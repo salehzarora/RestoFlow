@@ -1,0 +1,201 @@
+Issue Type,Issue Key,Summary,Description,Priority,Status,Epic Name,Epic Link,Labels,Components,Blocked By,Assignee,Reporter
+Epic,RF-EPIC-M0A,M0A — Documentation and architecture freeze candidate,"Epic for milestone M0A (DECISION D-019). Author the governance and architecture documents from the SHARED CANON before any code; this milestone produces a DRAFT freeze CANDIDATE, not the freeze itself. Docs-only milestone: no Flutter apps, packages, migrations, or CI. The freeze EVENT (tag frozen v1) is RF-004 and requires human architecture approval. Exit gate: human sign-off (RF-004).",Highest,In Progress,M0A Documentation and architecture freeze candidate,,M0A,Docs/Architecture,,Claude Code,Saleh
+Epic,RF-EPIC-M0B,M0B — Technical foundation,"Epic for milestone M0B (DECISION D-019). Monorepo, CI, Supabase bootstrap, first multi-tenant migrations, RLS skeleton, Drift+outbox, l10n+RTL. NO business features. Every tenant-scoped table carries organization_id (D-001).",Highest,Backlog,M0B Technical foundation,,M0B,Foundation/Infra,,Claude Code,Saleh
+Epic,RF-EPIC-M1,M1 — Local POS and KDS prototype,"Epic for milestone M1 (DECISION D-019). Local Drift-backed POS + KDS prototype with no real backend. Enforce locked state enumerations (D-018) and price snapshots (D-008) locally; integer minor-unit money only (D-007).",High,Backlog,M1 Local POS and KDS prototype,,M1,Frontend/POS,,Claude Code,Saleh
+Epic,RF-EPIC-M2,M2 — Real backend and synchronization,"Epic for milestone M2 (DECISION D-019). Supabase Auth, full RLS, RPC for sensitive mutations (D-011/D-012), outbox/inbox sync with idempotency (D-010/D-022), conflict handling, revocation propagation. Realtime is enhancement only (D-010).",Highest,Backlog,M2 Real backend and synchronization,,M2,Backend/DB,,Claude Code,Saleh
+Epic,RF-EPIC-M3,M3 — Hardware pilot,"Epic for milestone M3 (DECISION D-019). ESC/POS printing behind a replaceable adapter, cash drawer, localized receipts/tickets (D-014), daily reports, one real restaurant/branch pilot. Surfaces Q-006/Q-015 and R-001/R-006.",High,Backlog,M3 Hardware pilot,,M3,Hardware/Printing,,Claude Code,Saleh
+Epic,RF-EPIC-M4,M4 — Sellable SaaS,"Epic for milestone M4 (DECISION D-019). Self-serve organization signup, isolated audited platform admin, owner/manager dashboards, basic billing (Q-016), production hardening (Q-013). Multi-tenant isolation enforced throughout (D-001/R-003).",High,Backlog,M4 Sellable SaaS,,M4,Platform/SaaS,,Claude Code,Saleh
+Story,RF-001,M0A Project Foundation and Architecture Documentation,"Scope: Author all M0A governance and architecture documents from the SHARED CANON (DECISIONS.md, OPEN_QUESTIONS.md, DOMAIN_MODEL.md, STATE_MACHINES.md, MONEY_AND_TAX_SPEC.md, SECURITY_AND_THREAT_MODEL.md, OFFLINE_SYNC_SPEC.md, PRINTERS_AND_HARDWARE_SPEC.md, API_CONTRACT.md, TESTING_STRATEGY.md, ARCHITECTURE.md, PRODUCT_SPEC.md, MVP_SCOPE.md, PROJECT_PLAN.md, IMPLEMENTATION_CHECKLIST.md, JIRA_IMPORT.csv, OPERATIONS_AND_RECOVERY.md, PILOT_PLAN.md). Docs-only: no application code, migrations, package manifests, or CI (M0A constraint).
+DEPENDENCY-COLUMN CHOICE: this CSV uses a single ""Blocked By"" column (NOT ""Blocks""). Each row lists the issue keys that must complete before it can start, taken directly from the master task list Dependencies field. Importers should map ""Blocked By"" to the Jira ""is blocked by"" link type.
+Acceptance: every locked enumeration (D-018), role key, decision ID (D-001..D-028), open-question ID (Q-001..Q-024), and naming convention (D-017) is used consistently; document ownership respected; no contradiction with canon; no single-tenant or shared-account assumptions; no floating-point money (D-007).
+Workstream: Docs/Architecture. Reviewer: Codex (RF-002).
+Architecture/Security impact: foundational; establishes tenant isolation boundary organization_id (D-001), four-layer security model (D-011/D-012/D-013), and offline-first sync contract (D-010) that all later tickets implement against. RISK R-005 (bus factor) mitigated by full documentation.",Highest,Done,,RF-EPIC-M0A,M0A;Docs,Docs/Architecture,,Claude Code,Saleh
+Task,RF-002,Codex independent review of M0A documentation,"Scope: Read-only adversarial review of every M0A document for contradictions, gaps, and insufficient security/sync rigor.
+Acceptance: each document checked against the canon; all defects logged; isolation/permission test coverage (SECURITY_AND_THREAT_MODEL.md) and sync rules (OFFLINE_SYNC_SPEC.md) judged complete; sign-off recommendation issued.
+Workstream: QA/Review. Reviewer: Human.
+Architecture/Security impact: gate before architecture freeze; protects against R-003 (RLS correctness) and R-002 (sync conflicts) by catching specification gaps early. Codex reviews read-only (D-016). Review complete; verdict APPROVE WITH CHANGES.",Highest,Done,,RF-EPIC-M0A,M0A;QA-Review,QA/Review,RF-001,Codex,Saleh
+Task,RF-003,Resolve M0A blocking OPEN QUESTIONS,"Scope: Decide the blocking open questions: Q-001 jurisdiction, Q-007 currency, Q-006/Q-015 pilot hardware shortlist, Q-008 MFA method/roles, Q-009 offline authorization window. Per D-027 (M0B blocker rule), each question may end Resolved OR explicitly Accepted Open.
+Acceptance: each listed Q-id is either Resolved in OPEN_QUESTIONS.md with rationale, OR marked Accepted Open with a named owner, an identified blocking ticket/milestone, a documented safe interim, and no irreversible assumption (D-027); an Accepted Open question blocks only its dependent ticket(s), not the milestone start; downstream money/tax (Q-002/Q-003/Q-004) and printing (R-006) implications noted; no silent assumptions.
+Workstream: Decision. Reviewer: Human.
+Architecture/Security impact: unblocks money/tax freeze (R-008) and MFA/offline-validity security controls (R-007). Owner ChatGPT/Human.",High,In Progress,,RF-EPIC-M0A,M0A;Decision,Decision,RF-002,ChatGPT/Human,Saleh
+Task,RF-004,Freeze architecture and contracts v1,"Scope: Human sign-off on the M0A document set; tag docs as frozen v1; this is the freeze EVENT that opens the gate to start M0B.
+Acceptance: this gate does NOT require all of Q-001..Q-024 to be resolved (D-027); it requires (a) human architecture approval AND (b) every still-open question being either Resolved or recorded as Accepted Open (named owner, identified blocking ticket/milestone, safe interim, no irreversible assumption); all M0A docs reviewed (RF-002); frozen v1 tag applied; change-control note recorded.
+Workstream: Decision. Reviewer: Human.
+Architecture/Security impact: establishes the frozen contracts (API_CONTRACT.md, DOMAIN_MODEL.md, STATE_MACHINES.md) that M0B+ implement against; enforces D-016 human gate before code. Owner Human; pending human approval.",High,Backlog,,RF-EPIC-M0A,M0A;Decision,Decision,"RF-002,RF-003",Human,Saleh
+Task,RF-010,Initialize Melos monorepo skeleton,"Scope: Create Melos workspace and app/package layout per ARCHITECTURE.md. No business code.
+Acceptance: melos bootstrap succeeds; app and package directories exist per architecture; analyzer baseline green.
+Workstream: Foundation/Infra. Reviewer: Codex.
+Architecture/Security impact: structural only; sets the monorepo shape (D-009) all later packages depend on.",High,Backlog,,RF-EPIC-M0B,M0B;Foundation-Infra,Foundation/Infra,RF-004,Claude Code,Saleh
+Task,RF-011,Shared packages scaffold (core models design l10n),"Scope: Create empty shared packages (core, models, design, l10n) exposing public interfaces only.
+Acceptance: packages compile; public API surface defined; no business logic.
+Workstream: Foundation/Infra. Reviewer: Codex.
+Architecture/Security impact: shared-package change (D-016 requires dedicated ticket); establishes contracts for money types (integer minor units, D-007) and domain models (DOMAIN_MODEL.md).",High,Backlog,,RF-EPIC-M0B,M0B;Foundation-Infra,Foundation/Infra,RF-010,Claude Code,Saleh
+Task,RF-012,CI pipeline (analyze test build),"Scope: GitHub Actions with format, analyze, and test gates on pull requests.
+Acceptance: PRs blocked on failing format/analyze/test; build job green on main.
+Workstream: Foundation/Infra. Reviewer: Human.
+Architecture/Security impact: enforces quality gates supporting the agent workflow (D-016); no business logic.",High,Backlog,,RF-EPIC-M0B,M0B;Foundation-Infra,Foundation/Infra,RF-010,Claude Code,Saleh
+Task,RF-013,Supabase project bootstrap + environments + secrets,"Scope: Create Supabase projects/environments; define secrets handling. SECURITY REQUIREMENT: no service-role key in Flutter clients (D-011).
+Acceptance: dev/staging/prod environments provisioned; secrets stored outside clients; access documented.
+Workstream: Backend/DB. Reviewer: Human.
+Architecture/Security impact: foundational backend (D-009); enforces no-service-role-in-client control (D-011).",High,Backlog,,RF-EPIC-M0B,M0B;Backend-DB,Backend/DB,RF-004,Claude Code,Saleh
+Task,RF-014,First multi-tenant migration (orgs/restaurants/branches) + RLS skeleton,"Scope: Migration for organizations, restaurants, branches with organization_id on every tenant-scoped table; baseline RLS; database constraints.
+Acceptance: schema matches D-017 naming; RLS denies cross-org access by default; constraints as final boundary (D-012).
+Workstream: Backend/DB. Reviewer: Codex.
+Architecture/Security impact: establishes primary isolation boundary organization_id (D-001/D-002); CRITICAL for R-003. Layers 1 and 4 of security model (D-012).",Highest,Backlog,,RF-EPIC-M0B,M0B;Backend-DB,Backend/DB,RF-013,Claude Code,Saleh
+Task,RF-015,Identity and membership schema + RLS,"Scope: users/app_users, memberships, employee_profiles, roles; membership-scoped RLS. Per D-026, platform_admin is NOT a membership role; the identity schema includes a separate platform_admin_grants table (no organization_id; DOMAIN_MODEL.md 3.7) for platform-admin authority via a distinct, audited path.
+Acceptance: six identity concepts kept distinct (D-005); roles are membership-scoped not global (D-004); no shared accounts; RLS enforces membership scope; platform_admin is rejected as a memberships role value and platform-admin authority lives only in platform_admin_grants (no organization_id) per D-026; full platform-admin separation tests (SECURITY T-008..T-011) owned by RF-019/RF-060.
+Workstream: Backend/DB. Reviewer: Codex.
+Architecture/Security impact: implements D-004/D-005 identity model; tenant membership role keys org_owner/restaurant_owner/manager/cashier/kitchen_staff/accountant (accountant per Q-017); platform_admin separated into platform_admin_grants (D-026).",Highest,Backlog,,RF-EPIC-M0B,M0B;Backend-DB,Backend/DB,RF-014,Claude Code,Saleh
+Task,RF-016,Device identity pairing device/pin sessions + RLS,"Scope: devices, device_pairings (expiring enrollment codes), device_sessions, pin_sessions with RLS.
+Acceptance: device identity separate from human (D-005); pairing uses short-lived enrollment codes; pairing state machine code_issued->pending->paired->active->suspended->revoked plus code_expired/rejected (D-018); revocation removes future access (R-007/Q-009).
+Workstream: Backend/DB. Reviewer: Codex.
+Architecture/Security impact: implements D-006 device/PIN auth; supports offline-revocation control (R-007).",High,Backlog,,RF-EPIC-M0B,M0B;Backend-DB,Backend/DB,RF-015,Claude Code,Saleh
+Task,RF-017,Append-only audit events + enforcement,"Scope: audit_events table plus triggers/RPC; immutable to application roles.
+Acceptance: captures actor, device, organization, restaurant, branch, timestamp, action, reason, old values, new values (D-013); never updatable/deletable by app roles.
+Workstream: Security. Reviewer: Codex.
+Architecture/Security impact: implements append-only audit (D-013); underpins platform-admin isolation auditing and sensitive-mutation audit (layer 3, D-012).",High,Backlog,,RF-EPIC-M0B,M0B;Security,Security,RF-014,Claude Code,Saleh
+Task,RF-018,Drift local schema + outbox/inbox tables,"Scope: Local SQLite/Drift schema, outbox, processed-operation ledger, idempotency keys (device_id + local_operation_id).
+Acceptance: local schema mirrors sync columns (device_id, local_operation_id, revision/version, client/server timestamps per D-017); outbox/ledger present; tombstones for deletions (D-020).
+Workstream: Sync/Offline. Reviewer: Codex.
+Architecture/Security impact: foundation of offline-first store (D-010); idempotency keys per D-022.",High,Backlog,,RF-EPIC-M0B,M0B;Sync-Offline,Sync/Offline,RF-011,Claude Code,Saleh
+Task,RF-019,Tenant-isolation test harness (RLS suite skeleton),"Scope: Harness asserting cross-tenant denial; seed multi-org fixtures. Extensible to platform-admin separation tests SECURITY T-008..T-011 (D-026): membership cannot grant platform-admin; a grant is not a membership; platform-admin access audited; privileged path enforced. Skeleton here; full implementation at RF-060.
+Acceptance: fixtures create at least two organizations; harness can assert Org A cannot read Org B data; skeleton ready for canonical isolation cases including platform-admin separation cases T-008..T-011.
+Workstream: QA/Testing. Reviewer: Codex.
+Architecture/Security impact: scaffolds mandatory isolation tests (SECURITY_AND_THREAT_MODEL.md) incl. platform-admin separation (D-026); directly mitigates R-003 (CRITICAL).",High,Backlog,,RF-EPIC-M0B,M0B;QA-Testing,QA/Testing,RF-014,Claude Code,Saleh
+Task,RF-020,Localization framework (ar/he/en) + RTL/LTR scaffolding,"Scope: arb/intl setup and directionality plumbing for Arabic, Hebrew, English.
+Acceptance: ar/he resolve RTL, en resolves LTR (D-014); localization framework wired; no business strings required.
+Workstream: Foundation/Infra. Reviewer: Codex.
+Architecture/Security impact: implements D-014 languages and direction; supports localized receipts/tickets later (PRINTERS_AND_HARDWARE_SPEC.md).",Medium,Backlog,,RF-EPIC-M0B,M0B;Foundation-Infra,Foundation/Infra,RF-011,Claude Code,Saleh
+Task,RF-021,Local data-at-rest protection and device secret handling,"Scope: Secure storage for device/session secrets and protection of local operational data at rest. Evaluate and implement encrypted Drift/SQLite at rest with documented platform support and limitations; define key lifecycle (create/store/rotate/revoke); define fail-closed behavior when platform secure storage is unavailable; no secrets in logs; no plaintext sensitive-data fallback without explicit human approval. Builds on RF-013 (Supabase bootstrap + secrets) and RF-018 (Drift local schema + outbox); aligns SECURITY_AND_THREAT_MODEL.md and OPERATIONS_AND_RECOVERY.md.
+Acceptance: data-at-rest encryption enabled where the platform supports it (limitations documented where it does not); device/session secrets stored only in platform secure storage, never plaintext, never in logs; documented key lifecycle (create/store/rotate/revoke); fail-closed when secure storage is unavailable; no plaintext sensitive-data fallback without explicit human approval.
+Required tests: data-at-rest encryption test where technically possible; secret-handling + log-redaction test (no secrets in logs); fail-closed behavior test.
+Workstream: Security. Reviewer: Codex.
+Architecture/Security impact: secure-storage and at-rest-encryption layer for the local store; protects device/session secrets; fail-closed posture (SECURITY REQUIREMENT, R-007). Architecture impact medium; security impact high.",High,Backlog,,RF-EPIC-M0B,M0B;Security,Security,"RF-013,RF-018",Claude Code,Saleh
+Task,RF-030,Menu domain (categories/items/sizes/variants/modifiers) — local,"Scope: Local Drift-backed menu model and repository for menu_categories, menu_items, item_sizes, item_variants, modifiers, modifier_options.
+Acceptance: schema per D-017; money fields integer _minor (D-007); supports price snapshots later (D-008).
+Workstream: Frontend/POS. Reviewer: Codex.
+Architecture/Security impact: local-only menu domain (M1); no backend dependency yet (DOMAIN_MODEL.md).",High,Backlog,,RF-EPIC-M1,M1;Frontend-POS,Frontend/POS,RF-018,Claude Code,Saleh
+Task,RF-031,POS cart + order build — local,"Scope: Fast cashier cart with price and modifier snapshots captured at order time (D-008).
+Acceptance: orders never recompute from live menu prices; integer minor-unit math only (D-007); single currency per order (Q-007).
+Workstream: Frontend/POS. Reviewer: Codex.
+Architecture/Security impact: implements D-008 snapshots; foundation for order state machine.",High,Backlog,,RF-EPIC-M1,M1;Frontend-POS,Frontend/POS,RF-030,Claude Code,Saleh
+Task,RF-032,Order submission + order/order-item state machines — local,"Scope: Enforce locked enumerations locally. Order: draft->submitted->accepted->preparing->ready->served->completed plus cancelled/voided; takeaway skips served. Order item: pending->queued->preparing->ready->served plus voided/cancelled (D-018).
+Acceptance: illegal transitions rejected; terminal states honored (completed/cancelled/voided).
+Workstream: Frontend/POS. Reviewer: Codex.
+Architecture/Security impact: implements D-018 order state machines (STATE_MACHINES.md).",High,Backlog,,RF-EPIC-M1,M1;Frontend-POS,Frontend/POS,RF-031,Claude Code,Saleh
+Task,RF-033,Kitchen routing (items -> stations) — local,"Scope: Routing rules sending order items to kitchen stations.
+Acceptance: items route to correct station(s); station scoping respected.
+Workstream: Frontend/KDS. Reviewer: Codex.
+Architecture/Security impact: prepares kitchen ticket/station model (DOMAIN_MODEL.md, STATE_MACHINES.md).",Medium,Backlog,,RF-EPIC-M1,M1;Frontend-KDS,Frontend/KDS,RF-032,Claude Code,Saleh
+Task,RF-034,KDS screens + kitchen ticket/station state machines — local,"Scope: KDS screens with bump/recall flows. Kitchen ticket: new->acknowledged->in_preparation->ready->bumped plus recalled (bumped->in_preparation, audited)/cancelled. Kitchen station item: queued->in_preparation->ready->bumped plus voided (D-018).
+Acceptance: recall is audited; terminal states honored.
+Workstream: Frontend/KDS. Reviewer: Codex.
+Architecture/Security impact: implements D-018 kitchen state machines; recall audit aligns with D-013.",High,Backlog,,RF-EPIC-M1,M1;Frontend-KDS,Frontend/KDS,RF-033,Claude Code,Saleh
+Task,RF-035,Table management (dine-in/takeaway) basic,"Scope: tables plus order type (dine-in/takeaway).
+Acceptance: takeaway path skips served per D-018; tables scoped to branch.
+Workstream: Frontend/POS. Reviewer: Codex.
+Architecture/Security impact: supports order-type branching in state machine (STATE_MACHINES.md).",Medium,Backlog,,RF-EPIC-M1,M1;Frontend-POS,Frontend/POS,RF-031,Claude Code,Saleh
+Task,RF-036,Money calculation engine (minor units discounts totals),"Scope: Pure integer math engine for totals and discounts (order-level and item-level; percentage and fixed) with defined rounding; void/cancellation/refund distinct.
+Acceptance: no floating point anywhere (D-007); matches MONEY_AND_TAX_SPEC.md; tips DEFERRED (Q-011); service charge per Q-012; tax kept open until Q-001..Q-004 (R-008).
+Workstream: Backend/DB. Reviewer: Codex.
+Architecture/Security impact: implements D-007 money model and rounding rules (MONEY_AND_TAX_SPEC.md).",High,Backlog,,RF-EPIC-M1,M1;Backend-DB,Backend/DB,RF-030,Claude Code,Saleh
+Task,RF-037,Shift + cash drawer session — local,"Scope: Open/close shift with opening float and reconciliation locally. Shift: opening->open->closing->closed->reconciled. Cash drawer session: opened->active->counting->closed->reconciled, bound to a shift (D-018).
+Acceptance: terminal state reconciled; variance captured; integer minor units (D-007).
+Workstream: Frontend/POS. Reviewer: Codex.
+Architecture/Security impact: implements D-018 shift/cash-drawer machines (STATE_MACHINES.md).",Medium,Backlog,,RF-EPIC-M1,M1;Frontend-POS,Frontend/POS,RF-031,Claude Code,Saleh
+Task,RF-050,Supabase Auth (owners/managers personal + MFA),"Scope: Email/password personal accounts; MFA for privileged/sensitive roles (Q-008).
+Acceptance: no shared accounts (D-004); MFA enforced per resolved Q-008; privileged roles gated.
+Workstream: Security. Reviewer: Codex.
+Architecture/Security impact: implements D-006 auth direction; MFA method/roles from Q-008.",Highest,Backlog,,RF-EPIC-M2,M2;Security,Security,RF-015,Claude Code,Saleh
+Task,RF-051,PIN session flow on paired device,"Scope: PIN-based fast staff session on an already-paired and authorized device; attempt limits; offline validity window (Q-009).
+Acceptance: PIN session layered on device session (D-005/D-006); revoked employee/device cannot start a session; offline window bounded (R-007).
+Workstream: Security. Reviewer: Codex.
+Architecture/Security impact: implements D-006 PIN session; offline staleness control (R-007/Q-009).",High,Backlog,,RF-EPIC-M2,M2;Security,Security,"RF-016,RF-050",Claude Code,Saleh
+Task,RF-052,RPC submit_order (idempotent),"Scope: SECURITY DEFINER RPC to submit orders, idempotent via device_id + local_operation_id (D-022).
+Acceptance: duplicate submissions deduped; authorize and audit (D-011/D-013); receipt provisional id reconciled later (D-021).
+Workstream: Backend/DB. Reviewer: Codex.
+Architecture/Security impact: layer-3 sensitive mutation via RPC (D-011/D-012); idempotency D-022.",Highest,Backlog,,RF-EPIC-M2,M2;Backend-DB,Backend/DB,"RF-014,RF-032",Claude Code,Saleh
+Task,RF-053,RPC apply_discount / void_order (authorize + audit),"Scope: Permission-gated RPCs; reason required; fully audited. Void is post-submission and distinct from cancellation and refund.
+Acceptance: cashier cannot void a paid order without permission (canonical isolation/permission test); reason and old/new values recorded (D-013).
+Workstream: Security. Reviewer: Codex.
+Architecture/Security impact: implements D-011 RPC authorization + D-013 audit; enforces permission boundaries.",Highest,Backlog,,RF-EPIC-M2,M2;Security,Security,"RF-017,RF-052",Claude Code,Saleh
+Task,RF-054,RPC payment (cash) + receipt numbering,"Scope: Cash payment RPC with per-branch monotonic server-assigned receipt sequence (D-021); change due. Payment: pending->tendered->completed plus voided/failed; refunded DEFERRED.
+Acceptance: offline provisional id reconciled to authoritative on sync (D-021); integer minor units (D-007); change computed exactly.
+Workstream: Backend/DB. Reviewer: Codex.
+Architecture/Security impact: implements D-021 receipt numbering and payment state machine (D-018); legal numbering rules pending Q-004.",High,Backlog,,RF-EPIC-M2,M2;Backend-DB,Backend/DB,"RF-052,RF-036",Claude Code,Saleh
+Task,RF-055,RPC open/close shift + cash reconciliation,"Scope: RPCs for shift and cash-drawer lifecycle with reconciliation. Per D-028 this single ticket delivers TWO separate RPCs (do NOT split): close_shift (owning cashier or authorized manager) and reconcile_shift (manager/restaurant_owner/org_owner); accountant is read-only and may invoke neither.
+Acceptance: enforces shift/cash-drawer state machines (D-018); close_shift restricted to owning cashier/authorized manager; reconcile_shift restricted to manager/restaurant_owner/org_owner; accountant (read-only) rejected from both RPCs (D-028); variance reconciled; audited (D-013).
+Workstream: Backend/DB. Reviewer: Codex.
+Architecture/Security impact: server-side shift/cash machines (D-018) with split close_shift vs reconcile_shift authorization (D-028); feeds daily reports (RF-075).",High,Backlog,,RF-EPIC-M2,M2;Backend-DB,Backend/DB,RF-037,Claude Code,Saleh
+Task,RF-056,Outbox push + server inbox/ledger (idempotent),"Scope: Push local outbox to server inbox/processed-operation ledger; dedupe via ledger; retry with backoff; poison/permanent-rejection handling. Sync operation: created->pending->in_flight->applied plus rejected/dead/conflict->resolved (D-018).
+Acceptance: duplicate mutations prevented; poison ops become dead after max retries; ordering of dependent ops preserved.
+Workstream: Sync/Offline. Reviewer: Codex.
+Architecture/Security impact: implements D-010 outbox/inbox and D-022 idempotency; mitigates R-002.",Highest,Backlog,,RF-EPIC-M2,M2;Sync-Offline,Sync/Offline,"RF-018,RF-052",Claude Code,Saleh
+Task,RF-057,Pull sync + conflict resolution + revisions,"Scope: Pull sync with per-entity conflict policy (Q-010) and revision/version handling.
+Acceptance: conflicts resolved per documented per-entity rules (LWW vs domain, Q-010); revisions monotonic; tombstones applied (D-020).
+Workstream: Sync/Offline. Reviewer: Codex.
+Architecture/Security impact: implements OFFLINE_SYNC_SPEC.md conflict rules; Q-010 must be resolved.",High,Backlog,,RF-EPIC-M2,M2;Sync-Offline,Sync/Offline,RF-056,Claude Code,Saleh
+Task,RF-058,Realtime enhancement (KDS live updates),"Scope: Supabase Realtime for live KDS updates as an enhancement only.
+Acceptance: Realtime never source of truth or only sync mechanism (D-010); fallback polling honored (Q-014); KDS still correct without Realtime.
+Workstream: Sync/Offline. Reviewer: Codex.
+Architecture/Security impact: enforces D-010 enhancement-only constraint; provider limits per Q-014.",Medium,Backlog,,RF-EPIC-M2,M2;Sync-Offline,Sync/Offline,RF-057,Claude Code,Saleh
+Task,RF-059,Full RLS + membership/branch/device-scoped policies,"Scope: Complete RLS policy set across all tenant-scoped tables with membership, branch, and device scoping.
+Acceptance: cross-tenant access, IDOR, and platform-admin isolation prevented (D-011/D-012); human RLS sign-off required.
+Workstream: Security. Reviewer: Human.
+Architecture/Security impact: completes security layers 1 and 2 (D-012); CRITICAL for R-003.",Highest,Backlog,,RF-EPIC-M2,M2;Security,Security,"RF-014,RF-015,RF-016",Claude Code,Saleh
+Task,RF-060,Tenant-isolation and permission test suite (mandatory cases),"Scope: Implement the canonical isolation/permission tests: Org A cannot read Org B orders; Cashier A cannot modify Restaurant B; KDS cannot read financial reports; revoked device cannot sync new operations; removed employee cannot create new valid operations; cashier cannot void a paid order without permission; platform-admin access is explicitly audited. Plus platform-admin separation tests SECURITY T-008..T-011 (D-026): a membership cannot grant platform-admin; a platform_admin_grants row is not a membership; platform-admin access is audited; the privileged platform-admin path is enforced.
+Acceptance: all canonical cases pass plus T-008..T-011 platform-admin separation cases (SECURITY_AND_THREAT_MODEL.md, D-026).
+Workstream: QA/Testing. Reviewer: Codex.
+Architecture/Security impact: mandatory test gate for R-003 (CRITICAL) and R-007; enforces platform-admin separation (D-026).",Highest,Backlog,,RF-EPIC-M2,M2;QA-Testing,QA/Testing,RF-059,Claude Code,Saleh
+Task,RF-061,Device and employee revocation propagation (incl. offline),"Scope: Server rejects operations from revoked devices/employees on reconnect, including within the offline window.
+Acceptance: revoked actor ops rejected and audited (R-007); future access removed (D-005/D-006); offline window bounded (Q-009).
+Workstream: Security. Reviewer: Codex.
+Architecture/Security impact: implements offline-revocation control (R-007); audit per D-013.",High,Backlog,,RF-EPIC-M2,M2;Security,Security,"RF-016,RF-057",Claude Code,Saleh
+Task,RF-070,Printing adapter interface + ESC/POS driver,"Scope: Replaceable printing adapter interface plus an ESC/POS implementation.
+Acceptance: adapter abstraction allows swapping models (R-001); ESC/POS driver behind interface; connectivity per Q-015.
+Workstream: Hardware/Printing. Reviewer: Codex.
+Architecture/Security impact: implements D-009 ESC/POS-behind-adapter; mitigates R-001 (hardware variation). Hardware shortlist Q-006.",High,Backlog,,RF-EPIC-M3,M3;Hardware-Printing,Hardware/Printing,RF-054,Claude Code,Saleh
+Task,RF-071,Print job spool + state machine + retry + reprint audit,"Scope: Print job spool with state machine created->queued->printing->printed plus failed->retrying/cancelled/abandoned (after max retries) (D-018); duplicate-print prevention; reprint reason audited.
+Acceptance: terminal states printed/cancelled/abandoned honored; reprint reasons recorded (D-013).
+Workstream: Hardware/Printing. Reviewer: Codex.
+Architecture/Security impact: implements D-018 print-job machine; reprint audit per D-013.",High,Backlog,,RF-EPIC-M3,M3;Hardware-Printing,Hardware/Printing,RF-070,Claude Code,Saleh
+Task,RF-072,Kitchen ticket printing routing,"Scope: Route kitchen ticket prints per station.
+Acceptance: tickets print at correct station; integrates with KDS routing (RF-034) and print spool (RF-071).
+Workstream: Hardware/Printing. Reviewer: Codex.
+Architecture/Security impact: extends station routing to physical printers (PRINTERS_AND_HARDWARE_SPEC.md).",Medium,Backlog,,RF-EPIC-M3,M3;Hardware-Printing,Hardware/Printing,"RF-071,RF-034",Claude Code,Saleh
+Task,RF-073,Customer receipt printing (ar/he/en 58/80mm raster fallback),"Scope: RTL/LTR localized customer receipts at 58mm and 80mm with encoding/raster fallback for Arabic/Hebrew.
+Acceptance: ar/he render correctly via raster fallback (Q-015/R-006); receipt numbering from RF-054 (D-021); languages per D-014.
+Workstream: Hardware/Printing. Reviewer: Codex.
+Architecture/Security impact: implements D-014 localized receipts; mitigates R-006 (encoding correctness).",High,Backlog,,RF-EPIC-M3,M3;Hardware-Printing,Hardware/Printing,"RF-071,RF-054",Claude Code,Saleh
+Task,RF-074,Cash drawer kick,"Scope: Open the cash drawer on cash payment.
+Acceptance: drawer kicks on completed cash payment; tied to payment RPC and adapter.
+Workstream: Hardware/Printing. Reviewer: Codex.
+Architecture/Security impact: hardware integration via adapter (RF-070); pilot hardware per Q-006.",Low,Backlog,,RF-EPIC-M3,M3;Hardware-Printing,Hardware/Printing,RF-070,Claude Code,Saleh
+Task,RF-075,Daily reports (sales shift voids/discounts),"Scope: Per-branch daily summary covering sales, shift, voids, and discounts.
+Acceptance: figures in integer minor units (D-007); per-branch scoping; sources from shift reconciliation (RF-055).
+Workstream: Backend/DB. Reviewer: Codex.
+Architecture/Security impact: reporting scoped by branch within organization (D-001); no cross-tenant leakage (R-003).",Medium,Backlog,,RF-EPIC-M3,M3;Backend-DB,Backend/DB,RF-055,Claude Code,Saleh
+Task,RF-076,Pilot deployment in one restaurant/branch,"Scope: Run a full day on-site at one restaurant/branch; go/no-go decision.
+Acceptance: full-day operation validated; printing/cash/reports verified; pilot criteria met (PILOT_PLAN.md). ASSUMPTION: single pilot branch does not relax multi-tenant design (D-003).
+Workstream: Hardware/Printing. Reviewer: Claude Code.
+Architecture/Security impact: validates end-to-end M3; surfaces R-001/R-006 in the field. Owner Human.",High,Backlog,,RF-EPIC-M3,M3;Hardware-Printing,Hardware/Printing,"RF-072,RF-073,RF-075",Human,Saleh
+Task,RF-090,Self-serve organization signup + onboarding,"Scope: New organization provisions itself, fully isolated, with onboarding flow.
+Acceptance: new org isolated by organization_id (D-001); no cross-tenant data exposure (R-003); membership-scoped roles created (D-004).
+Workstream: Platform/SaaS. Reviewer: Codex.
+Architecture/Security impact: extends tenant model to self-serve (D-002/D-003); isolation CRITICAL (R-003).",High,Backlog,,RF-EPIC-M4,M4;Platform-SaaS,Platform/SaaS,RF-059,Claude Code,Saleh
+Task,RF-091,Platform admin panel (isolated audited),"Scope: Separate, explicitly audited platform-admin path.
+Acceptance: platform-admin isolation enforced and every access audited (D-013); separate from tenant data paths (D-012).
+Workstream: Platform/SaaS. Reviewer: Codex.
+Architecture/Security impact: implements platform-admin isolation (D-011/D-013); platform-admin authority via the separate platform_admin_grants path, not a membership role (D-026).",High,Backlog,,RF-EPIC-M4,M4;Platform-SaaS,Platform/SaaS,RF-059,Claude Code,Saleh
+Task,RF-092,Owner/manager dashboard (multi-restaurant/branch),"Scope: Cross-branch and multi-restaurant reporting UI for owners/managers.
+Acceptance: supports a restaurant group (one org, many restaurants/branches) per D-002; scoping by membership (D-004); integer minor-unit figures (D-007).
+Workstream: Platform/SaaS. Reviewer: Codex.
+Architecture/Security impact: respects D-002 hierarchy and membership scoping; no cross-org leakage (R-003).",Medium,Backlog,,RF-EPIC-M4,M4;Platform-SaaS,Platform/SaaS,RF-075,Claude Code,Saleh
+Task,RF-093,Subscription/billing (basic),"Scope: Basic subscription plans (Q-016).
+Acceptance: plan model defined per resolved Q-016; billing scoped per organization; DEFERRED details flagged.
+Workstream: Platform/SaaS. Reviewer: Human.
+Architecture/Security impact: org-scoped billing (D-001); model pending Q-016.",Medium,Backlog,,RF-EPIC-M4,M4;Platform-SaaS,Platform/SaaS,RF-090,Claude Code,Saleh
+Task,RF-094,Production hardening backups monitoring runbooks,"Scope: Backups, alerting/monitoring, incident runbooks.
+Acceptance: RPO/RTO targets and DR region defined (Q-013); backups verified; runbooks documented (OPERATIONS_AND_RECOVERY.md).
+Workstream: Operations. Reviewer: Human.
+Architecture/Security impact: production readiness; RPO/RTO/DR per Q-013.",High,Backlog,,RF-EPIC-M4,M4;Operations,Operations,RF-013,Claude Code,Saleh

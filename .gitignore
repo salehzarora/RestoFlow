@@ -1,0 +1,179 @@
+# ============================================================================
+# RestoFlow .gitignore
+# Multi-tenant Restaurant Operating System (RF-001 / M0A)
+#
+# Forward-looking: the toolchain below (Flutter / Melos / Supabase / Node)
+# is NOT installed yet (M0A is documentation-only — see docs/PROJECT_PLAN.md
+# and DECISION D-019). These rules exist so the repository stays clean once
+# M0B (technical foundation) begins. See DECISION D-009 for the tech stack.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# !!! SECURITY — READ THIS FIRST !!!
+# SECURITY REQUIREMENT (DECISION D-011): no service-role credentials, no
+# Supabase service keys, no shared restaurant password, and no .env files of
+# any kind are EVER committed to this repository. Secrets belong in a secrets
+# manager / CI secret store, never in Git. A leaked service-role key bypasses
+# PostgreSQL RLS entirely and breaks tenant isolation (RISK R-003, CRITICAL).
+# If you believe a secret was committed, treat it as compromised: rotate the
+# credential immediately and purge it from history. See docs/SECURITY_AND_THREAT_MODEL.md
+# and docs/OPERATIONS_AND_RECOVERY.md.
+# Never use `git add -f` to force-add anything matched by the env/secret rules.
+# ----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# Environment & secrets (HIGHEST PRIORITY — see SECURITY block above)
+# ----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+service-role*
+service_role*
+*service-role*
+*service_role*
+secrets/
+**/secrets/
+*.secret
+*credentials*.json
+google-services.json
+GoogleService-Info.plist
+
+# ----------------------------------------------------------------------------
+# Dart / Flutter
+# ----------------------------------------------------------------------------
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.fvm/
+*.iml
+*.ipr
+*.iws
+doc/api/
+flutter_*.png
+# pubspec.lock policy: COMMIT lock files for application/executable packages
+# (apps) to guarantee reproducible builds; for reusable library packages the
+# lock file is typically NOT committed. Decide per-package in M0B; do not add a
+# blanket ignore here. (See docs/ARCHITECTURE.md for the package layout.)
+
+# ----------------------------------------------------------------------------
+# Melos (monorepo tooling — DECISION D-009)
+# ----------------------------------------------------------------------------
+.melos_tool/
+pubspec_overrides.yaml
+
+# ----------------------------------------------------------------------------
+# Generated code (build_runner output — DO NOT commit, regenerated on build)
+# ----------------------------------------------------------------------------
+*.g.dart
+*.freezed.dart
+*.gr.dart
+*.config.dart
+*.mocks.dart
+generated_plugin_registrant.dart
+GeneratedPluginRegistrant.*
+lib/generated_plugin_registrant.dart
+# Drift / Moor generated database code
+*.drift.dart
+*.moor.dart
+
+# ----------------------------------------------------------------------------
+# IDE / editor (commit ONLY shared, intentional config)
+# ----------------------------------------------------------------------------
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+# VS Code: ignore personal settings but keep shared, reviewed config.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# Claude Code local agent metadata (e.g. .claude/settings.local.json) — never committed.
+.claude/
+
+# ----------------------------------------------------------------------------
+# Operating system
+# ----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ----------------------------------------------------------------------------
+# Supabase (local CLI / backend — DECISION D-009; backend integration in M2)
+# ----------------------------------------------------------------------------
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+.branches/
+.temp/
+
+# ----------------------------------------------------------------------------
+# Node tooling (scripts / CSV import helpers / CI utilities)
+# ----------------------------------------------------------------------------
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/
+.pnp.*
+
+# ----------------------------------------------------------------------------
+# Coverage & test artifacts (see docs/TESTING_STRATEGY.md)
+# ----------------------------------------------------------------------------
+coverage/
+*.lcov
+lcov.info
+test/.test_coverage.dart
+.test_runner.dart
+test-results/
+test_report.json
+failures/
+
+# ----------------------------------------------------------------------------
+# Platform build outputs (native shells — relevant from M1/M3 onward)
+# ----------------------------------------------------------------------------
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/local.properties
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+**/Flutter/ephemeral/
+.symlinks/
+macos/Pods/
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+web/.dart_tool/
+
+# ----------------------------------------------------------------------------
+# Logs & local scratch
+# ----------------------------------------------------------------------------
+*.log
+logs/
+*.tmp
+tmp/
+.cache/
