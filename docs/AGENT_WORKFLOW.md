@@ -1,10 +1,10 @@
 # AGENT_WORKFLOW.md — RestoFlow Agent Workflow (Authoritative)
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 > **Ownership.** This document is the single authoritative source for the **RestoFlow agent workflow and engineering process**: the delivery pipeline, Definition of Ready, Definition of Done, branch/commit naming, the implementation- and review-report formats, merge gates, the architecture-change procedure, and the concurrency/worktree rules plus forbidden-actions list. `AGENTS.md` (repo root) is the **concise pointer** to this document, not a second source of truth. This document implements and elaborates **DECISION D-016** (agent workflow pipeline + guardrails); it does **not** redefine the decision log ([DECISIONS.md](DECISIONS.md)), the open-question register ([OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)), naming conventions beyond what process requires (**DECISION D-017**), the test strategy ([TESTING_STRATEGY.md](TESTING_STRATEGY.md)), security/isolation tests ([SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md)), or the task backlog ([IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) + JIRA_IMPORT.csv). Those topics are referenced, not restated.
 >
-> **Status.** Drafted as part of milestone **M0A** (**DECISION D-019**, ticket **RF-001**); proposed for the architecture freeze, pending review and approval. Changes to this process require a new decision in [DECISIONS.md](DECISIONS.md) and human approval (see §8 and §10).
+> **Status.** Drafted as part of milestone **M0A** (**DECISION D-019**, ticket **RF-001**); frozen as the M0A architecture baseline at RF-004, approved into the frozen M0A baseline (RF-004). Changes to this process require a new decision in [DECISIONS.md](DECISIONS.md) and human approval (see §8 and §10).
 
 ---
 
@@ -333,7 +333,7 @@ This document is authored during milestone **M0A** (**DECISION D-019**), whose c
 - Test strategy (incl. CI): [TESTING_STRATEGY.md](TESTING_STRATEGY.md)
 - Security, RLS, isolation/permission tests (**RISK R-003**, **R-007**): [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md)
 - Entities/fields: [DOMAIN_MODEL.md](DOMAIN_MODEL.md)
-- Transitions (PROPOSED state enumerations, pending review and approval; **DECISION D-018**): [STATE_MACHINES.md](STATE_MACHINES.md)
+- Transitions (PROPOSED state enumerations, approved into the frozen M0A baseline (RF-004); **DECISION D-018**): [STATE_MACHINES.md](STATE_MACHINES.md)
 - Money/tax/receipt rules (**DECISION D-007**, **D-008**): [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md)
 - Sync (**DECISION D-010**, **D-020**, **D-021**, **D-022**): [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md)
 - API/RPC contracts: [API_CONTRACT.md](API_CONTRACT.md)

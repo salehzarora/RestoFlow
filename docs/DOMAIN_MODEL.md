@@ -1,8 +1,8 @@
 # DOMAIN_MODEL.md — RestoFlow Domain & Data Model
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** DRAFT candidate for M0A (RF-001) — proposed for the architecture freeze, pending review and approval.
+**Status:** FROZEN for M0A (RF-001) — frozen as the M0A architecture baseline at RF-004, approved into the frozen M0A baseline (RF-004).
 **Owner of this topic:** This document is the authoritative source of truth for **entities, fields, and relationships**. Other documents reference these entities; they do not redefine them.
 
 This document **owns** the entity/field/relationship model. It does **not** own:
@@ -13,7 +13,7 @@ This document **owns** the entity/field/relationship model. It does **not** own:
 - RPC/endpoint contracts — see [API_CONTRACT](API_CONTRACT.md).
 - The decision log — see [DECISIONS](DECISIONS.md). The open-questions register — see [OPEN_QUESTIONS](OPEN_QUESTIONS.md).
 
-Status column values in this document use **only** the PROPOSED enumerations defined in [STATE_MACHINES](STATE_MACHINES.md) (**DECISION D-018** — PROPOSED pending review and approval; RF-001 §8 directs us to evaluate, not assume final). No new states are invented here.
+Status column values in this document use **only** the PROPOSED enumerations defined in [STATE_MACHINES](STATE_MACHINES.md) (**DECISION D-018** — PROPOSED approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final). No new states are invented here.
 
 ---
 
@@ -36,7 +36,7 @@ Status column values in this document use **only** the PROPOSED enumerations def
   Per-entity sections say **"Sync: standard set"** when they carry all of the above, or list deviations. Reference tables that are only edited by privileged online roles (e.g. organizations, restaurants) may omit `local_operation_id`/`device_id`; this is noted per entity.
 - **SECURITY REQUIREMENT** — No table stores service-role credentials, and no human-shared password column exists. Credential material (PIN, device secret) is stored only as a **reference/hash**, never plaintext (**DECISION D-004, D-006**, detailed in [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md)).
 
-> **ASSUMPTION** — Field lists below are the proposed *minimum* contract (pending review and approval). M0B migrations may add non-breaking columns (indexes, denormalized caches) provided they do not violate the invariants above. Breaking changes require a new **DECISION** and a dedicated ticket per **DECISION D-016**.
+> **ASSUMPTION** — Field lists below are the proposed *minimum* contract (approved into the frozen M0A baseline (RF-004)). M0B migrations may add non-breaking columns (indexes, denormalized caches) provided they do not violate the invariants above. Breaking changes require a new **DECISION** and a dedicated ticket per **DECISION D-016**.
 
 ---
 
@@ -198,7 +198,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ### 3.4 `device_pairings`
 - **Purpose:** Controlled enrollment lifecycle binding a `device` to a branch via a short-lived, expiring enrollment code (D-006).
 - **Key fields:** `id`, `enrollment_code` (hash/reference), `code_expires_at`, `status`, `paired_at`, `revoked_at`, timestamps + `deleted_at`.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Device pairing):** `code_issued -> pending -> paired -> active -> suspended -> revoked`; plus `code_expired`, `rejected`. **Terminal:** `revoked`, `code_expired`, `rejected`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Device pairing):** `code_issued -> pending -> paired -> active -> suspended -> revoked`; plus `code_expired`, `rejected`. **Terminal:** `revoked`, `code_expired`, `rejected`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`.
 - **FKs:** `device_id -> devices.id`, `organization_id`, `restaurant_id`, `branch_id`.
 - **SECURITY REQUIREMENT:** enrollment codes are short-lived/expiring; stored only as references.
@@ -220,7 +220,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 
 ### 3.7 `platform_admin_grants` (PROPOSED, **DECISION D-026**)
 - **Purpose:** Records **platform-level administrative access** — the privilege held by Anthropic/RestoFlow platform operators to administer the platform itself. This is **NOT a tenant membership** (**D-026**): it is deliberately separate from `memberships` and from the six tenant membership roles, and it never grants tenant data access implicitly. `platform_admin` is therefore **not** a value of `memberships.role`.
-- **Key fields:** `id` (UUID PK), `status` (PROPOSED lifecycle `active -> suspended -> revoked` — **ASSUMPTION** label set, not in the D-018 proposed set; pending review and approval), `granted_at`, `revoked_at`, `created_at`, `updated_at`.
+- **Key fields:** `id` (UUID PK), `status` (PROPOSED lifecycle `active -> suspended -> revoked` — **ASSUMPTION** label set, not in the D-018 proposed set; approved into the frozen M0A baseline (RF-004)), `granted_at`, `revoked_at`, `created_at`, `updated_at`.
 - **Tenant/scoping:** **explicitly NONE** — this entity carries **NO `organization_id`** and **no `restaurant_id`/`branch_id`/`device_id`/`station_id`** scope. It is a platform-scoped grant by design (**D-026**); it sits outside the tenant hierarchy and the tenant-isolation boundary (D-001) does not apply to it.
 - **FKs:** `app_user_id -> app_users.id` (the user identity that holds the grant); `granted_by -> app_users.id` (who issued the grant); `revoked_by -> app_users.id` (who revoked it, nullable until revoked). No FK to any tenant table.
 - **Notes (PROPOSED, D-026):**
@@ -294,7 +294,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ### 6.1 `orders`
 - **Purpose:** A customer order (dine-in/takeaway). Created at a POS, possibly offline; reconciled on sync. Receipt number is a per-branch server-assigned monotonic sequence (D-021).
 - **Key fields:** `id`, `order_type` (`dine_in`/`takeaway` — **ASSUMPTION** label set; takeaway skips `served` per D-018), `receipt_number` (authoritative, server-assigned), `receipt_provisional_id` (offline provisional, reconciled on sync — **D-021**), `currency` (ISO 4217; **single currency per order**, **Q-007**), `subtotal_minor`, `discount_total_minor`, `tax_total_minor`, `grand_total_minor` (**all integer minor units, D-007**; computation owned by [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md)), `void_reason` (when voided), timestamps + `deleted_at`.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Order):** `draft -> submitted -> accepted -> preparing -> ready -> served -> completed`; plus `cancelled` (pre-production, terminal) and `voided` (post-submission, requires authorization + reason, terminal). **Takeaway:** `ready -> completed` (skips `served`). **Terminal:** `completed`, `cancelled`, `voided`. **DECISION D-024:** `completed` is **TERMINAL** — `completed -> voided` and `completed -> cancelled` are **FORBIDDEN**. A **pre-completion** cancel/void is **rejected if a completed payment exists** on the order (the appropriate remedy would be a refund, which is **DEFERRED**). Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Order):** `draft -> submitted -> accepted -> preparing -> ready -> served -> completed`; plus `cancelled` (pre-production, terminal) and `voided` (post-submission, requires authorization + reason, terminal). **Takeaway:** `ready -> completed` (skips `served`). **Terminal:** `completed`, `cancelled`, `voided`. **DECISION D-024:** `completed` is **TERMINAL** — `completed -> voided` and `completed -> cancelled` are **FORBIDDEN**. A **pre-completion** cancel/void is **rejected if a completed payment exists** on the order (the appropriate remedy would be a refund, which is **DEFERRED**). Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`, `device_id` (originating), `station_id` not applicable at order level.
 - **FKs:** hierarchy ids; nullable `table_id -> tables.id` (dine-in); `shift_id -> shifts.id`; `opened_by_employee_profile_id -> employee_profiles.id`.
 - **Money:** all amounts `_minor`. Order never recomputes from live menu (**D-008**); arithmetic rules in [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md).
@@ -304,7 +304,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ### 6.2 `order_items`
 - **Purpose:** A line item on an order, with **price snapshots captured at order time** (D-008).
 - **Key fields:** `id`, `quantity`, `menu_item_id` (reference), `menu_item_name_snapshot` (localizable display snapshot), `unit_price_minor_snapshot` (**integer minor units; snapshot, D-008**), `item_size_snapshot`/`item_variant_snapshot` (denormalized chosen size/variant + their price deltas, `_minor`), `line_discount_minor`, `line_total_minor` (**all `_minor`, D-007**), `void_reason` (when voided), timestamps + `deleted_at`.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Order item):** `pending -> queued -> preparing -> ready -> served`; plus `voided`, `cancelled` (terminal). Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Order item):** `pending -> queued -> preparing -> ready -> served`; plus `voided`, `cancelled` (terminal). Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`. (Inherits order scope.)
 - **FKs:** `order_id -> orders.id`, `menu_item_id -> menu_items.id` (reference only; price comes from snapshot), `organization_id`, `restaurant_id`, `branch_id`, nullable `station_id -> stations.id` (routing).
 - **Money:** **snapshot** prices in `_minor`; never recomputed from live menu (**D-008**).
@@ -325,7 +325,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ### 7.1 `kitchen_tickets`
 - **Purpose:** A station's view/grouping of items to prepare for an order; the unit the KDS acknowledges and bumps.
 - **Key fields:** `id`, `ticket_number` (display), `recall_count`, `acknowledged_at`, `bumped_at`, timestamps + `deleted_at`.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Kitchen ticket):** `new -> acknowledged -> in_preparation -> ready -> bumped`; plus `recalled` and `cancelled`. **Note:** `recalled` is a **transition/audit marker** (the `bumped -> in_preparation` recall), not a distinct resting state — the resting state after a recall is `in_preparation` (per [STATE_MACHINES](STATE_MACHINES.md) §3). **Terminal:** `bumped`, `cancelled`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Kitchen ticket):** `new -> acknowledged -> in_preparation -> ready -> bumped`; plus `recalled` and `cancelled`. **Note:** `recalled` is a **transition/audit marker** (the `bumped -> in_preparation` recall), not a distinct resting state — the resting state after a recall is `in_preparation` (per [STATE_MACHINES](STATE_MACHINES.md) §3). **Terminal:** `bumped`, `cancelled`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`, `station_id`.
 - **FKs:** `order_id -> orders.id`, `station_id -> stations.id`, hierarchy ids.
 - **SECURITY REQUIREMENT:** KDS scope must not read financial reports (isolation test, [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md)).
@@ -334,7 +334,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ### 7.2 `kitchen_station_items`
 - **Purpose:** The per-station preparation state of an individual order item routed to a station.
 - **Key fields:** `id`, `quantity`, `started_at`, `ready_at`, `bumped_at`, `void_reason`, timestamps + `deleted_at`.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Kitchen station item):** `queued -> in_preparation -> ready -> bumped`; plus `voided`. **Terminal:** `bumped`, `voided`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Kitchen station item):** `queued -> in_preparation -> ready -> bumped`; plus `voided`. **Terminal:** `bumped`, `voided`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`, `station_id`.
 - **FKs:** `kitchen_ticket_id -> kitchen_tickets.id`, `order_item_id -> order_items.id`, `station_id -> stations.id`, hierarchy ids.
 - **Sync:** standard set.
@@ -346,7 +346,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ### 8.1 `payments`
 - **Purpose:** A tender against an order. Void vs cancellation vs refund are distinct ([MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md); refunds **DEFERRED**).
 - **Key fields:** `id`, `method` (`cash`/`card`/... — **ASSUMPTION** label set), `amount_minor`, `tendered_minor`, `change_minor` (**all integer minor units, D-007**), `currency` (ISO 4217; matches order currency — **Q-007**), `void_reason`, timestamps + `deleted_at`.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Payment):** `pending -> tendered -> completed`; plus `voided`, `failed`. **`refunded` is DEFERRED.** **Terminal:** `completed`, `voided`, `failed`. **DECISION D-023:** `completed` is **TERMINAL** — `completed -> voided` is **FORBIDDEN**. Payment **void is only permitted pre-completion** (`pending -> voided`, `tendered -> voided`); refunds/reversals are **DEFERRED**. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Payment):** `pending -> tendered -> completed`; plus `voided`, `failed`. **`refunded` is DEFERRED.** **Terminal:** `completed`, `voided`, `failed`. **DECISION D-023:** `completed` is **TERMINAL** — `completed -> voided` is **FORBIDDEN**. Payment **void is only permitted pre-completion** (`pending -> voided`, `tendered -> voided`); refunds/reversals are **DEFERRED**. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`, `device_id`.
 - **FKs:** `order_id -> orders.id`, `shift_id -> shifts.id`, `cash_drawer_session_id -> cash_drawer_sessions.id` (for cash), `taken_by_employee_profile_id -> employee_profiles.id`, hierarchy ids.
 - **Money:** all `_minor`. **DEFERRED:** tips (**Q-011**); service charge rules (**Q-012**).
@@ -357,7 +357,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 - **Purpose:** An operational work period at a branch, the rollup boundary for sales/cash reporting.
 - **Key fields:** `id`, `opened_at`, `closed_at`, `reconciled_at`, `expected_total_minor`, `counted_total_minor`, `variance_minor` (**all integer minor units, D-007**), timestamps + `deleted_at`.
 - **Money cross-ref:** `expected_total_minor` here is what [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md) calls `expected_cash_minor`; the signed variance definition (`variance_minor = counted - expected`) is **owned** by [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md) — this document only declares the column.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Shift):** `opening -> open -> closing -> closed -> reconciled`. **Terminal:** `reconciled`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Shift):** `opening -> open -> closing -> closed -> reconciled`. **Terminal:** `reconciled`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Close/count vs reconciliation (DECISION D-028):** **shift close/count** (`close_shift`; performed by the cashier or an authorized manager) and **reconciliation** (`reconcile_shift`; performed by manager / restaurant_owner / org_owner) are **separate** operations with separate authorization. The `accountant` role is **strictly read-only** and performs **no mutation** here (no close, no count, no reconcile). The `variance_minor = counted − expected` arithmetic is **owned** by [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`.
 - **FKs:** `opened_by_employee_profile_id -> employee_profiles.id`, hierarchy ids.
@@ -368,7 +368,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 - **Purpose:** A cash-drawer accounting session **bound to a shift** (opening float -> active -> counting -> closed with variance -> reconciled).
 - **Key fields:** `id`, `opening_float_minor`, `counted_total_minor`, `expected_total_minor`, `variance_minor` (**all integer minor units, D-007**), `opened_at`, `closed_at`, `reconciled_at`, timestamps + `deleted_at`.
 - **Money cross-ref:** `expected_total_minor` here is what [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md) calls `expected_cash_minor`; the signed variance definition (`variance_minor = counted - expected`) is **owned** by [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md) — this document only declares the column.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Cash drawer session):** `opened (opening float) -> active -> counting -> closed (counted+variance) -> reconciled`. **Terminal:** `reconciled`. **Bound to a shift.** Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Cash drawer session):** `opened (opening float) -> active -> counting -> closed (counted+variance) -> reconciled`. **Terminal:** `reconciled`. **Bound to a shift.** Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Close/count vs reconciliation (DECISION D-028):** the **close/count** step (`close_shift`; cashier or authorized manager) and the **reconciliation** step (`reconcile_shift`; manager / restaurant_owner / org_owner) are **separate** with separate authorization. The `accountant` role is **strictly read-only** and performs **no mutation** on the drawer session. `variance_minor = counted − expected` arithmetic is **owned** by [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`, `device_id` (the drawer's POS).
 - **FKs:** `shift_id -> shifts.id` (NOT NULL — bound to a shift), `device_id -> devices.id`, `opened_by_employee_profile_id -> employee_profiles.id`, hierarchy ids.
@@ -382,7 +382,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ### 9.1 `print_jobs`
 - **Purpose:** A queued render of a receipt or kitchen ticket sent to an ESC/POS printer behind a replaceable adapter (D-009). Printing/encoding detail owned by [PRINTERS_AND_HARDWARE_SPEC](PRINTERS_AND_HARDWARE_SPEC.md).
 - **Key fields:** `id`, `job_type` (`receipt`/`kitchen_ticket` — **ASSUMPTION** label set), `payload_ref` (rendered content/reference), `retry_count`, `max_retries`, `last_error`, `abandoned_at`, timestamps + `deleted_at`.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Print job):** `created -> queued -> printing -> printed`; plus `failed -> retrying`, `cancelled`, `abandoned` (after max retries). **Terminal:** `printed`, `cancelled`, `abandoned`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Print job):** `created -> queued -> printing -> printed`; plus `failed -> retrying`, `cancelled`, `abandoned` (after max retries). **Terminal:** `printed`, `cancelled`, `abandoned`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`, `device_id` (printing device), nullable `station_id` (for kitchen tickets).
 - **FKs:** nullable `order_id -> orders.id`, nullable `kitchen_ticket_id -> kitchen_tickets.id`, hierarchy ids.
 - **RISK R-001 / R-006:** ESC/POS hardware variation and Arabic/Hebrew encoding (raster fallback) — **OPEN QUESTION Q-015**; handled in [PRINTERS_AND_HARDWARE_SPEC](PRINTERS_AND_HARDWARE_SPEC.md).
@@ -395,7 +395,7 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ### 10.1 `sync_operations`
 - **Purpose:** The **outbox/inbox/processed-operation ledger** entry for every mutating client operation (D-010, D-022). Owns the idempotency record; mechanics owned by [OFFLINE_SYNC_SPEC](OFFLINE_SYNC_SPEC.md).
 - **Key fields:** `id`, `device_id`, `local_operation_id` (together the **idempotency key**, **D-022**), `operation_type`, `target_entity`, `target_id`, `payload` (op body), `client_created_at`, `server_received_at`, `applied_at`, `retry_count`, `conflict_info`, `rejection_reason`, timestamps.
-- **Status column (PROPOSED, D-018 — pending review and approval; RF-001 §8 directs evaluation, not final assumption — Sync operation):** `created -> pending -> in_flight -> applied`; plus `rejected` (permanent), `dead` (poison after max retries), `conflict -> resolved`. **Terminal:** `applied`, `rejected`, `dead`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
+- **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Sync operation):** `created -> pending -> in_flight -> applied`; plus `rejected` (permanent), `dead` (poison after max retries), `conflict -> resolved`. **Terminal:** `applied`, `rejected`, `dead`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`, `device_id`.
 - **FKs:** `device_id -> devices.id`, hierarchy ids; `target_id` is a soft reference to the affected row.
 - **Constraint:** **UNIQUE(`device_id`, `local_operation_id`)** enforces idempotency at the DB layer (**D-022**, layer 4 of **D-012**).

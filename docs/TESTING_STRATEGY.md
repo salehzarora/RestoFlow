@@ -1,8 +1,8 @@
 # TESTING_STRATEGY.md — RestoFlow Test Strategy
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** DRAFT (candidate) for M0A (RF-001), proposed for the architecture freeze (pending review and approval). **Owner doc:** This document owns the RestoFlow testing strategy.
+**Status:** FROZEN for M0A (RF-001), frozen as the M0A architecture baseline at RF-004 (approved into the frozen M0A baseline (RF-004)). **Owner doc:** This document owns the RestoFlow testing strategy.
 **Authoritative cross-references (reference, never redefine):**
 [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md) (source of the isolation/permission cases and RLS model),
 [STATE_MACHINES.md](STATE_MACHINES.md) (source of every transition table),
@@ -82,7 +82,7 @@ Additional deny-by-default isolation assertions (same fixture):
 
 ## 3. State-machine tests
 
-[STATE_MACHINES.md](STATE_MACHINES.md) owns the transition tables; this section defines the test pattern applied to **every** PROPOSED state machine in **DECISION D-018** (state enumerations are PROPOSED, pending review and approval; RF-001 §8 directs us to evaluate, not assume final). For each machine we run a **transition matrix test**: for every (state × event) pair, assert the result is exactly the documented next state **or** an explicit rejection — there is no third outcome and no undocumented transition is silently allowed.
+[STATE_MACHINES.md](STATE_MACHINES.md) owns the transition tables; this section defines the test pattern applied to **every** PROPOSED state machine in **DECISION D-018** (state enumerations are PROPOSED, approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final). For each machine we run a **transition matrix test**: for every (state × event) pair, assert the result is exactly the documented next state **or** an explicit rejection — there is no third outcome and no undocumented transition is silently allowed.
 
 Pattern (per machine):
 1. **Allowed transitions pass**: each documented edge moves source → target and emits the required side effects (e.g. void requires authorization + reason and an audit event).
@@ -90,7 +90,7 @@ Pattern (per machine):
 3. **Terminal states are sinks**: no event moves a row out of a terminal state.
 4. **Guards enforced**: transitions with conditions (authorization, reason, takeaway routing) fail closed when the guard is unmet.
 
-Machines covered (PROPOSED enumerations from **DECISION D-018**, pending review and approval):
+Machines covered (PROPOSED enumerations from **DECISION D-018**, approved into the frozen M0A baseline (RF-004)):
 
 | Machine | Notable assertions |
 |---|---|

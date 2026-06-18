@@ -1,6 +1,6 @@
 # TASK_TRACKER.md — Session Resume Pointer
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 > Concise session-resume file only. **NOT** a backlog. The master task list lives in
 > [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) and [JIRA_IMPORT.csv](JIRA_IMPORT.csv).
@@ -8,15 +8,15 @@
 | Field | Value |
 | --- | --- |
 | Jira project key | RF |
-| Current milestone | M0A |
-| Active ticket | RF-003 — Resolve Approved RF-002 Findings & Prepare the Architecture Freeze Candidate |
-| Status | In Progress |
-| Branch | (none yet — M0A is docs-only, not committed) |
+| Current milestone | M0A — COMPLETE (architecture baseline FROZEN at RF-004) |
+| Active ticket | RF-004 — Human Architecture Freeze Approval — **DONE (approved by Saleh)**. RF-001/RF-002/RF-003 all complete. |
+| Status | M0A frozen; no active ticket — awaiting M0B kickoff |
+| Branch | `main` (M0A baseline committed at RF-004; no remote push) |
 | Primary agent | Claude Code |
 | Reviewer | Codex |
-| Next step | Final Codex read-only re-verification of the RF-003 cleanup, then RF-004 human approval / freeze event |
-| Current blockers | none (RF-001 done; RF-002 complete — APPROVE WITH CHANGES; RF-003 Codex verification returned CHANGES REQUESTED, now applied) |
-| Last verification | RF-003 cleanup applied after Codex CHANGES-REQUESTED: B-001 open-question gate (Q-001..Q-024 set to **Accepted Open** per **DECISION D-027** — none resolved/guessed), B-002 dangling branch/commit examples repointed to existing tickets (RF-054, RF-036), N-001 README decision range → D-001..D-028, plus `.claude/` added to `.gitignore`. Earlier RF-003 content corrections (payment/order terminal rules, platform-admin separation, accountant read-only, shift split) stand — pending final Codex re-verification + Saleh approval (RF-004 freeze event) |
+| Next step | Prepare **M0B** (technical foundation): begin with **RF-010** (Melos monorepo) and **RF-013** (Supabase bootstrap) **only after Jira/project tracking is ready**. Do not start M0B before that. |
+| Current blockers | none (RF-001/002/003 done; RF-004 freeze approved by Saleh; final Codex verification passed) |
+| Last verification | RF-004 freeze applied: all doc status banners set to FROZEN (M0A baseline, approved at RF-004); RF-004 changelog entry recorded in [DECISIONS.md](DECISIONS.md); Q-001..Q-024 remain **Accepted Open** (none resolved/guessed); D-001..D-028 frozen; `.claude/` ignored; no app code/migrations/manifests/CI/dependencies created; one commit `docs: freeze M0A architecture baseline [RF-004]`, no push. |
 
 ## Authoritative references
 

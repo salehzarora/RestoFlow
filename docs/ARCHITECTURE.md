@@ -1,8 +1,8 @@
 # RestoFlow — System Architecture
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-> **Scope:** M0A produces the candidate document set proposed for the architecture freeze. Design only — no code, packages, migrations, or CI are produced in this milestone (**DECISION D-019**).
+> **Scope:** M0A produces the architecture-baseline document set frozen as the M0A architecture baseline at RF-004. Design only — no code, packages, migrations, or CI are produced in this milestone (**DECISION D-019**).
 >
 > **Ownership:** This document owns *system structure* and how the pieces fit together. It **references** the detailed specs and never redefines their topics. For decision rationale see [DECISIONS](DECISIONS.md); for unresolved items see [OPEN_QUESTIONS](OPEN_QUESTIONS.md).
 
@@ -20,7 +20,7 @@ These principles are binding constraints on every layer described below. They de
 
 3. **Defence in depth (DECISION D-011, D-012, D-013).** Four security layers: (1) PostgreSQL RLS; (2) membership/role + branch/device scoping checks; (3) sensitive mutations via PostgreSQL RPC (`SECURITY DEFINER`) that authorize + audit; (4) database constraints as the final safety boundary. Append-only audit events capture full actor/tenant/device context. **SECURITY REQUIREMENT:** no service-role credentials in Flutter clients; no shared restaurant password. See [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md).
 
-4. **Contracts-first.** APIs, RPC signatures, state transitions, and sync payloads are settled as contracts before implementation (proposed for freeze; pending review and approval). Clients and server agree on the same contract. See [API_CONTRACT](API_CONTRACT.md) and [STATE_MACHINES](STATE_MACHINES.md). Shared-package and API-contract changes require dedicated tickets (**DECISION D-016**).
+4. **Contracts-first.** APIs, RPC signatures, state transitions, and sync payloads are settled as contracts before implementation (frozen as the M0A baseline at RF-004). Clients and server agree on the same contract. See [API_CONTRACT](API_CONTRACT.md) and [STATE_MACHINES](STATE_MACHINES.md). Shared-package and API-contract changes require dedicated tickets (**DECISION D-016**).
 
 5. **No floating-point money (DECISION D-007).** Money is stored and transported as integer **minor units** in columns suffixed `_minor`, everywhere — DB, RPC, Dart domain, and sync payloads. Currency is per organization (overridable per restaurant), single currency per order, ISO 4217. Orders never recompute from live menu prices; they use price/modifier snapshots taken at order time (**DECISION D-008**). See [MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md).
 
@@ -127,7 +127,7 @@ restoflow/
 
 Layering intent (enforced as dependency rules in M0B):
 
-- `domain` depends on nothing app-specific; it holds the **PROPOSED state enumerations** (**DECISION D-018**; pending review and approval — RF-001 §8 directs us to evaluate, not assume final) and money-typed fields backed by `money`.
+- `domain` depends on nothing app-specific; it holds the **PROPOSED state enumerations** (**DECISION D-018**; approved into the frozen M0A baseline (RF-004) — RF-001 §8 directs us to evaluate, not assume final) and money-typed fields backed by `money`.
 - `data_local` and `data_remote` depend on `domain`; `sync` orchestrates both.
 - `auth_identity` owns the **six identity concepts** and exposes the membership-scoped tenant context consumed by queries (Section 5).
 - `feature_*` packages compose lower packages and are consumed by `apps/*`. Apps contain wiring (routing via GoRouter, Riverpod providers) and surface-specific UI only.
@@ -173,7 +173,7 @@ Tenant context is **`organization_id`** (**DECISION D-001**), augmented by `rest
 Sensitive mutations — voids, refunds (**DEFERRED**, see [STATE_MACHINES](STATE_MACHINES.md)), discounts beyond policy, shift/drawer reconciliation, device pairing/revocation, role/membership changes — do **not** go through direct table writes. They flow through PostgreSQL **RPC (`SECURITY DEFINER`)** functions (**DECISION D-011**, layer 3 of **D-012**) that:
 
 1. Re-derive tenant context and verify the actor's membership/role/scope (a cashier cannot void an order without permission — canonical test).
-2. Validate the requested state transition against the proposed state machines (**DECISION D-018**, pending review and approval; [STATE_MACHINES](STATE_MACHINES.md)). Payment and fulfillment are **independent** transition tracks (**DECISION D-025**): a payment may complete from any of `submitted`/`accepted`/`preparing`/`ready`/`served` (quick-service **pay-first**), and completing payment does not advance fulfillment. A `completed` payment and a `completed` order are **terminal** (**DECISION D-023/D-024**): a void is accepted only before completion, an order void/cancel is rejected once a completed payment exists, and there is no refund in MVP (refunds **DEFERRED**).
+2. Validate the requested state transition against the proposed state machines (**DECISION D-018**, approved into the frozen M0A baseline (RF-004); [STATE_MACHINES](STATE_MACHINES.md)). Payment and fulfillment are **independent** transition tracks (**DECISION D-025**): a payment may complete from any of `submitted`/`accepted`/`preparing`/`ready`/`served` (quick-service **pay-first**), and completing payment does not advance fulfillment. A `completed` payment and a `completed` order are **terminal** (**DECISION D-023/D-024**): a void is accepted only before completion, an order void/cancel is rejected once a completed payment exists, and there is no refund in MVP (refunds **DEFERRED**).
 3. Apply the change within DB constraints (layer 4).
 4. Write an **append-only audit event** with actor, device, organization, restaurant, branch, timestamp, action, reason, old values, new values (**DECISION D-013**), never updatable/deletable by app roles.
 5. Carry the caller's **idempotency key** (`device_id` + `local_operation_id`) so a retried/duplicated call is applied at most once (**DECISION D-022**).
@@ -187,7 +187,7 @@ The exact function signatures, parameters, and error contracts are owned by [API
 > Full rules are owned by [OFFLINE_SYNC_SPEC](OFFLINE_SYNC_SPEC.md). This is the architectural summary only.
 
 - **Local-first writes.** Mutations are written to the local Drift store and enqueued in a local **outbox** with an idempotency key (`device_id` + `local_operation_id`, **DECISION D-022**), client + server timestamps, and an entity revision/version.
-- **Server inbox / processed-operation ledger.** On reconnect, the `sync` engine pushes outbox operations; the server records each in a processed-operation ledger so duplicates are rejected idempotently. Sync operation lifecycle uses the proposed enumeration (pending review and approval) `created -> pending -> in_flight -> applied`, plus `rejected` (permanent), `dead` (poison after max retries), and `conflict -> resolved` (**DECISION D-018**).
+- **Server inbox / processed-operation ledger.** On reconnect, the `sync` engine pushes outbox operations; the server records each in a processed-operation ledger so duplicates are rejected idempotently. Sync operation lifecycle uses the proposed enumeration (approved into the frozen M0A baseline (RF-004)) `created -> pending -> in_flight -> applied`, plus `rejected` (permanent), `dead` (poison after max retries), and `conflict -> resolved` (**DECISION D-018**).
 - **Retry, ordering, recovery.** Retry with backoff; dependent-operation ordering; crash recovery; poison/permanent-rejection handling; sync status visible to the cashier.
 - **Conflicts & deletions.** Multi-device conflict rules per entity (**OPEN QUESTION Q-010** — LWW vs. domain rules); soft-delete **tombstones** for sync-relevant deletions (**DECISION D-020**).
 - **Revocation while offline.** Removing an employee or revoking a device must remove FUTURE access; the server rejects operations from a revoked device/removed employee on reconnect within the offline validity window (**OPEN QUESTION Q-009**, **RISK R-007**).
@@ -201,7 +201,7 @@ The exact function signatures, parameters, and error contracts are owned by [API
 > Full rules are owned by [PRINTERS_AND_HARDWARE_SPEC](PRINTERS_AND_HARDWARE_SPEC.md). This is the architectural summary only.
 
 - ESC/POS printing sits behind a **replaceable adapter** in `packages/printing` (**DECISION D-009**) so business logic depends on an interface, not a printer model (**RISK R-001** mitigation: standardize one pilot model).
-- Print jobs follow the proposed lifecycle (pending review and approval) `created -> queued -> printing -> printed`, plus `failed -> retrying`, `cancelled`, and `abandoned` after max retries (**DECISION D-018**). Terminal: `printed`, `cancelled`, `abandoned`.
+- Print jobs follow the proposed lifecycle (approved into the frozen M0A baseline (RF-004)) `created -> queued -> printing -> printed`, plus `failed -> retrying`, `cancelled`, and `abandoned` after max retries (**DECISION D-018**). Terminal: `printed`, `cancelled`, `abandoned`.
 - Receipts/tickets are localized (ar/he/en) with an encoding / **raster fallback** strategy for Arabic/Hebrew (**DECISION D-014**, **RISK R-006**, **OPEN QUESTION Q-015** for connectivity network/USB/BT and encoding).
 
 ---

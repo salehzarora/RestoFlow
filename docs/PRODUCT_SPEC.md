@@ -1,8 +1,8 @@
 # RestoFlow — Product Specification (PRODUCT_SPEC.md)
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** M0A candidate document set, proposed for architecture freeze (pending review and approval) (ticket RF-001).
+**Status:** M0A architecture-baseline document set, frozen as the M0A architecture baseline at RF-004 (approved into the frozen M0A baseline (RF-004)) (ticket RF-001).
 **Owner of this document:** Product vision, personas, and product surfaces.
 **Authority:** This document owns the product vision, target customers/personas, and the description of the product surfaces and core user journeys. It does NOT define money/tax, state transitions, security/RLS, sync, printing, API contracts, scope boundaries, or the decision/question registers — those belong to their owning documents and are referenced here, never redefined.
 
@@ -41,7 +41,7 @@ The first pilot (milestone M3) will run with **one restaurant and one branch**, 
 2. **Service never stops.** Loss of connectivity degrades cleanly to local operation, not failure.
 3. **Every action is attributable.** No shared accounts; each human acts under an individual identity (**DECISION D-004**). Sensitive actions are audited (**DECISION D-013**).
 4. **Money is exact.** All money is integer minor units; no floating point anywhere (**DECISION D-007**, owned by [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md)).
-5. **Freeze before code.** The documentation set is authored as the candidate set proposed for the architecture freeze before implementation; the freeze occurs only after independent review and human approval (**DECISION D-019**, milestone M0A).
+5. **Freeze before code.** The documentation set is authored as the candidate set frozen as the M0A architecture baseline at RF-004 before implementation; the freeze occurs only after independent review and human approval (**DECISION D-019**, milestone M0A).
 
 ---
 
@@ -100,7 +100,7 @@ The kitchen-facing surface, scoped to a branch and station.
 
 - Displays kitchen tickets and station items, supports acknowledge / in-preparation / ready / bump, and audited recall.
 - **SECURITY REQUIREMENT** — KDS must never expose financial reports or payment data (this is part of the canonical isolation test set in [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md)).
-- Ticket and station-item lifecycles use the PROPOSED state enumerations (pending review and approval; RF-001 §8 directs us to evaluate, not assume final) owned by [STATE_MACHINES.md](STATE_MACHINES.md); this spec does not restate transitions.
+- Ticket and station-item lifecycles use the PROPOSED state enumerations (approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final) owned by [STATE_MACHINES.md](STATE_MACHINES.md); this spec does not restate transitions.
 
 ### 3.3 Owner/manager dashboard
 
@@ -132,7 +132,7 @@ These capabilities are surfaced inside POS/KDS/dashboard rather than being stand
 
 ## 4. Core user journeys
 
-These narratives describe product behavior. Status values referenced are the PROPOSED state enumerations (pending review and approval; RF-001 §8 directs us to evaluate, not assume final) owned by [STATE_MACHINES.md](STATE_MACHINES.md); money behavior is owned by [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md); authorization is owned by [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md). This spec never restates those rules — it shows how a persona experiences them.
+These narratives describe product behavior. Status values referenced are the PROPOSED state enumerations (approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final) owned by [STATE_MACHINES.md](STATE_MACHINES.md); money behavior is owned by [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md); authorization is owned by [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md). This spec never restates those rules — it shows how a persona experiences them.
 
 ### 4.1 Open a shift
 
@@ -231,11 +231,11 @@ The authoritative in-scope / out-of-scope and DEFERRED list is owned by [MVP_SCO
 
 - **DEFERRED** — Non-cash/card payments and integrated payment processors.
 - **DEFERRED** — Tips (**OPEN QUESTION Q-011**) and elaborate service-charge handling (**OPEN QUESTION Q-012**).
-- **DEFERRED** — Refunds (the `refunded` payment state is deferred per the PROPOSED state enumerations (pending review and approval) in [STATE_MACHINES.md](STATE_MACHINES.md)).
+- **DEFERRED** — Refunds (the `refunded` payment state is deferred per the PROPOSED state enumerations (approved into the frozen M0A baseline (RF-004)) in [STATE_MACHINES.md](STATE_MACHINES.md)).
 - **DEFERRED** — Self-serve signup, billing/subscriptions (**OPEN QUESTION Q-016**), and full platform-admin tooling (M4).
 - **DEFERRED** — Reservations, delivery/marketplace integrations, loyalty, and advanced analytics.
 - **OPEN QUESTION Q-017** — Whether the read-only `accountant` role ships in MVP or later.
-- **RISK R-004** — Scope creep into deferred features is mitigated by the candidate scope proposed for freeze (pending review and approval) plus a human approval gate (**DECISION D-016**).
+- **RISK R-004** — Scope creep into deferred features is mitigated by the scope frozen as the M0A baseline at RF-004 plus a human approval gate (**DECISION D-016**).
 
 For milestone sequencing (M0A through M4) and timeline, see [PROJECT_PLAN.md](PROJECT_PLAN.md) (**DECISION D-019**).
 
@@ -247,7 +247,7 @@ For milestone sequencing (M0A through M4) and timeline, see [PROJECT_PLAN.md](PR
 - [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — open-questions register (Q-xxx), authoritative.
 - [MVP_SCOPE.md](MVP_SCOPE.md) — in/out scope and DEFERRED list.
 - [DOMAIN_MODEL.md](DOMAIN_MODEL.md) — entities, fields, relationships, naming.
-- [STATE_MACHINES.md](STATE_MACHINES.md) — PROPOSED state enumerations and transitions (pending review and approval).
+- [STATE_MACHINES.md](STATE_MACHINES.md) — PROPOSED state enumerations and transitions (approved into the frozen M0A baseline (RF-004)).
 - [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md) — money, tax, receipts, discounts.
 - [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md) — identity, roles, RLS, threats, isolation tests.
 - [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md) — offline-first, outbox/inbox, idempotency, reconciliation.

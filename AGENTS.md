@@ -1,6 +1,6 @@
 # AGENTS.md — RestoFlow Multi-Agent Governance Contract
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [docs/DECISIONS.md](docs/DECISIONS.md) and [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [docs/DECISIONS.md](docs/DECISIONS.md) and [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
 
 This is the short, binding contract that **Claude Code** and **Codex** read before
 doing any work on RestoFlow. It encodes the agent workflow (**DECISION D-016**),
@@ -108,7 +108,7 @@ Mirrors the v1.0 plan. Applies to **both** AI agents unless stated.
 ## 5. Every task needs a ticket ID
 
 No work — code, migration, contract edit, or doc change — happens without a
-**ticket `RF-<number>`** (this M0A documentation set, proposed for the architecture freeze pending review and approval, is **RF-001**). Branches,
+**ticket `RF-<number>`** (this M0A documentation set, frozen as the M0A architecture baseline at RF-004 approved into the frozen M0A baseline (RF-004), is **RF-001**). Branches,
 commits, and reports all carry the ticket ID. Shared-package and API-contract
 changes get their **own dedicated tickets** (Section 3, ask-first).
 

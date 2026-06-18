@@ -1,8 +1,8 @@
 # STATE_MACHINES.md — RestoFlow State Machines (Authoritative for Transitions)
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** M0A candidate document, proposed for the architecture freeze (pending review and approval) (RF-001).
+**Status:** M0A architecture-baseline document, frozen as the M0A architecture baseline at RF-004 (approved into the frozen M0A baseline (RF-004)) (RF-001).
 **Owner of this topic:** This document is the single source of truth for **state transitions** of every stateful entity in RestoFlow. It owns the *allowed transition tables*, *forbidden transitions*, *terminal states*, *who/condition/reason/audit/offline/reversibility* per transition.
 
 **This document does NOT own:**
@@ -46,7 +46,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 1. Order
 
-**Proposed states (D-018, pending review and approval):** `draft → submitted → accepted → preparing → ready → served → completed`; plus `cancelled` (pre-production, terminal) and `voided` (post-submission, requires authorization+reason, terminal).
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `draft → submitted → accepted → preparing → ready → served → completed`; plus `cancelled` (pre-production, terminal) and `voided` (post-submission, requires authorization+reason, terminal).
 **Terminal:** `completed`, `cancelled`, `voided`.
 **Takeaway rule:** takeaway/pickup orders skip `served` (`ready → completed`).
 
@@ -77,7 +77,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 > **ASSUMPTION (void offline):** `void` is treated as `No-online-only` because it is a privileged, audited financial reversal and offline authorization staleness is a live risk (**R-007**, **Q-009**). If the pilot requires offline voids, this becomes a provisional transition gated by a cached privileged PIN session within the offline window; flagged here rather than silently allowed.
 
-> **ASSUMPTION (`accepted` is retained, not redundant):** The model distinguishes `submitted` (order captured by POS, idempotency id assigned) from `accepted` (kitchen/business acknowledgement that the order is admitted for production). One might argue `submitted` and `accepted` collapse for a single-station setup, but they are kept distinct because: (a) cancellation policy differs (cancel is permitted in both pre-production states but production may begin only after `accepted`); (b) multi-station/KDS acknowledgement (**§3** kitchen_ticket `acknowledged`) maps cleanly onto `accepted`; (c) future auto-accept vs manual-accept configuration. We therefore PROPOSE retaining both states rather than dropping one (pending review and approval). No order state is considered redundant in this draft.
+> **ASSUMPTION (`accepted` is retained, not redundant):** The model distinguishes `submitted` (order captured by POS, idempotency id assigned) from `accepted` (kitchen/business acknowledgement that the order is admitted for production). One might argue `submitted` and `accepted` collapse for a single-station setup, but they are kept distinct because: (a) cancellation policy differs (cancel is permitted in both pre-production states but production may begin only after `accepted`); (b) multi-station/KDS acknowledgement (**§3** kitchen_ticket `acknowledged`) maps cleanly onto `accepted`; (c) future auto-accept vs manual-accept configuration. We therefore PROPOSE retaining both states rather than dropping one (approved into the frozen M0A baseline (RF-004)). No order state is considered redundant in this draft.
 
 ### 1.2 Forbidden / invalid transitions (non-exhaustive, illustrative)
 
@@ -95,7 +95,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 2. Order item
 
-**Proposed states (D-018, pending review and approval):** `pending → queued → preparing → ready → served`; plus `voided`, `cancelled` (terminal).
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `pending → queued → preparing → ready → served`; plus `voided`, `cancelled` (terminal).
 **Terminal:** `voided`, `cancelled`. (`served` is the normal end-of-life but is non-terminal in the enumeration because an item may still be voided post-service alongside an order void; see Forbidden.)
 > Note: `served` is the normal **resting end-of-life on the happy path** — parent order completion closes the line rather than moving the item to a separate "completed" status; `voided` is reserved for post-service reversal.
 
@@ -127,7 +127,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 3. Kitchen ticket
 
-**Proposed states (D-018, pending review and approval):** `new → acknowledged → in_preparation → ready → bumped`; plus `recalled` (`bumped → in_preparation`, audited), `cancelled`.
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `new → acknowledged → in_preparation → ready → bumped`; plus `recalled` (`bumped → in_preparation`, audited), `cancelled`.
 **Terminal:** `bumped`, `cancelled`.
 > Note on `recalled`: per D-018 a recall is the audited transition `bumped → in_preparation`. `recalled` is a **transition / audit marker**, not a persistent stored status value: it is the *named action/audit reason* for that transition, and the ticket's resting state after recall is `in_preparation`. (See ASSUMPTION below.)
 
@@ -160,7 +160,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 4. Kitchen station item
 
-**Proposed states (D-018, pending review and approval):** `queued → in_preparation → ready → bumped`; plus `voided`.
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `queued → in_preparation → ready → bumped`; plus `voided`.
 **Terminal:** `bumped`, `voided`.
 
 ### 4.1 Allowed transitions
@@ -186,7 +186,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 5. Payment
 
-**Proposed states (D-018, pending review and approval):** `pending → tendered → completed`; plus `voided`, `failed`; `refunded` (**DEFERRED**).
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `pending → tendered → completed`; plus `voided`, `failed`; `refunded` (**DEFERRED**).
 **Terminal:** `completed`, `voided`, `failed`.
 > **Independence note (D-025):** payment and order fulfillment are independent axes; **PAY-FIRST** is supported. A payment may start while the order is in `submitted`/`accepted`/`preparing`/`ready`/`served` (excludes `draft`/`cancelled`/`voided`/`completed`). Completing a payment does **not** auto-advance fulfillment.
 
@@ -216,7 +216,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 6. Shift
 
-**Proposed states (D-018, pending review and approval):** `opening → open → closing → closed → reconciled`.
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `opening → open → closing → closed → reconciled`.
 **Terminal:** `reconciled`.
 
 ### 6.1 Allowed transitions
@@ -246,7 +246,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 7. Cash drawer session
 
-**Proposed states (D-018, pending review and approval):** `opened(opening float) → active → counting → closed(counted+variance) → reconciled`.
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `opened(opening float) → active → counting → closed(counted+variance) → reconciled`.
 **Terminal:** `reconciled`. Bound to a shift (**§6**).
 
 ### 7.1 Allowed transitions
@@ -273,7 +273,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 8. Print job
 
-**Proposed states (D-018, pending review and approval):** `created → queued → printing → printed`; plus `failed → retrying`, `cancelled`, `abandoned` (after max retries).
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `created → queued → printing → printed`; plus `failed → retrying`, `cancelled`, `abandoned` (after max retries).
 **Terminal:** `printed`, `cancelled`, `abandoned`.
 > Print job behaviour and the ESC/POS adapter are owned by [PRINTERS_AND_HARDWARE_SPEC.md](PRINTERS_AND_HARDWARE_SPEC.md); this section owns only the state transitions.
 
@@ -307,7 +307,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 9. Device pairing
 
-**Proposed states (D-018, pending review and approval):** `code_issued → pending → paired → active → suspended → revoked`; plus `code_expired`, `rejected`.
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `code_issued → pending → paired → active → suspended → revoked`; plus `code_expired`, `rejected`.
 **Terminal:** `revoked`, `code_expired`, `rejected`.
 > Identity/credential semantics owned by [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md) (device identity = distinct from human, **D-005/D-006**). This section owns the pairing lifecycle transitions.
 
@@ -341,7 +341,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 
 ## 10. Sync operation
 
-**Proposed states (D-018, pending review and approval):** `created → pending → in_flight → applied`; plus `rejected` (permanent), `dead` (poison after max retries), `conflict → resolved`.
+**Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `created → pending → in_flight → applied`; plus `rejected` (permanent), `dead` (poison after max retries), `conflict → resolved`.
 **Terminal:** `applied`, `rejected`, `dead`.
 > Mechanics (outbox/inbox, idempotency, backoff, conflict policy) owned by [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md); this section owns the operation lifecycle states.
 
@@ -396,4 +396,4 @@ These are the load-bearing couplings tests must cover (full conflict/sync rules 
 
 ---
 
-*End of STATE_MACHINES.md. State values are PROPOSED by D-018 (pending review and approval, not frozen); transitions defined here are the M0A candidate proposed for the architecture freeze for RF-001 and are subject to ChatGPT and independent Codex review per D-016 before any freeze.*
+*End of STATE_MACHINES.md. State values are PROPOSED by D-018 (approved into the frozen M0A baseline (RF-004), not frozen); transitions defined here are the M0A candidate frozen as the M0A architecture baseline at RF-004 for RF-001 and are subject to ChatGPT and independent Codex review per D-016 before any freeze.*

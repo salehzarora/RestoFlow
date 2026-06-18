@@ -1,8 +1,8 @@
 # SECURITY_AND_THREAT_MODEL
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** M0A candidate, proposed for architecture freeze (pending review and approval) (RF-001).
+**Status:** M0A baseline, frozen as the M0A architecture baseline at RF-004 (approved into the frozen M0A baseline (RF-004)) (RF-001).
 **Owns:** the security model, RLS strategy, tenant-isolation rules, the four defence layers, the threat model, and the canonical mandatory isolation/permission **test assertions** that [TESTING_STRATEGY](TESTING_STRATEGY.md) references as its source.
 **Does not own / references only:** entities and fields ([DOMAIN_MODEL](DOMAIN_MODEL.md)), RPC/endpoint bodies ([API_CONTRACT](API_CONTRACT.md)), money/tax/receipt rules ([MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md)), sync mechanics ([OFFLINE_SYNC_SPEC](OFFLINE_SYNC_SPEC.md)), state transitions ([STATE_MACHINES](STATE_MACHINES.md)), backup/incident operations ([OPERATIONS_AND_RECOVERY](OPERATIONS_AND_RECOVERY.md)), and the decision/question registers ([DECISIONS](DECISIONS.md), [OPEN_QUESTIONS](OPEN_QUESTIONS.md)).
 
@@ -64,7 +64,7 @@ Sensitive operations include (non-exhaustive; signatures owned by [API_CONTRACT]
 - `SECURITY DEFINER` functions must set a safe `search_path` and re-derive tenant scope internally; they must never accept an authorization decision (e.g. "is_authorized=true") from the client.
 
 ### Layer 4 — Database constraints as the final safety boundary
-**SECURITY REQUIREMENT** — Schema constraints are the last line that holds even if Layers 1-3 are bypassed: `NOT NULL` on every `organization_id`; foreign keys that keep `restaurant_id`/`branch_id`/`device_id` within the same `organization_id`; `CHECK` constraints on enum/status values matching the PROPOSED state enumerations (**DECISION D-018** — PROPOSED, pending review and approval; RF-001 §8 directs us to evaluate, not assume final); unique constraints enforcing per-branch receipt sequence and idempotency keys (**DECISION D-021**, **D-022**); and money columns typed as integer minor units suffixed `_minor` (**DECISION D-007** — no floating-point money in DB, RPC, Dart, or sync payloads).
+**SECURITY REQUIREMENT** — Schema constraints are the last line that holds even if Layers 1-3 are bypassed: `NOT NULL` on every `organization_id`; foreign keys that keep `restaurant_id`/`branch_id`/`device_id` within the same `organization_id`; `CHECK` constraints on enum/status values matching the PROPOSED state enumerations (**DECISION D-018** — PROPOSED, approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final); unique constraints enforcing per-branch receipt sequence and idempotency keys (**DECISION D-021**, **D-022**); and money columns typed as integer minor units suffixed `_minor` (**DECISION D-007** — no floating-point money in DB, RPC, Dart, or sync payloads).
 
 ---
 
@@ -131,7 +131,7 @@ Scope rules:
 
 **SECURITY REQUIREMENT** — A human PIN session is layered on top of a valid device session; a PIN never authenticates against the platform directly. PIN credential material is stored as a salted hash referenced by the employee profile, never in plaintext (**DECISION D-005**; the employee profile carries a PIN credential *reference*, not the PIN).
 
-**SECURITY REQUIREMENT** — PIN entry is **rate-limited with lockout**: after a bounded number of consecutive failures the PIN is temporarily locked on that device and the lockout is auditable. (Exact threshold/backoff to be fixed in [API_CONTRACT](API_CONTRACT.md)/M0B; the *requirement* for an attempt cap is an RF-001 invariant, proposed for freeze here pending review and approval.)
+**SECURITY REQUIREMENT** — PIN entry is **rate-limited with lockout**: after a bounded number of consecutive failures the PIN is temporarily locked on that device and the lockout is auditable. (Exact threshold/backoff to be fixed in [API_CONTRACT](API_CONTRACT.md)/M0B; the *requirement* for an attempt cap is an RF-001 invariant, frozen as the M0A baseline at RF-004.)
 
 **SECURITY REQUIREMENT** — Sessions expire. Human PIN sessions are short-lived and re-prompt after inactivity; privileged web sessions have shorter lifetimes than cashier sessions; device sessions are renewable but revocable (Section 10). The offline validity of a cached PIN/permission is bounded by **OPEN QUESTION Q-009** (see Section 11).
 
@@ -141,7 +141,7 @@ Scope rules:
 
 **SECURITY REQUIREMENT** — POS/KDS devices have their own device identity and credentials with limited permissions (a device is not a human, **DECISION D-005**). A device session (**concept 5**) is required before any human PIN session (**concept 6**) can exist on that device.
 
-**SECURITY REQUIREMENT** — Device pairing uses short-lived enrollment codes / controlled enrollment that **expire** (**DECISION D-006**). The pairing lifecycle follows the PROPOSED state enumeration (**DECISION D-018** — PROPOSED, pending review and approval; RF-001 §8 directs us to evaluate, not assume final): `code_issued -> pending -> paired -> active -> suspended -> revoked`, plus `code_expired` and `rejected`; terminal states `revoked`, `code_expired`, `rejected`. An expired or unredeemed code cannot be used to pair.
+**SECURITY REQUIREMENT** — Device pairing uses short-lived enrollment codes / controlled enrollment that **expire** (**DECISION D-006**). The pairing lifecycle follows the PROPOSED state enumeration (**DECISION D-018** — PROPOSED, approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final): `code_issued -> pending -> paired -> active -> suspended -> revoked`, plus `code_expired` and `rejected`; terminal states `revoked`, `code_expired`, `rejected`. An expired or unredeemed code cannot be used to pair.
 
 **SECURITY REQUIREMENT** — Device revocation removes **future** access. A `revoked` device cannot establish new sessions, and operations it submits after revocation are rejected server-side on sync (Section 14, T-004), even if the device was offline at revocation time. Revocation is an audited RPC (Layer 3).
 

@@ -1,8 +1,8 @@
 # API_CONTRACT.md — RestoFlow RPC & Endpoint Contracts
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** DRAFT (candidate) for M0A (RF-001), proposed for architecture freeze pending review and approval. Documentation only — no implementation in this milestone.
+**Status:** FROZEN for M0A (RF-001), frozen as the M0A architecture baseline at RF-004 approved into the frozen M0A baseline (RF-004). Documentation only — no implementation in this milestone.
 **Owns:** RPC and endpoint contracts (names, fields, semantics). This document is the authoritative source of truth for the *shape and meaning* of every sensitive-mutation call between RestoFlow clients and the backend.
 **Does NOT own:** entity field definitions ([DOMAIN_MODEL](DOMAIN_MODEL.md)), allowed status transitions ([STATE_MACHINES](STATE_MACHINES.md)), authorization rules and isolation tests ([SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md)), money/tax/receipt arithmetic ([MONEY_AND_TAX_SPEC](MONEY_AND_TAX_SPEC.md)), sync mechanics ([OFFLINE_SYNC_SPEC](OFFLINE_SYNC_SPEC.md)), decisions ([DECISIONS](DECISIONS.md)), or open questions ([OPEN_QUESTIONS](OPEN_QUESTIONS.md)). This document references those; it does not redefine them.
 
@@ -68,7 +68,7 @@ Every successful response carries:
 }
 ```
 
-> **ASSUMPTION:** field names above are illustrative contract shapes for M0A; exact JSON wire encoding is finalized in M0B alongside the first migrations, but the *semantics* (idempotency key, derived tenant context, integer `_minor`, returned `revision`) are proposed for freeze here, pending review and approval.
+> **ASSUMPTION:** field names above are illustrative contract shapes for M0A; exact JSON wire encoding is finalized in M0B alongside the first migrations, but the *semantics* (idempotency key, derived tenant context, integer `_minor`, returned `revision`) are frozen as the M0A baseline at RF-004.
 
 ---
 

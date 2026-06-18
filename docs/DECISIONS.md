@@ -1,8 +1,8 @@
 # RestoFlow — DECISIONS.md (Decision Log)
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** DRAFT (candidate) — proposed for the architecture freeze; pending review and approval (RF-001).
+**Status:** FROZEN — M0A architecture baseline, approved at RF-004 (authored RF-001; independently reviewed RF-002; corrected RF-003).
 **Owner of this document:** This file is the single authoritative source for decision IDs (`D-xxx`). Every other document **cites** these IDs and must never invent a conflicting decision. Open questions are owned by [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) (`Q-xxx`); risks are surfaced from the canon risk register (`R-xxx`).
 
 **Decision-status taxonomy used below:**
@@ -15,7 +15,7 @@
 
 Each entry is an ADR-style block:
 
-- **ID + Title** — the candidate decision (proposed for the architecture freeze; pending review and approval).
+- **ID + Title** — the decision, part of the frozen M0A baseline approved at RF-004 (RF-001 invariants flagged as binding).
 - **Status** — one of the taxonomy values above, optionally annotated `Provisional (pending Q-xxx)` where a decision also depends on an unresolved open question.
 - **Context** — why the decision matters.
 - **Decision** — the precise choice.
@@ -23,7 +23,7 @@ Each entry is an ADR-style block:
 - **Consequences** — positive outcomes and negative/risk trade-offs (linking `R-xxx`).
 - **Related** — documents that depend on or expand the decision.
 
-**Conventions:** Multi-tenant by construction (no single-organization assumptions); no shared accounts; money is integer minor units only (no floating point). These are RF-001 invariants reinforced by individual decisions below; the rest of the log remains a candidate set proposed for the architecture freeze (pending review and approval).
+**Conventions:** Multi-tenant by construction (no single-organization assumptions); no shared accounts; money is integer minor units only (no floating point). These are RF-001 invariants reinforced by individual decisions below; the rest of the log is the frozen M0A baseline, approved at RF-004.
 
 **Adding decisions:** Do not invent decisions beyond D-001..D-028 elsewhere. If a new decision is genuinely required, add it here as the next free ID (D-029+) with a full ADR block and a note in the changelog, then cite it from the consuming document.
 
@@ -315,7 +315,7 @@ Each entry is an ADR-style block:
 
 - **Status:** PROPOSED DECISION — pending ChatGPT + Codex review + Saleh approval; not frozen. (RF-001 §8 explicitly directs us to evaluate these and NOT assume the listed values are final.)
 - **Context:** State values should be agreed before the domain model and transitions are designed, so every layer can align on legal statuses. RF-001 §8 directs us to evaluate, not assume, the final enumerations.
-- **Decision:** **DECISION D-018 (PROPOSED)** — the following status enumerations are PROPOSED (pending review and approval; RF-001 §8 directs us to evaluate, not assume final). [STATE_MACHINES](STATE_MACHINES.md) defines the transitions; [DOMAIN_MODEL](DOMAIN_MODEL.md) uses these candidate values:
+- **Decision:** **DECISION D-018 (PROPOSED)** — the following status enumerations are PROPOSED and were approved into the frozen M0A baseline at RF-004 (RF-001 §8 directed evaluation rather than assuming the values final). [STATE_MACHINES](STATE_MACHINES.md) defines the transitions; [DOMAIN_MODEL](DOMAIN_MODEL.md) uses these baseline values:
   - **Order:** `draft -> submitted -> accepted -> preparing -> ready -> served -> completed`; plus `cancelled` (pre-production, terminal) and `voided` (post-submission, requires authorization+reason, terminal). Takeaway skips `served` (`ready -> completed`). Terminal: `completed`, `cancelled`, `voided`.
   - **Order item:** `pending -> queued -> preparing -> ready -> served`; plus `voided`, `cancelled` (terminal).
   - **Kitchen ticket:** `new -> acknowledged -> in_preparation -> ready -> bumped`; plus `recalled` (`bumped -> in_preparation`, audited), `cancelled`. Terminal: `bumped`, `cancelled`.
@@ -340,7 +340,7 @@ Each entry is an ADR-style block:
 - **Status:** RF-001 INVARIANT (binding requirement) for the milestone structure M0A..M4. (Recorded as binding; the surrounding set is still a draft pending review. Indicative dates are PROPOSED and may change.)
 - **Context:** A staged plan separates documentation, foundation, prototype, real backend, hardware pilot, and sellable SaaS so that scope is gated and risk is sequenced.
 - **Decision:** **DECISION D-019** — milestones:
-  - **M0A** — Documentation & Architecture Freeze Candidate (originated RF-001; corrections RF-002/RF-003). The freeze EVENT itself is RF-004 (Saleh's approval) and has not yet occurred.
+  - **M0A** — Documentation & Architecture baseline, FROZEN at RF-004 (human-approved by Saleh); originated RF-001, independently reviewed RF-002, corrected RF-003.
   - **M0B** — Technical foundation (monorepo, CI, Supabase bootstrap, first multi-tenant migrations, RLS skeleton, Drift+outbox, l10n+RTL) — **no business features**.
   - **M1** — Local POS + KDS prototype (local data, no real backend).
   - **M2** — Real backend + synchronization (Auth, RLS, RPC, outbox/inbox, conflict handling).
@@ -402,7 +402,7 @@ Each entry is an ADR-style block:
 
 ## D-023 — Completed payment is terminal in MVP
 
-- **Status:** Accepted as an RF-002/RF-003 human-approved correction for the RF-004 freeze CANDIDATE; pending final Saleh freeze approval — not yet frozen.
+- **Status:** Accepted at the RF-004 architecture freeze (human-approved by Saleh, after RF-002 review and RF-003 corrections); part of the frozen M0A baseline.
 - **Context:** The Payment enumeration (**DECISION D-018**) lists `completed` as terminal, but earlier draft text did not state unambiguously whether a completed payment could later be voided. Allowing `completed -> voided` would silently reintroduce a refund/reversal pathway that the MVP has deliberately deferred, corrupting financial history and audit integrity. The void semantics for pre-completion states (cash physically received vs. not) also need to be explicit.
 - **Decision:** **DECISION D-023** —
   - `payment.completed` is **TERMINAL** in MVP.
@@ -421,7 +421,7 @@ Each entry is an ADR-style block:
 
 ## D-024 — Completed order is terminal in MVP
 
-- **Status:** Accepted as an RF-002/RF-003 human-approved correction for the RF-004 freeze CANDIDATE; pending final Saleh freeze approval — not yet frozen.
+- **Status:** Accepted at the RF-004 architecture freeze (human-approved by Saleh, after RF-002 review and RF-003 corrections); part of the frozen M0A baseline.
 - **Context:** The Order enumeration (**DECISION D-018**) marks `completed` terminal, but the draft did not state clearly that a completed order cannot be cancelled or voided after the fact, nor how cancel/void interacts with an already-completed payment. Permitting post-completion order changes would rewrite historical records and could imply an undeferred refund.
 - **Decision:** **DECISION D-024** —
   - `order.completed` is **TERMINAL** in MVP.
@@ -441,7 +441,7 @@ Each entry is an ADR-style block:
 
 ## D-025 — Payment and fulfillment are independent; quick-service pay-first
 
-- **Status:** Accepted as an RF-002/RF-003 human-approved correction for the RF-004 freeze CANDIDATE; pending final Saleh freeze approval — not yet frozen.
+- **Status:** Accepted at the RF-004 architecture freeze (human-approved by Saleh, after RF-002 review and RF-003 corrections); part of the frozen M0A baseline.
 - **Context:** Quick-service flows take payment before food is prepared, while table-service flows pay after. The order lifecycle (**DECISION D-018**) and the payment lifecycle must not be conflated: completing a payment must not auto-advance fulfillment, and reaching a fulfillment state must not imply payment. The set of order states from which a payment may start must be explicit.
 - **Decision:** **DECISION D-025** —
   - Payment and fulfillment are **independent** lifecycles.
@@ -460,7 +460,7 @@ Each entry is an ADR-style block:
 
 ## D-026 — Platform admin is not a tenant membership role
 
-- **Status:** Accepted as an RF-002/RF-003 human-approved correction for the RF-004 freeze CANDIDATE; pending final Saleh freeze approval — not yet frozen.
+- **Status:** Accepted at the RF-004 architecture freeze (human-approved by Saleh, after RF-002 review and RF-003 corrections); part of the frozen M0A baseline.
 - **Context:** Earlier text (D-004/D-005) listed `platform_admin` among the membership role keys. Platform administration is cross-tenant by nature and has **no** `organization_id`; modelling it as a tenant membership role conflates platform operators with tenant staff, muddies RLS predicates, and risks a privileged role leaking into tenant authorization paths.
 - **Decision:** **DECISION D-026** —
   - **Remove `platform_admin` from the membership role keys.** Tenant (membership) roles are exactly: `org_owner`, `restaurant_owner`, `manager`, `cashier`, `kitchen_staff`, `accountant`.
@@ -478,7 +478,7 @@ Each entry is an ADR-style block:
 
 ## D-027 — M0B blocker classification
 
-- **Status:** Accepted as an RF-002/RF-003 human-approved correction for the RF-004 freeze CANDIDATE; pending final Saleh freeze approval — not yet frozen.
+- **Status:** Accepted at the RF-004 architecture freeze (human-approved by Saleh, after RF-002 review and RF-003 corrections); part of the frozen M0A baseline.
 - **Context:** It was ambiguous whether every open question (Q-001..Q-024) must be resolved before M0B can begin. Treating all open questions as global blockers would stall foundation work that does not actually depend on them; treating none as blockers would risk baking in irreversible assumptions.
 - **Decision:** **DECISION D-027** —
   - **RF-004 human approval blocks the START of M0B as a MILESTONE** (the freeze event gates the milestone).
@@ -497,7 +497,7 @@ Each entry is an ADR-style block:
 
 ## D-028 — Accountant read-only; shift close/count separated from reconciliation
 
-- **Status:** Accepted as an RF-002/RF-003 human-approved correction for the RF-004 freeze CANDIDATE; pending final Saleh freeze approval — not yet frozen.
+- **Status:** Accepted at the RF-004 architecture freeze (human-approved by Saleh, after RF-002 review and RF-003 corrections); part of the frozen M0A baseline.
 - **Context:** The `accountant` role (D-004, Q-017) must be genuinely read-only, and the shift/drawer lifecycle (**DECISION D-018**) must distinguish the operational close/count step from the managerial reconciliation step. Folding both into one action would let the counting party also approve the variance, removing separation of duties.
 - **Decision:** **DECISION D-028** —
   - `accountant` performs **NO transition or mutation anywhere**; it is strictly read-only.
@@ -529,4 +529,5 @@ See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) for owners, blocking milestones, and 
 ## Changelog
 
 - M0A (RF-001): Initial decision log **drafted** (candidate set proposed for the architecture freeze) covering D-001..D-022 — pending ChatGPT review, independent Codex review, and human approval (Saleh); not yet frozen. No decisions beyond D-022 introduced. Future additions must use the next free ID (D-023+) with a full ADR block and a changelog entry.
-- M0A (RF-003): Added **D-023..D-028** as human-approved proposed corrections (originating from RF-002/RF-003) for the **RF-004 freeze CANDIDATE** — D-023 (completed payment terminal in MVP), D-024 (completed order terminal in MVP), D-025 (payment/fulfillment independence; quick-service pay-first), D-026 (platform admin is not a tenant membership role; `platform_admin_grants` entity), D-027 (M0B blocker classification; "Accepted Open"), D-028 (accountant read-only; shift close/count separated from reconciliation). Also corrected: Payment enumeration (completed terminal; void only pre-completion, D-023); D-004/D-005 membership role keys reduced to six with `platform_admin` removed (D-026); D-019 M0A relabelled as a Freeze Candidate (freeze event is RF-004). These corrections are **pending final Saleh freeze approval — not yet frozen**. The decision range is now **D-001..D-028**; the next free ID is **D-029+**.
+- M0A (RF-003): Added **D-023..D-028** as human-approved proposed corrections (originating from RF-002/RF-003) for the **RF-004 freeze CANDIDATE** — D-023 (completed payment terminal in MVP), D-024 (completed order terminal in MVP), D-025 (payment/fulfillment independence; quick-service pay-first), D-026 (platform admin is not a tenant membership role; `platform_admin_grants` entity), D-027 (M0B blocker classification; "Accepted Open"), D-028 (accountant read-only; shift close/count separated from reconciliation). Also corrected: Payment enumeration (completed terminal; void only pre-completion, D-023); D-004/D-005 membership role keys reduced to six with `platform_admin` removed (D-026); D-019 M0A relabelled as a Freeze Candidate (freeze event is RF-004). These corrections were **approved at the RF-004 architecture freeze (human-approved by Saleh)**. The decision range is now **D-001..D-028**; the next free ID is **D-029+**.
+- **M0A (RF-004): ARCHITECTURE FREEZE APPROVED by the human owner, Saleh.** The full M0A documentation/architecture baseline — decisions **D-001..D-028** and the candidate document set — is hereby **FROZEN as v1**, following RF-001 drafting, RF-002 independent Codex review, RF-003 corrections, and final Codex verification. **RF-003 is complete; RF-004 is done (approved).** Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — none resolved, none guessed); the freeze does not require them resolved. No application code, migrations, package manifests, dependencies, or CI were created during M0A. Any future change to a frozen decision or contract requires the **architecture-change procedure** (a new ticket, independent review, and human approval — see [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) §8) and the next free decision ID (**D-029+**). Next milestone: **M0B** (technical foundation), beginning with **RF-010** and **RF-013** once project/Jira tracking is ready.

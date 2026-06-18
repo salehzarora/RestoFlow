@@ -1,8 +1,8 @@
 # MONEY_AND_TAX_SPEC.md
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** DRAFT candidate for M0A (RF-001) — proposed for the architecture freeze, pending review and approval.
+**Status:** FROZEN for M0A (RF-001) — frozen as the M0A architecture baseline at RF-004, approved into the frozen M0A baseline (RF-004).
 **Owner of this topic:** This document is the single source of truth for **money representation, discounts, rounding, taxes, service charges, tips, cash handling, receipt numbering, and money-affecting audit requirements**. Other documents must reference this file rather than redefining these rules.
 
 **Scope boundaries (ownership — do not duplicate here):**
@@ -224,7 +224,7 @@ Money totals attach to the order; payment rows attach to the order and record me
 
 ## 12. Void vs cancellation vs refund (distinct definitions)
 
-These three are **distinct** and must never be conflated. They map to the PROPOSED state enumerations (D-018; pending review and approval — RF-001 §8 directs us to evaluate, not assume final).
+These three are **distinct** and must never be conflated. They map to the PROPOSED state enumerations (D-018; approved into the frozen M0A baseline (RF-004) — RF-001 §8 directs us to evaluate, not assume final).
 
 ### 12.1 Cancellation
 - **Definition:** Ending an order (or item) **before production / before it became financially binding**.

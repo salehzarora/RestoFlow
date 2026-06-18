@@ -1,8 +1,8 @@
 # RestoFlow — Implementation Checklist (Master Task Backlog)
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** M0A authoring (RF-001). **Owner of this document:** this file (`IMPLEMENTATION_CHECKLIST.md`) together with [JIRA_IMPORT.csv](JIRA_IMPORT.csv) is the candidate, human-readable MASTER task backlog (proposed for architecture freeze, pending review and approval) per **DECISION D-015**.
+**Status:** M0A FROZEN baseline (authored RF-001; approved at RF-004). **Owner of this document:** this file (`IMPLEMENTATION_CHECKLIST.md`) together with [JIRA_IMPORT.csv](JIRA_IMPORT.csv) is the frozen, human-readable MASTER task backlog per **DECISION D-015**.
 
 > **DECISION D-015** — Sources of truth: Jira (project key `RF`) = task *status*; Git = code/history; `docs/` = technical decisions/contracts; [TASK_TRACKER.md](TASK_TRACKER.md) = concise session-resume file only. This checklist and `JIRA_IMPORT.csv` are the only two full backlogs. **[TASK_TRACKER.md](TASK_TRACKER.md) must NOT duplicate this list.** [PROJECT_PLAN.md](PROJECT_PLAN.md) describes milestones, not individual tickets.
 
@@ -38,7 +38,7 @@ Each task is rendered as a self-contained block with the following fields:
 - No shared accounts; roles are membership-scoped (**DECISION D-004, D-005**).
 - Money is integer **minor** units only; **no floating point anywhere** (**DECISION D-007**). Money columns suffixed `_minor`.
 - No service-role credentials in Flutter clients; no shared restaurant password (**SECURITY REQUIREMENT**, **DECISION D-011**).
-- PROPOSED state enumerations (pending review and approval; RF-001 §8 directs us to evaluate, not assume final) (**DECISION D-018**, owned by [STATE_MACHINES.md](STATE_MACHINES.md)).
+- PROPOSED state enumerations (approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final) (**DECISION D-018**, owned by [STATE_MACHINES.md](STATE_MACHINES.md)).
 - Naming per **DECISION D-017** ([ARCHITECTURE.md](ARCHITECTURE.md), [DOMAIN_MODEL.md](DOMAIN_MODEL.md)).
 - No agent may push without human approval; no force push / reset --hard / db reset / data deletion (**DECISION D-016**).
 
@@ -90,7 +90,7 @@ Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.
 - **Acceptance criteria:**
   1. A written review enumerates each document and records pass/fail with specific line/section references.
   2. Every found contradiction, silent assumption, or unresolved gap is filed as either an **OPEN QUESTION Q-xxx** candidate or a follow-up ticket id — none left implicit.
-  3. Security & sync sections are checked against the canonical isolation tests and the proposed sync states (pending review and approval); review explicitly confirms or rejects coverage of each canonical isolation test.
+  3. Security & sync sections are checked against the canonical isolation tests and the proposed sync states (approved into the frozen M0A baseline (RF-004)); review explicitly confirms or rejects coverage of each canonical isolation test.
   4. Reviewer makes no commits and opens no branches (read-only confirmed by clean working tree).
 - **Required tests:** N/A (review artifact). Output is a review report consumed by RF-003/RF-004.
 - **Allowed files/areas:** none (read-only). *Guidance.*
@@ -98,7 +98,7 @@ Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.
 - **Security impact:** high — gates the security model before any code (**RISK R-003**, **R-005**).
 
 ### RF-003 — Resolve M0A blocking OPEN QUESTIONS
-- **Milestone:** M0A · **Workstream:** Decision · **Owner:** ChatGPT/Human · **Reviewer:** Human · **Priority:** High · **Status:** In Progress (active)
+- **Milestone:** M0A · **Workstream:** Decision · **Owner:** ChatGPT/Human · **Reviewer:** Human · **Priority:** High · **Status:** Done (Q-001..Q-024 recorded **Accepted Open** per D-027; none resolved/guessed)
 - **Dependencies:** RF-002
 - **Scope:** Decide the M0A-blocking open questions: **Q-001** jurisdiction, **Q-007** currency, **Q-006**/**Q-015** pilot hardware shortlist, **Q-008** MFA method/roles, **Q-009** offline authorization validity window. Record outcomes in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) and promote to **DECISION D-xxx** in [DECISIONS.md](DECISIONS.md) where a choice is frozen. Per **DECISION D-027** (M0B blocker rule), each open question may end in one of two acceptable states: **Resolved**, or explicitly **"Accepted Open"**. An "Accepted Open" question is permissible only when it has a named owner, the blocking ticket/milestone it gates is identified, a safe interim behavior exists, and no irreversible assumption is baked in; in that case it blocks only the dependent ticket(s), not the milestone start.
 - **Acceptance criteria:**
@@ -111,7 +111,7 @@ Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.
 - **Security impact:** medium — Q-008 (MFA) and Q-009 (offline window) directly shape auth and **RISK R-007**.
 
 ### RF-004 — Freeze architecture & contracts v1
-- **Milestone:** M0A · **Workstream:** Decision · **Owner:** Human · **Reviewer:** — · **Priority:** High · **Status:** Backlog (pending human approval)
+- **Milestone:** M0A · **Workstream:** Decision · **Owner:** Human · **Reviewer:** — · **Priority:** High · **Status:** Done — **APPROVED by Saleh; M0A architecture baseline FROZEN as v1**
 - **Dependencies:** RF-002, RF-003
 - **Scope:** Human sign-off; tag the M0A document set as **frozen v1**; this is the freeze **event** that opens the gate to begin M0B. No code. Per **DECISION D-027**, the gate does **not** require that every open question be Resolved; it requires human architecture approval plus each still-open question being either Resolved or in the **"Accepted Open"** state.
 - **Acceptance criteria:**
@@ -211,7 +211,7 @@ Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.
 ### RF-016 — Device identity, pairing, device/pin sessions + RLS
 - **Milestone:** M0B · **Workstream:** Backend/DB · **Owner:** Claude Code · **Reviewer:** Codex · **Priority:** High
 - **Dependencies:** RF-015
-- **Scope:** `devices`, `device_pairings` (expiring enrollment codes), `device_sessions`, `pin_sessions` (**DECISION D-005, D-006**). Device pairing follows the proposed state machine `code_issued -> pending -> paired -> active -> suspended -> revoked` plus `code_expired`, `rejected` (**DECISION D-018**; PROPOSED, pending review and approval).
+- **Scope:** `devices`, `device_pairings` (expiring enrollment codes), `device_sessions`, `pin_sessions` (**DECISION D-005, D-006**). Device pairing follows the proposed state machine `code_issued -> pending -> paired -> active -> suspended -> revoked` plus `code_expired`, `rejected` (**DECISION D-018**; PROPOSED, approved into the frozen M0A baseline (RF-004)).
 - **Acceptance criteria:**
   1. Enrollment codes are short-lived; a test proves an expired code transitions to `code_expired` and cannot complete pairing.
   2. A device identity is separate from any human identity and has limited permissions (**SECURITY REQUIREMENT**); verified by schema + RLS test.
@@ -323,7 +323,7 @@ Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.
 ### RF-032 — Order submission + order/order-item state machines — local
 - **Milestone:** M1 · **Workstream:** Frontend/POS · **Owner:** Claude Code · **Reviewer:** Codex · **Priority:** High
 - **Dependencies:** RF-031
-- **Scope:** Enforce the proposed enumerations locally (**DECISION D-018**; PROPOSED, pending review and approval). Order: `draft -> submitted -> accepted -> preparing -> ready -> served -> completed` (+ `cancelled`, `voided`); takeaway skips `served` (`ready -> completed`). Order item: `pending -> queued -> preparing -> ready -> served` (+ `voided`, `cancelled`). Transitions owned by [STATE_MACHINES.md](STATE_MACHINES.md).
+- **Scope:** Enforce the proposed enumerations locally (**DECISION D-018**; PROPOSED, approved into the frozen M0A baseline (RF-004)). Order: `draft -> submitted -> accepted -> preparing -> ready -> served -> completed` (+ `cancelled`, `voided`); takeaway skips `served` (`ready -> completed`). Order item: `pending -> queued -> preparing -> ready -> served` (+ `voided`, `cancelled`). Transitions owned by [STATE_MACHINES.md](STATE_MACHINES.md).
 - **Acceptance criteria:**
   1. Illegal transitions are rejected (e.g. `draft -> completed` throws) — table-driven test covers all legal/illegal transitions.
   2. `voided` requires authorization + reason even in the local prototype (placeholder authorization), and is post-submission only.

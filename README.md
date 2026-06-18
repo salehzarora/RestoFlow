@@ -1,6 +1,6 @@
 # RestoFlow
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](docs/DECISIONS.md) and [OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](docs/DECISIONS.md) and [OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
 
 ## 1. What RestoFlow Is
 
@@ -8,11 +8,11 @@ RestoFlow is a **multi-tenant Restaurant Operating System** — not merely a poi
 
 ## 2. Current Status
 
-**M0A — Documentation & Architecture Freeze Candidate: IN REVIEW.**
+**M0A — Documentation & Architecture baseline: FROZEN (approved at RF-004).**
 
-The document set has been drafted (RF-001, done) and is undergoing review-and-correction: RF-002 review is complete (approve with changes), and **RF-003 is the active task**. The architecture freeze itself is a later event (RF-004, owned by Saleh) and **has not yet happened**.
+The M0A document set was drafted (RF-001, done), independently reviewed by Codex (RF-002), corrected (RF-003, done), and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004 (done)**. The `docs/` set is now the frozen v1 source of truth for technical decisions and contracts; changes require the architecture-change procedure (a new ticket, independent review, and human approval — see [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) §8).
 
-There is **no application code yet, by design**. RestoFlow follows a documentation-and-architecture-first method ("freeze before code"): the contracts, decisions, state machines, and security model are drafted as a complete, reviewable document set — the candidate set proposed for the architecture freeze — before any Flutter app, Dart package, Supabase migration, or CI workflow is created. The freeze occurs only after independent review, required fixes, and Saleh's approval (the RF-004 freeze event). Application work begins at **M0B** (technical foundation). See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full milestone structure (**DECISION D-019**: M0A → M0B → M1 → M2 → M3 → M4).
+There is still **no application code, by design**. RestoFlow follows a documentation-and-architecture-first method ("freeze before code"): the contracts, decisions, state machines, and security model were settled as a complete, reviewed document set — frozen as the M0A architecture baseline at RF-004 — before any Flutter app, Dart package, Supabase migration, or CI workflow is created. The freeze was approved after independent review, required fixes, and Saleh's approval. Application work begins at **M0B** (technical foundation), which has **not** yet started. See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for the full milestone structure (**DECISION D-019**: M0A → M0B → M1 → M2 → M3 → M4).
 
 ## 3. Repository Contents Now
 
@@ -20,20 +20,20 @@ There is **no application code yet, by design**. RestoFlow follows a documentati
 | --- | --- |
 | `RestoFlow Project Plan (EN).dc.html` | **LEGACY** planning input — the owner's original v1.0 plan (English). **Not a source of truth.** |
 | `RestoFlow Project Plan.dc.html` | **LEGACY** planning input — the owner's original v1.0 plan (Arabic). **Not a source of truth.** |
-| `docs/` | The **candidate document set, proposed for the architecture freeze** (pending independent review and human approval; source of truth for technical decisions and contracts once frozen). |
+| `docs/` | The **frozen M0A architecture baseline** (approved at RF-004) — the source of truth for technical decisions and contracts. |
 | [CLAUDE.md](CLAUDE.md) | Implementer guidance / shared canon for Claude Code. |
 | [AGENTS.md](AGENTS.md) | Agent roles, guardrails, and collaboration rules. |
 
-The two `*.dc.html` v1.0 plan files are **legacy** planning inputs — the owner's original planning artifacts, kept only for provenance. They are **not** sources of truth and must not be edited as canon. Any statement in them that conflicts with the candidate `docs/` set is **superseded** by `docs/` (once that set is approved at the RF-004 freeze) — for example **DECISION D-003** supersedes the earlier "Restaurant = Tenant" framing; the tenant is the **Organization**.
+The two `*.dc.html` v1.0 plan files are **legacy** planning inputs — the owner's original planning artifacts, kept only for provenance. They are **not** sources of truth and must not be edited as canon. Any statement in them that conflicts with the `docs/` set is **superseded** by `docs/` (now frozen at RF-004) — for example **DECISION D-003** supersedes the earlier "Restaurant = Tenant" framing; the tenant is the **Organization**.
 
 ## 4. Documentation Map
 
-All candidate documents (proposed for the architecture freeze, pending review and approval) live in `docs/`. Each document owns its topic; other documents reference it rather than redefining it.
+All documents (the frozen M0A architecture baseline, approved at RF-004) live in `docs/`. Each document owns its topic; other documents reference it rather than redefining it.
 
 ### Governance
 | Document | Purpose |
 | --- | --- |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | The decision log (D-001…D-028) — RF-001 invariants plus proposed decisions, each with context, alternatives, consequences (proposed for freeze; pending review and approval). |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | The decision log (D-001…D-028) — RF-001 invariants plus proposed decisions, each with context, alternatives, consequences (frozen as the M0A baseline at RF-004). |
 | [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) | The ChatGPT → human → Claude Code → Codex → merge pipeline and guardrails (**DECISION D-016**). |
 | [docs/TASK_TRACKER.md](docs/TASK_TRACKER.md) | Concise current-session resume file only — **not** a duplicate backlog. |
 
@@ -47,8 +47,8 @@ All candidate documents (proposed for the architecture freeze, pending review an
 | Document | Purpose |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System structure; ties the specs together. |
-| [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md) | Entities, fields, relationships, and the PROPOSED state enumerations in use (pending review and approval; RF-001 §8 directs us to evaluate, not assume final). |
-| [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md) | Allowed transitions for every state machine (**DECISION D-018** — PROPOSED, pending review and approval). |
+| [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md) | Entities, fields, relationships, and the PROPOSED state enumerations in use (approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final). |
+| [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md) | Allowed transitions for every state machine (**DECISION D-018** — PROPOSED, approved into the frozen M0A baseline (RF-004)). |
 
 ### Specifications
 | Document | Purpose |

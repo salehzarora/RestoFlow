@@ -1,6 +1,6 @@
 # CLAUDE.md — Operating Guide for Claude Code (Primary Implementer)
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](docs/DECISIONS.md) and [OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](docs/DECISIONS.md) and [OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
 
 > This file is loaded into **every** Claude Code session for the RestoFlow repository.
 > Read it before touching anything. It is imperative, not advisory.
@@ -16,7 +16,7 @@ The authoritative decision log is [docs/DECISIONS.md](docs/DECISIONS.md) and the
 
 RestoFlow connects POS stations (cashiers), Kitchen Display Systems (KDS), owner/manager dashboards, and platform administration, with offline operation, sync, printing, payments, shifts, and reporting. It serves **many independent restaurant customers on one platform**. The first pilot may run one restaurant and one branch, but **no schema, API, authorization policy, local database, or app architecture may assume only one restaurant/organization exists**.
 
-The following invariants are **non-negotiable**. Violating any of them is a defect, regardless of whether tests pass. They are the explicit RF-001 invariants (binding requirements); the surrounding document set is a candidate proposed for the architecture freeze, pending review and approval. The cited document **owns** the full rule.
+The following invariants are **non-negotiable**. Violating any of them is a defect, regardless of whether tests pass. They are the explicit RF-001 invariants (binding requirements); the surrounding document set is a candidate frozen as the M0A architecture baseline at RF-004, approved into the frozen M0A baseline (RF-004). The cited document **owns** the full rule.
 
 1. **Multi-tenant from the first migration.** The tenant is the **Organization** (**DECISION D-003**, supersedes "Restaurant = Tenant"). Hierarchy: `Platform -> Organization -> Restaurant -> Branch -> Device/Station` (**DECISION D-002**). Never regress to restaurant-as-tenant. Never write code, schema, or queries that assume a single org/restaurant/branch.
 
@@ -36,7 +36,7 @@ The following invariants are **non-negotiable**. Violating any of them is a defe
 
 9. **Languages ar / he / en with full RTL + LTR** (**DECISION D-014**). Localized receipts/tickets; encoding/raster fallback for Arabic/Hebrew printing is an open concern (**OPEN QUESTION Q-015**). Owner: [docs/PRINTERS_AND_HARDWARE_SPEC.md](docs/PRINTERS_AND_HARDWARE_SPEC.md) for printing.
 
-10. **PROPOSED state enumerations** (pending review and approval; RF-001 §8 directs us to evaluate, not assume final) (**DECISION D-018**). Use the candidate status values for Order, Order item, Kitchen ticket, Kitchen station item, Payment, Shift, Cash drawer session, Print job, Device pairing, and Sync operation. Transitions are owned by [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md); entities/fields by [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md). Do not add, rename, or repurpose states.
+10. **PROPOSED state enumerations** (approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final) (**DECISION D-018**). Use the candidate status values for Order, Order item, Kitchen ticket, Kitchen station item, Payment, Shift, Cash drawer session, Print job, Device pairing, and Sync operation. Transitions are owned by [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md); entities/fields by [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md). Do not add, rename, or repurpose states.
 
 **Top risks to keep in mind while implementing:** **RISK R-003** (RLS bug leaks cross-tenant data — CRITICAL), **RISK R-002** (offline sync conflicts/duplicates), **RISK R-007** (offline authorization staleness), **RISK R-008** (money/rounding/tax errors before jurisdiction frozen). Surface these in PRs where your change touches them.
 
@@ -132,9 +132,9 @@ Pipeline: **ChatGPT planning -> Human approval -> Claude Code implementation -> 
 
 ## 5. M0A Constraint Reminder — DOCS ONLY
 
-We are in **milestone M0A** (RF-001): the **Documentation & Architecture Freeze Candidate** under review (**DECISION D-019**). The freeze itself is a later event (RF-004, owned by Saleh) and has **not** yet happened.
+**Milestone M0A is COMPLETE — the architecture baseline was FROZEN at RF-004 (human-approved by Saleh; DECISION D-019).** **M0B** (technical foundation) has **not** yet begun. Until M0B is formally started (after project tracking is ready, beginning with **RF-010** and **RF-013**), the docs-only constraints below still hold — do **not** create application code yet.
 
-**Do NOT, during M0A:**
+**Do NOT (M0A is docs-only; this still holds until M0B is formally started):**
 - Create Flutter apps, Dart packages, or a Melos monorepo.
 - Create Supabase folders, SQL migrations, RLS policies, or RPC functions.
 - Create Node projects, package manifests, or lockfiles.
@@ -143,7 +143,7 @@ We are in **milestone M0A** (RF-001): the **Documentation & Architecture Freeze 
 
 **Allowed in M0A:** documentation and governance files only. **Forward-looking design text is fine** — describe the intended structure, schema shapes, RPC signatures, and policies in prose so M0B can implement them. The **intended tech stack** (**DECISION D-009**) — Flutter / Melos / Riverpod / GoRouter / Supabase / PostgreSQL RLS / RPC / Drift+SQLite offline-first / outbox+inbox / Realtime-as-enhancement / ESC/POS behind a replaceable adapter / ar+he+en RTL+LTR / GitHub Actions CI — is **documented now, installed later** (M0B onward). Document risks and alternatives where important; **do not initialize anything**.
 
-Milestones (**DECISION D-019**): **M0A** Documentation & Architecture Freeze Candidate (review; the freeze is the later RF-004 event) → **M0B** technical foundation (monorepo, CI, Supabase bootstrap, first multi-tenant migrations, RLS skeleton, Drift+outbox, l10n+RTL; no business features) → **M1** local POS+KDS prototype → **M2** real backend + sync → **M3** hardware pilot → **M4** sellable SaaS. Indicative dates are **proposed** and owned by [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md).
+Milestones (**DECISION D-019**): **M0A** Documentation & Architecture baseline (FROZEN at RF-004) → **M0B** technical foundation (monorepo, CI, Supabase bootstrap, first multi-tenant migrations, RLS skeleton, Drift+outbox, l10n+RTL; no business features) → **M1** local POS+KDS prototype → **M2** real backend + sync → **M3** hardware pilot → **M4** sellable SaaS. Indicative dates are **proposed** and owned by [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md).
 
 ---
 

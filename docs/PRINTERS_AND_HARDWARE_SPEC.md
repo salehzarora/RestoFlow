@@ -1,8 +1,8 @@
 # PRINTERS_AND_HARDWARE_SPEC
 
-> **Status — DRAFT (candidate), not yet frozen.** Drafted by Claude Code (RF-001) · pending ChatGPT review · pending independent Codex review · pending human approval (Saleh). Only the explicit RF-001 invariants (below/where cited) are binding requirements; every other architectural choice is a **PROPOSED DECISION** pending review and human approval. Architecture freeze happens only after independent review, required fixes, and Saleh's approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+> **Status — FROZEN: M0A architecture baseline, approved at RF-004.** Authored under RF-001, independently reviewed by Codex (RF-002), corrected under RF-003, and verified in a final Codex pass; the architecture freeze was **approved by the human owner, Saleh, at RF-004**. The explicit RF-001 invariants remain binding; decisions **D-001..D-028** are the frozen M0A baseline. Open questions **Q-001..Q-024** remain **Accepted Open** (per **DECISION D-027** — tracked, gating only their dependent tickets; none resolved or guessed). Changes to this frozen baseline now require the architecture-change procedure (a new ticket, independent review, and human approval). Any remaining inline pre-freeze status notes are superseded by this RF-004 approval. See [DECISIONS.md](DECISIONS.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status:** DRAFT candidate for M0A (RF-001); proposed for the architecture freeze, pending review and approval.
+**Status:** FROZEN for M0A (RF-001); frozen as the M0A architecture baseline at RF-004, approved into the frozen M0A baseline (RF-004).
 **Owns:** Printing and physical hardware (device classes, connectivity, paper, language/encoding for printing, station routing, print spool, print job lifecycle, retry, duplicate/reprint controls, device health, offline printing, cash drawer, the printing adapter abstraction).
 **Does NOT own (reference only):** print job *state transitions* live in [STATE_MACHINES.md](STATE_MACHINES.md); reprint/void/refund money semantics live in [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md); audit/authorization/threats live in [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md); the offline outbox/inbox/sync engine lives in [OFFLINE_SYNC_SPEC.md](OFFLINE_SYNC_SPEC.md); entities/fields/relationships live in [DOMAIN_MODEL.md](DOMAIN_MODEL.md); receipt/ticket localization rules live in [DECISIONS.md](DECISIONS.md) (D-014) and are detailed in [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md) for receipts; the replaceable-adapter contract surfaces in [ARCHITECTURE.md](ARCHITECTURE.md) and [API_CONTRACT.md](API_CONTRACT.md) for any server-assisted pieces.
 
@@ -132,7 +132,7 @@ The spool is a *local* concern. Print jobs are NOT part of the cross-device clou
 
 ### 8.1 Print job states (reference only)
 
-The print job state machine is **owned by [STATE_MACHINES.md](STATE_MACHINES.md)** (**DECISION D-018**). The PROPOSED state enumeration (pending review and approval; RF-001 §8 directs us to evaluate, not assume final) is:
+The print job state machine is **owned by [STATE_MACHINES.md](STATE_MACHINES.md)** (**DECISION D-018**). The PROPOSED state enumeration (approved into the frozen M0A baseline (RF-004); RF-001 §8 directs us to evaluate, not assume final) is:
 
 > `created -> queued -> printing -> printed`; plus `failed -> retrying`, `cancelled`, `abandoned` (after max retries). **Terminal:** `printed`, `cancelled`, `abandoned`.
 
