@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#fbfaf6; }
+  .doc { box-sizing:border-box; max-width:8.5in; margin:0 auto; background:inherit; padding:48px clamp(22px,5vw,0.7in) 96px; }
+  .doc-frame { width:100%; border-collapse:collapse; }
+  .doc-frame td { padding:0; }
+  .running-hdr,.running-ftr,.hdr-space,.ftr-space { display:none; }
+  @page { size:letter; margin:0; }
+  @media print {
+    html { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    html, body { margin:0; padding:0; }
+    .doc { max-width:none !important; margin:0 !important; padding:0 0.7in !important; box-shadow:none !important; border:none !important; }
+    #dc-root, .sc-host { height:auto !important; }
+    .hdr-space, .ftr-space { display:table-cell; height:0.7in !important; }
+    .running-hdr, .running-ftr { display:flex !important; justify-content:space-between; align-items:baseline; position:fixed !important; left:0; right:0; margin:0 !important; font-size:9.5px; letter-spacing:.04em; color:#9a948b; font-family:'IBM Plex Mono',monospace; }
+    .running-hdr { top:0; padding:.32in .7in 0 !important; }
+    .running-ftr { bottom:0; padding:0 .7in .32in !important; }
+    h1,h2,h3,h4 { break-after:avoid; }
+    figure,pre,blockquote,tr { break-inside:avoid; }
+    p,li { orphans:3; widows:3; }
+    .screen-only { display:none !important; }
+  }
+</style>
+</helmet>
+
+<main class="doc" lang="en" dir="ltr" style="--ink:#29241e; --muted:#6f6a61; --faint:#a39d92; --paper:#fbfaf6; --line:#e7e2d8; --panel:#f4f0e8; --brand:#b35a35; --brand-d:#8c4426; --brand-soft:#f3e3d8; --agent:#3f6478; --agent-d:#2f4d5d; --agent-soft:#e3edf1; --tool:#5b5a54; --tool-soft:#eceae3; --ok:#4f7a52; --ok-soft:#e6efe4; --warn:#9c7a26; --warn-soft:#f3ecd6; --no:#a8503c; --no-soft:#f3e0d9; --sans:'IBM Plex Sans',sans-serif; --mono:'IBM Plex Mono',monospace; font-family:var(--sans); color:var(--ink); font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;">
+
+  <div class="running-hdr"><span>RestoFlow Project Plan</span><span>Internal · v1.0</span></div>
+  <div class="running-ftr"><span>RestoFlow · Restaurant OS</span><span>June 2026</span></div>
+
+  <table class="doc-frame" role="presentation">
+    <thead><tr><td class="hdr-space"></td></tr></thead>
+    <tbody><tr><td>
+
+      <!-- ===== TITLE ===== -->
+      <h1 style="font-size:39px; font-weight:600; line-height:1.15; letter-spacing:-.01em; margin:0; text-wrap:balance;"><span style="color:var(--brand);">RestoFlow</span> Project Plan</h1>
+      <p style="font-size:16px; color:var(--muted); margin:12px 0 0; font-weight:400;">Restaurant Operating System — a multi-tenant restaurant platform</p>
+
+      <div style="display:flex; flex-wrap:wrap; gap:10px 26px; margin-top:22px; padding-top:18px; border-top:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--muted);">
+        <span><span style="color:var(--faint);">VERSION</span>&nbsp;&nbsp;1.0</span>
+        <span><span style="color:var(--faint);">DATE</span>&nbsp;&nbsp;June 2026</span>
+        <span><span style="color:var(--faint);">OWNER</span>&nbsp;&nbsp;Saleh</span>
+        <span><span style="color:var(--faint);">METHOD</span>&nbsp;&nbsp;Vibe Coding</span>
+      </div>
+
+      <!-- ===== OVERVIEW ===== -->
+      <section style="margin-top:46px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">01 · Overview</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Plan Overview</h2>
+        <p style="font-size:15px; line-height:1.7; color:var(--muted); margin:12px 0 0; max-width:64ch;">RestoFlow is a complete restaurant operating system connecting the cashier, kitchen, payment and reporting in one platform, built <strong style="color:var(--ink); font-weight:600;">multi-tenant from the first migration</strong>. This document defines <strong style="color:var(--ink); font-weight:600;">who does what</strong> across a mixed team of one human and three AI agents, with clear delivery milestones and a proposed schedule from M0 to M4.</p>
+
+        <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:24px;">
+          <div style="flex:1 1 150px; border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-size:30px; font-weight:600; color:var(--brand); line-height:1; font-family:var(--mono);">5</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.4;">Delivery milestones<br><span style="color:var(--faint); font-family:var(--mono); font-size:11px;">M0 → M4</span></div>
+          </div>
+          <div style="flex:1 1 150px; border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-size:30px; font-weight:600; color:var(--brand); line-height:1; font-family:var(--mono);">~24</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.4;">Proposed weeks<br><span style="color:var(--faint); font-family:var(--mono); font-size:11px;">≈ 5.5 months</span></div>
+          </div>
+          <div style="flex:1 1 150px; border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-size:30px; font-weight:600; color:var(--brand); line-height:1; font-family:var(--mono);">1 + 3</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.4;">Builders<br><span style="color:var(--faint); font-family:var(--mono); font-size:11px;">human + AI agents</span></div>
+          </div>
+          <div style="flex:1 1 150px; border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-size:21px; font-weight:600; color:var(--brand); line-height:1.1; font-family:var(--mono); padding-top:6px;">Offline-First</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:9px; line-height:1.4;">Core architecture<br><span style="color:var(--faint); font-family:var(--mono); font-size:11px;">SQLite + Outbox</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== TEAM & RESOURCES ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">02 · Team &amp; Resources</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Team &amp; Resources — Who Does What</h2>
+        <p style="font-size:15px; line-height:1.7; color:var(--muted); margin:12px 0 0; max-width:64ch;">Human decisions always sit above the agents: the human plans, reviews and merges; agents execute within defined permissions. <span style="color:var(--brand-d);">Git</span> is the final arbiter of code.</p>
+
+        <!-- Lead -->
+        <div style="margin-top:22px; border:1.5px solid var(--brand-soft); border-radius:13px; background:linear-gradient(180deg,#fdf7f3,#fff); padding:20px 22px; break-inside:avoid;">
+          <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+            <div style="width:46px; height:46px; border-radius:11px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:18px; flex:none;">S</div>
+            <div style="flex:1 1 auto; min-width:160px;">
+              <div style="font-size:18px; font-weight:600;">Saleh — Lead &amp; Owner</div>
+              <div style="font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:2px;">Lead / Product Owner</div>
+            </div>
+            <span style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:12px; font-weight:600; background:var(--brand-soft); color:var(--brand-d);"><span style="width:7px;height:7px;border-radius:50%;background:var(--brand);"></span>Human</span>
+          </div>
+          <ul style="margin:14px 0 0; padding:0; list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:7px 22px; font-size:13.5px; color:var(--ink);">
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>Architecture &amp; scope decisions</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>Writing &amp; tuning prompts</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>Final review &amp; merge</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>On-site presence for hardware trials</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>Sign-off on RLS &amp; security</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>Arbiter of any disagreement</li>
+          </ul>
+        </div>
+
+        <!-- agents grid -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px;">
+
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px; height:40px; border-radius:10px; background:var(--agent-soft); color:var(--agent-d); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:15px; flex:none;">GPT</div>
+              <div style="flex:1 1 auto;">
+                <div style="font-size:16px; font-weight:600;">ChatGPT</div>
+                <div style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:1px;">Planning &amp; Decisions</div>
+              </div>
+              <span style="padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:600; background:var(--agent-soft); color:var(--agent-d); font-family:var(--mono);">AI</span>
+            </div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);">
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>Planning &amp; option analysis</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>Drafting &amp; reviewing prompts</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>Reviewing reports &amp; decisions</li>
+            </ul>
+          </div>
+
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px; height:40px; border-radius:10px; background:var(--brand-soft); color:var(--brand-d); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:18px; flex:none;">CC</div>
+              <div style="flex:1 1 auto;">
+                <div style="font-size:16px; font-weight:600;">Claude Code</div>
+                <div style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:1px;">Primary Implementer</div>
+              </div>
+              <span style="padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:600; background:var(--agent-soft); color:var(--agent-d); font-family:var(--mono);">AI</span>
+            </div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);">
+              <li style="display:flex; gap:8px;"><span style="color:var(--brand);">·</span>Writing code &amp; tests</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--brand);">·</span>Running migrations (with permission)</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--brand);">·</span>Bug fixing &amp; analysis</li>
+            </ul>
+          </div>
+
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px; height:40px; border-radius:10px; background:var(--agent-soft); color:var(--agent-d); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:14px; flex:none;">Cdx</div>
+              <div style="flex:1 1 auto;">
+                <div style="font-size:16px; font-weight:600;">Codex</div>
+                <div style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:1px;">Independent Reviewer</div>
+              </div>
+              <span style="padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:600; background:var(--agent-soft); color:var(--agent-d); font-family:var(--mono);">AI</span>
+            </div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);">
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>Independent code review</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>Separate task execution when needed</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>Catching what the implementer misses</li>
+            </ul>
+          </div>
+
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px; height:40px; border-radius:10px; background:var(--tool-soft); color:var(--tool); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:14px; flex:none;">Git</div>
+              <div style="flex:1 1 auto;">
+                <div style="font-size:16px; font-weight:600;">Git</div>
+                <div style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:1px;">Final Arbiter</div>
+              </div>
+              <span style="padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:600; background:var(--tool-soft); color:var(--tool); font-family:var(--mono);">TOOL</span>
+            </div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);">
+              <li style="display:flex; gap:8px;"><span style="color:var(--tool);">·</span>Source of truth for code</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--tool);">·</span>Change history &amp; review</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--tool);">·</span>Protecting the <span style="font-family:var(--mono); font-size:12px;">main</span> branch</li>
+            </ul>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ===== AGENT PERMISSIONS ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">03 · Agent Permissions</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Agent Permissions</h2>
+        <p style="font-size:15px; line-height:1.7; color:var(--muted); margin:12px 0 0; max-width:64ch;">Clear limits on what agents do automatically, what needs permission, and what is strictly forbidden.</p>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:13px; margin-top:22px;">
+          <div style="border:1px solid var(--ok); border-radius:12px; background:var(--ok-soft); padding:16px 18px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--ok); font-size:14px;"><span style="font-size:16px;">✓</span>Allowed</div>
+            <ul style="margin:12px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink);">
+              <li>Read &amp; edit project files</li>
+              <li>Run tests &amp; analysis</li>
+              <li>Local <span style="font-family:var(--mono); font-size:12px;">commit</span></li>
+            </ul>
+          </div>
+          <div style="border:1px solid var(--warn); border-radius:12px; background:var(--warn-soft); padding:16px 18px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--warn); font-size:14px;"><span style="font-size:16px;">!</span>Ask First</div>
+            <ul style="margin:12px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink);">
+              <li>Add a new <span style="font-family:var(--mono); font-size:12px;">dependency</span></li>
+              <li>Apply <span style="font-family:var(--mono); font-size:12px;">migrations</span></li>
+              <li>Edit contracts &amp; <span style="font-family:var(--mono); font-size:12px;">shared</span></li>
+            </ul>
+          </div>
+          <div style="border:1px solid var(--no); border-radius:12px; background:var(--no-soft); padding:16px 18px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--no); font-size:14px;"><span style="font-size:16px;">✕</span>Forbidden</div>
+            <ul style="margin:12px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink);">
+              <li><span style="font-family:var(--mono); font-size:12px;">git push / reset --hard</span></li>
+              <li><span style="font-family:var(--mono); font-size:12px;">supabase db reset</span></li>
+              <li>Delete data or read <span style="font-family:var(--mono); font-size:12px;">secrets</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== WORKSTREAM OWNERSHIP ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">04 · Ownership</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Workstream Ownership</h2>
+        <p style="font-size:15px; line-height:1.7; color:var(--muted); margin:12px 0 0; max-width:64ch;">Each workstream has a primary implementer and a reviewer, with human-decision points marked.</p>
+
+        <table style="width:100%; border-collapse:collapse; margin-top:20px; break-inside:avoid;">
+          <thead>
+            <tr>
+              <th style="padding:10px 12px; border-bottom:2px solid var(--ink); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); text-align:left; font-weight:600;">Workstream</th>
+              <th style="padding:10px 12px; border-bottom:2px solid var(--ink); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); text-align:left; font-weight:600;">Primary</th>
+              <th style="padding:10px 12px; border-bottom:2px solid var(--ink); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); text-align:left; font-weight:600;">Reviewer</th>
+              <th style="padding:10px 12px; border-bottom:2px solid var(--ink); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); text-align:left; font-weight:600;">Human decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">Architecture &amp; Docs</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">ChatGPT + Human</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Human</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--brand-d); font-weight:500;">Freeze architecture</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">Frontend <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Flutter · POS · KDS</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Codex</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--muted);">Scope limits</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">Backend <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Supabase · RLS · RPC</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Codex</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--brand-d); font-weight:500;">Sign-off on RLS</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">Sync &amp; Offline <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Outbox · Sync</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Codex</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--faint);">—</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">QA &amp; Isolation Tests</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Codex + Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Human</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--muted);">Acceptance criteria</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">Infra &amp; CI <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Melos · GitHub Actions</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Human</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--brand-d); font-weight:500;">Secrets management</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">Hardware <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">ESC/POS · Devices</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Human (on-site)</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--muted);">Device selection</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; font-size:13.5px; vertical-align:top;">Merge &amp; Scope</td>
+              <td style="padding:11px 12px; font-size:13px; vertical-align:top;">Human + Git</td>
+              <td style="padding:11px 12px; font-size:13px; vertical-align:top; color:var(--faint);">—</td>
+              <td style="padding:11px 12px; font-size:13px; vertical-align:top; color:var(--brand-d); font-weight:500;">Final arbiter</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ===== ROADMAP ===== -->
+      <section style="margin-top:50px;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">05 · Roadmap</div>
+          <span style="font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--warn); background:var(--warn-soft); padding:3px 8px; border-radius:999px;">Proposed</span>
+        </div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Roadmap — M0 to M4</h2>
+        <p style="font-size:15px; line-height:1.7; color:var(--muted); margin:12px 0 0; max-width:64ch;">A proposed schedule starting <span style="font-family:var(--mono); font-size:13px;">July 2026</span> and ending <span style="font-family:var(--mono); font-size:13px;">mid-Dec 2026</span>. Durations may change as work progresses.</p>
+
+        <!-- proportional ribbon (LTR: M0 left → M4 right) -->
+        <div style="display:flex; gap:5px; margin-top:22px;">
+          <div style="flex:2 1 0; background:#f3e1d6; border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand-d);">M0</div>
+            <div style="font-size:11.5px; color:var(--brand-d); margin-top:3px; line-height:1.3;">Project System</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:var(--brand-d); opacity:.7; margin-top:4px;">2w · Jul</div>
+          </div>
+          <div style="flex:4 1 0; background:#ecc4ac; border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand-d);">M1</div>
+            <div style="font-size:11.5px; color:var(--brand-d); margin-top:3px; line-height:1.3;">Local Prototype</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:var(--brand-d); opacity:.7; margin-top:4px;">4w · Jul–Aug</div>
+          </div>
+          <div style="flex:6 1 0; background:#dd9a72; border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:#fff;">M2</div>
+            <div style="font-size:11.5px; color:#fff; margin-top:3px; line-height:1.3;">Real Backend</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:#fff; opacity:.85; margin-top:4px;">6w · Aug–Sep</div>
+          </div>
+          <div style="flex:4 1 0; background:#c46a44; border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:#fff;">M3</div>
+            <div style="font-size:11.5px; color:#fff; margin-top:3px; line-height:1.3;">Hardware Pilot</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:#fff; opacity:.85; margin-top:4px;">4w · Sep–Oct</div>
+          </div>
+          <div style="flex:8 1 0; background:var(--brand); border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:#fff;">M4</div>
+            <div style="font-size:11.5px; color:#fff; margin-top:3px; line-height:1.3;">SaaS Launch</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:#fff; opacity:.85; margin-top:4px;">8w · Oct–Dec</div>
+          </div>
+        </div>
+
+        <!-- vertical timeline detail (LTR: rail on left) -->
+        <div style="position:relative; margin-top:30px; padding-left:30px;">
+          <div style="position:absolute; top:10px; bottom:10px; left:9px; width:2px; background:var(--line);"></div>
+
+          <!-- M0 -->
+          <div style="position:relative; margin:0 0 16px 0; border:1px solid var(--line); border-radius:11px; background:#fff; padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; left:-29px; top:20px; width:14px; height:14px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M0</span>
+              <span style="font-size:17px; font-weight:600;">Project System</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);">Jul 1 – 14 · 2 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);">Deliverables</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">Architecture docs frozen · multi-tenant data model · task split &amp; contracts · monorepo setup.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">Architecture frozen &amp; reviewed · first multi-tenant migration ready · types agreed.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--brand-soft); color:var(--brand-d); font-weight:500;">Human · Lead</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">ChatGPT</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code</span>
+            </div>
+          </div>
+
+          <!-- M1 -->
+          <div style="position:relative; margin:0 0 16px 0; border:1px solid var(--line); border-radius:11px; background:#fff; padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; left:-29px; top:20px; width:14px; height:14px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M1</span>
+              <span style="font-size:17px; font-weight:600;">Local Prototype</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);">Jul 15 – Aug 11 · 4 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);">Deliverables</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">POS UI · KDS screen · full order cycle locally with fake data · SQLite/Drift storage.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">Order flows cashier → kitchen locally · state machine for statuses · no backend yet.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code · impl</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Codex · review</span>
+            </div>
+          </div>
+
+          <!-- M2 -->
+          <div style="position:relative; margin:0 0 16px 0; border:1px solid var(--line); border-radius:11px; background:#fff; padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; left:-29px; top:20px; width:14px; height:14px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M2</span>
+              <span style="font-size:17px; font-weight:600;">Real Backend</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);">Aug 12 – Sep 22 · 6 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);">Deliverables</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">Supabase + Auth + RLS · Membership/Roles · RPC for sensitive ops · Outbox sync between POS &amp; KDS.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">Isolation tests pass · sync works Offline → Online · idempotency guaranteed.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code · impl</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Codex · independent review</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--brand-soft); color:var(--brand-d); font-weight:500;">Human · RLS sign-off</span>
+            </div>
+          </div>
+
+          <!-- M3 -->
+          <div style="position:relative; margin:0 0 16px 0; border:1px solid var(--line); border-radius:11px; background:#fff; padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; left:-29px; top:20px; width:14px; height:14px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M3</span>
+              <span style="font-size:17px; font-weight:600;">Hardware Pilot</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);">Sep 23 – Oct 20 · 4 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);">Deliverables</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">ESC/POS printing · cashier + kitchen screen linked · run in one real restaurant · daily report.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">One restaurant runs a full day unattended · invoice + kitchen ticket · cash count &amp; shift close.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--brand-soft); color:var(--brand-d); font-weight:500;">Human · on-site</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code · fixes</span>
+            </div>
+          </div>
+
+          <!-- M4 -->
+          <div style="position:relative; margin:0; border:1.5px solid var(--brand-soft); border-radius:11px; background:linear-gradient(180deg,#fdf7f3,#fff); padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; left:-29px; top:20px; width:16px; height:16px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M4</span>
+              <span style="font-size:17px; font-weight:600;">SaaS Launch</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);">Oct 21 – Dec 15 · 8 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);">Deliverables</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">Self-serve restaurant signup · multi-tenant admin · basic subscriptions/billing · Platform Admin panel · reports.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">New restaurant signs up &amp; runs with no manual steps · multi-tenant isolation in production · billing works.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code · impl</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Codex · review</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--brand-soft); color:var(--brand-d); font-weight:500;">Human · go-to-market</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ===== SCOPE ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">06 · Scope</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">MVP Scope — In &amp; Deferred</h2>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px;">
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--ok); font-size:14px;"><span style="font-size:16px;">✓</span>In Scope</div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink); line-height:1.5;">
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Multi-tenant: many restaurants on one platform, fully isolated</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Personal account per Owner / Manager / Cashier / Kitchen</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>One owner can hold multiple restaurants</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Menu: items, sizes, add-ons, modifiers</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Dine-in &amp; takeaway + simple table management</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>POS &amp; KDS devices linked to restaurant &amp; branch</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Kitchen ticket + invoice + cash payment printing</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Shift + cash count + discounts &amp; voids with audit</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Daily report + Offline + Arabic/Hebrew/English</li>
+            </ul>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--muted); font-size:14px;"><span style="font-size:16px;">✕</span>Deferred</div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--muted); line-height:1.5;">
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Electronic payment</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Delivery app + Wolt / 10bis integration</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Advanced multi-branch</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Advanced inventory</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Loyalty programs</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Table reservations</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>QR self-order</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Full accounting</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Advanced automated billing</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== PRINCIPLES ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">07 · Principles</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Architecture Principles</h2>
+        <p style="font-size:15px; line-height:1.7; color:var(--muted); margin:12px 0 0; max-width:64ch;">Fixed decisions governing every phase — security, isolation and reliability built into the design, not bolted on later.</p>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-top:22px;">
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Multi-Tenant Isolation</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">Every row carries <span style="font-family:var(--mono); font-size:11.5px;">tenant_id / restaurant_id</span>; one restaurant can't read another's data — even if the request is hand-edited, the database refuses.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Per-Person Identity</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">No shared account: each person an account, each device an identity, every action under its real owner with instant access revocation.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Four Security Layers</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">RLS · Membership &amp; Roles · server-side functions (<span style="font-family:var(--mono); font-size:11.5px;">fn_apply_discount</span>) · strict database constraints.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Offline-First</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">Local SQLite + Outbox + idempotency: the restaurant never stops, and sync happens on its own when the network returns.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Bug Prevention by Design</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">State machines · tamper-proof audit log · typed contracts between Flutter and the backend.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Isolation Tests</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">Mandatory tests: a restaurant can't read another's data, and a revoked employee can't operate — a gate on every merge.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== ADOPTED MODEL ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">08 · Adopted Model</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Officially Adopted Model</h2>
+
+        <div style="margin-top:20px; border:1px solid var(--line); border-radius:12px; overflow:hidden; break-inside:avoid;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--line);">
+            <span style="font-size:14.5px; font-weight:600;">Restaurant</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">Tenant / Workspace</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--line); background:#fff;">
+            <span style="font-size:14.5px; font-weight:600;">Person</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">User Account</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--line);">
+            <span style="font-size:14.5px; font-weight:600;">Relationship</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">Membership + Role</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--line); background:#fff;">
+            <span style="font-size:14.5px; font-weight:600;">Device</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">Device Identity (limited)</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px;">
+            <span style="font-size:14.5px; font-weight:600;">Staff on device</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">Personal PIN / Session</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== TECH STACK ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">09 · Tech Stack</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Tech Stack</h2>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:13px; margin-top:22px;">
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);">Frontend</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:11px;">
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Flutter</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Riverpod</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">GoRouter</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Drift / SQLite</span>
+            </div>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);">Backend</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:11px;">
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Supabase</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">PostgreSQL</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">RLS</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">RPC + Edge Fns</span>
+            </div>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);">Infra &amp; QA</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:11px;">
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Melos</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">ESC/POS</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">GitHub Actions</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Playwright</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== RISKS ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">10 · Risks</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">Risks &amp; Open Questions</h2>
+
+        <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--no); background:var(--no-soft); padding:3px 8px; border-radius:6px; flex:none;">R1</span>
+            <div><div style="font-size:14px; font-weight:600;">Hardware integration (ESC/POS)</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">Printer &amp; model variation. <strong style="color:var(--ink); font-weight:600;">Mitigation:</strong> standardize one model in M3 before scaling.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--no); background:var(--no-soft); padding:3px 8px; border-radius:6px; flex:none;">R2</span>
+            <div><div style="font-size:14px; font-weight:600;">Offline sync conflicts</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">Network returns with queued orders. <strong style="color:var(--ink); font-weight:600;">Mitigation:</strong> idempotency + Outbox tested in M2.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--warn); background:var(--warn-soft); padding:3px 8px; border-radius:6px; flex:none;">R3</span>
+            <div><div style="font-size:14px; font-weight:600;">RLS correctness &amp; isolation</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">A small bug = data leak between restaurants. <strong style="color:var(--ink); font-weight:600;">Mitigation:</strong> mandatory isolation tests + human sign-off.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--warn); background:var(--warn-soft); padding:3px 8px; border-radius:6px; flex:none;">R4</span>
+            <div><div style="font-size:14px; font-weight:600;">Scope creep</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">Drifting into deferred items. <strong style="color:var(--ink); font-weight:600;">Mitigation:</strong> frozen "deferred" list + human scope decision.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--warn); background:var(--warn-soft); padding:3px 8px; border-radius:6px; flex:none;">R5</span>
+            <div><div style="font-size:14px; font-weight:600;">Single-builder bus factor</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">One human + agents. <strong style="color:var(--ink); font-weight:600;">Mitigation:</strong> document every decision + Codex as independent reviewer + Git as source of truth.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== NEXT STEP ===== -->
+      <section style="margin-top:50px;">
+        <div style="border-radius:14px; background:var(--ink); color:#f3efe8; padding:26px 28px; break-inside:avoid;">
+          <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:#e9b89e; font-weight:600;">11 · Next Step</div>
+          <h2 style="font-size:23px; font-weight:600; margin:9px 0 0; color:#fff; line-height:1.3;">Next Step</h2>
+          <p style="font-size:15px; line-height:1.7; margin:12px 0 0; color:#d8d2c7; max-width:62ch;">We start <strong style="color:#fff; font-weight:600;">Claude Code</strong> on the docs phase (M0) — after tuning the prompt to be <strong style="color:#fff; font-weight:600;">multi-tenant from the first migration</strong>, freezing the architecture and contracts before any code.</p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:18px;">
+            <span style="padding:5px 12px; border-radius:999px; font-size:12px; font-family:var(--mono); background:rgba(255,255,255,.1); color:#f3efe8;">→ M0 · docs</span>
+            <span style="padding:5px 12px; border-radius:999px; font-size:12px; font-family:var(--mono); background:rgba(255,255,255,.1); color:#f3efe8;">multi-tenant first migration</span>
+            <span style="padding:5px 12px; border-radius:999px; font-size:12px; font-family:var(--mono); background:rgba(255,255,255,.1); color:#f3efe8;">freeze contracts</span>
+          </div>
+        </div>
+        <p style="text-align:center; font-family:var(--mono); font-size:11px; color:var(--faint); margin:24px 0 0; letter-spacing:.04em;">RestoFlow · Restaurant Operating System — Project Plan v1.0 · June 2026</p>
+      </section>
+
+    </td></tr></tbody>
+    <tfoot><tr><td class="ftr-space"></td></tr></tfoot>
+  </table>
+</main>
+</x-dc>
+</body>
+</html>

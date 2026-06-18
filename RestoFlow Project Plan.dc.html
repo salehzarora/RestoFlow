@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#fbfaf6; }
+  .doc { box-sizing:border-box; max-width:8.5in; margin:0 auto; background:inherit; padding:48px clamp(22px,5vw,0.7in) 96px; }
+  .doc-frame { width:100%; border-collapse:collapse; }
+  .doc-frame td { padding:0; }
+  .running-hdr,.running-ftr,.hdr-space,.ftr-space { display:none; }
+  @page { size:letter; margin:0; }
+  @media print {
+    html { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    html, body { margin:0; padding:0; }
+    .doc { max-width:none !important; margin:0 !important; padding:0 0.7in !important; box-shadow:none !important; border:none !important; }
+    #dc-root, .sc-host { height:auto !important; }
+    .hdr-space, .ftr-space { display:table-cell; height:0.7in !important; }
+    .running-hdr, .running-ftr { display:flex !important; justify-content:space-between; align-items:baseline; position:fixed !important; left:0; right:0; margin:0 !important; font-size:9.5px; letter-spacing:.04em; color:#9a948b; font-family:'IBM Plex Mono',monospace; }
+    .running-hdr { top:0; padding:.32in .7in 0 !important; }
+    .running-ftr { bottom:0; padding:0 .7in .32in !important; }
+    h1,h2,h3,h4 { break-after:avoid; }
+    figure,pre,blockquote,tr { break-inside:avoid; }
+    p,li { orphans:3; widows:3; }
+    .screen-only { display:none !important; }
+  }
+</style>
+</helmet>
+
+<main class="doc" lang="ar" dir="rtl" style="--ink:#29241e; --muted:#6f6a61; --faint:#a39d92; --paper:#fbfaf6; --line:#e7e2d8; --panel:#f4f0e8; --brand:#b35a35; --brand-d:#8c4426; --brand-soft:#f3e3d8; --agent:#3f6478; --agent-d:#2f4d5d; --agent-soft:#e3edf1; --tool:#5b5a54; --tool-soft:#eceae3; --ok:#4f7a52; --ok-soft:#e6efe4; --warn:#9c7a26; --warn-soft:#f3ecd6; --no:#a8503c; --no-soft:#f3e0d9; --sans:'IBM Plex Sans Arabic','IBM Plex Sans',sans-serif; --mono:'IBM Plex Mono',monospace; font-family:var(--sans); color:var(--ink); font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased;">
+
+  <div class="running-hdr"><span>خطة مشروع RestoFlow</span><span>Internal · v1.0</span></div>
+  <div class="running-ftr"><span>RestoFlow · Restaurant OS</span><span>June 2026</span></div>
+
+  <table class="doc-frame" role="presentation">
+    <thead><tr><td class="hdr-space"></td></tr></thead>
+    <tbody><tr><td>
+
+      <!-- ===== TITLE ===== -->
+      <h1 style="font-size:39px; font-weight:600; line-height:1.15; letter-spacing:-.01em; margin:0; text-wrap:balance;">خطة مشروع <span style="color:var(--brand);">RestoFlow</span></h1>
+      <p style="font-size:16px; color:var(--muted); margin:12px 0 0; font-weight:400;">Restaurant Operating System — نظام تشغيل مطعم متعدّد المستأجرين <span style="color:var(--faint);">(Multi-Tenant)</span></p>
+
+      <div style="display:flex; flex-wrap:wrap; gap:10px 26px; margin-top:22px; padding-top:18px; border-top:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--muted);">
+        <span><span style="color:var(--faint);">الإصدار / VERSION</span>&nbsp;&nbsp;1.0</span>
+        <span><span style="color:var(--faint);">التاريخ / DATE</span>&nbsp;&nbsp;<span dir="ltr">June 2026</span></span>
+        <span><span style="color:var(--faint);">المالك / OWNER</span>&nbsp;&nbsp;صالح</span>
+        <span><span style="color:var(--faint);">المنهجية / METHOD</span>&nbsp;&nbsp;Vibe Coding</span>
+      </div>
+
+      <!-- ===== OVERVIEW ===== -->
+      <section style="margin-top:46px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">01 · Overview</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">نظرة عامة على الخطة</h2>
+        <p style="font-size:15px; line-height:1.72; color:var(--muted); margin:12px 0 0; max-width:62ch;">RestoFlow نظام تشغيل مطعم كامل يربط الكاشير والمطبخ والدفع والتقارير في منصّة واحدة، مبنية <strong style="color:var(--ink); font-weight:600;">Multi-Tenant من أول migration</strong>. هذه الوثيقة تحدّد <strong style="color:var(--ink); font-weight:600;">من يفعل ماذا</strong> عبر فريق مختلط من بشري واحد وثلاثة وكلاء AI، مع محطات تسليم واضحة وجدول مقترح من M0 إلى M4.</p>
+
+        <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:24px;">
+          <div style="flex:1 1 150px; border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-size:30px; font-weight:600; color:var(--brand); line-height:1; font-family:var(--mono);">5</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.4;">محطات تسليم<br><span style="color:var(--faint); font-family:var(--mono); font-size:11px;">M0 → M4</span></div>
+          </div>
+          <div style="flex:1 1 150px; border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-size:30px; font-weight:600; color:var(--brand); line-height:1; font-family:var(--mono);">~24</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.4;">أسبوع مقترح<br><span style="color:var(--faint); font-family:var(--mono); font-size:11px;">≈ 5.5 months</span></div>
+          </div>
+          <div style="flex:1 1 150px; border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-size:30px; font-weight:600; color:var(--brand); line-height:1; font-family:var(--mono);">1 + 3</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:8px; line-height:1.4;">منفّذون<br><span style="color:var(--faint); font-family:var(--mono); font-size:11px;">human + AI agents</span></div>
+          </div>
+          <div style="flex:1 1 150px; border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-size:21px; font-weight:600; color:var(--brand); line-height:1.1; font-family:var(--mono); padding-top:6px;">Offline-First</div>
+            <div style="font-size:13px; color:var(--muted); margin-top:9px; line-height:1.4;">مبدأ معماري أساسي<br><span style="color:var(--faint); font-family:var(--mono); font-size:11px;">SQLite + Outbox</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== TEAM & RESOURCES (centerpiece) ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">02 · Team &amp; Resources</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">الفريق والموارد — من يفعل ماذا</h2>
+        <p style="font-size:15px; line-height:1.72; color:var(--muted); margin:12px 0 0; max-width:62ch;">القرار البشري يبقى دائمًا فوق الوكلاء: البشري يخطّط ويراجع ويدمج، والوكلاء ينفّذون ضمن صلاحيات محدّدة. <span style="color:var(--brand-d);">Git</span> هو الحَكَم النهائي على الكود.</p>
+
+        <!-- Lead (human) -->
+        <div style="margin-top:22px; border:1.5px solid var(--brand-soft); border-radius:13px; background:linear-gradient(180deg,#fdf7f3,#fff); padding:20px 22px; break-inside:avoid;">
+          <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+            <div style="width:46px; height:46px; border-radius:11px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:18px; flex:none;">ص</div>
+            <div style="flex:1 1 auto; min-width:160px;">
+              <div style="font-size:18px; font-weight:600;">صالح — القائد والمالك</div>
+              <div style="font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:2px;">Lead / Product Owner</div>
+            </div>
+            <span style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:12px; font-weight:600; background:var(--brand-soft); color:var(--brand-d);"><span style="width:7px;height:7px;border-radius:50%;background:var(--brand);"></span>بشري · Human</span>
+          </div>
+          <ul style="margin:14px 0 0; padding:0; list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:7px 22px; font-size:13.5px; color:var(--ink);">
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>قرارات المعمارية والـ scope</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>كتابة وتعديل البرومبتات</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>المراجعة النهائية والدمج (merge)</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>التواجد الميداني لتجربة الأجهزة</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>sign-off على RLS والأمان</li>
+            <li style="display:flex; gap:8px;"><span style="color:var(--brand);">—</span>الحَكَم عند أي خلاف بين الوكلاء</li>
+          </ul>
+        </div>
+
+        <!-- AI agents + tool grid -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px;">
+
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px; height:40px; border-radius:10px; background:var(--agent-soft); color:var(--agent-d); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:15px; flex:none;">GPT</div>
+              <div style="flex:1 1 auto;">
+                <div style="font-size:16px; font-weight:600;">ChatGPT</div>
+                <div style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:1px;">Planning &amp; Decisions</div>
+              </div>
+              <span style="padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:600; background:var(--agent-soft); color:var(--agent-d); font-family:var(--mono);">AI</span>
+            </div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);">
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>التخطيط وتحليل الخيارات</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>صياغة ومراجعة البرومبتات</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>مراجعة التقارير والقرارات</li>
+            </ul>
+          </div>
+
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px; height:40px; border-radius:10px; background:var(--brand-soft); color:var(--brand-d); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:18px; flex:none;">CC</div>
+              <div style="flex:1 1 auto;">
+                <div style="font-size:16px; font-weight:600;">Claude Code</div>
+                <div style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:1px;">Primary Implementer</div>
+              </div>
+              <span style="padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:600; background:var(--agent-soft); color:var(--agent-d); font-family:var(--mono);">AI</span>
+            </div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);">
+              <li style="display:flex; gap:8px;"><span style="color:var(--brand);">·</span>كتابة الكود والاختبارات</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--brand);">·</span>تنفيذ الـ migrations (بإذن)</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--brand);">·</span>إصلاح الأعطال والتحليل</li>
+            </ul>
+          </div>
+
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px; height:40px; border-radius:10px; background:var(--agent-soft); color:var(--agent-d); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:14px; flex:none;">Cdx</div>
+              <div style="flex:1 1 auto;">
+                <div style="font-size:16px; font-weight:600;">Codex</div>
+                <div style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:1px;">Independent Reviewer</div>
+              </div>
+              <span style="padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:600; background:var(--agent-soft); color:var(--agent-d); font-family:var(--mono);">AI</span>
+            </div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);">
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>مراجعة مستقلة للكود</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>تنفيذ مهمة منفصلة عند اللزوم</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--agent);">·</span>التقاط ما يفوت المنفّذ</li>
+            </ul>
+          </div>
+
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px; height:40px; border-radius:10px; background:var(--tool-soft); color:var(--tool); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:600; font-size:14px; flex:none;">Git</div>
+              <div style="flex:1 1 auto;">
+                <div style="font-size:16px; font-weight:600;">Git</div>
+                <div style="font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:1px;">Final Arbiter</div>
+              </div>
+              <span style="padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:600; background:var(--tool-soft); color:var(--tool); font-family:var(--mono);">TOOL</span>
+            </div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);">
+              <li style="display:flex; gap:8px;"><span style="color:var(--tool);">·</span>مصدر الحقيقة للكود</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--tool);">·</span>تاريخ التغييرات والمراجعة</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--tool);">·</span>حماية الفرع <span dir="ltr" style="font-family:var(--mono); font-size:12px;">main</span></li>
+            </ul>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ===== AGENT PERMISSIONS ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">03 · Agent Permissions</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">صلاحيات الوكلاء</h2>
+        <p style="font-size:15px; line-height:1.72; color:var(--muted); margin:12px 0 0; max-width:62ch;">حدود واضحة لما يفعله الوكلاء تلقائيًا، وما يحتاج إذنًا، وما هو ممنوع منعًا باتًا.</p>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:13px; margin-top:22px;">
+          <div style="border:1px solid var(--ok); border-radius:12px; background:var(--ok-soft); padding:16px 18px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--ok); font-size:14px;"><span style="font-size:16px;">✓</span>مسموح · Allowed</div>
+            <ul style="margin:12px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink);">
+              <li>قراءة وتعديل ملفات المشروع</li>
+              <li>تشغيل الاختبارات والتحليل</li>
+              <li><span dir="ltr" style="font-family:var(--mono); font-size:12px;">commit</span> محلي</li>
+            </ul>
+          </div>
+          <div style="border:1px solid var(--warn); border-radius:12px; background:var(--warn-soft); padding:16px 18px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--warn); font-size:14px;"><span style="font-size:16px;">!</span>يطلب إذن · Ask First</div>
+            <ul style="margin:12px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink);">
+              <li>إضافة <span dir="ltr" style="font-family:var(--mono); font-size:12px;">dependency</span> جديدة</li>
+              <li>تطبيق <span dir="ltr" style="font-family:var(--mono); font-size:12px;">migrations</span></li>
+              <li>تعديل العقود والـ <span dir="ltr" style="font-family:var(--mono); font-size:12px;">shared</span></li>
+            </ul>
+          </div>
+          <div style="border:1px solid var(--no); border-radius:12px; background:var(--no-soft); padding:16px 18px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--no); font-size:14px;"><span style="font-size:16px;">✕</span>ممنوع · Forbidden</div>
+            <ul style="margin:12px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink);">
+              <li><span dir="ltr" style="font-family:var(--mono); font-size:12px;">git push / reset --hard</span></li>
+              <li><span dir="ltr" style="font-family:var(--mono); font-size:12px;">supabase db reset</span></li>
+              <li>حذف بيانات أو قراءة <span dir="ltr" style="font-family:var(--mono); font-size:12px;">secrets</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== WORKSTREAM OWNERSHIP ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">04 · Ownership</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">توزيع المسؤوليات على المسارات</h2>
+        <p style="font-size:15px; line-height:1.72; color:var(--muted); margin:12px 0 0; max-width:62ch;">لكل مسار عمل منفّذ أساسي ومراجِع، مع تحديد ما يحتاج قرارًا بشريًا.</p>
+
+        <table style="width:100%; border-collapse:collapse; margin-top:20px; break-inside:avoid;">
+          <thead>
+            <tr>
+              <th style="padding:10px 12px; border-bottom:2px solid var(--ink); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); text-align:right; font-weight:600;">المسار · Workstream</th>
+              <th style="padding:10px 12px; border-bottom:2px solid var(--ink); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); text-align:right; font-weight:600;">المنفّذ · Primary</th>
+              <th style="padding:10px 12px; border-bottom:2px solid var(--ink); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); text-align:right; font-weight:600;">المراجِع · Reviewer</th>
+              <th style="padding:10px 12px; border-bottom:2px solid var(--ink); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); text-align:right; font-weight:600;">قرار بشري</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">المعمارية والوثائق <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Architecture &amp; Docs</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">ChatGPT + بشري</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">بشري</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--brand-d); font-weight:500;">تجميد المعمارية</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">الواجهة <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Flutter · POS · KDS</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Codex</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--muted);">حدود الـ scope</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">الـ Backend <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Supabase · RLS · RPC</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Codex</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--brand-d); font-weight:500;">sign-off على RLS</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">المزامنة و Offline <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Outbox · Sync</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Codex</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--faint);">—</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">الجودة واختبارات العزل <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">QA · Isolation Tests</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Codex + Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">بشري</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--muted);">معايير القبول</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">البنية والـ CI <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Melos · GitHub Actions</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">بشري</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--brand-d); font-weight:500;">إدارة الـ secrets</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:top;">الأجهزة <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">ESC/POS · Devices</span></td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">بشري (ميداني)</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top;">Claude Code</td>
+              <td style="padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; color:var(--muted);">اختيار الأجهزة</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 12px; font-size:13.5px; vertical-align:top;">الدمج والـ scope <span style="color:var(--faint); font-family:var(--mono); font-size:11px; display:block;">Merge &amp; Scope</span></td>
+              <td style="padding:11px 12px; font-size:13px; vertical-align:top;">بشري + Git</td>
+              <td style="padding:11px 12px; font-size:13px; vertical-align:top; color:var(--faint);">—</td>
+              <td style="padding:11px 12px; font-size:13px; vertical-align:top; color:var(--brand-d); font-weight:500;">الحَكَم النهائي</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ===== ROADMAP ===== -->
+      <section style="margin-top:50px;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">05 · Roadmap</div>
+          <span style="font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--warn); background:var(--warn-soft); padding:3px 8px; border-radius:999px;">جدول مقترح · proposed</span>
+        </div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">خارطة الطريق — M0 إلى M4</h2>
+        <p style="font-size:15px; line-height:1.72; color:var(--muted); margin:12px 0 0; max-width:62ch;">جدول مقترح يبدأ <span dir="ltr" style="font-family:var(--mono); font-size:13px;">July 2026</span> وينتهي <span dir="ltr" style="font-family:var(--mono); font-size:13px;">mid-Dec 2026</span>. المدد قابلة للتعديل مع تقدّم العمل.</p>
+
+        <!-- proportional ribbon (RTL: M0 right → M4 left) -->
+        <div style="display:flex; gap:5px; margin-top:22px;">
+          <div style="flex:2 1 0; background:#f3e1d6; border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand-d);">M0</div>
+            <div style="font-size:11.5px; color:var(--brand-d); margin-top:3px; line-height:1.3;">نظام المشروع</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:var(--brand-d); opacity:.7; margin-top:4px;" dir="ltr">2w · Jul</div>
+          </div>
+          <div style="flex:4 1 0; background:#ecc4ac; border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand-d);">M1</div>
+            <div style="font-size:11.5px; color:var(--brand-d); margin-top:3px; line-height:1.3;">نموذج محلي</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:var(--brand-d); opacity:.7; margin-top:4px;" dir="ltr">4w · Jul–Aug</div>
+          </div>
+          <div style="flex:6 1 0; background:#dd9a72; border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:#fff;">M2</div>
+            <div style="font-size:11.5px; color:#fff; margin-top:3px; line-height:1.3;">Backend حقيقي</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:#fff; opacity:.85; margin-top:4px;" dir="ltr">6w · Aug–Sep</div>
+          </div>
+          <div style="flex:4 1 0; background:#c46a44; border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:#fff;">M3</div>
+            <div style="font-size:11.5px; color:#fff; margin-top:3px; line-height:1.3;">تجربة أجهزة</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:#fff; opacity:.85; margin-top:4px;" dir="ltr">4w · Sep–Oct</div>
+          </div>
+          <div style="flex:8 1 0; background:var(--brand); border-radius:8px; padding:11px 12px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:#fff;">M4</div>
+            <div style="font-size:11.5px; color:#fff; margin-top:3px; line-height:1.3;">SaaS للبيع</div>
+            <div style="font-family:var(--mono); font-size:9.5px; color:#fff; opacity:.85; margin-top:4px;" dir="ltr">8w · Oct–Dec</div>
+          </div>
+        </div>
+
+        <!-- vertical timeline detail -->
+        <div style="position:relative; margin-top:30px; padding-right:30px;">
+          <div style="position:absolute; top:10px; bottom:10px; right:9px; width:2px; background:var(--line);"></div>
+
+          <!-- M0 -->
+          <div style="position:relative; margin:0 0 16px 0; border:1px solid var(--line); border-radius:11px; background:#fff; padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; right:-29px; top:20px; width:14px; height:14px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M0</span>
+              <span style="font-size:17px; font-weight:600;">نظام المشروع</span>
+              <span style="font-family:var(--mono); font-size:11.5px; color:var(--muted);">Project System</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);" dir="ltr">Jul 1 – 14 · 2 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); padding-top:2px;">تسليمات</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">وثائق المعمارية مُجمّدة · نموذج بيانات Multi-Tenant · تقسيم المهام والعقود (contracts) · إعداد الـ monorepo.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">المعمارية مُجمّدة ومراجَعة · أول migration متعدّدة المستأجرين جاهزة · الأنواع (types) متّفق عليها.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--brand-soft); color:var(--brand-d); font-weight:500;">بشري · Lead</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">ChatGPT</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code</span>
+            </div>
+          </div>
+
+          <!-- M1 -->
+          <div style="position:relative; margin:0 0 16px 0; border:1px solid var(--line); border-radius:11px; background:#fff; padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; right:-29px; top:20px; width:14px; height:14px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M1</span>
+              <span style="font-size:17px; font-weight:600;">نموذج محلي</span>
+              <span style="font-family:var(--mono); font-size:11.5px; color:var(--muted);">Local Prototype</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);" dir="ltr">Jul 15 – Aug 11 · 4 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); padding-top:2px;">تسليمات</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">واجهة POS · شاشة KDS · دورة طلب كاملة محليًا ببيانات Fake · تخزين SQLite/Drift.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">طلب يمشي من الكاشير للمطبخ محليًا · State machine للحالات · بدون Backend بعد.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code · منفّذ</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Codex · مراجعة</span>
+            </div>
+          </div>
+
+          <!-- M2 -->
+          <div style="position:relative; margin:0 0 16px 0; border:1px solid var(--line); border-radius:11px; background:#fff; padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; right:-29px; top:20px; width:14px; height:14px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M2</span>
+              <span style="font-size:17px; font-weight:600;">Backend حقيقي</span>
+              <span style="font-family:var(--mono); font-size:11.5px; color:var(--muted);">Real Backend</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);" dir="ltr">Aug 12 – Sep 22 · 6 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); padding-top:2px;">تسليمات</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">Supabase + Auth + RLS · Membership/Roles · RPC للعمليات الحساسة · مزامنة Outbox بين POS و KDS.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">اختبارات العزل تمرّ · المزامنة تعمل Offline → Online · Idempotency مضمونة.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code · منفّذ</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Codex · مراجعة مستقلة</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--brand-soft); color:var(--brand-d); font-weight:500;">بشري · sign-off RLS</span>
+            </div>
+          </div>
+
+          <!-- M3 -->
+          <div style="position:relative; margin:0 0 16px 0; border:1px solid var(--line); border-radius:11px; background:#fff; padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; right:-29px; top:20px; width:14px; height:14px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M3</span>
+              <span style="font-size:17px; font-weight:600;">تجربة أجهزة</span>
+              <span style="font-family:var(--mono); font-size:11.5px; color:var(--muted);">Hardware Pilot</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);" dir="ltr">Sep 23 – Oct 20 · 4 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); padding-top:2px;">تسليمات</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">طباعة ESC/POS · ربط جهاز كاشير + شاشة مطبخ · تشغيل في مطعم واحد فعلي · تقرير يومي.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">مطعم واحد يشتغل يوم كامل بدون تدخل · فاتورة + Kitchen ticket · جرد كاش وإغلاق وردية.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--brand-soft); color:var(--brand-d); font-weight:500;">بشري · ميداني</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code · إصلاح</span>
+            </div>
+          </div>
+
+          <!-- M4 -->
+          <div style="position:relative; margin:0; border:1.5px solid var(--brand-soft); border-radius:11px; background:linear-gradient(180deg,#fdf7f3,#fff); padding:17px 19px; break-inside:avoid;">
+            <div style="position:absolute; right:-29px; top:20px; width:16px; height:16px; border-radius:50%; background:var(--brand); border:3px solid var(--paper);"></div>
+            <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:var(--mono); font-weight:600; font-size:14px; color:var(--brand);">M4</span>
+              <span style="font-size:17px; font-weight:600;">SaaS للبيع</span>
+              <span style="font-family:var(--mono); font-size:11.5px; color:var(--muted);">SaaS Launch</span>
+              <span style="margin-inline-start:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted);" dir="ltr">Oct 21 – Dec 15 · 8 weeks</span>
+            </div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:5px;">
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); padding-top:2px;">تسليمات</span>
+              <span style="font-size:13.5px; color:var(--ink); line-height:1.6;">تسجيل مطاعم ذاتي · إدارة Multi-Tenant · اشتراكات/Billing أساسي · لوحة Platform Admin · تقارير.</span>
+              <span style="font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); margin-top:7px;">DoD</span>
+              <span style="font-size:13.5px; color:var(--muted); line-height:1.6;">مطعم جديد يسجّل ويشتغل بدون تدخل يدوي · عزل Multi-Tenant بالإنتاج · Billing يعمل.</span>
+            </div>
+            <div style="margin-top:13px; display:flex; gap:7px; flex-wrap:wrap;">
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Claude Code · منفّذ</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--agent-soft); color:var(--agent-d); font-weight:500;">Codex · مراجعة</span>
+              <span style="padding:3px 10px; border-radius:999px; font-size:11px; background:var(--brand-soft); color:var(--brand-d); font-weight:500;">بشري · go-to-market</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ===== SCOPE ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">06 · Scope</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">نطاق الـ MVP — داخل ومؤجّل</h2>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px;">
+          <div style="border:1px solid var(--line); border-radius:12px; background:#fff; padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--ok); font-size:14px;"><span style="font-size:16px;">✓</span>داخل MVP · In Scope</div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink); line-height:1.5;">
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Multi-Tenant: مطاعم كثيرة على نفس المنصّة بعزل كامل</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>حساب شخصي لكل Owner / Manager / Cashier / Kitchen</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>مالك واحد يملك أكثر من مطعم</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>منيو: أصناف، أحجام، إضافات، Modifiers</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Dine-in و Takeaway + إدارة طاولات بسيطة</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>أجهزة POS و KDS مربوطة بمطعم وفرع</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>طباعة Kitchen ticket + فاتورة + دفع نقدي</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>Shift + جرد كاش + خصومات و Voids مع Audit</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--ok); flex:none;">✓</span>تقرير يومي + Offline + عربي/عبري/إنجليزي</li>
+            </ul>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:18px 20px; break-inside:avoid;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--muted); font-size:14px;"><span style="font-size:16px;">✕</span>مؤجّل لاحقًا · Deferred</div>
+            <ul style="margin:13px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--muted); line-height:1.5;">
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>دفع إلكتروني</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>تطبيق توصيل + تكامل Wolt / 10bis</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Multi-branch المتقدّمة</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Inventory متقدّم</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>Loyalty وبرامج الولاء</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>حجوزات الطاولات</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>QR self-order</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>محاسبة كاملة</li>
+              <li style="display:flex; gap:8px;"><span style="color:var(--faint); flex:none;">✕</span>اشتراكات و Billing أوتوماتيكي متقدّم</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== PRINCIPLES ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">07 · Principles</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">المبادئ المعمارية</h2>
+        <p style="font-size:15px; line-height:1.72; color:var(--muted); margin:12px 0 0; max-width:62ch;">قرارات ثابتة تحكم كل مرحلة — أمان وعزل وموثوقية مبنية في التصميم، لا مضافة لاحقًا.</p>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-top:22px;">
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Multi-Tenant Isolation</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">كل صف يحمل <span dir="ltr" style="font-family:var(--mono); font-size:11.5px;">tenant_id / restaurant_id</span>؛ مطعم لا يقرأ بيانات مطعم آخر — حتى لو عُدّل الطلب يدويًا، القاعدة ترفض.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Per-Person Identity</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">لا حساب مشترك: كل شخص حساب، كل جهاز هوية، كل عملية باسم صاحبها الحقيقي مع إلغاء وصول فوري.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Four Security Layers</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">RLS · Membership &amp; Roles · Server-side functions (<span dir="ltr" style="font-family:var(--mono); font-size:11.5px;">fn_apply_discount</span>) · Database constraints صارمة.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Offline-First</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">SQLite محلي + Outbox + Idempotency: المطعم لا يتوقف، والمزامنة تتم لحالها عند رجوع النت.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Bug Prevention by Design</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">State machines · Audit log لا يُعبث به · Typed contracts بين Flutter والـ Backend.</p>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--brand);">Isolation Tests</div>
+            <p style="margin:7px 0 0; font-size:13px; color:var(--muted); line-height:1.6;">اختبارات إلزامية: مطعم لا يقرأ بيانات مطعم آخر، وموظف مُلغى لا يشتغل — شرط لكل دمج.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== ADOPTED MODEL ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">08 · Adopted Model</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">النموذج المعتمد رسميًا</h2>
+
+        <div style="margin-top:20px; border:1px solid var(--line); border-radius:12px; overflow:hidden; break-inside:avoid;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--line);">
+            <span style="font-size:14.5px; font-weight:600;">مطعم</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">Tenant / Workspace</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--line); background:#fff;">
+            <span style="font-size:14.5px; font-weight:600;">شخص</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">User Account</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--line);">
+            <span style="font-size:14.5px; font-weight:600;">العلاقة</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">Membership + Role</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--line); background:#fff;">
+            <span style="font-size:14.5px; font-weight:600;">جهاز</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">Device Identity (محدود)</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px;">
+            <span style="font-size:14.5px; font-weight:600;">الموظف على الجهاز</span><span style="color:var(--brand); font-family:var(--mono);">=</span><span style="font-family:var(--mono); font-size:13px; color:var(--ink);">Personal PIN / Session</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== TECH STACK ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">09 · Tech Stack</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">المنظومة التقنية</h2>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:13px; margin-top:22px;">
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);">Frontend</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:11px;" dir="ltr">
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Flutter</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Riverpod</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">GoRouter</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Drift / SQLite</span>
+            </div>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);">Backend</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:11px;" dir="ltr">
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Supabase</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">PostgreSQL</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">RLS</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">RPC + Edge Fns</span>
+            </div>
+          </div>
+          <div style="border:1px solid var(--line); border-radius:11px; background:#fff; padding:16px 18px; break-inside:avoid;">
+            <div style="font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);">Infra &amp; QA</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:11px;" dir="ltr">
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Melos</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">ESC/POS</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">GitHub Actions</span>
+              <span style="padding:4px 10px; border-radius:7px; font-size:12px; font-family:var(--mono); background:var(--panel); color:var(--ink);">Playwright</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== RISKS ===== -->
+      <section style="margin-top:50px;">
+        <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brand); font-weight:600;">10 · Risks</div>
+        <h2 style="font-size:25px; font-weight:600; margin:7px 0 0; line-height:1.25;">المخاطر والأسئلة المفتوحة</h2>
+
+        <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--no); background:var(--no-soft); padding:3px 8px; border-radius:6px; flex:none;">R1</span>
+            <div><div style="font-size:14px; font-weight:600;">تكامل الأجهزة (ESC/POS)</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">اختلاف الطابعات والموديلات. <strong style="color:var(--ink); font-weight:600;">التخفيف:</strong> تثبيت موديل واحد في M3 قبل التوسّع.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--no); background:var(--no-soft); padding:3px 8px; border-radius:6px; flex:none;">R2</span>
+            <div><div style="font-size:14px; font-weight:600;">تعارضات المزامنة Offline</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">رجوع النت بطلبات متراكمة. <strong style="color:var(--ink); font-weight:600;">التخفيف:</strong> Idempotency + Outbox مُختبَران في M2.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--warn); background:var(--warn-soft); padding:3px 8px; border-radius:6px; flex:none;">R3</span>
+            <div><div style="font-size:14px; font-weight:600;">صحّة الـ RLS والعزل</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">خطأ بسيط = تسريب بيانات بين مطاعم. <strong style="color:var(--ink); font-weight:600;">التخفيف:</strong> اختبارات عزل إلزامية + sign-off بشري.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--warn); background:var(--warn-soft); padding:3px 8px; border-radius:6px; flex:none;">R4</span>
+            <div><div style="font-size:14px; font-weight:600;">تمدّد النطاق (Scope creep)</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">انجرار نحو المؤجّل. <strong style="color:var(--ink); font-weight:600;">التخفيف:</strong> قائمة «مؤجّل» مُجمّدة + قرار بشري على الـ scope.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:#fff; padding:14px 16px; break-inside:avoid;">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:600; color:var(--warn); background:var(--warn-soft); padding:3px 8px; border-radius:6px; flex:none;">R5</span>
+            <div><div style="font-size:14px; font-weight:600;">الاعتماد على منفّذ واحد (bus factor)</div><div style="font-size:13px; color:var(--muted); margin-top:3px; line-height:1.55;">بشري واحد + وكلاء. <strong style="color:var(--ink); font-weight:600;">التخفيف:</strong> توثيق كل قرار + Codex كمراجع مستقل + Git كمصدر حقيقة.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== NEXT STEP ===== -->
+      <section style="margin-top:50px;">
+        <div style="border-radius:14px; background:var(--ink); color:#f3efe8; padding:26px 28px; break-inside:avoid;">
+          <div style="font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:#e9b89e; font-weight:600;">11 · Next Step</div>
+          <h2 style="font-size:23px; font-weight:600; margin:9px 0 0; color:#fff; line-height:1.3;">الخطوة التالية</h2>
+          <p style="font-size:15px; line-height:1.75; margin:12px 0 0; color:#d8d2c7; max-width:60ch;">نشغّل <strong style="color:#fff; font-weight:600;">Claude Code</strong> على مرحلة الوثائق (M0) — بعد تعديل البرومبت ليكون <strong style="color:#fff; font-weight:600;">Multi-Tenant من أول migration</strong>، مع تجميد المعمارية والعقود قبل أي كود.</p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:18px;">
+            <span style="padding:5px 12px; border-radius:999px; font-size:12px; font-family:var(--mono); background:rgba(255,255,255,.1); color:#f3efe8;" dir="ltr">→ M0 · docs</span>
+            <span style="padding:5px 12px; border-radius:999px; font-size:12px; font-family:var(--mono); background:rgba(255,255,255,.1); color:#f3efe8;" dir="ltr">multi-tenant first migration</span>
+            <span style="padding:5px 12px; border-radius:999px; font-size:12px; font-family:var(--mono); background:rgba(255,255,255,.1); color:#f3efe8;" dir="ltr">freeze contracts</span>
+          </div>
+        </div>
+        <p style="text-align:center; font-family:var(--mono); font-size:11px; color:var(--faint); margin:24px 0 0; letter-spacing:.04em;">RestoFlow · Restaurant Operating System — خطة المشروع v1.0 · June 2026</p>
+      </section>
+
+    </td></tr></tbody>
+    <tfoot><tr><td class="ftr-space"></td></tr></tfoot>
+  </table>
+</main>
+</x-dc>
+</body>
+</html>
