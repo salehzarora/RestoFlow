@@ -34,9 +34,10 @@ melos:
   scripts:
     analyze:
       description: Static-analyze every workspace package.
-      # Native Melos `exec:` form — Melos runs the command in each package itself,
-      # so the script does NOT shell out to a global `melos` (works via
-      # `dart run melos run analyze`). No `packageFilters`: every workspace member
-      # already has `lib/`, and a filter triggers an interactive package-selection
-      # prompt that hangs/fails in a non-interactive shell.
-      exec: dart analyze .
+      # Root-level `dart analyze .` (NOT a Melos `exec:` script). With Dart pub
+      # workspaces this analyzes EVERY member package in a single pass. Crucially
+      # it needs NO global `melos` on PATH: Melos runs an `exec:` script by
+      # invoking the `melos` binary, which is absent in CI (only `dart run melos`
+      # exists there) — that caused "eval: melos: not found" (RF-012 CI fix). A
+      # plain `run:` command invokes no nested melos, so it works everywhere.
+      run: dart analyze .
