@@ -1,5 +1,5 @@
 name: restoflow_design_system
-description: RestoFlow design_system package (RF-010 skeleton) - themed widgets and RTL/LTR-aware layout primitives. No implementation yet.
+description: RestoFlow design system - shared themeable UI foundations (shell). Real tokens, widgets, and RTL/LTR primitives land in later UI tickets.
 publish_to: none
 version: 0.0.1
 environment:

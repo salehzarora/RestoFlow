@@ -1,5 +1,5 @@
 name: restoflow_l10n
-description: RestoFlow l10n package (RF-010 skeleton) - ar/he/en localization assets and bidi helpers. No implementation yet.
+description: RestoFlow localization - shell only (declares supported locales). The full ar/he/en framework and RTL/LTR scaffolding is ticket RF-020.
 publish_to: none
 version: 0.0.1
 environment:

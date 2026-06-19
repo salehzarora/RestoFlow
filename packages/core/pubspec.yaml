@@ -1,7 +1,9 @@
 name: restoflow_core
-description: RestoFlow core package (RF-010 skeleton) - cross-cutting utilities, Result/error types, env, and logging hooks. No implementation yet.
+description: RestoFlow core package - cross-cutting foundations (Result/error types, environment selection, logging hooks). Pure Dart; no Flutter, no business logic.
 publish_to: none
 version: 0.0.1
 environment:
   sdk: ^3.12.0
 resolution: workspace
+dev_dependencies:
+  test: ^1.25.0
