@@ -39,8 +39,22 @@ insert into stations (id, organization_id, restaurant_id, branch_id, name) value
   ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a2', 'Station A'),
   ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000b2', 'Station B');
 
+-- RF-015 fixture update: app.current_org_id() is now MEMBERSHIP-DERIVED, so the
+-- principal must be a real app_user holding an active membership in the selected
+-- org. Seed one ORG-WIDE (org_owner, restaurant_id NULL) member of BOTH orgs;
+-- org-wide scope means app.has_scope() grants access to every row in the
+-- selected org, so the original RF-014 expectations are preserved unchanged.
+insert into app_users (id, email) values
+  ('00000000-0000-0000-0000-0000000000c1', 'rf014-fixture@example.test');
+insert into memberships (app_user_id, organization_id, role) values
+  ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-00000000000a', 'org_owner'),
+  ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-00000000000b', 'org_owner');
+
 -- ---- Exercise RLS as the non-privileged `authenticated` role ---------------
 set local role authenticated;
+-- RF-015: identify the current user (drives the membership lookup). The active
+-- org is selected per-block below via app.current_organization_id, exactly as before.
+set local app.current_app_user_id = '00000000-0000-0000-0000-0000000000c1';
 
 -- Deny-by-default: GUC genuinely unset => current_org_id() is NULL => zero rows  1-4
 select is((select count(*) from organizations)::int, 0, 'No tenant context => zero organizations (deny-by-default)');
