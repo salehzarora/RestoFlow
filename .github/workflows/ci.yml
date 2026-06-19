@@ -1,0 +1,75 @@
+name: CI
+
+# RF-012 — RestoFlow workspace validation pipeline.
+#
+# Enforces, on every pull request and on pushes to `main`, the same gates proven
+# locally: format, workspace bootstrap, static analysis, core/domain tests, and
+# the no-floating-point-money + secret-leak guardrails. The pipeline is
+# deterministic and SECRET-FREE: it requires NO repository secrets and NO
+# Supabase service-role key, and it runs no Docker, no `supabase start`, no
+# `supabase db reset`, and no migrations (DECISION D-009; SECURITY REQUIREMENT
+# DECISION D-011). App build gates are intentionally deferred until the apps
+# gain platform targets (see RF-012 notes / ~M1).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege: a read-only token. This pipeline needs no write scope and no
+# secrets. If a future job ever needs one, reference it by NAME only
+# (e.g. ${{ secrets.SOME_NAME }}) — never inline a credential value here.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: format · bootstrap · analyze · test · guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter (bundles Dart)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.2
+          channel: stable
+          cache: true
+
+      - name: Tool versions
+        run: |
+          flutter --version
+          dart --version
+
+      # Resolve the whole pub workspace (incl. the local `melos` dev-dependency
+      # and the Flutter-SDK members) so `dart run melos ...` works on a fresh
+      # runner without a global Melos install.
+      - name: Resolve workspace
+        run: flutter pub get
+
+      - name: Bootstrap workspace (melos)
+        run: dart run melos bootstrap
+
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Static analysis
+        run: dart run melos run analyze
+
+      - name: Tests — core
+        run: dart test packages/core
+
+      - name: Tests — domain
+        run: dart test packages/domain
+
+      - name: Guardrail — no floating-point money (DECISION D-007)
+        run: bash tools/check_no_float_money.sh
+
+      - name: Guardrail — secret-leak scan (DECISION D-011)
+        run: bash tools/check_secrets.sh
