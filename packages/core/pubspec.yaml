@@ -1,0 +1,7 @@
+name: restoflow_core
+description: RestoFlow core package (RF-010 skeleton) - cross-cutting utilities, Result/error types, env, and logging hooks. No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+resolution: workspace

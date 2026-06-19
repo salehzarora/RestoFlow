@@ -1,0 +1,7 @@
+name: restoflow_printing
+description: RestoFlow printing package (RF-010 skeleton) - ESC/POS printing adapter interface (replaceable; implementations land later). No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+resolution: workspace

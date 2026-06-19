@@ -1,0 +1,7 @@
+# RestoFlow workspace analyzer configuration (RF-010 skeleton).
+# Stricter lint rules / lint packages are introduced in later tickets (RF-011+).
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "**/*.config.dart"

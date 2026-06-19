@@ -1,0 +1,7 @@
+name: restoflow_money
+description: RestoFlow money package (RF-010 skeleton) - integer minor-unit money type, currency, and rounding helpers (no floating point). No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+resolution: workspace

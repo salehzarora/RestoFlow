@@ -1,0 +1,11 @@
+name: restoflow_design_system
+description: RestoFlow design_system package (RF-010 skeleton) - themed widgets and RTL/LTR-aware layout primitives. No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.0.0"
+resolution: workspace
+dependencies:
+  flutter:
+    sdk: flutter

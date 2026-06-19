@@ -1,0 +1,7 @@
+name: restoflow_auth_identity
+description: RestoFlow auth_identity package (RF-010 skeleton) - the six identity concepts (user, membership, employee, device identity, device session, PIN session) and role keys. No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+resolution: workspace
