@@ -117,13 +117,21 @@ Thumbs.db
 desktop.ini
 
 # ----------------------------------------------------------------------------
-# Supabase (local CLI / backend — DECISION D-009; backend integration in M2)
+# Supabase (local CLI / backend — DECISION D-009; bootstrap under RF-013)
+# `supabase/config.toml` IS committed (config only, secrets via env(...)).
+# Real secrets live in gitignored *.env.local / *.env.keys — never in git.
 # ----------------------------------------------------------------------------
 supabase/.branches/
 supabase/.temp/
 supabase/.env
+supabase/.env.local
+supabase/.env.*.local
+supabase/.env.keys
 .branches/
 .temp/
+# Supabase Auth JWT signing keys (config.toml: auth.signing_keys_path) — NEVER commit.
+signing_keys.json
+**/signing_keys.json
 
 # ----------------------------------------------------------------------------
 # Node tooling (scripts / CSV import helpers / CI utilities)
