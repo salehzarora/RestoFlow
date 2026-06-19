@@ -1,6 +1,9 @@
-/// RestoFlow design_system package - RF-010 skeleton.
+/// RestoFlow design system - shared, themeable UI foundations.
 ///
-/// themed widgets and RTL/LTR-aware layout primitives.
-/// Intentionally empty: implementation lands in later M0B/M1 tickets per the
-/// frozen architecture (docs/ARCHITECTURE.md section 3). No business logic in RF-010.
+/// Per docs/ARCHITECTURE.md section 3 this package will own themed widgets and
+/// RTL/LTR-aware layout primitives (DECISION D-014). RF-011 provides only a
+/// neutral shell (a base theme placeholder); real design tokens, widgets, and
+/// bidi primitives land in later UI tickets. No feature/business UI here.
 library;
+
+export 'src/theme.dart';

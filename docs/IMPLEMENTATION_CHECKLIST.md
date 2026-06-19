@@ -141,6 +141,7 @@ Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.
 - **Security impact:** none.
 
 ### RF-011 — Shared packages scaffold (core, models, design, l10n)
+> **Clarification (RF-011, Option A — human-approved 2026-06-19; wording only, frozen architecture unchanged):** The names `models`/`design` in this entry are **aliases** for the packages already frozen in [ARCHITECTURE.md](ARCHITECTURE.md) §3 and created in RF-010 — **`models` = `packages/domain`**, **`design` = `packages/design_system`**; no `packages/models` or `packages/design` is created. Per **DECISION D-007** and ARCHITECTURE §3, the integer minor-unit **money TYPE is owned by `packages/money` (ticket RF-036)**, not `domain`; acceptance criterion 2's money type is therefore **deferred to RF-036**, and RF-011 instead enforces the no-floating-point-money invariant repo-wide via `tools/check_no_float_money.sh` plus an integer-only convention. The integer-based money **unit test** moves with the money type to RF-036.
 - **Milestone:** M0B · **Workstream:** Foundation/Infra · **Owner:** Claude Code · **Reviewer:** Codex · **Priority:** High
 - **Dependencies:** RF-010
 - **Scope:** Create empty shared packages (`core`, `models`, `design`, `l10n`) exposing public interfaces only — no business logic. Shared-package changes are dedicated tickets (**DECISION D-016**).

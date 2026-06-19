@@ -1,7 +1,9 @@
 name: restoflow_domain
-description: RestoFlow domain package (RF-010 skeleton) - entities, value objects, and the proposed state enumerations (D-018) - pure Dart, no Flutter, no IO. No implementation yet.
+description: RestoFlow domain package - neutral entity/value-object foundations. Concrete entities and state enums land in later tickets; money type lives in packages/money (RF-036).
 publish_to: none
 version: 0.0.1
 environment:
   sdk: ^3.12.0
 resolution: workspace
+dev_dependencies:
+  test: ^1.25.0
