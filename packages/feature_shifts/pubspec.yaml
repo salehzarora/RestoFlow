@@ -1,0 +1,11 @@
+name: restoflow_feature_shifts
+description: RestoFlow feature_shifts package (RF-010 skeleton) - shifts feature package (composes domain + data + UI). No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.0.0"
+resolution: workspace
+dependencies:
+  flutter:
+    sdk: flutter

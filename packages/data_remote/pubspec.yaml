@@ -1,0 +1,7 @@
+name: restoflow_data_remote
+description: RestoFlow data_remote package (RF-010 skeleton) - Supabase client wrappers, RPC call sites, and query builders. No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+resolution: workspace

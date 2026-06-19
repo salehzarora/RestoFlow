@@ -1,0 +1,11 @@
+name: restoflow_feature_kitchen
+description: RestoFlow feature_kitchen package (RF-010 skeleton) - kitchen feature package (composes domain + data + UI). No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.0.0"
+resolution: workspace
+dependencies:
+  flutter:
+    sdk: flutter

@@ -1,0 +1,42 @@
+name: restoflow
+description: RestoFlow multi-tenant Restaurant OS - Dart pub workspace root for the Melos monorepo (RF-010 skeleton; no business logic). See docs/ARCHITECTURE.md section 3.
+publish_to: none
+environment:
+  sdk: ^3.12.0
+workspace:
+  - apps/pos
+  - apps/kds
+  - apps/dashboard
+  - apps/admin
+  - packages/core
+  - packages/domain
+  - packages/data_local
+  - packages/data_remote
+  - packages/sync
+  - packages/auth_identity
+  - packages/money
+  - packages/printing
+  - packages/design_system
+  - packages/l10n
+  - packages/feature_orders
+  - packages/feature_kitchen
+  - packages/feature_payments
+  - packages/feature_shifts
+  - packages/feature_menu
+  - packages/feature_reporting
+dev_dependencies:
+  melos: ^7.0.0
+
+# Melos 7 reads its configuration from this `melos:` key when the root pubspec
+# defines a Dart pub `workspace:` (a standalone melos.yaml is not used in that
+# mode). Packages are derived from the workspace list above.
+melos:
+  scripts:
+    analyze:
+      description: Static-analyze every workspace package.
+      # Native Melos `exec:` form — Melos runs the command in each package itself,
+      # so the script does NOT shell out to a global `melos` (works via
+      # `dart run melos run analyze`). No `packageFilters`: every workspace member
+      # already has `lib/`, and a filter triggers an interactive package-selection
+      # prompt that hangs/fails in a non-interactive shell.
+      exec: dart analyze .

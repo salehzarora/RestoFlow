@@ -1,0 +1,7 @@
+name: restoflow_data_local
+description: RestoFlow data_local package (RF-010 skeleton) - Drift/SQLite local store - schema, DAOs, outbox/inbox tables (offline-first). No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+resolution: workspace

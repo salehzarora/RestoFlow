@@ -1,0 +1,11 @@
+name: restoflow_feature_payments
+description: RestoFlow feature_payments package (RF-010 skeleton) - payments feature package (composes domain + data + UI). No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.0.0"
+resolution: workspace
+dependencies:
+  flutter:
+    sdk: flutter

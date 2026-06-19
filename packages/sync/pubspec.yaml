@@ -1,0 +1,7 @@
+name: restoflow_sync
+description: RestoFlow sync package (RF-010 skeleton) - outbox/inbox sync engine - idempotency, retry/backoff, conflict, tombstones, poison handling. No implementation yet.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+resolution: workspace
