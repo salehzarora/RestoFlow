@@ -1,0 +1,12 @@
+{
+  "@@locale": "ar",
+  "appName": "ريستوفلو",
+  "posAppTitle": "ريستوفلو - نقطة البيع",
+  "kdsAppTitle": "ريستوفلو - شاشة المطبخ",
+  "dashboardAppTitle": "ريستوفلو - لوحة التحكم",
+  "adminAppTitle": "ريستوفلو - الإدارة",
+  "welcomeMessage": "مرحبًا بك في ريستوفلو",
+  "localeEnglish": "الإنجليزية",
+  "localeArabic": "العربية",
+  "localeHebrew": "العبرية"
+}

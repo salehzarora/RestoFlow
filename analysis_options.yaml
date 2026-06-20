@@ -5,3 +5,7 @@ analyzer:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
     - "**/*.config.dart"
+    # RF-020: committed Flutter gen-l10n output (not named *.g.dart). Narrowly
+    # excluded so generated localizations are not linted; it is still resolvable
+    # by importers and exercised by `flutter test packages/l10n`.
+    - "packages/l10n/lib/src/generated/**"
