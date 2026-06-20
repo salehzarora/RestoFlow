@@ -1,15 +1,21 @@
 name: CI
 
-# RF-012 — RestoFlow workspace validation pipeline.
+# RestoFlow CI — two jobs, both run on every pull request + pushes to `main`,
+# and both SECRET-FREE (no repository secrets, no Supabase service-role key, no
+# remote/linked Supabase):
 #
-# Enforces, on every pull request and on pushes to `main`, the same gates proven
-# locally: format, workspace bootstrap, static analysis, core/domain tests, and
-# the no-floating-point-money + secret-leak guardrails. The pipeline is
-# deterministic and SECRET-FREE: it requires NO repository secrets and NO
-# Supabase service-role key, and it runs no Docker, no `supabase start`, no
-# `supabase db reset`, and no migrations (DECISION D-009; SECURITY REQUIREMENT
-# DECISION D-011). App build gates are intentionally deferred until the apps
-# gain platform targets (see RF-012 notes / ~M1).
+#   * validate  (RF-012) — Dart workspace gates: format, melos bootstrap, static
+#     analysis, core/domain tests, and the no-floating-point-money + secret-leak
+#     guardrails. Runs NO Docker, NO `supabase`, NO `db reset`, NO migrations.
+#   * db-tests  (RF-019) — the reusable tenant-isolation pgTAP harness plus the
+#     per-table RLS suites, run against a DOCKER-LOCAL, EPHEMERAL Supabase stack
+#     (`supabase start` + `supabase db reset` + `supabase test db`). Local-only
+#     and secret-free: no `supabase login`, no access token, no service-role key,
+#     no `${{ secrets.* }}`, never a remote/linked project
+#     (DECISION D-009 / D-011 / D-016; RISK R-003).
+#
+# App build gates are intentionally deferred until the apps gain platform targets
+# (see RF-012 notes / ~M1).
 
 on:
   pull_request:
@@ -73,3 +79,37 @@ jobs:
 
       - name: Guardrail — secret-leak scan (DECISION D-011)
         run: bash tools/check_secrets.sh
+
+  # RF-019 — reusable tenant-isolation harness + the RLS pgTAP suites, run against
+  # a Docker-local, EPHEMERAL Supabase DB. Separate from `validate` so the fast
+  # Dart gates aren't blocked by Docker, and so this job's distinct properties
+  # (Docker-using, but still secret-free / local-only) are explicit. A red result
+  # means a cross-tenant read/write succeeded, or a tenant-scoped table shipped
+  # without RLS — RISK R-003 (CRITICAL).
+  db-tests:
+    name: supabase pgTAP (tenant-isolation harness + RLS suites)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0
+
+      # Docker-local stack only (GitHub runners ship Docker). DB-only: exclude every
+      # non-db service (valid CLI 2.107.0 names) so only Postgres starts — `db reset`
+      # + `test db` need nothing else. `--ignore-health-check` is REQUIRED with this
+      # exclusion: `supabase start`'s readiness probe targets the API/PostgREST
+      # endpoint (kong/rest), which we exclude, so without the flag start would abort
+      # before migrations run. NO login, NO access token, NO remote/linked project.
+      - name: Start Supabase local stack (DB-only)
+        run: supabase start -x analytics,edge-runtime,functions,imgproxy,inbucket,kong,meta,realtime,rest,storage,studio,vector --ignore-health-check
+
+      - name: Apply migrations to the ephemeral local DB
+        run: supabase db reset
+
+      - name: Run pgTAP suites (incl. the RF-019 tenant-isolation harness)
+        run: supabase test db
