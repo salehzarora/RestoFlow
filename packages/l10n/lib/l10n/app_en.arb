@@ -1,0 +1,39 @@
+{
+  "@@locale": "en",
+  "appName": "RestoFlow",
+  "@appName": {
+    "description": "The product name, shown across all surfaces."
+  },
+  "posAppTitle": "RestoFlow POS",
+  "@posAppTitle": {
+    "description": "Window/app title for the POS cashier app."
+  },
+  "kdsAppTitle": "RestoFlow KDS",
+  "@kdsAppTitle": {
+    "description": "Window/app title for the Kitchen Display System app."
+  },
+  "dashboardAppTitle": "RestoFlow Dashboard",
+  "@dashboardAppTitle": {
+    "description": "Window/app title for the owner/manager dashboard app."
+  },
+  "adminAppTitle": "RestoFlow Admin",
+  "@adminAppTitle": {
+    "description": "Window/app title for the platform admin app."
+  },
+  "welcomeMessage": "Welcome to RestoFlow",
+  "@welcomeMessage": {
+    "description": "Generic welcome message shown on the scaffold body."
+  },
+  "localeEnglish": "English",
+  "@localeEnglish": {
+    "description": "Display name of the English locale."
+  },
+  "localeArabic": "Arabic",
+  "@localeArabic": {
+    "description": "Display name of the Arabic locale."
+  },
+  "localeHebrew": "Hebrew",
+  "@localeHebrew": {
+    "description": "Display name of the Hebrew locale."
+  }
+}

@@ -1,5 +1,5 @@
 name: restoflow_l10n
-description: RestoFlow localization - shell only (declares supported locales). The full ar/he/en framework and RTL/LTR scaffolding is ticket RF-020.
+description: RestoFlow localization (RF-020) - ar/he/en ARB + Flutter gen-l10n + RTL/LTR delegates and shared app wiring (DECISION D-014). The generated AppLocalizations is COMMITTED and CI runs no l10n codegen.
 publish_to: none
 version: 0.0.1
 environment:
@@ -9,3 +9,18 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  # Required by the gen-l10n generated AppLocalizations (message formatting).
+  # `any` defers to the version pinned transitively by flutter_localizations.
+  intl: any
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+# RF-020: the gen-l10n output under lib/src/generated/ is COMMITTED, so CI never
+# runs codegen. `generate` is OFF here so `flutter pub get` does NOT re-run
+# gen-l10n. To regenerate locally after editing an ARB file, temporarily flip
+# this to `true` and run `flutter gen-l10n` from this package, then flip back.
+flutter:
+  generate: false

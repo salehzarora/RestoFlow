@@ -78,6 +78,14 @@ jobs:
       - name: Verify committed Drift generated code
         run: test -f packages/data_local/lib/src/local_database.g.dart
 
+      # RF-020: like the Drift file above, the Flutter gen-l10n output is COMMITTED
+      # and CI runs NO l10n codegen (`flutter gen-l10n` is run locally; see
+      # packages/l10n/l10n.yaml). This only fails fast if the committed generated
+      # AppLocalizations is missing; it generates nothing. Runs before analysis so
+      # `dart analyze .` can resolve the generated localizations.
+      - name: Verify committed l10n generated code (RF-020)
+        run: test -f packages/l10n/lib/src/generated/app_localizations.dart
+
       - name: Static analysis
         run: dart run melos run analyze
 
@@ -90,11 +98,31 @@ jobs:
       - name: Tests — data_local (RF-018)
         run: dart test packages/data_local
 
+      # RF-020 (RF020-B1): Flutter-FREE structural check of the committed l10n
+      # setup (ARB completeness + generated output present/consistent). Runs even
+      # if the Flutter tool is unavailable, so l10n structural regressions are
+      # caught independently of `flutter test` below.
+      - name: Guardrail — l10n structure (Flutter-free, RF-020)
+        run: dart run tools/check_l10n.dart
+
+      # RF-020 (RF020-B1): fail fast with a clear message if the Flutter tool is
+      # not runnable, BEFORE the l10n widget tests.
+      - name: Flutter tool sanity check (RF-020)
+        run: flutter --version
+
+      # RF-020: l10n directionality (RTL/LTR) widget test + ARB-completeness test.
+      # These use flutter_test, so they run under `flutter test` (not `dart test`).
+      - name: Tests — l10n (RF-020, Flutter widget + ARB completeness)
+        run: flutter test packages/l10n
+
       - name: Guardrail — no floating-point money (DECISION D-007)
         run: bash tools/check_no_float_money.sh
 
       - name: Guardrail — secret-leak scan (DECISION D-011)
         run: bash tools/check_secrets.sh
+
+      - name: Guardrail — no hardcoded user-facing strings in app shells (RF-020)
+        run: bash tools/check_no_hardcoded_strings.sh
 
   # RF-019 — reusable tenant-isolation harness + the RLS pgTAP suites, run against
   # a Docker-local, EPHEMERAL Supabase DB. Separate from `validate` so the fast

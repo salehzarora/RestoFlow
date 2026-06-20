@@ -9,3 +9,5 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  restoflow_l10n:
+    path: ../../packages/l10n

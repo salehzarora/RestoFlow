@@ -7,18 +7,23 @@ environment:
 resolution: workspace
 
 # RF-018: real Drift (pure Dart, no Flutter SDK dependency). The native query
-# executor (drift/native.dart) uses the `sqlite3` FFI package; generated code
-# (*.g.dart) is produced by drift_dev via build_runner and is NEVER committed
-# (.gitignore + analysis_options exclude it). See docs/OFFLINE_SYNC_SPEC.md and
-# docs/ARCHITECTURE.md section 3 (data_local owns the local schema + tables).
+# executor (drift/native.dart) uses the `sqlite3` FFI package. Per RF-018
+# Option A, the SINGLE production generated file (lib/src/local_database.g.dart)
+# IS committed (via a narrow .gitignore exception) and CI does NOT run
+# build_runner; build_runner/drift_dev remain dev deps only for LOCAL
+# regeneration. See docs/OFFLINE_SYNC_SPEC.md and docs/ARCHITECTURE.md section 3
+# (data_local owns the local schema + tables).
 dependencies:
   drift: '>=2.18.0 <3.0.0'
   sqlite3: '>=2.4.0 <3.0.0'
 
 dev_dependencies:
   drift_dev: '>=2.18.0 <3.0.0'
-  # RF018-B1: pin build_runner to the stable 2.4.x line. The 2.15.x line's
-  # AOT/JIT build-script compilation was unreliable (timeouts) on constrained
-  # clean-checkout validation; 2.4.x uses the lighter kernel-snapshot path.
-  build_runner: 2.4.15
+  # RF018-B1 pinned build_runner to 2.4.15 for CI codegen reliability. RF-020
+  # introduces flutter_test workspace-wide, which forces matcher 0.12.19 -> test
+  # >=1.28 -> analyzer >=8.0.0; build_runner 2.4.15 caps analyzer <8.0.0, so the
+  # hard pin is relaxed to a range. This is safe: CI no longer runs build_runner
+  # (the generated Drift file is committed, RF-018 Option A), so the exact
+  # build_runner version only affects LOCAL regeneration.
+  build_runner: '>=2.4.0 <3.0.0'
   test: ^1.25.0

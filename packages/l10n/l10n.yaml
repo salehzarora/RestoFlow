@@ -1,0 +1,14 @@
+# Flutter gen-l10n configuration (RF-020, DECISION D-014).
+#
+# Generation is run LOCALLY (`flutter gen-l10n` from this package dir) and the
+# output is COMMITTED to source control; CI never runs gen-l10n (it only verifies
+# the committed output exists and exercises it via analyze + `flutter test`).
+# `flutter gen-l10n` is the first-class Flutter tool (NOT build_runner), so this
+# does not reintroduce the RF-018 codegen-in-CI reliability problem.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-dir: lib/src/generated
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+# AppLocalizations.of(context) returns a non-null instance (asserts presence).
+nullable-getter: false

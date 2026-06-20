@@ -1,0 +1,12 @@
+{
+  "@@locale": "he",
+  "appName": "רסטופלו",
+  "posAppTitle": "רסטופלו - קופה",
+  "kdsAppTitle": "רסטופלו - מסך מטבח",
+  "dashboardAppTitle": "רסטופלו - לוח בקרה",
+  "adminAppTitle": "רסטופלו - ניהול",
+  "welcomeMessage": "ברוכים הבאים לרסטופלו",
+  "localeEnglish": "אנגלית",
+  "localeArabic": "ערבית",
+  "localeHebrew": "עברית"
+}
