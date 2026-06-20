@@ -1,7 +1,24 @@
 name: restoflow_data_local
-description: RestoFlow data_local package (RF-010 skeleton) - Drift/SQLite local store - schema, DAOs, outbox/inbox tables (offline-first). No implementation yet.
+description: RestoFlow data_local package (RF-018) - Drift/SQLite local sync foundation - outbox + processed-pull/inbox ledger + idempotency + sync-operation state + tombstone/revision contract (offline-first). Pure Dart; no Flutter. Business entity tables land in RF-030+.
 publish_to: none
 version: 0.0.1
 environment:
   sdk: ^3.12.0
 resolution: workspace
+
+# RF-018: real Drift (pure Dart, no Flutter SDK dependency). The native query
+# executor (drift/native.dart) uses the `sqlite3` FFI package; generated code
+# (*.g.dart) is produced by drift_dev via build_runner and is NEVER committed
+# (.gitignore + analysis_options exclude it). See docs/OFFLINE_SYNC_SPEC.md and
+# docs/ARCHITECTURE.md section 3 (data_local owns the local schema + tables).
+dependencies:
+  drift: '>=2.18.0 <3.0.0'
+  sqlite3: '>=2.4.0 <3.0.0'
+
+dev_dependencies:
+  drift_dev: '>=2.18.0 <3.0.0'
+  # RF018-B1: pin build_runner to the stable 2.4.x line. The 2.15.x line's
+  # AOT/JIT build-script compilation was unreliable (timeouts) on constrained
+  # clean-checkout validation; 2.4.x uses the lighter kernel-snapshot path.
+  build_runner: 2.4.15
+  test: ^1.25.0
