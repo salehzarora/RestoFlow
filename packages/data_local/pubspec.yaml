@@ -16,6 +16,10 @@ resolution: workspace
 dependencies:
   drift: '>=2.18.0 <3.0.0'
   sqlite3: '>=2.4.0 <3.0.0'
+  # RF-021: the fail-closed data-at-rest opening policy consumes the pure-Dart
+  # SecureKeyStore / SecretValue / fail-closed exceptions from core.
+  restoflow_core:
+    path: ../core
 
 dev_dependencies:
   drift_dev: '>=2.18.0 <3.0.0'
