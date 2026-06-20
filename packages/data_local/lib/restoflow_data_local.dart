@@ -10,6 +10,8 @@ library;
 
 export 'src/converters.dart';
 export 'src/local_database.dart';
+// RF-021: fail-closed data-at-rest opening policy around the injected executor.
+export 'src/protected_local_database.dart';
 export 'src/sync_operation_state.dart';
 export 'src/tables/outbox_operations.dart';
 export 'src/tables/processed_pull_log.dart';
