@@ -65,6 +65,19 @@ jobs:
       - name: Format check
         run: dart format --output=none --set-exit-if-changed .
 
+      # RF-018 (RF018-B1): CI does NOT run build_runner. Drift codegen proved
+      # unreliable in the review/CI environment (repeated clean-checkout timeouts
+      # across default, --force-jit, and pinned-2.4.x command variants), so the
+      # SINGLE production Drift output — packages/data_local/lib/src/
+      # local_database.g.dart — is committed (a narrow .gitignore exception keeps
+      # only that one file tracked) and regenerated locally by developers via
+      # `dart run build_runner build` (build_runner/drift_dev remain dev deps).
+      # This step only fails fast if the committed generated part is missing; it
+      # generates nothing. It runs before analysis so `dart analyze .` can resolve
+      # the @DriftDatabase part file.
+      - name: Verify committed Drift generated code
+        run: test -f packages/data_local/lib/src/local_database.g.dart
+
       - name: Static analysis
         run: dart run melos run analyze
 
@@ -73,6 +86,9 @@ jobs:
 
       - name: Tests — domain
         run: dart test packages/domain
+
+      - name: Tests — data_local (RF-018)
+        run: dart test packages/data_local
 
       - name: Guardrail — no floating-point money (DECISION D-007)
         run: bash tools/check_no_float_money.sh

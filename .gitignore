@@ -86,6 +86,14 @@ lib/generated_plugin_registrant.dart
 *.drift.dart
 *.moor.dart
 
+# RF-018 (RF018-B1) EXCEPTION — narrow, deliberate. build_runner codegen proved
+# unreliable in the review/CI environment, so the SINGLE production Drift output
+# is committed and CI no longer runs codegen. This negation re-includes ONLY that
+# one file; it MUST come after the `*.g.dart` rule above for the negation to take
+# effect. Do NOT broaden it: every other *.g.dart / *.drift.dart / *.moor.dart
+# (including any test-only generated DB) stays ignored.
+!packages/data_local/lib/src/local_database.g.dart
+
 # ----------------------------------------------------------------------------
 # IDE / editor (commit ONLY shared, intentional config)
 # ----------------------------------------------------------------------------

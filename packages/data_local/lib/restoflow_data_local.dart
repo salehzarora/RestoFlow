@@ -1,6 +1,16 @@
-/// RestoFlow data_local package - RF-010 skeleton.
+/// RestoFlow data_local package - local sync foundation (RF-018).
 ///
-/// Drift/SQLite local store - schema, DAOs, outbox/inbox tables (offline-first).
-/// Intentionally empty: implementation lands in later M0B/M1 tickets per the
-/// frozen architecture (docs/ARCHITECTURE.md section 3). No business logic in RF-010.
+/// Owns (per docs/ARCHITECTURE.md section 3) the Drift/SQLite local store: the
+/// outbox, the processed-pull/inbox dedupe ledger, idempotency keys
+/// `(device_id, local_operation_id)`, the sync-operation state vocabulary, and
+/// the reusable syncable column-set / tombstone-revision contract. Pure Dart
+/// (no Flutter). Business entity tables and the push/pull sync engine are later
+/// tickets (RF-030+ / RF-056 / RF-057).
 library;
+
+export 'src/converters.dart';
+export 'src/local_database.dart';
+export 'src/sync_operation_state.dart';
+export 'src/tables/outbox_operations.dart';
+export 'src/tables/processed_pull_log.dart';
+export 'src/tables/syncable_columns.dart';
