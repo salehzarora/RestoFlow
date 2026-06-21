@@ -202,10 +202,12 @@ void main() {
         'test-secret-placeholder',
       );
       expect(enc.recordedPath, path);
-      expect(db.allTables.map((t) => t.actualTableName).toSet(), {
-        'outbox_operations',
-        'processed_pull_log',
-      });
+      // The protected open yields a usable DB carrying the sync-foundation
+      // tables (RF-030 later adds menu tables, so assert containment not equality).
+      expect(
+        db.allTables.map((t) => t.actualTableName).toSet(),
+        containsAll(<String>{'outbox_operations', 'processed_pull_log'}),
+      );
     });
   });
 

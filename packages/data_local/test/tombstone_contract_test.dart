@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart' show Variable, QueryRow;
+import 'package:drift/drift.dart' show QueryRow, TableInfo, Variable;
 import 'package:drift/native.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:test/test.dart';
@@ -116,12 +116,42 @@ void main() {
     });
   });
 
-  group('No hard-delete path for syncable rows (DECISION D-020)', () {
-    test('shipped LocalDatabase contains NO syncable business tables', () {
-      // The declared schema is only the sync foundation; the ad-hoc
-      // sync_entities table above lives solely in this test connection.
+  group('Shipped schema: RF-018 foundation + RF-030 menu tables (D-020)', () {
+    test('LocalDatabase registers exactly the RF-018 + RF-030 menu tables', () {
       final tableNames = db.allTables.map((t) => t.actualTableName).toSet();
-      expect(tableNames, {'outbox_operations', 'processed_pull_log'});
+      expect(tableNames, {
+        // RF-018 sync foundation — still valid, never dropped.
+        'outbox_operations',
+        'processed_pull_log',
+        // RF-030 local menu catalog.
+        'menu_categories',
+        'menu_items',
+        'item_sizes',
+        'item_variants',
+        'modifiers',
+        'modifier_options',
+      });
+    });
+
+    test('every RF-030 menu table exposes a nullable deleted_at tombstone', () {
+      final menuTables = <TableInfo>[
+        db.menuCategories,
+        db.menuItems,
+        db.itemSizes,
+        db.itemVariants,
+        db.modifiers,
+        db.modifierOptions,
+      ];
+      for (final table in menuTables) {
+        final deletedAt = table.$columns.firstWhere(
+          (c) => c.name == 'deleted_at',
+        );
+        expect(
+          deletedAt.$nullable,
+          isTrue,
+          reason: '${table.actualTableName}.deleted_at must be nullable',
+        );
+      }
     });
   });
 }
