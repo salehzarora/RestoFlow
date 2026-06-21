@@ -34,4 +34,19 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get localeHebrew => 'עברית';
+
+  @override
+  String get kdsEmptyState => 'אין כרטיסים פעילים';
+
+  @override
+  String get kdsBumpAction => 'סיום';
+
+  @override
+  String get kdsRecallAction => 'שחזור';
+
+  @override
+  String get kdsStationLabel => 'עמדה';
+
+  @override
+  String get kdsTicketLabel => 'כרטיס';
 }

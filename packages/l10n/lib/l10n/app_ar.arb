@@ -8,5 +8,10 @@
   "welcomeMessage": "مرحبًا بك في ريستوفلو",
   "localeEnglish": "الإنجليزية",
   "localeArabic": "العربية",
-  "localeHebrew": "العبرية"
+  "localeHebrew": "العبرية",
+  "kdsEmptyState": "لا توجد تذاكر نشطة",
+  "kdsBumpAction": "إنهاء",
+  "kdsRecallAction": "استرجاع",
+  "kdsStationLabel": "محطة",
+  "kdsTicketLabel": "تذكرة"
 }

@@ -8,5 +8,10 @@
   "welcomeMessage": "ברוכים הבאים לרסטופלו",
   "localeEnglish": "אנגלית",
   "localeArabic": "ערבית",
-  "localeHebrew": "עברית"
+  "localeHebrew": "עברית",
+  "kdsEmptyState": "אין כרטיסים פעילים",
+  "kdsBumpAction": "סיום",
+  "kdsRecallAction": "שחזור",
+  "kdsStationLabel": "עמדה",
+  "kdsTicketLabel": "כרטיס"
 }

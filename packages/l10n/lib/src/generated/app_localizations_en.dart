@@ -34,4 +34,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get localeHebrew => 'Hebrew';
+
+  @override
+  String get kdsEmptyState => 'No active tickets';
+
+  @override
+  String get kdsBumpAction => 'Bump';
+
+  @override
+  String get kdsRecallAction => 'Recall';
+
+  @override
+  String get kdsStationLabel => 'Station';
+
+  @override
+  String get kdsTicketLabel => 'Ticket';
 }

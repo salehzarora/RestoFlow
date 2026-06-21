@@ -11,3 +11,8 @@ dependencies:
     sdk: flutter
   restoflow_l10n:
     path: ../../packages/l10n
+  restoflow_domain:
+    path: ../../packages/domain
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
