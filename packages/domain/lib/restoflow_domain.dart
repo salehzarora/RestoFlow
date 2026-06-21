@@ -13,6 +13,11 @@
 /// RF-031 adds the in-memory POS cart / draft-order model (`src/cart/`): a
 /// `Cart` aggregate of `CartLine`s with immutable price snapshots (D-008) and
 /// integer minor-unit totals (D-007). It is not persisted, submitted, or synced.
+///
+/// RF-032 adds the in-memory order state machines (`src/order/`): `LocalOrder`
+/// (submitted from a `Cart`) + `LocalOrderItem`, the `OrderStatus`/
+/// `OrderItemStatus`/`OrderType` enumerations (D-018), and the table-driven
+/// transition validators. Still in-memory only — no persistence/outbox/sync.
 library;
 
 export 'src/cart/cart.dart';
@@ -20,3 +25,11 @@ export 'src/cart/cart_exceptions.dart';
 export 'src/cart/cart_line.dart';
 export 'src/cart/cart_snapshots.dart';
 export 'src/entity.dart';
+export 'src/order/local_order.dart';
+export 'src/order/local_order_item.dart';
+export 'src/order/order_action_authorization.dart';
+export 'src/order/order_exceptions.dart';
+export 'src/order/order_item_status.dart';
+export 'src/order/order_state_machine.dart';
+export 'src/order/order_status.dart';
+export 'src/order/order_type.dart';
