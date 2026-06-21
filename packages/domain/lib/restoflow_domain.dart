@@ -30,6 +30,11 @@
 /// `KitchenTicketStateMachine` (incl. the audited recall action returning an
 /// in-memory `RecallAuditEvent` placeholder) and `KitchenStationItemStateMachine`.
 /// Still local-only — no persistence/backend/real audit write.
+///
+/// RF-035 adds the pure-Dart table management (`src/table/`): `DiningTable`,
+/// `OrderPlacement` (dine-in-with-table / takeaway, reusing RF-032 `OrderType`),
+/// `TablePolicy`, and `TableAssignmentService` (tenant-checked assignment + the
+/// one-open-dine-in-per-table guard). In-memory only — no persistence/backend.
 library;
 
 export 'src/cart/cart.dart';
@@ -56,3 +61,8 @@ export 'src/order/order_item_status.dart';
 export 'src/order/order_state_machine.dart';
 export 'src/order/order_status.dart';
 export 'src/order/order_type.dart';
+export 'src/table/dining_table.dart';
+export 'src/table/order_placement.dart';
+export 'src/table/table_assignment_service.dart';
+export 'src/table/table_exceptions.dart';
+export 'src/table/table_policy.dart';
