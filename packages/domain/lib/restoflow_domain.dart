@@ -18,6 +18,12 @@
 /// (submitted from a `Cart`) + `LocalOrderItem`, the `OrderStatus`/
 /// `OrderItemStatus`/`OrderType` enumerations (D-018), and the table-driven
 /// transition validators. Still in-memory only — no persistence/outbox/sync.
+///
+/// RF-033 adds the pure-Dart kitchen routing (`src/kitchen/`): `KitchenRouter`
+/// routes a `LocalOrder`'s active items to stations per `KitchenRoutingRules`,
+/// producing a deterministic in-memory `KitchenRoutingResult` (one
+/// `KitchenTicket` per station + flagged `UnroutableOrderItem`s). No status/
+/// state machine (RF-034), no persistence/backend.
 library;
 
 export 'src/cart/cart.dart';
@@ -25,6 +31,12 @@ export 'src/cart/cart_exceptions.dart';
 export 'src/cart/cart_line.dart';
 export 'src/cart/cart_snapshots.dart';
 export 'src/entity.dart';
+export 'src/kitchen/kitchen_router.dart';
+export 'src/kitchen/kitchen_routing_result.dart';
+export 'src/kitchen/kitchen_routing_rules.dart';
+export 'src/kitchen/kitchen_station_item.dart';
+export 'src/kitchen/kitchen_ticket.dart';
+export 'src/kitchen/unroutable_order_item.dart';
 export 'src/order/local_order.dart';
 export 'src/order/local_order_item.dart';
 export 'src/order/order_action_authorization.dart';
