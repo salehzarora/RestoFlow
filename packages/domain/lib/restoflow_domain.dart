@@ -35,6 +35,13 @@
 /// `OrderPlacement` (dine-in-with-table / takeaway, reusing RF-032 `OrderType`),
 /// `TablePolicy`, and `TableAssignmentService` (tenant-checked assignment + the
 /// one-open-dine-in-per-table guard). In-memory only — no persistence/backend.
+///
+/// RF-037 adds the pure-Dart shift + cash-drawer-session machines (`src/shift/`):
+/// `ShiftStatus`/`CashDrawerSessionStatus` (D-018), the table-driven
+/// `ShiftStateMachine`/`CashDrawerSessionStateMachine`, the `Shift`/
+/// `CashDrawerSession` aggregates with integer minor-unit variance
+/// (`counted - expected`), and `ShiftCashDrawerBinding` (one drawer bound to one
+/// shift). In-memory only — no persistence/backend/audit; no money dependency.
 library;
 
 export 'src/cart/cart.dart';
@@ -61,6 +68,14 @@ export 'src/order/order_item_status.dart';
 export 'src/order/order_state_machine.dart';
 export 'src/order/order_status.dart';
 export 'src/order/order_type.dart';
+export 'src/shift/cash_drawer_session.dart';
+export 'src/shift/cash_drawer_session_state_machine.dart';
+export 'src/shift/cash_drawer_session_status.dart';
+export 'src/shift/shift.dart';
+export 'src/shift/shift_cash_drawer_binding.dart';
+export 'src/shift/shift_exceptions.dart';
+export 'src/shift/shift_state_machine.dart';
+export 'src/shift/shift_status.dart';
 export 'src/table/dining_table.dart';
 export 'src/table/order_placement.dart';
 export 'src/table/table_assignment_service.dart';
