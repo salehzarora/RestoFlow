@@ -1535,6 +1535,6150 @@ class ProcessedPullLogCompanion extends UpdateCompanion<ProcessedPullLogData> {
   }
 }
 
+class $MenuCategoriesTable extends MenuCategories
+    with TableInfo<$MenuCategoriesTable, MenuCategory> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MenuCategoriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _organizationIdMeta = const VerificationMeta(
+    'organizationId',
+  );
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+    'organization_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localOperationIdMeta = const VerificationMeta(
+    'localOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> localOperationId = GeneratedColumn<String>(
+    'local_operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _clientUpdatedAtMeta = const VerificationMeta(
+    'clientUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> clientUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'client_updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _serverUpdatedAtMeta = const VerificationMeta(
+    'serverUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> serverUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'server_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _restaurantIdMeta = const VerificationMeta(
+    'restaurantId',
+  );
+  @override
+  late final GeneratedColumn<String> restaurantId = GeneratedColumn<String>(
+    'restaurant_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchIdMeta = const VerificationMeta(
+    'branchId',
+  );
+  @override
+  late final GeneratedColumn<String> branchId = GeneratedColumn<String>(
+    'branch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _displayOrderMeta = const VerificationMeta(
+    'displayOrder',
+  );
+  @override
+  late final GeneratedColumn<int> displayOrder = GeneratedColumn<int>(
+    'display_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isActiveMeta = const VerificationMeta(
+    'isActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    name,
+    displayOrder,
+    isActive,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'menu_categories';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MenuCategory> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('organization_id')) {
+      context.handle(
+        _organizationIdMeta,
+        organizationId.isAcceptableOrUnknown(
+          data['organization_id']!,
+          _organizationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_organizationIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('local_operation_id')) {
+      context.handle(
+        _localOperationIdMeta,
+        localOperationId.isAcceptableOrUnknown(
+          data['local_operation_id']!,
+          _localOperationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localOperationIdMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('client_updated_at')) {
+      context.handle(
+        _clientUpdatedAtMeta,
+        clientUpdatedAt.isAcceptableOrUnknown(
+          data['client_updated_at']!,
+          _clientUpdatedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientUpdatedAtMeta);
+    }
+    if (data.containsKey('server_updated_at')) {
+      context.handle(
+        _serverUpdatedAtMeta,
+        serverUpdatedAt.isAcceptableOrUnknown(
+          data['server_updated_at']!,
+          _serverUpdatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('restaurant_id')) {
+      context.handle(
+        _restaurantIdMeta,
+        restaurantId.isAcceptableOrUnknown(
+          data['restaurant_id']!,
+          _restaurantIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_restaurantIdMeta);
+    }
+    if (data.containsKey('branch_id')) {
+      context.handle(
+        _branchIdMeta,
+        branchId.isAcceptableOrUnknown(data['branch_id']!, _branchIdMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('display_order')) {
+      context.handle(
+        _displayOrderMeta,
+        displayOrder.isAcceptableOrUnknown(
+          data['display_order']!,
+          _displayOrderMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MenuCategory map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MenuCategory(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      organizationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}organization_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      localOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_operation_id'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      clientUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}client_updated_at'],
+      )!,
+      serverUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}server_updated_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      restaurantId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}restaurant_id'],
+      )!,
+      branchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_id'],
+      ),
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      displayOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}display_order'],
+      )!,
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+    );
+  }
+
+  @override
+  $MenuCategoriesTable createAlias(String alias) {
+    return $MenuCategoriesTable(attachedDatabase, alias);
+  }
+}
+
+class MenuCategory extends DataClass implements Insertable<MenuCategory> {
+  /// Client-generated UUID primary key (rows exist before any server round-trip).
+  final String id;
+
+  /// Tenant isolation boundary (DECISION D-001).
+  final String organizationId;
+
+  /// Originating device identity (DECISION D-022).
+  final String deviceId;
+
+  /// Client-generated per-operation id; `(deviceId, localOperationId)` is the
+  /// idempotency key (DECISION D-022).
+  final String localOperationId;
+
+  /// Monotonic per-entity version; optimistic-concurrency token.
+  final int revision;
+
+  /// Wall-clock time the change was made on the device (advisory, not trusted).
+  final DateTime clientUpdatedAt;
+
+  /// Authoritative time set by the server on accept; null until first accepted.
+  final DateTime? serverUpdatedAt;
+
+  /// Standard audit timestamps.
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  /// Tombstone marker (DECISION D-020). Null = live; non-null = soft-deleted.
+  final DateTime? deletedAt;
+
+  /// Operational tenant scope (DECISION D-001/D-002); organization_id is on the
+  /// mixin. `branch_id` is nullable for branch-specific overrides.
+  final String restaurantId;
+  final String? branchId;
+  final String name;
+  final int displayOrder;
+  final bool isActive;
+  const MenuCategory({
+    required this.id,
+    required this.organizationId,
+    required this.deviceId,
+    required this.localOperationId,
+    required this.revision,
+    required this.clientUpdatedAt,
+    this.serverUpdatedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.restaurantId,
+    this.branchId,
+    required this.name,
+    required this.displayOrder,
+    required this.isActive,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['organization_id'] = Variable<String>(organizationId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['local_operation_id'] = Variable<String>(localOperationId);
+    map['revision'] = Variable<int>(revision);
+    map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt);
+    if (!nullToAbsent || serverUpdatedAt != null) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['restaurant_id'] = Variable<String>(restaurantId);
+    if (!nullToAbsent || branchId != null) {
+      map['branch_id'] = Variable<String>(branchId);
+    }
+    map['name'] = Variable<String>(name);
+    map['display_order'] = Variable<int>(displayOrder);
+    map['is_active'] = Variable<bool>(isActive);
+    return map;
+  }
+
+  MenuCategoriesCompanion toCompanion(bool nullToAbsent) {
+    return MenuCategoriesCompanion(
+      id: Value(id),
+      organizationId: Value(organizationId),
+      deviceId: Value(deviceId),
+      localOperationId: Value(localOperationId),
+      revision: Value(revision),
+      clientUpdatedAt: Value(clientUpdatedAt),
+      serverUpdatedAt: serverUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverUpdatedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      restaurantId: Value(restaurantId),
+      branchId: branchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(branchId),
+      name: Value(name),
+      displayOrder: Value(displayOrder),
+      isActive: Value(isActive),
+    );
+  }
+
+  factory MenuCategory.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MenuCategory(
+      id: serializer.fromJson<String>(json['id']),
+      organizationId: serializer.fromJson<String>(json['organizationId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      localOperationId: serializer.fromJson<String>(json['localOperationId']),
+      revision: serializer.fromJson<int>(json['revision']),
+      clientUpdatedAt: serializer.fromJson<DateTime>(json['clientUpdatedAt']),
+      serverUpdatedAt: serializer.fromJson<DateTime?>(json['serverUpdatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      restaurantId: serializer.fromJson<String>(json['restaurantId']),
+      branchId: serializer.fromJson<String?>(json['branchId']),
+      name: serializer.fromJson<String>(json['name']),
+      displayOrder: serializer.fromJson<int>(json['displayOrder']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'organizationId': serializer.toJson<String>(organizationId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'localOperationId': serializer.toJson<String>(localOperationId),
+      'revision': serializer.toJson<int>(revision),
+      'clientUpdatedAt': serializer.toJson<DateTime>(clientUpdatedAt),
+      'serverUpdatedAt': serializer.toJson<DateTime?>(serverUpdatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'restaurantId': serializer.toJson<String>(restaurantId),
+      'branchId': serializer.toJson<String?>(branchId),
+      'name': serializer.toJson<String>(name),
+      'displayOrder': serializer.toJson<int>(displayOrder),
+      'isActive': serializer.toJson<bool>(isActive),
+    };
+  }
+
+  MenuCategory copyWith({
+    String? id,
+    String? organizationId,
+    String? deviceId,
+    String? localOperationId,
+    int? revision,
+    DateTime? clientUpdatedAt,
+    Value<DateTime?> serverUpdatedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    String? restaurantId,
+    Value<String?> branchId = const Value.absent(),
+    String? name,
+    int? displayOrder,
+    bool? isActive,
+  }) => MenuCategory(
+    id: id ?? this.id,
+    organizationId: organizationId ?? this.organizationId,
+    deviceId: deviceId ?? this.deviceId,
+    localOperationId: localOperationId ?? this.localOperationId,
+    revision: revision ?? this.revision,
+    clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+    serverUpdatedAt: serverUpdatedAt.present
+        ? serverUpdatedAt.value
+        : this.serverUpdatedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    restaurantId: restaurantId ?? this.restaurantId,
+    branchId: branchId.present ? branchId.value : this.branchId,
+    name: name ?? this.name,
+    displayOrder: displayOrder ?? this.displayOrder,
+    isActive: isActive ?? this.isActive,
+  );
+  MenuCategory copyWithCompanion(MenuCategoriesCompanion data) {
+    return MenuCategory(
+      id: data.id.present ? data.id.value : this.id,
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      localOperationId: data.localOperationId.present
+          ? data.localOperationId.value
+          : this.localOperationId,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      clientUpdatedAt: data.clientUpdatedAt.present
+          ? data.clientUpdatedAt.value
+          : this.clientUpdatedAt,
+      serverUpdatedAt: data.serverUpdatedAt.present
+          ? data.serverUpdatedAt.value
+          : this.serverUpdatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      restaurantId: data.restaurantId.present
+          ? data.restaurantId.value
+          : this.restaurantId,
+      branchId: data.branchId.present ? data.branchId.value : this.branchId,
+      name: data.name.present ? data.name.value : this.name,
+      displayOrder: data.displayOrder.present
+          ? data.displayOrder.value
+          : this.displayOrder,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MenuCategory(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('name: $name, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    name,
+    displayOrder,
+    isActive,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MenuCategory &&
+          other.id == this.id &&
+          other.organizationId == this.organizationId &&
+          other.deviceId == this.deviceId &&
+          other.localOperationId == this.localOperationId &&
+          other.revision == this.revision &&
+          other.clientUpdatedAt == this.clientUpdatedAt &&
+          other.serverUpdatedAt == this.serverUpdatedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.restaurantId == this.restaurantId &&
+          other.branchId == this.branchId &&
+          other.name == this.name &&
+          other.displayOrder == this.displayOrder &&
+          other.isActive == this.isActive);
+}
+
+class MenuCategoriesCompanion extends UpdateCompanion<MenuCategory> {
+  final Value<String> id;
+  final Value<String> organizationId;
+  final Value<String> deviceId;
+  final Value<String> localOperationId;
+  final Value<int> revision;
+  final Value<DateTime> clientUpdatedAt;
+  final Value<DateTime?> serverUpdatedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String> restaurantId;
+  final Value<String?> branchId;
+  final Value<String> name;
+  final Value<int> displayOrder;
+  final Value<bool> isActive;
+  final Value<int> rowid;
+  const MenuCategoriesCompanion({
+    this.id = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.localOperationId = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.clientUpdatedAt = const Value.absent(),
+    this.serverUpdatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.restaurantId = const Value.absent(),
+    this.branchId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MenuCategoriesCompanion.insert({
+    required String id,
+    required String organizationId,
+    required String deviceId,
+    required String localOperationId,
+    this.revision = const Value.absent(),
+    required DateTime clientUpdatedAt,
+    this.serverUpdatedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    required String restaurantId,
+    this.branchId = const Value.absent(),
+    required String name,
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       organizationId = Value(organizationId),
+       deviceId = Value(deviceId),
+       localOperationId = Value(localOperationId),
+       clientUpdatedAt = Value(clientUpdatedAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       restaurantId = Value(restaurantId),
+       name = Value(name);
+  static Insertable<MenuCategory> custom({
+    Expression<String>? id,
+    Expression<String>? organizationId,
+    Expression<String>? deviceId,
+    Expression<String>? localOperationId,
+    Expression<int>? revision,
+    Expression<DateTime>? clientUpdatedAt,
+    Expression<DateTime>? serverUpdatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? restaurantId,
+    Expression<String>? branchId,
+    Expression<String>? name,
+    Expression<int>? displayOrder,
+    Expression<bool>? isActive,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (organizationId != null) 'organization_id': organizationId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (localOperationId != null) 'local_operation_id': localOperationId,
+      if (revision != null) 'revision': revision,
+      if (clientUpdatedAt != null) 'client_updated_at': clientUpdatedAt,
+      if (serverUpdatedAt != null) 'server_updated_at': serverUpdatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (restaurantId != null) 'restaurant_id': restaurantId,
+      if (branchId != null) 'branch_id': branchId,
+      if (name != null) 'name': name,
+      if (displayOrder != null) 'display_order': displayOrder,
+      if (isActive != null) 'is_active': isActive,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MenuCategoriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? organizationId,
+    Value<String>? deviceId,
+    Value<String>? localOperationId,
+    Value<int>? revision,
+    Value<DateTime>? clientUpdatedAt,
+    Value<DateTime?>? serverUpdatedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String>? restaurantId,
+    Value<String?>? branchId,
+    Value<String>? name,
+    Value<int>? displayOrder,
+    Value<bool>? isActive,
+    Value<int>? rowid,
+  }) {
+    return MenuCategoriesCompanion(
+      id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
+      deviceId: deviceId ?? this.deviceId,
+      localOperationId: localOperationId ?? this.localOperationId,
+      revision: revision ?? this.revision,
+      clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+      serverUpdatedAt: serverUpdatedAt ?? this.serverUpdatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      restaurantId: restaurantId ?? this.restaurantId,
+      branchId: branchId ?? this.branchId,
+      name: name ?? this.name,
+      displayOrder: displayOrder ?? this.displayOrder,
+      isActive: isActive ?? this.isActive,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (localOperationId.present) {
+      map['local_operation_id'] = Variable<String>(localOperationId.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (clientUpdatedAt.present) {
+      map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt.value);
+    }
+    if (serverUpdatedAt.present) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (restaurantId.present) {
+      map['restaurant_id'] = Variable<String>(restaurantId.value);
+    }
+    if (branchId.present) {
+      map['branch_id'] = Variable<String>(branchId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (displayOrder.present) {
+      map['display_order'] = Variable<int>(displayOrder.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MenuCategoriesCompanion(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('name: $name, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MenuItemsTable extends MenuItems
+    with TableInfo<$MenuItemsTable, MenuItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MenuItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _organizationIdMeta = const VerificationMeta(
+    'organizationId',
+  );
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+    'organization_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localOperationIdMeta = const VerificationMeta(
+    'localOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> localOperationId = GeneratedColumn<String>(
+    'local_operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _clientUpdatedAtMeta = const VerificationMeta(
+    'clientUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> clientUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'client_updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _serverUpdatedAtMeta = const VerificationMeta(
+    'serverUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> serverUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'server_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _restaurantIdMeta = const VerificationMeta(
+    'restaurantId',
+  );
+  @override
+  late final GeneratedColumn<String> restaurantId = GeneratedColumn<String>(
+    'restaurant_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchIdMeta = const VerificationMeta(
+    'branchId',
+  );
+  @override
+  late final GeneratedColumn<String> branchId = GeneratedColumn<String>(
+    'branch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _menuCategoryIdMeta = const VerificationMeta(
+    'menuCategoryId',
+  );
+  @override
+  late final GeneratedColumn<String> menuCategoryId = GeneratedColumn<String>(
+    'menu_category_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES menu_categories (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _basePriceMinorMeta = const VerificationMeta(
+    'basePriceMinor',
+  );
+  @override
+  late final GeneratedColumn<int> basePriceMinor = GeneratedColumn<int>(
+    'base_price_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currencyCodeMeta = const VerificationMeta(
+    'currencyCode',
+  );
+  @override
+  late final GeneratedColumn<String> currencyCode = GeneratedColumn<String>(
+    'currency_code',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 3,
+      maxTextLength: 3,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isActiveMeta = const VerificationMeta(
+    'isActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    menuCategoryId,
+    name,
+    description,
+    basePriceMinor,
+    currencyCode,
+    isActive,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'menu_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MenuItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('organization_id')) {
+      context.handle(
+        _organizationIdMeta,
+        organizationId.isAcceptableOrUnknown(
+          data['organization_id']!,
+          _organizationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_organizationIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('local_operation_id')) {
+      context.handle(
+        _localOperationIdMeta,
+        localOperationId.isAcceptableOrUnknown(
+          data['local_operation_id']!,
+          _localOperationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localOperationIdMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('client_updated_at')) {
+      context.handle(
+        _clientUpdatedAtMeta,
+        clientUpdatedAt.isAcceptableOrUnknown(
+          data['client_updated_at']!,
+          _clientUpdatedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientUpdatedAtMeta);
+    }
+    if (data.containsKey('server_updated_at')) {
+      context.handle(
+        _serverUpdatedAtMeta,
+        serverUpdatedAt.isAcceptableOrUnknown(
+          data['server_updated_at']!,
+          _serverUpdatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('restaurant_id')) {
+      context.handle(
+        _restaurantIdMeta,
+        restaurantId.isAcceptableOrUnknown(
+          data['restaurant_id']!,
+          _restaurantIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_restaurantIdMeta);
+    }
+    if (data.containsKey('branch_id')) {
+      context.handle(
+        _branchIdMeta,
+        branchId.isAcceptableOrUnknown(data['branch_id']!, _branchIdMeta),
+      );
+    }
+    if (data.containsKey('menu_category_id')) {
+      context.handle(
+        _menuCategoryIdMeta,
+        menuCategoryId.isAcceptableOrUnknown(
+          data['menu_category_id']!,
+          _menuCategoryIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_menuCategoryIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('base_price_minor')) {
+      context.handle(
+        _basePriceMinorMeta,
+        basePriceMinor.isAcceptableOrUnknown(
+          data['base_price_minor']!,
+          _basePriceMinorMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_basePriceMinorMeta);
+    }
+    if (data.containsKey('currency_code')) {
+      context.handle(
+        _currencyCodeMeta,
+        currencyCode.isAcceptableOrUnknown(
+          data['currency_code']!,
+          _currencyCodeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currencyCodeMeta);
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MenuItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MenuItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      organizationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}organization_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      localOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_operation_id'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      clientUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}client_updated_at'],
+      )!,
+      serverUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}server_updated_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      restaurantId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}restaurant_id'],
+      )!,
+      branchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_id'],
+      ),
+      menuCategoryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}menu_category_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      basePriceMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}base_price_minor'],
+      )!,
+      currencyCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}currency_code'],
+      )!,
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+    );
+  }
+
+  @override
+  $MenuItemsTable createAlias(String alias) {
+    return $MenuItemsTable(attachedDatabase, alias);
+  }
+}
+
+class MenuItem extends DataClass implements Insertable<MenuItem> {
+  /// Client-generated UUID primary key (rows exist before any server round-trip).
+  final String id;
+
+  /// Tenant isolation boundary (DECISION D-001).
+  final String organizationId;
+
+  /// Originating device identity (DECISION D-022).
+  final String deviceId;
+
+  /// Client-generated per-operation id; `(deviceId, localOperationId)` is the
+  /// idempotency key (DECISION D-022).
+  final String localOperationId;
+
+  /// Monotonic per-entity version; optimistic-concurrency token.
+  final int revision;
+
+  /// Wall-clock time the change was made on the device (advisory, not trusted).
+  final DateTime clientUpdatedAt;
+
+  /// Authoritative time set by the server on accept; null until first accepted.
+  final DateTime? serverUpdatedAt;
+
+  /// Standard audit timestamps.
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  /// Tombstone marker (DECISION D-020). Null = live; non-null = soft-deleted.
+  final DateTime? deletedAt;
+  final String restaurantId;
+  final String? branchId;
+
+  /// Owning category (DECISION D-017 FK).
+  final String menuCategoryId;
+  final String name;
+  final String? description;
+
+  /// Base price in integer MINOR units (DECISION D-007). No floating point.
+  final int basePriceMinor;
+
+  /// ISO 4217 currency code (e.g. ILS / USD). Child price deltas inherit it.
+  final String currencyCode;
+  final bool isActive;
+  const MenuItem({
+    required this.id,
+    required this.organizationId,
+    required this.deviceId,
+    required this.localOperationId,
+    required this.revision,
+    required this.clientUpdatedAt,
+    this.serverUpdatedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.restaurantId,
+    this.branchId,
+    required this.menuCategoryId,
+    required this.name,
+    this.description,
+    required this.basePriceMinor,
+    required this.currencyCode,
+    required this.isActive,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['organization_id'] = Variable<String>(organizationId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['local_operation_id'] = Variable<String>(localOperationId);
+    map['revision'] = Variable<int>(revision);
+    map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt);
+    if (!nullToAbsent || serverUpdatedAt != null) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['restaurant_id'] = Variable<String>(restaurantId);
+    if (!nullToAbsent || branchId != null) {
+      map['branch_id'] = Variable<String>(branchId);
+    }
+    map['menu_category_id'] = Variable<String>(menuCategoryId);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['base_price_minor'] = Variable<int>(basePriceMinor);
+    map['currency_code'] = Variable<String>(currencyCode);
+    map['is_active'] = Variable<bool>(isActive);
+    return map;
+  }
+
+  MenuItemsCompanion toCompanion(bool nullToAbsent) {
+    return MenuItemsCompanion(
+      id: Value(id),
+      organizationId: Value(organizationId),
+      deviceId: Value(deviceId),
+      localOperationId: Value(localOperationId),
+      revision: Value(revision),
+      clientUpdatedAt: Value(clientUpdatedAt),
+      serverUpdatedAt: serverUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverUpdatedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      restaurantId: Value(restaurantId),
+      branchId: branchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(branchId),
+      menuCategoryId: Value(menuCategoryId),
+      name: Value(name),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      basePriceMinor: Value(basePriceMinor),
+      currencyCode: Value(currencyCode),
+      isActive: Value(isActive),
+    );
+  }
+
+  factory MenuItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MenuItem(
+      id: serializer.fromJson<String>(json['id']),
+      organizationId: serializer.fromJson<String>(json['organizationId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      localOperationId: serializer.fromJson<String>(json['localOperationId']),
+      revision: serializer.fromJson<int>(json['revision']),
+      clientUpdatedAt: serializer.fromJson<DateTime>(json['clientUpdatedAt']),
+      serverUpdatedAt: serializer.fromJson<DateTime?>(json['serverUpdatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      restaurantId: serializer.fromJson<String>(json['restaurantId']),
+      branchId: serializer.fromJson<String?>(json['branchId']),
+      menuCategoryId: serializer.fromJson<String>(json['menuCategoryId']),
+      name: serializer.fromJson<String>(json['name']),
+      description: serializer.fromJson<String?>(json['description']),
+      basePriceMinor: serializer.fromJson<int>(json['basePriceMinor']),
+      currencyCode: serializer.fromJson<String>(json['currencyCode']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'organizationId': serializer.toJson<String>(organizationId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'localOperationId': serializer.toJson<String>(localOperationId),
+      'revision': serializer.toJson<int>(revision),
+      'clientUpdatedAt': serializer.toJson<DateTime>(clientUpdatedAt),
+      'serverUpdatedAt': serializer.toJson<DateTime?>(serverUpdatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'restaurantId': serializer.toJson<String>(restaurantId),
+      'branchId': serializer.toJson<String?>(branchId),
+      'menuCategoryId': serializer.toJson<String>(menuCategoryId),
+      'name': serializer.toJson<String>(name),
+      'description': serializer.toJson<String?>(description),
+      'basePriceMinor': serializer.toJson<int>(basePriceMinor),
+      'currencyCode': serializer.toJson<String>(currencyCode),
+      'isActive': serializer.toJson<bool>(isActive),
+    };
+  }
+
+  MenuItem copyWith({
+    String? id,
+    String? organizationId,
+    String? deviceId,
+    String? localOperationId,
+    int? revision,
+    DateTime? clientUpdatedAt,
+    Value<DateTime?> serverUpdatedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    String? restaurantId,
+    Value<String?> branchId = const Value.absent(),
+    String? menuCategoryId,
+    String? name,
+    Value<String?> description = const Value.absent(),
+    int? basePriceMinor,
+    String? currencyCode,
+    bool? isActive,
+  }) => MenuItem(
+    id: id ?? this.id,
+    organizationId: organizationId ?? this.organizationId,
+    deviceId: deviceId ?? this.deviceId,
+    localOperationId: localOperationId ?? this.localOperationId,
+    revision: revision ?? this.revision,
+    clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+    serverUpdatedAt: serverUpdatedAt.present
+        ? serverUpdatedAt.value
+        : this.serverUpdatedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    restaurantId: restaurantId ?? this.restaurantId,
+    branchId: branchId.present ? branchId.value : this.branchId,
+    menuCategoryId: menuCategoryId ?? this.menuCategoryId,
+    name: name ?? this.name,
+    description: description.present ? description.value : this.description,
+    basePriceMinor: basePriceMinor ?? this.basePriceMinor,
+    currencyCode: currencyCode ?? this.currencyCode,
+    isActive: isActive ?? this.isActive,
+  );
+  MenuItem copyWithCompanion(MenuItemsCompanion data) {
+    return MenuItem(
+      id: data.id.present ? data.id.value : this.id,
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      localOperationId: data.localOperationId.present
+          ? data.localOperationId.value
+          : this.localOperationId,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      clientUpdatedAt: data.clientUpdatedAt.present
+          ? data.clientUpdatedAt.value
+          : this.clientUpdatedAt,
+      serverUpdatedAt: data.serverUpdatedAt.present
+          ? data.serverUpdatedAt.value
+          : this.serverUpdatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      restaurantId: data.restaurantId.present
+          ? data.restaurantId.value
+          : this.restaurantId,
+      branchId: data.branchId.present ? data.branchId.value : this.branchId,
+      menuCategoryId: data.menuCategoryId.present
+          ? data.menuCategoryId.value
+          : this.menuCategoryId,
+      name: data.name.present ? data.name.value : this.name,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      basePriceMinor: data.basePriceMinor.present
+          ? data.basePriceMinor.value
+          : this.basePriceMinor,
+      currencyCode: data.currencyCode.present
+          ? data.currencyCode.value
+          : this.currencyCode,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MenuItem(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('menuCategoryId: $menuCategoryId, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('basePriceMinor: $basePriceMinor, ')
+          ..write('currencyCode: $currencyCode, ')
+          ..write('isActive: $isActive')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    menuCategoryId,
+    name,
+    description,
+    basePriceMinor,
+    currencyCode,
+    isActive,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MenuItem &&
+          other.id == this.id &&
+          other.organizationId == this.organizationId &&
+          other.deviceId == this.deviceId &&
+          other.localOperationId == this.localOperationId &&
+          other.revision == this.revision &&
+          other.clientUpdatedAt == this.clientUpdatedAt &&
+          other.serverUpdatedAt == this.serverUpdatedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.restaurantId == this.restaurantId &&
+          other.branchId == this.branchId &&
+          other.menuCategoryId == this.menuCategoryId &&
+          other.name == this.name &&
+          other.description == this.description &&
+          other.basePriceMinor == this.basePriceMinor &&
+          other.currencyCode == this.currencyCode &&
+          other.isActive == this.isActive);
+}
+
+class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
+  final Value<String> id;
+  final Value<String> organizationId;
+  final Value<String> deviceId;
+  final Value<String> localOperationId;
+  final Value<int> revision;
+  final Value<DateTime> clientUpdatedAt;
+  final Value<DateTime?> serverUpdatedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String> restaurantId;
+  final Value<String?> branchId;
+  final Value<String> menuCategoryId;
+  final Value<String> name;
+  final Value<String?> description;
+  final Value<int> basePriceMinor;
+  final Value<String> currencyCode;
+  final Value<bool> isActive;
+  final Value<int> rowid;
+  const MenuItemsCompanion({
+    this.id = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.localOperationId = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.clientUpdatedAt = const Value.absent(),
+    this.serverUpdatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.restaurantId = const Value.absent(),
+    this.branchId = const Value.absent(),
+    this.menuCategoryId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.description = const Value.absent(),
+    this.basePriceMinor = const Value.absent(),
+    this.currencyCode = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MenuItemsCompanion.insert({
+    required String id,
+    required String organizationId,
+    required String deviceId,
+    required String localOperationId,
+    this.revision = const Value.absent(),
+    required DateTime clientUpdatedAt,
+    this.serverUpdatedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    required String restaurantId,
+    this.branchId = const Value.absent(),
+    required String menuCategoryId,
+    required String name,
+    this.description = const Value.absent(),
+    required int basePriceMinor,
+    required String currencyCode,
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       organizationId = Value(organizationId),
+       deviceId = Value(deviceId),
+       localOperationId = Value(localOperationId),
+       clientUpdatedAt = Value(clientUpdatedAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       restaurantId = Value(restaurantId),
+       menuCategoryId = Value(menuCategoryId),
+       name = Value(name),
+       basePriceMinor = Value(basePriceMinor),
+       currencyCode = Value(currencyCode);
+  static Insertable<MenuItem> custom({
+    Expression<String>? id,
+    Expression<String>? organizationId,
+    Expression<String>? deviceId,
+    Expression<String>? localOperationId,
+    Expression<int>? revision,
+    Expression<DateTime>? clientUpdatedAt,
+    Expression<DateTime>? serverUpdatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? restaurantId,
+    Expression<String>? branchId,
+    Expression<String>? menuCategoryId,
+    Expression<String>? name,
+    Expression<String>? description,
+    Expression<int>? basePriceMinor,
+    Expression<String>? currencyCode,
+    Expression<bool>? isActive,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (organizationId != null) 'organization_id': organizationId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (localOperationId != null) 'local_operation_id': localOperationId,
+      if (revision != null) 'revision': revision,
+      if (clientUpdatedAt != null) 'client_updated_at': clientUpdatedAt,
+      if (serverUpdatedAt != null) 'server_updated_at': serverUpdatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (restaurantId != null) 'restaurant_id': restaurantId,
+      if (branchId != null) 'branch_id': branchId,
+      if (menuCategoryId != null) 'menu_category_id': menuCategoryId,
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (basePriceMinor != null) 'base_price_minor': basePriceMinor,
+      if (currencyCode != null) 'currency_code': currencyCode,
+      if (isActive != null) 'is_active': isActive,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MenuItemsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? organizationId,
+    Value<String>? deviceId,
+    Value<String>? localOperationId,
+    Value<int>? revision,
+    Value<DateTime>? clientUpdatedAt,
+    Value<DateTime?>? serverUpdatedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String>? restaurantId,
+    Value<String?>? branchId,
+    Value<String>? menuCategoryId,
+    Value<String>? name,
+    Value<String?>? description,
+    Value<int>? basePriceMinor,
+    Value<String>? currencyCode,
+    Value<bool>? isActive,
+    Value<int>? rowid,
+  }) {
+    return MenuItemsCompanion(
+      id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
+      deviceId: deviceId ?? this.deviceId,
+      localOperationId: localOperationId ?? this.localOperationId,
+      revision: revision ?? this.revision,
+      clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+      serverUpdatedAt: serverUpdatedAt ?? this.serverUpdatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      restaurantId: restaurantId ?? this.restaurantId,
+      branchId: branchId ?? this.branchId,
+      menuCategoryId: menuCategoryId ?? this.menuCategoryId,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      basePriceMinor: basePriceMinor ?? this.basePriceMinor,
+      currencyCode: currencyCode ?? this.currencyCode,
+      isActive: isActive ?? this.isActive,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (localOperationId.present) {
+      map['local_operation_id'] = Variable<String>(localOperationId.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (clientUpdatedAt.present) {
+      map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt.value);
+    }
+    if (serverUpdatedAt.present) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (restaurantId.present) {
+      map['restaurant_id'] = Variable<String>(restaurantId.value);
+    }
+    if (branchId.present) {
+      map['branch_id'] = Variable<String>(branchId.value);
+    }
+    if (menuCategoryId.present) {
+      map['menu_category_id'] = Variable<String>(menuCategoryId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (basePriceMinor.present) {
+      map['base_price_minor'] = Variable<int>(basePriceMinor.value);
+    }
+    if (currencyCode.present) {
+      map['currency_code'] = Variable<String>(currencyCode.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MenuItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('menuCategoryId: $menuCategoryId, ')
+          ..write('name: $name, ')
+          ..write('description: $description, ')
+          ..write('basePriceMinor: $basePriceMinor, ')
+          ..write('currencyCode: $currencyCode, ')
+          ..write('isActive: $isActive, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ItemSizesTable extends ItemSizes
+    with TableInfo<$ItemSizesTable, ItemSize> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ItemSizesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _organizationIdMeta = const VerificationMeta(
+    'organizationId',
+  );
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+    'organization_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localOperationIdMeta = const VerificationMeta(
+    'localOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> localOperationId = GeneratedColumn<String>(
+    'local_operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _clientUpdatedAtMeta = const VerificationMeta(
+    'clientUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> clientUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'client_updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _serverUpdatedAtMeta = const VerificationMeta(
+    'serverUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> serverUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'server_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _restaurantIdMeta = const VerificationMeta(
+    'restaurantId',
+  );
+  @override
+  late final GeneratedColumn<String> restaurantId = GeneratedColumn<String>(
+    'restaurant_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchIdMeta = const VerificationMeta(
+    'branchId',
+  );
+  @override
+  late final GeneratedColumn<String> branchId = GeneratedColumn<String>(
+    'branch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _menuItemIdMeta = const VerificationMeta(
+    'menuItemId',
+  );
+  @override
+  late final GeneratedColumn<String> menuItemId = GeneratedColumn<String>(
+    'menu_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES menu_items (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _priceDeltaMinorMeta = const VerificationMeta(
+    'priceDeltaMinor',
+  );
+  @override
+  late final GeneratedColumn<int> priceDeltaMinor = GeneratedColumn<int>(
+    'price_delta_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _displayOrderMeta = const VerificationMeta(
+    'displayOrder',
+  );
+  @override
+  late final GeneratedColumn<int> displayOrder = GeneratedColumn<int>(
+    'display_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isActiveMeta = const VerificationMeta(
+    'isActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    menuItemId,
+    name,
+    priceDeltaMinor,
+    displayOrder,
+    isActive,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'item_sizes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ItemSize> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('organization_id')) {
+      context.handle(
+        _organizationIdMeta,
+        organizationId.isAcceptableOrUnknown(
+          data['organization_id']!,
+          _organizationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_organizationIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('local_operation_id')) {
+      context.handle(
+        _localOperationIdMeta,
+        localOperationId.isAcceptableOrUnknown(
+          data['local_operation_id']!,
+          _localOperationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localOperationIdMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('client_updated_at')) {
+      context.handle(
+        _clientUpdatedAtMeta,
+        clientUpdatedAt.isAcceptableOrUnknown(
+          data['client_updated_at']!,
+          _clientUpdatedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientUpdatedAtMeta);
+    }
+    if (data.containsKey('server_updated_at')) {
+      context.handle(
+        _serverUpdatedAtMeta,
+        serverUpdatedAt.isAcceptableOrUnknown(
+          data['server_updated_at']!,
+          _serverUpdatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('restaurant_id')) {
+      context.handle(
+        _restaurantIdMeta,
+        restaurantId.isAcceptableOrUnknown(
+          data['restaurant_id']!,
+          _restaurantIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_restaurantIdMeta);
+    }
+    if (data.containsKey('branch_id')) {
+      context.handle(
+        _branchIdMeta,
+        branchId.isAcceptableOrUnknown(data['branch_id']!, _branchIdMeta),
+      );
+    }
+    if (data.containsKey('menu_item_id')) {
+      context.handle(
+        _menuItemIdMeta,
+        menuItemId.isAcceptableOrUnknown(
+          data['menu_item_id']!,
+          _menuItemIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_menuItemIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('price_delta_minor')) {
+      context.handle(
+        _priceDeltaMinorMeta,
+        priceDeltaMinor.isAcceptableOrUnknown(
+          data['price_delta_minor']!,
+          _priceDeltaMinorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('display_order')) {
+      context.handle(
+        _displayOrderMeta,
+        displayOrder.isAcceptableOrUnknown(
+          data['display_order']!,
+          _displayOrderMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ItemSize map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ItemSize(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      organizationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}organization_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      localOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_operation_id'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      clientUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}client_updated_at'],
+      )!,
+      serverUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}server_updated_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      restaurantId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}restaurant_id'],
+      )!,
+      branchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_id'],
+      ),
+      menuItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}menu_item_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      priceDeltaMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}price_delta_minor'],
+      )!,
+      displayOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}display_order'],
+      )!,
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+    );
+  }
+
+  @override
+  $ItemSizesTable createAlias(String alias) {
+    return $ItemSizesTable(attachedDatabase, alias);
+  }
+}
+
+class ItemSize extends DataClass implements Insertable<ItemSize> {
+  /// Client-generated UUID primary key (rows exist before any server round-trip).
+  final String id;
+
+  /// Tenant isolation boundary (DECISION D-001).
+  final String organizationId;
+
+  /// Originating device identity (DECISION D-022).
+  final String deviceId;
+
+  /// Client-generated per-operation id; `(deviceId, localOperationId)` is the
+  /// idempotency key (DECISION D-022).
+  final String localOperationId;
+
+  /// Monotonic per-entity version; optimistic-concurrency token.
+  final int revision;
+
+  /// Wall-clock time the change was made on the device (advisory, not trusted).
+  final DateTime clientUpdatedAt;
+
+  /// Authoritative time set by the server on accept; null until first accepted.
+  final DateTime? serverUpdatedAt;
+
+  /// Standard audit timestamps.
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  /// Tombstone marker (DECISION D-020). Null = live; non-null = soft-deleted.
+  final DateTime? deletedAt;
+  final String restaurantId;
+  final String? branchId;
+  final String menuItemId;
+  final String name;
+
+  /// Price delta vs the item base price, integer MINOR units (DECISION D-007).
+  final int priceDeltaMinor;
+  final int displayOrder;
+  final bool isActive;
+  const ItemSize({
+    required this.id,
+    required this.organizationId,
+    required this.deviceId,
+    required this.localOperationId,
+    required this.revision,
+    required this.clientUpdatedAt,
+    this.serverUpdatedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.restaurantId,
+    this.branchId,
+    required this.menuItemId,
+    required this.name,
+    required this.priceDeltaMinor,
+    required this.displayOrder,
+    required this.isActive,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['organization_id'] = Variable<String>(organizationId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['local_operation_id'] = Variable<String>(localOperationId);
+    map['revision'] = Variable<int>(revision);
+    map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt);
+    if (!nullToAbsent || serverUpdatedAt != null) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['restaurant_id'] = Variable<String>(restaurantId);
+    if (!nullToAbsent || branchId != null) {
+      map['branch_id'] = Variable<String>(branchId);
+    }
+    map['menu_item_id'] = Variable<String>(menuItemId);
+    map['name'] = Variable<String>(name);
+    map['price_delta_minor'] = Variable<int>(priceDeltaMinor);
+    map['display_order'] = Variable<int>(displayOrder);
+    map['is_active'] = Variable<bool>(isActive);
+    return map;
+  }
+
+  ItemSizesCompanion toCompanion(bool nullToAbsent) {
+    return ItemSizesCompanion(
+      id: Value(id),
+      organizationId: Value(organizationId),
+      deviceId: Value(deviceId),
+      localOperationId: Value(localOperationId),
+      revision: Value(revision),
+      clientUpdatedAt: Value(clientUpdatedAt),
+      serverUpdatedAt: serverUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverUpdatedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      restaurantId: Value(restaurantId),
+      branchId: branchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(branchId),
+      menuItemId: Value(menuItemId),
+      name: Value(name),
+      priceDeltaMinor: Value(priceDeltaMinor),
+      displayOrder: Value(displayOrder),
+      isActive: Value(isActive),
+    );
+  }
+
+  factory ItemSize.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ItemSize(
+      id: serializer.fromJson<String>(json['id']),
+      organizationId: serializer.fromJson<String>(json['organizationId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      localOperationId: serializer.fromJson<String>(json['localOperationId']),
+      revision: serializer.fromJson<int>(json['revision']),
+      clientUpdatedAt: serializer.fromJson<DateTime>(json['clientUpdatedAt']),
+      serverUpdatedAt: serializer.fromJson<DateTime?>(json['serverUpdatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      restaurantId: serializer.fromJson<String>(json['restaurantId']),
+      branchId: serializer.fromJson<String?>(json['branchId']),
+      menuItemId: serializer.fromJson<String>(json['menuItemId']),
+      name: serializer.fromJson<String>(json['name']),
+      priceDeltaMinor: serializer.fromJson<int>(json['priceDeltaMinor']),
+      displayOrder: serializer.fromJson<int>(json['displayOrder']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'organizationId': serializer.toJson<String>(organizationId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'localOperationId': serializer.toJson<String>(localOperationId),
+      'revision': serializer.toJson<int>(revision),
+      'clientUpdatedAt': serializer.toJson<DateTime>(clientUpdatedAt),
+      'serverUpdatedAt': serializer.toJson<DateTime?>(serverUpdatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'restaurantId': serializer.toJson<String>(restaurantId),
+      'branchId': serializer.toJson<String?>(branchId),
+      'menuItemId': serializer.toJson<String>(menuItemId),
+      'name': serializer.toJson<String>(name),
+      'priceDeltaMinor': serializer.toJson<int>(priceDeltaMinor),
+      'displayOrder': serializer.toJson<int>(displayOrder),
+      'isActive': serializer.toJson<bool>(isActive),
+    };
+  }
+
+  ItemSize copyWith({
+    String? id,
+    String? organizationId,
+    String? deviceId,
+    String? localOperationId,
+    int? revision,
+    DateTime? clientUpdatedAt,
+    Value<DateTime?> serverUpdatedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    String? restaurantId,
+    Value<String?> branchId = const Value.absent(),
+    String? menuItemId,
+    String? name,
+    int? priceDeltaMinor,
+    int? displayOrder,
+    bool? isActive,
+  }) => ItemSize(
+    id: id ?? this.id,
+    organizationId: organizationId ?? this.organizationId,
+    deviceId: deviceId ?? this.deviceId,
+    localOperationId: localOperationId ?? this.localOperationId,
+    revision: revision ?? this.revision,
+    clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+    serverUpdatedAt: serverUpdatedAt.present
+        ? serverUpdatedAt.value
+        : this.serverUpdatedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    restaurantId: restaurantId ?? this.restaurantId,
+    branchId: branchId.present ? branchId.value : this.branchId,
+    menuItemId: menuItemId ?? this.menuItemId,
+    name: name ?? this.name,
+    priceDeltaMinor: priceDeltaMinor ?? this.priceDeltaMinor,
+    displayOrder: displayOrder ?? this.displayOrder,
+    isActive: isActive ?? this.isActive,
+  );
+  ItemSize copyWithCompanion(ItemSizesCompanion data) {
+    return ItemSize(
+      id: data.id.present ? data.id.value : this.id,
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      localOperationId: data.localOperationId.present
+          ? data.localOperationId.value
+          : this.localOperationId,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      clientUpdatedAt: data.clientUpdatedAt.present
+          ? data.clientUpdatedAt.value
+          : this.clientUpdatedAt,
+      serverUpdatedAt: data.serverUpdatedAt.present
+          ? data.serverUpdatedAt.value
+          : this.serverUpdatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      restaurantId: data.restaurantId.present
+          ? data.restaurantId.value
+          : this.restaurantId,
+      branchId: data.branchId.present ? data.branchId.value : this.branchId,
+      menuItemId: data.menuItemId.present
+          ? data.menuItemId.value
+          : this.menuItemId,
+      name: data.name.present ? data.name.value : this.name,
+      priceDeltaMinor: data.priceDeltaMinor.present
+          ? data.priceDeltaMinor.value
+          : this.priceDeltaMinor,
+      displayOrder: data.displayOrder.present
+          ? data.displayOrder.value
+          : this.displayOrder,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ItemSize(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('menuItemId: $menuItemId, ')
+          ..write('name: $name, ')
+          ..write('priceDeltaMinor: $priceDeltaMinor, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    menuItemId,
+    name,
+    priceDeltaMinor,
+    displayOrder,
+    isActive,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ItemSize &&
+          other.id == this.id &&
+          other.organizationId == this.organizationId &&
+          other.deviceId == this.deviceId &&
+          other.localOperationId == this.localOperationId &&
+          other.revision == this.revision &&
+          other.clientUpdatedAt == this.clientUpdatedAt &&
+          other.serverUpdatedAt == this.serverUpdatedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.restaurantId == this.restaurantId &&
+          other.branchId == this.branchId &&
+          other.menuItemId == this.menuItemId &&
+          other.name == this.name &&
+          other.priceDeltaMinor == this.priceDeltaMinor &&
+          other.displayOrder == this.displayOrder &&
+          other.isActive == this.isActive);
+}
+
+class ItemSizesCompanion extends UpdateCompanion<ItemSize> {
+  final Value<String> id;
+  final Value<String> organizationId;
+  final Value<String> deviceId;
+  final Value<String> localOperationId;
+  final Value<int> revision;
+  final Value<DateTime> clientUpdatedAt;
+  final Value<DateTime?> serverUpdatedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String> restaurantId;
+  final Value<String?> branchId;
+  final Value<String> menuItemId;
+  final Value<String> name;
+  final Value<int> priceDeltaMinor;
+  final Value<int> displayOrder;
+  final Value<bool> isActive;
+  final Value<int> rowid;
+  const ItemSizesCompanion({
+    this.id = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.localOperationId = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.clientUpdatedAt = const Value.absent(),
+    this.serverUpdatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.restaurantId = const Value.absent(),
+    this.branchId = const Value.absent(),
+    this.menuItemId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.priceDeltaMinor = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ItemSizesCompanion.insert({
+    required String id,
+    required String organizationId,
+    required String deviceId,
+    required String localOperationId,
+    this.revision = const Value.absent(),
+    required DateTime clientUpdatedAt,
+    this.serverUpdatedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    required String restaurantId,
+    this.branchId = const Value.absent(),
+    required String menuItemId,
+    required String name,
+    this.priceDeltaMinor = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       organizationId = Value(organizationId),
+       deviceId = Value(deviceId),
+       localOperationId = Value(localOperationId),
+       clientUpdatedAt = Value(clientUpdatedAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       restaurantId = Value(restaurantId),
+       menuItemId = Value(menuItemId),
+       name = Value(name);
+  static Insertable<ItemSize> custom({
+    Expression<String>? id,
+    Expression<String>? organizationId,
+    Expression<String>? deviceId,
+    Expression<String>? localOperationId,
+    Expression<int>? revision,
+    Expression<DateTime>? clientUpdatedAt,
+    Expression<DateTime>? serverUpdatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? restaurantId,
+    Expression<String>? branchId,
+    Expression<String>? menuItemId,
+    Expression<String>? name,
+    Expression<int>? priceDeltaMinor,
+    Expression<int>? displayOrder,
+    Expression<bool>? isActive,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (organizationId != null) 'organization_id': organizationId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (localOperationId != null) 'local_operation_id': localOperationId,
+      if (revision != null) 'revision': revision,
+      if (clientUpdatedAt != null) 'client_updated_at': clientUpdatedAt,
+      if (serverUpdatedAt != null) 'server_updated_at': serverUpdatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (restaurantId != null) 'restaurant_id': restaurantId,
+      if (branchId != null) 'branch_id': branchId,
+      if (menuItemId != null) 'menu_item_id': menuItemId,
+      if (name != null) 'name': name,
+      if (priceDeltaMinor != null) 'price_delta_minor': priceDeltaMinor,
+      if (displayOrder != null) 'display_order': displayOrder,
+      if (isActive != null) 'is_active': isActive,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ItemSizesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? organizationId,
+    Value<String>? deviceId,
+    Value<String>? localOperationId,
+    Value<int>? revision,
+    Value<DateTime>? clientUpdatedAt,
+    Value<DateTime?>? serverUpdatedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String>? restaurantId,
+    Value<String?>? branchId,
+    Value<String>? menuItemId,
+    Value<String>? name,
+    Value<int>? priceDeltaMinor,
+    Value<int>? displayOrder,
+    Value<bool>? isActive,
+    Value<int>? rowid,
+  }) {
+    return ItemSizesCompanion(
+      id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
+      deviceId: deviceId ?? this.deviceId,
+      localOperationId: localOperationId ?? this.localOperationId,
+      revision: revision ?? this.revision,
+      clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+      serverUpdatedAt: serverUpdatedAt ?? this.serverUpdatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      restaurantId: restaurantId ?? this.restaurantId,
+      branchId: branchId ?? this.branchId,
+      menuItemId: menuItemId ?? this.menuItemId,
+      name: name ?? this.name,
+      priceDeltaMinor: priceDeltaMinor ?? this.priceDeltaMinor,
+      displayOrder: displayOrder ?? this.displayOrder,
+      isActive: isActive ?? this.isActive,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (localOperationId.present) {
+      map['local_operation_id'] = Variable<String>(localOperationId.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (clientUpdatedAt.present) {
+      map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt.value);
+    }
+    if (serverUpdatedAt.present) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (restaurantId.present) {
+      map['restaurant_id'] = Variable<String>(restaurantId.value);
+    }
+    if (branchId.present) {
+      map['branch_id'] = Variable<String>(branchId.value);
+    }
+    if (menuItemId.present) {
+      map['menu_item_id'] = Variable<String>(menuItemId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (priceDeltaMinor.present) {
+      map['price_delta_minor'] = Variable<int>(priceDeltaMinor.value);
+    }
+    if (displayOrder.present) {
+      map['display_order'] = Variable<int>(displayOrder.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ItemSizesCompanion(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('menuItemId: $menuItemId, ')
+          ..write('name: $name, ')
+          ..write('priceDeltaMinor: $priceDeltaMinor, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ItemVariantsTable extends ItemVariants
+    with TableInfo<$ItemVariantsTable, ItemVariant> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ItemVariantsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _organizationIdMeta = const VerificationMeta(
+    'organizationId',
+  );
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+    'organization_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localOperationIdMeta = const VerificationMeta(
+    'localOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> localOperationId = GeneratedColumn<String>(
+    'local_operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _clientUpdatedAtMeta = const VerificationMeta(
+    'clientUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> clientUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'client_updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _serverUpdatedAtMeta = const VerificationMeta(
+    'serverUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> serverUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'server_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _restaurantIdMeta = const VerificationMeta(
+    'restaurantId',
+  );
+  @override
+  late final GeneratedColumn<String> restaurantId = GeneratedColumn<String>(
+    'restaurant_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchIdMeta = const VerificationMeta(
+    'branchId',
+  );
+  @override
+  late final GeneratedColumn<String> branchId = GeneratedColumn<String>(
+    'branch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _menuItemIdMeta = const VerificationMeta(
+    'menuItemId',
+  );
+  @override
+  late final GeneratedColumn<String> menuItemId = GeneratedColumn<String>(
+    'menu_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES menu_items (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _priceDeltaMinorMeta = const VerificationMeta(
+    'priceDeltaMinor',
+  );
+  @override
+  late final GeneratedColumn<int> priceDeltaMinor = GeneratedColumn<int>(
+    'price_delta_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _displayOrderMeta = const VerificationMeta(
+    'displayOrder',
+  );
+  @override
+  late final GeneratedColumn<int> displayOrder = GeneratedColumn<int>(
+    'display_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isActiveMeta = const VerificationMeta(
+    'isActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    menuItemId,
+    name,
+    priceDeltaMinor,
+    displayOrder,
+    isActive,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'item_variants';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ItemVariant> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('organization_id')) {
+      context.handle(
+        _organizationIdMeta,
+        organizationId.isAcceptableOrUnknown(
+          data['organization_id']!,
+          _organizationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_organizationIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('local_operation_id')) {
+      context.handle(
+        _localOperationIdMeta,
+        localOperationId.isAcceptableOrUnknown(
+          data['local_operation_id']!,
+          _localOperationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localOperationIdMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('client_updated_at')) {
+      context.handle(
+        _clientUpdatedAtMeta,
+        clientUpdatedAt.isAcceptableOrUnknown(
+          data['client_updated_at']!,
+          _clientUpdatedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientUpdatedAtMeta);
+    }
+    if (data.containsKey('server_updated_at')) {
+      context.handle(
+        _serverUpdatedAtMeta,
+        serverUpdatedAt.isAcceptableOrUnknown(
+          data['server_updated_at']!,
+          _serverUpdatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('restaurant_id')) {
+      context.handle(
+        _restaurantIdMeta,
+        restaurantId.isAcceptableOrUnknown(
+          data['restaurant_id']!,
+          _restaurantIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_restaurantIdMeta);
+    }
+    if (data.containsKey('branch_id')) {
+      context.handle(
+        _branchIdMeta,
+        branchId.isAcceptableOrUnknown(data['branch_id']!, _branchIdMeta),
+      );
+    }
+    if (data.containsKey('menu_item_id')) {
+      context.handle(
+        _menuItemIdMeta,
+        menuItemId.isAcceptableOrUnknown(
+          data['menu_item_id']!,
+          _menuItemIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_menuItemIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('price_delta_minor')) {
+      context.handle(
+        _priceDeltaMinorMeta,
+        priceDeltaMinor.isAcceptableOrUnknown(
+          data['price_delta_minor']!,
+          _priceDeltaMinorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('display_order')) {
+      context.handle(
+        _displayOrderMeta,
+        displayOrder.isAcceptableOrUnknown(
+          data['display_order']!,
+          _displayOrderMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ItemVariant map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ItemVariant(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      organizationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}organization_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      localOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_operation_id'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      clientUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}client_updated_at'],
+      )!,
+      serverUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}server_updated_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      restaurantId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}restaurant_id'],
+      )!,
+      branchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_id'],
+      ),
+      menuItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}menu_item_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      priceDeltaMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}price_delta_minor'],
+      )!,
+      displayOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}display_order'],
+      )!,
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+    );
+  }
+
+  @override
+  $ItemVariantsTable createAlias(String alias) {
+    return $ItemVariantsTable(attachedDatabase, alias);
+  }
+}
+
+class ItemVariant extends DataClass implements Insertable<ItemVariant> {
+  /// Client-generated UUID primary key (rows exist before any server round-trip).
+  final String id;
+
+  /// Tenant isolation boundary (DECISION D-001).
+  final String organizationId;
+
+  /// Originating device identity (DECISION D-022).
+  final String deviceId;
+
+  /// Client-generated per-operation id; `(deviceId, localOperationId)` is the
+  /// idempotency key (DECISION D-022).
+  final String localOperationId;
+
+  /// Monotonic per-entity version; optimistic-concurrency token.
+  final int revision;
+
+  /// Wall-clock time the change was made on the device (advisory, not trusted).
+  final DateTime clientUpdatedAt;
+
+  /// Authoritative time set by the server on accept; null until first accepted.
+  final DateTime? serverUpdatedAt;
+
+  /// Standard audit timestamps.
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  /// Tombstone marker (DECISION D-020). Null = live; non-null = soft-deleted.
+  final DateTime? deletedAt;
+  final String restaurantId;
+  final String? branchId;
+  final String menuItemId;
+  final String name;
+
+  /// Price delta vs the item base price, integer MINOR units (DECISION D-007).
+  final int priceDeltaMinor;
+  final int displayOrder;
+  final bool isActive;
+  const ItemVariant({
+    required this.id,
+    required this.organizationId,
+    required this.deviceId,
+    required this.localOperationId,
+    required this.revision,
+    required this.clientUpdatedAt,
+    this.serverUpdatedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.restaurantId,
+    this.branchId,
+    required this.menuItemId,
+    required this.name,
+    required this.priceDeltaMinor,
+    required this.displayOrder,
+    required this.isActive,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['organization_id'] = Variable<String>(organizationId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['local_operation_id'] = Variable<String>(localOperationId);
+    map['revision'] = Variable<int>(revision);
+    map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt);
+    if (!nullToAbsent || serverUpdatedAt != null) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['restaurant_id'] = Variable<String>(restaurantId);
+    if (!nullToAbsent || branchId != null) {
+      map['branch_id'] = Variable<String>(branchId);
+    }
+    map['menu_item_id'] = Variable<String>(menuItemId);
+    map['name'] = Variable<String>(name);
+    map['price_delta_minor'] = Variable<int>(priceDeltaMinor);
+    map['display_order'] = Variable<int>(displayOrder);
+    map['is_active'] = Variable<bool>(isActive);
+    return map;
+  }
+
+  ItemVariantsCompanion toCompanion(bool nullToAbsent) {
+    return ItemVariantsCompanion(
+      id: Value(id),
+      organizationId: Value(organizationId),
+      deviceId: Value(deviceId),
+      localOperationId: Value(localOperationId),
+      revision: Value(revision),
+      clientUpdatedAt: Value(clientUpdatedAt),
+      serverUpdatedAt: serverUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverUpdatedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      restaurantId: Value(restaurantId),
+      branchId: branchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(branchId),
+      menuItemId: Value(menuItemId),
+      name: Value(name),
+      priceDeltaMinor: Value(priceDeltaMinor),
+      displayOrder: Value(displayOrder),
+      isActive: Value(isActive),
+    );
+  }
+
+  factory ItemVariant.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ItemVariant(
+      id: serializer.fromJson<String>(json['id']),
+      organizationId: serializer.fromJson<String>(json['organizationId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      localOperationId: serializer.fromJson<String>(json['localOperationId']),
+      revision: serializer.fromJson<int>(json['revision']),
+      clientUpdatedAt: serializer.fromJson<DateTime>(json['clientUpdatedAt']),
+      serverUpdatedAt: serializer.fromJson<DateTime?>(json['serverUpdatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      restaurantId: serializer.fromJson<String>(json['restaurantId']),
+      branchId: serializer.fromJson<String?>(json['branchId']),
+      menuItemId: serializer.fromJson<String>(json['menuItemId']),
+      name: serializer.fromJson<String>(json['name']),
+      priceDeltaMinor: serializer.fromJson<int>(json['priceDeltaMinor']),
+      displayOrder: serializer.fromJson<int>(json['displayOrder']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'organizationId': serializer.toJson<String>(organizationId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'localOperationId': serializer.toJson<String>(localOperationId),
+      'revision': serializer.toJson<int>(revision),
+      'clientUpdatedAt': serializer.toJson<DateTime>(clientUpdatedAt),
+      'serverUpdatedAt': serializer.toJson<DateTime?>(serverUpdatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'restaurantId': serializer.toJson<String>(restaurantId),
+      'branchId': serializer.toJson<String?>(branchId),
+      'menuItemId': serializer.toJson<String>(menuItemId),
+      'name': serializer.toJson<String>(name),
+      'priceDeltaMinor': serializer.toJson<int>(priceDeltaMinor),
+      'displayOrder': serializer.toJson<int>(displayOrder),
+      'isActive': serializer.toJson<bool>(isActive),
+    };
+  }
+
+  ItemVariant copyWith({
+    String? id,
+    String? organizationId,
+    String? deviceId,
+    String? localOperationId,
+    int? revision,
+    DateTime? clientUpdatedAt,
+    Value<DateTime?> serverUpdatedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    String? restaurantId,
+    Value<String?> branchId = const Value.absent(),
+    String? menuItemId,
+    String? name,
+    int? priceDeltaMinor,
+    int? displayOrder,
+    bool? isActive,
+  }) => ItemVariant(
+    id: id ?? this.id,
+    organizationId: organizationId ?? this.organizationId,
+    deviceId: deviceId ?? this.deviceId,
+    localOperationId: localOperationId ?? this.localOperationId,
+    revision: revision ?? this.revision,
+    clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+    serverUpdatedAt: serverUpdatedAt.present
+        ? serverUpdatedAt.value
+        : this.serverUpdatedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    restaurantId: restaurantId ?? this.restaurantId,
+    branchId: branchId.present ? branchId.value : this.branchId,
+    menuItemId: menuItemId ?? this.menuItemId,
+    name: name ?? this.name,
+    priceDeltaMinor: priceDeltaMinor ?? this.priceDeltaMinor,
+    displayOrder: displayOrder ?? this.displayOrder,
+    isActive: isActive ?? this.isActive,
+  );
+  ItemVariant copyWithCompanion(ItemVariantsCompanion data) {
+    return ItemVariant(
+      id: data.id.present ? data.id.value : this.id,
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      localOperationId: data.localOperationId.present
+          ? data.localOperationId.value
+          : this.localOperationId,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      clientUpdatedAt: data.clientUpdatedAt.present
+          ? data.clientUpdatedAt.value
+          : this.clientUpdatedAt,
+      serverUpdatedAt: data.serverUpdatedAt.present
+          ? data.serverUpdatedAt.value
+          : this.serverUpdatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      restaurantId: data.restaurantId.present
+          ? data.restaurantId.value
+          : this.restaurantId,
+      branchId: data.branchId.present ? data.branchId.value : this.branchId,
+      menuItemId: data.menuItemId.present
+          ? data.menuItemId.value
+          : this.menuItemId,
+      name: data.name.present ? data.name.value : this.name,
+      priceDeltaMinor: data.priceDeltaMinor.present
+          ? data.priceDeltaMinor.value
+          : this.priceDeltaMinor,
+      displayOrder: data.displayOrder.present
+          ? data.displayOrder.value
+          : this.displayOrder,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ItemVariant(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('menuItemId: $menuItemId, ')
+          ..write('name: $name, ')
+          ..write('priceDeltaMinor: $priceDeltaMinor, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    menuItemId,
+    name,
+    priceDeltaMinor,
+    displayOrder,
+    isActive,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ItemVariant &&
+          other.id == this.id &&
+          other.organizationId == this.organizationId &&
+          other.deviceId == this.deviceId &&
+          other.localOperationId == this.localOperationId &&
+          other.revision == this.revision &&
+          other.clientUpdatedAt == this.clientUpdatedAt &&
+          other.serverUpdatedAt == this.serverUpdatedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.restaurantId == this.restaurantId &&
+          other.branchId == this.branchId &&
+          other.menuItemId == this.menuItemId &&
+          other.name == this.name &&
+          other.priceDeltaMinor == this.priceDeltaMinor &&
+          other.displayOrder == this.displayOrder &&
+          other.isActive == this.isActive);
+}
+
+class ItemVariantsCompanion extends UpdateCompanion<ItemVariant> {
+  final Value<String> id;
+  final Value<String> organizationId;
+  final Value<String> deviceId;
+  final Value<String> localOperationId;
+  final Value<int> revision;
+  final Value<DateTime> clientUpdatedAt;
+  final Value<DateTime?> serverUpdatedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String> restaurantId;
+  final Value<String?> branchId;
+  final Value<String> menuItemId;
+  final Value<String> name;
+  final Value<int> priceDeltaMinor;
+  final Value<int> displayOrder;
+  final Value<bool> isActive;
+  final Value<int> rowid;
+  const ItemVariantsCompanion({
+    this.id = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.localOperationId = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.clientUpdatedAt = const Value.absent(),
+    this.serverUpdatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.restaurantId = const Value.absent(),
+    this.branchId = const Value.absent(),
+    this.menuItemId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.priceDeltaMinor = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ItemVariantsCompanion.insert({
+    required String id,
+    required String organizationId,
+    required String deviceId,
+    required String localOperationId,
+    this.revision = const Value.absent(),
+    required DateTime clientUpdatedAt,
+    this.serverUpdatedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    required String restaurantId,
+    this.branchId = const Value.absent(),
+    required String menuItemId,
+    required String name,
+    this.priceDeltaMinor = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       organizationId = Value(organizationId),
+       deviceId = Value(deviceId),
+       localOperationId = Value(localOperationId),
+       clientUpdatedAt = Value(clientUpdatedAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       restaurantId = Value(restaurantId),
+       menuItemId = Value(menuItemId),
+       name = Value(name);
+  static Insertable<ItemVariant> custom({
+    Expression<String>? id,
+    Expression<String>? organizationId,
+    Expression<String>? deviceId,
+    Expression<String>? localOperationId,
+    Expression<int>? revision,
+    Expression<DateTime>? clientUpdatedAt,
+    Expression<DateTime>? serverUpdatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? restaurantId,
+    Expression<String>? branchId,
+    Expression<String>? menuItemId,
+    Expression<String>? name,
+    Expression<int>? priceDeltaMinor,
+    Expression<int>? displayOrder,
+    Expression<bool>? isActive,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (organizationId != null) 'organization_id': organizationId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (localOperationId != null) 'local_operation_id': localOperationId,
+      if (revision != null) 'revision': revision,
+      if (clientUpdatedAt != null) 'client_updated_at': clientUpdatedAt,
+      if (serverUpdatedAt != null) 'server_updated_at': serverUpdatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (restaurantId != null) 'restaurant_id': restaurantId,
+      if (branchId != null) 'branch_id': branchId,
+      if (menuItemId != null) 'menu_item_id': menuItemId,
+      if (name != null) 'name': name,
+      if (priceDeltaMinor != null) 'price_delta_minor': priceDeltaMinor,
+      if (displayOrder != null) 'display_order': displayOrder,
+      if (isActive != null) 'is_active': isActive,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ItemVariantsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? organizationId,
+    Value<String>? deviceId,
+    Value<String>? localOperationId,
+    Value<int>? revision,
+    Value<DateTime>? clientUpdatedAt,
+    Value<DateTime?>? serverUpdatedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String>? restaurantId,
+    Value<String?>? branchId,
+    Value<String>? menuItemId,
+    Value<String>? name,
+    Value<int>? priceDeltaMinor,
+    Value<int>? displayOrder,
+    Value<bool>? isActive,
+    Value<int>? rowid,
+  }) {
+    return ItemVariantsCompanion(
+      id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
+      deviceId: deviceId ?? this.deviceId,
+      localOperationId: localOperationId ?? this.localOperationId,
+      revision: revision ?? this.revision,
+      clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+      serverUpdatedAt: serverUpdatedAt ?? this.serverUpdatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      restaurantId: restaurantId ?? this.restaurantId,
+      branchId: branchId ?? this.branchId,
+      menuItemId: menuItemId ?? this.menuItemId,
+      name: name ?? this.name,
+      priceDeltaMinor: priceDeltaMinor ?? this.priceDeltaMinor,
+      displayOrder: displayOrder ?? this.displayOrder,
+      isActive: isActive ?? this.isActive,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (localOperationId.present) {
+      map['local_operation_id'] = Variable<String>(localOperationId.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (clientUpdatedAt.present) {
+      map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt.value);
+    }
+    if (serverUpdatedAt.present) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (restaurantId.present) {
+      map['restaurant_id'] = Variable<String>(restaurantId.value);
+    }
+    if (branchId.present) {
+      map['branch_id'] = Variable<String>(branchId.value);
+    }
+    if (menuItemId.present) {
+      map['menu_item_id'] = Variable<String>(menuItemId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (priceDeltaMinor.present) {
+      map['price_delta_minor'] = Variable<int>(priceDeltaMinor.value);
+    }
+    if (displayOrder.present) {
+      map['display_order'] = Variable<int>(displayOrder.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ItemVariantsCompanion(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('menuItemId: $menuItemId, ')
+          ..write('name: $name, ')
+          ..write('priceDeltaMinor: $priceDeltaMinor, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ModifiersTable extends Modifiers
+    with TableInfo<$ModifiersTable, Modifier> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ModifiersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _organizationIdMeta = const VerificationMeta(
+    'organizationId',
+  );
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+    'organization_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localOperationIdMeta = const VerificationMeta(
+    'localOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> localOperationId = GeneratedColumn<String>(
+    'local_operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _clientUpdatedAtMeta = const VerificationMeta(
+    'clientUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> clientUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'client_updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _serverUpdatedAtMeta = const VerificationMeta(
+    'serverUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> serverUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'server_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _restaurantIdMeta = const VerificationMeta(
+    'restaurantId',
+  );
+  @override
+  late final GeneratedColumn<String> restaurantId = GeneratedColumn<String>(
+    'restaurant_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchIdMeta = const VerificationMeta(
+    'branchId',
+  );
+  @override
+  late final GeneratedColumn<String> branchId = GeneratedColumn<String>(
+    'branch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _menuItemIdMeta = const VerificationMeta(
+    'menuItemId',
+  );
+  @override
+  late final GeneratedColumn<String> menuItemId = GeneratedColumn<String>(
+    'menu_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES menu_items (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _selectionTypeMeta = const VerificationMeta(
+    'selectionType',
+  );
+  @override
+  late final GeneratedColumn<String> selectionType = GeneratedColumn<String>(
+    'selection_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _minSelectMeta = const VerificationMeta(
+    'minSelect',
+  );
+  @override
+  late final GeneratedColumn<int> minSelect = GeneratedColumn<int>(
+    'min_select',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _maxSelectMeta = const VerificationMeta(
+    'maxSelect',
+  );
+  @override
+  late final GeneratedColumn<int> maxSelect = GeneratedColumn<int>(
+    'max_select',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _isRequiredMeta = const VerificationMeta(
+    'isRequired',
+  );
+  @override
+  late final GeneratedColumn<bool> isRequired = GeneratedColumn<bool>(
+    'is_required',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_required" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _displayOrderMeta = const VerificationMeta(
+    'displayOrder',
+  );
+  @override
+  late final GeneratedColumn<int> displayOrder = GeneratedColumn<int>(
+    'display_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isActiveMeta = const VerificationMeta(
+    'isActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    menuItemId,
+    name,
+    selectionType,
+    minSelect,
+    maxSelect,
+    isRequired,
+    displayOrder,
+    isActive,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'modifiers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Modifier> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('organization_id')) {
+      context.handle(
+        _organizationIdMeta,
+        organizationId.isAcceptableOrUnknown(
+          data['organization_id']!,
+          _organizationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_organizationIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('local_operation_id')) {
+      context.handle(
+        _localOperationIdMeta,
+        localOperationId.isAcceptableOrUnknown(
+          data['local_operation_id']!,
+          _localOperationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localOperationIdMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('client_updated_at')) {
+      context.handle(
+        _clientUpdatedAtMeta,
+        clientUpdatedAt.isAcceptableOrUnknown(
+          data['client_updated_at']!,
+          _clientUpdatedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientUpdatedAtMeta);
+    }
+    if (data.containsKey('server_updated_at')) {
+      context.handle(
+        _serverUpdatedAtMeta,
+        serverUpdatedAt.isAcceptableOrUnknown(
+          data['server_updated_at']!,
+          _serverUpdatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('restaurant_id')) {
+      context.handle(
+        _restaurantIdMeta,
+        restaurantId.isAcceptableOrUnknown(
+          data['restaurant_id']!,
+          _restaurantIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_restaurantIdMeta);
+    }
+    if (data.containsKey('branch_id')) {
+      context.handle(
+        _branchIdMeta,
+        branchId.isAcceptableOrUnknown(data['branch_id']!, _branchIdMeta),
+      );
+    }
+    if (data.containsKey('menu_item_id')) {
+      context.handle(
+        _menuItemIdMeta,
+        menuItemId.isAcceptableOrUnknown(
+          data['menu_item_id']!,
+          _menuItemIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_menuItemIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('selection_type')) {
+      context.handle(
+        _selectionTypeMeta,
+        selectionType.isAcceptableOrUnknown(
+          data['selection_type']!,
+          _selectionTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_selectionTypeMeta);
+    }
+    if (data.containsKey('min_select')) {
+      context.handle(
+        _minSelectMeta,
+        minSelect.isAcceptableOrUnknown(data['min_select']!, _minSelectMeta),
+      );
+    }
+    if (data.containsKey('max_select')) {
+      context.handle(
+        _maxSelectMeta,
+        maxSelect.isAcceptableOrUnknown(data['max_select']!, _maxSelectMeta),
+      );
+    }
+    if (data.containsKey('is_required')) {
+      context.handle(
+        _isRequiredMeta,
+        isRequired.isAcceptableOrUnknown(data['is_required']!, _isRequiredMeta),
+      );
+    }
+    if (data.containsKey('display_order')) {
+      context.handle(
+        _displayOrderMeta,
+        displayOrder.isAcceptableOrUnknown(
+          data['display_order']!,
+          _displayOrderMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Modifier map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Modifier(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      organizationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}organization_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      localOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_operation_id'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      clientUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}client_updated_at'],
+      )!,
+      serverUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}server_updated_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      restaurantId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}restaurant_id'],
+      )!,
+      branchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_id'],
+      ),
+      menuItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}menu_item_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      selectionType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}selection_type'],
+      )!,
+      minSelect: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}min_select'],
+      )!,
+      maxSelect: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_select'],
+      )!,
+      isRequired: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_required'],
+      )!,
+      displayOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}display_order'],
+      )!,
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+    );
+  }
+
+  @override
+  $ModifiersTable createAlias(String alias) {
+    return $ModifiersTable(attachedDatabase, alias);
+  }
+}
+
+class Modifier extends DataClass implements Insertable<Modifier> {
+  /// Client-generated UUID primary key (rows exist before any server round-trip).
+  final String id;
+
+  /// Tenant isolation boundary (DECISION D-001).
+  final String organizationId;
+
+  /// Originating device identity (DECISION D-022).
+  final String deviceId;
+
+  /// Client-generated per-operation id; `(deviceId, localOperationId)` is the
+  /// idempotency key (DECISION D-022).
+  final String localOperationId;
+
+  /// Monotonic per-entity version; optimistic-concurrency token.
+  final int revision;
+
+  /// Wall-clock time the change was made on the device (advisory, not trusted).
+  final DateTime clientUpdatedAt;
+
+  /// Authoritative time set by the server on accept; null until first accepted.
+  final DateTime? serverUpdatedAt;
+
+  /// Standard audit timestamps.
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  /// Tombstone marker (DECISION D-020). Null = live; non-null = soft-deleted.
+  final DateTime? deletedAt;
+  final String restaurantId;
+  final String? branchId;
+  final String menuItemId;
+  final String name;
+
+  /// 'single' or 'multiple' (stored as text; not enforced in RF-030).
+  final String selectionType;
+  final int minSelect;
+  final int maxSelect;
+  final bool isRequired;
+  final int displayOrder;
+  final bool isActive;
+  const Modifier({
+    required this.id,
+    required this.organizationId,
+    required this.deviceId,
+    required this.localOperationId,
+    required this.revision,
+    required this.clientUpdatedAt,
+    this.serverUpdatedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.restaurantId,
+    this.branchId,
+    required this.menuItemId,
+    required this.name,
+    required this.selectionType,
+    required this.minSelect,
+    required this.maxSelect,
+    required this.isRequired,
+    required this.displayOrder,
+    required this.isActive,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['organization_id'] = Variable<String>(organizationId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['local_operation_id'] = Variable<String>(localOperationId);
+    map['revision'] = Variable<int>(revision);
+    map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt);
+    if (!nullToAbsent || serverUpdatedAt != null) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['restaurant_id'] = Variable<String>(restaurantId);
+    if (!nullToAbsent || branchId != null) {
+      map['branch_id'] = Variable<String>(branchId);
+    }
+    map['menu_item_id'] = Variable<String>(menuItemId);
+    map['name'] = Variable<String>(name);
+    map['selection_type'] = Variable<String>(selectionType);
+    map['min_select'] = Variable<int>(minSelect);
+    map['max_select'] = Variable<int>(maxSelect);
+    map['is_required'] = Variable<bool>(isRequired);
+    map['display_order'] = Variable<int>(displayOrder);
+    map['is_active'] = Variable<bool>(isActive);
+    return map;
+  }
+
+  ModifiersCompanion toCompanion(bool nullToAbsent) {
+    return ModifiersCompanion(
+      id: Value(id),
+      organizationId: Value(organizationId),
+      deviceId: Value(deviceId),
+      localOperationId: Value(localOperationId),
+      revision: Value(revision),
+      clientUpdatedAt: Value(clientUpdatedAt),
+      serverUpdatedAt: serverUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverUpdatedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      restaurantId: Value(restaurantId),
+      branchId: branchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(branchId),
+      menuItemId: Value(menuItemId),
+      name: Value(name),
+      selectionType: Value(selectionType),
+      minSelect: Value(minSelect),
+      maxSelect: Value(maxSelect),
+      isRequired: Value(isRequired),
+      displayOrder: Value(displayOrder),
+      isActive: Value(isActive),
+    );
+  }
+
+  factory Modifier.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Modifier(
+      id: serializer.fromJson<String>(json['id']),
+      organizationId: serializer.fromJson<String>(json['organizationId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      localOperationId: serializer.fromJson<String>(json['localOperationId']),
+      revision: serializer.fromJson<int>(json['revision']),
+      clientUpdatedAt: serializer.fromJson<DateTime>(json['clientUpdatedAt']),
+      serverUpdatedAt: serializer.fromJson<DateTime?>(json['serverUpdatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      restaurantId: serializer.fromJson<String>(json['restaurantId']),
+      branchId: serializer.fromJson<String?>(json['branchId']),
+      menuItemId: serializer.fromJson<String>(json['menuItemId']),
+      name: serializer.fromJson<String>(json['name']),
+      selectionType: serializer.fromJson<String>(json['selectionType']),
+      minSelect: serializer.fromJson<int>(json['minSelect']),
+      maxSelect: serializer.fromJson<int>(json['maxSelect']),
+      isRequired: serializer.fromJson<bool>(json['isRequired']),
+      displayOrder: serializer.fromJson<int>(json['displayOrder']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'organizationId': serializer.toJson<String>(organizationId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'localOperationId': serializer.toJson<String>(localOperationId),
+      'revision': serializer.toJson<int>(revision),
+      'clientUpdatedAt': serializer.toJson<DateTime>(clientUpdatedAt),
+      'serverUpdatedAt': serializer.toJson<DateTime?>(serverUpdatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'restaurantId': serializer.toJson<String>(restaurantId),
+      'branchId': serializer.toJson<String?>(branchId),
+      'menuItemId': serializer.toJson<String>(menuItemId),
+      'name': serializer.toJson<String>(name),
+      'selectionType': serializer.toJson<String>(selectionType),
+      'minSelect': serializer.toJson<int>(minSelect),
+      'maxSelect': serializer.toJson<int>(maxSelect),
+      'isRequired': serializer.toJson<bool>(isRequired),
+      'displayOrder': serializer.toJson<int>(displayOrder),
+      'isActive': serializer.toJson<bool>(isActive),
+    };
+  }
+
+  Modifier copyWith({
+    String? id,
+    String? organizationId,
+    String? deviceId,
+    String? localOperationId,
+    int? revision,
+    DateTime? clientUpdatedAt,
+    Value<DateTime?> serverUpdatedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    String? restaurantId,
+    Value<String?> branchId = const Value.absent(),
+    String? menuItemId,
+    String? name,
+    String? selectionType,
+    int? minSelect,
+    int? maxSelect,
+    bool? isRequired,
+    int? displayOrder,
+    bool? isActive,
+  }) => Modifier(
+    id: id ?? this.id,
+    organizationId: organizationId ?? this.organizationId,
+    deviceId: deviceId ?? this.deviceId,
+    localOperationId: localOperationId ?? this.localOperationId,
+    revision: revision ?? this.revision,
+    clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+    serverUpdatedAt: serverUpdatedAt.present
+        ? serverUpdatedAt.value
+        : this.serverUpdatedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    restaurantId: restaurantId ?? this.restaurantId,
+    branchId: branchId.present ? branchId.value : this.branchId,
+    menuItemId: menuItemId ?? this.menuItemId,
+    name: name ?? this.name,
+    selectionType: selectionType ?? this.selectionType,
+    minSelect: minSelect ?? this.minSelect,
+    maxSelect: maxSelect ?? this.maxSelect,
+    isRequired: isRequired ?? this.isRequired,
+    displayOrder: displayOrder ?? this.displayOrder,
+    isActive: isActive ?? this.isActive,
+  );
+  Modifier copyWithCompanion(ModifiersCompanion data) {
+    return Modifier(
+      id: data.id.present ? data.id.value : this.id,
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      localOperationId: data.localOperationId.present
+          ? data.localOperationId.value
+          : this.localOperationId,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      clientUpdatedAt: data.clientUpdatedAt.present
+          ? data.clientUpdatedAt.value
+          : this.clientUpdatedAt,
+      serverUpdatedAt: data.serverUpdatedAt.present
+          ? data.serverUpdatedAt.value
+          : this.serverUpdatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      restaurantId: data.restaurantId.present
+          ? data.restaurantId.value
+          : this.restaurantId,
+      branchId: data.branchId.present ? data.branchId.value : this.branchId,
+      menuItemId: data.menuItemId.present
+          ? data.menuItemId.value
+          : this.menuItemId,
+      name: data.name.present ? data.name.value : this.name,
+      selectionType: data.selectionType.present
+          ? data.selectionType.value
+          : this.selectionType,
+      minSelect: data.minSelect.present ? data.minSelect.value : this.minSelect,
+      maxSelect: data.maxSelect.present ? data.maxSelect.value : this.maxSelect,
+      isRequired: data.isRequired.present
+          ? data.isRequired.value
+          : this.isRequired,
+      displayOrder: data.displayOrder.present
+          ? data.displayOrder.value
+          : this.displayOrder,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Modifier(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('menuItemId: $menuItemId, ')
+          ..write('name: $name, ')
+          ..write('selectionType: $selectionType, ')
+          ..write('minSelect: $minSelect, ')
+          ..write('maxSelect: $maxSelect, ')
+          ..write('isRequired: $isRequired, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    menuItemId,
+    name,
+    selectionType,
+    minSelect,
+    maxSelect,
+    isRequired,
+    displayOrder,
+    isActive,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Modifier &&
+          other.id == this.id &&
+          other.organizationId == this.organizationId &&
+          other.deviceId == this.deviceId &&
+          other.localOperationId == this.localOperationId &&
+          other.revision == this.revision &&
+          other.clientUpdatedAt == this.clientUpdatedAt &&
+          other.serverUpdatedAt == this.serverUpdatedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.restaurantId == this.restaurantId &&
+          other.branchId == this.branchId &&
+          other.menuItemId == this.menuItemId &&
+          other.name == this.name &&
+          other.selectionType == this.selectionType &&
+          other.minSelect == this.minSelect &&
+          other.maxSelect == this.maxSelect &&
+          other.isRequired == this.isRequired &&
+          other.displayOrder == this.displayOrder &&
+          other.isActive == this.isActive);
+}
+
+class ModifiersCompanion extends UpdateCompanion<Modifier> {
+  final Value<String> id;
+  final Value<String> organizationId;
+  final Value<String> deviceId;
+  final Value<String> localOperationId;
+  final Value<int> revision;
+  final Value<DateTime> clientUpdatedAt;
+  final Value<DateTime?> serverUpdatedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String> restaurantId;
+  final Value<String?> branchId;
+  final Value<String> menuItemId;
+  final Value<String> name;
+  final Value<String> selectionType;
+  final Value<int> minSelect;
+  final Value<int> maxSelect;
+  final Value<bool> isRequired;
+  final Value<int> displayOrder;
+  final Value<bool> isActive;
+  final Value<int> rowid;
+  const ModifiersCompanion({
+    this.id = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.localOperationId = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.clientUpdatedAt = const Value.absent(),
+    this.serverUpdatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.restaurantId = const Value.absent(),
+    this.branchId = const Value.absent(),
+    this.menuItemId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.selectionType = const Value.absent(),
+    this.minSelect = const Value.absent(),
+    this.maxSelect = const Value.absent(),
+    this.isRequired = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ModifiersCompanion.insert({
+    required String id,
+    required String organizationId,
+    required String deviceId,
+    required String localOperationId,
+    this.revision = const Value.absent(),
+    required DateTime clientUpdatedAt,
+    this.serverUpdatedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    required String restaurantId,
+    this.branchId = const Value.absent(),
+    required String menuItemId,
+    required String name,
+    required String selectionType,
+    this.minSelect = const Value.absent(),
+    this.maxSelect = const Value.absent(),
+    this.isRequired = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       organizationId = Value(organizationId),
+       deviceId = Value(deviceId),
+       localOperationId = Value(localOperationId),
+       clientUpdatedAt = Value(clientUpdatedAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       restaurantId = Value(restaurantId),
+       menuItemId = Value(menuItemId),
+       name = Value(name),
+       selectionType = Value(selectionType);
+  static Insertable<Modifier> custom({
+    Expression<String>? id,
+    Expression<String>? organizationId,
+    Expression<String>? deviceId,
+    Expression<String>? localOperationId,
+    Expression<int>? revision,
+    Expression<DateTime>? clientUpdatedAt,
+    Expression<DateTime>? serverUpdatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? restaurantId,
+    Expression<String>? branchId,
+    Expression<String>? menuItemId,
+    Expression<String>? name,
+    Expression<String>? selectionType,
+    Expression<int>? minSelect,
+    Expression<int>? maxSelect,
+    Expression<bool>? isRequired,
+    Expression<int>? displayOrder,
+    Expression<bool>? isActive,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (organizationId != null) 'organization_id': organizationId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (localOperationId != null) 'local_operation_id': localOperationId,
+      if (revision != null) 'revision': revision,
+      if (clientUpdatedAt != null) 'client_updated_at': clientUpdatedAt,
+      if (serverUpdatedAt != null) 'server_updated_at': serverUpdatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (restaurantId != null) 'restaurant_id': restaurantId,
+      if (branchId != null) 'branch_id': branchId,
+      if (menuItemId != null) 'menu_item_id': menuItemId,
+      if (name != null) 'name': name,
+      if (selectionType != null) 'selection_type': selectionType,
+      if (minSelect != null) 'min_select': minSelect,
+      if (maxSelect != null) 'max_select': maxSelect,
+      if (isRequired != null) 'is_required': isRequired,
+      if (displayOrder != null) 'display_order': displayOrder,
+      if (isActive != null) 'is_active': isActive,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ModifiersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? organizationId,
+    Value<String>? deviceId,
+    Value<String>? localOperationId,
+    Value<int>? revision,
+    Value<DateTime>? clientUpdatedAt,
+    Value<DateTime?>? serverUpdatedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String>? restaurantId,
+    Value<String?>? branchId,
+    Value<String>? menuItemId,
+    Value<String>? name,
+    Value<String>? selectionType,
+    Value<int>? minSelect,
+    Value<int>? maxSelect,
+    Value<bool>? isRequired,
+    Value<int>? displayOrder,
+    Value<bool>? isActive,
+    Value<int>? rowid,
+  }) {
+    return ModifiersCompanion(
+      id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
+      deviceId: deviceId ?? this.deviceId,
+      localOperationId: localOperationId ?? this.localOperationId,
+      revision: revision ?? this.revision,
+      clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+      serverUpdatedAt: serverUpdatedAt ?? this.serverUpdatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      restaurantId: restaurantId ?? this.restaurantId,
+      branchId: branchId ?? this.branchId,
+      menuItemId: menuItemId ?? this.menuItemId,
+      name: name ?? this.name,
+      selectionType: selectionType ?? this.selectionType,
+      minSelect: minSelect ?? this.minSelect,
+      maxSelect: maxSelect ?? this.maxSelect,
+      isRequired: isRequired ?? this.isRequired,
+      displayOrder: displayOrder ?? this.displayOrder,
+      isActive: isActive ?? this.isActive,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (localOperationId.present) {
+      map['local_operation_id'] = Variable<String>(localOperationId.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (clientUpdatedAt.present) {
+      map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt.value);
+    }
+    if (serverUpdatedAt.present) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (restaurantId.present) {
+      map['restaurant_id'] = Variable<String>(restaurantId.value);
+    }
+    if (branchId.present) {
+      map['branch_id'] = Variable<String>(branchId.value);
+    }
+    if (menuItemId.present) {
+      map['menu_item_id'] = Variable<String>(menuItemId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (selectionType.present) {
+      map['selection_type'] = Variable<String>(selectionType.value);
+    }
+    if (minSelect.present) {
+      map['min_select'] = Variable<int>(minSelect.value);
+    }
+    if (maxSelect.present) {
+      map['max_select'] = Variable<int>(maxSelect.value);
+    }
+    if (isRequired.present) {
+      map['is_required'] = Variable<bool>(isRequired.value);
+    }
+    if (displayOrder.present) {
+      map['display_order'] = Variable<int>(displayOrder.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ModifiersCompanion(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('menuItemId: $menuItemId, ')
+          ..write('name: $name, ')
+          ..write('selectionType: $selectionType, ')
+          ..write('minSelect: $minSelect, ')
+          ..write('maxSelect: $maxSelect, ')
+          ..write('isRequired: $isRequired, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ModifierOptionsTable extends ModifierOptions
+    with TableInfo<$ModifierOptionsTable, ModifierOption> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ModifierOptionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _organizationIdMeta = const VerificationMeta(
+    'organizationId',
+  );
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+    'organization_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localOperationIdMeta = const VerificationMeta(
+    'localOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> localOperationId = GeneratedColumn<String>(
+    'local_operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _clientUpdatedAtMeta = const VerificationMeta(
+    'clientUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> clientUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'client_updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _serverUpdatedAtMeta = const VerificationMeta(
+    'serverUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> serverUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'server_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _restaurantIdMeta = const VerificationMeta(
+    'restaurantId',
+  );
+  @override
+  late final GeneratedColumn<String> restaurantId = GeneratedColumn<String>(
+    'restaurant_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchIdMeta = const VerificationMeta(
+    'branchId',
+  );
+  @override
+  late final GeneratedColumn<String> branchId = GeneratedColumn<String>(
+    'branch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _modifierIdMeta = const VerificationMeta(
+    'modifierId',
+  );
+  @override
+  late final GeneratedColumn<String> modifierId = GeneratedColumn<String>(
+    'modifier_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES modifiers (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _priceDeltaMinorMeta = const VerificationMeta(
+    'priceDeltaMinor',
+  );
+  @override
+  late final GeneratedColumn<int> priceDeltaMinor = GeneratedColumn<int>(
+    'price_delta_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _displayOrderMeta = const VerificationMeta(
+    'displayOrder',
+  );
+  @override
+  late final GeneratedColumn<int> displayOrder = GeneratedColumn<int>(
+    'display_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isActiveMeta = const VerificationMeta(
+    'isActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    modifierId,
+    name,
+    priceDeltaMinor,
+    displayOrder,
+    isActive,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'modifier_options';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ModifierOption> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('organization_id')) {
+      context.handle(
+        _organizationIdMeta,
+        organizationId.isAcceptableOrUnknown(
+          data['organization_id']!,
+          _organizationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_organizationIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('local_operation_id')) {
+      context.handle(
+        _localOperationIdMeta,
+        localOperationId.isAcceptableOrUnknown(
+          data['local_operation_id']!,
+          _localOperationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localOperationIdMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('client_updated_at')) {
+      context.handle(
+        _clientUpdatedAtMeta,
+        clientUpdatedAt.isAcceptableOrUnknown(
+          data['client_updated_at']!,
+          _clientUpdatedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientUpdatedAtMeta);
+    }
+    if (data.containsKey('server_updated_at')) {
+      context.handle(
+        _serverUpdatedAtMeta,
+        serverUpdatedAt.isAcceptableOrUnknown(
+          data['server_updated_at']!,
+          _serverUpdatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('restaurant_id')) {
+      context.handle(
+        _restaurantIdMeta,
+        restaurantId.isAcceptableOrUnknown(
+          data['restaurant_id']!,
+          _restaurantIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_restaurantIdMeta);
+    }
+    if (data.containsKey('branch_id')) {
+      context.handle(
+        _branchIdMeta,
+        branchId.isAcceptableOrUnknown(data['branch_id']!, _branchIdMeta),
+      );
+    }
+    if (data.containsKey('modifier_id')) {
+      context.handle(
+        _modifierIdMeta,
+        modifierId.isAcceptableOrUnknown(data['modifier_id']!, _modifierIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modifierIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('price_delta_minor')) {
+      context.handle(
+        _priceDeltaMinorMeta,
+        priceDeltaMinor.isAcceptableOrUnknown(
+          data['price_delta_minor']!,
+          _priceDeltaMinorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('display_order')) {
+      context.handle(
+        _displayOrderMeta,
+        displayOrder.isAcceptableOrUnknown(
+          data['display_order']!,
+          _displayOrderMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ModifierOption map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ModifierOption(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      organizationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}organization_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      localOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_operation_id'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      clientUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}client_updated_at'],
+      )!,
+      serverUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}server_updated_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      restaurantId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}restaurant_id'],
+      )!,
+      branchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_id'],
+      ),
+      modifierId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}modifier_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      priceDeltaMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}price_delta_minor'],
+      )!,
+      displayOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}display_order'],
+      )!,
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+    );
+  }
+
+  @override
+  $ModifierOptionsTable createAlias(String alias) {
+    return $ModifierOptionsTable(attachedDatabase, alias);
+  }
+}
+
+class ModifierOption extends DataClass implements Insertable<ModifierOption> {
+  /// Client-generated UUID primary key (rows exist before any server round-trip).
+  final String id;
+
+  /// Tenant isolation boundary (DECISION D-001).
+  final String organizationId;
+
+  /// Originating device identity (DECISION D-022).
+  final String deviceId;
+
+  /// Client-generated per-operation id; `(deviceId, localOperationId)` is the
+  /// idempotency key (DECISION D-022).
+  final String localOperationId;
+
+  /// Monotonic per-entity version; optimistic-concurrency token.
+  final int revision;
+
+  /// Wall-clock time the change was made on the device (advisory, not trusted).
+  final DateTime clientUpdatedAt;
+
+  /// Authoritative time set by the server on accept; null until first accepted.
+  final DateTime? serverUpdatedAt;
+
+  /// Standard audit timestamps.
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  /// Tombstone marker (DECISION D-020). Null = live; non-null = soft-deleted.
+  final DateTime? deletedAt;
+  final String restaurantId;
+  final String? branchId;
+  final String modifierId;
+  final String name;
+
+  /// Price delta in integer MINOR units (DECISION D-007).
+  final int priceDeltaMinor;
+  final int displayOrder;
+  final bool isActive;
+  const ModifierOption({
+    required this.id,
+    required this.organizationId,
+    required this.deviceId,
+    required this.localOperationId,
+    required this.revision,
+    required this.clientUpdatedAt,
+    this.serverUpdatedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.restaurantId,
+    this.branchId,
+    required this.modifierId,
+    required this.name,
+    required this.priceDeltaMinor,
+    required this.displayOrder,
+    required this.isActive,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['organization_id'] = Variable<String>(organizationId);
+    map['device_id'] = Variable<String>(deviceId);
+    map['local_operation_id'] = Variable<String>(localOperationId);
+    map['revision'] = Variable<int>(revision);
+    map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt);
+    if (!nullToAbsent || serverUpdatedAt != null) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['restaurant_id'] = Variable<String>(restaurantId);
+    if (!nullToAbsent || branchId != null) {
+      map['branch_id'] = Variable<String>(branchId);
+    }
+    map['modifier_id'] = Variable<String>(modifierId);
+    map['name'] = Variable<String>(name);
+    map['price_delta_minor'] = Variable<int>(priceDeltaMinor);
+    map['display_order'] = Variable<int>(displayOrder);
+    map['is_active'] = Variable<bool>(isActive);
+    return map;
+  }
+
+  ModifierOptionsCompanion toCompanion(bool nullToAbsent) {
+    return ModifierOptionsCompanion(
+      id: Value(id),
+      organizationId: Value(organizationId),
+      deviceId: Value(deviceId),
+      localOperationId: Value(localOperationId),
+      revision: Value(revision),
+      clientUpdatedAt: Value(clientUpdatedAt),
+      serverUpdatedAt: serverUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverUpdatedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      restaurantId: Value(restaurantId),
+      branchId: branchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(branchId),
+      modifierId: Value(modifierId),
+      name: Value(name),
+      priceDeltaMinor: Value(priceDeltaMinor),
+      displayOrder: Value(displayOrder),
+      isActive: Value(isActive),
+    );
+  }
+
+  factory ModifierOption.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ModifierOption(
+      id: serializer.fromJson<String>(json['id']),
+      organizationId: serializer.fromJson<String>(json['organizationId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      localOperationId: serializer.fromJson<String>(json['localOperationId']),
+      revision: serializer.fromJson<int>(json['revision']),
+      clientUpdatedAt: serializer.fromJson<DateTime>(json['clientUpdatedAt']),
+      serverUpdatedAt: serializer.fromJson<DateTime?>(json['serverUpdatedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      restaurantId: serializer.fromJson<String>(json['restaurantId']),
+      branchId: serializer.fromJson<String?>(json['branchId']),
+      modifierId: serializer.fromJson<String>(json['modifierId']),
+      name: serializer.fromJson<String>(json['name']),
+      priceDeltaMinor: serializer.fromJson<int>(json['priceDeltaMinor']),
+      displayOrder: serializer.fromJson<int>(json['displayOrder']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'organizationId': serializer.toJson<String>(organizationId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'localOperationId': serializer.toJson<String>(localOperationId),
+      'revision': serializer.toJson<int>(revision),
+      'clientUpdatedAt': serializer.toJson<DateTime>(clientUpdatedAt),
+      'serverUpdatedAt': serializer.toJson<DateTime?>(serverUpdatedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'restaurantId': serializer.toJson<String>(restaurantId),
+      'branchId': serializer.toJson<String?>(branchId),
+      'modifierId': serializer.toJson<String>(modifierId),
+      'name': serializer.toJson<String>(name),
+      'priceDeltaMinor': serializer.toJson<int>(priceDeltaMinor),
+      'displayOrder': serializer.toJson<int>(displayOrder),
+      'isActive': serializer.toJson<bool>(isActive),
+    };
+  }
+
+  ModifierOption copyWith({
+    String? id,
+    String? organizationId,
+    String? deviceId,
+    String? localOperationId,
+    int? revision,
+    DateTime? clientUpdatedAt,
+    Value<DateTime?> serverUpdatedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    String? restaurantId,
+    Value<String?> branchId = const Value.absent(),
+    String? modifierId,
+    String? name,
+    int? priceDeltaMinor,
+    int? displayOrder,
+    bool? isActive,
+  }) => ModifierOption(
+    id: id ?? this.id,
+    organizationId: organizationId ?? this.organizationId,
+    deviceId: deviceId ?? this.deviceId,
+    localOperationId: localOperationId ?? this.localOperationId,
+    revision: revision ?? this.revision,
+    clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+    serverUpdatedAt: serverUpdatedAt.present
+        ? serverUpdatedAt.value
+        : this.serverUpdatedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    restaurantId: restaurantId ?? this.restaurantId,
+    branchId: branchId.present ? branchId.value : this.branchId,
+    modifierId: modifierId ?? this.modifierId,
+    name: name ?? this.name,
+    priceDeltaMinor: priceDeltaMinor ?? this.priceDeltaMinor,
+    displayOrder: displayOrder ?? this.displayOrder,
+    isActive: isActive ?? this.isActive,
+  );
+  ModifierOption copyWithCompanion(ModifierOptionsCompanion data) {
+    return ModifierOption(
+      id: data.id.present ? data.id.value : this.id,
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      localOperationId: data.localOperationId.present
+          ? data.localOperationId.value
+          : this.localOperationId,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      clientUpdatedAt: data.clientUpdatedAt.present
+          ? data.clientUpdatedAt.value
+          : this.clientUpdatedAt,
+      serverUpdatedAt: data.serverUpdatedAt.present
+          ? data.serverUpdatedAt.value
+          : this.serverUpdatedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      restaurantId: data.restaurantId.present
+          ? data.restaurantId.value
+          : this.restaurantId,
+      branchId: data.branchId.present ? data.branchId.value : this.branchId,
+      modifierId: data.modifierId.present
+          ? data.modifierId.value
+          : this.modifierId,
+      name: data.name.present ? data.name.value : this.name,
+      priceDeltaMinor: data.priceDeltaMinor.present
+          ? data.priceDeltaMinor.value
+          : this.priceDeltaMinor,
+      displayOrder: data.displayOrder.present
+          ? data.displayOrder.value
+          : this.displayOrder,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ModifierOption(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('modifierId: $modifierId, ')
+          ..write('name: $name, ')
+          ..write('priceDeltaMinor: $priceDeltaMinor, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    organizationId,
+    deviceId,
+    localOperationId,
+    revision,
+    clientUpdatedAt,
+    serverUpdatedAt,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    restaurantId,
+    branchId,
+    modifierId,
+    name,
+    priceDeltaMinor,
+    displayOrder,
+    isActive,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ModifierOption &&
+          other.id == this.id &&
+          other.organizationId == this.organizationId &&
+          other.deviceId == this.deviceId &&
+          other.localOperationId == this.localOperationId &&
+          other.revision == this.revision &&
+          other.clientUpdatedAt == this.clientUpdatedAt &&
+          other.serverUpdatedAt == this.serverUpdatedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.restaurantId == this.restaurantId &&
+          other.branchId == this.branchId &&
+          other.modifierId == this.modifierId &&
+          other.name == this.name &&
+          other.priceDeltaMinor == this.priceDeltaMinor &&
+          other.displayOrder == this.displayOrder &&
+          other.isActive == this.isActive);
+}
+
+class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
+  final Value<String> id;
+  final Value<String> organizationId;
+  final Value<String> deviceId;
+  final Value<String> localOperationId;
+  final Value<int> revision;
+  final Value<DateTime> clientUpdatedAt;
+  final Value<DateTime?> serverUpdatedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String> restaurantId;
+  final Value<String?> branchId;
+  final Value<String> modifierId;
+  final Value<String> name;
+  final Value<int> priceDeltaMinor;
+  final Value<int> displayOrder;
+  final Value<bool> isActive;
+  final Value<int> rowid;
+  const ModifierOptionsCompanion({
+    this.id = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.localOperationId = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.clientUpdatedAt = const Value.absent(),
+    this.serverUpdatedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.restaurantId = const Value.absent(),
+    this.branchId = const Value.absent(),
+    this.modifierId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.priceDeltaMinor = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ModifierOptionsCompanion.insert({
+    required String id,
+    required String organizationId,
+    required String deviceId,
+    required String localOperationId,
+    this.revision = const Value.absent(),
+    required DateTime clientUpdatedAt,
+    this.serverUpdatedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    required String restaurantId,
+    this.branchId = const Value.absent(),
+    required String modifierId,
+    required String name,
+    this.priceDeltaMinor = const Value.absent(),
+    this.displayOrder = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       organizationId = Value(organizationId),
+       deviceId = Value(deviceId),
+       localOperationId = Value(localOperationId),
+       clientUpdatedAt = Value(clientUpdatedAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       restaurantId = Value(restaurantId),
+       modifierId = Value(modifierId),
+       name = Value(name);
+  static Insertable<ModifierOption> custom({
+    Expression<String>? id,
+    Expression<String>? organizationId,
+    Expression<String>? deviceId,
+    Expression<String>? localOperationId,
+    Expression<int>? revision,
+    Expression<DateTime>? clientUpdatedAt,
+    Expression<DateTime>? serverUpdatedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? restaurantId,
+    Expression<String>? branchId,
+    Expression<String>? modifierId,
+    Expression<String>? name,
+    Expression<int>? priceDeltaMinor,
+    Expression<int>? displayOrder,
+    Expression<bool>? isActive,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (organizationId != null) 'organization_id': organizationId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (localOperationId != null) 'local_operation_id': localOperationId,
+      if (revision != null) 'revision': revision,
+      if (clientUpdatedAt != null) 'client_updated_at': clientUpdatedAt,
+      if (serverUpdatedAt != null) 'server_updated_at': serverUpdatedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (restaurantId != null) 'restaurant_id': restaurantId,
+      if (branchId != null) 'branch_id': branchId,
+      if (modifierId != null) 'modifier_id': modifierId,
+      if (name != null) 'name': name,
+      if (priceDeltaMinor != null) 'price_delta_minor': priceDeltaMinor,
+      if (displayOrder != null) 'display_order': displayOrder,
+      if (isActive != null) 'is_active': isActive,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ModifierOptionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? organizationId,
+    Value<String>? deviceId,
+    Value<String>? localOperationId,
+    Value<int>? revision,
+    Value<DateTime>? clientUpdatedAt,
+    Value<DateTime?>? serverUpdatedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String>? restaurantId,
+    Value<String?>? branchId,
+    Value<String>? modifierId,
+    Value<String>? name,
+    Value<int>? priceDeltaMinor,
+    Value<int>? displayOrder,
+    Value<bool>? isActive,
+    Value<int>? rowid,
+  }) {
+    return ModifierOptionsCompanion(
+      id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
+      deviceId: deviceId ?? this.deviceId,
+      localOperationId: localOperationId ?? this.localOperationId,
+      revision: revision ?? this.revision,
+      clientUpdatedAt: clientUpdatedAt ?? this.clientUpdatedAt,
+      serverUpdatedAt: serverUpdatedAt ?? this.serverUpdatedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      restaurantId: restaurantId ?? this.restaurantId,
+      branchId: branchId ?? this.branchId,
+      modifierId: modifierId ?? this.modifierId,
+      name: name ?? this.name,
+      priceDeltaMinor: priceDeltaMinor ?? this.priceDeltaMinor,
+      displayOrder: displayOrder ?? this.displayOrder,
+      isActive: isActive ?? this.isActive,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (localOperationId.present) {
+      map['local_operation_id'] = Variable<String>(localOperationId.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (clientUpdatedAt.present) {
+      map['client_updated_at'] = Variable<DateTime>(clientUpdatedAt.value);
+    }
+    if (serverUpdatedAt.present) {
+      map['server_updated_at'] = Variable<DateTime>(serverUpdatedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (restaurantId.present) {
+      map['restaurant_id'] = Variable<String>(restaurantId.value);
+    }
+    if (branchId.present) {
+      map['branch_id'] = Variable<String>(branchId.value);
+    }
+    if (modifierId.present) {
+      map['modifier_id'] = Variable<String>(modifierId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (priceDeltaMinor.present) {
+      map['price_delta_minor'] = Variable<int>(priceDeltaMinor.value);
+    }
+    if (displayOrder.present) {
+      map['display_order'] = Variable<int>(displayOrder.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ModifierOptionsCompanion(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('revision: $revision, ')
+          ..write('clientUpdatedAt: $clientUpdatedAt, ')
+          ..write('serverUpdatedAt: $serverUpdatedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('restaurantId: $restaurantId, ')
+          ..write('branchId: $branchId, ')
+          ..write('modifierId: $modifierId, ')
+          ..write('name: $name, ')
+          ..write('priceDeltaMinor: $priceDeltaMinor, ')
+          ..write('displayOrder: $displayOrder, ')
+          ..write('isActive: $isActive, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LocalDatabase extends GeneratedDatabase {
   _$LocalDatabase(QueryExecutor e) : super(e);
   $LocalDatabaseManager get managers => $LocalDatabaseManager(this);
@@ -1544,6 +7688,14 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final $ProcessedPullLogTable processedPullLog = $ProcessedPullLogTable(
     this,
   );
+  late final $MenuCategoriesTable menuCategories = $MenuCategoriesTable(this);
+  late final $MenuItemsTable menuItems = $MenuItemsTable(this);
+  late final $ItemSizesTable itemSizes = $ItemSizesTable(this);
+  late final $ItemVariantsTable itemVariants = $ItemVariantsTable(this);
+  late final $ModifiersTable modifiers = $ModifiersTable(this);
+  late final $ModifierOptionsTable modifierOptions = $ModifierOptionsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1551,6 +7703,12 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     outboxOperations,
     processedPullLog,
+    menuCategories,
+    menuItems,
+    itemSizes,
+    itemVariants,
+    modifiers,
+    modifierOptions,
   ];
 }
 
@@ -2267,6 +8425,3805 @@ typedef $$ProcessedPullLogTableProcessedTableManager =
       ProcessedPullLogData,
       PrefetchHooks Function()
     >;
+typedef $$MenuCategoriesTableCreateCompanionBuilder =
+    MenuCategoriesCompanion Function({
+      required String id,
+      required String organizationId,
+      required String deviceId,
+      required String localOperationId,
+      Value<int> revision,
+      required DateTime clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      required String restaurantId,
+      Value<String?> branchId,
+      required String name,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+typedef $$MenuCategoriesTableUpdateCompanionBuilder =
+    MenuCategoriesCompanion Function({
+      Value<String> id,
+      Value<String> organizationId,
+      Value<String> deviceId,
+      Value<String> localOperationId,
+      Value<int> revision,
+      Value<DateTime> clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> restaurantId,
+      Value<String?> branchId,
+      Value<String> name,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+
+final class $$MenuCategoriesTableReferences
+    extends
+        BaseReferences<_$LocalDatabase, $MenuCategoriesTable, MenuCategory> {
+  $$MenuCategoriesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<$MenuItemsTable, List<MenuItem>>
+  _menuItemsRefsTable(_$LocalDatabase db) => MultiTypedResultKey.fromTable(
+    db.menuItems,
+    aliasName: $_aliasNameGenerator(
+      db.menuCategories.id,
+      db.menuItems.menuCategoryId,
+    ),
+  );
+
+  $$MenuItemsTableProcessedTableManager get menuItemsRefs {
+    final manager = $$MenuItemsTableTableManager(
+      $_db,
+      $_db.menuItems,
+    ).filter((f) => f.menuCategoryId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_menuItemsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$MenuCategoriesTableFilterComposer
+    extends Composer<_$LocalDatabase, $MenuCategoriesTable> {
+  $$MenuCategoriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> menuItemsRefs(
+    Expression<bool> Function($$MenuItemsTableFilterComposer f) f,
+  ) {
+    final $$MenuItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.menuCategoryId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$MenuCategoriesTableOrderingComposer
+    extends Composer<_$LocalDatabase, $MenuCategoriesTable> {
+  $$MenuCategoriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MenuCategoriesTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $MenuCategoriesTable> {
+  $$MenuCategoriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchId =>
+      $composableBuilder(column: $table.branchId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  Expression<T> menuItemsRefs<T extends Object>(
+    Expression<T> Function($$MenuItemsTableAnnotationComposer a) f,
+  ) {
+    final $$MenuItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.menuCategoryId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$MenuCategoriesTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $MenuCategoriesTable,
+          MenuCategory,
+          $$MenuCategoriesTableFilterComposer,
+          $$MenuCategoriesTableOrderingComposer,
+          $$MenuCategoriesTableAnnotationComposer,
+          $$MenuCategoriesTableCreateCompanionBuilder,
+          $$MenuCategoriesTableUpdateCompanionBuilder,
+          (MenuCategory, $$MenuCategoriesTableReferences),
+          MenuCategory,
+          PrefetchHooks Function({bool menuItemsRefs})
+        > {
+  $$MenuCategoriesTableTableManager(
+    _$LocalDatabase db,
+    $MenuCategoriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MenuCategoriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MenuCategoriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MenuCategoriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> organizationId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String> localOperationId = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> clientUpdatedAt = const Value.absent(),
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> restaurantId = const Value.absent(),
+                Value<String?> branchId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MenuCategoriesCompanion(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                name: name,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String organizationId,
+                required String deviceId,
+                required String localOperationId,
+                Value<int> revision = const Value.absent(),
+                required DateTime clientUpdatedAt,
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                required String restaurantId,
+                Value<String?> branchId = const Value.absent(),
+                required String name,
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MenuCategoriesCompanion.insert(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                name: name,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$MenuCategoriesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({menuItemsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (menuItemsRefs) db.menuItems],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (menuItemsRefs)
+                    await $_getPrefetchedData<
+                      MenuCategory,
+                      $MenuCategoriesTable,
+                      MenuItem
+                    >(
+                      currentTable: table,
+                      referencedTable: $$MenuCategoriesTableReferences
+                          ._menuItemsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$MenuCategoriesTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).menuItemsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where(
+                            (e) => e.menuCategoryId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$MenuCategoriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $MenuCategoriesTable,
+      MenuCategory,
+      $$MenuCategoriesTableFilterComposer,
+      $$MenuCategoriesTableOrderingComposer,
+      $$MenuCategoriesTableAnnotationComposer,
+      $$MenuCategoriesTableCreateCompanionBuilder,
+      $$MenuCategoriesTableUpdateCompanionBuilder,
+      (MenuCategory, $$MenuCategoriesTableReferences),
+      MenuCategory,
+      PrefetchHooks Function({bool menuItemsRefs})
+    >;
+typedef $$MenuItemsTableCreateCompanionBuilder =
+    MenuItemsCompanion Function({
+      required String id,
+      required String organizationId,
+      required String deviceId,
+      required String localOperationId,
+      Value<int> revision,
+      required DateTime clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      required String restaurantId,
+      Value<String?> branchId,
+      required String menuCategoryId,
+      required String name,
+      Value<String?> description,
+      required int basePriceMinor,
+      required String currencyCode,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+typedef $$MenuItemsTableUpdateCompanionBuilder =
+    MenuItemsCompanion Function({
+      Value<String> id,
+      Value<String> organizationId,
+      Value<String> deviceId,
+      Value<String> localOperationId,
+      Value<int> revision,
+      Value<DateTime> clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> restaurantId,
+      Value<String?> branchId,
+      Value<String> menuCategoryId,
+      Value<String> name,
+      Value<String?> description,
+      Value<int> basePriceMinor,
+      Value<String> currencyCode,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+
+final class $$MenuItemsTableReferences
+    extends BaseReferences<_$LocalDatabase, $MenuItemsTable, MenuItem> {
+  $$MenuItemsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $MenuCategoriesTable _menuCategoryIdTable(_$LocalDatabase db) =>
+      db.menuCategories.createAlias(
+        $_aliasNameGenerator(db.menuItems.menuCategoryId, db.menuCategories.id),
+      );
+
+  $$MenuCategoriesTableProcessedTableManager get menuCategoryId {
+    final $_column = $_itemColumn<String>('menu_category_id')!;
+
+    final manager = $$MenuCategoriesTableTableManager(
+      $_db,
+      $_db.menuCategories,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_menuCategoryIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$ItemSizesTable, List<ItemSize>>
+  _itemSizesRefsTable(_$LocalDatabase db) => MultiTypedResultKey.fromTable(
+    db.itemSizes,
+    aliasName: $_aliasNameGenerator(db.menuItems.id, db.itemSizes.menuItemId),
+  );
+
+  $$ItemSizesTableProcessedTableManager get itemSizesRefs {
+    final manager = $$ItemSizesTableTableManager(
+      $_db,
+      $_db.itemSizes,
+    ).filter((f) => f.menuItemId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_itemSizesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ItemVariantsTable, List<ItemVariant>>
+  _itemVariantsRefsTable(_$LocalDatabase db) => MultiTypedResultKey.fromTable(
+    db.itemVariants,
+    aliasName: $_aliasNameGenerator(
+      db.menuItems.id,
+      db.itemVariants.menuItemId,
+    ),
+  );
+
+  $$ItemVariantsTableProcessedTableManager get itemVariantsRefs {
+    final manager = $$ItemVariantsTableTableManager(
+      $_db,
+      $_db.itemVariants,
+    ).filter((f) => f.menuItemId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_itemVariantsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ModifiersTable, List<Modifier>>
+  _modifiersRefsTable(_$LocalDatabase db) => MultiTypedResultKey.fromTable(
+    db.modifiers,
+    aliasName: $_aliasNameGenerator(db.menuItems.id, db.modifiers.menuItemId),
+  );
+
+  $$ModifiersTableProcessedTableManager get modifiersRefs {
+    final manager = $$ModifiersTableTableManager(
+      $_db,
+      $_db.modifiers,
+    ).filter((f) => f.menuItemId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_modifiersRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$MenuItemsTableFilterComposer
+    extends Composer<_$LocalDatabase, $MenuItemsTable> {
+  $$MenuItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get basePriceMinor => $composableBuilder(
+    column: $table.basePriceMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currencyCode => $composableBuilder(
+    column: $table.currencyCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MenuCategoriesTableFilterComposer get menuCategoryId {
+    final $$MenuCategoriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuCategoryId,
+      referencedTable: $db.menuCategories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuCategoriesTableFilterComposer(
+            $db: $db,
+            $table: $db.menuCategories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> itemSizesRefs(
+    Expression<bool> Function($$ItemSizesTableFilterComposer f) f,
+  ) {
+    final $$ItemSizesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.itemSizes,
+      getReferencedColumn: (t) => t.menuItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ItemSizesTableFilterComposer(
+            $db: $db,
+            $table: $db.itemSizes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> itemVariantsRefs(
+    Expression<bool> Function($$ItemVariantsTableFilterComposer f) f,
+  ) {
+    final $$ItemVariantsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.itemVariants,
+      getReferencedColumn: (t) => t.menuItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ItemVariantsTableFilterComposer(
+            $db: $db,
+            $table: $db.itemVariants,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> modifiersRefs(
+    Expression<bool> Function($$ModifiersTableFilterComposer f) f,
+  ) {
+    final $$ModifiersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.modifiers,
+      getReferencedColumn: (t) => t.menuItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ModifiersTableFilterComposer(
+            $db: $db,
+            $table: $db.modifiers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$MenuItemsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $MenuItemsTable> {
+  $$MenuItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get basePriceMinor => $composableBuilder(
+    column: $table.basePriceMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currencyCode => $composableBuilder(
+    column: $table.currencyCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MenuCategoriesTableOrderingComposer get menuCategoryId {
+    final $$MenuCategoriesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuCategoryId,
+      referencedTable: $db.menuCategories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuCategoriesTableOrderingComposer(
+            $db: $db,
+            $table: $db.menuCategories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$MenuItemsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $MenuItemsTable> {
+  $$MenuItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchId =>
+      $composableBuilder(column: $table.branchId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get basePriceMinor => $composableBuilder(
+    column: $table.basePriceMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currencyCode => $composableBuilder(
+    column: $table.currencyCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  $$MenuCategoriesTableAnnotationComposer get menuCategoryId {
+    final $$MenuCategoriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuCategoryId,
+      referencedTable: $db.menuCategories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuCategoriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.menuCategories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> itemSizesRefs<T extends Object>(
+    Expression<T> Function($$ItemSizesTableAnnotationComposer a) f,
+  ) {
+    final $$ItemSizesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.itemSizes,
+      getReferencedColumn: (t) => t.menuItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ItemSizesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.itemSizes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> itemVariantsRefs<T extends Object>(
+    Expression<T> Function($$ItemVariantsTableAnnotationComposer a) f,
+  ) {
+    final $$ItemVariantsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.itemVariants,
+      getReferencedColumn: (t) => t.menuItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ItemVariantsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.itemVariants,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> modifiersRefs<T extends Object>(
+    Expression<T> Function($$ModifiersTableAnnotationComposer a) f,
+  ) {
+    final $$ModifiersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.modifiers,
+      getReferencedColumn: (t) => t.menuItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ModifiersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.modifiers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$MenuItemsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $MenuItemsTable,
+          MenuItem,
+          $$MenuItemsTableFilterComposer,
+          $$MenuItemsTableOrderingComposer,
+          $$MenuItemsTableAnnotationComposer,
+          $$MenuItemsTableCreateCompanionBuilder,
+          $$MenuItemsTableUpdateCompanionBuilder,
+          (MenuItem, $$MenuItemsTableReferences),
+          MenuItem,
+          PrefetchHooks Function({
+            bool menuCategoryId,
+            bool itemSizesRefs,
+            bool itemVariantsRefs,
+            bool modifiersRefs,
+          })
+        > {
+  $$MenuItemsTableTableManager(_$LocalDatabase db, $MenuItemsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MenuItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MenuItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MenuItemsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> organizationId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String> localOperationId = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> clientUpdatedAt = const Value.absent(),
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> restaurantId = const Value.absent(),
+                Value<String?> branchId = const Value.absent(),
+                Value<String> menuCategoryId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<int> basePriceMinor = const Value.absent(),
+                Value<String> currencyCode = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MenuItemsCompanion(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                menuCategoryId: menuCategoryId,
+                name: name,
+                description: description,
+                basePriceMinor: basePriceMinor,
+                currencyCode: currencyCode,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String organizationId,
+                required String deviceId,
+                required String localOperationId,
+                Value<int> revision = const Value.absent(),
+                required DateTime clientUpdatedAt,
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                required String restaurantId,
+                Value<String?> branchId = const Value.absent(),
+                required String menuCategoryId,
+                required String name,
+                Value<String?> description = const Value.absent(),
+                required int basePriceMinor,
+                required String currencyCode,
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MenuItemsCompanion.insert(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                menuCategoryId: menuCategoryId,
+                name: name,
+                description: description,
+                basePriceMinor: basePriceMinor,
+                currencyCode: currencyCode,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$MenuItemsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                menuCategoryId = false,
+                itemSizesRefs = false,
+                itemVariantsRefs = false,
+                modifiersRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (itemSizesRefs) db.itemSizes,
+                    if (itemVariantsRefs) db.itemVariants,
+                    if (modifiersRefs) db.modifiers,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (menuCategoryId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.menuCategoryId,
+                                    referencedTable: $$MenuItemsTableReferences
+                                        ._menuCategoryIdTable(db),
+                                    referencedColumn: $$MenuItemsTableReferences
+                                        ._menuCategoryIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (itemSizesRefs)
+                        await $_getPrefetchedData<
+                          MenuItem,
+                          $MenuItemsTable,
+                          ItemSize
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MenuItemsTableReferences
+                              ._itemSizesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MenuItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).itemSizesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.menuItemId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (itemVariantsRefs)
+                        await $_getPrefetchedData<
+                          MenuItem,
+                          $MenuItemsTable,
+                          ItemVariant
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MenuItemsTableReferences
+                              ._itemVariantsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MenuItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).itemVariantsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.menuItemId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (modifiersRefs)
+                        await $_getPrefetchedData<
+                          MenuItem,
+                          $MenuItemsTable,
+                          Modifier
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MenuItemsTableReferences
+                              ._modifiersRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MenuItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).modifiersRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.menuItemId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$MenuItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $MenuItemsTable,
+      MenuItem,
+      $$MenuItemsTableFilterComposer,
+      $$MenuItemsTableOrderingComposer,
+      $$MenuItemsTableAnnotationComposer,
+      $$MenuItemsTableCreateCompanionBuilder,
+      $$MenuItemsTableUpdateCompanionBuilder,
+      (MenuItem, $$MenuItemsTableReferences),
+      MenuItem,
+      PrefetchHooks Function({
+        bool menuCategoryId,
+        bool itemSizesRefs,
+        bool itemVariantsRefs,
+        bool modifiersRefs,
+      })
+    >;
+typedef $$ItemSizesTableCreateCompanionBuilder =
+    ItemSizesCompanion Function({
+      required String id,
+      required String organizationId,
+      required String deviceId,
+      required String localOperationId,
+      Value<int> revision,
+      required DateTime clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      required String restaurantId,
+      Value<String?> branchId,
+      required String menuItemId,
+      required String name,
+      Value<int> priceDeltaMinor,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+typedef $$ItemSizesTableUpdateCompanionBuilder =
+    ItemSizesCompanion Function({
+      Value<String> id,
+      Value<String> organizationId,
+      Value<String> deviceId,
+      Value<String> localOperationId,
+      Value<int> revision,
+      Value<DateTime> clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> restaurantId,
+      Value<String?> branchId,
+      Value<String> menuItemId,
+      Value<String> name,
+      Value<int> priceDeltaMinor,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+
+final class $$ItemSizesTableReferences
+    extends BaseReferences<_$LocalDatabase, $ItemSizesTable, ItemSize> {
+  $$ItemSizesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $MenuItemsTable _menuItemIdTable(_$LocalDatabase db) =>
+      db.menuItems.createAlias(
+        $_aliasNameGenerator(db.itemSizes.menuItemId, db.menuItems.id),
+      );
+
+  $$MenuItemsTableProcessedTableManager get menuItemId {
+    final $_column = $_itemColumn<String>('menu_item_id')!;
+
+    final manager = $$MenuItemsTableTableManager(
+      $_db,
+      $_db.menuItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_menuItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ItemSizesTableFilterComposer
+    extends Composer<_$LocalDatabase, $ItemSizesTable> {
+  $$ItemSizesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MenuItemsTableFilterComposer get menuItemId {
+    final $$MenuItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ItemSizesTableOrderingComposer
+    extends Composer<_$LocalDatabase, $ItemSizesTable> {
+  $$ItemSizesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MenuItemsTableOrderingComposer get menuItemId {
+    final $$MenuItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ItemSizesTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $ItemSizesTable> {
+  $$ItemSizesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchId =>
+      $composableBuilder(column: $table.branchId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  $$MenuItemsTableAnnotationComposer get menuItemId {
+    final $$MenuItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ItemSizesTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $ItemSizesTable,
+          ItemSize,
+          $$ItemSizesTableFilterComposer,
+          $$ItemSizesTableOrderingComposer,
+          $$ItemSizesTableAnnotationComposer,
+          $$ItemSizesTableCreateCompanionBuilder,
+          $$ItemSizesTableUpdateCompanionBuilder,
+          (ItemSize, $$ItemSizesTableReferences),
+          ItemSize,
+          PrefetchHooks Function({bool menuItemId})
+        > {
+  $$ItemSizesTableTableManager(_$LocalDatabase db, $ItemSizesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ItemSizesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ItemSizesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ItemSizesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> organizationId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String> localOperationId = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> clientUpdatedAt = const Value.absent(),
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> restaurantId = const Value.absent(),
+                Value<String?> branchId = const Value.absent(),
+                Value<String> menuItemId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> priceDeltaMinor = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ItemSizesCompanion(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                menuItemId: menuItemId,
+                name: name,
+                priceDeltaMinor: priceDeltaMinor,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String organizationId,
+                required String deviceId,
+                required String localOperationId,
+                Value<int> revision = const Value.absent(),
+                required DateTime clientUpdatedAt,
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                required String restaurantId,
+                Value<String?> branchId = const Value.absent(),
+                required String menuItemId,
+                required String name,
+                Value<int> priceDeltaMinor = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ItemSizesCompanion.insert(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                menuItemId: menuItemId,
+                name: name,
+                priceDeltaMinor: priceDeltaMinor,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ItemSizesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({menuItemId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (menuItemId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.menuItemId,
+                                referencedTable: $$ItemSizesTableReferences
+                                    ._menuItemIdTable(db),
+                                referencedColumn: $$ItemSizesTableReferences
+                                    ._menuItemIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ItemSizesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $ItemSizesTable,
+      ItemSize,
+      $$ItemSizesTableFilterComposer,
+      $$ItemSizesTableOrderingComposer,
+      $$ItemSizesTableAnnotationComposer,
+      $$ItemSizesTableCreateCompanionBuilder,
+      $$ItemSizesTableUpdateCompanionBuilder,
+      (ItemSize, $$ItemSizesTableReferences),
+      ItemSize,
+      PrefetchHooks Function({bool menuItemId})
+    >;
+typedef $$ItemVariantsTableCreateCompanionBuilder =
+    ItemVariantsCompanion Function({
+      required String id,
+      required String organizationId,
+      required String deviceId,
+      required String localOperationId,
+      Value<int> revision,
+      required DateTime clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      required String restaurantId,
+      Value<String?> branchId,
+      required String menuItemId,
+      required String name,
+      Value<int> priceDeltaMinor,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+typedef $$ItemVariantsTableUpdateCompanionBuilder =
+    ItemVariantsCompanion Function({
+      Value<String> id,
+      Value<String> organizationId,
+      Value<String> deviceId,
+      Value<String> localOperationId,
+      Value<int> revision,
+      Value<DateTime> clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> restaurantId,
+      Value<String?> branchId,
+      Value<String> menuItemId,
+      Value<String> name,
+      Value<int> priceDeltaMinor,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+
+final class $$ItemVariantsTableReferences
+    extends BaseReferences<_$LocalDatabase, $ItemVariantsTable, ItemVariant> {
+  $$ItemVariantsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $MenuItemsTable _menuItemIdTable(_$LocalDatabase db) =>
+      db.menuItems.createAlias(
+        $_aliasNameGenerator(db.itemVariants.menuItemId, db.menuItems.id),
+      );
+
+  $$MenuItemsTableProcessedTableManager get menuItemId {
+    final $_column = $_itemColumn<String>('menu_item_id')!;
+
+    final manager = $$MenuItemsTableTableManager(
+      $_db,
+      $_db.menuItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_menuItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ItemVariantsTableFilterComposer
+    extends Composer<_$LocalDatabase, $ItemVariantsTable> {
+  $$ItemVariantsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MenuItemsTableFilterComposer get menuItemId {
+    final $$MenuItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ItemVariantsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $ItemVariantsTable> {
+  $$ItemVariantsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MenuItemsTableOrderingComposer get menuItemId {
+    final $$MenuItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ItemVariantsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $ItemVariantsTable> {
+  $$ItemVariantsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchId =>
+      $composableBuilder(column: $table.branchId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  $$MenuItemsTableAnnotationComposer get menuItemId {
+    final $$MenuItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ItemVariantsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $ItemVariantsTable,
+          ItemVariant,
+          $$ItemVariantsTableFilterComposer,
+          $$ItemVariantsTableOrderingComposer,
+          $$ItemVariantsTableAnnotationComposer,
+          $$ItemVariantsTableCreateCompanionBuilder,
+          $$ItemVariantsTableUpdateCompanionBuilder,
+          (ItemVariant, $$ItemVariantsTableReferences),
+          ItemVariant,
+          PrefetchHooks Function({bool menuItemId})
+        > {
+  $$ItemVariantsTableTableManager(_$LocalDatabase db, $ItemVariantsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ItemVariantsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ItemVariantsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ItemVariantsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> organizationId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String> localOperationId = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> clientUpdatedAt = const Value.absent(),
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> restaurantId = const Value.absent(),
+                Value<String?> branchId = const Value.absent(),
+                Value<String> menuItemId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> priceDeltaMinor = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ItemVariantsCompanion(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                menuItemId: menuItemId,
+                name: name,
+                priceDeltaMinor: priceDeltaMinor,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String organizationId,
+                required String deviceId,
+                required String localOperationId,
+                Value<int> revision = const Value.absent(),
+                required DateTime clientUpdatedAt,
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                required String restaurantId,
+                Value<String?> branchId = const Value.absent(),
+                required String menuItemId,
+                required String name,
+                Value<int> priceDeltaMinor = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ItemVariantsCompanion.insert(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                menuItemId: menuItemId,
+                name: name,
+                priceDeltaMinor: priceDeltaMinor,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ItemVariantsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({menuItemId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (menuItemId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.menuItemId,
+                                referencedTable: $$ItemVariantsTableReferences
+                                    ._menuItemIdTable(db),
+                                referencedColumn: $$ItemVariantsTableReferences
+                                    ._menuItemIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ItemVariantsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $ItemVariantsTable,
+      ItemVariant,
+      $$ItemVariantsTableFilterComposer,
+      $$ItemVariantsTableOrderingComposer,
+      $$ItemVariantsTableAnnotationComposer,
+      $$ItemVariantsTableCreateCompanionBuilder,
+      $$ItemVariantsTableUpdateCompanionBuilder,
+      (ItemVariant, $$ItemVariantsTableReferences),
+      ItemVariant,
+      PrefetchHooks Function({bool menuItemId})
+    >;
+typedef $$ModifiersTableCreateCompanionBuilder =
+    ModifiersCompanion Function({
+      required String id,
+      required String organizationId,
+      required String deviceId,
+      required String localOperationId,
+      Value<int> revision,
+      required DateTime clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      required String restaurantId,
+      Value<String?> branchId,
+      required String menuItemId,
+      required String name,
+      required String selectionType,
+      Value<int> minSelect,
+      Value<int> maxSelect,
+      Value<bool> isRequired,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+typedef $$ModifiersTableUpdateCompanionBuilder =
+    ModifiersCompanion Function({
+      Value<String> id,
+      Value<String> organizationId,
+      Value<String> deviceId,
+      Value<String> localOperationId,
+      Value<int> revision,
+      Value<DateTime> clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> restaurantId,
+      Value<String?> branchId,
+      Value<String> menuItemId,
+      Value<String> name,
+      Value<String> selectionType,
+      Value<int> minSelect,
+      Value<int> maxSelect,
+      Value<bool> isRequired,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+
+final class $$ModifiersTableReferences
+    extends BaseReferences<_$LocalDatabase, $ModifiersTable, Modifier> {
+  $$ModifiersTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $MenuItemsTable _menuItemIdTable(_$LocalDatabase db) =>
+      db.menuItems.createAlias(
+        $_aliasNameGenerator(db.modifiers.menuItemId, db.menuItems.id),
+      );
+
+  $$MenuItemsTableProcessedTableManager get menuItemId {
+    final $_column = $_itemColumn<String>('menu_item_id')!;
+
+    final manager = $$MenuItemsTableTableManager(
+      $_db,
+      $_db.menuItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_menuItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$ModifierOptionsTable, List<ModifierOption>>
+  _modifierOptionsRefsTable(_$LocalDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.modifierOptions,
+        aliasName: $_aliasNameGenerator(
+          db.modifiers.id,
+          db.modifierOptions.modifierId,
+        ),
+      );
+
+  $$ModifierOptionsTableProcessedTableManager get modifierOptionsRefs {
+    final manager = $$ModifierOptionsTableTableManager(
+      $_db,
+      $_db.modifierOptions,
+    ).filter((f) => f.modifierId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _modifierOptionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$ModifiersTableFilterComposer
+    extends Composer<_$LocalDatabase, $ModifiersTable> {
+  $$ModifiersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get selectionType => $composableBuilder(
+    column: $table.selectionType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get minSelect => $composableBuilder(
+    column: $table.minSelect,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxSelect => $composableBuilder(
+    column: $table.maxSelect,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isRequired => $composableBuilder(
+    column: $table.isRequired,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MenuItemsTableFilterComposer get menuItemId {
+    final $$MenuItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> modifierOptionsRefs(
+    Expression<bool> Function($$ModifierOptionsTableFilterComposer f) f,
+  ) {
+    final $$ModifierOptionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.modifierOptions,
+      getReferencedColumn: (t) => t.modifierId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ModifierOptionsTableFilterComposer(
+            $db: $db,
+            $table: $db.modifierOptions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$ModifiersTableOrderingComposer
+    extends Composer<_$LocalDatabase, $ModifiersTable> {
+  $$ModifiersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get selectionType => $composableBuilder(
+    column: $table.selectionType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get minSelect => $composableBuilder(
+    column: $table.minSelect,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxSelect => $composableBuilder(
+    column: $table.maxSelect,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isRequired => $composableBuilder(
+    column: $table.isRequired,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MenuItemsTableOrderingComposer get menuItemId {
+    final $$MenuItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ModifiersTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $ModifiersTable> {
+  $$ModifiersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchId =>
+      $composableBuilder(column: $table.branchId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get selectionType => $composableBuilder(
+    column: $table.selectionType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get minSelect =>
+      $composableBuilder(column: $table.minSelect, builder: (column) => column);
+
+  GeneratedColumn<int> get maxSelect =>
+      $composableBuilder(column: $table.maxSelect, builder: (column) => column);
+
+  GeneratedColumn<bool> get isRequired => $composableBuilder(
+    column: $table.isRequired,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  $$MenuItemsTableAnnotationComposer get menuItemId {
+    final $$MenuItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.menuItemId,
+      referencedTable: $db.menuItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MenuItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.menuItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> modifierOptionsRefs<T extends Object>(
+    Expression<T> Function($$ModifierOptionsTableAnnotationComposer a) f,
+  ) {
+    final $$ModifierOptionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.modifierOptions,
+      getReferencedColumn: (t) => t.modifierId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ModifierOptionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.modifierOptions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$ModifiersTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $ModifiersTable,
+          Modifier,
+          $$ModifiersTableFilterComposer,
+          $$ModifiersTableOrderingComposer,
+          $$ModifiersTableAnnotationComposer,
+          $$ModifiersTableCreateCompanionBuilder,
+          $$ModifiersTableUpdateCompanionBuilder,
+          (Modifier, $$ModifiersTableReferences),
+          Modifier,
+          PrefetchHooks Function({bool menuItemId, bool modifierOptionsRefs})
+        > {
+  $$ModifiersTableTableManager(_$LocalDatabase db, $ModifiersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ModifiersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ModifiersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ModifiersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> organizationId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String> localOperationId = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> clientUpdatedAt = const Value.absent(),
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> restaurantId = const Value.absent(),
+                Value<String?> branchId = const Value.absent(),
+                Value<String> menuItemId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> selectionType = const Value.absent(),
+                Value<int> minSelect = const Value.absent(),
+                Value<int> maxSelect = const Value.absent(),
+                Value<bool> isRequired = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ModifiersCompanion(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                menuItemId: menuItemId,
+                name: name,
+                selectionType: selectionType,
+                minSelect: minSelect,
+                maxSelect: maxSelect,
+                isRequired: isRequired,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String organizationId,
+                required String deviceId,
+                required String localOperationId,
+                Value<int> revision = const Value.absent(),
+                required DateTime clientUpdatedAt,
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                required String restaurantId,
+                Value<String?> branchId = const Value.absent(),
+                required String menuItemId,
+                required String name,
+                required String selectionType,
+                Value<int> minSelect = const Value.absent(),
+                Value<int> maxSelect = const Value.absent(),
+                Value<bool> isRequired = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ModifiersCompanion.insert(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                menuItemId: menuItemId,
+                name: name,
+                selectionType: selectionType,
+                minSelect: minSelect,
+                maxSelect: maxSelect,
+                isRequired: isRequired,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ModifiersTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({menuItemId = false, modifierOptionsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (modifierOptionsRefs) db.modifierOptions,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (menuItemId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.menuItemId,
+                                    referencedTable: $$ModifiersTableReferences
+                                        ._menuItemIdTable(db),
+                                    referencedColumn: $$ModifiersTableReferences
+                                        ._menuItemIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (modifierOptionsRefs)
+                        await $_getPrefetchedData<
+                          Modifier,
+                          $ModifiersTable,
+                          ModifierOption
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ModifiersTableReferences
+                              ._modifierOptionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ModifiersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).modifierOptionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.modifierId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$ModifiersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $ModifiersTable,
+      Modifier,
+      $$ModifiersTableFilterComposer,
+      $$ModifiersTableOrderingComposer,
+      $$ModifiersTableAnnotationComposer,
+      $$ModifiersTableCreateCompanionBuilder,
+      $$ModifiersTableUpdateCompanionBuilder,
+      (Modifier, $$ModifiersTableReferences),
+      Modifier,
+      PrefetchHooks Function({bool menuItemId, bool modifierOptionsRefs})
+    >;
+typedef $$ModifierOptionsTableCreateCompanionBuilder =
+    ModifierOptionsCompanion Function({
+      required String id,
+      required String organizationId,
+      required String deviceId,
+      required String localOperationId,
+      Value<int> revision,
+      required DateTime clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      required String restaurantId,
+      Value<String?> branchId,
+      required String modifierId,
+      required String name,
+      Value<int> priceDeltaMinor,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+typedef $$ModifierOptionsTableUpdateCompanionBuilder =
+    ModifierOptionsCompanion Function({
+      Value<String> id,
+      Value<String> organizationId,
+      Value<String> deviceId,
+      Value<String> localOperationId,
+      Value<int> revision,
+      Value<DateTime> clientUpdatedAt,
+      Value<DateTime?> serverUpdatedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> restaurantId,
+      Value<String?> branchId,
+      Value<String> modifierId,
+      Value<String> name,
+      Value<int> priceDeltaMinor,
+      Value<int> displayOrder,
+      Value<bool> isActive,
+      Value<int> rowid,
+    });
+
+final class $$ModifierOptionsTableReferences
+    extends
+        BaseReferences<_$LocalDatabase, $ModifierOptionsTable, ModifierOption> {
+  $$ModifierOptionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ModifiersTable _modifierIdTable(_$LocalDatabase db) =>
+      db.modifiers.createAlias(
+        $_aliasNameGenerator(db.modifierOptions.modifierId, db.modifiers.id),
+      );
+
+  $$ModifiersTableProcessedTableManager get modifierId {
+    final $_column = $_itemColumn<String>('modifier_id')!;
+
+    final manager = $$ModifiersTableTableManager(
+      $_db,
+      $_db.modifiers,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_modifierIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ModifierOptionsTableFilterComposer
+    extends Composer<_$LocalDatabase, $ModifierOptionsTable> {
+  $$ModifierOptionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ModifiersTableFilterComposer get modifierId {
+    final $$ModifiersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.modifierId,
+      referencedTable: $db.modifiers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ModifiersTableFilterComposer(
+            $db: $db,
+            $table: $db.modifiers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ModifierOptionsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $ModifierOptionsTable> {
+  $$ModifierOptionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ModifiersTableOrderingComposer get modifierId {
+    final $$ModifiersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.modifierId,
+      referencedTable: $db.modifiers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ModifiersTableOrderingComposer(
+            $db: $db,
+            $table: $db.modifiers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ModifierOptionsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $ModifierOptionsTable> {
+  $$ModifierOptionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get clientUpdatedAt => $composableBuilder(
+    column: $table.clientUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get serverUpdatedAt => $composableBuilder(
+    column: $table.serverUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get restaurantId => $composableBuilder(
+    column: $table.restaurantId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchId =>
+      $composableBuilder(column: $table.branchId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get priceDeltaMinor => $composableBuilder(
+    column: $table.priceDeltaMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get displayOrder => $composableBuilder(
+    column: $table.displayOrder,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  $$ModifiersTableAnnotationComposer get modifierId {
+    final $$ModifiersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.modifierId,
+      referencedTable: $db.modifiers,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ModifiersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.modifiers,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ModifierOptionsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $ModifierOptionsTable,
+          ModifierOption,
+          $$ModifierOptionsTableFilterComposer,
+          $$ModifierOptionsTableOrderingComposer,
+          $$ModifierOptionsTableAnnotationComposer,
+          $$ModifierOptionsTableCreateCompanionBuilder,
+          $$ModifierOptionsTableUpdateCompanionBuilder,
+          (ModifierOption, $$ModifierOptionsTableReferences),
+          ModifierOption,
+          PrefetchHooks Function({bool modifierId})
+        > {
+  $$ModifierOptionsTableTableManager(
+    _$LocalDatabase db,
+    $ModifierOptionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ModifierOptionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ModifierOptionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ModifierOptionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> organizationId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String> localOperationId = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> clientUpdatedAt = const Value.absent(),
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> restaurantId = const Value.absent(),
+                Value<String?> branchId = const Value.absent(),
+                Value<String> modifierId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> priceDeltaMinor = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ModifierOptionsCompanion(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                modifierId: modifierId,
+                name: name,
+                priceDeltaMinor: priceDeltaMinor,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String organizationId,
+                required String deviceId,
+                required String localOperationId,
+                Value<int> revision = const Value.absent(),
+                required DateTime clientUpdatedAt,
+                Value<DateTime?> serverUpdatedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                required String restaurantId,
+                Value<String?> branchId = const Value.absent(),
+                required String modifierId,
+                required String name,
+                Value<int> priceDeltaMinor = const Value.absent(),
+                Value<int> displayOrder = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ModifierOptionsCompanion.insert(
+                id: id,
+                organizationId: organizationId,
+                deviceId: deviceId,
+                localOperationId: localOperationId,
+                revision: revision,
+                clientUpdatedAt: clientUpdatedAt,
+                serverUpdatedAt: serverUpdatedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                restaurantId: restaurantId,
+                branchId: branchId,
+                modifierId: modifierId,
+                name: name,
+                priceDeltaMinor: priceDeltaMinor,
+                displayOrder: displayOrder,
+                isActive: isActive,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ModifierOptionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({modifierId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (modifierId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.modifierId,
+                                referencedTable:
+                                    $$ModifierOptionsTableReferences
+                                        ._modifierIdTable(db),
+                                referencedColumn:
+                                    $$ModifierOptionsTableReferences
+                                        ._modifierIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ModifierOptionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $ModifierOptionsTable,
+      ModifierOption,
+      $$ModifierOptionsTableFilterComposer,
+      $$ModifierOptionsTableOrderingComposer,
+      $$ModifierOptionsTableAnnotationComposer,
+      $$ModifierOptionsTableCreateCompanionBuilder,
+      $$ModifierOptionsTableUpdateCompanionBuilder,
+      (ModifierOption, $$ModifierOptionsTableReferences),
+      ModifierOption,
+      PrefetchHooks Function({bool modifierId})
+    >;
 
 class $LocalDatabaseManager {
   final _$LocalDatabase _db;
@@ -2275,4 +12232,16 @@ class $LocalDatabaseManager {
       $$OutboxOperationsTableTableManager(_db, _db.outboxOperations);
   $$ProcessedPullLogTableTableManager get processedPullLog =>
       $$ProcessedPullLogTableTableManager(_db, _db.processedPullLog);
+  $$MenuCategoriesTableTableManager get menuCategories =>
+      $$MenuCategoriesTableTableManager(_db, _db.menuCategories);
+  $$MenuItemsTableTableManager get menuItems =>
+      $$MenuItemsTableTableManager(_db, _db.menuItems);
+  $$ItemSizesTableTableManager get itemSizes =>
+      $$ItemSizesTableTableManager(_db, _db.itemSizes);
+  $$ItemVariantsTableTableManager get itemVariants =>
+      $$ItemVariantsTableTableManager(_db, _db.itemVariants);
+  $$ModifiersTableTableManager get modifiers =>
+      $$ModifiersTableTableManager(_db, _db.modifiers);
+  $$ModifierOptionsTableTableManager get modifierOptions =>
+      $$ModifierOptionsTableTableManager(_db, _db.modifierOptions);
 }

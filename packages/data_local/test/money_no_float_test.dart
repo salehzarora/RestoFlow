@@ -4,9 +4,14 @@ import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:test/test.dart';
 
 /// Money is integer minor units only — never floating point, anywhere
-/// (DECISION D-007). RF-018 adds NO money columns at all; this test proves the
-/// shipped local schema declares no float column and no money-named column.
-const _moneyTerms = <String>[
+/// (DECISION D-007). RF-030 menu tables introduce money columns, so this guard
+/// evolved from "no money columns exist" to: no float column anywhere, every
+/// money-AMOUNT column is an INTEGER suffixed `_minor`, and the currency
+/// reference is a 3-char text code on `menu_items`.
+///
+/// `currency` is intentionally excluded here — it is an ISO 4217 CODE, not an
+/// amount — and is checked separately as text.
+const _amountTerms = <String>[
   'price',
   'amount',
   'subtotal',
@@ -21,7 +26,6 @@ const _moneyTerms = <String>[
   'cash',
   'gross',
   'refund',
-  'currency',
 ];
 
 void main() {
@@ -47,24 +51,36 @@ void main() {
       }
     });
 
-    test(
-      'no money-named column exists at all (RF-018 adds no money fields)',
-      () {
-        for (final table in allTables()) {
-          for (final col in table.$columns) {
-            final name = col.name.toLowerCase();
-            for (final term in _moneyTerms) {
-              expect(
-                name.contains(term),
-                isFalse,
-                reason:
-                    '${table.actualTableName}.${col.name} looks money-named '
-                    '("$term"); RF-018 must add no money fields (money lives in '
-                    'packages/money, RF-036, and only as integer *_minor)',
-              );
-            }
+    test('every money-amount column is an INTEGER suffixed _minor (D-007)', () {
+      for (final table in allTables()) {
+        for (final col in table.$columns) {
+          final name = col.name.toLowerCase();
+          if (_amountTerms.any(name.contains)) {
+            expect(
+              col.type,
+              DriftSqlType.int,
+              reason:
+                  '${table.actualTableName}.${col.name} is a money amount -> '
+                  'must be an integer (D-007), not ${col.type}',
+            );
+            expect(
+              name.endsWith('_minor'),
+              isTrue,
+              reason:
+                  '${table.actualTableName}.${col.name} is a money amount -> '
+                  'must be suffixed _minor (D-007 / D-017)',
+            );
           }
         }
+      }
+    });
+
+    test(
+      'currency reference lives on menu_items as a 3-char text code (D-007)',
+      () {
+        final byName = {for (final c in db.menuItems.$columns) c.name: c};
+        expect(byName.containsKey('currency_code'), isTrue);
+        expect(byName['currency_code']!.type, DriftSqlType.string);
       },
     );
 
