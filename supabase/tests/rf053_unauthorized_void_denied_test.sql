@@ -1,0 +1,60 @@
+-- ============================================================================
+-- RF-053 — pgTAP: unauthorized void is denied + audited (AC#1, T-006)
+-- ============================================================================
+-- A plain cashier (no void_order permission) cannot void a submitted order: the
+-- RPC returns permission_denied, makes NO state change, and writes an
+-- order.void_denied audit row. A manager can void. Fixtures inserted as the
+-- BYPASSRLS connection role; the RPCs are SECURITY DEFINER.
+-- ============================================================================
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path to extensions, public, pg_catalog;
+
+select plan(7);
+
+-- ---- PIN-session chain: manager, plain cashier, granted cashier ------------
+insert into organizations (id, name, slug, default_currency) values
+  ('00000000-0000-0000-0000-0000000000a0', 'Org A', 'rf053u-a', 'USD');
+insert into restaurants (id, organization_id, name) values
+  ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a0', 'Rest A1');
+insert into branches (id, organization_id, restaurant_id, name) values
+  ('00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', 'Branch A1');
+insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
+  ('00000000-0000-0000-0000-00000000da11', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'pos');
+insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
+  ('00000000-0000-0000-0000-00000000fa11', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000da11', 'active');
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id) values
+  ('00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000da11', '00000000-0000-0000-0000-00000000fa11');
+insert into app_users (id, email) values
+  ('00000000-0000-0000-0000-00000000ee01', 'rf053u-mgr@example.test'),
+  ('00000000-0000-0000-0000-00000000ee02', 'rf053u-cashier@example.test');
+insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
+  ('00000000-0000-0000-0000-00000000ab01', '00000000-0000-0000-0000-00000000ee01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'manager', '{}'::jsonb),
+  ('00000000-0000-0000-0000-00000000ab02', '00000000-0000-0000-0000-00000000ee02', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{}'::jsonb);
+insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
+  ('00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee01', '00000000-0000-0000-0000-00000000ab01'),
+  ('00000000-0000-0000-0000-0000000ef002', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee02', '00000000-0000-0000-0000-00000000ab02');
+insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
+  ('00000000-0000-0000-0000-00000000c501', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-00000000ab01', now() + interval '1 hour'),
+  ('00000000-0000-0000-0000-00000000c502', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef002', '00000000-0000-0000-0000-00000000ab02', now() + interval '1 hour');
+-- a submitted order (connection role; the RPC mutates it)
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, local_operation_id) values
+  ('00000000-0000-0000-0000-00000000a0d1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000da11', '00000000-0000-0000-0000-00000000c501', '00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-00000000ab01', 'dine_in', 'submitted', 'USD', 1000, 0, 0, 1000, 'ord-1');
+
+-- plain cashier void => permission_denied, no state change, audited ---------- 1-4
+select is(
+  (app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-deny','suspected error', null) ->> 'error'),
+  'permission_denied', 'plain cashier (no void_order grant) is denied');
+select is((select status from orders where id='00000000-0000-0000-0000-00000000a0d1')::text, 'submitted', 'denied void makes NO state change');
+select is((select count(*) from audit_events where action='order.void_denied')::int, 1, 'the denied void is audited (order.void_denied)');
+select is((select actor_employee_profile_id from audit_events where action='order.void_denied'), '00000000-0000-0000-0000-0000000ef002'::uuid, 'the denial audit records the attempting cashier');
+
+-- manager can void ----------------------------------------------------------- 5-7
+select is(
+  (app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-mgr','manager void', null) ->> 'ok')::boolean,
+  true, 'a manager can void the order');
+select is((select status from orders where id='00000000-0000-0000-0000-00000000a0d1')::text, 'voided', 'the order is now voided');
+select is((select count(*) from audit_events where action='order.voided')::int, 1, 'the successful void writes one order.voided audit row');
+
+select * from finish();
+rollback;
