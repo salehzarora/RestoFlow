@@ -98,6 +98,9 @@ jobs:
       - name: Tests — data_local (RF-018)
         run: dart test packages/data_local
 
+      - name: Tests — money (RF-036, integer money engine)
+        run: dart test packages/money
+
       # RF-020 (RF020-B1): Flutter-FREE structural check of the committed l10n
       # setup (ARB completeness + generated output present/consistent). Runs even
       # if the Flutter tool is unavailable, so l10n structural regressions are
