@@ -35,5 +35,25 @@
   "localeHebrew": "Hebrew",
   "@localeHebrew": {
     "description": "Display name of the Hebrew locale."
+  },
+  "kdsEmptyState": "No active tickets",
+  "@kdsEmptyState": {
+    "description": "KDS message shown when there are no tickets to display."
+  },
+  "kdsBumpAction": "Bump",
+  "@kdsBumpAction": {
+    "description": "KDS action that marks a ready ticket as bumped (done)."
+  },
+  "kdsRecallAction": "Recall",
+  "@kdsRecallAction": {
+    "description": "KDS action that recalls a bumped ticket back into preparation."
+  },
+  "kdsStationLabel": "Station",
+  "@kdsStationLabel": {
+    "description": "KDS label prefixing a kitchen station name."
+  },
+  "kdsTicketLabel": "Ticket",
+  "@kdsTicketLabel": {
+    "description": "KDS label prefixing a kitchen ticket identifier."
   }
 }

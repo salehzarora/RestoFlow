@@ -115,6 +115,12 @@ jobs:
       - name: Tests — l10n (RF-020, Flutter widget + ARB completeness)
         run: flutter test packages/l10n
 
+      # RF-034: KDS Flutter widget tests (RTL/LTR layout + bump/recall
+      # interaction). Like the l10n tests, these use flutter_test and run under
+      # `flutter test` (not `dart test`).
+      - name: Tests — KDS (RF-034, Flutter widget)
+        run: flutter test apps/kds
+
       - name: Guardrail — no floating-point money (DECISION D-007)
         run: bash tools/check_no_float_money.sh
 

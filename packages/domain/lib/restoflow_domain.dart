@@ -24,6 +24,12 @@
 /// producing a deterministic in-memory `KitchenRoutingResult` (one
 /// `KitchenTicket` per station + flagged `UnroutableOrderItem`s). No status/
 /// state machine (RF-034), no persistence/backend.
+///
+/// RF-034 adds the pure-Dart kitchen STATE MACHINES (`src/kitchen/`):
+/// `KitchenTicketStatus`/`KitchenStationItemStatus` (D-018), the table-driven
+/// `KitchenTicketStateMachine` (incl. the audited recall action returning an
+/// in-memory `RecallAuditEvent` placeholder) and `KitchenStationItemStateMachine`.
+/// Still local-only — no persistence/backend/real audit write.
 library;
 
 export 'src/cart/cart.dart';
@@ -34,9 +40,14 @@ export 'src/entity.dart';
 export 'src/kitchen/kitchen_router.dart';
 export 'src/kitchen/kitchen_routing_result.dart';
 export 'src/kitchen/kitchen_routing_rules.dart';
+export 'src/kitchen/kitchen_state_exceptions.dart';
 export 'src/kitchen/kitchen_station_item.dart';
+export 'src/kitchen/kitchen_station_item_state_machine.dart';
+export 'src/kitchen/kitchen_station_item_status.dart';
 export 'src/kitchen/kitchen_ticket.dart';
-export 'src/kitchen/unroutable_order_item.dart';
+export 'src/kitchen/kitchen_ticket_state_machine.dart';
+export 'src/kitchen/kitchen_ticket_status.dart';
+export 'src/kitchen/recall_audit_event.dart';
 export 'src/order/local_order.dart';
 export 'src/order/local_order_item.dart';
 export 'src/order/order_action_authorization.dart';

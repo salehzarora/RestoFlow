@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'src/kds_screen.dart';
+import 'src/kds_ticket_view.dart';
+
 void main() => runApp(const KdsApp());
 
-/// Minimal localized KDS shell (RF-020). Real Kitchen Display UI and features
-/// land in later tickets; this only proves locale resolution + RTL/LTR via the
-/// shared `packages/l10n` wiring. No business logic, no navigation, no hardcoded
-/// user-facing strings.
+/// Minimal localized KDS app (RF-034). Hosts the local [KdsScreen] driven by a
+/// fake in-memory fixture — no backend, no repository, no persistence. RTL/LTR
+/// is data-driven by the shared `packages/l10n` wiring.
 class KdsApp extends StatelessWidget {
   const KdsApp({super.key});
 
@@ -18,20 +20,24 @@ class KdsApp extends StatelessWidget {
       supportedLocales: kSupportedLocales,
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      home: const _KdsHome(),
+      home: KdsScreen(tickets: _demoTickets()),
     );
   }
 }
 
-class _KdsHome extends StatelessWidget {
-  const _KdsHome();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.kdsAppTitle)),
-      body: Center(child: Text(l10n.welcomeMessage)),
-    );
-  }
-}
+/// A small local fixture (data only) so the running app shows sample tickets.
+List<KdsTicketView> _demoTickets() => [
+  KdsTicketView(
+    kitchenTicketId: 'order-1:grill',
+    stationId: 'grill',
+    items: const [
+      KdsItemView(name: 'Burger', quantity: 2),
+      KdsItemView(name: 'Steak', quantity: 1),
+    ],
+  ),
+  KdsTicketView(
+    kitchenTicketId: 'order-1:bar',
+    stationId: 'bar',
+    items: const [KdsItemView(name: 'Beer', quantity: 3)],
+  ),
+];

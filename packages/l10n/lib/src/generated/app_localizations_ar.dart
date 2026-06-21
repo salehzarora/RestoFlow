@@ -34,4 +34,19 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get localeHebrew => 'العبرية';
+
+  @override
+  String get kdsEmptyState => 'لا توجد تذاكر نشطة';
+
+  @override
+  String get kdsBumpAction => 'إنهاء';
+
+  @override
+  String get kdsRecallAction => 'استرجاع';
+
+  @override
+  String get kdsStationLabel => 'محطة';
+
+  @override
+  String get kdsTicketLabel => 'تذكرة';
 }

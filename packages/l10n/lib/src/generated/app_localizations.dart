@@ -153,6 +153,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hebrew'**
   String get localeHebrew;
+
+  /// KDS message shown when there are no tickets to display.
+  ///
+  /// In en, this message translates to:
+  /// **'No active tickets'**
+  String get kdsEmptyState;
+
+  /// KDS action that marks a ready ticket as bumped (done).
+  ///
+  /// In en, this message translates to:
+  /// **'Bump'**
+  String get kdsBumpAction;
+
+  /// KDS action that recalls a bumped ticket back into preparation.
+  ///
+  /// In en, this message translates to:
+  /// **'Recall'**
+  String get kdsRecallAction;
+
+  /// KDS label prefixing a kitchen station name.
+  ///
+  /// In en, this message translates to:
+  /// **'Station'**
+  String get kdsStationLabel;
+
+  /// KDS label prefixing a kitchen ticket identifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket'**
+  String get kdsTicketLabel;
 }
 
 class _AppLocalizationsDelegate
