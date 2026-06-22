@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_kds/src/kds_screen.dart';
-import 'package:restoflow_kds/src/kds_ticket_view.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// RF-034 AC#3 (DECISION D-014): the KDS screen renders correctly in LTR (en)

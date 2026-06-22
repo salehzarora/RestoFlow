@@ -1,7 +1,19 @@
 name: restoflow_data_remote
-description: RestoFlow data_remote package (RF-010 skeleton) - Supabase client wrappers, RPC call sites, and query builders. No implementation yet.
+description: RestoFlow data_remote package - Supabase client wrappers + RPC call sites. RF-063 adds the polling-first sync_pull RPC wrapper (injected SupabaseClient; no secrets/URLs; DECISION D-011).
 publish_to: none
 version: 0.0.1
 environment:
   sdk: ^3.12.0
 resolution: workspace
+
+# RF-063: the pure-Dart Supabase SDK (`supabase`, NOT `supabase_flutter`) — this
+# package is pure Dart and only needs the PostgREST/RPC surface. The client is
+# INJECTED (approved decision A2); this package never constructs it or holds a
+# URL/anon key/secret (DECISION D-011).
+dependencies:
+  supabase: '>=2.0.0 <3.0.0'
+  restoflow_core:
+    path: ../core
+
+dev_dependencies:
+  test: ^1.25.0

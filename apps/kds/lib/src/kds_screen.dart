@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
-
-import 'kds_ticket_view.dart';
 
 /// Minimal local Kitchen Display screen (RF-034): renders fake/local tickets
 /// grouped by station with bump/recall actions. Pure UI + the local kitchen
