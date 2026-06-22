@@ -67,9 +67,14 @@ select ok(not has_table_privilege('authenticated', 'public.audit_events', 'DELET
 -- otherwise mask a mistaken grant by returning zero rows instead of erroring) ---- 35
 select ok(not has_table_privilege('anon', 'public.audit_events', 'SELECT'), 'anon has NO SELECT on audit_events');
 
--- the SELECT-only RLS policy exists and is exactly that (catches widening to FOR ALL) 36-37
-select policies_are('public', 'audit_events', array['audit_events_select'], 'audit_events has exactly the one (SELECT-only) policy');
-select policy_cmd_is('public', 'audit_events', 'audit_events_select', 'SELECT', 'audit_events_select is a SELECT-only policy');
+-- RF-059 (A1): audit_events now has EXPLICIT per-command policies — a scoped SELECT
+-- read policy plus INSERT/UPDATE/DELETE DENY policies. Pinning the exact set still
+-- catches any widening to a permissive FOR ALL; append-only is preserved (no write
+-- grant — assertions 32-34 — plus the append-only trigger). ------------------- 36-37
+select policies_are('public', 'audit_events',
+  array['audit_events_sel', 'audit_events_ins_deny', 'audit_events_upd_deny', 'audit_events_del_deny'],
+  'audit_events has exactly the RF-059 per-command policies (SELECT read + INSERT/UPDATE/DELETE deny; no FOR ALL)');
+select policy_cmd_is('public', 'audit_events', 'audit_events_sel', 'SELECT', 'audit_events_sel is a SELECT-only read policy');
 
 -- the append-only trigger function is a NORMAL INVOKER (Codex-required), search_path-locked 38-39
 select ok((select not p.prosecdef from pg_proc p join pg_namespace n on n.oid = p.pronamespace

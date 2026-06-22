@@ -25,7 +25,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(32);
+select plan(33);
 
 -- ---- Fixtures (connection role / BYPASSRLS) --------------------------------
 -- Org A: two restaurants (A1, A2) same org; RA1 has TWO branches (BA1, BA1b) for
@@ -113,10 +113,12 @@ select is((select count(*) from employee_profiles where id = '00000000-0000-0000
 select is((select count(*) from app_users)::int, 1, 'cashier @ RA1: app_users self-only — sees just its own row');                                  -- 18
 select is((select count(*) from app_users where id = '00000000-0000-0000-0000-00000000ee02')::int, 0, 'cashier @ RA1: cannot read another user (app_users self-only)'); -- 19
 select is((select count(*) from memberships where app_user_id = '00000000-0000-0000-0000-00000000ee03')::int, 1, 'cashier @ RA1: sees its OWN membership row'); -- 20
--- positive control: the cashier MAY modify its own restaurant
-select lives_ok(
+-- RF-059 (A2): direct restaurant writes are revoked from authenticated (RPC-only),
+-- so a cashier can no longer directly modify even its own restaurant.
+select throws_ok(
   $$ update restaurants set name = 'Restaurant A1 (edited)' where id = '00000000-0000-0000-0000-00000000a001' $$,
-  'cashier @ RA1: MAY modify its own restaurant (RA1)');                                                                                            -- 21
+  '42501', NULL,
+  'cashier @ RA1: direct UPDATE of its own restaurant is DENIED (RF-059: restaurant writes are RPC-only)');                                          -- 21
 -- write isolation (WITH CHECK via has_scope) on every scoped surface --> 42501
 select throws_ok(
   $$ insert into branches (organization_id, restaurant_id, name) values ('00000000-0000-0000-0000-0000000000a0','00000000-0000-0000-0000-00000000a002','rogue') $$,
@@ -130,8 +132,11 @@ select throws_ok(
 select throws_ok(
   $$ insert into memberships (app_user_id, organization_id, restaurant_id, role) values ('00000000-0000-0000-0000-00000000ee01','00000000-0000-0000-0000-0000000000a0','00000000-0000-0000-0000-00000000a002','cashier') $$,
   '42501', NULL, 'cashier @ RA1: CANNOT create a membership scoped to RA2 (WITH CHECK confines membership writes)');                                -- 25
--- a cashier UPDATE targeting RA2 is a silent no-op (USING hides it); verified after RESET ROLE
-update restaurants set name = 'hacked-by-cashier' where id = '00000000-0000-0000-0000-00000000a002';
+-- RF-059 (A2): a cashier UPDATE targeting RA2 is DENIED outright (direct writes
+-- revoked), not a USING-clause silent no-op; RA2 is untouched (verified after RESET).
+select throws_ok(
+  $$ update restaurants set name = 'hacked-by-cashier' where id = '00000000-0000-0000-0000-00000000a002' $$,
+  '42501', NULL, 'cashier @ RA1: cross-restaurant UPDATE of RA2 is DENIED (direct writes revoked, RF-059)');  -- (RF-059) +1 assertion
 
 -- ===== Scenario C2 — bootstrap: own membership visible with NO org selected ==
 set local app.current_organization_id = '';
