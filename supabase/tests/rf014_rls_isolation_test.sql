@@ -20,7 +20,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(24);
+select plan(26);
 
 -- ---- Fixtures (inserted as postgres / BYPASSRLS): two fully-populated orgs --
 insert into organizations (id, name, slug, default_currency, country_code) values
@@ -95,13 +95,25 @@ set local app.current_organization_id = '00000000-0000-0000-0000-00000000000a';
 
 -- 18: soft-deleted OWN-tenant row stays visible — policies intentionally omit a
 -- `deleted_at IS NULL` filter so tombstones still propagate (DECISION D-020).
+-- RF-059 (A2): restaurants writes are now RPC-only (direct INSERT/UPDATE/DELETE
+-- revoked from authenticated), so the soft-delete is performed as the table owner
+-- (the real soft-delete path); the tombstone must still be VISIBLE to the
+-- authenticated SELECT (RLS keeps tombstones).
+reset role;
 update restaurants set deleted_at = now() where id = '00000000-0000-0000-0000-0000000000a1';
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-0000000000c1';
+set local app.current_organization_id = '00000000-0000-0000-0000-00000000000a';
 select is((select count(*) from restaurants)::int, 1, 'Org A: soft-deleted own restaurant remains visible (RLS does not hide tombstones — D-020)');
 
--- 19: positive control — an in-tenant INSERT passes WITH CHECK (guards against an over-tight policy)
-select lives_ok(
+-- 19: RF-059 (A2) — direct INSERT is now REVOKED from authenticated (writes are
+-- RPC-only), so the in-tenant positive control becomes a DENIAL control. The
+-- SELECT-side positive controls (assertions 5-10) still guard against an over-tight
+-- read policy.
+select throws_ok(
   $$ insert into restaurants (organization_id, name) values ('00000000-0000-0000-0000-00000000000a', 'In-tenant OK') $$,
-  'Org A: in-tenant INSERT under authenticated succeeds (WITH CHECK passes)');
+  '42501', NULL,
+  'Org A: in-tenant direct INSERT under authenticated is DENIED (RF-059: restaurants writes are RPC-only)');
 
 -- 20: cross-org INSERT on restaurants rejected by WITH CHECK (restaurants has only an existence FK, so WITH CHECK is the sole defence)
 select throws_ok(
@@ -121,15 +133,21 @@ select throws_ok(
   '42501', NULL,
   'Org A: re-tenanting a row into Org B is rejected by RLS WITH CHECK');
 
--- cross-tenant UPDATEs under Org A are silent no-ops (USING hides Org B rows); verified after RESET ROLE below
-update restaurants   set name   = 'hijack-attempt' where id = '00000000-0000-0000-0000-0000000000b1';
-update organizations set status = 'suspended'      where id = '00000000-0000-0000-0000-00000000000b';
+-- 23-24: RF-059 (A2) — direct UPDATEs are revoked from authenticated, so a
+-- cross-tenant write attempt is DENIED outright (42501), not a USING-clause silent
+-- no-op. Either way Org B data is untouched (verified after RESET ROLE below).
+select throws_ok(
+  $$ update restaurants set name = 'hijack-attempt' where id = '00000000-0000-0000-0000-0000000000b1' $$,
+  '42501', NULL, 'Org A: cross-tenant UPDATE of an Org B restaurant is DENIED (direct writes revoked, RF-059)');
+select throws_ok(
+  $$ update organizations set status = 'suspended' where id = '00000000-0000-0000-0000-00000000000b' $$,
+  '42501', NULL, 'Org A: cross-tenant UPDATE of the Org B organization is DENIED (direct writes revoked, RF-059)');
 
 reset role;
 
--- 23-24: as the BYPASSRLS connection role, confirm Org B rows were untouched by the cross-tenant write attempts
-select is((select name   from restaurants   where id = '00000000-0000-0000-0000-0000000000b1'), 'Restaurant B', 'cross-tenant UPDATE under Org A did NOT modify Org B restaurant (USING no-op)');
-select is((select status from organizations where id = '00000000-0000-0000-0000-00000000000b'), 'active',       'cross-tenant UPDATE under Org A did NOT modify Org B organization (USING no-op)');
+-- 25-26: as the BYPASSRLS connection role, confirm Org B rows were untouched by the denied write attempts
+select is((select name   from restaurants   where id = '00000000-0000-0000-0000-0000000000b1'), 'Restaurant B', 'cross-tenant UPDATE under Org A did NOT modify Org B restaurant (write denied)');
+select is((select status from organizations where id = '00000000-0000-0000-0000-00000000000b'), 'active',       'cross-tenant UPDATE under Org A did NOT modify Org B organization (write denied)');
 
 select * from finish();
 rollback;

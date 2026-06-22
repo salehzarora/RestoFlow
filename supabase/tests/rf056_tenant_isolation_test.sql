@@ -68,11 +68,13 @@ select is(
 select is((select count(*) from sync_operations where local_operation_id='op-1')::int, 2, 'op-1 yields two separate ledger rows (one per org/device)');
 select is((select count(distinct organization_id) from sync_operations where local_operation_id='op-1')::int, 2, 'the two op-1 rows belong to two different organizations');
 
--- RLS: as an org A principal, only org A''s ledger row is visible ------------- 5
+-- RF-059 (A4): authenticated has NO direct SELECT on sync_operations (revoked); the
+-- current-device status feed is exposed only via app.sync_pull operation_statuses, so
+-- a direct read is DENIED (42501) rather than RLS-filtered to the org row. --------- 5
 set local role authenticated;
 set local app.current_app_user_id = '00000000-0000-0000-0000-00000000ee0a';
 set local app.current_organization_id = '00000000-0000-0000-0000-0000000000a0';
-select is((select count(*) from sync_operations where local_operation_id='op-1')::int, 1, 'RLS confines an org A principal to only org A''s ledger row');
+select throws_ok($$ select count(*) from sync_operations where local_operation_id='op-1' $$, '42501', NULL, 'RF-059 (A4): authenticated has NO direct SELECT on sync_operations (cross-device leakage closed; status only via sync_pull)');
 reset role;
 
 select * from finish();
