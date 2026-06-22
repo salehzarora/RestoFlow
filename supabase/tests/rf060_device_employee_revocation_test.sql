@@ -62,9 +62,12 @@ select throws_ok(
 select throws_ok(
   $$ select app.sync_pull('00000000-0000-0000-0000-00000000c5a2','00000000-0000-0000-0000-00000000da11',null,'{}'::jsonb,500) $$,
   '42501', NULL, 'T-004: a revoked backing device session cannot sync_pull');
-select throws_ok(
-  $$ select app.sync_push('00000000-0000-0000-0000-00000000c5a2','00000000-0000-0000-0000-00000000da11','[{"local_operation_id":"op-rvp","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-0000000000d4","order_type":"dine_in","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb) $$,
-  '42501', NULL, 'T-004: a revoked backing device session fails the whole sync_push batch (R-007)');
+-- RF-061: a revoked backing device session's sync_push no longer raises 42501; each op is
+-- RECORDED as rejected (revoked_device) and returned (no business state — see assertion 9).
+select is(
+  (app.sync_push('00000000-0000-0000-0000-00000000c5a2','00000000-0000-0000-0000-00000000da11','[{"local_operation_id":"op-rvp","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-0000000000d4","order_type":"dine_in","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
+   -> 'results' -> 0 ->> 'status'), 'rejected',
+  'T-004: a revoked backing device session''s sync_push RECORDS the op as rejected (revoked_device), not a silent batch raise (RF-061; R-007)');
 
 -- ===== T-005 removed/revoked employee ====================================== 6-8
 select throws_ok(

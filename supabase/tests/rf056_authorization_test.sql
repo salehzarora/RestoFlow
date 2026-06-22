@@ -11,7 +11,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(6);
+select plan(8);
 
 insert into organizations (id, name, slug, default_currency) values
   ('00000000-0000-0000-0000-0000000000a0', 'Org A', 'rf056z-a', 'USD');
@@ -47,10 +47,25 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 -- revoke the backing device session for the c5rev PIN session (after the backing-guard insert)
 update device_sessions set revoked_at = now() where id = '00000000-0000-0000-0000-0000000005b1';
 
--- batch-level rejections ----------------------------------------------------- 1-3
+-- batch-level raises: expired PIN + device mismatch still fail the whole push (42501)  1-2
 select throws_ok($$ select app.sync_push('00000000-0000-0000-0000-0000000005e1','00000000-0000-0000-0000-00000000da11','[]'::jsonb) $$, '42501', NULL, 'an expired PIN session cannot push (whole batch rejected)');
 select throws_ok($$ select app.sync_push('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000000ff','[]'::jsonb) $$, '42501', NULL, 'a device_id not matching the PIN session device is rejected');
-select throws_ok($$ select app.sync_push('00000000-0000-0000-0000-0000000005f1','00000000-0000-0000-0000-00000000da11','[]'::jsonb) $$, '42501', NULL, 'a revoked backing device session cannot push (R-007)');
+
+-- RF-061 (R-007): a REVOKED backing device session no longer fails the whole batch with a
+-- raise; each queued op is RECORDED as rejected (revoked_device) with NO business state
+-- (AC1). Same security intent — a revoked device cannot push valid operations.  ----- 3-5
+select is(
+  (app.sync_push('00000000-0000-0000-0000-0000000005f1','00000000-0000-0000-0000-00000000da11',
+    '[{"local_operation_id":"op-rev","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-00000000a0d3","order_type":"dine_in","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
+   -> 'results' -> 0 ->> 'status'), 'rejected',
+  'a revoked backing device session''s push is RECORDED rejected, not raised (RF-061; R-007)');
+select is(
+  (app.sync_push('00000000-0000-0000-0000-0000000005f1','00000000-0000-0000-0000-00000000da11',
+    '[{"local_operation_id":"op-rev","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-00000000a0d3","order_type":"dine_in","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
+   -> 'results' -> 0 ->> 'detail'), 'revoked_device',
+  'the recorded rejection reason/error is revoked_device');
+select is((select count(*) from orders where id='00000000-0000-0000-0000-00000000a0d3')::int, 0,
+  'a revoked backing device session''s push creates NO business state (no order) — R-007 intent preserved');
 
 -- per-op: accountant + kitchen_staff are rejected by the underlying RPC gate -- 4-5
 select is(
