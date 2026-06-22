@@ -12,14 +12,15 @@ import 'sync_rpc_transport.dart';
 /// (DECISION D-011). The client must already carry an authenticated session;
 /// establishing that session is out of RF-063 scope.
 ///
-/// `app.sync_pull` lives in the `app` schema, so the call selects that schema
-/// (`client.schema('app').rpc(...)`) — a bare `rpc('sync_pull')` would target
-/// `public` and 404. NOTE: the server must also EXPOSE the `app` schema to
-/// PostgREST (`[api] schemas` in supabase/config.toml) for the live path to
-/// reach this function; that server/config change is OUT of RF-063 scope (which
-/// stops at the injected session seam) and belongs to the live-wiring ticket.
+/// The default schema is `public` (RF-064): the client calls
+/// `client.schema('public').rpc('sync_pull', ...)`, hitting `public.sync_pull` —
+/// a narrow SECURITY INVOKER wrapper that delegates verbatim to `app.sync_pull`.
+/// This keeps the `app` schema UNEXPOSED in PostgREST (so no other app RPC is
+/// reachable over HTTP) while `app.sync_pull` stays the server source of truth.
+/// The schema is configurable for tests/alternate deployments, but production
+/// targets `public`.
 class SupabaseSyncRpcTransport implements SyncRpcTransport {
-  const SupabaseSyncRpcTransport(this._client, {String schema = 'app'})
+  const SupabaseSyncRpcTransport(this._client, {String schema = 'public'})
     : _schema = schema;
 
   final SupabaseClient _client;
