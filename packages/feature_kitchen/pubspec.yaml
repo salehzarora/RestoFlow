@@ -1,5 +1,5 @@
 name: restoflow_feature_kitchen
-description: RestoFlow feature_kitchen package (RF-010 skeleton) - kitchen feature package (composes domain + data + UI). No implementation yet.
+description: RestoFlow feature_kitchen package - the kitchen capability (composes domain + data + UI). RF-063 adds the KDS client data path - view models, a money-free sync_pull row mapper, a repository, and Riverpod providers.
 publish_to: none
 version: 0.0.1
 environment:
@@ -8,4 +8,13 @@ environment:
 resolution: workspace
 dependencies:
   flutter:
+    sdk: flutter
+  # RF-063: Riverpod state management (DECISION D-009 / ARCHITECTURE §4).
+  flutter_riverpod: '>=2.5.0 <3.0.0'
+  restoflow_domain:
+    path: ../domain
+  restoflow_sync:
+    path: ../sync
+dev_dependencies:
+  flutter_test:
     sdk: flutter

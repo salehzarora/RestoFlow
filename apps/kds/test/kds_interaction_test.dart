@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_kds/src/kds_screen.dart';
-import 'package:restoflow_kds/src/kds_ticket_view.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// RF-034 AC#1: bump moves a ready ticket to `bumped`; recall returns it to

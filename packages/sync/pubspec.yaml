@@ -1,7 +1,18 @@
 name: restoflow_sync
-description: RestoFlow sync package (RF-010 skeleton) - outbox/inbox sync engine - idempotency, retry/backoff, conflict, tombstones, poison handling. No implementation yet.
+description: RestoFlow sync package - offline sync orchestration. RF-063 adds the pull-only KDS sync coordinator (polling-first sync_pull, in-memory cursors, backoff; no push/realtime). Pure Dart.
 publish_to: none
 version: 0.0.1
 environment:
   sdk: ^3.12.0
 resolution: workspace
+
+# RF-063: pull-only KDS coordinator. Depends on the data_remote sync_pull
+# wrapper + core Result. No Flutter, no Drift, no realtime (DECISION D-010).
+dependencies:
+  restoflow_core:
+    path: ../core
+  restoflow_data_remote:
+    path: ../data_remote
+
+dev_dependencies:
+  test: ^1.25.0
