@@ -36,6 +36,12 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, grand_total_minor, local_operation_id) values
   ('00000000-0000-0000-0000-00000000a0d1', '00000000-0000-0000-0000-0000000000a0','00000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-00000000a1b1','00000000-0000-0000-0000-00000000da11','00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-0000000ef002','00000000-0000-0000-0000-00000000ab02','dine_in','submitted','USD',1000,1000,'ord-1');
 
+-- RF-055: record_payment now requires an open shift + active cash drawer (A2)
+insert into shifts (id, organization_id, restaurant_id, branch_id, device_id, opened_by_employee_profile_id, resolved_membership_id, local_operation_id) values
+  ('00000000-0000-0000-0000-00000000a5f1', '00000000-0000-0000-0000-0000000000a0','00000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-00000000a1b1','00000000-0000-0000-0000-00000000da11','00000000-0000-0000-0000-0000000ef002','00000000-0000-0000-0000-00000000ab02','fx-shift');
+insert into cash_drawer_sessions (id, organization_id, restaurant_id, branch_id, device_id, shift_id, opened_by_employee_profile_id, opening_float_minor, local_operation_id) values
+  ('00000000-0000-0000-0000-00000000acd1', '00000000-0000-0000-0000-0000000000a0','00000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-00000000a1b1','00000000-0000-0000-0000-00000000da11','00000000-0000-0000-0000-00000000a5f1','00000000-0000-0000-0000-0000000ef002',0,'fx-drawer');
+
 -- ===== authenticated: direct writes to the new tables are DENIED ============
 set local role authenticated;
 set local app.current_app_user_id = '00000000-0000-0000-0000-00000000ee02';
