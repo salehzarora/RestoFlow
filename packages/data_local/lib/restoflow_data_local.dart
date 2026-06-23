@@ -9,6 +9,8 @@
 library;
 
 export 'src/converters.dart';
+// RF-071: durable Drift-backed print spool store + table.
+export 'src/drift_print_spool_store.dart';
 export 'src/local_database.dart';
 // RF-030: local menu/catalog repository.
 export 'src/menu_repository.dart';

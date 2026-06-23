@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:restoflow_printing/restoflow_printing.dart';
 
 import 'sync_operation_state.dart';
 
@@ -16,4 +17,29 @@ class SyncOperationStateConverter
   @override
   SyncOperationState fromSql(String fromDb) =>
       SyncOperationState.fromWire(fromDb);
+}
+
+/// Drift [TypeConverter] persisting the RF-071 [PrintJobState] as its wire text
+/// (e.g. `possibly_printed`). The state machine lives in `packages/printing`;
+/// `data_local` only stores the wire value.
+class PrintJobStateConverter extends TypeConverter<PrintJobState, String> {
+  const PrintJobStateConverter();
+
+  @override
+  String toSql(PrintJobState value) => value.wireName;
+
+  @override
+  PrintJobState fromSql(String fromDb) => PrintJobState.fromWire(fromDb);
+}
+
+/// Drift [TypeConverter] persisting the RF-071 [PrintJobType] as its wire text
+/// (`receipt` / `kitchen_ticket`).
+class PrintJobTypeConverter extends TypeConverter<PrintJobType, String> {
+  const PrintJobTypeConverter();
+
+  @override
+  String toSql(PrintJobType value) => value.wireName;
+
+  @override
+  PrintJobType fromSql(String fromDb) => PrintJobType.fromWire(fromDb);
 }
