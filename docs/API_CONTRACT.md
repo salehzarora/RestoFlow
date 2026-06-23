@@ -332,6 +332,13 @@ Shift close and shift reconciliation are **two distinct RPCs** (**DECISION D-028
 - **Security:** `SECURITY DEFINER`, locked `search_path`, granted to `authenticated` only (never `anon`/`service_role`). The new org is RLS-isolated; cross-tenant access is impossible (isolation test, **RISK R-003**).
 - **Offline:** Online-only (tenant creation is not an offline/outbox operation).
 
+### 4.18 Platform-admin read-only panel RPCs (RF-091)
+Read-only platform overview surface on the separate platform plane (§4.16). All three share one gate (`app.platform_admin_guard`): authenticated principal → **active `platform_admin_grant`** (`app.is_platform_admin()`; a tenant membership, even `org_owner`, can **never** satisfy it — **DECISION D-026**, T-008) → **MFA assurance `aal2`** → **non-empty `reason`**. Each writes a `platform_admin_audit_events` row on success and returns only narrow summary fields. **Read-only:** no tenant mutation, no impersonation, no generic cross-tenant `select *`, no grant/revoke. `SECURITY DEFINER`, locked `search_path`, granted to `authenticated` only (self-gated); never `anon`/`service_role`.
+- **`platform_admin_organization_overview(p_reason)`** — platform-wide org summary: `{id, name, status, created_by_app_user_id, creation_request_id, restaurants_count, branches_count, active_memberships_count}[]`. Audited `platform.organizations.overview` (`target_organization_id` null = platform-wide).
+- **`platform_admin_get_organization(p_organization_id, p_reason)`** — one org's detail + restaurant/branch summary + counts; fails clearly (`42501`) if the org does not exist. Audited `platform.organization.read` with `target_organization_id = p_organization_id`.
+- **`platform_admin_recent_audit(p_reason, p_limit default 50)`** — recent `platform_admin_audit_events` (newest first, `p_limit` capped to [1,200]). Audited `platform.audit.read`.
+- **MFA note (Q-008):** these RF-091 RPCs require `aal2` (checked directly via `app.current_auth_assurance_level()`, since `app.require_mfa_for_privileged()` is membership-scoped and does not gate a membership-less platform admin). The pre-existing `platform_admin_list_organizations` (§4.16) is **not** yet `aal2`-gated — closing that inconsistency is a **Q-008 / hardening follow-up**.
+
 ---
 
 ## 5. Cross-References
