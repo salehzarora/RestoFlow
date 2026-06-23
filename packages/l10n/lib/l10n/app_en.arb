@@ -55,5 +55,53 @@
   "kdsTicketLabel": "Ticket",
   "@kdsTicketLabel": {
     "description": "KDS label prefixing a kitchen ticket identifier."
+  },
+  "posMenuHeading": "Menu",
+  "@posMenuHeading": {
+    "description": "POS heading above the menu item grid."
+  },
+  "posCartTitle": "Cart",
+  "@posCartTitle": {
+    "description": "POS heading for the cart/order panel."
+  },
+  "posCartEmpty": "Your cart is empty",
+  "@posCartEmpty": {
+    "description": "POS message shown when the cart has no items yet."
+  },
+  "posCartSubtotal": "Subtotal",
+  "@posCartSubtotal": {
+    "description": "POS label for the cart subtotal amount (non-authoritative preview, excludes tax)."
+  },
+  "posAddToCart": "Add",
+  "@posAddToCart": {
+    "description": "POS action that adds a menu item to the cart."
+  },
+  "posClearCart": "Clear",
+  "@posClearCart": {
+    "description": "POS action that removes all items from the cart."
+  },
+  "posRemoveItem": "Remove",
+  "@posRemoveItem": {
+    "description": "POS action/tooltip that removes a single line from the cart."
+  },
+  "posIncreaseQuantity": "Increase quantity",
+  "@posIncreaseQuantity": {
+    "description": "POS action/tooltip that increases a cart line quantity by one."
+  },
+  "posDecreaseQuantity": "Decrease quantity",
+  "@posDecreaseQuantity": {
+    "description": "POS action/tooltip that decreases a cart line quantity by one."
+  },
+  "posCategoryAll": "All",
+  "@posCategoryAll": {
+    "description": "POS filter chip that shows menu items from every category."
+  },
+  "posSendOrder": "Send Order",
+  "@posSendOrder": {
+    "description": "POS primary action button to send the current order (demo placeholder)."
+  },
+  "posDemoOrderNotice": "Demo only — order submission comes in a later step.",
+  "@posDemoOrderNotice": {
+    "description": "POS message shown when the demo Send Order button is tapped; no backend is called."
   }
 }

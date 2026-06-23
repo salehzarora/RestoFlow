@@ -183,6 +183,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ticket'**
   String get kdsTicketLabel;
+
+  /// POS heading above the menu item grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get posMenuHeading;
+
+  /// POS heading for the cart/order panel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cart'**
+  String get posCartTitle;
+
+  /// POS message shown when the cart has no items yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Your cart is empty'**
+  String get posCartEmpty;
+
+  /// POS label for the cart subtotal amount (non-authoritative preview, excludes tax).
+  ///
+  /// In en, this message translates to:
+  /// **'Subtotal'**
+  String get posCartSubtotal;
+
+  /// POS action that adds a menu item to the cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get posAddToCart;
+
+  /// POS action that removes all items from the cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get posClearCart;
+
+  /// POS action/tooltip that removes a single line from the cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get posRemoveItem;
+
+  /// POS action/tooltip that increases a cart line quantity by one.
+  ///
+  /// In en, this message translates to:
+  /// **'Increase quantity'**
+  String get posIncreaseQuantity;
+
+  /// POS action/tooltip that decreases a cart line quantity by one.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrease quantity'**
+  String get posDecreaseQuantity;
+
+  /// POS filter chip that shows menu items from every category.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get posCategoryAll;
+
+  /// POS primary action button to send the current order (demo placeholder).
+  ///
+  /// In en, this message translates to:
+  /// **'Send Order'**
+  String get posSendOrder;
+
+  /// POS message shown when the demo Send Order button is tapped; no backend is called.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo only — order submission comes in a later step.'**
+  String get posDemoOrderNotice;
 }
 
 class _AppLocalizationsDelegate

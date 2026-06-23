@@ -13,5 +13,17 @@
   "kdsBumpAction": "סיום",
   "kdsRecallAction": "שחזור",
   "kdsStationLabel": "עמדה",
-  "kdsTicketLabel": "כרטיס"
+  "kdsTicketLabel": "כרטיס",
+  "posMenuHeading": "תפריט",
+  "posCartTitle": "עגלה",
+  "posCartEmpty": "העגלה ריקה",
+  "posCartSubtotal": "סכום ביניים",
+  "posAddToCart": "הוספה",
+  "posClearCart": "ניקוי",
+  "posRemoveItem": "הסרה",
+  "posIncreaseQuantity": "הגדלת כמות",
+  "posDecreaseQuantity": "הקטנת כמות",
+  "posCategoryAll": "הכול",
+  "posSendOrder": "שליחת הזמנה",
+  "posDemoOrderNotice": "הדגמה בלבד — שליחת הזמנה תתווסף בהמשך."
 }

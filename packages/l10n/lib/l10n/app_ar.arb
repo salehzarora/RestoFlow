@@ -13,5 +13,17 @@
   "kdsBumpAction": "إنهاء",
   "kdsRecallAction": "استرجاع",
   "kdsStationLabel": "محطة",
-  "kdsTicketLabel": "تذكرة"
+  "kdsTicketLabel": "تذكرة",
+  "posMenuHeading": "القائمة",
+  "posCartTitle": "السلة",
+  "posCartEmpty": "سلتك فارغة",
+  "posCartSubtotal": "المجموع الفرعي",
+  "posAddToCart": "إضافة",
+  "posClearCart": "مسح",
+  "posRemoveItem": "إزالة",
+  "posIncreaseQuantity": "زيادة الكمية",
+  "posDecreaseQuantity": "إنقاص الكمية",
+  "posCategoryAll": "الكل",
+  "posSendOrder": "إرسال الطلب",
+  "posDemoOrderNotice": "نسخة تجريبية — إرسال الطلب يأتي في خطوة لاحقة."
 }

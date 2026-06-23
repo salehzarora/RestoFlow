@@ -49,4 +49,41 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kdsTicketLabel => 'تذكرة';
+
+  @override
+  String get posMenuHeading => 'القائمة';
+
+  @override
+  String get posCartTitle => 'السلة';
+
+  @override
+  String get posCartEmpty => 'سلتك فارغة';
+
+  @override
+  String get posCartSubtotal => 'المجموع الفرعي';
+
+  @override
+  String get posAddToCart => 'إضافة';
+
+  @override
+  String get posClearCart => 'مسح';
+
+  @override
+  String get posRemoveItem => 'إزالة';
+
+  @override
+  String get posIncreaseQuantity => 'زيادة الكمية';
+
+  @override
+  String get posDecreaseQuantity => 'إنقاص الكمية';
+
+  @override
+  String get posCategoryAll => 'الكل';
+
+  @override
+  String get posSendOrder => 'إرسال الطلب';
+
+  @override
+  String get posDemoOrderNotice =>
+      'نسخة تجريبية — إرسال الطلب يأتي في خطوة لاحقة.';
 }

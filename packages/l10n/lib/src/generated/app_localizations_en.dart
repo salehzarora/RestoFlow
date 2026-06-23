@@ -49,4 +49,41 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kdsTicketLabel => 'Ticket';
+
+  @override
+  String get posMenuHeading => 'Menu';
+
+  @override
+  String get posCartTitle => 'Cart';
+
+  @override
+  String get posCartEmpty => 'Your cart is empty';
+
+  @override
+  String get posCartSubtotal => 'Subtotal';
+
+  @override
+  String get posAddToCart => 'Add';
+
+  @override
+  String get posClearCart => 'Clear';
+
+  @override
+  String get posRemoveItem => 'Remove';
+
+  @override
+  String get posIncreaseQuantity => 'Increase quantity';
+
+  @override
+  String get posDecreaseQuantity => 'Decrease quantity';
+
+  @override
+  String get posCategoryAll => 'All';
+
+  @override
+  String get posSendOrder => 'Send Order';
+
+  @override
+  String get posDemoOrderNotice =>
+      'Demo only — order submission comes in a later step.';
 }

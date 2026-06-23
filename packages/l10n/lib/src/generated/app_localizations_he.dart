@@ -49,4 +49,40 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kdsTicketLabel => 'כרטיס';
+
+  @override
+  String get posMenuHeading => 'תפריט';
+
+  @override
+  String get posCartTitle => 'עגלה';
+
+  @override
+  String get posCartEmpty => 'העגלה ריקה';
+
+  @override
+  String get posCartSubtotal => 'סכום ביניים';
+
+  @override
+  String get posAddToCart => 'הוספה';
+
+  @override
+  String get posClearCart => 'ניקוי';
+
+  @override
+  String get posRemoveItem => 'הסרה';
+
+  @override
+  String get posIncreaseQuantity => 'הגדלת כמות';
+
+  @override
+  String get posDecreaseQuantity => 'הקטנת כמות';
+
+  @override
+  String get posCategoryAll => 'הכול';
+
+  @override
+  String get posSendOrder => 'שליחת הזמנה';
+
+  @override
+  String get posDemoOrderNotice => 'הדגמה בלבד — שליחת הזמנה תתווסף בהמשך.';
 }
