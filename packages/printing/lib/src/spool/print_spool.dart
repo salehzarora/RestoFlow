@@ -185,6 +185,12 @@ class PrintSpool {
   /// key + `reprintOf` + mandatory [reason]) that renders the SAME document. The
   /// original is never modified. Emits a [ReprintAuditEntry] to the sink.
   /// Throws if [reason] is blank or the original is missing.
+  ///
+  /// REFUSES cash-drawer jobs ([PrintJobType.cashDrawer]) with a [StateError]
+  /// (RF-58, for RF-074): reprinting a drawer kick would physically open the
+  /// drawer a second time, breaking the at-most-once guarantee. The refusal
+  /// happens before any new job is created and emits NO audit entry; the
+  /// original job is left unchanged.
   Future<PrintJob> reprint(
     String originalJobId, {
     required String reason,
@@ -201,6 +207,12 @@ class PrintSpool {
     final original = await _store.getById(originalJobId);
     if (original == null) {
       throw StateError('print job $originalJobId not found');
+    }
+    if (original.jobType == PrintJobType.cashDrawer) {
+      throw StateError(
+        'cash drawer jobs cannot be reprinted: a re-issue would open the '
+        'drawer again (job $originalJobId)',
+      );
     }
     final now = _clock();
     final newJobId = _generateId();

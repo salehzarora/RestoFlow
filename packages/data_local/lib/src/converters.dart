@@ -33,7 +33,8 @@ class PrintJobStateConverter extends TypeConverter<PrintJobState, String> {
 }
 
 /// Drift [TypeConverter] persisting the RF-071 [PrintJobType] as its wire text
-/// (`receipt` / `kitchen_ticket`).
+/// (`receipt` / `kitchen_ticket` / `drawer_kick`). Wire-driven via
+/// `wireName`/`fromWire`, so new job types persist with no converter change.
 class PrintJobTypeConverter extends TypeConverter<PrintJobType, String> {
   const PrintJobTypeConverter();
 

@@ -260,6 +260,57 @@ void main() {
       },
     );
 
+    test('reprint REFUSES a cash drawer job (RF-58: at-most-once)', () async {
+      final store = InMemoryPrintSpoolStore();
+      final sink = InMemoryReprintAuditSink();
+      var seq = 0;
+      final spool = PrintSpool(
+        store: store,
+        printer: _ScriptedPrinter([const PrintResult.success()]),
+        auditSink: sink,
+        clock: () => _t0,
+        newId: () => 'new-${seq++}',
+      );
+
+      final drawerJob = PrintJob(
+        id: 'drawer-orig',
+        organizationId: 'org',
+        branchId: 'b1',
+        deviceId: 'dev1',
+        localOperationId: 'drawer:payment-1',
+        jobType: PrintJobType.cashDrawer,
+        document: const PrintDocument([PrintDrawerKickLine()]),
+        createdAt: _t0,
+        updatedAt: _t0,
+        maxRetries: 0,
+      );
+      await spool.enqueue(drawerJob);
+
+      // It refuses with a clear cash-drawer error.
+      await expectLater(
+        () => spool.reprint(
+          'drawer-orig',
+          reason: 'manager asked',
+          actorId: 'm1',
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('cash drawer'),
+          ),
+        ),
+      );
+
+      // No new job was created, no audit entry emitted, original unchanged.
+      expect(await store.listRunnable(_t0), hasLength(1));
+      expect(sink.entries, isEmpty);
+      final orig = (await store.getById('drawer-orig'))!;
+      expect(orig.status, PrintJobState.created);
+      expect(orig.jobType, PrintJobType.cashDrawer);
+      expect(orig.reprintOf, isNull);
+    });
+
     test('reprint requires a non-blank reason', () async {
       final store = InMemoryPrintSpoolStore();
       final spool = PrintSpool(

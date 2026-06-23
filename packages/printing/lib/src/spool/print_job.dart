@@ -1,11 +1,19 @@
 import '../print_document.dart';
 import 'print_job_state.dart';
 
-/// The kind of artifact a print job produces (RF-071). Templates/content are
-/// RF-072 (kitchen) / RF-073 (receipt); RF-071 only tags the job.
+/// The kind of artifact a print job produces (RF-071, DOMAIN_MODEL §9.1).
+/// Templates/content are RF-072 (kitchen) / RF-073 (receipt); RF-071 only tags
+/// the job.
+///
+/// [cashDrawer] (`drawer_kick`) is a SPECIAL one-shot job (RF-58, consumed by
+/// RF-074): it must be at-most-once, so the RF-074 trigger layer enqueues it
+/// with `maxRetries: 0` (no automatic retry) and the spool REFUSES to
+/// [PrintSpool.reprint] it — a re-issue could physically open the drawer again
+/// (a crash/unknown outcome must never auto-open the drawer).
 enum PrintJobType {
   receipt('receipt'),
-  kitchenTicket('kitchen_ticket');
+  kitchenTicket('kitchen_ticket'),
+  cashDrawer('drawer_kick');
 
   const PrintJobType(this.wireName);
   final String wireName;
