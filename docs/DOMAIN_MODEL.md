@@ -380,8 +380,9 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 ## 9. Printing entity
 
 ### 9.1 `print_jobs`
-- **Purpose:** A queued render of a receipt or kitchen ticket sent to an ESC/POS printer behind a replaceable adapter (D-009). Printing/encoding detail owned by [PRINTERS_AND_HARDWARE_SPEC](PRINTERS_AND_HARDWARE_SPEC.md).
-- **Key fields:** `id`, `job_type` (`receipt`/`kitchen_ticket` — **ASSUMPTION** label set), `payload_ref` (rendered content/reference), `retry_count`, `max_retries`, `last_error`, `abandoned_at`, timestamps + `deleted_at`.
+- **Purpose:** A queued render of a receipt, kitchen ticket, or cash-drawer kick sent to an ESC/POS printer behind a replaceable adapter (D-009). Printing/encoding detail owned by [PRINTERS_AND_HARDWARE_SPEC](PRINTERS_AND_HARDWARE_SPEC.md).
+- **Key fields:** `id`, `job_type` (`receipt`/`kitchen_ticket`/`drawer_kick` — **ASSUMPTION** label set; `drawer_kick` added under RF-58 for the RF-074 cash-drawer kick), `payload_ref` (rendered content/reference), `retry_count`, `max_retries`, `last_error`, `abandoned_at`, timestamps + `deleted_at`.
+- **Cash-drawer (`drawer_kick`) jobs are one-shot (RF-58/RF-074):** created with `max_retries = 0` (no automatic retry) and **never reprinted** — a re-issue would physically open the drawer again, so a crash/unknown outcome must not auto-open it. See [STATE_MACHINES §8](STATE_MACHINES.md) and [PRINTERS_AND_HARDWARE_SPEC §11](PRINTERS_AND_HARDWARE_SPEC.md).
 - **Status column (PROPOSED, D-018 — approved into the frozen M0A baseline (RF-004); RF-001 §8 directs evaluation, not final assumption — Print job):** `created -> queued -> printing -> printed`; plus `failed -> retrying`, `cancelled`, `abandoned` (after max retries). **Terminal:** `printed`, `cancelled`, `abandoned`. Transitions in [STATE_MACHINES](STATE_MACHINES.md).
 - **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, `branch_id`, `device_id` (printing device), nullable `station_id` (for kitchen tickets).
 - **FKs:** nullable `order_id -> orders.id`, nullable `kitchen_ticket_id -> kitchen_tickets.id`, hierarchy ids.

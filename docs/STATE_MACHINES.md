@@ -276,6 +276,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 **Proposed states (D-018, approved into the frozen M0A baseline (RF-004)):** `created → queued → printing → printed`; plus `failed → retrying`, `cancelled`, `abandoned` (after max retries).
 **Terminal:** `printed`, `cancelled`, `abandoned`.
 > Print job behaviour and the ESC/POS adapter are owned by [PRINTERS_AND_HARDWARE_SPEC.md](PRINTERS_AND_HARDWARE_SPEC.md); this section owns only the state transitions.
+> **Cash-drawer jobs (`drawer_kick` job_type — RF-58 / RF-074) are a special one-shot variant.** To keep the physical drawer **at-most-once**, the RF-074 trigger layer creates them with `max_retries = 0` — a single dispatch, and any failure goes straight to `failed → abandoned`, **never** `retrying`. They are **never reprinted**: the spool refuses `reprint()` of a `drawer_kick` job because a re-issue would open the drawer again. A crash-interrupted kick (`printing → possiblyPrinted`) is left for manual review and **never auto-replayed**.
 
 ### 8.1 Allowed transitions
 

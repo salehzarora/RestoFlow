@@ -31,7 +31,7 @@ class PrintJobs extends Table {
   /// Idempotency key part (DECISION D-022); UNIQUE with [deviceId].
   TextColumn get localOperationId => text()();
 
-  /// `receipt` / `kitchen_ticket` (PrintJobType wire value).
+  /// `receipt` / `kitchen_ticket` / `drawer_kick` (PrintJobType wire value).
   TextColumn get jobType => text().map(const PrintJobTypeConverter())();
 
   /// Lifecycle state (DECISION D-018); stored as wire text.
