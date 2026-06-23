@@ -5,14 +5,16 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../format/money_format.dart';
 import '../state/cart_controller.dart';
+import 'order_confirmation.dart';
 
 /// The live cart/order panel: a header with item count + clear, the list of
 /// cart lines with quantity steppers + remove, and a footer with the subtotal
-/// and a (demo-only) Send Order action.
+/// and a Send Order action. After a local submit (RF-101) it shows the
+/// in-place [OrderConfirmation] instead of the cart.
 ///
 /// Reads/mutates the in-memory [cartControllerProvider]. Chrome is localized;
-/// item names are data; amounts are formatted integer minor-unit money. The
-/// Send Order button calls NO backend — it only shows a demo notice.
+/// item names are data; amounts are formatted integer minor-unit money. Send
+/// Order builds an in-memory demo order only — NO backend, kitchen, or printer.
 class CartPanel extends ConsumerWidget {
   const CartPanel({super.key});
 
@@ -22,14 +24,11 @@ class CartPanel extends ConsumerWidget {
     final cart = ref.watch(cartControllerProvider);
     final controller = ref.read(cartControllerProvider.notifier);
 
-    void onSend() {
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(l10n.posDemoOrderNotice),
-          behavior: SnackBarBehavior.floating,
-        ),
+    final submittedOrder = cart.submittedOrder;
+    if (submittedOrder != null) {
+      return OrderConfirmation(
+        order: submittedOrder,
+        onNewOrder: controller.startNewOrder,
       );
     }
 
@@ -69,7 +68,7 @@ class CartPanel extends ConsumerWidget {
           _CartFooter(
             l10n: l10n,
             subtotalText: MoneyFormatter.format(cart.subtotal),
-            onSend: cart.isEmpty ? null : onSend,
+            onSend: cart.isEmpty ? null : controller.submitOrder,
           ),
         ],
       ),

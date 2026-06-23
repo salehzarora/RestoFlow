@@ -25,5 +25,9 @@
   "posDecreaseQuantity": "הקטנת כמות",
   "posCategoryAll": "הכול",
   "posSendOrder": "שליחת הזמנה",
-  "posDemoOrderNotice": "הדגמה בלבד — שליחת הזמנה תתווסף בהמשך."
+  "posDemoOrderNotice": "הזמנת הדגמה — לא נשלחה לשרת, למטבח או למדפסת.",
+  "posOrderSubmittedTitle": "ההזמנה נשלחה",
+  "posOrderNumberLabel": "מספר הזמנה",
+  "posOrderStatusSubmitted": "נשלחה",
+  "posNewOrder": "הזמנה חדשה"
 }

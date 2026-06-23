@@ -85,5 +85,17 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posDemoOrderNotice =>
-      'نسخة تجريبية — إرسال الطلب يأتي في خطوة لاحقة.';
+      'طلب تجريبي — لم يُرسَل إلى خادم أو مطبخ أو طابعة.';
+
+  @override
+  String get posOrderSubmittedTitle => 'تم إرسال الطلب';
+
+  @override
+  String get posOrderNumberLabel => 'رقم الطلب';
+
+  @override
+  String get posOrderStatusSubmitted => 'تم الإرسال';
+
+  @override
+  String get posNewOrder => 'طلب جديد';
 }

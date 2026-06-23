@@ -100,8 +100,24 @@
   "@posSendOrder": {
     "description": "POS primary action button to send the current order (demo placeholder)."
   },
-  "posDemoOrderNotice": "Demo only — order submission comes in a later step.",
+  "posDemoOrderNotice": "Demo order — not sent to a backend, kitchen, or printer.",
   "@posDemoOrderNotice": {
-    "description": "POS message shown when the demo Send Order button is tapped; no backend is called."
+    "description": "POS notice on the local order confirmation clarifying nothing was sent to a backend/kitchen/printer."
+  },
+  "posOrderSubmittedTitle": "Order sent",
+  "@posOrderSubmittedTitle": {
+    "description": "POS heading on the local order-confirmation panel after Send Order."
+  },
+  "posOrderNumberLabel": "Order number",
+  "@posOrderNumberLabel": {
+    "description": "POS label preceding the local/provisional demo order number."
+  },
+  "posOrderStatusSubmitted": "Submitted",
+  "@posOrderStatusSubmitted": {
+    "description": "POS status chip label for a locally-submitted demo order."
+  },
+  "posNewOrder": "New order",
+  "@posNewOrder": {
+    "description": "POS action that dismisses the confirmation and starts a new empty order."
   }
 }

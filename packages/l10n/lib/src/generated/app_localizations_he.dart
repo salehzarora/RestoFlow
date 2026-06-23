@@ -84,5 +84,18 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posSendOrder => 'שליחת הזמנה';
 
   @override
-  String get posDemoOrderNotice => 'הדגמה בלבד — שליחת הזמנה תתווסף בהמשך.';
+  String get posDemoOrderNotice =>
+      'הזמנת הדגמה — לא נשלחה לשרת, למטבח או למדפסת.';
+
+  @override
+  String get posOrderSubmittedTitle => 'ההזמנה נשלחה';
+
+  @override
+  String get posOrderNumberLabel => 'מספר הזמנה';
+
+  @override
+  String get posOrderStatusSubmitted => 'נשלחה';
+
+  @override
+  String get posNewOrder => 'הזמנה חדשה';
 }

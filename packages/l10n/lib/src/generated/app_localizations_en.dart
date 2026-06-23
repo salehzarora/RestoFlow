@@ -85,5 +85,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDemoOrderNotice =>
-      'Demo only — order submission comes in a later step.';
+      'Demo order — not sent to a backend, kitchen, or printer.';
+
+  @override
+  String get posOrderSubmittedTitle => 'Order sent';
+
+  @override
+  String get posOrderNumberLabel => 'Order number';
+
+  @override
+  String get posOrderStatusSubmitted => 'Submitted';
+
+  @override
+  String get posNewOrder => 'New order';
 }

@@ -92,7 +92,58 @@ void main() {
     expect(find.text('Cappuccino'), findsOneWidget);
   });
 
-  testWidgets('Send Order shows a demo notice and does not submit', (
+  testWidgets('Send Order shows the local order confirmation', (tester) async {
+    _useWideSurface(tester);
+    await tester.pumpWidget(_wrap(const Locale('en')));
+    await tester.pumpAndSettle();
+
+    // Add Classic Burger (₪42.00) and submit.
+    await tester.tap(find.byIcon(Icons.add_shopping_cart).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send Order'));
+    await tester.pumpAndSettle();
+
+    // Confirmation replaces the cart.
+    expect(find.text('Order sent'), findsOneWidget);
+    expect(find.text('Submitted'), findsOneWidget);
+    expect(find.text('New order'), findsOneWidget);
+    expect(find.text('Send Order'), findsNothing);
+
+    final orderNumber = tester.widget<Text>(
+      find.byKey(const Key('order-number')),
+    );
+    expect(orderNumber.data, 'DEMO-0001');
+
+    final subtotal = tester.widget<Text>(
+      find.byKey(const Key('confirmation-subtotal')),
+    );
+    expect(subtotal.data, '₪42.00');
+
+    expect(
+      find.text('Demo order — not sent to a backend, kitchen, or printer.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('New order returns to the empty cart', (tester) async {
+    _useWideSurface(tester);
+    await tester.pumpWidget(_wrap(const Locale('en')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add_shopping_cart).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send Order'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('New order'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Order sent'), findsNothing);
+    expect(find.text('Your cart is empty'), findsOneWidget);
+    expect(find.text('Send Order'), findsOneWidget);
+  });
+
+  testWidgets('adding an item after confirmation starts a fresh order', (
     tester,
   ) async {
     _useWideSurface(tester);
@@ -101,15 +152,16 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.add_shopping_cart).first);
     await tester.pumpAndSettle();
-
     await tester.tap(find.text('Send Order'));
-    await tester.pump(); // surface the snackbar
+    await tester.pumpAndSettle();
+    expect(find.text('Order sent'), findsOneWidget);
 
-    expect(
-      find.text('Demo only — order submission comes in a later step.'),
-      findsOneWidget,
-    );
-    // The cart is untouched — no backend submit cleared it.
-    expect(find.text('Classic Burger'), findsNWidgets(2));
+    // Tapping a menu item dismisses the confirmation and starts a new cart.
+    await tester.tap(find.byIcon(Icons.add_shopping_cart).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Order sent'), findsNothing);
+    expect(find.text('Subtotal'), findsOneWidget);
+    expect(find.text('Send Order'), findsOneWidget);
   });
 }

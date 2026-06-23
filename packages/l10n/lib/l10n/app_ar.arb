@@ -25,5 +25,9 @@
   "posDecreaseQuantity": "إنقاص الكمية",
   "posCategoryAll": "الكل",
   "posSendOrder": "إرسال الطلب",
-  "posDemoOrderNotice": "نسخة تجريبية — إرسال الطلب يأتي في خطوة لاحقة."
+  "posDemoOrderNotice": "طلب تجريبي — لم يُرسَل إلى خادم أو مطبخ أو طابعة.",
+  "posOrderSubmittedTitle": "تم إرسال الطلب",
+  "posOrderNumberLabel": "رقم الطلب",
+  "posOrderStatusSubmitted": "تم الإرسال",
+  "posNewOrder": "طلب جديد"
 }

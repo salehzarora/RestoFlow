@@ -3,6 +3,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_money/restoflow_money.dart';
 
 import '../data/demo_menu.dart';
+import 'submitted_order_view.dart';
 
 /// Immutable view of a single cart line for the POS UI.
 ///
@@ -37,10 +38,15 @@ class CartViewState {
     required this.lines,
     required this.subtotalMinor,
     required this.currencyCode,
+    this.submittedOrder,
   });
 
-  /// Builds an immutable view from the mutable domain [Cart].
-  factory CartViewState.fromCart(Cart cart) {
+  /// Builds an immutable view from the mutable domain [Cart], optionally
+  /// carrying the last locally-submitted order snapshot (RF-101).
+  factory CartViewState.fromCart(
+    Cart cart, {
+    SubmittedOrderView? submittedOrder,
+  }) {
     final views = cart.lines
         .map(
           (line) => CartLineView(
@@ -58,12 +64,19 @@ class CartViewState {
       lines: views,
       subtotalMinor: cart.subtotalMinor,
       currencyCode: cart.currencyCode,
+      submittedOrder: submittedOrder,
     );
   }
 
   final List<CartLineView> lines;
   final int subtotalMinor;
   final String currencyCode;
+
+  /// Snapshot of the last locally-submitted demo order, or null when none is
+  /// being confirmed (RF-101). When non-null, the cart UI shows the confirmation.
+  final SubmittedOrderView? submittedOrder;
+
+  bool get hasSubmittedOrder => submittedOrder != null;
 
   bool get isEmpty => lines.isEmpty;
   bool get isNotEmpty => lines.isNotEmpty;
@@ -85,6 +98,8 @@ class CartViewState {
 class CartController extends Notifier<CartViewState> {
   late Cart _cart;
   int _lineSeq = 0;
+  int _orderSeq = 0;
+  SubmittedOrderView? _submittedOrder;
 
   Cart _freshCart() => Cart(
     orderId: 'demo-order',
@@ -97,12 +112,15 @@ class CartController extends Notifier<CartViewState> {
   @override
   CartViewState build() {
     _cart = _freshCart();
+    _submittedOrder = null;
     return CartViewState.fromCart(_cart);
   }
 
   /// Adds [item] to the cart. If a line for the same menu item already exists,
-  /// its quantity is incremented instead of adding a duplicate line.
+  /// its quantity is incremented instead of adding a duplicate line. Adding an
+  /// item while a confirmation is showing dismisses it and starts a fresh order.
   void addItem(DemoMenuItem item) {
+    _submittedOrder = null;
     final existing = _lineForMenuItem(item.id);
     if (existing != null) {
       _cart.changeQuantity(existing.lineId, existing.quantity + 1);
@@ -154,6 +172,42 @@ class CartController extends Notifier<CartViewState> {
     _emit();
   }
 
+  /// Locally "submits" the current cart (RF-101): materializes an in-memory
+  /// [LocalOrder] from the cart, snapshots it into a [SubmittedOrderView] with a
+  /// local/provisional demo number, then empties the cart so the confirmation
+  /// stands on its own. No backend, RPC, payment, kitchen, printer, or
+  /// persistence — purely a visible demo confirmation. No-op on an empty cart.
+  void submitOrder({OrderType orderType = OrderType.takeaway}) {
+    if (_cart.isEmpty) return;
+    final order = LocalOrder.submitFromCart(_cart, orderType: orderType);
+    _orderSeq++;
+    final orderNumber = 'DEMO-${_orderSeq.toString().padLeft(4, '0')}';
+    _submittedOrder = SubmittedOrderView(
+      orderNumber: orderNumber,
+      currencyCode: order.currencyCode,
+      subtotalMinor: order.subtotalMinorPreview,
+      lines: order.items
+          .map(
+            (item) => SubmittedLineView(
+              name: item.itemNameSnapshot,
+              quantity: item.quantity,
+              lineTotalMinor: item.lineTotalMinorPreview,
+              currencyCode: item.currencyCodeSnapshot,
+            ),
+          )
+          .toList(growable: false),
+    );
+    _cart = _freshCart();
+    _emit();
+  }
+
+  /// Dismisses the confirmation and returns to an empty cart (RF-101).
+  void startNewOrder() {
+    _submittedOrder = null;
+    _cart = _freshCart();
+    _emit();
+  }
+
   CartLine? _lineById(String lineId) {
     for (final line in _cart.lines) {
       if (line.lineId == lineId) return line;
@@ -168,7 +222,8 @@ class CartController extends Notifier<CartViewState> {
     return null;
   }
 
-  void _emit() => state = CartViewState.fromCart(_cart);
+  void _emit() =>
+      state = CartViewState.fromCart(_cart, submittedOrder: _submittedOrder);
 }
 
 /// Provider for the in-memory POS cart controller (demo-only).

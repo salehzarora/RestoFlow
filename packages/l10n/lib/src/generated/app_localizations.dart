@@ -250,11 +250,35 @@ abstract class AppLocalizations {
   /// **'Send Order'**
   String get posSendOrder;
 
-  /// POS message shown when the demo Send Order button is tapped; no backend is called.
+  /// POS notice on the local order confirmation clarifying nothing was sent to a backend/kitchen/printer.
   ///
   /// In en, this message translates to:
-  /// **'Demo only — order submission comes in a later step.'**
+  /// **'Demo order — not sent to a backend, kitchen, or printer.'**
   String get posDemoOrderNotice;
+
+  /// POS heading on the local order-confirmation panel after Send Order.
+  ///
+  /// In en, this message translates to:
+  /// **'Order sent'**
+  String get posOrderSubmittedTitle;
+
+  /// POS label preceding the local/provisional demo order number.
+  ///
+  /// In en, this message translates to:
+  /// **'Order number'**
+  String get posOrderNumberLabel;
+
+  /// POS status chip label for a locally-submitted demo order.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted'**
+  String get posOrderStatusSubmitted;
+
+  /// POS action that dismisses the confirmation and starts a new empty order.
+  ///
+  /// In en, this message translates to:
+  /// **'New order'**
+  String get posNewOrder;
 }
 
 class _AppLocalizationsDelegate
