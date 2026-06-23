@@ -56,6 +56,18 @@
   "@kdsTicketLabel": {
     "description": "KDS label prefixing a kitchen ticket identifier."
   },
+  "kdsLoadingState": "Loading tickets…",
+  "@kdsLoadingState": {
+    "description": "KDS message shown while the first ticket pull is loading."
+  },
+  "kdsErrorState": "Couldn't load tickets",
+  "@kdsErrorState": {
+    "description": "KDS message shown when tickets cannot be loaded."
+  },
+  "kdsReauthRequired": "Sign-in required",
+  "@kdsReauthRequired": {
+    "description": "KDS message shown when the session is revoked/expired and re-authentication is required."
+  },
   "posMenuHeading": "Menu",
   "@posMenuHeading": {
     "description": "POS heading above the menu item grid."

@@ -184,6 +184,24 @@ abstract class AppLocalizations {
   /// **'Ticket'**
   String get kdsTicketLabel;
 
+  /// KDS message shown while the first ticket pull is loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading tickets…'**
+  String get kdsLoadingState;
+
+  /// KDS message shown when tickets cannot be loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load tickets'**
+  String get kdsErrorState;
+
+  /// KDS message shown when the session is revoked/expired and re-authentication is required.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in required'**
+  String get kdsReauthRequired;
+
   /// POS heading above the menu item grid.
   ///
   /// In en, this message translates to:

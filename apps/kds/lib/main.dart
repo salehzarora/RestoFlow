@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
@@ -37,6 +38,7 @@ class KdsApp extends StatelessWidget {
       supportedLocales: kSupportedLocales,
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
+      theme: restoflowBaseTheme(),
       home: injected == null
           ? KdsScreen(tickets: _demoTickets())
           : const KdsSyncedHome(),

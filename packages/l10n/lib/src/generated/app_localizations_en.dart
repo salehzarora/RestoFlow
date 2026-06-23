@@ -51,6 +51,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kdsTicketLabel => 'Ticket';
 
   @override
+  String get kdsLoadingState => 'Loading tickets…';
+
+  @override
+  String get kdsErrorState => 'Couldn\'t load tickets';
+
+  @override
+  String get kdsReauthRequired => 'Sign-in required';
+
+  @override
   String get posMenuHeading => 'Menu';
 
   @override

@@ -51,6 +51,15 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kdsTicketLabel => 'כרטיס';
 
   @override
+  String get kdsLoadingState => 'טוען כרטיסים…';
+
+  @override
+  String get kdsErrorState => 'לא ניתן לטעון כרטיסים';
+
+  @override
+  String get kdsReauthRequired => 'נדרשת התחברות מחדש';
+
+  @override
   String get posMenuHeading => 'תפריט';
 
   @override

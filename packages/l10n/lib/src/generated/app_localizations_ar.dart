@@ -51,6 +51,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kdsTicketLabel => 'تذكرة';
 
   @override
+  String get kdsLoadingState => 'جارٍ تحميل التذاكر…';
+
+  @override
+  String get kdsErrorState => 'تعذّر تحميل التذاكر';
+
+  @override
+  String get kdsReauthRequired => 'تسجيل الدخول مطلوب';
+
+  @override
   String get posMenuHeading => 'القائمة';
 
   @override
