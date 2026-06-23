@@ -130,6 +130,8 @@ void main() {
         'item_variants',
         'modifiers',
         'modifier_options',
+        // RF-071 local print spool.
+        'print_jobs',
       });
     });
 

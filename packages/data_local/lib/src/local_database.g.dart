@@ -7679,6 +7679,1227 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
   }
 }
 
+class $PrintJobsTable extends PrintJobs
+    with TableInfo<$PrintJobsTable, PrintJobRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PrintJobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _organizationIdMeta = const VerificationMeta(
+    'organizationId',
+  );
+  @override
+  late final GeneratedColumn<String> organizationId = GeneratedColumn<String>(
+    'organization_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _branchIdMeta = const VerificationMeta(
+    'branchId',
+  );
+  @override
+  late final GeneratedColumn<String> branchId = GeneratedColumn<String>(
+    'branch_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stationIdMeta = const VerificationMeta(
+    'stationId',
+  );
+  @override
+  late final GeneratedColumn<String> stationId = GeneratedColumn<String>(
+    'station_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _localOperationIdMeta = const VerificationMeta(
+    'localOperationId',
+  );
+  @override
+  late final GeneratedColumn<String> localOperationId = GeneratedColumn<String>(
+    'local_operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<PrintJobType, String> jobType =
+      GeneratedColumn<String>(
+        'job_type',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<PrintJobType>($PrintJobsTable.$converterjobType);
+  @override
+  late final GeneratedColumnWithTypeConverter<PrintJobState, String> status =
+      GeneratedColumn<String>(
+        'status',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('created'),
+      ).withConverter<PrintJobState>($PrintJobsTable.$converterstatus);
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _retryCountMeta = const VerificationMeta(
+    'retryCount',
+  );
+  @override
+  late final GeneratedColumn<int> retryCount = GeneratedColumn<int>(
+    'retry_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _maxRetriesMeta = const VerificationMeta(
+    'maxRetries',
+  );
+  @override
+  late final GeneratedColumn<int> maxRetries = GeneratedColumn<int>(
+    'max_retries',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(12),
+  );
+  static const VerificationMeta _nextAttemptAtMeta = const VerificationMeta(
+    'nextAttemptAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextAttemptAt =
+      GeneratedColumn<DateTime>(
+        'next_attempt_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastErrorCodeMeta = const VerificationMeta(
+    'lastErrorCode',
+  );
+  @override
+  late final GeneratedColumn<String> lastErrorCode = GeneratedColumn<String>(
+    'last_error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastErrorMessageMeta = const VerificationMeta(
+    'lastErrorMessage',
+  );
+  @override
+  late final GeneratedColumn<String> lastErrorMessage = GeneratedColumn<String>(
+    'last_error_message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reprintOfMeta = const VerificationMeta(
+    'reprintOf',
+  );
+  @override
+  late final GeneratedColumn<String> reprintOf = GeneratedColumn<String>(
+    'reprint_of',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reprintReasonMeta = const VerificationMeta(
+    'reprintReason',
+  );
+  @override
+  late final GeneratedColumn<String> reprintReason = GeneratedColumn<String>(
+    'reprint_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _printedAtMeta = const VerificationMeta(
+    'printedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> printedAt = GeneratedColumn<DateTime>(
+    'printed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _abandonedAtMeta = const VerificationMeta(
+    'abandonedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> abandonedAt = GeneratedColumn<DateTime>(
+    'abandoned_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    organizationId,
+    branchId,
+    deviceId,
+    stationId,
+    localOperationId,
+    jobType,
+    status,
+    payloadJson,
+    retryCount,
+    maxRetries,
+    nextAttemptAt,
+    lastErrorCode,
+    lastErrorMessage,
+    reprintOf,
+    reprintReason,
+    createdAt,
+    updatedAt,
+    printedAt,
+    abandonedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'print_jobs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PrintJobRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('organization_id')) {
+      context.handle(
+        _organizationIdMeta,
+        organizationId.isAcceptableOrUnknown(
+          data['organization_id']!,
+          _organizationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_organizationIdMeta);
+    }
+    if (data.containsKey('branch_id')) {
+      context.handle(
+        _branchIdMeta,
+        branchId.isAcceptableOrUnknown(data['branch_id']!, _branchIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_branchIdMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('station_id')) {
+      context.handle(
+        _stationIdMeta,
+        stationId.isAcceptableOrUnknown(data['station_id']!, _stationIdMeta),
+      );
+    }
+    if (data.containsKey('local_operation_id')) {
+      context.handle(
+        _localOperationIdMeta,
+        localOperationId.isAcceptableOrUnknown(
+          data['local_operation_id']!,
+          _localOperationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localOperationIdMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('retry_count')) {
+      context.handle(
+        _retryCountMeta,
+        retryCount.isAcceptableOrUnknown(data['retry_count']!, _retryCountMeta),
+      );
+    }
+    if (data.containsKey('max_retries')) {
+      context.handle(
+        _maxRetriesMeta,
+        maxRetries.isAcceptableOrUnknown(data['max_retries']!, _maxRetriesMeta),
+      );
+    }
+    if (data.containsKey('next_attempt_at')) {
+      context.handle(
+        _nextAttemptAtMeta,
+        nextAttemptAt.isAcceptableOrUnknown(
+          data['next_attempt_at']!,
+          _nextAttemptAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error_code')) {
+      context.handle(
+        _lastErrorCodeMeta,
+        lastErrorCode.isAcceptableOrUnknown(
+          data['last_error_code']!,
+          _lastErrorCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error_message')) {
+      context.handle(
+        _lastErrorMessageMeta,
+        lastErrorMessage.isAcceptableOrUnknown(
+          data['last_error_message']!,
+          _lastErrorMessageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reprint_of')) {
+      context.handle(
+        _reprintOfMeta,
+        reprintOf.isAcceptableOrUnknown(data['reprint_of']!, _reprintOfMeta),
+      );
+    }
+    if (data.containsKey('reprint_reason')) {
+      context.handle(
+        _reprintReasonMeta,
+        reprintReason.isAcceptableOrUnknown(
+          data['reprint_reason']!,
+          _reprintReasonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('printed_at')) {
+      context.handle(
+        _printedAtMeta,
+        printedAt.isAcceptableOrUnknown(data['printed_at']!, _printedAtMeta),
+      );
+    }
+    if (data.containsKey('abandoned_at')) {
+      context.handle(
+        _abandonedAtMeta,
+        abandonedAt.isAcceptableOrUnknown(
+          data['abandoned_at']!,
+          _abandonedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {deviceId, localOperationId},
+  ];
+  @override
+  PrintJobRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PrintJobRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      organizationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}organization_id'],
+      )!,
+      branchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}branch_id'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      stationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}station_id'],
+      ),
+      localOperationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_operation_id'],
+      )!,
+      jobType: $PrintJobsTable.$converterjobType.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}job_type'],
+        )!,
+      ),
+      status: $PrintJobsTable.$converterstatus.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}status'],
+        )!,
+      ),
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      retryCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}retry_count'],
+      )!,
+      maxRetries: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_retries'],
+      )!,
+      nextAttemptAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_attempt_at'],
+      ),
+      lastErrorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error_code'],
+      ),
+      lastErrorMessage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error_message'],
+      ),
+      reprintOf: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reprint_of'],
+      ),
+      reprintReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reprint_reason'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      printedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}printed_at'],
+      ),
+      abandonedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}abandoned_at'],
+      ),
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $PrintJobsTable createAlias(String alias) {
+    return $PrintJobsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<PrintJobType, String> $converterjobType =
+      const PrintJobTypeConverter();
+  static TypeConverter<PrintJobState, String> $converterstatus =
+      const PrintJobStateConverter();
+}
+
+class PrintJobRow extends DataClass implements Insertable<PrintJobRow> {
+  /// Client-generated UUID primary key.
+  final String id;
+
+  /// Tenant scope (DECISION D-001).
+  final String organizationId;
+  final String branchId;
+  final String deviceId;
+
+  /// nullable station scope (kitchen-station tickets).
+  final String? stationId;
+
+  /// Idempotency key part (DECISION D-022); UNIQUE with [deviceId].
+  final String localOperationId;
+
+  /// `receipt` / `kitchen_ticket` (PrintJobType wire value).
+  final PrintJobType jobType;
+
+  /// Lifecycle state (DECISION D-018); stored as wire text.
+  final PrintJobState status;
+
+  /// The render-neutral [PrintDocument] serialized as JSON (A4). No raw bytes,
+  /// no money — text is caller-pre-formatted (D-007/D-008).
+  final String payloadJson;
+
+  /// Retry bookkeeping (policy/limits configurable, Q-018; defaults in engine).
+  final int retryCount;
+  final int maxRetries;
+  final DateTime? nextAttemptAt;
+  final String? lastErrorCode;
+  final String? lastErrorMessage;
+
+  /// Reprint linkage (PRINTERS §8.4): the original job id + mandatory reason.
+  final String? reprintOf;
+  final String? reprintReason;
+
+  /// Lifecycle timestamps (stored as UTC ISO-8601 text — DB option).
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? printedAt;
+  final DateTime? abandonedAt;
+
+  /// Tombstone for local pruning (matches the local convention; not synced).
+  final DateTime? deletedAt;
+  const PrintJobRow({
+    required this.id,
+    required this.organizationId,
+    required this.branchId,
+    required this.deviceId,
+    this.stationId,
+    required this.localOperationId,
+    required this.jobType,
+    required this.status,
+    required this.payloadJson,
+    required this.retryCount,
+    required this.maxRetries,
+    this.nextAttemptAt,
+    this.lastErrorCode,
+    this.lastErrorMessage,
+    this.reprintOf,
+    this.reprintReason,
+    required this.createdAt,
+    required this.updatedAt,
+    this.printedAt,
+    this.abandonedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['organization_id'] = Variable<String>(organizationId);
+    map['branch_id'] = Variable<String>(branchId);
+    map['device_id'] = Variable<String>(deviceId);
+    if (!nullToAbsent || stationId != null) {
+      map['station_id'] = Variable<String>(stationId);
+    }
+    map['local_operation_id'] = Variable<String>(localOperationId);
+    {
+      map['job_type'] = Variable<String>(
+        $PrintJobsTable.$converterjobType.toSql(jobType),
+      );
+    }
+    {
+      map['status'] = Variable<String>(
+        $PrintJobsTable.$converterstatus.toSql(status),
+      );
+    }
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['retry_count'] = Variable<int>(retryCount);
+    map['max_retries'] = Variable<int>(maxRetries);
+    if (!nullToAbsent || nextAttemptAt != null) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt);
+    }
+    if (!nullToAbsent || lastErrorCode != null) {
+      map['last_error_code'] = Variable<String>(lastErrorCode);
+    }
+    if (!nullToAbsent || lastErrorMessage != null) {
+      map['last_error_message'] = Variable<String>(lastErrorMessage);
+    }
+    if (!nullToAbsent || reprintOf != null) {
+      map['reprint_of'] = Variable<String>(reprintOf);
+    }
+    if (!nullToAbsent || reprintReason != null) {
+      map['reprint_reason'] = Variable<String>(reprintReason);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || printedAt != null) {
+      map['printed_at'] = Variable<DateTime>(printedAt);
+    }
+    if (!nullToAbsent || abandonedAt != null) {
+      map['abandoned_at'] = Variable<DateTime>(abandonedAt);
+    }
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  PrintJobsCompanion toCompanion(bool nullToAbsent) {
+    return PrintJobsCompanion(
+      id: Value(id),
+      organizationId: Value(organizationId),
+      branchId: Value(branchId),
+      deviceId: Value(deviceId),
+      stationId: stationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stationId),
+      localOperationId: Value(localOperationId),
+      jobType: Value(jobType),
+      status: Value(status),
+      payloadJson: Value(payloadJson),
+      retryCount: Value(retryCount),
+      maxRetries: Value(maxRetries),
+      nextAttemptAt: nextAttemptAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextAttemptAt),
+      lastErrorCode: lastErrorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastErrorCode),
+      lastErrorMessage: lastErrorMessage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastErrorMessage),
+      reprintOf: reprintOf == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reprintOf),
+      reprintReason: reprintReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reprintReason),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      printedAt: printedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(printedAt),
+      abandonedAt: abandonedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(abandonedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory PrintJobRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PrintJobRow(
+      id: serializer.fromJson<String>(json['id']),
+      organizationId: serializer.fromJson<String>(json['organizationId']),
+      branchId: serializer.fromJson<String>(json['branchId']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      stationId: serializer.fromJson<String?>(json['stationId']),
+      localOperationId: serializer.fromJson<String>(json['localOperationId']),
+      jobType: serializer.fromJson<PrintJobType>(json['jobType']),
+      status: serializer.fromJson<PrintJobState>(json['status']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      retryCount: serializer.fromJson<int>(json['retryCount']),
+      maxRetries: serializer.fromJson<int>(json['maxRetries']),
+      nextAttemptAt: serializer.fromJson<DateTime?>(json['nextAttemptAt']),
+      lastErrorCode: serializer.fromJson<String?>(json['lastErrorCode']),
+      lastErrorMessage: serializer.fromJson<String?>(json['lastErrorMessage']),
+      reprintOf: serializer.fromJson<String?>(json['reprintOf']),
+      reprintReason: serializer.fromJson<String?>(json['reprintReason']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      printedAt: serializer.fromJson<DateTime?>(json['printedAt']),
+      abandonedAt: serializer.fromJson<DateTime?>(json['abandonedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'organizationId': serializer.toJson<String>(organizationId),
+      'branchId': serializer.toJson<String>(branchId),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'stationId': serializer.toJson<String?>(stationId),
+      'localOperationId': serializer.toJson<String>(localOperationId),
+      'jobType': serializer.toJson<PrintJobType>(jobType),
+      'status': serializer.toJson<PrintJobState>(status),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'retryCount': serializer.toJson<int>(retryCount),
+      'maxRetries': serializer.toJson<int>(maxRetries),
+      'nextAttemptAt': serializer.toJson<DateTime?>(nextAttemptAt),
+      'lastErrorCode': serializer.toJson<String?>(lastErrorCode),
+      'lastErrorMessage': serializer.toJson<String?>(lastErrorMessage),
+      'reprintOf': serializer.toJson<String?>(reprintOf),
+      'reprintReason': serializer.toJson<String?>(reprintReason),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'printedAt': serializer.toJson<DateTime?>(printedAt),
+      'abandonedAt': serializer.toJson<DateTime?>(abandonedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  PrintJobRow copyWith({
+    String? id,
+    String? organizationId,
+    String? branchId,
+    String? deviceId,
+    Value<String?> stationId = const Value.absent(),
+    String? localOperationId,
+    PrintJobType? jobType,
+    PrintJobState? status,
+    String? payloadJson,
+    int? retryCount,
+    int? maxRetries,
+    Value<DateTime?> nextAttemptAt = const Value.absent(),
+    Value<String?> lastErrorCode = const Value.absent(),
+    Value<String?> lastErrorMessage = const Value.absent(),
+    Value<String?> reprintOf = const Value.absent(),
+    Value<String?> reprintReason = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> printedAt = const Value.absent(),
+    Value<DateTime?> abandonedAt = const Value.absent(),
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => PrintJobRow(
+    id: id ?? this.id,
+    organizationId: organizationId ?? this.organizationId,
+    branchId: branchId ?? this.branchId,
+    deviceId: deviceId ?? this.deviceId,
+    stationId: stationId.present ? stationId.value : this.stationId,
+    localOperationId: localOperationId ?? this.localOperationId,
+    jobType: jobType ?? this.jobType,
+    status: status ?? this.status,
+    payloadJson: payloadJson ?? this.payloadJson,
+    retryCount: retryCount ?? this.retryCount,
+    maxRetries: maxRetries ?? this.maxRetries,
+    nextAttemptAt: nextAttemptAt.present
+        ? nextAttemptAt.value
+        : this.nextAttemptAt,
+    lastErrorCode: lastErrorCode.present
+        ? lastErrorCode.value
+        : this.lastErrorCode,
+    lastErrorMessage: lastErrorMessage.present
+        ? lastErrorMessage.value
+        : this.lastErrorMessage,
+    reprintOf: reprintOf.present ? reprintOf.value : this.reprintOf,
+    reprintReason: reprintReason.present
+        ? reprintReason.value
+        : this.reprintReason,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    printedAt: printedAt.present ? printedAt.value : this.printedAt,
+    abandonedAt: abandonedAt.present ? abandonedAt.value : this.abandonedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  PrintJobRow copyWithCompanion(PrintJobsCompanion data) {
+    return PrintJobRow(
+      id: data.id.present ? data.id.value : this.id,
+      organizationId: data.organizationId.present
+          ? data.organizationId.value
+          : this.organizationId,
+      branchId: data.branchId.present ? data.branchId.value : this.branchId,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      stationId: data.stationId.present ? data.stationId.value : this.stationId,
+      localOperationId: data.localOperationId.present
+          ? data.localOperationId.value
+          : this.localOperationId,
+      jobType: data.jobType.present ? data.jobType.value : this.jobType,
+      status: data.status.present ? data.status.value : this.status,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      retryCount: data.retryCount.present
+          ? data.retryCount.value
+          : this.retryCount,
+      maxRetries: data.maxRetries.present
+          ? data.maxRetries.value
+          : this.maxRetries,
+      nextAttemptAt: data.nextAttemptAt.present
+          ? data.nextAttemptAt.value
+          : this.nextAttemptAt,
+      lastErrorCode: data.lastErrorCode.present
+          ? data.lastErrorCode.value
+          : this.lastErrorCode,
+      lastErrorMessage: data.lastErrorMessage.present
+          ? data.lastErrorMessage.value
+          : this.lastErrorMessage,
+      reprintOf: data.reprintOf.present ? data.reprintOf.value : this.reprintOf,
+      reprintReason: data.reprintReason.present
+          ? data.reprintReason.value
+          : this.reprintReason,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      printedAt: data.printedAt.present ? data.printedAt.value : this.printedAt,
+      abandonedAt: data.abandonedAt.present
+          ? data.abandonedAt.value
+          : this.abandonedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PrintJobRow(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('branchId: $branchId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('stationId: $stationId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('jobType: $jobType, ')
+          ..write('status: $status, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('retryCount: $retryCount, ')
+          ..write('maxRetries: $maxRetries, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('lastErrorCode: $lastErrorCode, ')
+          ..write('lastErrorMessage: $lastErrorMessage, ')
+          ..write('reprintOf: $reprintOf, ')
+          ..write('reprintReason: $reprintReason, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('printedAt: $printedAt, ')
+          ..write('abandonedAt: $abandonedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    organizationId,
+    branchId,
+    deviceId,
+    stationId,
+    localOperationId,
+    jobType,
+    status,
+    payloadJson,
+    retryCount,
+    maxRetries,
+    nextAttemptAt,
+    lastErrorCode,
+    lastErrorMessage,
+    reprintOf,
+    reprintReason,
+    createdAt,
+    updatedAt,
+    printedAt,
+    abandonedAt,
+    deletedAt,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PrintJobRow &&
+          other.id == this.id &&
+          other.organizationId == this.organizationId &&
+          other.branchId == this.branchId &&
+          other.deviceId == this.deviceId &&
+          other.stationId == this.stationId &&
+          other.localOperationId == this.localOperationId &&
+          other.jobType == this.jobType &&
+          other.status == this.status &&
+          other.payloadJson == this.payloadJson &&
+          other.retryCount == this.retryCount &&
+          other.maxRetries == this.maxRetries &&
+          other.nextAttemptAt == this.nextAttemptAt &&
+          other.lastErrorCode == this.lastErrorCode &&
+          other.lastErrorMessage == this.lastErrorMessage &&
+          other.reprintOf == this.reprintOf &&
+          other.reprintReason == this.reprintReason &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.printedAt == this.printedAt &&
+          other.abandonedAt == this.abandonedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class PrintJobsCompanion extends UpdateCompanion<PrintJobRow> {
+  final Value<String> id;
+  final Value<String> organizationId;
+  final Value<String> branchId;
+  final Value<String> deviceId;
+  final Value<String?> stationId;
+  final Value<String> localOperationId;
+  final Value<PrintJobType> jobType;
+  final Value<PrintJobState> status;
+  final Value<String> payloadJson;
+  final Value<int> retryCount;
+  final Value<int> maxRetries;
+  final Value<DateTime?> nextAttemptAt;
+  final Value<String?> lastErrorCode;
+  final Value<String?> lastErrorMessage;
+  final Value<String?> reprintOf;
+  final Value<String?> reprintReason;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> printedAt;
+  final Value<DateTime?> abandonedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const PrintJobsCompanion({
+    this.id = const Value.absent(),
+    this.organizationId = const Value.absent(),
+    this.branchId = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.stationId = const Value.absent(),
+    this.localOperationId = const Value.absent(),
+    this.jobType = const Value.absent(),
+    this.status = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.retryCount = const Value.absent(),
+    this.maxRetries = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+    this.lastErrorMessage = const Value.absent(),
+    this.reprintOf = const Value.absent(),
+    this.reprintReason = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.printedAt = const Value.absent(),
+    this.abandonedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PrintJobsCompanion.insert({
+    required String id,
+    required String organizationId,
+    required String branchId,
+    required String deviceId,
+    this.stationId = const Value.absent(),
+    required String localOperationId,
+    required PrintJobType jobType,
+    this.status = const Value.absent(),
+    required String payloadJson,
+    this.retryCount = const Value.absent(),
+    this.maxRetries = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+    this.lastErrorMessage = const Value.absent(),
+    this.reprintOf = const Value.absent(),
+    this.reprintReason = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.printedAt = const Value.absent(),
+    this.abandonedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       organizationId = Value(organizationId),
+       branchId = Value(branchId),
+       deviceId = Value(deviceId),
+       localOperationId = Value(localOperationId),
+       jobType = Value(jobType),
+       payloadJson = Value(payloadJson),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<PrintJobRow> custom({
+    Expression<String>? id,
+    Expression<String>? organizationId,
+    Expression<String>? branchId,
+    Expression<String>? deviceId,
+    Expression<String>? stationId,
+    Expression<String>? localOperationId,
+    Expression<String>? jobType,
+    Expression<String>? status,
+    Expression<String>? payloadJson,
+    Expression<int>? retryCount,
+    Expression<int>? maxRetries,
+    Expression<DateTime>? nextAttemptAt,
+    Expression<String>? lastErrorCode,
+    Expression<String>? lastErrorMessage,
+    Expression<String>? reprintOf,
+    Expression<String>? reprintReason,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? printedAt,
+    Expression<DateTime>? abandonedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (organizationId != null) 'organization_id': organizationId,
+      if (branchId != null) 'branch_id': branchId,
+      if (deviceId != null) 'device_id': deviceId,
+      if (stationId != null) 'station_id': stationId,
+      if (localOperationId != null) 'local_operation_id': localOperationId,
+      if (jobType != null) 'job_type': jobType,
+      if (status != null) 'status': status,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (retryCount != null) 'retry_count': retryCount,
+      if (maxRetries != null) 'max_retries': maxRetries,
+      if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
+      if (lastErrorCode != null) 'last_error_code': lastErrorCode,
+      if (lastErrorMessage != null) 'last_error_message': lastErrorMessage,
+      if (reprintOf != null) 'reprint_of': reprintOf,
+      if (reprintReason != null) 'reprint_reason': reprintReason,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (printedAt != null) 'printed_at': printedAt,
+      if (abandonedAt != null) 'abandoned_at': abandonedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PrintJobsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? organizationId,
+    Value<String>? branchId,
+    Value<String>? deviceId,
+    Value<String?>? stationId,
+    Value<String>? localOperationId,
+    Value<PrintJobType>? jobType,
+    Value<PrintJobState>? status,
+    Value<String>? payloadJson,
+    Value<int>? retryCount,
+    Value<int>? maxRetries,
+    Value<DateTime?>? nextAttemptAt,
+    Value<String?>? lastErrorCode,
+    Value<String?>? lastErrorMessage,
+    Value<String?>? reprintOf,
+    Value<String?>? reprintReason,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? printedAt,
+    Value<DateTime?>? abandonedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return PrintJobsCompanion(
+      id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
+      branchId: branchId ?? this.branchId,
+      deviceId: deviceId ?? this.deviceId,
+      stationId: stationId ?? this.stationId,
+      localOperationId: localOperationId ?? this.localOperationId,
+      jobType: jobType ?? this.jobType,
+      status: status ?? this.status,
+      payloadJson: payloadJson ?? this.payloadJson,
+      retryCount: retryCount ?? this.retryCount,
+      maxRetries: maxRetries ?? this.maxRetries,
+      nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+      lastErrorCode: lastErrorCode ?? this.lastErrorCode,
+      lastErrorMessage: lastErrorMessage ?? this.lastErrorMessage,
+      reprintOf: reprintOf ?? this.reprintOf,
+      reprintReason: reprintReason ?? this.reprintReason,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      printedAt: printedAt ?? this.printedAt,
+      abandonedAt: abandonedAt ?? this.abandonedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (organizationId.present) {
+      map['organization_id'] = Variable<String>(organizationId.value);
+    }
+    if (branchId.present) {
+      map['branch_id'] = Variable<String>(branchId.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (stationId.present) {
+      map['station_id'] = Variable<String>(stationId.value);
+    }
+    if (localOperationId.present) {
+      map['local_operation_id'] = Variable<String>(localOperationId.value);
+    }
+    if (jobType.present) {
+      map['job_type'] = Variable<String>(
+        $PrintJobsTable.$converterjobType.toSql(jobType.value),
+      );
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(
+        $PrintJobsTable.$converterstatus.toSql(status.value),
+      );
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (retryCount.present) {
+      map['retry_count'] = Variable<int>(retryCount.value);
+    }
+    if (maxRetries.present) {
+      map['max_retries'] = Variable<int>(maxRetries.value);
+    }
+    if (nextAttemptAt.present) {
+      map['next_attempt_at'] = Variable<DateTime>(nextAttemptAt.value);
+    }
+    if (lastErrorCode.present) {
+      map['last_error_code'] = Variable<String>(lastErrorCode.value);
+    }
+    if (lastErrorMessage.present) {
+      map['last_error_message'] = Variable<String>(lastErrorMessage.value);
+    }
+    if (reprintOf.present) {
+      map['reprint_of'] = Variable<String>(reprintOf.value);
+    }
+    if (reprintReason.present) {
+      map['reprint_reason'] = Variable<String>(reprintReason.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (printedAt.present) {
+      map['printed_at'] = Variable<DateTime>(printedAt.value);
+    }
+    if (abandonedAt.present) {
+      map['abandoned_at'] = Variable<DateTime>(abandonedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PrintJobsCompanion(')
+          ..write('id: $id, ')
+          ..write('organizationId: $organizationId, ')
+          ..write('branchId: $branchId, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('stationId: $stationId, ')
+          ..write('localOperationId: $localOperationId, ')
+          ..write('jobType: $jobType, ')
+          ..write('status: $status, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('retryCount: $retryCount, ')
+          ..write('maxRetries: $maxRetries, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('lastErrorCode: $lastErrorCode, ')
+          ..write('lastErrorMessage: $lastErrorMessage, ')
+          ..write('reprintOf: $reprintOf, ')
+          ..write('reprintReason: $reprintReason, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('printedAt: $printedAt, ')
+          ..write('abandonedAt: $abandonedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LocalDatabase extends GeneratedDatabase {
   _$LocalDatabase(QueryExecutor e) : super(e);
   $LocalDatabaseManager get managers => $LocalDatabaseManager(this);
@@ -7696,6 +8917,7 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final $ModifierOptionsTable modifierOptions = $ModifierOptionsTable(
     this,
   );
+  late final $PrintJobsTable printJobs = $PrintJobsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7709,6 +8931,7 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     itemVariants,
     modifiers,
     modifierOptions,
+    printJobs,
   ];
 }
 
@@ -12224,6 +13447,532 @@ typedef $$ModifierOptionsTableProcessedTableManager =
       ModifierOption,
       PrefetchHooks Function({bool modifierId})
     >;
+typedef $$PrintJobsTableCreateCompanionBuilder =
+    PrintJobsCompanion Function({
+      required String id,
+      required String organizationId,
+      required String branchId,
+      required String deviceId,
+      Value<String?> stationId,
+      required String localOperationId,
+      required PrintJobType jobType,
+      Value<PrintJobState> status,
+      required String payloadJson,
+      Value<int> retryCount,
+      Value<int> maxRetries,
+      Value<DateTime?> nextAttemptAt,
+      Value<String?> lastErrorCode,
+      Value<String?> lastErrorMessage,
+      Value<String?> reprintOf,
+      Value<String?> reprintReason,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> printedAt,
+      Value<DateTime?> abandonedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$PrintJobsTableUpdateCompanionBuilder =
+    PrintJobsCompanion Function({
+      Value<String> id,
+      Value<String> organizationId,
+      Value<String> branchId,
+      Value<String> deviceId,
+      Value<String?> stationId,
+      Value<String> localOperationId,
+      Value<PrintJobType> jobType,
+      Value<PrintJobState> status,
+      Value<String> payloadJson,
+      Value<int> retryCount,
+      Value<int> maxRetries,
+      Value<DateTime?> nextAttemptAt,
+      Value<String?> lastErrorCode,
+      Value<String?> lastErrorMessage,
+      Value<String?> reprintOf,
+      Value<String?> reprintReason,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> printedAt,
+      Value<DateTime?> abandonedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$PrintJobsTableFilterComposer
+    extends Composer<_$LocalDatabase, $PrintJobsTable> {
+  $$PrintJobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stationId => $composableBuilder(
+    column: $table.stationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<PrintJobType, PrintJobType, String>
+  get jobType => $composableBuilder(
+    column: $table.jobType,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<PrintJobState, PrintJobState, String>
+  get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get retryCount => $composableBuilder(
+    column: $table.retryCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxRetries => $composableBuilder(
+    column: $table.maxRetries,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastErrorMessage => $composableBuilder(
+    column: $table.lastErrorMessage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reprintOf => $composableBuilder(
+    column: $table.reprintOf,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reprintReason => $composableBuilder(
+    column: $table.reprintReason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get printedAt => $composableBuilder(
+    column: $table.printedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get abandonedAt => $composableBuilder(
+    column: $table.abandonedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PrintJobsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $PrintJobsTable> {
+  $$PrintJobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get branchId => $composableBuilder(
+    column: $table.branchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stationId => $composableBuilder(
+    column: $table.stationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get jobType => $composableBuilder(
+    column: $table.jobType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get retryCount => $composableBuilder(
+    column: $table.retryCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxRetries => $composableBuilder(
+    column: $table.maxRetries,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastErrorMessage => $composableBuilder(
+    column: $table.lastErrorMessage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reprintOf => $composableBuilder(
+    column: $table.reprintOf,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reprintReason => $composableBuilder(
+    column: $table.reprintReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get printedAt => $composableBuilder(
+    column: $table.printedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get abandonedAt => $composableBuilder(
+    column: $table.abandonedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PrintJobsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $PrintJobsTable> {
+  $$PrintJobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get organizationId => $composableBuilder(
+    column: $table.organizationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get branchId =>
+      $composableBuilder(column: $table.branchId, builder: (column) => column);
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get stationId =>
+      $composableBuilder(column: $table.stationId, builder: (column) => column);
+
+  GeneratedColumn<String> get localOperationId => $composableBuilder(
+    column: $table.localOperationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<PrintJobType, String> get jobType =>
+      $composableBuilder(column: $table.jobType, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<PrintJobState, String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get retryCount => $composableBuilder(
+    column: $table.retryCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get maxRetries => $composableBuilder(
+    column: $table.maxRetries,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastErrorMessage => $composableBuilder(
+    column: $table.lastErrorMessage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get reprintOf =>
+      $composableBuilder(column: $table.reprintOf, builder: (column) => column);
+
+  GeneratedColumn<String> get reprintReason => $composableBuilder(
+    column: $table.reprintReason,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get printedAt =>
+      $composableBuilder(column: $table.printedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get abandonedAt => $composableBuilder(
+    column: $table.abandonedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$PrintJobsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $PrintJobsTable,
+          PrintJobRow,
+          $$PrintJobsTableFilterComposer,
+          $$PrintJobsTableOrderingComposer,
+          $$PrintJobsTableAnnotationComposer,
+          $$PrintJobsTableCreateCompanionBuilder,
+          $$PrintJobsTableUpdateCompanionBuilder,
+          (
+            PrintJobRow,
+            BaseReferences<_$LocalDatabase, $PrintJobsTable, PrintJobRow>,
+          ),
+          PrintJobRow,
+          PrefetchHooks Function()
+        > {
+  $$PrintJobsTableTableManager(_$LocalDatabase db, $PrintJobsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PrintJobsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PrintJobsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PrintJobsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> organizationId = const Value.absent(),
+                Value<String> branchId = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String?> stationId = const Value.absent(),
+                Value<String> localOperationId = const Value.absent(),
+                Value<PrintJobType> jobType = const Value.absent(),
+                Value<PrintJobState> status = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<int> retryCount = const Value.absent(),
+                Value<int> maxRetries = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+                Value<String?> lastErrorMessage = const Value.absent(),
+                Value<String?> reprintOf = const Value.absent(),
+                Value<String?> reprintReason = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> printedAt = const Value.absent(),
+                Value<DateTime?> abandonedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PrintJobsCompanion(
+                id: id,
+                organizationId: organizationId,
+                branchId: branchId,
+                deviceId: deviceId,
+                stationId: stationId,
+                localOperationId: localOperationId,
+                jobType: jobType,
+                status: status,
+                payloadJson: payloadJson,
+                retryCount: retryCount,
+                maxRetries: maxRetries,
+                nextAttemptAt: nextAttemptAt,
+                lastErrorCode: lastErrorCode,
+                lastErrorMessage: lastErrorMessage,
+                reprintOf: reprintOf,
+                reprintReason: reprintReason,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                printedAt: printedAt,
+                abandonedAt: abandonedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String organizationId,
+                required String branchId,
+                required String deviceId,
+                Value<String?> stationId = const Value.absent(),
+                required String localOperationId,
+                required PrintJobType jobType,
+                Value<PrintJobState> status = const Value.absent(),
+                required String payloadJson,
+                Value<int> retryCount = const Value.absent(),
+                Value<int> maxRetries = const Value.absent(),
+                Value<DateTime?> nextAttemptAt = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+                Value<String?> lastErrorMessage = const Value.absent(),
+                Value<String?> reprintOf = const Value.absent(),
+                Value<String?> reprintReason = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> printedAt = const Value.absent(),
+                Value<DateTime?> abandonedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PrintJobsCompanion.insert(
+                id: id,
+                organizationId: organizationId,
+                branchId: branchId,
+                deviceId: deviceId,
+                stationId: stationId,
+                localOperationId: localOperationId,
+                jobType: jobType,
+                status: status,
+                payloadJson: payloadJson,
+                retryCount: retryCount,
+                maxRetries: maxRetries,
+                nextAttemptAt: nextAttemptAt,
+                lastErrorCode: lastErrorCode,
+                lastErrorMessage: lastErrorMessage,
+                reprintOf: reprintOf,
+                reprintReason: reprintReason,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                printedAt: printedAt,
+                abandonedAt: abandonedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PrintJobsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $PrintJobsTable,
+      PrintJobRow,
+      $$PrintJobsTableFilterComposer,
+      $$PrintJobsTableOrderingComposer,
+      $$PrintJobsTableAnnotationComposer,
+      $$PrintJobsTableCreateCompanionBuilder,
+      $$PrintJobsTableUpdateCompanionBuilder,
+      (
+        PrintJobRow,
+        BaseReferences<_$LocalDatabase, $PrintJobsTable, PrintJobRow>,
+      ),
+      PrintJobRow,
+      PrefetchHooks Function()
+    >;
 
 class $LocalDatabaseManager {
   final _$LocalDatabase _db;
@@ -12244,4 +13993,6 @@ class $LocalDatabaseManager {
       $$ModifiersTableTableManager(_db, _db.modifiers);
   $$ModifierOptionsTableTableManager get modifierOptions =>
       $$ModifierOptionsTableTableManager(_db, _db.modifierOptions);
+  $$PrintJobsTableTableManager get printJobs =>
+      $$PrintJobsTableTableManager(_db, _db.printJobs);
 }

@@ -20,6 +20,10 @@ dependencies:
   # SecureKeyStore / SecretValue / fail-closed exceptions from core.
   restoflow_core:
     path: ../core
+  # RF-071: the print-spool model/state/codec/store port (pure Dart, no cycle —
+  # printing has no deps). data_local provides the Drift-backed PrintSpoolStore.
+  restoflow_printing:
+    path: ../printing
 
 dev_dependencies:
   drift_dev: '>=2.18.0 <3.0.0'

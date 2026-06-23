@@ -1,4 +1,7 @@
 import 'package:drift/drift.dart';
+// RF-071: brings PrintJobState/PrintJobType into the library scope so the
+// generated `part` (local_database.g.dart) can reference the converter types.
+import 'package:restoflow_printing/restoflow_printing.dart';
 
 import 'converters.dart';
 import 'sync_operation_state.dart';
@@ -9,6 +12,7 @@ import 'tables/menu_items.dart';
 import 'tables/modifier_options.dart';
 import 'tables/modifiers.dart';
 import 'tables/outbox_operations.dart';
+import 'tables/print_jobs.dart';
 import 'tables/processed_pull_log.dart';
 
 part 'local_database.g.dart';
@@ -24,6 +28,10 @@ part 'local_database.g.dart';
 ///
 /// The sync engine (push RF-056 / pull RF-057), encryption at rest (RF-021),
 /// auth/JWT (RF-050) and conflict resolution are all OUT of scope here.
+///
+/// RF-071 adds the durable LOCAL print spool ([PrintJobs]) — local-only, not
+/// cross-device synced; the spool engine/state machine live in
+/// `packages/printing`.
 @DriftDatabase(
   tables: [
     OutboxOperations,
@@ -34,21 +42,23 @@ part 'local_database.g.dart';
     ItemVariants,
     Modifiers,
     ModifierOptions,
+    PrintJobs,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
   /// Opens the database on [executor] (e.g. `NativeDatabase.memory()` in tests).
   LocalDatabase(super.executor);
 
-  /// v1 = RF-018 sync foundation; v2 = RF-030 menu catalog tables.
+  /// v1 = RF-018 sync foundation; v2 = RF-030 menu catalog; v3 = RF-071 print
+  /// spool (`print_jobs`).
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
-  /// Migration strategy (RF-030).
+  /// Migration strategy.
   ///
   /// `onCreate` builds the full current schema. The v1 -> v2 upgrade ADDS the
-  /// six menu tables only — it never drops or recreates the RF-018 tables
-  /// (`outbox_operations`, `processed_pull_log`). Foreign keys are enabled so
+  /// six menu tables; the v2 -> v3 upgrade ADDS the `print_jobs` table only.
+  /// Existing tables are never dropped or recreated. Foreign keys are enabled so
   /// the menu FK relationships (item->category, size/variant/modifier->item,
   /// option->modifier) are enforced.
   @override
@@ -64,6 +74,10 @@ class LocalDatabase extends _$LocalDatabase {
         await m.createTable(itemVariants);
         await m.createTable(modifiers);
         await m.createTable(modifierOptions);
+      }
+      if (from < 3) {
+        // RF-071: add the local print spool (no FK to other tables).
+        await m.createTable(printJobs);
       }
     },
     beforeOpen: (details) async {
