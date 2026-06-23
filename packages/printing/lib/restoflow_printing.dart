@@ -13,10 +13,13 @@
 /// [PrintDocumentCodec] for durable persistence (A4), and a [ReprintAuditSink]
 /// port (the literal server audit_events write is a deferred follow-up, A1).
 ///
-/// The print layer never computes/formats money (D-007/D-008) and performs no
-/// Arabic/Hebrew shaping/RTL (RF-073). Routing (RF-072), receipt templates
-/// (RF-073), the drawer-kick trigger (RF-074), and the server reprint-audit RPC
-/// live elsewhere.
+/// The print layer may FORMAT already-supplied integer minor-unit values for
+/// display (RF-073 receipts), but it never CALCULATES, recomputes, or derives
+/// money/tax totals — authoritative amounts are provided by the caller
+/// (D-007/D-008). The ESC/POS layer performs no Arabic/Hebrew shaping/RTL; that
+/// rasterization lives in packages/l10n (RF-073). Routing (RF-072), receipt
+/// templates (RF-073), the drawer-kick trigger (RF-074), and the server
+/// reprint-audit RPC live elsewhere.
 library;
 
 export 'src/codec/print_document_codec.dart';
@@ -27,6 +30,14 @@ export 'src/print_document.dart';
 export 'src/print_result.dart';
 export 'src/printer.dart';
 export 'src/printer_profile.dart';
+// RF-073: customer receipt printing (ar/he/en, 58/80mm, raster fallback). The
+// builder/input/money-formatter/dispatcher are pure-Dart; the real Flutter
+// rasterizer implementing ReceiptRasterizer lives in packages/l10n.
+export 'src/receipt/customer_receipt_print_builder.dart';
+export 'src/receipt/receipt_input.dart';
+export 'src/receipt/receipt_money_format.dart';
+export 'src/receipt/receipt_print_dispatcher.dart';
+export 'src/receipt/receipt_rasterizer.dart';
 export 'src/spool/print_job.dart';
 export 'src/spool/print_job_state.dart';
 export 'src/spool/print_spool.dart';

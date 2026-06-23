@@ -14,6 +14,10 @@ dependencies:
   # Required by the gen-l10n generated AppLocalizations (message formatting).
   # `any` defers to the version pinned transitively by flutter_localizations.
   intl: any
+  # RF-073: the pure-Dart ReceiptRasterizer port + receipt types; l10n provides
+  # the real Flutter/dart:ui implementation (FlutterReceiptRasterizer).
+  restoflow_printing:
+    path: ../printing
 dev_dependencies:
   flutter_test:
     sdk: flutter
