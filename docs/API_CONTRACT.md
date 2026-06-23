@@ -339,6 +339,12 @@ Read-only platform overview surface on the separate platform plane (§4.16). All
 - **`platform_admin_recent_audit(p_reason, p_limit default 50)`** — recent `platform_admin_audit_events` (newest first, `p_limit` capped to [1,200]). Audited `platform.audit.read`.
 - **MFA note (Q-008):** these RF-091 RPCs require `aal2` (checked directly via `app.current_auth_assurance_level()`, since `app.require_mfa_for_privileged()` is membership-scoped and does not gate a membership-less platform admin). The pre-existing `platform_admin_list_organizations` (§4.16) is **not** yet `aal2`-gated — closing that inconsistency is a **Q-008 / hardening follow-up**.
 
+### 4.19 Reporting read views — daily reports + dashboard rollups (RF-075 / RF-092)
+Read-only reporting is exposed as **RLS-scoped views** (the "read-mostly via RLS" pattern, §1.2), not RPCs. All are `security_invoker = true`, so the RF-059 SELECT gate `app.can_read_financials(org, restaurant, branch)` applies **as the caller** — `org_owner`/`restaurant_owner`/`manager`/`accountant` see their scoped rows, a **branch-scoped manager sees only their branch**, and **kitchen_staff/KDS and cross-tenant callers get zero rows**. All figures are integer `_minor`; nothing is recomputed (the rollups are integer `SUM`s and reconcile to the per-branch report). Read-only; no mutation; the platform plane (§4.16/§4.18) is separate. Dashboard **UI is deferred**.
+- **`daily_branch_sales_report`** (RF-075) — per `(organization_id, restaurant_id, branch_id, business_day, currency_code)`: `order_count`, `gross_minor`, `discount_total_minor`, `net_sales_minor`, `tax_total_minor`, `void_count`, `void_total_minor`, `collected_total_minor`, `collected_cash_minor` (+ companion `daily_branch_shift_lines`, `daily_branch_void_discount_reasons`).
+- **`dashboard_org_daily_sales`** (RF-092) — org-level rollup per `(organization_id, business_day, currency_code)`: `restaurant_count`, `branch_count`, and the summed `_minor` buckets above. An org_owner aggregates all visible branches across all their restaurants (**D-002**); a branch-scoped manager aggregates only their branch.
+- **`dashboard_restaurant_daily_sales`** (RF-092) — restaurant-level rollup per `(organization_id, restaurant_id, business_day, currency_code)`: `branch_count` + the summed `_minor` buckets. Reconciles to `daily_branch_sales_report` by construction.
+
 ---
 
 ## 5. Cross-References
