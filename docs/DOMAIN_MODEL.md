@@ -412,6 +412,23 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 
 ---
 
+## 10a. Billing entities (RF-093, basic)
+
+Billing attaches to the **Organization** (the tenant, **D-003**). RF-093 ships **internal subscription state only** — there is **no external payment provider, checkout, webhook, invoice, or tax/legal accounting** (the billing model is **OPEN QUESTION Q-016**, deferred). Money is integer `_minor` (**D-007**).
+
+### 10a.1 `plans`
+- **Purpose:** Shared (NOT tenant-scoped) subscription plan catalog.
+- **Key fields:** `code` (PK), `display_name`, `price_minor` (integer minor; RF-093 placeholder `0`), `currency_code`, `max_branches` (null = unlimited), `is_active`, timestamps. Seeded `free`/`basic`.
+- **Access:** readable by authenticated; no tenant writes.
+
+### 10a.2 `organization_subscriptions`
+- **Purpose:** One subscription row per organization (the billing unit).
+- **Key fields:** `organization_id` (PK, FK → organizations), `plan_code` (FK → plans), `status` (`trialing`/`active`/`past_due`/`canceled`), `current_period_start`/`current_period_end`, timestamps.
+- **Tenant/scoping:** `organization_id` (**D-001**). RLS SELECT only to `org_owner`/`accountant` in the org; all direct tenant writes denied — mutated **only** by the platform-admin RPC `app.set_organization_plan` (audited, **D-026**). `org_owner` reads but cannot change billing (no self-serve, Q-016 deferred).
+- **Entitlement surface:** the `organization_entitlements` view + `app.org_plan_limit` primitive expose the org's plan/limits per-tenant (no external provider ids in RF-093). See [API_CONTRACT §4.20](API_CONTRACT.md).
+
+---
+
 ## 11. Cross-cutting summary
 
 | Concern | Rule | Decision |
