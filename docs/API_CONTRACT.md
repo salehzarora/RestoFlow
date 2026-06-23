@@ -321,6 +321,17 @@ Shift close and shift reconciliation are **two distinct RPCs** (**DECISION D-028
 - **Tenant isolation:** Platform-admin operations **never silently bypass** tenant RLS or membership scoping; any cross-tenant access is an explicit, narrowly scoped, fully audited action.
 - **Audit:** All platform-admin actions, including platform-admin `sync_pull`/reads (§4.15), are written to the append-only audit trail on a dedicated path (**DECISION D-013**, [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md)).
 
+### 4.17 `create_organization` (self-serve onboarding, RF-090)
+- **Purpose:** A new authenticated user provisions its OWN tenant: an `organization` + first `restaurant` + `branch` (+ an optional default `station`) + the first `org_owner` **membership**, fully isolated by `organization_id` (**DECISION D-001/D-002/D-004**).
+- **Auth:** Authenticated Supabase principal only; the caller is derived from `auth.uid()` and **never** from input. Unauthenticated calls are rejected (`42501`).
+- **Inputs:** `p_client_request_id` (uuid, idempotency key), `p_organization_name`, `p_organization_slug` (`^[a-z0-9]+(-[a-z0-9]+)*$`, globally unique), `p_restaurant_name`, `p_branch_name`, `p_currency_code` (`^[A-Z]{3}$`), `p_timezone` (IANA, validated against `pg_timezone_names`), optional `p_default_station_name`.
+- **Returns:** jsonb `{ ok, idempotent_replay, organization_id, restaurant_id, branch_id, station_id, membership_id, app_user_id, slug }`.
+- **Side effects:** Bootstraps the caller's `app_users` row (linked to `auth.uid()`, email from the JWT claim — **no shared accounts**, **DECISION D-004**); creates the org/restaurant/branch/station and the `org_owner` membership; writes an `organization.created` audit event (**DECISION D-013**).
+- **Authorization model:** The owner is a **membership-scoped** role (`org_owner`), never a global/platform role. The RPC accepts **no** `role`, `app_user_id`, `organization_id`, or platform input, and **never** writes `platform_admin_grants` — `platform_admin` remains the separate, audited plane (**DECISION D-026**).
+- **Idempotency:** Keyed on `(caller, p_client_request_id)` via `organizations.creation_request_id` (a partial unique index). Same caller + same key returns the existing org (no duplicate); reuse with conflicting org-level input fails (`42501`). A different key may create another org (multi-org ownership).
+- **Security:** `SECURITY DEFINER`, locked `search_path`, granted to `authenticated` only (never `anon`/`service_role`). The new org is RLS-isolated; cross-tenant access is impossible (isolation test, **RISK R-003**).
+- **Offline:** Online-only (tenant creation is not an offline/outbox operation).
+
 ---
 
 ## 5. Cross-References
