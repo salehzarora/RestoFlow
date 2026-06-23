@@ -15,6 +15,8 @@ This document is the proposed source of truth for **operations and recovery** (a
 - [OPEN_QUESTIONS](OPEN_QUESTIONS.md) — owns the open-questions register (Q-xxx).
 - [PILOT_PLAN](PILOT_PLAN.md) — owns the M3 pilot specifics.
 - `AGENTS.md` (repo root) — owns agent guardrails and forbidden actions referenced below.
+- [RUNBOOKS](RUNBOOKS.md) — RF-094 operational runbooks (backup/restore drill §1, monitoring/alerting §2, and the per-incident runbooks §3–§6) that implement the design in §5 and §7 here; this document remains the owner of the design.
+- [PRODUCTION_READINESS](PRODUCTION_READINESS.md) — RF-094 production-readiness verdict + go/no-go gate (real go-live is human-owned and currently BLOCKED).
 
 > Scope note: M0A is **documentation only**. Nothing here authorizes creating infrastructure, Supabase projects, migrations, CI, or secrets. This document describes the operational design to be implemented from M0B onward, consistent with **DECISION D-009** (tech stack) and **DECISION D-019** (milestones).
 
@@ -144,6 +146,10 @@ On shared (`staging`) and `prod`:
 
 ## 5. Backup and Recovery
 
+> **RF-094 runbook:** the concrete, numbered backup/restore drill (production setup steps, local
+> simulation, and the post-restore validation checklist) lives in [RUNBOOKS.md](RUNBOOKS.md) §1. The
+> production-readiness verdict and go/no-go gate live in [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md).
+
 ### 5.1 Cadence and mechanism
 
 - **prod**: automated daily full backups plus **Point-In-Time Recovery (PITR)** where the provider plan supports it (Supabase managed Postgres, **DECISION D-009**).
@@ -183,6 +189,11 @@ On shared (`staging`) and `prod`:
 ---
 
 ## 7. Monitoring, Observability, and Incident Handling
+
+> **RF-094 runbooks:** concrete monitoring signals/alerting guidance and the per-incident runbooks
+> (sync outage / dead-letter, RLS / cross-tenant incident, printer/hardware failure, service-role/secret
+> compromise) live in [RUNBOOKS.md](RUNBOOKS.md) §2–§6, with the shared severity ladder mirroring §7.4
+> below. Production readiness + go/no-go: [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md).
 
 ### 7.1 Logs (with redaction)
 
