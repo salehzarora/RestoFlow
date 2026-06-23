@@ -8,6 +8,9 @@
 /// establishment (login/pairing/PIN) is out of RF-063 scope.
 library;
 
+export 'src/invalidation_hint.dart';
+export 'src/invalidation_source.dart';
+export 'src/realtime_invalidation_source.dart';
 export 'src/supabase_sync_rpc_transport.dart';
 export 'src/sync_cursor.dart';
 export 'src/sync_failure.dart';

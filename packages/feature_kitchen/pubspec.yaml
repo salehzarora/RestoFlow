@@ -11,6 +11,9 @@ dependencies:
     sdk: flutter
   # RF-063: Riverpod state management (DECISION D-009 / ARCHITECTURE §4).
   flutter_riverpod: '>=2.5.0 <3.0.0'
+  # RF-058: the realtime invalidation-source type for the optional KDS bridge.
+  restoflow_data_remote:
+    path: ../data_remote
   restoflow_domain:
     path: ../domain
   restoflow_sync:

@@ -18,10 +18,15 @@ void main() => runApp(const KdsApp());
 /// widget tests run with NO Supabase credentials (approved decision A1). RTL/LTR
 /// is data-driven by the shared `packages/l10n` wiring.
 class KdsApp extends StatelessWidget {
-  const KdsApp({this.source, super.key});
+  const KdsApp({this.source, this.invalidationSource, super.key});
 
   /// The injected sync source (authenticated). Null -> use the local fixture.
   final KdsSyncSource? source;
+
+  /// RF-058: an OPTIONAL realtime invalidation source. When provided (and a sync
+  /// [source] is too), realtime hints are bridged to refresh() on top of
+  /// polling. Null -> polling-only (realtime is never required).
+  final InvalidationSource? invalidationSource;
 
   @override
   Widget build(BuildContext context) {
@@ -37,8 +42,13 @@ class KdsApp extends StatelessWidget {
           : const KdsSyncedHome(),
     );
     if (injected == null) return app;
+    final invSource = invalidationSource;
     return ProviderScope(
-      overrides: [kdsSyncSourceProvider.overrideWithValue(injected)],
+      overrides: [
+        kdsSyncSourceProvider.overrideWithValue(injected),
+        if (invSource != null)
+          kdsInvalidationSourceProvider.overrideWithValue(invSource),
+      ],
       child: app,
     );
   }

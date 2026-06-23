@@ -10,6 +10,7 @@
 library;
 
 export 'src/backoff.dart';
+export 'src/kds_realtime_bridge.dart';
 export 'src/kds_sync_coordinator.dart';
 export 'src/kds_sync_state.dart';
 export 'src/sync_cursor_store.dart';

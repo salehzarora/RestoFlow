@@ -9,6 +9,17 @@
 /// root (approved decision A1); unoverridden, the app shell uses its fixture.
 library;
 
+// RF-058: re-export the realtime invalidation types so the KDS app can name an
+// optional InvalidationSource (and wire it via kdsInvalidationSourceProvider)
+// without a direct data_remote import.
+export 'package:restoflow_data_remote/restoflow_data_remote.dart'
+    show
+        DisabledInvalidationSource,
+        InvalidationHint,
+        InvalidationSource,
+        RealtimeInvalidationSource,
+        RealtimeScope;
+
 export 'src/kds_providers.dart';
 export 'src/kds_repository.dart';
 export 'src/kds_ticket_mapper.dart';
