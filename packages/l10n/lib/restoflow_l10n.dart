@@ -10,4 +10,7 @@ library;
 
 export 'src/generated/app_localizations.dart';
 export 'src/localization_wiring.dart';
+// RF-073: the real Flutter/dart:ui implementation of the printing package's
+// ReceiptRasterizer port (Arabic/Hebrew/English shaping -> 1bpp bitmap).
+export 'src/receipt/receipt_rasterizer_flutter.dart';
 export 'src/supported_locales.dart';
