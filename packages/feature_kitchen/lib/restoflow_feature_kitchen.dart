@@ -25,3 +25,11 @@ export 'src/kds_repository.dart';
 export 'src/kds_ticket_mapper.dart';
 export 'src/kds_ticket_view.dart';
 export 'src/kds_view_state.dart';
+
+// RF-072: kitchen-ticket print routing (route -> resolve destination -> build a
+// money-free document -> enqueue a durable print job). Composes RF-033 routing
+// with RF-070/RF-071 printing; no transport/UI/money.
+export 'src/print/kitchen_print_dispatcher.dart';
+export 'src/print/kitchen_print_result.dart';
+export 'src/print/kitchen_ticket_print_builder.dart';
+export 'src/print/station_printer_routing.dart';

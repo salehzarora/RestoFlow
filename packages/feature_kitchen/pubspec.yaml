@@ -16,6 +16,10 @@ dependencies:
     path: ../data_remote
   restoflow_domain:
     path: ../domain
+  # RF-072: render-neutral PrintDocument + durable PrintSpool/PrintJob for
+  # kitchen-ticket printing (RF-070/RF-071). Consumed, never modified.
+  restoflow_printing:
+    path: ../printing
   restoflow_sync:
     path: ../sync
 dev_dependencies:
