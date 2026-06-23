@@ -23,6 +23,11 @@
 library;
 
 export 'src/codec/print_document_codec.dart';
+// RF-074: cash-drawer kick trigger — a narrow input contract + a dispatcher
+// that enqueues a one-shot, no-retry `cashDrawer` job (consumes RF-070's
+// PrintDrawerKickLine + RF-071 spool + the RF-58 job type/reprint guard).
+export 'src/drawer/cash_drawer_kick_dispatcher.dart';
+export 'src/drawer/cash_drawer_kick_input.dart';
 export 'src/escpos/escpos_command_builder.dart';
 export 'src/escpos/escpos_print_adapter.dart';
 export 'src/print_adapter.dart';
