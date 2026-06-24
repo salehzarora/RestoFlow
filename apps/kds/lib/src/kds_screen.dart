@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -60,7 +61,19 @@ class _KdsScreenState extends State<KdsScreen> {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.kdsAppTitle)),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.kitchen_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: RestoflowSpacing.sm),
+            Text(l10n.kdsAppTitle),
+          ],
+        ),
+      ),
       body: widget.tickets.isEmpty
           ? KdsStateMessage(
               icon: Icons.restaurant_outlined,
