@@ -1,7 +1,21 @@
 name: restoflow_auth_identity
-description: RestoFlow auth_identity package (RF-010 skeleton) - the six identity concepts (user, membership, employee, device identity, device session, PIN session) and role keys. No implementation yet.
+description: RestoFlow auth_identity package - RF-108 typed models + services for real auth and role-based entry (public.get_my_context / public.start_pin_session). The six identity concepts and the six membership role keys; no UI/app integration in this stage.
 publish_to: none
 version: 0.0.1
 environment:
   sdk: ^3.12.0
 resolution: workspace
+
+# RF-108 Stage 1 is pure Dart (models + services + unit tests; no Flutter/UI).
+# It consumes the abstract RPC seam (SyncRpcTransport) from data_remote and the
+# Result type from core. The SupabaseClient is INJECTED by the app via the
+# Supabase-backed transport; this package holds NO URL/anon-key/secret and never
+# uses a service-role key (DECISION D-011).
+dependencies:
+  restoflow_core:
+    path: ../core
+  restoflow_data_remote:
+    path: ../data_remote
+
+dev_dependencies:
+  test: ^1.25.0

@@ -1,6 +1,20 @@
-/// RestoFlow auth_identity package - RF-010 skeleton.
+/// RestoFlow auth_identity package - RF-108 Stage 1: typed models + services for
+/// real auth and role-based entry. No app/UI integration in this stage.
 ///
-/// the six identity concepts (user, membership, employee, device identity, device session, PIN session) and role keys.
-/// Intentionally empty: implementation lands in later M0B/M1 tickets per the
-/// frozen architecture (docs/ARCHITECTURE.md section 3). No business logic in RF-010.
+/// Consumes the merged backend auth RPCs: `public.get_my_context()` (RF-124) and
+/// `public.start_pin_session()` (RF-123). Identity is server-derived from
+/// `auth.uid()` (NEVER client-supplied); roles are per-membership (D-004); the
+/// platform-admin flag is a SEPARATE boolean (D-026). No service-role key, no
+/// money fields, no hardcoded tenant ids, no `ok:false`, no `server_ts`.
 library;
+
+export 'src/app_surface.dart';
+export 'src/app_user_context.dart';
+export 'src/auth_context_repository.dart';
+export 'src/auth_failure.dart';
+export 'src/membership_context.dart';
+export 'src/membership_role.dart';
+export 'src/membership_selection.dart';
+export 'src/my_context.dart';
+export 'src/pin_session_service.dart';
+export 'src/role_entry_policy.dart';
