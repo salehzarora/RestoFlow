@@ -116,4 +116,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posNewOrder => 'New order';
+
+  @override
+  String get dashboardOverviewHeading => 'Today\'s overview';
+
+  @override
+  String get dashboardTodaySales => 'Today\'s sales';
+
+  @override
+  String get dashboardOrders => 'Orders';
+
+  @override
+  String get dashboardAvgOrderValue => 'Avg. order value';
+
+  @override
+  String get dashboardCompletedOrders => 'Completed orders';
+
+  @override
+  String get dashboardOpenOrders => 'Open orders';
+
+  @override
+  String get dashboardDailySummary => 'Daily summary';
+
+  @override
+  String get dashboardNetSales => 'Net sales';
+
+  @override
+  String get dashboardDiscounts => 'Discounts';
+
+  @override
+  String get dashboardVoids => 'Voids';
+
+  @override
+  String get dashboardCashCollected => 'Cash collected';
+
+  @override
+  String get dashboardCashVariance => 'Cash variance';
+
+  @override
+  String get dashboardShiftStatus => 'Shift';
+
+  @override
+  String get dashboardSalesByBranch => 'Sales by branch';
+
+  @override
+  String get dashboardTopItems => 'Top items';
+
+  @override
+  String get dashboardDemoNotice => 'Demo data — not from a live backend.';
 }

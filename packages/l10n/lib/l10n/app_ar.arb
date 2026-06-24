@@ -35,5 +35,21 @@
   "posOrderSubmittedTitle": "تم إرسال الطلب",
   "posOrderNumberLabel": "رقم الطلب",
   "posOrderStatusSubmitted": "تم الإرسال",
-  "posNewOrder": "طلب جديد"
+  "posNewOrder": "طلب جديد",
+  "dashboardOverviewHeading": "نظرة عامة لليوم",
+  "dashboardTodaySales": "مبيعات اليوم",
+  "dashboardOrders": "الطلبات",
+  "dashboardAvgOrderValue": "متوسط قيمة الطلب",
+  "dashboardCompletedOrders": "الطلبات المكتملة",
+  "dashboardOpenOrders": "الطلبات المفتوحة",
+  "dashboardDailySummary": "ملخص اليوم",
+  "dashboardNetSales": "صافي المبيعات",
+  "dashboardDiscounts": "الخصومات",
+  "dashboardVoids": "الإلغاءات",
+  "dashboardCashCollected": "النقد المُحصَّل",
+  "dashboardCashVariance": "فرق النقدية",
+  "dashboardShiftStatus": "الوردية",
+  "dashboardSalesByBranch": "المبيعات حسب الفرع",
+  "dashboardTopItems": "الأصناف الأكثر مبيعًا",
+  "dashboardDemoNotice": "بيانات تجريبية — ليست من خادم مباشر."
 }

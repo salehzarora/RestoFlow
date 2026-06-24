@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-void main() => runApp(const DashboardApp());
+import 'src/dashboard_home_screen.dart';
 
-/// Minimal localized dashboard shell (RF-020). Real owner/manager dashboard UI
-/// and features land in later tickets; this only proves locale resolution +
-/// RTL/LTR via the shared `packages/l10n` wiring. No business logic, no
-/// navigation, no hardcoded user-facing strings.
+void main() => runApp(const ProviderScope(child: DashboardApp()));
+
+/// RestoFlow owner/manager dashboard app (RF-104): a visible demo report-cards
+/// screen.
+///
+/// In-memory demo only — no Supabase, no report views, no backend. Localization
+/// /RTL come from the shared `packages/l10n` wiring; the theme (seeded Material
+/// 3 + tokens) comes from `packages/design_system`; state is Riverpod. Money is
+/// integer minor units (DECISION D-007).
 class DashboardApp extends StatelessWidget {
   const DashboardApp({super.key});
 
@@ -19,20 +26,8 @@ class DashboardApp extends StatelessWidget {
       supportedLocales: kSupportedLocales,
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      home: const _DashboardHome(),
-    );
-  }
-}
-
-class _DashboardHome extends StatelessWidget {
-  const _DashboardHome();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.dashboardAppTitle)),
-      body: Center(child: Text(l10n.welcomeMessage)),
+      theme: restoflowBaseTheme(),
+      home: const DashboardHomeScreen(),
     );
   }
 }

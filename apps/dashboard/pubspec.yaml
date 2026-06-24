@@ -1,5 +1,5 @@
 name: restoflow_dashboard
-description: RestoFlow dashboard app (RF-010 skeleton) - owner/manager dashboard app target. No features yet.
+description: RestoFlow dashboard app - owner/manager dashboard target. RF-104 adds the visible demo report-cards UI (in-memory, no backend).
 publish_to: none
 version: 0.0.1
 environment:
@@ -9,5 +9,17 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  flutter_riverpod: '>=2.5.0 <3.0.0'
   restoflow_l10n:
     path: ../../packages/l10n
+  restoflow_design_system:
+    path: ../../packages/design_system
+  restoflow_money:
+    path: ../../packages/money
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  # Bundles the Material Icons font so Icon(Icons.*) renders glyphs, not tofu.
+  uses-material-design: true

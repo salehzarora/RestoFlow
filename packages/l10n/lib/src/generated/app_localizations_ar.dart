@@ -116,4 +116,52 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posNewOrder => 'طلب جديد';
+
+  @override
+  String get dashboardOverviewHeading => 'نظرة عامة لليوم';
+
+  @override
+  String get dashboardTodaySales => 'مبيعات اليوم';
+
+  @override
+  String get dashboardOrders => 'الطلبات';
+
+  @override
+  String get dashboardAvgOrderValue => 'متوسط قيمة الطلب';
+
+  @override
+  String get dashboardCompletedOrders => 'الطلبات المكتملة';
+
+  @override
+  String get dashboardOpenOrders => 'الطلبات المفتوحة';
+
+  @override
+  String get dashboardDailySummary => 'ملخص اليوم';
+
+  @override
+  String get dashboardNetSales => 'صافي المبيعات';
+
+  @override
+  String get dashboardDiscounts => 'الخصومات';
+
+  @override
+  String get dashboardVoids => 'الإلغاءات';
+
+  @override
+  String get dashboardCashCollected => 'النقد المُحصَّل';
+
+  @override
+  String get dashboardCashVariance => 'فرق النقدية';
+
+  @override
+  String get dashboardShiftStatus => 'الوردية';
+
+  @override
+  String get dashboardSalesByBranch => 'المبيعات حسب الفرع';
+
+  @override
+  String get dashboardTopItems => 'الأصناف الأكثر مبيعًا';
+
+  @override
+  String get dashboardDemoNotice => 'بيانات تجريبية — ليست من خادم مباشر.';
 }
