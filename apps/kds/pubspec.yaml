@@ -18,6 +18,12 @@ dependencies:
     path: ../../packages/domain
   restoflow_sync:
     path: ../../packages/sync
+  restoflow_design_system:
+    path: ../../packages/design_system
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+flutter:
+  # Bundles the Material Icons font so Icon(Icons.*) renders glyphs, not tofu.
+  uses-material-design: true

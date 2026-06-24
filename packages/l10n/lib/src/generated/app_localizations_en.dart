@@ -45,8 +45,75 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kdsRecallAction => 'Recall';
 
   @override
+  String get kdsAcknowledgeAction => 'Acknowledge';
+
+  @override
+  String get kdsStartAction => 'Start';
+
+  @override
+  String get kdsReadyAction => 'Mark ready';
+
+  @override
   String get kdsStationLabel => 'Station';
 
   @override
   String get kdsTicketLabel => 'Ticket';
+
+  @override
+  String get kdsLoadingState => 'Loading tickets…';
+
+  @override
+  String get kdsErrorState => 'Couldn\'t load tickets';
+
+  @override
+  String get kdsReauthRequired => 'Sign-in required';
+
+  @override
+  String get posMenuHeading => 'Menu';
+
+  @override
+  String get posCartTitle => 'Cart';
+
+  @override
+  String get posCartEmpty => 'Your cart is empty';
+
+  @override
+  String get posCartSubtotal => 'Subtotal';
+
+  @override
+  String get posAddToCart => 'Add';
+
+  @override
+  String get posClearCart => 'Clear';
+
+  @override
+  String get posRemoveItem => 'Remove';
+
+  @override
+  String get posIncreaseQuantity => 'Increase quantity';
+
+  @override
+  String get posDecreaseQuantity => 'Decrease quantity';
+
+  @override
+  String get posCategoryAll => 'All';
+
+  @override
+  String get posSendOrder => 'Send Order';
+
+  @override
+  String get posDemoOrderNotice =>
+      'Demo order — not sent to a backend, kitchen, or printer.';
+
+  @override
+  String get posOrderSubmittedTitle => 'Order sent';
+
+  @override
+  String get posOrderNumberLabel => 'Order number';
+
+  @override
+  String get posOrderStatusSubmitted => 'Submitted';
+
+  @override
+  String get posNewOrder => 'New order';
 }

@@ -45,8 +45,75 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kdsRecallAction => 'استرجاع';
 
   @override
+  String get kdsAcknowledgeAction => 'استلام';
+
+  @override
+  String get kdsStartAction => 'بدء التحضير';
+
+  @override
+  String get kdsReadyAction => 'تم التحضير';
+
+  @override
   String get kdsStationLabel => 'محطة';
 
   @override
   String get kdsTicketLabel => 'تذكرة';
+
+  @override
+  String get kdsLoadingState => 'جارٍ تحميل التذاكر…';
+
+  @override
+  String get kdsErrorState => 'تعذّر تحميل التذاكر';
+
+  @override
+  String get kdsReauthRequired => 'تسجيل الدخول مطلوب';
+
+  @override
+  String get posMenuHeading => 'القائمة';
+
+  @override
+  String get posCartTitle => 'السلة';
+
+  @override
+  String get posCartEmpty => 'سلتك فارغة';
+
+  @override
+  String get posCartSubtotal => 'المجموع الفرعي';
+
+  @override
+  String get posAddToCart => 'إضافة';
+
+  @override
+  String get posClearCart => 'مسح';
+
+  @override
+  String get posRemoveItem => 'إزالة';
+
+  @override
+  String get posIncreaseQuantity => 'زيادة الكمية';
+
+  @override
+  String get posDecreaseQuantity => 'إنقاص الكمية';
+
+  @override
+  String get posCategoryAll => 'الكل';
+
+  @override
+  String get posSendOrder => 'إرسال الطلب';
+
+  @override
+  String get posDemoOrderNotice =>
+      'طلب تجريبي — لم يُرسَل إلى خادم أو مطبخ أو طابعة.';
+
+  @override
+  String get posOrderSubmittedTitle => 'تم إرسال الطلب';
+
+  @override
+  String get posOrderNumberLabel => 'رقم الطلب';
+
+  @override
+  String get posOrderStatusSubmitted => 'تم الإرسال';
+
+  @override
+  String get posNewOrder => 'طلب جديد';
 }

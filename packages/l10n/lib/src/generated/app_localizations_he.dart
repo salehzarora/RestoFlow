@@ -45,8 +45,75 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kdsRecallAction => 'שחזור';
 
   @override
+  String get kdsAcknowledgeAction => 'אישור קבלה';
+
+  @override
+  String get kdsStartAction => 'התחלת הכנה';
+
+  @override
+  String get kdsReadyAction => 'סימון כמוכן';
+
+  @override
   String get kdsStationLabel => 'עמדה';
 
   @override
   String get kdsTicketLabel => 'כרטיס';
+
+  @override
+  String get kdsLoadingState => 'טוען כרטיסים…';
+
+  @override
+  String get kdsErrorState => 'לא ניתן לטעון כרטיסים';
+
+  @override
+  String get kdsReauthRequired => 'נדרשת התחברות מחדש';
+
+  @override
+  String get posMenuHeading => 'תפריט';
+
+  @override
+  String get posCartTitle => 'עגלה';
+
+  @override
+  String get posCartEmpty => 'העגלה ריקה';
+
+  @override
+  String get posCartSubtotal => 'סכום ביניים';
+
+  @override
+  String get posAddToCart => 'הוספה';
+
+  @override
+  String get posClearCart => 'ניקוי';
+
+  @override
+  String get posRemoveItem => 'הסרה';
+
+  @override
+  String get posIncreaseQuantity => 'הגדלת כמות';
+
+  @override
+  String get posDecreaseQuantity => 'הקטנת כמות';
+
+  @override
+  String get posCategoryAll => 'הכול';
+
+  @override
+  String get posSendOrder => 'שליחת הזמנה';
+
+  @override
+  String get posDemoOrderNotice =>
+      'הזמנת הדגמה — לא נשלחה לשרת, למטבח או למדפסת.';
+
+  @override
+  String get posOrderSubmittedTitle => 'ההזמנה נשלחה';
+
+  @override
+  String get posOrderNumberLabel => 'מספר הזמנה';
+
+  @override
+  String get posOrderStatusSubmitted => 'נשלחה';
+
+  @override
+  String get posNewOrder => 'הזמנה חדשה';
 }

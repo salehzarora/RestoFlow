@@ -172,6 +172,24 @@ abstract class AppLocalizations {
   /// **'Recall'**
   String get kdsRecallAction;
 
+  /// KDS action that acknowledges a new ticket (new -> acknowledged).
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get kdsAcknowledgeAction;
+
+  /// KDS action that starts preparing an acknowledged ticket (acknowledged -> in_preparation).
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get kdsStartAction;
+
+  /// KDS action that marks a ticket ready (in_preparation -> ready).
+  ///
+  /// In en, this message translates to:
+  /// **'Mark ready'**
+  String get kdsReadyAction;
+
   /// KDS label prefixing a kitchen station name.
   ///
   /// In en, this message translates to:
@@ -183,6 +201,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ticket'**
   String get kdsTicketLabel;
+
+  /// KDS message shown while the first ticket pull is loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading tickets…'**
+  String get kdsLoadingState;
+
+  /// KDS message shown when tickets cannot be loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load tickets'**
+  String get kdsErrorState;
+
+  /// KDS message shown when the session is revoked/expired and re-authentication is required.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in required'**
+  String get kdsReauthRequired;
+
+  /// POS heading above the menu item grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get posMenuHeading;
+
+  /// POS heading for the cart/order panel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cart'**
+  String get posCartTitle;
+
+  /// POS message shown when the cart has no items yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Your cart is empty'**
+  String get posCartEmpty;
+
+  /// POS label for the cart subtotal amount (non-authoritative preview, excludes tax).
+  ///
+  /// In en, this message translates to:
+  /// **'Subtotal'**
+  String get posCartSubtotal;
+
+  /// POS action that adds a menu item to the cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get posAddToCart;
+
+  /// POS action that removes all items from the cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get posClearCart;
+
+  /// POS action/tooltip that removes a single line from the cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get posRemoveItem;
+
+  /// POS action/tooltip that increases a cart line quantity by one.
+  ///
+  /// In en, this message translates to:
+  /// **'Increase quantity'**
+  String get posIncreaseQuantity;
+
+  /// POS action/tooltip that decreases a cart line quantity by one.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrease quantity'**
+  String get posDecreaseQuantity;
+
+  /// POS filter chip that shows menu items from every category.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get posCategoryAll;
+
+  /// POS primary action button to send the current order (demo placeholder).
+  ///
+  /// In en, this message translates to:
+  /// **'Send Order'**
+  String get posSendOrder;
+
+  /// POS notice on the local order confirmation clarifying nothing was sent to a backend/kitchen/printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo order — not sent to a backend, kitchen, or printer.'**
+  String get posDemoOrderNotice;
+
+  /// POS heading on the local order-confirmation panel after Send Order.
+  ///
+  /// In en, this message translates to:
+  /// **'Order sent'**
+  String get posOrderSubmittedTitle;
+
+  /// POS label preceding the local/provisional demo order number.
+  ///
+  /// In en, this message translates to:
+  /// **'Order number'**
+  String get posOrderNumberLabel;
+
+  /// POS status chip label for a locally-submitted demo order.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted'**
+  String get posOrderStatusSubmitted;
+
+  /// POS action that dismisses the confirmation and starts a new empty order.
+  ///
+  /// In en, this message translates to:
+  /// **'New order'**
+  String get posNewOrder;
 }
 
 class _AppLocalizationsDelegate

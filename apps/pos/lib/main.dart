@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-void main() => runApp(const PosApp());
+import 'src/pos_menu_screen.dart';
 
-/// Minimal localized POS shell (RF-020). Real POS UI, routing, and features land
-/// in later tickets; this only proves locale resolution + RTL/LTR via the shared
-/// `packages/l10n` wiring. No business logic, no navigation, no hardcoded
-/// user-facing strings.
+void main() => runApp(const ProviderScope(child: PosApp()));
+
+/// RestoFlow POS app (RF-100): a visible, polished demo menu + cart screen.
+///
+/// In-memory demo only — no Supabase, no auth, no order submission, no payments,
+/// no persistence. Localization/RTL come from the shared `packages/l10n` wiring;
+/// the theme (seeded Material 3 + tokens) comes from `packages/design_system`;
+/// state is Riverpod.
 class PosApp extends StatelessWidget {
   const PosApp({super.key});
 
@@ -18,20 +24,8 @@ class PosApp extends StatelessWidget {
       supportedLocales: kSupportedLocales,
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      home: const _PosHome(),
-    );
-  }
-}
-
-class _PosHome extends StatelessWidget {
-  const _PosHome();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.posAppTitle)),
-      body: Center(child: Text(l10n.welcomeMessage)),
+      theme: restoflowBaseTheme(),
+      home: const PosMenuScreen(),
     );
   }
 }

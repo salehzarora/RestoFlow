@@ -56,10 +56,17 @@ void main() {
   testWidgets(
     'fixture fallback renders demo tickets when no session is injected',
     (tester) async {
+      // Tall, narrow surface so all RF-103 lifecycle-seeded fixture tickets
+      // are laid out (stacked layout; below the wide-columns breakpoint).
+      tester.view.physicalSize = const Size(880, 1700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       await tester.pumpWidget(const KdsApp()); // no source -> fixture
       await tester.pumpAndSettle();
 
-      // The RF-034 demo fixture: Burger ×2 and Beer ×3.
+      // The demo fixture still includes Burger ×2 and Beer ×3.
       expect(find.text('Burger ×2'), findsOneWidget);
       expect(find.text('Beer ×3'), findsOneWidget);
     },
