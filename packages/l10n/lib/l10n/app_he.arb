@@ -35,5 +35,21 @@
   "posOrderSubmittedTitle": "ההזמנה נשלחה",
   "posOrderNumberLabel": "מספר הזמנה",
   "posOrderStatusSubmitted": "נשלחה",
-  "posNewOrder": "הזמנה חדשה"
+  "posNewOrder": "הזמנה חדשה",
+  "dashboardOverviewHeading": "סקירת היום",
+  "dashboardTodaySales": "מכירות היום",
+  "dashboardOrders": "הזמנות",
+  "dashboardAvgOrderValue": "ערך הזמנה ממוצע",
+  "dashboardCompletedOrders": "הזמנות שהושלמו",
+  "dashboardOpenOrders": "הזמנות פתוחות",
+  "dashboardDailySummary": "סיכום יומי",
+  "dashboardNetSales": "מכירות נטו",
+  "dashboardDiscounts": "הנחות",
+  "dashboardVoids": "ביטולים",
+  "dashboardCashCollected": "מזומן שנאסף",
+  "dashboardCashVariance": "פער מזומן",
+  "dashboardShiftStatus": "משמרת",
+  "dashboardSalesByBranch": "מכירות לפי סניף",
+  "dashboardTopItems": "פריטים מובילים",
+  "dashboardDemoNotice": "נתוני הדגמה — לא משרת חי."
 }

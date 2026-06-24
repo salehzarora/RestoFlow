@@ -116,4 +116,52 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posNewOrder => 'הזמנה חדשה';
+
+  @override
+  String get dashboardOverviewHeading => 'סקירת היום';
+
+  @override
+  String get dashboardTodaySales => 'מכירות היום';
+
+  @override
+  String get dashboardOrders => 'הזמנות';
+
+  @override
+  String get dashboardAvgOrderValue => 'ערך הזמנה ממוצע';
+
+  @override
+  String get dashboardCompletedOrders => 'הזמנות שהושלמו';
+
+  @override
+  String get dashboardOpenOrders => 'הזמנות פתוחות';
+
+  @override
+  String get dashboardDailySummary => 'סיכום יומי';
+
+  @override
+  String get dashboardNetSales => 'מכירות נטו';
+
+  @override
+  String get dashboardDiscounts => 'הנחות';
+
+  @override
+  String get dashboardVoids => 'ביטולים';
+
+  @override
+  String get dashboardCashCollected => 'מזומן שנאסף';
+
+  @override
+  String get dashboardCashVariance => 'פער מזומן';
+
+  @override
+  String get dashboardShiftStatus => 'משמרת';
+
+  @override
+  String get dashboardSalesByBranch => 'מכירות לפי סניף';
+
+  @override
+  String get dashboardTopItems => 'פריטים מובילים';
+
+  @override
+  String get dashboardDemoNotice => 'נתוני הדגמה — לא משרת חי.';
 }

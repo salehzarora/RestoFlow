@@ -143,5 +143,69 @@
   "posNewOrder": "New order",
   "@posNewOrder": {
     "description": "POS action that dismisses the confirmation and starts a new empty order."
+  },
+  "dashboardOverviewHeading": "Today's overview",
+  "@dashboardOverviewHeading": {
+    "description": "Owner dashboard section heading above the daily KPI cards."
+  },
+  "dashboardTodaySales": "Today's sales",
+  "@dashboardTodaySales": {
+    "description": "Owner dashboard KPI card label for the day's net sales total."
+  },
+  "dashboardOrders": "Orders",
+  "@dashboardOrders": {
+    "description": "Owner dashboard KPI card label for the day's order count."
+  },
+  "dashboardAvgOrderValue": "Avg. order value",
+  "@dashboardAvgOrderValue": {
+    "description": "Owner dashboard KPI card label for the average order value."
+  },
+  "dashboardCompletedOrders": "Completed orders",
+  "@dashboardCompletedOrders": {
+    "description": "Owner dashboard KPI card label for the count of completed orders."
+  },
+  "dashboardOpenOrders": "Open orders",
+  "@dashboardOpenOrders": {
+    "description": "Owner dashboard label for the count of open/active orders."
+  },
+  "dashboardDailySummary": "Daily summary",
+  "@dashboardDailySummary": {
+    "description": "Owner dashboard heading for the daily summary card."
+  },
+  "dashboardNetSales": "Net sales",
+  "@dashboardNetSales": {
+    "description": "Owner dashboard daily-summary row label for net sales."
+  },
+  "dashboardDiscounts": "Discounts",
+  "@dashboardDiscounts": {
+    "description": "Owner dashboard daily-summary row label for total discounts."
+  },
+  "dashboardVoids": "Voids",
+  "@dashboardVoids": {
+    "description": "Owner dashboard daily-summary row label for voids (count and total)."
+  },
+  "dashboardCashCollected": "Cash collected",
+  "@dashboardCashCollected": {
+    "description": "Owner dashboard daily-summary row label for cash collected."
+  },
+  "dashboardCashVariance": "Cash variance",
+  "@dashboardCashVariance": {
+    "description": "Owner dashboard daily-summary row label for cash reconciliation variance (counted minus expected)."
+  },
+  "dashboardShiftStatus": "Shift",
+  "@dashboardShiftStatus": {
+    "description": "Owner dashboard daily-summary row label preceding the current shift status."
+  },
+  "dashboardSalesByBranch": "Sales by branch",
+  "@dashboardSalesByBranch": {
+    "description": "Owner dashboard heading for the per-branch sales list."
+  },
+  "dashboardTopItems": "Top items",
+  "@dashboardTopItems": {
+    "description": "Owner dashboard heading for the top-selling items list."
+  },
+  "dashboardDemoNotice": "Demo data — not from a live backend.",
+  "@dashboardDemoNotice": {
+    "description": "Owner dashboard banner clarifying the figures are in-memory demo data, not live."
   }
 }

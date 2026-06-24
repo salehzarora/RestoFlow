@@ -315,6 +315,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New order'**
   String get posNewOrder;
+
+  /// Owner dashboard section heading above the daily KPI cards.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s overview'**
+  String get dashboardOverviewHeading;
+
+  /// Owner dashboard KPI card label for the day's net sales total.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s sales'**
+  String get dashboardTodaySales;
+
+  /// Owner dashboard KPI card label for the day's order count.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders'**
+  String get dashboardOrders;
+
+  /// Owner dashboard KPI card label for the average order value.
+  ///
+  /// In en, this message translates to:
+  /// **'Avg. order value'**
+  String get dashboardAvgOrderValue;
+
+  /// Owner dashboard KPI card label for the count of completed orders.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed orders'**
+  String get dashboardCompletedOrders;
+
+  /// Owner dashboard label for the count of open/active orders.
+  ///
+  /// In en, this message translates to:
+  /// **'Open orders'**
+  String get dashboardOpenOrders;
+
+  /// Owner dashboard heading for the daily summary card.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily summary'**
+  String get dashboardDailySummary;
+
+  /// Owner dashboard daily-summary row label for net sales.
+  ///
+  /// In en, this message translates to:
+  /// **'Net sales'**
+  String get dashboardNetSales;
+
+  /// Owner dashboard daily-summary row label for total discounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Discounts'**
+  String get dashboardDiscounts;
+
+  /// Owner dashboard daily-summary row label for voids (count and total).
+  ///
+  /// In en, this message translates to:
+  /// **'Voids'**
+  String get dashboardVoids;
+
+  /// Owner dashboard daily-summary row label for cash collected.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash collected'**
+  String get dashboardCashCollected;
+
+  /// Owner dashboard daily-summary row label for cash reconciliation variance (counted minus expected).
+  ///
+  /// In en, this message translates to:
+  /// **'Cash variance'**
+  String get dashboardCashVariance;
+
+  /// Owner dashboard daily-summary row label preceding the current shift status.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift'**
+  String get dashboardShiftStatus;
+
+  /// Owner dashboard heading for the per-branch sales list.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by branch'**
+  String get dashboardSalesByBranch;
+
+  /// Owner dashboard heading for the top-selling items list.
+  ///
+  /// In en, this message translates to:
+  /// **'Top items'**
+  String get dashboardTopItems;
+
+  /// Owner dashboard banner clarifying the figures are in-memory demo data, not live.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo data — not from a live backend.'**
+  String get dashboardDemoNotice;
 }
 
 class _AppLocalizationsDelegate
