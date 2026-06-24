@@ -45,6 +45,15 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kdsRecallAction => 'שחזור';
 
   @override
+  String get kdsAcknowledgeAction => 'אישור קבלה';
+
+  @override
+  String get kdsStartAction => 'התחלת הכנה';
+
+  @override
+  String get kdsReadyAction => 'סימון כמוכן';
+
+  @override
   String get kdsStationLabel => 'עמדה';
 
   @override

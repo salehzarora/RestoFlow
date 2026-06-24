@@ -45,6 +45,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kdsRecallAction => 'Recall';
 
   @override
+  String get kdsAcknowledgeAction => 'Acknowledge';
+
+  @override
+  String get kdsStartAction => 'Start';
+
+  @override
+  String get kdsReadyAction => 'Mark ready';
+
+  @override
   String get kdsStationLabel => 'Station';
 
   @override

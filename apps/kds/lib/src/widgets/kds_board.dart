@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -8,13 +9,13 @@ import 'kds_ticket_card.dart';
 /// The KDS board: tickets grouped by station, deterministically ordered.
 ///
 /// Responsive — station COLUMNS side by side on wide screens (a real kitchen
-/// display), and readable STACKED sections when narrow. Bump/Recall are
-/// delegated per ticket to [onBump]/[onRecall].
+/// display), and readable STACKED sections when narrow. Lifecycle actions are
+/// delegated per ticket: [onAdvance] (forward transitions) and [onRecall].
 class KdsBoard extends StatelessWidget {
   const KdsBoard({
     required this.tickets,
     required this.l10n,
-    required this.onBump,
+    required this.onAdvance,
     required this.onRecall,
     super.key,
   });
@@ -24,7 +25,7 @@ class KdsBoard extends StatelessWidget {
 
   final List<KdsTicketView> tickets;
   final AppLocalizations l10n;
-  final void Function(KdsTicketView ticket) onBump;
+  final void Function(KdsTicketView ticket, KitchenTicketStatus to) onAdvance;
   final void Function(KdsTicketView ticket) onRecall;
 
   List<_Station> _stations() {
@@ -58,7 +59,7 @@ class KdsBoard extends StatelessWidget {
                       child: _StationColumn(
                         station: station,
                         l10n: l10n,
-                        onBump: onBump,
+                        onAdvance: onAdvance,
                         onRecall: onRecall,
                       ),
                     ),
@@ -77,7 +78,7 @@ class KdsBoard extends StatelessWidget {
                 KdsTicketCard(
                   ticket: ticket,
                   l10n: l10n,
-                  onBump: () => onBump(ticket),
+                  onAdvance: (to) => onAdvance(ticket, to),
                   onRecall: () => onRecall(ticket),
                 ),
               const SizedBox(height: RestoflowSpacing.md),
@@ -93,13 +94,13 @@ class _StationColumn extends StatelessWidget {
   const _StationColumn({
     required this.station,
     required this.l10n,
-    required this.onBump,
+    required this.onAdvance,
     required this.onRecall,
   });
 
   final _Station station;
   final AppLocalizations l10n;
-  final void Function(KdsTicketView ticket) onBump;
+  final void Function(KdsTicketView ticket, KitchenTicketStatus to) onAdvance;
   final void Function(KdsTicketView ticket) onRecall;
 
   @override
@@ -116,7 +117,7 @@ class _StationColumn extends StatelessWidget {
                 KdsTicketCard(
                   ticket: ticket,
                   l10n: l10n,
-                  onBump: () => onBump(ticket),
+                  onAdvance: (to) => onAdvance(ticket, to),
                   onRecall: () => onRecall(ticket),
                 ),
             ],

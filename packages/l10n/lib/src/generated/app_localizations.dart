@@ -172,6 +172,24 @@ abstract class AppLocalizations {
   /// **'Recall'**
   String get kdsRecallAction;
 
+  /// KDS action that acknowledges a new ticket (new -> acknowledged).
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get kdsAcknowledgeAction;
+
+  /// KDS action that starts preparing an acknowledged ticket (acknowledged -> in_preparation).
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get kdsStartAction;
+
+  /// KDS action that marks a ticket ready (in_preparation -> ready).
+  ///
+  /// In en, this message translates to:
+  /// **'Mark ready'**
+  String get kdsReadyAction;
+
   /// KDS label prefixing a kitchen station name.
   ///
   /// In en, this message translates to:

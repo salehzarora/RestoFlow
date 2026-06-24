@@ -48,6 +48,18 @@
   "@kdsRecallAction": {
     "description": "KDS action that recalls a bumped ticket back into preparation."
   },
+  "kdsAcknowledgeAction": "Acknowledge",
+  "@kdsAcknowledgeAction": {
+    "description": "KDS action that acknowledges a new ticket (new -> acknowledged)."
+  },
+  "kdsStartAction": "Start",
+  "@kdsStartAction": {
+    "description": "KDS action that starts preparing an acknowledged ticket (acknowledged -> in_preparation)."
+  },
+  "kdsReadyAction": "Mark ready",
+  "@kdsReadyAction": {
+    "description": "KDS action that marks a ticket ready (in_preparation -> ready)."
+  },
   "kdsStationLabel": "Station",
   "@kdsStationLabel": {
     "description": "KDS label prefixing a kitchen station name."

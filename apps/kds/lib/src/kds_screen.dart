@@ -33,12 +33,11 @@ class _KdsScreenState extends State<KdsScreen> {
   /// Last recall audit placeholder produced on this screen (test-accessible).
   RecallAuditEvent? lastRecallEvent;
 
-  void _bump(KdsTicketView ticket) {
+  /// Advance [ticket] to [to] via the existing forward state-machine edges
+  /// (acknowledge / start / mark-ready / bump). Local in-memory only.
+  void _advance(KdsTicketView ticket, KitchenTicketStatus to) {
     setState(() {
-      ticket.status = KitchenTicketStateMachine.transition(
-        ticket.status,
-        KitchenTicketStatus.bumped,
-      );
+      ticket.status = KitchenTicketStateMachine.transition(ticket.status, to);
     });
   }
 
@@ -70,7 +69,7 @@ class _KdsScreenState extends State<KdsScreen> {
           : KdsBoard(
               tickets: widget.tickets,
               l10n: l10n,
-              onBump: _bump,
+              onAdvance: _advance,
               onRecall: _recall,
             ),
     );

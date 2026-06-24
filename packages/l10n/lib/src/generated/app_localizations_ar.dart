@@ -45,6 +45,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kdsRecallAction => 'استرجاع';
 
   @override
+  String get kdsAcknowledgeAction => 'استلام';
+
+  @override
+  String get kdsStartAction => 'بدء التحضير';
+
+  @override
+  String get kdsReadyAction => 'تم التحضير';
+
+  @override
   String get kdsStationLabel => 'محطة';
 
   @override

@@ -7,23 +7,28 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'kds_status_chip.dart';
 
 /// A polished KDS ticket card: a header row (ticket id + colour-coded status
-/// chip), large readable item lines, and the status-gated Bump/Recall action.
+/// chip), large readable item lines, and the status-gated lifecycle action.
 ///
-/// Presentation only — bump/recall are delegated to [onBump]/[onRecall] (driven
-/// by the kitchen state machine on the screen). No money is shown anywhere
-/// (the view models carry none; SECURITY T-003).
+/// RF-103: the action advances the ticket through its existing lifecycle —
+/// Acknowledge / Start / Mark ready / Bump (forward, via [onAdvance]) and Recall
+/// (via [onRecall]). Presentation only; the screen runs the existing
+/// `KitchenTicketStateMachine`. No money is shown anywhere (SECURITY T-003).
 class KdsTicketCard extends StatelessWidget {
   const KdsTicketCard({
     required this.ticket,
     required this.l10n,
-    required this.onBump,
+    required this.onAdvance,
     required this.onRecall,
     super.key,
   });
 
   final KdsTicketView ticket;
   final AppLocalizations l10n;
-  final VoidCallback onBump;
+
+  /// Advance the ticket to [to] via the existing state machine (forward edges).
+  final void Function(KitchenTicketStatus to) onAdvance;
+
+  /// Recall a bumped ticket (existing audited `bumped -> in_preparation`).
   final VoidCallback onRecall;
 
   @override
@@ -61,7 +66,7 @@ class KdsTicketCard extends StatelessWidget {
             _TicketAction(
               status: ticket.status,
               l10n: l10n,
-              onBump: onBump,
+              onAdvance: onAdvance,
               onRecall: onRecall,
             ),
           ],
@@ -92,33 +97,48 @@ class _ItemLine extends StatelessWidget {
   }
 }
 
+/// The single status-gated lifecycle action for a ticket. Forward transitions
+/// are filled buttons that call [onAdvance] with the next status; recall is an
+/// outlined button. Terminal/no-action statuses render nothing.
 class _TicketAction extends StatelessWidget {
   const _TicketAction({
     required this.status,
     required this.l10n,
-    required this.onBump,
+    required this.onAdvance,
     required this.onRecall,
   });
 
   final KitchenTicketStatus status;
   final AppLocalizations l10n;
-  final VoidCallback onBump;
+  final void Function(KitchenTicketStatus to) onAdvance;
   final VoidCallback onRecall;
 
   @override
   Widget build(BuildContext context) {
     switch (status) {
+      case KitchenTicketStatus.newTicket:
+        return _ForwardButton(
+          icon: Icons.visibility_outlined,
+          label: l10n.kdsAcknowledgeAction,
+          onPressed: () => onAdvance(KitchenTicketStatus.acknowledged),
+        );
+      case KitchenTicketStatus.acknowledged:
+        return _ForwardButton(
+          icon: Icons.play_arrow_rounded,
+          label: l10n.kdsStartAction,
+          onPressed: () => onAdvance(KitchenTicketStatus.inPreparation),
+        );
+      case KitchenTicketStatus.inPreparation:
+        return _ForwardButton(
+          icon: Icons.check_circle_outline,
+          label: l10n.kdsReadyAction,
+          onPressed: () => onAdvance(KitchenTicketStatus.ready),
+        );
       case KitchenTicketStatus.ready:
-        return Padding(
-          padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onBump,
-              icon: const Icon(Icons.check),
-              label: Text(l10n.kdsBumpAction),
-            ),
-          ),
+        return _ForwardButton(
+          icon: Icons.check,
+          label: l10n.kdsBumpAction,
+          onPressed: () => onAdvance(KitchenTicketStatus.bumped),
         );
       case KitchenTicketStatus.bumped:
         return Padding(
@@ -132,11 +152,35 @@ class _TicketAction extends StatelessWidget {
             ),
           ),
         );
-      case KitchenTicketStatus.newTicket:
-      case KitchenTicketStatus.acknowledged:
-      case KitchenTicketStatus.inPreparation:
       case KitchenTicketStatus.cancelled:
         return const SizedBox.shrink();
     }
+  }
+}
+
+class _ForwardButton extends StatelessWidget {
+  const _ForwardButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon),
+          label: Text(label),
+        ),
+      ),
+    );
   }
 }
