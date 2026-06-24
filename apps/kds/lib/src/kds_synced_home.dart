@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -23,10 +24,12 @@ class KdsSyncedHome extends ConsumerWidget {
     final async = ref.watch(kdsViewStateProvider);
     return async.when(
       loading: () => _scaffold(
+        context,
         l10n,
         KdsStateMessage(message: l10n.kdsLoadingState, showSpinner: true),
       ),
       error: (_, __) => _scaffold(
+        context,
         l10n,
         KdsStateMessage(icon: Icons.error_outline, message: l10n.kdsErrorState),
       ),
@@ -34,6 +37,7 @@ class KdsSyncedHome extends ConsumerWidget {
         if (vs.isReauthRequired) {
           // Revoked/expired session: re-auth required, polling stopped.
           return _scaffold(
+            context,
             l10n,
             KdsStateMessage(
               icon: Icons.lock_outline,
@@ -43,6 +47,7 @@ class KdsSyncedHome extends ConsumerWidget {
         }
         if (vs.isError && vs.tickets.isEmpty) {
           return _scaffold(
+            context,
             l10n,
             KdsStateMessage(
               icon: Icons.error_outline,
@@ -57,8 +62,21 @@ class KdsSyncedHome extends ConsumerWidget {
     );
   }
 
-  Widget _scaffold(AppLocalizations l10n, Widget body) => Scaffold(
-    appBar: AppBar(title: Text(l10n.kdsAppTitle)),
-    body: body,
-  );
+  Widget _scaffold(BuildContext context, AppLocalizations l10n, Widget body) =>
+      Scaffold(
+        appBar: AppBar(
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.kitchen_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              Text(l10n.kdsAppTitle),
+            ],
+          ),
+        ),
+        body: body,
+      );
 }

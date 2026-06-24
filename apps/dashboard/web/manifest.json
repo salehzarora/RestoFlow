@@ -1,11 +1,11 @@
 {
-    "name": "restoflow_dashboard",
-    "short_name": "restoflow_dashboard",
+    "name": "RestoFlow Dashboard",
+    "short_name": "RestoFlow Dashboard",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#1B7A52",
+    "description": "RestoFlow Dashboard — owner reports demo (in-memory M5 demo).",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

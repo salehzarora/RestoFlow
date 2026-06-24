@@ -10,12 +10,12 @@ List<KdsTicketView> _tickets() => [
   KdsTicketView(
     kitchenTicketId: 'o1:grill',
     stationId: 'grill',
-    items: const [KdsItemView(name: 'Burger', quantity: 2)],
+    items: const [KdsItemView(name: 'Classic Burger', quantity: 2)],
   ),
   KdsTicketView(
-    kitchenTicketId: 'o2:bar',
-    stationId: 'bar',
-    items: const [KdsItemView(name: 'Beer', quantity: 3)],
+    kitchenTicketId: 'o2:fryer',
+    stationId: 'fryer',
+    items: const [KdsItemView(name: 'French Fries', quantity: 3)],
   ),
 ];
 
@@ -40,8 +40,8 @@ void main() {
 
     // Both stations and their items are present in the wide board.
     expect(find.textContaining('grill'), findsWidgets);
-    expect(find.textContaining('bar'), findsWidgets);
-    expect(find.text('Burger ×2'), findsOneWidget);
-    expect(find.text('Beer ×3'), findsOneWidget);
+    expect(find.textContaining('fryer'), findsWidgets);
+    expect(find.text('Classic Burger ×2'), findsOneWidget);
+    expect(find.text('French Fries ×3'), findsOneWidget);
   });
 }
