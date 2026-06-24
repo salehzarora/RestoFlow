@@ -6,16 +6,19 @@ environment:
   sdk: ^3.12.0
 resolution: workspace
 
-# RF-108 Stage 1 is pure Dart (models + services + unit tests; no Flutter/UI).
+# RF-108 is pure Dart (models + services + bootstrap + unit tests; no Flutter/UI).
 # It consumes the abstract RPC seam (SyncRpcTransport) from data_remote and the
-# Result type from core. The SupabaseClient is INJECTED by the app via the
-# Supabase-backed transport; this package holds NO URL/anon-key/secret and never
-# uses a service-role key (DECISION D-011).
+# Result type from core. RF-108 Stage 2 adds a Supabase bootstrap factory that
+# constructs the anon-key SupabaseClient from --dart-define config, so this
+# package now depends on the pure-Dart `supabase` SDK (NOT supabase_flutter).
+# The client carries ONLY the PUBLIC anon key + URL; this package holds NO
+# secret and never uses a service-role key (DECISION D-011).
 dependencies:
   restoflow_core:
     path: ../core
   restoflow_data_remote:
     path: ../data_remote
+  supabase: '>=2.0.0 <3.0.0'
 
 dev_dependencies:
   test: ^1.25.0

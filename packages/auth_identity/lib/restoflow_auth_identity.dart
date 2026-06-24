@@ -18,3 +18,6 @@ export 'src/membership_selection.dart';
 export 'src/my_context.dart';
 export 'src/pin_session_service.dart';
 export 'src/role_entry_policy.dart';
+// RF-108 Stage 2: Supabase bootstrap config + transport factory (anon key only).
+export 'src/supabase_auth_bootstrap.dart';
+export 'src/supabase_bootstrap_config.dart';
