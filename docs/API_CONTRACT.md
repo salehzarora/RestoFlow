@@ -353,10 +353,36 @@ Internal, per-organization subscription state only — **no payment provider, no
 - **`app.org_plan_limit(p_organization_id, p_key)`** — entitlement/limit primitive (`max_branches` today). SECURITY INVOKER: returns the org's own limit under the caller's RLS, `null` when unauthorized for the org / unlimited / unknown key — **cannot leak another org's limit**. RF-093 does **not** wire call-site blocking (deferred).
 - **`app.set_organization_plan(p_organization_id, p_plan_code, p_status, p_reason, p_current_period_start?, p_current_period_end?)`** — **platform-admin** manual assignment. SECURITY DEFINER, locked `search_path`; gated via `app.platform_admin_guard` (active platform grant + MFA `aal2` + non-empty reason — **D-026**, never a tenant role; **org_owner cannot call it**). Validates org/plan/status/period, upserts the subscription, and writes a `platform_admin_audit_events` row (`platform.org.plan_set`, target org, reason, old/new). Granted to `authenticated` (self-gated). **No self-serve plan change.**
 
+### 4.21 `public.start_pin_session` (public wrapper over `app.start_pin_session`, RF-122/RF-123)
+Public Data API wrapper that exposes the PIN-session RPC of §4.13 (implemented as `app.start_pin_session`) on the **public** schema so clients can reach it (only `public`/`graphql_public` are exposed; `app.*` is **not** — `supabase/config.toml`). Same fast **human PIN session** on a paired+authorized device (**DECISION D-006**, **DECISION D-005**). **RF-122 authorizes the contract** (**DECISION D-029**); the wrapper is implemented under **RF-123**.
+- **Purpose:** public-schema, client-callable wrapper over the internal `app.start_pin_session`; no new logic.
+- **Inputs:** faithful pass-through — **same four parameters, same types and order** as the internal function: `p_device_session_id uuid`, `p_employee_profile_id uuid`, `p_pin_verifier text`, `p_local_operation_id text default null`. The PIN verifier is never logged and never stored plaintext (per [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md)).
+- **Authorization:** `authenticated` only; **no `anon`**, **no service-role key in any client** (**DECISION D-011**). The wrapper is **`SECURITY INVOKER`** with `search_path=''`, delegating verbatim to `app.start_pin_session`, so the caller's existing `EXECUTE` on the `app` function is reused and **no new privilege is granted on `app.*`** (the RF-064 `public.sync_pull` pattern). All inner authorization (active device session on a paired device; branch/scope match; PIN verification) is unchanged.
+- **Returns:** bare `uuid` (the PIN session id) — **identical to `app.start_pin_session`; no richer/composite return is introduced by RF-122/RF-123**. **Wrong PIN returns `NULL`** (no row, no error); **structural / precondition / lockout failures raise SQLSTATE `42501`** (device session not found/not active, employee not found/not in org/not active, membership empty/ambiguous/inactive/out-of-scope, PIN locked). The two failure modes are distinct: wrong verifier = `NULL`; everything else = `42501`.
+- **Idempotency:** unchanged — keyed on `(organization, device session, employee profile, resolved membership, p_local_operation_id)`; a repeated validated call returns the **same** session id; replay never bypasses validation/lockout.
+- **Audit:** unchanged from §4.13 — `pin_session.started` on success and rate-limited failed-attempt events (**DECISION D-013**).
+- **Offline:** capable only within the cached offline validity window (**OPEN QUESTION Q-009**); a revoked employee/device is rejected (**RISK R-007**).
+
+### 4.22 `public.get_my_context` (self-context membership resolver, RF-122/RF-124)
+Authenticated, read-only **self-context / membership resolver**: lets a client read **its own** identity and the **list of its own memberships** so it can choose a tenant scope for routing, without trusting any client-supplied identity. **RF-122 authorizes the contract** (**DECISION D-029**); the resolver is implemented under **RF-124**. Read-only; no mutation.
+- **Purpose:** server-resolved self-context for routing / membership selection in RF-108.
+- **Inputs:** **none.** The caller is derived from `auth.uid()` via `app.current_app_user_id()` (fails closed when the principal is unlinked) and **never** from an input argument (**DECISION D-004 / D-005**).
+- **Authorization:** `authenticated` only; **no `anon`**, **no service-role** (rejected with `42501`). The `app` schema is **not** exposed; only this `public.*` surface is reachable (`supabase/config.toml`). Locked `search_path=''`, granted `EXECUTE` to `authenticated` only.
+- **Returns:** `jsonb`:
+  - `ok` — boolean.
+  - `app_user` — `{ id, email, display_name, is_active }` for the **calling principal only**.
+  - `is_platform_admin` — a **separate boolean** (via `app.is_platform_admin()`), **never** a tenant membership entry; the platform-admin grant carries **no `organization_id`** and no org/restaurant/branch context is derivable from it (**DECISION D-026**).
+  - `memberships` — a **LIST** (a user may hold many memberships across scopes); each entry: `id`, `organization_id`, `organization_name`, `restaurant_id` (nullable), `restaurant_name` (nullable), `branch_id` (nullable), `branch_name` (nullable), `role` (one of the six keys `org_owner`/`restaurant_owner`/`manager`/`cashier`/`kitchen_staff`/`accountant`), `status`. There is **no single global top-level `role`** — role is per-membership (**DECISION D-004 / D-005**).
+  - The only PII returned is the **caller's own** `email`/`display_name`; no other user's data and no cross-org data.
+- **Authorization model:** returns **only** rows for the calling principal — the caller's own `app_users` row and only memberships whose `app_user_id` is the caller; tenant RLS plus the explicit self-filter. No cross-user, no cross-org exposure (**DECISION D-001**, **RISK R-003**).
+- **Side effects / Audit:** none — a self-scoped **read** writes **no `audit_events` row** (audit is reserved for sensitive mutations — [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md) §7).
+- **Idempotency:** N/A (read-only, no state change).
+- **Offline:** online-only resolver (context selection is not an offline/outbox operation); the client caches the result for the offline window (**OPEN QUESTION Q-009**).
+
 ---
 
 ## 5. Cross-References
-- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028).
+- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (subset of the Q-001..Q-024 range: Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-017).
 - State transitions: [STATE_MACHINES](STATE_MACHINES.md).
 - Authorization, RLS, isolation tests, audit: [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md).
