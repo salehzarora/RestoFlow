@@ -66,9 +66,9 @@ void main() {
       await tester.pumpWidget(const KdsApp()); // no source -> fixture
       await tester.pumpAndSettle();
 
-      // The demo fixture still includes Burger ×2 and Beer ×3.
-      expect(find.text('Burger ×2'), findsOneWidget);
-      expect(find.text('Beer ×3'), findsOneWidget);
+      // RF-105: the aligned demo fixture uses POS menu item names.
+      expect(find.text('Classic Burger ×2'), findsOneWidget);
+      expect(find.text('French Fries ×2'), findsOneWidget);
     },
   );
 

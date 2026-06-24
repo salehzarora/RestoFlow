@@ -138,6 +138,7 @@ Keep reports short and concrete:
 
 ---
 
-> Companion: [M5_UI_DIRECTION.md](M5_UI_DIRECTION.md) (what to build + invariants).
+> Companion: [M5_UI_DIRECTION.md](M5_UI_DIRECTION.md) (what to build + invariants)
+> and [M5_DEMO_RUN_GUIDE.md](M5_DEMO_RUN_GUIDE.md) (how to run the demos in Chrome).
 > Authority: [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) (frozen pipeline this addendum
 > sits under).
