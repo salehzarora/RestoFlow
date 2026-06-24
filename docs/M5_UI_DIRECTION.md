@@ -62,12 +62,15 @@ Surface detail is owned by [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.
 
 ## 4. Current UI inventory (as of this M5 track)
 
+To run any of these in Chrome and read the shared demo story, see
+[M5_DEMO_RUN_GUIDE.md](M5_DEMO_RUN_GUIDE.md).
+
 | App | State | Notes |
 |---|---|---|
-| `apps/pos` | **Real / polished** | Menu grid + cart, Riverpod, themed via `packages/design_system`, l10n, integer-minor money, demo Send Order. The current visual reference. |
-| `apps/kds` | **Usable, needs polish** | Real screen (tickets by station, bump/recall via the kitchen state machine), Riverpod + l10n — but does **not** apply the shared theme/tokens; renders raw `status.canonicalName`; loading/reauth/error are icon-only. |
-| `apps/dashboard` | **Shell** | ~38-line localized welcome screen; no Riverpod, no theme, no screens. Needs real UI. |
-| `apps/admin` | **Shell** | Same as dashboard. Needs real UI. |
+| `apps/pos` | **Real / polished** | Category-filtered menu grid + live cart (Riverpod), themed via `packages/design_system`, l10n, integer-minor money, and a local **Send Order** confirmation (RF-100/RF-101). Chrome `web/` target. The visual reference. |
+| `apps/kds` | **Real / polished** | Themed kitchen board — station columns, color-coded status chips, polished loading/error/reauth states, and visible lifecycle actions (Acknowledge → Start → Mark ready → Bump + Recall) via the real `KitchenTicketStateMachine` (RF-102/RF-103). Money-free. Chrome `web/` target. |
+| `apps/dashboard` | **Real / polished** | Owner/manager demo report cards — KPI tiles, daily summary, sales-by-branch, top items (Riverpod over isolated in-memory demo data), themed + l10n + integer-minor money (RF-104). Chrome `web/` target. |
+| `apps/admin` | **Shell** | ~38-line localized welcome screen; no Riverpod, no theme. Still needs real UI. |
 
 ## 5. UI design principles (the demo bar)
 
@@ -94,8 +97,9 @@ Surface detail is owned by [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.
   (seeded Material 3, light + optional dark) on every `MaterialApp`, and use the
   **`RestoflowSpacing` / `RestoflowRadii`** tokens (+ `kRestoflowSeedColor`)
   instead of hardcoded `EdgeInsets`/radii.
-- **Standardize adoption:** dashboard, admin, and kds should all depend on and
-  apply the shared theme (today only POS does).
+- **Standardize adoption:** POS, KDS, and Dashboard now depend on and apply the
+  shared theme (RF-100/RF-102/RF-104); `apps/admin` is the remaining shell and
+  should adopt it when it gains real UI.
 - **State management = Riverpod** (DECISION **D-009**): `ProviderScope` at the
   app root, `ConsumerWidget` + `AsyncValue.when` for data-driven screens (the KDS
   pattern). **Routing = GoRouter** (D-009) once a surface needs more than one
