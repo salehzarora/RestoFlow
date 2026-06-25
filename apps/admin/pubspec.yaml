@@ -1,5 +1,5 @@
 name: restoflow_admin
-description: RestoFlow admin app (RF-010 skeleton) - platform admin app target (isolated, audited path). No features yet.
+description: RestoFlow admin app - platform-admin app target (isolated, audited path). RF-108 Stage 4 wires the auth gate (platform-admin-only entry); no platform-admin features/data yet.
 publish_to: none
 version: 0.0.1
 environment:
@@ -11,3 +11,17 @@ dependencies:
     sdk: flutter
   restoflow_l10n:
     path: ../../packages/l10n
+  restoflow_design_system:
+    path: ../../packages/design_system
+  # RF-108 Stage 4: the auth gate (demo-mode fallback / platform-admin entry).
+  restoflow_auth_identity:
+    path: ../../packages/auth_identity
+  restoflow_feature_auth:
+    path: ../../packages/feature_auth
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  # Bundles the Material Icons font so the auth gate's Icon(Icons.*) render.
+  uses-material-design: true

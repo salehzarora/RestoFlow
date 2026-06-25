@@ -164,4 +164,70 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dashboardDemoNotice => 'Demo data — not from a live backend.';
+
+  @override
+  String get authLoadingAccount => 'Loading account…';
+
+  @override
+  String get authSignInRequired => 'Sign-in required';
+
+  @override
+  String get authContinue => 'Continue';
+
+  @override
+  String get authChooseLocation => 'Choose location';
+
+  @override
+  String get authNoAccess => 'No active access';
+
+  @override
+  String get authWrongRole => 'This role can\'t use this app';
+
+  @override
+  String get authAccessDenied => 'Account access denied';
+
+  @override
+  String get authError => 'Something went wrong';
+
+  @override
+  String get authTryAgain => 'Try again';
+
+  @override
+  String get authSignOut => 'Sign out';
+
+  @override
+  String get authPlatformAdmin => 'Platform admin';
+
+  @override
+  String get authOrganization => 'Organization';
+
+  @override
+  String get authRestaurant => 'Restaurant';
+
+  @override
+  String get authBranch => 'Branch';
+
+  @override
+  String get authRole => 'Role';
+
+  @override
+  String get authRoleOwner => 'Owner';
+
+  @override
+  String get authRoleRestaurantOwner => 'Restaurant owner';
+
+  @override
+  String get authRoleManager => 'Manager';
+
+  @override
+  String get authRoleCashier => 'Cashier';
+
+  @override
+  String get authRoleKitchenStaff => 'Kitchen staff';
+
+  @override
+  String get authRoleAccountant => 'Accountant';
+
+  @override
+  String get authComingSoon => 'Coming soon';
 }

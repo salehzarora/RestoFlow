@@ -18,6 +18,7 @@ workspace:
   - packages/printing
   - packages/design_system
   - packages/l10n
+  - packages/feature_auth
   - packages/feature_orders
   - packages/feature_kitchen
   - packages/feature_payments

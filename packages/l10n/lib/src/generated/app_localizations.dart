@@ -411,6 +411,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Demo data — not from a live backend.'**
   String get dashboardDemoNotice;
+
+  /// Auth gate message shown while the user's context is loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading account…'**
+  String get authLoadingAccount;
+
+  /// Auth gate message shown when there is no authenticated session.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in required'**
+  String get authSignInRequired;
+
+  /// Auth gate primary action that proceeds (e.g. to sign-in).
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get authContinue;
+
+  /// Auth gate heading above the membership picker (pick organization/restaurant/branch).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose location'**
+  String get authChooseLocation;
+
+  /// Auth gate message shown when the user has no active memberships for this app.
+  ///
+  /// In en, this message translates to:
+  /// **'No active access'**
+  String get authNoAccess;
+
+  /// Auth gate message shown when the selected role may not enter this app surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This role can\'t use this app'**
+  String get authWrongRole;
+
+  /// Auth gate message shown when access is denied (unauthenticated/unlinked/inactive).
+  ///
+  /// In en, this message translates to:
+  /// **'Account access denied'**
+  String get authAccessDenied;
+
+  /// Auth gate message shown for a generic backend/auth error.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong'**
+  String get authError;
+
+  /// Auth gate action that retries loading the account context.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get authTryAgain;
+
+  /// Auth gate action that signs the user out.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get authSignOut;
+
+  /// Auth gate label for the platform-admin entry/state (separate from tenant roles).
+  ///
+  /// In en, this message translates to:
+  /// **'Platform admin'**
+  String get authPlatformAdmin;
+
+  /// Membership picker field label for the organization name.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization'**
+  String get authOrganization;
+
+  /// Membership picker field label for the restaurant name.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant'**
+  String get authRestaurant;
+
+  /// Membership picker field label for the branch name.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch'**
+  String get authBranch;
+
+  /// Membership picker field label for the membership role.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get authRole;
+
+  /// Display label for the org_owner membership role.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get authRoleOwner;
+
+  /// Display label for the restaurant_owner membership role.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant owner'**
+  String get authRoleRestaurantOwner;
+
+  /// Display label for the manager membership role.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager'**
+  String get authRoleManager;
+
+  /// Display label for the cashier membership role.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashier'**
+  String get authRoleCashier;
+
+  /// Display label for the kitchen_staff membership role.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen staff'**
+  String get authRoleKitchenStaff;
+
+  /// Display label for the accountant membership role.
+  ///
+  /// In en, this message translates to:
+  /// **'Accountant'**
+  String get authRoleAccountant;
+
+  /// Auth gate message for a deferred role (e.g. accountant) not yet enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming soon'**
+  String get authComingSoon;
 }
 
 class _AppLocalizationsDelegate
