@@ -33,7 +33,7 @@ final menuRepositoryProvider = Provider<MenuManagementRepository>((ref) {
     readSource: ref.watch(menuReadSourceProvider),
     writer: ref.watch(menuWriterProvider),
   );
-});
+}, dependencies: [menuReadSourceProvider, menuWriterProvider]);
 
 /// The loaded menu tree for the active scope. Reloads when invalidated after a
 /// successful write (non-optimistic).
@@ -43,7 +43,7 @@ final menuSnapshotProvider = FutureProvider.autoDispose<MenuSnapshot>((
   final repository = ref.watch(menuRepositoryProvider);
   final scope = ref.watch(menuScopeProvider);
   return repository.load(scope);
-});
+}, dependencies: [menuScopeProvider, menuRepositoryProvider]);
 
 /// The currently focused category in the master/detail layout.
 final selectedCategoryIdProvider = StateProvider.autoDispose<String?>(
@@ -209,9 +209,16 @@ class MenuWriteController {
 }
 
 /// The write controller for the active scope.
-final menuWriteControllerProvider = Provider<MenuWriteController>((ref) {
-  return MenuWriteController(ref);
-});
+final menuWriteControllerProvider = Provider<MenuWriteController>(
+  (ref) {
+    return MenuWriteController(ref);
+  },
+  dependencies: [
+    menuScopeProvider,
+    menuRepositoryProvider,
+    menuSnapshotProvider,
+  ],
+);
 
 /// Builds the [ProviderScope] overrides that wire the menu feature to a concrete
 /// scope + read source + writer. The dashboard uses this for the demo store; a

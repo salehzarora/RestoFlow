@@ -230,4 +230,190 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authComingSoon => 'Coming soon';
+
+  @override
+  String get dashboardNavOverview => 'Overview';
+
+  @override
+  String get dashboardNavMenu => 'Menu';
+
+  @override
+  String get menuManagementTitle => 'Menu management';
+
+  @override
+  String get menuDemoBanner =>
+      'Demo data — changes stay on this device and are not saved to a server yet.';
+
+  @override
+  String get menuCategoriesHeading => 'Categories';
+
+  @override
+  String get menuItemsHeading => 'Items';
+
+  @override
+  String get menuSelectCategoryHint => 'Select a category to see its items.';
+
+  @override
+  String get menuEmptyCategories => 'No categories yet.';
+
+  @override
+  String get menuEmptyItems => 'No items in this category yet.';
+
+  @override
+  String get menuLoadError => 'Could not load the menu.';
+
+  @override
+  String get menuRetry => 'Retry';
+
+  @override
+  String menuItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get menuAddCategory => 'Add category';
+
+  @override
+  String get menuAddItem => 'Add item';
+
+  @override
+  String get menuAddSize => 'Add size';
+
+  @override
+  String get menuAddVariant => 'Add variant';
+
+  @override
+  String get menuAddModifier => 'Add modifier';
+
+  @override
+  String get menuAddOption => 'Add option';
+
+  @override
+  String get menuEditTitle => 'Edit';
+
+  @override
+  String get menuSaveAction => 'Save';
+
+  @override
+  String get menuCancelAction => 'Cancel';
+
+  @override
+  String get menuEditAction => 'Edit';
+
+  @override
+  String get menuDeleteAction => 'Delete';
+
+  @override
+  String get menuNameLabel => 'Name';
+
+  @override
+  String get menuDescriptionLabel => 'Description (optional)';
+
+  @override
+  String get menuPriceLabel => 'Base price';
+
+  @override
+  String get menuPriceDeltaLabel => 'Price change';
+
+  @override
+  String get menuCurrencyLabel => 'Currency';
+
+  @override
+  String get menuCategoryFieldLabel => 'Category';
+
+  @override
+  String get menuDisplayOrderLabel => 'Display order';
+
+  @override
+  String get menuActiveLabel => 'Active';
+
+  @override
+  String get menuSelectionTypeLabel => 'Selection';
+
+  @override
+  String get menuSelectionSingle => 'Single';
+
+  @override
+  String get menuSelectionMultiple => 'Multiple';
+
+  @override
+  String get menuMinSelectLabel => 'Minimum';
+
+  @override
+  String get menuMaxSelectLabel => 'Maximum (optional)';
+
+  @override
+  String get menuRequiredLabel => 'Required';
+
+  @override
+  String get menuSizesHeading => 'Sizes';
+
+  @override
+  String get menuVariantsHeading => 'Variants';
+
+  @override
+  String get menuModifiersHeading => 'Modifiers';
+
+  @override
+  String get menuOptionsHeading => 'Options';
+
+  @override
+  String get menuDeleteConfirmTitle => 'Delete this entry?';
+
+  @override
+  String get menuDeleteConfirmBody =>
+      'It will be hidden from the menu. You can restore it later.';
+
+  @override
+  String get menuConfirmDelete => 'Delete';
+
+  @override
+  String get menuInactiveBadge => 'Inactive';
+
+  @override
+  String get menuGlobalBadge => 'All branches';
+
+  @override
+  String get menuBranchBadge => 'This branch';
+
+  @override
+  String get menuImageHeading => 'Item image';
+
+  @override
+  String get menuImageDeferredTitle => 'Image upload coming soon';
+
+  @override
+  String get menuImageDeferredBody =>
+      'Showing and uploading item photos needs a backend image record (a planned follow-up). The upload path and validation are already built.';
+
+  @override
+  String get menuErrorRequired => 'Required';
+
+  @override
+  String get menuErrorAmount => 'Enter a valid amount';
+
+  @override
+  String get menuErrorNegativePrice => 'Cannot be negative';
+
+  @override
+  String get menuErrorCurrency => 'Use a 3-letter code (e.g. USD)';
+
+  @override
+  String get menuErrorSelectionType => 'Choose single or multiple';
+
+  @override
+  String get menuErrorMaxLessThanMin => 'Must be at least the minimum';
+
+  @override
+  String get menuWritePermissionDenied =>
+      'You can\'t change the menu in this scope.';
+
+  @override
+  String get menuWriteProblem => 'Couldn\'t save — please try again.';
+
+  @override
+  String get menuSavedSnack => 'Saved';
+
+  @override
+  String get menuDeletedSnack => 'Deleted';
 }

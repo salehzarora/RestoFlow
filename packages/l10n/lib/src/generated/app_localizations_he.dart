@@ -230,4 +230,190 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get authComingSoon => 'בקרוב';
+
+  @override
+  String get dashboardNavOverview => 'סקירה';
+
+  @override
+  String get dashboardNavMenu => 'תפריט';
+
+  @override
+  String get menuManagementTitle => 'ניהול תפריט';
+
+  @override
+  String get menuDemoBanner =>
+      'נתוני דמו — השינויים נשמרים במכשיר זה בלבד ועדיין לא נשמרים בשרת.';
+
+  @override
+  String get menuCategoriesHeading => 'קטגוריות';
+
+  @override
+  String get menuItemsHeading => 'פריטים';
+
+  @override
+  String get menuSelectCategoryHint => 'בחר קטגוריה כדי לראות את הפריטים שלה.';
+
+  @override
+  String get menuEmptyCategories => 'אין עדיין קטגוריות.';
+
+  @override
+  String get menuEmptyItems => 'אין עדיין פריטים בקטגוריה זו.';
+
+  @override
+  String get menuLoadError => 'לא ניתן לטעון את התפריט.';
+
+  @override
+  String get menuRetry => 'נסה שוב';
+
+  @override
+  String menuItemCount(int count) {
+    return '$count פריטים';
+  }
+
+  @override
+  String get menuAddCategory => 'הוסף קטגוריה';
+
+  @override
+  String get menuAddItem => 'הוסף פריט';
+
+  @override
+  String get menuAddSize => 'הוסף גודל';
+
+  @override
+  String get menuAddVariant => 'הוסף וריאציה';
+
+  @override
+  String get menuAddModifier => 'הוסף תוספת';
+
+  @override
+  String get menuAddOption => 'הוסף אפשרות';
+
+  @override
+  String get menuEditTitle => 'עריכה';
+
+  @override
+  String get menuSaveAction => 'שמור';
+
+  @override
+  String get menuCancelAction => 'ביטול';
+
+  @override
+  String get menuEditAction => 'ערוך';
+
+  @override
+  String get menuDeleteAction => 'מחק';
+
+  @override
+  String get menuNameLabel => 'שם';
+
+  @override
+  String get menuDescriptionLabel => 'תיאור (אופציונלי)';
+
+  @override
+  String get menuPriceLabel => 'מחיר בסיס';
+
+  @override
+  String get menuPriceDeltaLabel => 'שינוי מחיר';
+
+  @override
+  String get menuCurrencyLabel => 'מטבע';
+
+  @override
+  String get menuCategoryFieldLabel => 'קטגוריה';
+
+  @override
+  String get menuDisplayOrderLabel => 'סדר תצוגה';
+
+  @override
+  String get menuActiveLabel => 'פעיל';
+
+  @override
+  String get menuSelectionTypeLabel => 'בחירה';
+
+  @override
+  String get menuSelectionSingle => 'יחיד';
+
+  @override
+  String get menuSelectionMultiple => 'מרובה';
+
+  @override
+  String get menuMinSelectLabel => 'מינימום';
+
+  @override
+  String get menuMaxSelectLabel => 'מקסימום (אופציונלי)';
+
+  @override
+  String get menuRequiredLabel => 'חובה';
+
+  @override
+  String get menuSizesHeading => 'גדלים';
+
+  @override
+  String get menuVariantsHeading => 'וריאציות';
+
+  @override
+  String get menuModifiersHeading => 'תוספות';
+
+  @override
+  String get menuOptionsHeading => 'אפשרויות';
+
+  @override
+  String get menuDeleteConfirmTitle => 'למחוק פריט זה?';
+
+  @override
+  String get menuDeleteConfirmBody =>
+      'הוא יוסתר מהתפריט. ניתן לשחזר אותו מאוחר יותר.';
+
+  @override
+  String get menuConfirmDelete => 'מחק';
+
+  @override
+  String get menuInactiveBadge => 'לא פעיל';
+
+  @override
+  String get menuGlobalBadge => 'כל הסניפים';
+
+  @override
+  String get menuBranchBadge => 'סניף זה';
+
+  @override
+  String get menuImageHeading => 'תמונת פריט';
+
+  @override
+  String get menuImageDeferredTitle => 'העלאת תמונות בקרוב';
+
+  @override
+  String get menuImageDeferredBody =>
+      'הצגה והעלאה של תמונות פריטים דורשות רשומת תמונה בצד השרת (המשך מתוכנן). נתיב ההעלאה והאימות כבר מוכנים.';
+
+  @override
+  String get menuErrorRequired => 'חובה';
+
+  @override
+  String get menuErrorAmount => 'הזן סכום תקין';
+
+  @override
+  String get menuErrorNegativePrice => 'לא יכול להיות שלילי';
+
+  @override
+  String get menuErrorCurrency => 'השתמש בקוד בן 3 אותיות (למשל USD)';
+
+  @override
+  String get menuErrorSelectionType => 'בחר יחיד או מרובה';
+
+  @override
+  String get menuErrorMaxLessThanMin => 'חייב להיות לפחות המינימום';
+
+  @override
+  String get menuWritePermissionDenied =>
+      'אין לך הרשאה לשנות את התפריט בהיקף זה.';
+
+  @override
+  String get menuWriteProblem => 'השמירה נכשלה — נסה שוב.';
+
+  @override
+  String get menuSavedSnack => 'נשמר';
+
+  @override
+  String get menuDeletedSnack => 'נמחק';
 }

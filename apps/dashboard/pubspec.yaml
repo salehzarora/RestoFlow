@@ -21,6 +21,9 @@ dependencies:
     path: ../../packages/auth_identity
   restoflow_feature_auth:
     path: ../../packages/feature_auth
+  # RF-111: the owner menu management surface (demo-backed; no real backend yet).
+  restoflow_feature_menu:
+    path: ../../packages/feature_menu
 dev_dependencies:
   flutter_test:
     sdk: flutter

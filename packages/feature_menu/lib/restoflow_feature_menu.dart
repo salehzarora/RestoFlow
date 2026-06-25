@@ -37,3 +37,7 @@ export 'src/data/rpc_menu_writer.dart';
 
 // State (Riverpod providers + write controller).
 export 'src/state/menu_providers.dart';
+
+// UI (the owner menu management surface + the in-place editor target).
+export 'src/screens/item_editor_screen.dart' show MenuEditorTarget;
+export 'src/screens/menu_management_screen.dart';

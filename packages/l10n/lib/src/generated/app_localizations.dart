@@ -543,6 +543,366 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Coming soon'**
   String get authComingSoon;
+
+  /// Dashboard navigation label for the overview/report screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get dashboardNavOverview;
+
+  /// Dashboard navigation label for the menu management surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get dashboardNavMenu;
+
+  /// Title of the owner menu management surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu management'**
+  String get menuManagementTitle;
+
+  /// Banner explaining the menu surface uses local demo data, not a real backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo data — changes stay on this device and are not saved to a server yet.'**
+  String get menuDemoBanner;
+
+  /// Heading for the list of menu categories.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories'**
+  String get menuCategoriesHeading;
+
+  /// Heading for the list of menu items in a category.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get menuItemsHeading;
+
+  /// Hint shown in the detail panel before a category is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a category to see its items.'**
+  String get menuSelectCategoryHint;
+
+  /// Empty state for the category list.
+  ///
+  /// In en, this message translates to:
+  /// **'No categories yet.'**
+  String get menuEmptyCategories;
+
+  /// Empty state for the item list of a category.
+  ///
+  /// In en, this message translates to:
+  /// **'No items in this category yet.'**
+  String get menuEmptyItems;
+
+  /// Error state when the menu fails to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the menu.'**
+  String get menuLoadError;
+
+  /// Button to retry loading the menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get menuRetry;
+
+  /// Number of items in a category.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String menuItemCount(int count);
+
+  /// Action to create a new menu category.
+  ///
+  /// In en, this message translates to:
+  /// **'Add category'**
+  String get menuAddCategory;
+
+  /// Action to create a new menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Add item'**
+  String get menuAddItem;
+
+  /// Action to add a size option to an item.
+  ///
+  /// In en, this message translates to:
+  /// **'Add size'**
+  String get menuAddSize;
+
+  /// Action to add a variant option to an item.
+  ///
+  /// In en, this message translates to:
+  /// **'Add variant'**
+  String get menuAddVariant;
+
+  /// Action to add a modifier group to an item.
+  ///
+  /// In en, this message translates to:
+  /// **'Add modifier'**
+  String get menuAddModifier;
+
+  /// Action to add an option to a modifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Add option'**
+  String get menuAddOption;
+
+  /// Generic edit dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get menuEditTitle;
+
+  /// Save button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get menuSaveAction;
+
+  /// Cancel button.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get menuCancelAction;
+
+  /// Edit a menu entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get menuEditAction;
+
+  /// Delete (soft-delete) a menu entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get menuDeleteAction;
+
+  /// Name field label for menu entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get menuNameLabel;
+
+  /// Optional description field label for a menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Description (optional)'**
+  String get menuDescriptionLabel;
+
+  /// Base price field label for a menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Base price'**
+  String get menuPriceLabel;
+
+  /// Signed price-delta field label for sizes/variants/options.
+  ///
+  /// In en, this message translates to:
+  /// **'Price change'**
+  String get menuPriceDeltaLabel;
+
+  /// Currency code field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency'**
+  String get menuCurrencyLabel;
+
+  /// Category selector field label for an item.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get menuCategoryFieldLabel;
+
+  /// Display-order field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Display order'**
+  String get menuDisplayOrderLabel;
+
+  /// Active/inactive toggle label.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get menuActiveLabel;
+
+  /// Modifier selection-type field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection'**
+  String get menuSelectionTypeLabel;
+
+  /// Single-selection modifier type.
+  ///
+  /// In en, this message translates to:
+  /// **'Single'**
+  String get menuSelectionSingle;
+
+  /// Multiple-selection modifier type.
+  ///
+  /// In en, this message translates to:
+  /// **'Multiple'**
+  String get menuSelectionMultiple;
+
+  /// Modifier minimum-selection field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum'**
+  String get menuMinSelectLabel;
+
+  /// Modifier maximum-selection field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum (optional)'**
+  String get menuMaxSelectLabel;
+
+  /// Modifier required toggle label.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get menuRequiredLabel;
+
+  /// Heading for an item's sizes.
+  ///
+  /// In en, this message translates to:
+  /// **'Sizes'**
+  String get menuSizesHeading;
+
+  /// Heading for an item's variants.
+  ///
+  /// In en, this message translates to:
+  /// **'Variants'**
+  String get menuVariantsHeading;
+
+  /// Heading for an item's modifiers.
+  ///
+  /// In en, this message translates to:
+  /// **'Modifiers'**
+  String get menuModifiersHeading;
+
+  /// Heading for a modifier's options.
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get menuOptionsHeading;
+
+  /// Soft-delete confirmation dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this entry?'**
+  String get menuDeleteConfirmTitle;
+
+  /// Soft-delete confirmation dialog body.
+  ///
+  /// In en, this message translates to:
+  /// **'It will be hidden from the menu. You can restore it later.'**
+  String get menuDeleteConfirmBody;
+
+  /// Confirm-delete button.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get menuConfirmDelete;
+
+  /// Badge for an inactive menu entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get menuInactiveBadge;
+
+  /// Badge for a restaurant-scoped (global) menu entry.
+  ///
+  /// In en, this message translates to:
+  /// **'All branches'**
+  String get menuGlobalBadge;
+
+  /// Badge for a branch-scoped menu entry.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch'**
+  String get menuBranchBadge;
+
+  /// Heading for the item image section.
+  ///
+  /// In en, this message translates to:
+  /// **'Item image'**
+  String get menuImageHeading;
+
+  /// Title of the deferred/gated image management panel.
+  ///
+  /// In en, this message translates to:
+  /// **'Image upload coming soon'**
+  String get menuImageDeferredTitle;
+
+  /// Body explaining why image upload is deferred.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing and uploading item photos needs a backend image record (a planned follow-up). The upload path and validation are already built.'**
+  String get menuImageDeferredBody;
+
+  /// Validation error: a required field is blank.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get menuErrorRequired;
+
+  /// Validation error: a price did not parse to an amount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid amount'**
+  String get menuErrorAmount;
+
+  /// Validation error: base price is negative.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot be negative'**
+  String get menuErrorNegativePrice;
+
+  /// Validation error: invalid currency code.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a 3-letter code (e.g. USD)'**
+  String get menuErrorCurrency;
+
+  /// Validation error: invalid selection type.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose single or multiple'**
+  String get menuErrorSelectionType;
+
+  /// Validation error: max-select is below min-select.
+  ///
+  /// In en, this message translates to:
+  /// **'Must be at least the minimum'**
+  String get menuErrorMaxLessThanMin;
+
+  /// Failure message: the role lacks menu write permission.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t change the menu in this scope.'**
+  String get menuWritePermissionDenied;
+
+  /// Failure message: a transient/server/unexpected write error.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save — please try again.'**
+  String get menuWriteProblem;
+
+  /// Snackbar after a successful save.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get menuSavedSnack;
+
+  /// Snackbar after a successful soft-delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted'**
+  String get menuDeletedSnack;
 }
 
 class _AppLocalizationsDelegate
