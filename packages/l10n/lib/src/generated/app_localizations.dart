@@ -903,6 +903,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deleted'**
   String get menuDeletedSnack;
+
+  /// Subtitle under the menu management page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Organize categories, items, sizes, modifiers, and prices.'**
+  String get menuManagementSubtitle;
+
+  /// Placeholder for the menu search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the menu'**
+  String get menuSearchHint;
+
+  /// Filter chip: show all (active + inactive) entries.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get menuFilterAll;
+
+  /// Filter chip: show only active entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get menuFilterActive;
+
+  /// Filter chip: show only inactive entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get menuFilterInactive;
+
+  /// Empty-state description for the category list.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your first category to start building the menu.'**
+  String get menuEmptyCategoriesBody;
+
+  /// Empty-state description for the item list.
+  ///
+  /// In en, this message translates to:
+  /// **'Add an item to this category to get started.'**
+  String get menuEmptyItemsBody;
+
+  /// Error-state description when the menu fails to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong while loading the menu.'**
+  String get menuLoadErrorBody;
+
+  /// Placeholder caption for the item image preview.
+  ///
+  /// In en, this message translates to:
+  /// **'No image yet'**
+  String get menuImageEmptyHint;
+
+  /// Short badge marking a deferred/planned feature.
+  ///
+  /// In en, this message translates to:
+  /// **'Soon'**
+  String get menuComingSoonBadge;
+
+  /// Section title for the item's main fields in the editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get menuItemDetailsSection;
+
+  /// Empty-state title when a search/filter returns nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get menuNoResults;
+
+  /// Empty-state description when a search/filter returns nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Try a different search or filter.'**
+  String get menuNoResultsBody;
 }
 
 class _AppLocalizationsDelegate

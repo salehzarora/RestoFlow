@@ -416,4 +416,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuDeletedSnack => 'Deleted';
+
+  @override
+  String get menuManagementSubtitle =>
+      'Organize categories, items, sizes, modifiers, and prices.';
+
+  @override
+  String get menuSearchHint => 'Search the menu';
+
+  @override
+  String get menuFilterAll => 'All';
+
+  @override
+  String get menuFilterActive => 'Active';
+
+  @override
+  String get menuFilterInactive => 'Inactive';
+
+  @override
+  String get menuEmptyCategoriesBody =>
+      'Create your first category to start building the menu.';
+
+  @override
+  String get menuEmptyItemsBody =>
+      'Add an item to this category to get started.';
+
+  @override
+  String get menuLoadErrorBody =>
+      'Something went wrong while loading the menu.';
+
+  @override
+  String get menuImageEmptyHint => 'No image yet';
+
+  @override
+  String get menuComingSoonBadge => 'Soon';
+
+  @override
+  String get menuItemDetailsSection => 'Details';
+
+  @override
+  String get menuNoResults => 'No matches';
+
+  @override
+  String get menuNoResultsBody => 'Try a different search or filter.';
 }

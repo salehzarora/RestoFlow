@@ -12,12 +12,13 @@ import '../models/menu_item.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
 import '../models/modifier.dart';
+import '../models/modifier_option.dart';
 import '../state/menu_providers.dart';
 import '../widgets/menu_badges.dart';
+import '../widgets/menu_components.dart';
 import '../widgets/menu_entity_forms.dart';
 import '../widgets/menu_image_panel.dart';
 import '../widgets/menu_l10n.dart';
-import '../widgets/menu_panel_header.dart';
 
 /// What the item editor is editing: an existing [item], or a new item in
 /// [categoryId].
@@ -32,8 +33,9 @@ class MenuEditorTarget {
 
 /// The in-place item editor (RF-111). Rendered inside the menu surface subtree
 /// (NOT a pushed route) so it stays under the feature ProviderScope overrides.
-/// New items show the fields only; existing items also show sizes/variants/
-/// modifiers (+ options) and the gated image panel.
+/// Structured as sectioned cards: details, sizes, variants, modifiers (+ options),
+/// and the gated image panel. New items show the details only; existing items
+/// show every section.
 class ItemEditorView extends ConsumerStatefulWidget {
   const ItemEditorView({
     required this.snapshot,
@@ -133,8 +135,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(l10n.menuSavedSnack)));
-        // A newly-created item returns to the list (children are added by
-        // re-opening it); an existing item stays so children can be edited.
         if (!widget.target.isExisting) widget.onClose();
       },
       (failure) {
@@ -158,179 +158,204 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(RestoflowSpacing.lg),
-            children: [
-              _fieldsCard(context, l10n, categories),
-              if (_item != null) ...[
-                const SizedBox(height: RestoflowSpacing.lg),
-                _PricedChildSection(
-                  title: l10n.menuSizesHeading,
-                  addLabel: l10n.menuAddSize,
-                  kind: PricedChildKind.size,
-                  parentId: _item.id,
-                  currencyCode: _currencyCode,
-                  rows: widget.snapshot
-                      .sizesForItem(_item.id)
-                      .map(
-                        (s) => _PricedChildVm(
-                          id: s.id,
-                          name: s.name,
-                          deltaMinor: s.priceDeltaMinor,
-                          isActive: s.isActive,
-                          branchId: s.branchId,
-                        ),
-                      )
-                      .toList(),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(RestoflowSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _detailsCard(context, l10n, categories),
+                    if (_item != null) ...[
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      _PricedChildSection(
+                        title: l10n.menuSizesHeading,
+                        icon: Icons.straighten,
+                        addLabel: l10n.menuAddSize,
+                        kind: PricedChildKind.size,
+                        parentId: _item.id,
+                        currencyCode: _currencyCode,
+                        rows: widget.snapshot
+                            .sizesForItem(_item.id)
+                            .map(
+                              (s) => _PricedChildVm(
+                                id: s.id,
+                                name: s.name,
+                                deltaMinor: s.priceDeltaMinor,
+                                isActive: s.isActive,
+                                branchId: s.branchId,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      _PricedChildSection(
+                        title: l10n.menuVariantsHeading,
+                        icon: Icons.tune,
+                        addLabel: l10n.menuAddVariant,
+                        kind: PricedChildKind.variant,
+                        parentId: _item.id,
+                        currencyCode: _currencyCode,
+                        rows: widget.snapshot
+                            .variantsForItem(_item.id)
+                            .map(
+                              (v) => _PricedChildVm(
+                                id: v.id,
+                                name: v.name,
+                                deltaMinor: v.priceDeltaMinor,
+                                isActive: v.isActive,
+                                branchId: v.branchId,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      _ModifiersSection(
+                        item: _item,
+                        modifiers: widget.snapshot.modifiersForItem(_item.id),
+                        snapshot: widget.snapshot,
+                        currencyCode: _currencyCode,
+                      ),
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      MenuImagePanel(item: _item),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: RestoflowSpacing.lg),
-                _PricedChildSection(
-                  title: l10n.menuVariantsHeading,
-                  addLabel: l10n.menuAddVariant,
-                  kind: PricedChildKind.variant,
-                  parentId: _item.id,
-                  currencyCode: _currencyCode,
-                  rows: widget.snapshot
-                      .variantsForItem(_item.id)
-                      .map(
-                        (v) => _PricedChildVm(
-                          id: v.id,
-                          name: v.name,
-                          deltaMinor: v.priceDeltaMinor,
-                          isActive: v.isActive,
-                          branchId: v.branchId,
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: RestoflowSpacing.lg),
-                _ModifiersSection(
-                  item: _item,
-                  modifiers: widget.snapshot.modifiersForItem(_item.id),
-                  snapshot: widget.snapshot,
-                  currencyCode: _currencyCode,
-                ),
-                const SizedBox(height: RestoflowSpacing.lg),
-                MenuImagePanel(item: _item),
-              ],
-            ],
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _fieldsCard(
+  Widget _detailsCard(
     BuildContext context,
     AppLocalizations l10n,
     List<MenuCategory> categories,
   ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              key: const ValueKey('menu-item-name'),
-              controller: _name,
-              decoration: InputDecoration(
-                labelText: l10n.menuNameLabel,
-                errorText: _nameError == null
-                    ? null
-                    : l10n.menuFieldErrorText(_nameError!),
+    return MenuSectionCard(
+      title: l10n.menuItemDetailsSection,
+      icon: Icons.info_outline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('menu-item-name'),
+            controller: _name,
+            decoration: InputDecoration(
+              labelText: l10n.menuNameLabel,
+              border: const OutlineInputBorder(),
+              errorText: _nameError == null
+                  ? null
+                  : l10n.menuFieldErrorText(_nameError!),
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          TextField(
+            controller: _description,
+            maxLines: 2,
+            decoration: InputDecoration(
+              labelText: l10n.menuDescriptionLabel,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  key: const ValueKey('menu-item-price'),
+                  controller: _price,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: l10n.menuPriceLabel,
+                    border: const OutlineInputBorder(),
+                    errorText: _priceError == null
+                        ? null
+                        : l10n.menuFieldErrorText(_priceError!),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: RestoflowSpacing.md),
-            TextField(
-              controller: _description,
-              maxLines: 2,
-              decoration: InputDecoration(labelText: l10n.menuDescriptionLabel),
-            ),
-            const SizedBox(height: RestoflowSpacing.md),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    key: const ValueKey('menu-item-price'),
-                    controller: _price,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: l10n.menuPriceLabel,
-                      errorText: _priceError == null
-                          ? null
-                          : l10n.menuFieldErrorText(_priceError!),
-                    ),
+              const SizedBox(width: RestoflowSpacing.md),
+              Expanded(
+                child: TextField(
+                  controller: _currency,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    labelText: l10n.menuCurrencyLabel,
+                    border: const OutlineInputBorder(),
+                    errorText: _currencyError == null
+                        ? null
+                        : l10n.menuFieldErrorText(_currencyError!),
                   ),
                 ),
-                const SizedBox(width: RestoflowSpacing.md),
-                Expanded(
-                  child: TextField(
-                    controller: _currency,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: InputDecoration(
-                      labelText: l10n.menuCurrencyLabel,
-                      errorText: _currencyError == null
-                          ? null
-                          : l10n.menuFieldErrorText(_currencyError!),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: RestoflowSpacing.md),
-            DropdownButtonFormField<String>(
-              initialValue: _categoryId,
-              decoration: InputDecoration(
-                labelText: l10n.menuCategoryFieldLabel,
               ),
-              items: [
-                for (final category in categories)
-                  DropdownMenuItem(
-                    value: category.id,
-                    child: Text(category.name),
-                  ),
-              ],
-              onChanged: (value) => setState(() => _categoryId = value),
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          DropdownButtonFormField<String>(
+            initialValue: _categoryId,
+            decoration: InputDecoration(
+              labelText: l10n.menuCategoryFieldLabel,
+              border: const OutlineInputBorder(),
             ),
-            const SizedBox(height: RestoflowSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _order,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: l10n.menuDisplayOrderLabel,
-                    ),
+            items: [
+              for (final category in categories)
+                DropdownMenuItem(
+                  value: category.id,
+                  child: Text(category.name),
+                ),
+            ],
+            onChanged: (value) => setState(() => _categoryId = value),
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _order,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: l10n.menuDisplayOrderLabel,
+                    border: const OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(width: RestoflowSpacing.md),
-                Expanded(
-                  child: SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.menuActiveLabel),
-                    value: _active,
-                    onChanged: (value) => setState(() => _active = value),
-                  ),
+              ),
+              const SizedBox(width: RestoflowSpacing.md),
+              Expanded(
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.menuActiveLabel),
+                  value: _active,
+                  onChanged: (value) => setState(() => _active = value),
                 ),
-              ],
-            ),
-            const SizedBox(height: RestoflowSpacing.lg),
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: FilledButton(
+              ),
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.lg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _submitting ? null : widget.onClose,
+                child: Text(l10n.menuCancelAction),
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              FilledButton.icon(
                 key: const ValueKey('menu-item-save'),
                 onPressed: _submitting ? null : _saveFields,
-                child: Text(l10n.menuSaveAction),
+                icon: const Icon(Icons.check, size: 18),
+                label: Text(l10n.menuSaveAction),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -354,8 +379,11 @@ class _EditorTopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          BackButton(onPressed: onClose),
-          const SizedBox(width: RestoflowSpacing.sm),
+          IconButton.filledTonal(
+            onPressed: onClose,
+            icon: const BackButtonIcon(),
+          ),
+          const SizedBox(width: RestoflowSpacing.md),
           Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
         ],
       ),
@@ -389,6 +417,7 @@ MenuEntityType _entityForKind(PricedChildKind kind) => switch (kind) {
 class _PricedChildSection extends ConsumerWidget {
   const _PricedChildSection({
     required this.title,
+    required this.icon,
     required this.addLabel,
     required this.kind,
     required this.parentId,
@@ -397,6 +426,7 @@ class _PricedChildSection extends ConsumerWidget {
   });
 
   final String title;
+  final IconData icon;
   final String addLabel;
   final PricedChildKind kind;
   final String parentId;
@@ -424,69 +454,118 @@ class _PricedChildSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            MenuPanelHeader(
-              title: title,
-              actionLabel: addLabel,
-              onAction: () => showPricedChildFormDialog(
-                context,
-                kind: kind,
-                parentId: parentId,
-                currencyCode: currencyCode,
-              ),
-            ),
-            for (final row in rows)
-              ListTile(
-                dense: true,
-                title: Text(row.name),
-                subtitle: MenuEntityBadges(
-                  isActive: row.isActive,
-                  branchId: row.branchId,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(formatMinorUnits(row.deltaMinor, currencyCode)),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          showPricedChildFormDialog(
-                            context,
-                            kind: kind,
-                            parentId: parentId,
-                            currencyCode: currencyCode,
-                            id: row.id,
-                            initialName: row.name,
-                            initialDeltaMinor: row.deltaMinor,
-                            initialActive: row.isActive,
-                          );
-                        }
-                        if (value == 'delete') _delete(context, ref, row.id);
-                      },
-                      itemBuilder: (context) {
-                        final l10n = AppLocalizations.of(context);
-                        return [
-                          PopupMenuItem(
-                            value: 'edit',
-                            child: Text(l10n.menuEditAction),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Text(l10n.menuDeleteAction),
-                          ),
-                        ];
-                      },
-                    ),
-                  ],
-                ),
-              ),
-          ],
+    final theme = Theme.of(context);
+    return MenuSectionCard(
+      title: title,
+      icon: icon,
+      contentPadding: EdgeInsets.zero,
+      trailing: TextButton.icon(
+        onPressed: () => showPricedChildFormDialog(
+          context,
+          kind: kind,
+          parentId: parentId,
+          currencyCode: currencyCode,
         ),
+        icon: const Icon(Icons.add, size: 18),
+        label: Text(addLabel),
+      ),
+      child: rows.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(RestoflowSpacing.lg),
+              child: Text(
+                '—',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                for (var i = 0; i < rows.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _PricedChildRow(
+                    row: rows[i],
+                    currencyCode: currencyCode,
+                    onEdit: () => showPricedChildFormDialog(
+                      context,
+                      kind: kind,
+                      parentId: parentId,
+                      currencyCode: currencyCode,
+                      id: rows[i].id,
+                      initialName: rows[i].name,
+                      initialDeltaMinor: rows[i].deltaMinor,
+                      initialActive: rows[i].isActive,
+                    ),
+                    onDelete: () => _delete(context, ref, rows[i].id),
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _PricedChildRow extends StatelessWidget {
+  const _PricedChildRow({
+    required this.row,
+    required this.currencyCode,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final _PricedChildVm row;
+  final String currencyCode;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        RestoflowSpacing.lg,
+        RestoflowSpacing.xs,
+        RestoflowSpacing.sm,
+        RestoflowSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(row.name, style: theme.textTheme.bodyLarge),
+                ),
+                if (!row.isActive) ...[
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  MenuPill(
+                    label: l10n.menuInactiveBadge,
+                    background: theme.colorScheme.surfaceContainerHighest,
+                    foreground: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Text(
+            formatMinorUnits(row.deltaMinor, currencyCode),
+            style: theme.textTheme.titleSmall,
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'edit') onEdit();
+              if (value == 'delete') onDelete();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(value: 'edit', child: Text(l10n.menuEditAction)),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text(l10n.menuDeleteAction),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -531,90 +610,141 @@ class _ModifiersSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        MenuPanelHeader(
-          title: l10n.menuModifiersHeading,
-          actionLabel: l10n.menuAddModifier,
-          onAction: () => showModifierFormDialog(context, menuItemId: item.id),
-        ),
-        for (final modifier in modifiers)
-          Card(
-            child: Padding(
+    final theme = Theme.of(context);
+    return MenuSectionCard(
+      title: l10n.menuModifiersHeading,
+      icon: Icons.layers_outlined,
+      contentPadding: EdgeInsets.zero,
+      trailing: TextButton.icon(
+        onPressed: () => showModifierFormDialog(context, menuItemId: item.id),
+        icon: const Icon(Icons.add, size: 18),
+        label: Text(l10n.menuAddModifier),
+      ),
+      child: modifiers.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(RestoflowSpacing.lg),
+              child: Text(
+                '—',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          : Padding(
               padding: const EdgeInsets.all(RestoflowSpacing.md),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          modifier.name,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
+                  for (final modifier in modifiers)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: RestoflowSpacing.md,
                       ),
-                      MenuEntityBadges(
-                        isActive: modifier.isActive,
-                        branchId: modifier.branchId,
+                      child: _ModifierCard(
+                        modifier: modifier,
+                        item: item,
+                        currencyCode: currencyCode,
+                        options: snapshot.optionsForModifier(modifier.id),
+                        onDelete: () =>
+                            _deleteModifier(context, ref, modifier.id),
                       ),
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            showModifierFormDialog(
-                              context,
-                              menuItemId: item.id,
-                              id: modifier.id,
-                              initialName: modifier.name,
-                              initialSelectionType: modifier.selectionType,
-                              initialMinSelect: modifier.minSelect,
-                              initialMaxSelect: modifier.maxSelect,
-                              initialRequired: modifier.isRequired,
-                              initialDisplayOrder: modifier.displayOrder,
-                              initialActive: modifier.isActive,
-                            );
-                          }
-                          if (value == 'delete') {
-                            _deleteModifier(context, ref, modifier.id);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: 'edit',
-                            child: Text(l10n.menuEditAction),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Text(l10n.menuDeleteAction),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  _PricedChildSection(
-                    title: l10n.menuOptionsHeading,
-                    addLabel: l10n.menuAddOption,
-                    kind: PricedChildKind.option,
-                    parentId: modifier.id,
-                    currencyCode: currencyCode,
-                    rows: snapshot
-                        .optionsForModifier(modifier.id)
-                        .map(
-                          (o) => _PricedChildVm(
-                            id: o.id,
-                            name: o.name,
-                            deltaMinor: o.priceDeltaMinor,
-                            isActive: o.isActive,
-                            branchId: o.branchId,
-                          ),
-                        )
-                        .toList(),
-                  ),
+                    ),
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _ModifierCard extends StatelessWidget {
+  const _ModifierCard({
+    required this.modifier,
+    required this.item,
+    required this.currencyCode,
+    required this.options,
+    required this.onDelete,
+  });
+
+  final Modifier modifier;
+  final MenuItem item;
+  final String currencyCode;
+  final List<ModifierOption> options;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      padding: const EdgeInsets.all(RestoflowSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(modifier.name, style: theme.textTheme.titleSmall),
+              ),
+              MenuEntityBadges(
+                isActive: modifier.isActive,
+                branchId: modifier.branchId,
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    showModifierFormDialog(
+                      context,
+                      menuItemId: item.id,
+                      id: modifier.id,
+                      initialName: modifier.name,
+                      initialSelectionType: modifier.selectionType,
+                      initialMinSelect: modifier.minSelect,
+                      initialMaxSelect: modifier.maxSelect,
+                      initialRequired: modifier.isRequired,
+                      initialDisplayOrder: modifier.displayOrder,
+                      initialActive: modifier.isActive,
+                    );
+                  }
+                  if (value == 'delete') onDelete();
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text(l10n.menuEditAction),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text(l10n.menuDeleteAction),
+                  ),
+                ],
+              ),
+            ],
           ),
-      ],
+          _PricedChildSection(
+            title: l10n.menuOptionsHeading,
+            icon: Icons.tonality,
+            addLabel: l10n.menuAddOption,
+            kind: PricedChildKind.option,
+            parentId: modifier.id,
+            currencyCode: currencyCode,
+            rows: options
+                .map(
+                  (o) => _PricedChildVm(
+                    id: o.id,
+                    name: o.name,
+                    deltaMinor: o.priceDeltaMinor,
+                    isActive: o.isActive,
+                    branchId: o.branchId,
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -133,5 +133,18 @@
   "menuWritePermissionDenied": "لا يمكنك تغيير القائمة في هذا النطاق.",
   "menuWriteProblem": "تعذّر الحفظ — يرجى المحاولة مرة أخرى.",
   "menuSavedSnack": "تم الحفظ",
-  "menuDeletedSnack": "تم الحذف"
+  "menuDeletedSnack": "تم الحذف",
+  "menuManagementSubtitle": "نظّم الفئات والعناصر والأحجام والمُعدِّلات والأسعار.",
+  "menuSearchHint": "ابحث في القائمة",
+  "menuFilterAll": "الكل",
+  "menuFilterActive": "نشط",
+  "menuFilterInactive": "غير نشط",
+  "menuEmptyCategoriesBody": "أنشئ أول فئة لبدء بناء القائمة.",
+  "menuEmptyItemsBody": "أضف عنصرًا إلى هذه الفئة للبدء.",
+  "menuLoadErrorBody": "حدث خطأ أثناء تحميل القائمة.",
+  "menuImageEmptyHint": "لا توجد صورة بعد",
+  "menuComingSoonBadge": "قريبًا",
+  "menuItemDetailsSection": "التفاصيل",
+  "menuNoResults": "لا توجد نتائج",
+  "menuNoResultsBody": "جرّب بحثًا أو تصفية مختلفة."
 }

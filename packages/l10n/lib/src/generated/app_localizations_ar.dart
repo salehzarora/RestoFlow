@@ -416,4 +416,44 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get menuDeletedSnack => 'تم الحذف';
+
+  @override
+  String get menuManagementSubtitle =>
+      'نظّم الفئات والعناصر والأحجام والمُعدِّلات والأسعار.';
+
+  @override
+  String get menuSearchHint => 'ابحث في القائمة';
+
+  @override
+  String get menuFilterAll => 'الكل';
+
+  @override
+  String get menuFilterActive => 'نشط';
+
+  @override
+  String get menuFilterInactive => 'غير نشط';
+
+  @override
+  String get menuEmptyCategoriesBody => 'أنشئ أول فئة لبدء بناء القائمة.';
+
+  @override
+  String get menuEmptyItemsBody => 'أضف عنصرًا إلى هذه الفئة للبدء.';
+
+  @override
+  String get menuLoadErrorBody => 'حدث خطأ أثناء تحميل القائمة.';
+
+  @override
+  String get menuImageEmptyHint => 'لا توجد صورة بعد';
+
+  @override
+  String get menuComingSoonBadge => 'قريبًا';
+
+  @override
+  String get menuItemDetailsSection => 'التفاصيل';
+
+  @override
+  String get menuNoResults => 'لا توجد نتائج';
+
+  @override
+  String get menuNoResultsBody => 'جرّب بحثًا أو تصفية مختلفة.';
 }

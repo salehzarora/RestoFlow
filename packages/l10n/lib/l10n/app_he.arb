@@ -133,5 +133,18 @@
   "menuWritePermissionDenied": "אין לך הרשאה לשנות את התפריט בהיקף זה.",
   "menuWriteProblem": "השמירה נכשלה — נסה שוב.",
   "menuSavedSnack": "נשמר",
-  "menuDeletedSnack": "נמחק"
+  "menuDeletedSnack": "נמחק",
+  "menuManagementSubtitle": "ארגן קטגוריות, פריטים, גדלים, תוספות ומחירים.",
+  "menuSearchHint": "חיפוש בתפריט",
+  "menuFilterAll": "הכול",
+  "menuFilterActive": "פעיל",
+  "menuFilterInactive": "לא פעיל",
+  "menuEmptyCategoriesBody": "צור את הקטגוריה הראשונה כדי להתחיל לבנות את התפריט.",
+  "menuEmptyItemsBody": "הוסף פריט לקטגוריה זו כדי להתחיל.",
+  "menuLoadErrorBody": "אירעה שגיאה בעת טעינת התפריט.",
+  "menuImageEmptyHint": "אין עדיין תמונה",
+  "menuComingSoonBadge": "בקרוב",
+  "menuItemDetailsSection": "פרטים",
+  "menuNoResults": "אין תוצאות",
+  "menuNoResultsBody": "נסה חיפוש או סינון אחר."
 }

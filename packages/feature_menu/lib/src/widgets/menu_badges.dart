@@ -8,17 +8,19 @@ class MenuPill extends StatelessWidget {
     required this.label,
     required this.background,
     required this.foreground,
+    this.icon,
     super.key,
   });
 
   final String label;
   final Color background;
   final Color foreground;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
+      padding: const EdgeInsetsDirectional.symmetric(
         horizontal: RestoflowSpacing.sm,
         vertical: RestoflowSpacing.xs / 2,
       ),
@@ -26,11 +28,20 @@ class MenuPill extends StatelessWidget {
         color: background,
         borderRadius: BorderRadius.circular(RestoflowRadii.pill),
       ),
-      child: Text(
-        label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(color: foreground),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: foreground),
+            const SizedBox(width: RestoflowSpacing.xs),
+          ],
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: foreground),
+          ),
+        ],
       ),
     );
   }
@@ -59,15 +70,41 @@ class MenuEntityBadges extends StatelessWidget {
         if (!isActive)
           MenuPill(
             label: l10n.menuInactiveBadge,
-            background: scheme.errorContainer,
-            foreground: scheme.onErrorContainer,
+            icon: Icons.visibility_off_outlined,
+            background: scheme.surfaceContainerHighest,
+            foreground: scheme.onSurfaceVariant,
           ),
         MenuPill(
           label: branchId == null ? l10n.menuGlobalBadge : l10n.menuBranchBadge,
+          icon: branchId == null
+              ? Icons.account_tree_outlined
+              : Icons.storefront_outlined,
           background: scheme.secondaryContainer,
           foreground: scheme.onSecondaryContainer,
         ),
       ],
+    );
+  }
+}
+
+/// A larger scope chip for the page header (the menu's active branch/global
+/// scope).
+class MenuScopeChip extends StatelessWidget {
+  const MenuScopeChip({required this.branchId, super.key});
+
+  final String? branchId;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return MenuPill(
+      label: branchId == null ? l10n.menuGlobalBadge : l10n.menuBranchBadge,
+      icon: branchId == null
+          ? Icons.account_tree_outlined
+          : Icons.storefront_outlined,
+      background: scheme.primaryContainer,
+      foreground: scheme.onPrimaryContainer,
     );
   }
 }

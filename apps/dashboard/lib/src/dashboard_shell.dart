@@ -6,9 +6,8 @@ import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'dashboard_home_screen.dart';
-import 'widgets/demo_notice_banner.dart';
 
-/// The owner/manager dashboard shell (RF-111): a two-destination navigation
+/// The owner/manager dashboard shell (RF-111): a branded side navigation
 /// (Overview + Menu) hosting the existing RF-104 overview and the RF-111 menu
 /// management surface.
 ///
@@ -33,6 +32,8 @@ class _DashboardShellState extends State<DashboardShell> {
   int _index = 0;
   late final InMemoryMenuStore _menuStore = buildDemoMenuStore();
 
+  void _select(int value) => setState(() => _index = value);
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -47,24 +48,7 @@ class _DashboardShellState extends State<DashboardShell> {
           if (isWide) {
             return Row(
               children: [
-                NavigationRail(
-                  selectedIndex: _index,
-                  onDestinationSelected: (value) =>
-                      setState(() => _index = value),
-                  labelType: NavigationRailLabelType.all,
-                  destinations: [
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.dashboard_outlined),
-                      selectedIcon: const Icon(Icons.dashboard),
-                      label: Text(l10n.dashboardNavOverview),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.restaurant_menu_outlined),
-                      selectedIcon: const Icon(Icons.restaurant_menu),
-                      label: Text(l10n.dashboardNavMenu),
-                    ),
-                  ],
-                ),
+                _SideNav(selectedIndex: _index, onSelected: _select),
                 const VerticalDivider(width: 1),
                 Expanded(child: content),
               ],
@@ -75,8 +59,7 @@ class _DashboardShellState extends State<DashboardShell> {
               Expanded(child: content),
               NavigationBar(
                 selectedIndex: _index,
-                onDestinationSelected: (value) =>
-                    setState(() => _index = value),
+                onDestinationSelected: _select,
                 destinations: [
                   NavigationDestination(
                     icon: const Icon(Icons.dashboard_outlined),
@@ -99,7 +82,10 @@ class _DashboardShellState extends State<DashboardShell> {
 
   Widget _menuSurface(BuildContext context, AppLocalizations l10n) {
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.menuManagementTitle)),
+      appBar: AppBar(
+        titleSpacing: RestoflowSpacing.lg,
+        title: Text(l10n.menuManagementTitle),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -112,7 +98,7 @@ class _DashboardShellState extends State<DashboardShell> {
               RestoflowSpacing.lg,
               0,
             ),
-            child: DemoNoticeBanner(message: l10n.menuDemoBanner),
+            child: _MenuDemoBanner(message: l10n.menuDemoBanner),
           ),
           Expanded(
             child: ProviderScope(
@@ -122,6 +108,93 @@ class _DashboardShellState extends State<DashboardShell> {
                 writer: _menuStore,
               ),
               child: const MenuManagementScreen(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The branded wide-screen side navigation.
+class _SideNav extends StatelessWidget {
+  const _SideNav({required this.selectedIndex, required this.onSelected});
+
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return NavigationRail(
+      backgroundColor: scheme.surfaceContainer,
+      selectedIndex: selectedIndex,
+      onDestinationSelected: onSelected,
+      labelType: NavigationRailLabelType.all,
+      groupAlignment: -0.9,
+      leading: Padding(
+        padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.lg),
+        child: CircleAvatar(
+          radius: 22,
+          backgroundColor: scheme.primary,
+          child: Icon(Icons.restaurant, color: scheme.onPrimary),
+        ),
+      ),
+      destinations: [
+        NavigationRailDestination(
+          icon: const Icon(Icons.dashboard_outlined),
+          selectedIcon: const Icon(Icons.dashboard),
+          label: Text(l10n.dashboardNavOverview),
+        ),
+        NavigationRailDestination(
+          icon: const Icon(Icons.restaurant_menu_outlined),
+          selectedIcon: const Icon(Icons.restaurant_menu),
+          label: Text(l10n.dashboardNavMenu),
+        ),
+      ],
+    );
+  }
+}
+
+/// A professional demo banner: an accent bar, an icon, and the message.
+class _MenuDemoBanner extends StatelessWidget {
+  const _MenuDemoBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        border: BorderDirectional(
+          start: BorderSide(color: scheme.tertiary, width: 4),
+        ),
+      ),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        RestoflowSpacing.md,
+        RestoflowSpacing.sm,
+        RestoflowSpacing.md,
+        RestoflowSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.science_outlined,
+            size: 20,
+            color: scheme.onTertiaryContainer,
+          ),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onTertiaryContainer,
+              ),
             ),
           ),
         ],
@@ -151,7 +224,7 @@ class _MembershipContextBar extends StatelessWidget {
         horizontal: RestoflowSpacing.lg,
         vertical: RestoflowSpacing.sm,
       ),
-      color: theme.colorScheme.surfaceContainerHighest,
+      color: theme.colorScheme.surfaceContainerHigh,
       child: Row(
         children: [
           Icon(

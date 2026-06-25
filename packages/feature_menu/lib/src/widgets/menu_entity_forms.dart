@@ -17,9 +17,11 @@ enum PricedChildKind { size, variant, option }
 /// A soft-delete confirmation dialog. Returns true if the user confirms.
 Future<bool> showMenuDeleteConfirm(BuildContext context) async {
   final l10n = AppLocalizations.of(context);
+  final scheme = Theme.of(context).colorScheme;
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
+      icon: Icon(Icons.delete_outline, color: scheme.error),
       title: Text(l10n.menuDeleteConfirmTitle),
       content: Text(l10n.menuDeleteConfirmBody),
       actions: [
@@ -28,6 +30,10 @@ Future<bool> showMenuDeleteConfirm(BuildContext context) async {
           child: Text(l10n.menuCancelAction),
         ),
         FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: scheme.error,
+            foregroundColor: scheme.onError,
+          ),
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(l10n.menuConfirmDelete),
         ),

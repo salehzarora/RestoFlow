@@ -416,4 +416,45 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get menuDeletedSnack => 'נמחק';
+
+  @override
+  String get menuManagementSubtitle =>
+      'ארגן קטגוריות, פריטים, גדלים, תוספות ומחירים.';
+
+  @override
+  String get menuSearchHint => 'חיפוש בתפריט';
+
+  @override
+  String get menuFilterAll => 'הכול';
+
+  @override
+  String get menuFilterActive => 'פעיל';
+
+  @override
+  String get menuFilterInactive => 'לא פעיל';
+
+  @override
+  String get menuEmptyCategoriesBody =>
+      'צור את הקטגוריה הראשונה כדי להתחיל לבנות את התפריט.';
+
+  @override
+  String get menuEmptyItemsBody => 'הוסף פריט לקטגוריה זו כדי להתחיל.';
+
+  @override
+  String get menuLoadErrorBody => 'אירעה שגיאה בעת טעינת התפריט.';
+
+  @override
+  String get menuImageEmptyHint => 'אין עדיין תמונה';
+
+  @override
+  String get menuComingSoonBadge => 'בקרוב';
+
+  @override
+  String get menuItemDetailsSection => 'פרטים';
+
+  @override
+  String get menuNoResults => 'אין תוצאות';
+
+  @override
+  String get menuNoResultsBody => 'נסה חיפוש או סינון אחר.';
 }

@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
 import '../state/menu_providers.dart';
+import '../widgets/menu_badges.dart';
 import '../widgets/menu_category_list.dart';
+import '../widgets/menu_components.dart';
+import '../widgets/menu_entity_forms.dart';
 import '../widgets/menu_item_list.dart';
 import '../widgets/menu_state_views.dart';
 import 'item_editor_screen.dart';
 
-/// The owner menu management surface (RF-111): a responsive master/detail of
-/// categories + items, with an in-place item editor. All navigation is internal
-/// state (no GoRouter / pushed routes) so the whole tree stays under the feature
-/// ProviderScope overrides. Read/write run against the injected seam (demo store
-/// today; real online wiring deferred to the auth/org-context bridge).
+/// The owner menu management surface (RF-111): a polished page header + a
+/// search/filter toolbar over a responsive master/detail (categories + items),
+/// with an in-place item editor. All navigation is internal state (no GoRouter /
+/// pushed routes) so the whole tree stays under the feature ProviderScope
+/// overrides. Read/write run against the injected seam (demo store today).
 class MenuManagementScreen extends ConsumerStatefulWidget {
   const MenuManagementScreen({super.key});
 
@@ -29,6 +33,8 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
   MenuEditorTarget? _editing;
   String? _selectedCategoryId;
   bool _narrowShowItems = false;
+  String _query = '';
+  MenuActiveFilter _filter = MenuActiveFilter.all;
 
   void _openEditor(MenuEditorTarget target) =>
       setState(() => _editing = target);
@@ -40,6 +46,15 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
     _narrowShowItems = true;
   });
 
+  Future<void> _addCategory() async {
+    final l10n = AppLocalizations.of(context);
+    if (await showCategoryFormDialog(context) && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.menuSavedSnack)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -48,12 +63,14 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
 
     return snapshotAsync.when(
       loading: () => const MenuLoadingView(),
-      error: (error, _) => MenuMessageView(
+      error: (error, _) => MenuStateView(
         icon: Icons.error_outline,
-        message: l10n.menuLoadError,
-        action: FilledButton(
+        title: l10n.menuLoadError,
+        body: l10n.menuLoadErrorBody,
+        action: FilledButton.icon(
           onPressed: () => ref.invalidate(menuSnapshotProvider),
-          child: Text(l10n.menuRetry),
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.menuRetry),
         ),
       ),
       data: (snapshot) {
@@ -66,16 +83,75 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
             onClose: _closeEditor,
           );
         }
-        return _MasterDetail(
-          snapshot: snapshot,
-          scope: scope,
-          selectedCategoryId: _resolveSelected(snapshot),
-          narrowShowItems: _narrowShowItems,
-          onSelectCategory: _selectCategory,
-          onBackToCategories: () => setState(() => _narrowShowItems = false),
-          onOpenEditor: _openEditor,
-        );
+        return _surface(context, l10n, snapshot, scope);
       },
+    );
+  }
+
+  Widget _surface(
+    BuildContext context,
+    AppLocalizations l10n,
+    MenuSnapshot snapshot,
+    MenuScope scope,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            RestoflowSpacing.lg,
+            RestoflowSpacing.lg,
+            RestoflowSpacing.lg,
+            RestoflowSpacing.md,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              MenuPageHeader(
+                title: l10n.menuManagementTitle,
+                subtitle: l10n.menuManagementSubtitle,
+                trailing: MenuScopeChip(branchId: scope.branchId),
+              ),
+              const SizedBox(height: RestoflowSpacing.lg),
+              MenuToolbar(
+                query: _query,
+                onQueryChanged: (value) => setState(() => _query = value),
+                filter: _filter,
+                onFilterChanged: (value) => setState(() => _filter = value),
+                trailing: FilledButton.icon(
+                  onPressed: _addCategory,
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.menuAddCategory),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.lg,
+              0,
+              RestoflowSpacing.lg,
+              RestoflowSpacing.lg,
+            ),
+            child: MenuSurfacePanel(
+              child: _MasterDetail(
+                snapshot: snapshot,
+                scope: scope,
+                query: _query,
+                filter: _filter,
+                selectedCategoryId: _resolveSelected(snapshot),
+                narrowShowItems: _narrowShowItems,
+                onSelectCategory: _selectCategory,
+                onBackToCategories: () =>
+                    setState(() => _narrowShowItems = false),
+                onOpenEditor: _openEditor,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -92,6 +168,8 @@ class _MasterDetail extends StatelessWidget {
   const _MasterDetail({
     required this.snapshot,
     required this.scope,
+    required this.query,
+    required this.filter,
     required this.selectedCategoryId,
     required this.narrowShowItems,
     required this.onSelectCategory,
@@ -101,6 +179,8 @@ class _MasterDetail extends StatelessWidget {
 
   final MenuSnapshot snapshot;
   final MenuScope scope;
+  final String query;
+  final MenuActiveFilter filter;
   final String? selectedCategoryId;
   final bool narrowShowItems;
   final ValueChanged<String> onSelectCategory;
@@ -111,15 +191,17 @@ class _MasterDetail extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final categoryId = selectedCategoryId;
     if (categoryId == null) {
-      return MenuMessageView(
+      return MenuStateView(
         icon: Icons.touch_app_outlined,
-        message: l10n.menuSelectCategoryHint,
+        title: l10n.menuSelectCategoryHint,
       );
     }
     return MenuItemList(
       snapshot: snapshot,
       categoryId: categoryId,
       scope: scope,
+      query: query,
+      filter: filter,
       onOpenEditor: onOpenEditor,
     );
   }
@@ -128,6 +210,8 @@ class _MasterDetail extends StatelessWidget {
     return MenuCategoryList(
       snapshot: snapshot,
       selectedCategoryId: selectedCategoryId,
+      query: query,
+      filter: filter,
       onSelect: onSelectCategory,
     );
   }
@@ -142,7 +226,7 @@ class _MasterDetail extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(width: 340, child: _categoryList()),
+              SizedBox(width: 360, child: _categoryList()),
               const VerticalDivider(width: 1),
               Expanded(child: _itemsPanel(context)),
             ],
