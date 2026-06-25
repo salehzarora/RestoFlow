@@ -235,46 +235,48 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 
 > Menu rows are editable offline by privileged staff and consumed during ordering. They carry the **standard sync set** so menu changes while offline are reconciled and price snapshots remain authoritative (**D-008**, [OFFLINE_SYNC_SPEC](OFFLINE_SYNC_SPEC.md)).
 
+> **Amended by DECISION D-031 (RF-109 menu backend contract; [DECISIONS](DECISIONS.md)).** All six menu tables carry `organization_id` + `restaurant_id` + **nullable `branch_id`** (scope override — **no branch-specific pricing/availability engine** in RF-109). `menu_items` carries `base_price_minor bigint` + `currency_code char(3)` + nullable `default_station_id`; the child tables (`item_sizes`, `item_variants`, `modifier_options`) carry a **signed `price_delta_minor bigint`**. Integer minor units only — **no float / numeric / decimal money** (**D-007**). Modifiers attach to items by **direct FK** (**no many-to-many** modifier groups in RF-109; m2m DEFERRED) and **no tax metadata** is added in RF-109. **No order-snapshot FK to the live menu** — order snapshots stay independent (**D-008**); `kitchen_staff`/KDS do **not** pull the live menu (it carries money), and KDS shows item names from order snapshots. Where older M6 planning text conflicts, **DECISION D-031 governs**.
+
 ### 4.1 `menu_categories`
 - **Purpose:** Grouping of menu items for display/ordering.
 - **Key fields:** `id`, `name` (localizable; ar/he/en per **D-014**), `display_order`, `is_active`, timestamps + `deleted_at`.
-- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`. (Menus are typically per-restaurant; `branch_id` nullable for branch-specific overrides — **ASSUMPTION**.)
-- **FKs:** `organization_id`, `restaurant_id`.
+- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, nullable `branch_id` (scope override — **DECISION D-031** promotes this from an ASSUMPTION to a ratified column on all six menu tables; no branch-specific pricing/availability **engine** in RF-109).
+- **FKs:** `organization_id`, `restaurant_id` (composite same-org FK to `restaurants`); nullable `branch_id -> branches` (scope override).
 - **Sync:** standard set.
 
 ### 4.2 `menu_items`
 - **Purpose:** A sellable menu product.
-- **Key fields:** `id`, `name` (localizable), `description`, `base_price_minor` (**integer minor units, D-007**), `currency` (ISO 4217; single currency per order enforced at order time — **Q-007**), `default_station_id` (routing to KDS), `is_active`, timestamps + `deleted_at`.
-- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`.
-- **FKs:** `organization_id`, `restaurant_id`, `menu_category_id -> menu_categories.id`, nullable `default_station_id -> stations.id`.
+- **Key fields:** `id`, `name` (localizable), `description`, `base_price_minor` (`bigint`, **integer minor units, D-007**), `currency_code` (`char(3)`, ISO 4217; single currency per order enforced at order time — **Q-007**; **DECISION D-031** names this `currency_code`), nullable `default_station_id` (routing to KDS), `display_order`, `is_active`, timestamps + `deleted_at`.
+- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, nullable `branch_id` (scope override, **DECISION D-031**).
+- **FKs:** `organization_id`, `restaurant_id` (composite same-org FK to `restaurants`), `menu_category_id -> menu_categories.id`, nullable `branch_id -> branches`, nullable `default_station_id -> stations.id`.
 - **Money:** `base_price_minor` (no floating point). Live price is **never** used after order placement (**D-008**); see `order_items` snapshot.
 - **Sync:** standard set.
 
 ### 4.3 `item_sizes`
-- **Purpose:** Size variants of a menu item (e.g. Small/Medium/Large) with a price delta or absolute price.
-- **Key fields:** `id`, `name` (localizable), `price_delta_minor` **or** `price_minor` (**integer minor units, D-007**), `display_order`, `is_active`, timestamps + `deleted_at`.
-- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`.
-- **FKs:** `menu_item_id -> menu_items.id`, `organization_id`, `restaurant_id`.
-- **Money:** `_minor` integers only.
+- **Purpose:** Size variants of a menu item (e.g. Small/Medium/Large) with a **signed price delta**.
+- **Key fields:** `id`, `name` (localizable), signed `price_delta_minor` (`bigint`, **integer minor units, D-007**; **DECISION D-031** standardizes children on a signed delta), `display_order`, `is_active`, timestamps + `deleted_at`.
+- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, nullable `branch_id` (scope override, **DECISION D-031**).
+- **FKs:** `menu_item_id -> menu_items.id` (composite same-org), `organization_id`, `restaurant_id`, nullable `branch_id -> branches`.
+- **Money:** `_minor` integers only — signed `price_delta_minor`; no float/numeric (**D-007**).
 
 ### 4.4 `item_variants`
 - **Purpose:** Non-size variants of an item (e.g. flavor, preparation) that may adjust price.
-- **Key fields:** `id`, `name` (localizable), `price_delta_minor` (**integer minor units, D-007**), `display_order`, `is_active`, timestamps + `deleted_at`.
-- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`.
-- **FKs:** `menu_item_id -> menu_items.id`, `organization_id`, `restaurant_id`.
+- **Key fields:** `id`, `name` (localizable), signed `price_delta_minor` (`bigint`, **integer minor units, D-007**), `display_order`, `is_active`, timestamps + `deleted_at`.
+- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, nullable `branch_id` (scope override, **DECISION D-031**).
+- **FKs:** `menu_item_id -> menu_items.id` (composite same-org), `organization_id`, `restaurant_id`, nullable `branch_id -> branches`.
 
 ### 4.5 `modifiers`
 - **Purpose:** A group of selectable options attached to a menu item (e.g. "Toppings", "Cooking level"), with selection rules.
 - **Key fields:** `id`, `name` (localizable), `selection_type` (`single`/`multiple` — **ASSUMPTION**), `min_select`, `max_select`, `is_required`, `display_order`, `is_active`, timestamps + `deleted_at`.
-- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`.
-- **FKs:** `menu_item_id -> menu_items.id` (or a many-to-many link table — **ASSUMPTION**, finalized in M0B), `organization_id`, `restaurant_id`.
+- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, nullable `branch_id` (scope override, **DECISION D-031**).
+- **FKs:** `menu_item_id -> menu_items.id` (**direct FK** — **DECISION D-031** keeps the direct attach; **no many-to-many** modifier-group link table in RF-109, m2m **DEFERRED**), `organization_id`, `restaurant_id`, nullable `branch_id -> branches`.
 
 ### 4.6 `modifier_options`
 - **Purpose:** An individual choice within a modifier (e.g. "Extra cheese") with a price.
-- **Key fields:** `id`, `name` (localizable), `price_minor` (**integer minor units, D-007**), `display_order`, `is_active`, timestamps + `deleted_at`.
-- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`.
-- **FKs:** `modifier_id -> modifiers.id`, `organization_id`, `restaurant_id`.
-- **Money:** `price_minor` is snapshotted into `order_item_modifiers` at order time (**D-008**).
+- **Key fields:** `id`, `name` (localizable), signed `price_delta_minor` (`bigint`, **integer minor units, D-007**; **DECISION D-031** standardizes this on a signed delta, **superseding** the prior absolute `price_minor`), `display_order`, `is_active`, timestamps + `deleted_at`.
+- **Tenant/scoping:** `organization_id` (**D-001**), `restaurant_id`, nullable `branch_id` (scope override, **DECISION D-031**).
+- **FKs:** `modifier_id -> modifiers.id` (composite same-org), `organization_id`, `restaurant_id`, nullable `branch_id -> branches`.
+- **Money:** the option's signed `price_delta_minor` contributes to the **captured price snapshot** (`price_minor_snapshot` on `order_item_modifiers`) at order time (**D-008**); orders never recompute from the live menu, and there is **no FK** from the order snapshot to this table.
 
 ---
 

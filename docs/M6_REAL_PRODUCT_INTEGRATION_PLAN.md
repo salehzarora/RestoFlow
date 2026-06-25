@@ -91,11 +91,15 @@ a provider/repository so it can be swapped for the real source later.
 
 ## 6. Menu / images plan
 
-- **Menu backend (new, change-controlled — RF-109):** `menu_categories`,
+- **Menu backend (new, change-controlled — RF-109 / DECISION D-031):** `menu_categories`,
   `menu_items`, `item_sizes`, `item_variants`, `modifiers`, `modifier_options`
-  with **integer `_minor` prices**, availability/`is_active`, tenant columns,
-  **RLS** (owner/manager write; in-scope read), **audited management RPCs**, and
-  **added to `sync_pull`** so POS/KDS get menu offline. The client Drift mirror
+  with **integer `_minor` prices** (`base_price_minor` / signed `price_delta_minor`),
+  `currency_code`, availability/`is_active`, tenant columns (org + restaurant +
+  nullable `branch_id`), **RLS** (owner/manager write; **price-capable roles
+  read** — `kitchen_staff` excluded), **audited management RPCs**, and **added to
+  `sync_pull`** so **price-capable POS roles** get the menu offline. **`kitchen_staff`/KDS
+  do NOT pull the live menu** (it carries price/money); KDS shows item names from
+  **order snapshots** (**D-008**), not the live menu. The client Drift mirror
   (`MenuRepository` in `data_local`) already exists.
 - **Order snapshots stay authoritative (D-008):** editing the menu never rewrites
   prices/names on existing or historical orders.
