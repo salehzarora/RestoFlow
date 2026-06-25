@@ -1,20 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'src/pos_menu_screen.dart';
 
 void main() => runApp(const ProviderScope(child: PosApp()));
 
-/// RestoFlow POS app (RF-100): a visible, polished demo menu + cart screen.
+/// RestoFlow POS app (RF-100 + RF-108): the demo menu + cart screen, behind the
+/// shared auth gate.
 ///
-/// In-memory demo only — no Supabase, no auth, no order submission, no payments,
-/// no persistence. Localization/RTL come from the shared `packages/l10n` wiring;
-/// the theme (seeded Material 3 + tokens) comes from `packages/design_system`;
-/// state is Riverpod.
+/// In DEMO mode (`RESTOFLOW_DEMO_MODE` default true) it renders the existing
+/// in-memory demo screen. In auth mode it routes through the cashier/owner/
+/// manager role gate (`AppSurface.pos`). No order submission/payments here
+/// (RF-108 wires entry only); the cashier scope-aware data binding is deferred
+/// to the real-data tickets. Localization/RTL + theme + Riverpod as before.
 class PosApp extends StatelessWidget {
-  const PosApp({super.key});
+  const PosApp({this.demoMode, this.fetchContext, super.key});
+
+  /// Test-only override of the demo/auth mode (null => `RESTOFLOW_DEMO_MODE`).
+  final bool? demoMode;
+
+  /// Test-only override of the auth-context fetcher (null => env config).
+  final AuthContextFetcher? fetchContext;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +35,13 @@ class PosApp extends StatelessWidget {
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
       theme: restoflowBaseTheme(),
-      home: const PosMenuScreen(),
+      home: AuthGatedHome(
+        surface: AppSurface.pos,
+        demoHome: const PosMenuScreen(),
+        onReady: (context, state) => const PosMenuScreen(),
+        demoMode: demoMode,
+        fetchContext: fetchContext,
+      ),
     );
   }
 }

@@ -16,6 +16,11 @@ dependencies:
     path: ../../packages/design_system
   restoflow_money:
     path: ../../packages/money
+  # RF-108 Stage 4: the auth gate (demo-mode fallback / role-based entry).
+  restoflow_auth_identity:
+    path: ../../packages/auth_identity
+  restoflow_feature_auth:
+    path: ../../packages/feature_auth
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -6,7 +6,10 @@
 /// Supabase session lifecycle live here (that is the app layer / a later stage).
 library;
 
+export 'src/auth_context_fetcher.dart';
+export 'src/auth_gate_host.dart';
 export 'src/auth_gate_view.dart';
+export 'src/auth_gated_home.dart';
 export 'src/auth_state_views.dart';
 export 'src/membership_picker_view.dart';
 export 'src/role_label.dart';

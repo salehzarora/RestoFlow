@@ -12,6 +12,9 @@ dependencies:
   # The pure-Dart auth gate state machine + models (RF-108 Stage 1/3).
   restoflow_auth_identity:
     path: ../auth_identity
+  # Result/Failure types (RF-108 Stage 4 host + fail-closed env fetcher).
+  restoflow_core:
+    path: ../core
   # Shared theme + tokens (no service-specific widgets live there).
   restoflow_design_system:
     path: ../design_system
