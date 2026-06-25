@@ -393,10 +393,21 @@ Owner/manager menu CRUD for the six menu reference tables (`menu_categories`, `m
 - **Errors:** `permission_denied` / `42501` (role/scope or non-member), `tenant_isolation` (target row resolves to another organization, **DECISION D-001**), `validation` (non-integer/negative absolute price, bad input). Error `message`/`details` never leak cross-tenant existence (§2).
 - **Offline:** online-only (menu editing is not an offline/outbox operation); devices observe edits on the next `sync_pull`.
 
+### 4.24 Menu image storage (RF-110, DECISION D-032)
+Menu **item** images are stored in a **private** Supabase Storage bucket **`menu-images`** governed by tenant-scoped `storage.objects` RLS — **not** via any RPC and **not** as a `menu_items` column (the object key encodes the `menu_item_id`; UI / "current image" metadata is owned by RF-111). The `app` schema is unaffected; **no Data-API RPC is added** in RF-110.
+- **Bucket:** `menu-images`, **private** (no public/anon read; no durable public URLs). Allowed MIME `image/png` / `image/jpeg` / `image/webp`; `file_size_limit` ≈ `5MiB`. Created by a SQL migration upserting `storage.buckets` (**not** a committed `config.toml` block).
+- **Object key (path):** `{organization_id}/{restaurant_id}/{branch_id_or_global}/menu_item/{menu_item_id}/{image_id}.{ext}` — UUID segments; `branch_id_or_global` is a UUID or the literal `global` (restaurant-scoped, `branch_id NULL`); the literal `menu_item` segment is required; `ext` must be an allowed image type. **Menu item images only** (category/modifier images deferred). Malformed paths are denied.
+- **Access model:** direct storage-api (S3 proxy) authenticated by the user's JWT (`auth.uid()`); **no service-role key in any client** (**DECISION D-011**). Because the storage-api does **not** set the app's org GUC, policies use **path-derived helpers** (`app.menu_image_scope`, `app.can_read_menu_image`, `app.can_write_menu_image`; `SECURITY DEFINER`, `search_path=''`) that identify the caller via `app.current_app_user_id()` (auth.uid) and derive scope from the path — **not** `app.has_scope` / `app.has_role_in_scope`. Four explicit `storage.objects` policies (SELECT/INSERT/UPDATE/DELETE), each pinned to `bucket_id='menu-images'`.
+- **Read:** price-capable tenant roles in scope — `org_owner` / `restaurant_owner` / `manager` / `cashier` / `accountant`. **`kitchen_staff` is excluded** (live-menu surface; the path reveals menu structure — consistent with **DECISION D-031** / [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md) §14 T-013/T-003; KDS uses order snapshots, §4.1). Reads are served by client-side signed URLs over the private objects the SELECT policy permits.
+- **Write (INSERT/UPDATE/DELETE):** `org_owner` / `restaurant_owner` / `manager` in scope only; `cashier` / `kitchen_staff` / `accountant` / platform-admin-only / non-member / wrong-scope denied. A write **requires the referenced `menu_items` row to exist** in the parsed org/restaurant/branch scope (verified by the `SECURITY DEFINER` helper, which reads `menu_items` bypassing menu RLS). Physical delete; orphan cleanup deferred.
+- **Audit:** RF-110 writes **no `audit_events`** for blob mutations (direct storage-api RLS, no `SECURITY DEFINER` RPC) — an accepted MVP gap; an audited RPC-mediated delete is a possible follow-up.
+- **Errors / denial:** malformed paths, wrong scope (cross-org / cross-restaurant / sibling-branch), and unauthorized roles are denied by `storage.objects` RLS (no row returned / write rejected); no `anon`; `platform_admin` is never a tenant storage bypass (**DECISION D-026**).
+- **RF-111** wires the owner upload UI and the "current image" metadata linkage later.
+
 ---
 
 ## 5. Cross-References
-- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031).
+- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (subset of the Q-001..Q-024 range: Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-017).
 - State transitions: [STATE_MACHINES](STATE_MACHINES.md).
 - Authorization, RLS, isolation tests, audit: [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md).
