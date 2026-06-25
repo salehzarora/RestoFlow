@@ -207,5 +207,93 @@
   "dashboardDemoNotice": "Demo data — not from a live backend.",
   "@dashboardDemoNotice": {
     "description": "Owner dashboard banner clarifying the figures are in-memory demo data, not live."
+  },
+  "authLoadingAccount": "Loading account…",
+  "@authLoadingAccount": {
+    "description": "Auth gate message shown while the user's context is loading."
+  },
+  "authSignInRequired": "Sign-in required",
+  "@authSignInRequired": {
+    "description": "Auth gate message shown when there is no authenticated session."
+  },
+  "authContinue": "Continue",
+  "@authContinue": {
+    "description": "Auth gate primary action that proceeds (e.g. to sign-in)."
+  },
+  "authChooseLocation": "Choose location",
+  "@authChooseLocation": {
+    "description": "Auth gate heading above the membership picker (pick organization/restaurant/branch)."
+  },
+  "authNoAccess": "No active access",
+  "@authNoAccess": {
+    "description": "Auth gate message shown when the user has no active memberships for this app."
+  },
+  "authWrongRole": "This role can't use this app",
+  "@authWrongRole": {
+    "description": "Auth gate message shown when the selected role may not enter this app surface."
+  },
+  "authAccessDenied": "Account access denied",
+  "@authAccessDenied": {
+    "description": "Auth gate message shown when access is denied (unauthenticated/unlinked/inactive)."
+  },
+  "authError": "Something went wrong",
+  "@authError": {
+    "description": "Auth gate message shown for a generic backend/auth error."
+  },
+  "authTryAgain": "Try again",
+  "@authTryAgain": {
+    "description": "Auth gate action that retries loading the account context."
+  },
+  "authSignOut": "Sign out",
+  "@authSignOut": {
+    "description": "Auth gate action that signs the user out."
+  },
+  "authPlatformAdmin": "Platform admin",
+  "@authPlatformAdmin": {
+    "description": "Auth gate label for the platform-admin entry/state (separate from tenant roles)."
+  },
+  "authOrganization": "Organization",
+  "@authOrganization": {
+    "description": "Membership picker field label for the organization name."
+  },
+  "authRestaurant": "Restaurant",
+  "@authRestaurant": {
+    "description": "Membership picker field label for the restaurant name."
+  },
+  "authBranch": "Branch",
+  "@authBranch": {
+    "description": "Membership picker field label for the branch name."
+  },
+  "authRole": "Role",
+  "@authRole": {
+    "description": "Membership picker field label for the membership role."
+  },
+  "authRoleOwner": "Owner",
+  "@authRoleOwner": {
+    "description": "Display label for the org_owner membership role."
+  },
+  "authRoleRestaurantOwner": "Restaurant owner",
+  "@authRoleRestaurantOwner": {
+    "description": "Display label for the restaurant_owner membership role."
+  },
+  "authRoleManager": "Manager",
+  "@authRoleManager": {
+    "description": "Display label for the manager membership role."
+  },
+  "authRoleCashier": "Cashier",
+  "@authRoleCashier": {
+    "description": "Display label for the cashier membership role."
+  },
+  "authRoleKitchenStaff": "Kitchen staff",
+  "@authRoleKitchenStaff": {
+    "description": "Display label for the kitchen_staff membership role."
+  },
+  "authRoleAccountant": "Accountant",
+  "@authRoleAccountant": {
+    "description": "Display label for the accountant membership role."
+  },
+  "authComingSoon": "Coming soon",
+  "@authComingSoon": {
+    "description": "Auth gate message for a deferred role (e.g. accountant) not yet enabled."
   }
 }

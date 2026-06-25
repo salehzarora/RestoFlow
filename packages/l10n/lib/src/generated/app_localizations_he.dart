@@ -164,4 +164,70 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get dashboardDemoNotice => 'נתוני הדגמה — לא משרת חי.';
+
+  @override
+  String get authLoadingAccount => 'טוען חשבון…';
+
+  @override
+  String get authSignInRequired => 'נדרשת התחברות';
+
+  @override
+  String get authContinue => 'המשך';
+
+  @override
+  String get authChooseLocation => 'בחר מיקום';
+
+  @override
+  String get authNoAccess => 'אין גישה פעילה';
+
+  @override
+  String get authWrongRole => 'תפקיד זה אינו יכול להשתמש באפליקציה זו';
+
+  @override
+  String get authAccessDenied => 'הגישה לחשבון נדחתה';
+
+  @override
+  String get authError => 'משהו השתבש';
+
+  @override
+  String get authTryAgain => 'נסה שוב';
+
+  @override
+  String get authSignOut => 'התנתק';
+
+  @override
+  String get authPlatformAdmin => 'מנהל פלטפורמה';
+
+  @override
+  String get authOrganization => 'ארגון';
+
+  @override
+  String get authRestaurant => 'מסעדה';
+
+  @override
+  String get authBranch => 'סניף';
+
+  @override
+  String get authRole => 'תפקיד';
+
+  @override
+  String get authRoleOwner => 'בעלים';
+
+  @override
+  String get authRoleRestaurantOwner => 'בעל מסעדה';
+
+  @override
+  String get authRoleManager => 'מנהל';
+
+  @override
+  String get authRoleCashier => 'קופאי';
+
+  @override
+  String get authRoleKitchenStaff => 'צוות מטבח';
+
+  @override
+  String get authRoleAccountant => 'רואה חשבון';
+
+  @override
+  String get authComingSoon => 'בקרוב';
 }

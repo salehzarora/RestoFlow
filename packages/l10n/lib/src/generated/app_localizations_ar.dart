@@ -164,4 +164,70 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardDemoNotice => 'بيانات تجريبية — ليست من خادم مباشر.';
+
+  @override
+  String get authLoadingAccount => 'جارٍ تحميل الحساب…';
+
+  @override
+  String get authSignInRequired => 'تسجيل الدخول مطلوب';
+
+  @override
+  String get authContinue => 'متابعة';
+
+  @override
+  String get authChooseLocation => 'اختر الموقع';
+
+  @override
+  String get authNoAccess => 'لا يوجد وصول نشط';
+
+  @override
+  String get authWrongRole => 'لا يمكن لهذا الدور استخدام هذا التطبيق';
+
+  @override
+  String get authAccessDenied => 'تم رفض الوصول إلى الحساب';
+
+  @override
+  String get authError => 'حدث خطأ ما';
+
+  @override
+  String get authTryAgain => 'حاول مرة أخرى';
+
+  @override
+  String get authSignOut => 'تسجيل الخروج';
+
+  @override
+  String get authPlatformAdmin => 'مشرف المنصة';
+
+  @override
+  String get authOrganization => 'المؤسسة';
+
+  @override
+  String get authRestaurant => 'المطعم';
+
+  @override
+  String get authBranch => 'الفرع';
+
+  @override
+  String get authRole => 'الدور';
+
+  @override
+  String get authRoleOwner => 'المالك';
+
+  @override
+  String get authRoleRestaurantOwner => 'مالك المطعم';
+
+  @override
+  String get authRoleManager => 'المدير';
+
+  @override
+  String get authRoleCashier => 'أمين الصندوق';
+
+  @override
+  String get authRoleKitchenStaff => 'طاقم المطبخ';
+
+  @override
+  String get authRoleAccountant => 'المحاسب';
+
+  @override
+  String get authComingSoon => 'قريبًا';
 }

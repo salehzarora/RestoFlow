@@ -11,6 +11,7 @@ library;
 export 'src/app_surface.dart';
 export 'src/app_user_context.dart';
 export 'src/auth_context_repository.dart';
+export 'src/auth_gate_state.dart';
 export 'src/auth_failure.dart';
 export 'src/membership_context.dart';
 export 'src/membership_role.dart';
