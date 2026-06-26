@@ -463,4 +463,301 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get menuScopeUnavailableBody =>
       'هذا وصول على مستوى المؤسسة دون اختيار مطعم. افتح إدارة القائمة من مطعم أو فرع محدد.';
+
+  @override
+  String get dashboardNavSettings => 'الإعدادات';
+
+  @override
+  String get dashboardNavUsers => 'المستخدمون';
+
+  @override
+  String get dashboardNavDevices => 'الأجهزة';
+
+  @override
+  String get adminDemoBanner =>
+      'بيانات تجريبية — الإجراءات تتبع عقود الواجهة الخلفية RF-112 لكنها تعمل على مخزن في الذاكرة على هذا الجهاز؛ لا شيء يُحفظ على الخادم بعد.';
+
+  @override
+  String get adminPermissionDeniedTitle => 'ليس لديك صلاحية';
+
+  @override
+  String get adminPermissionDeniedBody =>
+      'لا يمكن لدورك تنفيذ هذا الإجراء في هذا النطاق. حارس رتبة الأدوار يقصر الإدارة على الأدوار الأعلى.';
+
+  @override
+  String get adminStateErrorTitle => 'حدث خطأ ما';
+
+  @override
+  String get adminStateErrorBody => 'تعذّر تحميل هذا. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get adminRetry => 'إعادة المحاولة';
+
+  @override
+  String get adminConflictMessage => 'هذا الإجراء غير مسموح في الحالة الحالية.';
+
+  @override
+  String get adminActionProblem =>
+      'تعذّر إتمام الإجراء — يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get adminErrCurrency => 'استخدم رمزًا من 3 أحرف (مثل USD)';
+
+  @override
+  String get adminErrCountry => 'استخدم رمزًا من حرفين (مثل US)';
+
+  @override
+  String get adminErrName => 'مطلوب';
+
+  @override
+  String get adminErrEmail => 'أدخل بريدًا إلكترونيًا صالحًا';
+
+  @override
+  String get adminErrStatus => 'اختر حالة صالحة';
+
+  @override
+  String get adminErrRequired => 'مطلوب';
+
+  @override
+  String get adminCopy => 'نسخ';
+
+  @override
+  String get adminShownOnce =>
+      'يُعرض مرة واحدة — انسخه الآن. لن تتمكن من رؤيته مجددًا.';
+
+  @override
+  String get adminDone => 'تم';
+
+  @override
+  String get adminSavedSnack => 'تم الحفظ';
+
+  @override
+  String get adminDevStatusNone => 'غير مقترن';
+
+  @override
+  String get adminDevStatusCodeIssued => 'تم إصدار الرمز';
+
+  @override
+  String get adminDevStatusPending => 'بانتظار الموافقة';
+
+  @override
+  String get adminDevStatusPaired => 'مقترن';
+
+  @override
+  String get adminDevStatusActive => 'نشط';
+
+  @override
+  String get adminDevStatusSuspended => 'موقوف';
+
+  @override
+  String get adminDevStatusRevoked => 'مُلغى';
+
+  @override
+  String get adminDevStatusCodeExpired => 'انتهت صلاحية الرمز';
+
+  @override
+  String get adminDevStatusRejected => 'مرفوض';
+
+  @override
+  String get adminSettingsTitle => 'الإعدادات';
+
+  @override
+  String get adminSettingsSubtitle =>
+      'إعدادات المؤسسة والمطعم والفرع لهذا النطاق.';
+
+  @override
+  String get adminSettingsReadOnly =>
+      'يمكن لدورك عرض هذه الإعدادات لكن لا يمكن تعديلها.';
+
+  @override
+  String get adminSectionOrg => 'المؤسسة';
+
+  @override
+  String get adminSectionRestaurant => 'المطعم';
+
+  @override
+  String get adminSectionBranch => 'الفرع';
+
+  @override
+  String get adminFieldDefaultCurrency => 'العملة الافتراضية';
+
+  @override
+  String get adminFieldCountryCode => 'رمز الدولة';
+
+  @override
+  String get adminFieldStatus => 'الحالة';
+
+  @override
+  String get adminFieldName => 'الاسم';
+
+  @override
+  String get adminFieldCurrencyOverride => 'تجاوز العملة';
+
+  @override
+  String get adminFieldTimezone => 'المنطقة الزمنية';
+
+  @override
+  String get adminFieldAddress => 'العنوان';
+
+  @override
+  String get adminFieldReceiptPrefix => 'بادئة الإيصال';
+
+  @override
+  String get adminStatusActive => 'نشط';
+
+  @override
+  String get adminStatusSuspended => 'موقوف';
+
+  @override
+  String get adminOptional => 'اختياري';
+
+  @override
+  String get adminSave => 'حفظ';
+
+  @override
+  String get adminCancel => 'إلغاء';
+
+  @override
+  String get adminUsersTitle => 'المستخدمون والأدوار';
+
+  @override
+  String get adminUsersSubtitle =>
+      'أدر من يمكنه الوصول إلى هذه المؤسسة وما يمكنه فعله.';
+
+  @override
+  String get adminGrantUser => 'منح وصول';
+
+  @override
+  String get adminGrantDialogTitle => 'منح وصول';
+
+  @override
+  String get adminGrant => 'منح';
+
+  @override
+  String get adminChangeRole => 'تغيير الدور';
+
+  @override
+  String get adminChangeRoleTitle => 'تغيير الدور';
+
+  @override
+  String get adminUpdate => 'تحديث';
+
+  @override
+  String get adminRevoke => 'إلغاء الوصول';
+
+  @override
+  String get adminComingSoon => 'قريبًا';
+
+  @override
+  String get adminRoleGuardNote =>
+      'يمكنك إسناد أدوار أقل من دورك — حارس رتبة الأدوار يمنع منح دورك نفسه أو أعلى.';
+
+  @override
+  String get adminSelf => 'أنت';
+
+  @override
+  String get adminStatusRevoked => 'مُلغى';
+
+  @override
+  String get adminFieldDisplayName => 'الاسم المعروض';
+
+  @override
+  String get adminFieldEmail => 'البريد الإلكتروني';
+
+  @override
+  String get adminFieldRole => 'الدور';
+
+  @override
+  String get adminUsersEmptyTitle => 'لا يوجد أعضاء بعد';
+
+  @override
+  String get adminUsersEmptyBody =>
+      'امنح وصولًا لإضافة أول عضو إلى هذه المؤسسة.';
+
+  @override
+  String get adminUserGranted => 'تم منح الوصول';
+
+  @override
+  String get adminRoleUpdated => 'تم تحديث الدور';
+
+  @override
+  String get adminDevicesTitle => 'الأجهزة';
+
+  @override
+  String get adminDevicesSubtitle =>
+      'زوّد واقترن أجهزة نقاط البيع وشاشات المطبخ لهذا الفرع.';
+
+  @override
+  String get adminCreateDevice => 'إضافة جهاز';
+
+  @override
+  String get adminCreateDeviceTitle => 'إضافة جهاز';
+
+  @override
+  String get adminCreate => 'إنشاء';
+
+  @override
+  String get adminFieldDeviceLabel => 'اسم الجهاز';
+
+  @override
+  String get adminFieldDeviceType => 'نوع الجهاز';
+
+  @override
+  String get adminDeviceTypePos => 'نقطة بيع';
+
+  @override
+  String get adminDeviceTypeKds => 'شاشة مطبخ';
+
+  @override
+  String get adminLifecycleNote =>
+      'دورة الحياة: أصدر رمزًا، يستردّه الجهاز (قيد الانتظار)، ثم الموافقة (مقترن)، ثم التفعيل (نشط)، ثم بدء جلسة. الموافقة والتفعيل خطوتان منفصلتان؛ لا يمكن للجهاز القفز من قيد الانتظار إلى نشط.';
+
+  @override
+  String get adminIssueCode => 'إصدار رمز';
+
+  @override
+  String get adminRedeem => 'استرداد الرمز';
+
+  @override
+  String get adminApprove => 'موافقة';
+
+  @override
+  String get adminActivate => 'تفعيل';
+
+  @override
+  String get adminStartSession => 'بدء جلسة';
+
+  @override
+  String get adminDevicesEmptyTitle => 'لا توجد أجهزة بعد';
+
+  @override
+  String get adminDevicesEmptyBody =>
+      'أضف جهازًا لبدء عملية التسجيل والاقتران.';
+
+  @override
+  String get adminCodeIssuedTitle => 'رمز التسجيل';
+
+  @override
+  String get adminCodeIssuedSubtitle =>
+      'أدخل هذا الرمز على الجهاز لبدء الاقتران.';
+
+  @override
+  String get adminCodeExpiresNote =>
+      'تنتهي صلاحية هذا الرمز قريبًا ويمكن استرداده مرة واحدة.';
+
+  @override
+  String get adminTokenStartedTitle => 'بدأت جلسة الجهاز';
+
+  @override
+  String get adminTokenStartedSubtitle =>
+      'حمّل رمز الجلسة هذا على الجهاز للمصادقة عليه.';
+
+  @override
+  String get adminSessionOpen => 'الجلسة نشطة';
+
+  @override
+  String get adminDeviceCreated => 'تمت إضافة الجهاز';
+
+  @override
+  String get adminDeviceUpdated => 'تم تحديث الجهاز';
 }

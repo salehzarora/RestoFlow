@@ -24,6 +24,7 @@ workspace:
   - packages/feature_payments
   - packages/feature_shifts
   - packages/feature_menu
+  - packages/feature_admin
   - packages/feature_reporting
 dev_dependencies:
   melos: ^7.0.0

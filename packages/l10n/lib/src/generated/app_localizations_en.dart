@@ -466,4 +466,302 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get menuScopeUnavailableBody =>
       'This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.';
+
+  @override
+  String get dashboardNavSettings => 'Settings';
+
+  @override
+  String get dashboardNavUsers => 'Users';
+
+  @override
+  String get dashboardNavDevices => 'Devices';
+
+  @override
+  String get adminDemoBanner =>
+      'Demo data — actions follow the RF-112 backend contracts but run against an in-memory store on this device; nothing is saved to a server yet.';
+
+  @override
+  String get adminPermissionDeniedTitle => 'You don’t have permission';
+
+  @override
+  String get adminPermissionDeniedBody =>
+      'Your role can’t perform this action at this scope. The role-rank guard limits management to higher roles.';
+
+  @override
+  String get adminStateErrorTitle => 'Something went wrong';
+
+  @override
+  String get adminStateErrorBody => 'We couldn’t load this. Please try again.';
+
+  @override
+  String get adminRetry => 'Retry';
+
+  @override
+  String get adminConflictMessage =>
+      'That action isn’t allowed in the current state.';
+
+  @override
+  String get adminActionProblem =>
+      'Couldn’t complete the action — please try again.';
+
+  @override
+  String get adminErrCurrency => 'Use a 3-letter code (e.g. USD)';
+
+  @override
+  String get adminErrCountry => 'Use a 2-letter code (e.g. US)';
+
+  @override
+  String get adminErrName => 'Required';
+
+  @override
+  String get adminErrEmail => 'Enter a valid email';
+
+  @override
+  String get adminErrStatus => 'Choose a valid status';
+
+  @override
+  String get adminErrRequired => 'Required';
+
+  @override
+  String get adminCopy => 'Copy';
+
+  @override
+  String get adminShownOnce =>
+      'Shown once — copy it now. You won’t be able to see it again.';
+
+  @override
+  String get adminDone => 'Done';
+
+  @override
+  String get adminSavedSnack => 'Saved';
+
+  @override
+  String get adminDevStatusNone => 'Not paired';
+
+  @override
+  String get adminDevStatusCodeIssued => 'Code issued';
+
+  @override
+  String get adminDevStatusPending => 'Pending approval';
+
+  @override
+  String get adminDevStatusPaired => 'Paired';
+
+  @override
+  String get adminDevStatusActive => 'Active';
+
+  @override
+  String get adminDevStatusSuspended => 'Suspended';
+
+  @override
+  String get adminDevStatusRevoked => 'Revoked';
+
+  @override
+  String get adminDevStatusCodeExpired => 'Code expired';
+
+  @override
+  String get adminDevStatusRejected => 'Rejected';
+
+  @override
+  String get adminSettingsTitle => 'Settings';
+
+  @override
+  String get adminSettingsSubtitle =>
+      'Organization, restaurant, and branch settings for this scope.';
+
+  @override
+  String get adminSettingsReadOnly =>
+      'Your role can view these settings but can’t edit them.';
+
+  @override
+  String get adminSectionOrg => 'Organization';
+
+  @override
+  String get adminSectionRestaurant => 'Restaurant';
+
+  @override
+  String get adminSectionBranch => 'Branch';
+
+  @override
+  String get adminFieldDefaultCurrency => 'Default currency';
+
+  @override
+  String get adminFieldCountryCode => 'Country code';
+
+  @override
+  String get adminFieldStatus => 'Status';
+
+  @override
+  String get adminFieldName => 'Name';
+
+  @override
+  String get adminFieldCurrencyOverride => 'Currency override';
+
+  @override
+  String get adminFieldTimezone => 'Timezone';
+
+  @override
+  String get adminFieldAddress => 'Address';
+
+  @override
+  String get adminFieldReceiptPrefix => 'Receipt prefix';
+
+  @override
+  String get adminStatusActive => 'Active';
+
+  @override
+  String get adminStatusSuspended => 'Suspended';
+
+  @override
+  String get adminOptional => 'optional';
+
+  @override
+  String get adminSave => 'Save';
+
+  @override
+  String get adminCancel => 'Cancel';
+
+  @override
+  String get adminUsersTitle => 'Users & Roles';
+
+  @override
+  String get adminUsersSubtitle =>
+      'Manage who can access this organization and what they can do.';
+
+  @override
+  String get adminGrantUser => 'Grant access';
+
+  @override
+  String get adminGrantDialogTitle => 'Grant access';
+
+  @override
+  String get adminGrant => 'Grant';
+
+  @override
+  String get adminChangeRole => 'Change role';
+
+  @override
+  String get adminChangeRoleTitle => 'Change role';
+
+  @override
+  String get adminUpdate => 'Update';
+
+  @override
+  String get adminRevoke => 'Revoke';
+
+  @override
+  String get adminComingSoon => 'coming soon';
+
+  @override
+  String get adminRoleGuardNote =>
+      'You can assign roles below your own — the role-rank guard prevents granting your own role or higher.';
+
+  @override
+  String get adminSelf => 'You';
+
+  @override
+  String get adminStatusRevoked => 'Revoked';
+
+  @override
+  String get adminFieldDisplayName => 'Display name';
+
+  @override
+  String get adminFieldEmail => 'Email';
+
+  @override
+  String get adminFieldRole => 'Role';
+
+  @override
+  String get adminUsersEmptyTitle => 'No members yet';
+
+  @override
+  String get adminUsersEmptyBody =>
+      'Grant access to add the first member to this organization.';
+
+  @override
+  String get adminUserGranted => 'Access granted';
+
+  @override
+  String get adminRoleUpdated => 'Role updated';
+
+  @override
+  String get adminDevicesTitle => 'Devices';
+
+  @override
+  String get adminDevicesSubtitle =>
+      'Provision and pair POS and kitchen-display devices for this branch.';
+
+  @override
+  String get adminCreateDevice => 'Add device';
+
+  @override
+  String get adminCreateDeviceTitle => 'Add device';
+
+  @override
+  String get adminCreate => 'Create';
+
+  @override
+  String get adminFieldDeviceLabel => 'Device label';
+
+  @override
+  String get adminFieldDeviceType => 'Device type';
+
+  @override
+  String get adminDeviceTypePos => 'POS';
+
+  @override
+  String get adminDeviceTypeKds => 'Kitchen display';
+
+  @override
+  String get adminLifecycleNote =>
+      'Lifecycle: issue a code → the device redeems it (pending) → approve (paired) → activate (active) → start a session. Approval and activation are separate steps; a device can’t jump from pending to active.';
+
+  @override
+  String get adminIssueCode => 'Issue code';
+
+  @override
+  String get adminRedeem => 'Redeem code';
+
+  @override
+  String get adminApprove => 'Approve';
+
+  @override
+  String get adminActivate => 'Activate';
+
+  @override
+  String get adminStartSession => 'Start session';
+
+  @override
+  String get adminDevicesEmptyTitle => 'No devices yet';
+
+  @override
+  String get adminDevicesEmptyBody =>
+      'Add a device to begin the enrollment and pairing flow.';
+
+  @override
+  String get adminCodeIssuedTitle => 'Enrollment code';
+
+  @override
+  String get adminCodeIssuedSubtitle =>
+      'Enter this code on the device to begin pairing.';
+
+  @override
+  String get adminCodeExpiresNote =>
+      'This code expires shortly and can be redeemed once.';
+
+  @override
+  String get adminTokenStartedTitle => 'Device session started';
+
+  @override
+  String get adminTokenStartedSubtitle =>
+      'Load this session token onto the device to authenticate it.';
+
+  @override
+  String get adminSessionOpen => 'Session active';
+
+  @override
+  String get adminDeviceCreated => 'Device added';
+
+  @override
+  String get adminDeviceUpdated => 'Device updated';
 }

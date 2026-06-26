@@ -24,6 +24,9 @@ dependencies:
   # RF-111: the owner menu management surface (demo-backed; no real backend yet).
   restoflow_feature_menu:
     path: ../../packages/feature_menu
+  # RF-113: the owner Settings / Users / Devices admin surfaces (demo-backed).
+  restoflow_feature_admin:
+    path: ../../packages/feature_admin
 dev_dependencies:
   flutter_test:
     sdk: flutter
