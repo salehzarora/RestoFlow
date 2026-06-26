@@ -1,0 +1,28 @@
+name: restoflow_feature_admin
+description: RestoFlow feature_admin package - the owner/manager Settings, Users/Roles, and Devices provisioning UI (RF-113) over the RF-112 backend contracts (D-033/D-034). Composes domain models, a client repository seam, Riverpod state, and a polished Material 3 dashboard surface. No backend changes; today the seam resolves to a labelled in-memory demo store that mirrors the RF-112 role-rank guard + device lifecycle + return-once secrets, with the real RPC wiring deferred to the auth/org-context bridge.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.0.0"
+resolution: workspace
+dependencies:
+  flutter:
+    sdk: flutter
+  # RF-113: Riverpod state (DECISION D-009 / ARCHITECTURE §4).
+  flutter_riverpod: '>=2.5.0 <3.0.0'
+  # Result<S,F> seam (no exceptions across layer boundaries).
+  restoflow_core:
+    path: ../core
+  # MembershipRole / MembershipContext: the active scope + role come from RF-108.
+  restoflow_auth_identity:
+    path: ../auth_identity
+  # Design tokens/theme for the admin UI.
+  restoflow_design_system:
+    path: ../design_system
+  # Localized strings (ar/he/en) for the admin UI.
+  restoflow_l10n:
+    path: ../l10n
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -20,16 +21,23 @@ MenuScope? dashboardMenuScopeFor(MembershipContext? membership) {
   return MenuScope.fromMembership(membership, currencyCode: demoCurrencyCode);
 }
 
-/// The owner/manager dashboard shell (RF-111): a branded side navigation
-/// (Overview + Menu) hosting the existing RF-104 overview and the RF-111 menu
-/// management surface.
+/// Derives the administration scope (RF-113) from the active membership. Unlike
+/// the menu, the admin surfaces (settings/users/devices) work at ANY scope — an
+/// org-wide membership is fine — so there is no blocked state.
+AdminScope dashboardAdminScopeFor(MembershipContext? membership) {
+  if (membership == null) return AdminScope.demo;
+  return AdminScope.fromMembership(membership, currencyCode: demoCurrencyCode);
+}
+
+/// The owner/manager dashboard shell (RF-111 + RF-113): a branded side navigation
+/// (Overview · Menu · Settings · Users · Devices) hosting the RF-104 overview, the
+/// RF-111 menu surface, and the RF-113 administration surfaces.
 ///
-/// The menu surface is DEMO-BACKED but scoped to the active membership: the
-/// in-memory store is seeded at the membership's org/restaurant/branch (so menu
-/// edits and RF-110 image-path previews carry the REAL scope), with a clear demo
-/// banner — real persistence is deferred to the auth/org-context bridge (D1/D3).
-/// The active [membership] is consumed (it gated entry, drives the scope, and is
-/// shown as context), never discarded.
+/// Every feature surface is DEMO-BACKED but scoped to the active membership (the
+/// in-memory stores are seeded at the membership's org/restaurant/branch), with a
+/// clear demo banner — real persistence is deferred to the auth/org-context
+/// bridge. The active [membership] gated entry, drives the scope, and is shown as
+/// context; it is never discarded.
 class DashboardShell extends StatefulWidget {
   const DashboardShell({this.membership, super.key});
 
@@ -48,19 +56,28 @@ class _DashboardShellState extends State<DashboardShell> {
   /// The active menu scope (null when the membership is org-wide / restaurant-less).
   late final MenuScope? _menuScope = dashboardMenuScopeFor(widget.membership);
 
-  /// The demo store, seeded at the active scope (null when there is no scope).
+  /// The demo menu store, seeded at the active scope (null when there is no scope).
   late final InMemoryMenuStore? _menuStore = _menuScope == null
       ? null
       : buildDemoMenuStore(scope: _menuScope);
+
+  /// The active administration scope + its demo store (shared by all 3 admin
+  /// surfaces, so edits persist across tab switches within a session).
+  late final AdminScope _adminScope = dashboardAdminScopeFor(widget.membership);
+  late final DemoAdminStore _adminStore = DemoAdminStore(scope: _adminScope);
 
   void _select(int value) => setState(() => _index = value);
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final content = _index == 0
-        ? const DashboardHomeScreen()
-        : _menuSurface(context, l10n);
+    final content = switch (_index) {
+      0 => const DashboardHomeScreen(),
+      1 => _menuSurface(context, l10n),
+      2 => _adminSurface(const AdminSettingsScreen()),
+      3 => _adminSurface(const AdminUsersScreen()),
+      _ => _adminSurface(const AdminDevicesScreen()),
+    };
 
     return Scaffold(
       body: LayoutBuilder(
@@ -81,23 +98,50 @@ class _DashboardShellState extends State<DashboardShell> {
               NavigationBar(
                 selectedIndex: _index,
                 onDestinationSelected: _select,
-                destinations: [
-                  NavigationDestination(
-                    icon: const Icon(Icons.dashboard_outlined),
-                    selectedIcon: const Icon(Icons.dashboard),
-                    label: l10n.dashboardNavOverview,
-                  ),
-                  NavigationDestination(
-                    icon: const Icon(Icons.restaurant_menu_outlined),
-                    selectedIcon: const Icon(Icons.restaurant_menu),
-                    label: l10n.dashboardNavMenu,
-                  ),
-                ],
+                destinations: _destinations(l10n)
+                    .map(
+                      (d) => NavigationDestination(
+                        icon: Icon(d.icon),
+                        selectedIcon: Icon(d.selectedIcon),
+                        label: d.label,
+                      ),
+                    )
+                    .toList(),
               ),
             ],
           );
         },
       ),
+    );
+  }
+
+  /// Wraps an RF-113 admin screen with the membership context strip, the demo
+  /// banner, and the feature [ProviderScope] overrides (scope + demo store).
+  Widget _adminSurface(Widget screen) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.membership != null)
+          _MembershipContextBar(membership: widget.membership!),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(
+            RestoflowSpacing.lg,
+            RestoflowSpacing.md,
+            RestoflowSpacing.lg,
+            0,
+          ),
+          child: AdminDemoBanner(),
+        ),
+        Expanded(
+          child: ProviderScope(
+            overrides: adminFeatureOverrides(
+              scope: _adminScope,
+              repository: _adminStore,
+            ),
+            child: screen,
+          ),
+        ),
+      ],
     );
   }
 
@@ -141,6 +185,45 @@ class _DashboardShellState extends State<DashboardShell> {
       ),
     );
   }
+
+  List<_NavItem> _destinations(AppLocalizations l10n) => [
+    _NavItem(
+      icon: Icons.dashboard_outlined,
+      selectedIcon: Icons.dashboard,
+      label: l10n.dashboardNavOverview,
+    ),
+    _NavItem(
+      icon: Icons.restaurant_menu_outlined,
+      selectedIcon: Icons.restaurant_menu,
+      label: l10n.dashboardNavMenu,
+    ),
+    _NavItem(
+      icon: Icons.tune_outlined,
+      selectedIcon: Icons.tune,
+      label: l10n.dashboardNavSettings,
+    ),
+    _NavItem(
+      icon: Icons.group_outlined,
+      selectedIcon: Icons.group,
+      label: l10n.dashboardNavUsers,
+    ),
+    _NavItem(
+      icon: Icons.devices_outlined,
+      selectedIcon: Icons.devices,
+      label: l10n.dashboardNavDevices,
+    ),
+  ];
+}
+
+class _NavItem {
+  const _NavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
 }
 
 /// The blocked state shown when the active membership is org-wide and has no
@@ -232,6 +315,21 @@ class _SideNav extends StatelessWidget {
           icon: const Icon(Icons.restaurant_menu_outlined),
           selectedIcon: const Icon(Icons.restaurant_menu),
           label: Text(l10n.dashboardNavMenu),
+        ),
+        NavigationRailDestination(
+          icon: const Icon(Icons.tune_outlined),
+          selectedIcon: const Icon(Icons.tune),
+          label: Text(l10n.dashboardNavSettings),
+        ),
+        NavigationRailDestination(
+          icon: const Icon(Icons.group_outlined),
+          selectedIcon: const Icon(Icons.group),
+          label: Text(l10n.dashboardNavUsers),
+        ),
+        NavigationRailDestination(
+          icon: const Icon(Icons.devices_outlined),
+          selectedIcon: const Icon(Icons.devices),
+          label: Text(l10n.dashboardNavDevices),
         ),
       ],
     );

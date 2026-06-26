@@ -993,6 +993,570 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.'**
   String get menuScopeUnavailableBody;
+
+  /// No description provided for @dashboardNavSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get dashboardNavSettings;
+
+  /// No description provided for @dashboardNavUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get dashboardNavUsers;
+
+  /// No description provided for @dashboardNavDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get dashboardNavDevices;
+
+  /// No description provided for @adminDemoBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo data — actions follow the RF-112 backend contracts but run against an in-memory store on this device; nothing is saved to a server yet.'**
+  String get adminDemoBanner;
+
+  /// No description provided for @adminPermissionDeniedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You don’t have permission'**
+  String get adminPermissionDeniedTitle;
+
+  /// No description provided for @adminPermissionDeniedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role can’t perform this action at this scope. The role-rank guard limits management to higher roles.'**
+  String get adminPermissionDeniedBody;
+
+  /// No description provided for @adminStateErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong'**
+  String get adminStateErrorTitle;
+
+  /// No description provided for @adminStateErrorBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn’t load this. Please try again.'**
+  String get adminStateErrorBody;
+
+  /// No description provided for @adminRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get adminRetry;
+
+  /// No description provided for @adminConflictMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'That action isn’t allowed in the current state.'**
+  String get adminConflictMessage;
+
+  /// No description provided for @adminActionProblem.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t complete the action — please try again.'**
+  String get adminActionProblem;
+
+  /// No description provided for @adminErrCurrency.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a 3-letter code (e.g. USD)'**
+  String get adminErrCurrency;
+
+  /// No description provided for @adminErrCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a 2-letter code (e.g. US)'**
+  String get adminErrCountry;
+
+  /// No description provided for @adminErrName.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get adminErrName;
+
+  /// No description provided for @adminErrEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email'**
+  String get adminErrEmail;
+
+  /// No description provided for @adminErrStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a valid status'**
+  String get adminErrStatus;
+
+  /// No description provided for @adminErrRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get adminErrRequired;
+
+  /// No description provided for @adminCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get adminCopy;
+
+  /// No description provided for @adminShownOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown once — copy it now. You won’t be able to see it again.'**
+  String get adminShownOnce;
+
+  /// No description provided for @adminDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get adminDone;
+
+  /// No description provided for @adminSavedSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get adminSavedSnack;
+
+  /// No description provided for @adminDevStatusNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Not paired'**
+  String get adminDevStatusNone;
+
+  /// No description provided for @adminDevStatusCodeIssued.
+  ///
+  /// In en, this message translates to:
+  /// **'Code issued'**
+  String get adminDevStatusCodeIssued;
+
+  /// No description provided for @adminDevStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending approval'**
+  String get adminDevStatusPending;
+
+  /// No description provided for @adminDevStatusPaired.
+  ///
+  /// In en, this message translates to:
+  /// **'Paired'**
+  String get adminDevStatusPaired;
+
+  /// No description provided for @adminDevStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminDevStatusActive;
+
+  /// No description provided for @adminDevStatusSuspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended'**
+  String get adminDevStatusSuspended;
+
+  /// No description provided for @adminDevStatusRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked'**
+  String get adminDevStatusRevoked;
+
+  /// No description provided for @adminDevStatusCodeExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Code expired'**
+  String get adminDevStatusCodeExpired;
+
+  /// No description provided for @adminDevStatusRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get adminDevStatusRejected;
+
+  /// No description provided for @adminSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get adminSettingsTitle;
+
+  /// No description provided for @adminSettingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization, restaurant, and branch settings for this scope.'**
+  String get adminSettingsSubtitle;
+
+  /// No description provided for @adminSettingsReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role can view these settings but can’t edit them.'**
+  String get adminSettingsReadOnly;
+
+  /// No description provided for @adminSectionOrg.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization'**
+  String get adminSectionOrg;
+
+  /// No description provided for @adminSectionRestaurant.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant'**
+  String get adminSectionRestaurant;
+
+  /// No description provided for @adminSectionBranch.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch'**
+  String get adminSectionBranch;
+
+  /// No description provided for @adminFieldDefaultCurrency.
+  ///
+  /// In en, this message translates to:
+  /// **'Default currency'**
+  String get adminFieldDefaultCurrency;
+
+  /// No description provided for @adminFieldCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Country code'**
+  String get adminFieldCountryCode;
+
+  /// No description provided for @adminFieldStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get adminFieldStatus;
+
+  /// No description provided for @adminFieldName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get adminFieldName;
+
+  /// No description provided for @adminFieldCurrencyOverride.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency override'**
+  String get adminFieldCurrencyOverride;
+
+  /// No description provided for @adminFieldTimezone.
+  ///
+  /// In en, this message translates to:
+  /// **'Timezone'**
+  String get adminFieldTimezone;
+
+  /// No description provided for @adminFieldAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get adminFieldAddress;
+
+  /// No description provided for @adminFieldReceiptPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt prefix'**
+  String get adminFieldReceiptPrefix;
+
+  /// No description provided for @adminStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminStatusActive;
+
+  /// No description provided for @adminStatusSuspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended'**
+  String get adminStatusSuspended;
+
+  /// No description provided for @adminOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'optional'**
+  String get adminOptional;
+
+  /// No description provided for @adminSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get adminSave;
+
+  /// No description provided for @adminCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get adminCancel;
+
+  /// No description provided for @adminUsersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Users & Roles'**
+  String get adminUsersTitle;
+
+  /// No description provided for @adminUsersSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage who can access this organization and what they can do.'**
+  String get adminUsersSubtitle;
+
+  /// No description provided for @adminGrantUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant access'**
+  String get adminGrantUser;
+
+  /// No description provided for @adminGrantDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant access'**
+  String get adminGrantDialogTitle;
+
+  /// No description provided for @adminGrant.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant'**
+  String get adminGrant;
+
+  /// No description provided for @adminChangeRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Change role'**
+  String get adminChangeRole;
+
+  /// No description provided for @adminChangeRoleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change role'**
+  String get adminChangeRoleTitle;
+
+  /// No description provided for @adminUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get adminUpdate;
+
+  /// No description provided for @adminRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get adminRevoke;
+
+  /// No description provided for @adminComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'coming soon'**
+  String get adminComingSoon;
+
+  /// No description provided for @adminRoleGuardNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You can assign roles below your own — the role-rank guard prevents granting your own role or higher.'**
+  String get adminRoleGuardNote;
+
+  /// No description provided for @adminSelf.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get adminSelf;
+
+  /// No description provided for @adminStatusRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked'**
+  String get adminStatusRevoked;
+
+  /// No description provided for @adminFieldDisplayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get adminFieldDisplayName;
+
+  /// No description provided for @adminFieldEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get adminFieldEmail;
+
+  /// No description provided for @adminFieldRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get adminFieldRole;
+
+  /// No description provided for @adminUsersEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No members yet'**
+  String get adminUsersEmptyTitle;
+
+  /// No description provided for @adminUsersEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant access to add the first member to this organization.'**
+  String get adminUsersEmptyBody;
+
+  /// No description provided for @adminUserGranted.
+  ///
+  /// In en, this message translates to:
+  /// **'Access granted'**
+  String get adminUserGranted;
+
+  /// No description provided for @adminRoleUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Role updated'**
+  String get adminRoleUpdated;
+
+  /// No description provided for @adminDevicesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get adminDevicesTitle;
+
+  /// No description provided for @adminDevicesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Provision and pair POS and kitchen-display devices for this branch.'**
+  String get adminDevicesSubtitle;
+
+  /// No description provided for @adminCreateDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Add device'**
+  String get adminCreateDevice;
+
+  /// No description provided for @adminCreateDeviceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add device'**
+  String get adminCreateDeviceTitle;
+
+  /// No description provided for @adminCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get adminCreate;
+
+  /// No description provided for @adminFieldDeviceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Device label'**
+  String get adminFieldDeviceLabel;
+
+  /// No description provided for @adminFieldDeviceType.
+  ///
+  /// In en, this message translates to:
+  /// **'Device type'**
+  String get adminFieldDeviceType;
+
+  /// No description provided for @adminDeviceTypePos.
+  ///
+  /// In en, this message translates to:
+  /// **'POS'**
+  String get adminDeviceTypePos;
+
+  /// No description provided for @adminDeviceTypeKds.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen display'**
+  String get adminDeviceTypeKds;
+
+  /// No description provided for @adminLifecycleNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Lifecycle: issue a code → the device redeems it (pending) → approve (paired) → activate (active) → start a session. Approval and activation are separate steps; a device can’t jump from pending to active.'**
+  String get adminLifecycleNote;
+
+  /// No description provided for @adminIssueCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Issue code'**
+  String get adminIssueCode;
+
+  /// No description provided for @adminRedeem.
+  ///
+  /// In en, this message translates to:
+  /// **'Redeem code'**
+  String get adminRedeem;
+
+  /// No description provided for @adminApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get adminApprove;
+
+  /// No description provided for @adminActivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate'**
+  String get adminActivate;
+
+  /// No description provided for @adminStartSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Start session'**
+  String get adminStartSession;
+
+  /// No description provided for @adminDevicesEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No devices yet'**
+  String get adminDevicesEmptyTitle;
+
+  /// No description provided for @adminDevicesEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a device to begin the enrollment and pairing flow.'**
+  String get adminDevicesEmptyBody;
+
+  /// No description provided for @adminCodeIssuedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enrollment code'**
+  String get adminCodeIssuedTitle;
+
+  /// No description provided for @adminCodeIssuedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter this code on the device to begin pairing.'**
+  String get adminCodeIssuedSubtitle;
+
+  /// No description provided for @adminCodeExpiresNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This code expires shortly and can be redeemed once.'**
+  String get adminCodeExpiresNote;
+
+  /// No description provided for @adminTokenStartedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Device session started'**
+  String get adminTokenStartedTitle;
+
+  /// No description provided for @adminTokenStartedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Load this session token onto the device to authenticate it.'**
+  String get adminTokenStartedSubtitle;
+
+  /// No description provided for @adminSessionOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Session active'**
+  String get adminSessionOpen;
+
+  /// No description provided for @adminDeviceCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Device added'**
+  String get adminDeviceCreated;
+
+  /// No description provided for @adminDeviceUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Device updated'**
+  String get adminDeviceUpdated;
 }
 
 class _AppLocalizationsDelegate
