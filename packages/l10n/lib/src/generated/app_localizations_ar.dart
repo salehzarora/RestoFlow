@@ -230,4 +230,237 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authComingSoon => 'قريبًا';
+
+  @override
+  String get dashboardNavOverview => 'نظرة عامة';
+
+  @override
+  String get dashboardNavMenu => 'القائمة';
+
+  @override
+  String get menuManagementTitle => 'إدارة القائمة';
+
+  @override
+  String get menuDemoBanner =>
+      'بيانات تجريبية — التغييرات تبقى على هذا الجهاز ولا تُحفظ على الخادم بعد.';
+
+  @override
+  String get menuCategoriesHeading => 'الفئات';
+
+  @override
+  String get menuItemsHeading => 'العناصر';
+
+  @override
+  String get menuSelectCategoryHint => 'اختر فئة لعرض عناصرها.';
+
+  @override
+  String get menuEmptyCategories => 'لا توجد فئات بعد.';
+
+  @override
+  String get menuEmptyItems => 'لا توجد عناصر في هذه الفئة بعد.';
+
+  @override
+  String get menuLoadError => 'تعذّر تحميل القائمة.';
+
+  @override
+  String get menuRetry => 'إعادة المحاولة';
+
+  @override
+  String menuItemCount(int count) {
+    return '$count عناصر';
+  }
+
+  @override
+  String get menuAddCategory => 'إضافة فئة';
+
+  @override
+  String get menuAddItem => 'إضافة عنصر';
+
+  @override
+  String get menuAddSize => 'إضافة حجم';
+
+  @override
+  String get menuAddVariant => 'إضافة نوع';
+
+  @override
+  String get menuAddModifier => 'إضافة مُعدِّل';
+
+  @override
+  String get menuAddOption => 'إضافة خيار';
+
+  @override
+  String get menuEditTitle => 'تعديل';
+
+  @override
+  String get menuSaveAction => 'حفظ';
+
+  @override
+  String get menuCancelAction => 'إلغاء';
+
+  @override
+  String get menuEditAction => 'تعديل';
+
+  @override
+  String get menuDeleteAction => 'حذف';
+
+  @override
+  String get menuNameLabel => 'الاسم';
+
+  @override
+  String get menuDescriptionLabel => 'الوصف (اختياري)';
+
+  @override
+  String get menuPriceLabel => 'السعر الأساسي';
+
+  @override
+  String get menuPriceDeltaLabel => 'تغيير السعر';
+
+  @override
+  String get menuCurrencyLabel => 'العملة';
+
+  @override
+  String get menuCategoryFieldLabel => 'الفئة';
+
+  @override
+  String get menuDisplayOrderLabel => 'ترتيب العرض';
+
+  @override
+  String get menuActiveLabel => 'نشط';
+
+  @override
+  String get menuSelectionTypeLabel => 'الاختيار';
+
+  @override
+  String get menuSelectionSingle => 'مفرد';
+
+  @override
+  String get menuSelectionMultiple => 'متعدد';
+
+  @override
+  String get menuMinSelectLabel => 'الحد الأدنى';
+
+  @override
+  String get menuMaxSelectLabel => 'الحد الأقصى (اختياري)';
+
+  @override
+  String get menuRequiredLabel => 'مطلوب';
+
+  @override
+  String get menuSizesHeading => 'الأحجام';
+
+  @override
+  String get menuVariantsHeading => 'الأنواع';
+
+  @override
+  String get menuModifiersHeading => 'المُعدِّلات';
+
+  @override
+  String get menuOptionsHeading => 'الخيارات';
+
+  @override
+  String get menuDeleteConfirmTitle => 'حذف هذا العنصر؟';
+
+  @override
+  String get menuDeleteConfirmBody =>
+      'سيُخفى من القائمة. يمكنك استعادته لاحقًا.';
+
+  @override
+  String get menuConfirmDelete => 'حذف';
+
+  @override
+  String get menuInactiveBadge => 'غير نشط';
+
+  @override
+  String get menuGlobalBadge => 'كل الفروع';
+
+  @override
+  String get menuBranchBadge => 'هذا الفرع';
+
+  @override
+  String get menuImageHeading => 'صورة العنصر';
+
+  @override
+  String get menuImageDeferredTitle => 'رفع الصور قريبًا';
+
+  @override
+  String get menuImageDeferredBody =>
+      'عرض ورفع صور العناصر يتطلب سجلًا خلفيًا للصور (متابعة مخطط لها). مسار الرفع والتحقق جاهزان بالفعل.';
+
+  @override
+  String get menuErrorRequired => 'مطلوب';
+
+  @override
+  String get menuErrorAmount => 'أدخل مبلغًا صالحًا';
+
+  @override
+  String get menuErrorNegativePrice => 'لا يمكن أن يكون سالبًا';
+
+  @override
+  String get menuErrorCurrency => 'استخدم رمزًا من 3 أحرف (مثل USD)';
+
+  @override
+  String get menuErrorSelectionType => 'اختر مفرد أو متعدد';
+
+  @override
+  String get menuErrorMaxLessThanMin => 'يجب ألا يقل عن الحد الأدنى';
+
+  @override
+  String get menuWritePermissionDenied =>
+      'لا يمكنك تغيير القائمة في هذا النطاق.';
+
+  @override
+  String get menuWriteProblem => 'تعذّر الحفظ — يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get menuSavedSnack => 'تم الحفظ';
+
+  @override
+  String get menuDeletedSnack => 'تم الحذف';
+
+  @override
+  String get menuManagementSubtitle =>
+      'نظّم الفئات والعناصر والأحجام والمُعدِّلات والأسعار.';
+
+  @override
+  String get menuSearchHint => 'ابحث في القائمة';
+
+  @override
+  String get menuFilterAll => 'الكل';
+
+  @override
+  String get menuFilterActive => 'نشط';
+
+  @override
+  String get menuFilterInactive => 'غير نشط';
+
+  @override
+  String get menuEmptyCategoriesBody => 'أنشئ أول فئة لبدء بناء القائمة.';
+
+  @override
+  String get menuEmptyItemsBody => 'أضف عنصرًا إلى هذه الفئة للبدء.';
+
+  @override
+  String get menuLoadErrorBody => 'حدث خطأ أثناء تحميل القائمة.';
+
+  @override
+  String get menuImageEmptyHint => 'لا توجد صورة بعد';
+
+  @override
+  String get menuComingSoonBadge => 'قريبًا';
+
+  @override
+  String get menuItemDetailsSection => 'التفاصيل';
+
+  @override
+  String get menuNoResults => 'لا توجد نتائج';
+
+  @override
+  String get menuNoResultsBody => 'جرّب بحثًا أو تصفية مختلفة.';
+
+  @override
+  String get menuScopeUnavailableTitle => 'القائمة غير متاحة لهذا الوصول';
+
+  @override
+  String get menuScopeUnavailableBody =>
+      'هذا وصول على مستوى المؤسسة دون اختيار مطعم. افتح إدارة القائمة من مطعم أو فرع محدد.';
 }

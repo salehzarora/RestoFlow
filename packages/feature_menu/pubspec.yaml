@@ -1,5 +1,5 @@
 name: restoflow_feature_menu
-description: RestoFlow feature_menu package (RF-010 skeleton) - menu feature package (composes domain + data + UI). No implementation yet.
+description: RestoFlow feature_menu package - the owner/manager menu management capability (RF-111). Composes domain models, a client menu repository over the RF-109 public menu RPCs, RF-110 image path/validation helpers, Riverpod state, and the dashboard UI. No backend changes; reads/writes run against an injected seam (fake/demo today; real wiring deferred to the auth/org-context bridge).
 publish_to: none
 version: 0.0.1
 environment:
@@ -8,4 +8,24 @@ environment:
 resolution: workspace
 dependencies:
   flutter:
+    sdk: flutter
+  # RF-111: Riverpod state management (DECISION D-009 / ARCHITECTURE §4).
+  flutter_riverpod: '>=2.5.0 <3.0.0'
+  # Result<S,F> seam (no exceptions across layer boundaries).
+  restoflow_core:
+    path: ../core
+  # The neutral SyncRpcTransport seam used to call the RF-109 public menu RPCs.
+  restoflow_data_remote:
+    path: ../data_remote
+  # MembershipContext / MembershipRole: the active scope + role come from RF-108.
+  restoflow_auth_identity:
+    path: ../auth_identity
+  # Design tokens/theme for the dashboard menu UI.
+  restoflow_design_system:
+    path: ../design_system
+  # Localized strings (ar/he/en) for the menu UI.
+  restoflow_l10n:
+    path: ../l10n
+dev_dependencies:
+  flutter_test:
     sdk: flutter

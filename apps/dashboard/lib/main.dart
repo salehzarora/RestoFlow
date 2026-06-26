@@ -5,7 +5,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-import 'src/dashboard_home_screen.dart';
+import 'src/dashboard_shell.dart';
 
 void main() => runApp(const ProviderScope(child: DashboardApp()));
 
@@ -38,8 +38,10 @@ class DashboardApp extends StatelessWidget {
       theme: restoflowBaseTheme(),
       home: AuthGatedHome(
         surface: AppSurface.dashboard,
-        demoHome: const DashboardHomeScreen(),
-        onReady: (context, state) => const DashboardHomeScreen(),
+        demoHome: const DashboardShell(),
+        onReady: (context, state) => DashboardShell(
+          membership: state is AuthGateReady ? state.membership : null,
+        ),
         demoMode: demoMode,
         fetchContext: fetchContext,
       ),
