@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../format/money_format.dart';
@@ -68,6 +69,8 @@ class OrderConfirmation extends StatelessWidget {
                             label: l10n.posOrderStatusSubmitted,
                           ),
                         ),
+                        const SizedBox(height: RestoflowSpacing.sm),
+                        _ServiceModeRow(order: order, l10n: l10n),
                       ],
                     ),
                   ),
@@ -153,6 +156,76 @@ class _SuccessHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The submitted order's service mode (RF-114): an order-type chip plus, for a
+/// dine-in order, the assigned table chip.
+class _ServiceModeRow extends StatelessWidget {
+  const _ServiceModeRow({required this.order, required this.l10n});
+
+  final SubmittedOrderView order;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final dineIn = order.orderType == OrderType.dineIn;
+    final typeLabel = dineIn
+        ? l10n.posOrderTypeDineIn
+        : l10n.posOrderTypeTakeaway;
+    final tableLabel = order.tableLabel;
+    final tableChipLabel = tableLabel == null
+        ? null
+        : '${l10n.posTableLabel} $tableLabel';
+
+    return Wrap(
+      spacing: RestoflowSpacing.sm,
+      runSpacing: RestoflowSpacing.xs,
+      children: [
+        _InfoChip(
+          icon: dineIn ? Icons.restaurant : Icons.takeout_dining,
+          label: typeLabel,
+        ),
+        if (tableChipLabel != null)
+          _InfoChip(icon: Icons.event_seat, label: tableChipLabel),
+      ],
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.sm,
+        vertical: RestoflowSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: RestoflowSpacing.xs),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

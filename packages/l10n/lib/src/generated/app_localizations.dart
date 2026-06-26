@@ -316,6 +316,108 @@ abstract class AppLocalizations {
   /// **'New order'**
   String get posNewOrder;
 
+  /// POS label above the order-type (dine-in / takeaway) selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Order type'**
+  String get posOrderTypeLabel;
+
+  /// POS order-type option: the order is served at a table in the restaurant.
+  ///
+  /// In en, this message translates to:
+  /// **'Dine-in'**
+  String get posOrderTypeDineIn;
+
+  /// POS order-type option: the order is taken away (no table).
+  ///
+  /// In en, this message translates to:
+  /// **'Takeaway'**
+  String get posOrderTypeTakeaway;
+
+  /// POS label preceding a dining-table name/number.
+  ///
+  /// In en, this message translates to:
+  /// **'Table'**
+  String get posTableLabel;
+
+  /// POS action that opens the table picker to assign a table to a dine-in order.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign table'**
+  String get posAssignTable;
+
+  /// POS action that reopens the table picker to change the assigned table.
+  ///
+  /// In en, this message translates to:
+  /// **'Change table'**
+  String get posChangeTable;
+
+  /// POS action/tooltip that removes the assigned table from a dine-in order.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear table'**
+  String get posClearTableAssignment;
+
+  /// POS validation message shown when a dine-in order has no table assigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Dine-in orders need a table'**
+  String get posTableRequiredWarning;
+
+  /// POS hint shown for takeaway orders, which do not require a table.
+  ///
+  /// In en, this message translates to:
+  /// **'No table needed for takeaway'**
+  String get posTableNotNeeded;
+
+  /// POS heading on the table-picker sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a table'**
+  String get posTablePickerTitle;
+
+  /// POS table status: free and assignable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get posTableStatusAvailable;
+
+  /// POS table status: an open dine-in order is already on the table.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied'**
+  String get posTableStatusOccupied;
+
+  /// POS table status: the table is inactive and cannot be assigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Out of service'**
+  String get posTableStatusBlocked;
+
+  /// POS table seating capacity.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} seats'**
+  String posTableSeats(int count);
+
+  /// POS notice on the table picker clarifying the tables are in-memory demo data.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo tables — not loaded from a backend.'**
+  String get posTablesDemoNotice;
+
+  /// POS empty-state message on the table picker when there are no tables.
+  ///
+  /// In en, this message translates to:
+  /// **'No tables to show'**
+  String get posTablesEmpty;
+
+  /// POS error-state message on the table picker when tables fail to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load tables'**
+  String get posTablesError;
+
   /// Owner dashboard section heading above the daily KPI cards.
   ///
   /// In en, this message translates to:

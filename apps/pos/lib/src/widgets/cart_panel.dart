@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../format/money_format.dart';
 import '../state/cart_controller.dart';
+import '../state/order_setup_controller.dart';
 import 'order_confirmation.dart';
+import 'order_setup_section.dart';
 
 /// The live cart/order panel: a header with item count + clear, the list of
 /// cart lines with quantity steppers + remove, and a footer with the subtotal
@@ -23,14 +26,21 @@ class CartPanel extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final cart = ref.watch(cartControllerProvider);
     final controller = ref.read(cartControllerProvider.notifier);
+    final setup = ref.watch(orderSetupControllerProvider);
+    final setupController = ref.read(orderSetupControllerProvider.notifier);
 
     final submittedOrder = cart.submittedOrder;
     if (submittedOrder != null) {
       return OrderConfirmation(
         order: submittedOrder,
-        onNewOrder: controller.startNewOrder,
+        onNewOrder: () {
+          controller.startNewOrder();
+          setupController.reset();
+        },
       );
     }
+
+    final canSend = !cart.isEmpty && setup.isReadyToSubmit;
 
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -41,6 +51,8 @@ class CartPanel extends ConsumerWidget {
             itemCount: cart.itemCount,
             onClear: cart.isEmpty ? null : controller.clear,
           ),
+          const Divider(height: 1),
+          const OrderSetupSection(),
           const Divider(height: 1),
           Expanded(
             child: cart.isEmpty
@@ -68,7 +80,17 @@ class CartPanel extends ConsumerWidget {
           _CartFooter(
             l10n: l10n,
             subtotalText: MoneyFormatter.format(cart.subtotal),
-            onSend: cart.isEmpty ? null : controller.submitOrder,
+            orderType: setup.orderType,
+            tableLabel: setup.assignedTable?.label,
+            onSend: canSend
+                ? () {
+                    controller.submitOrder(
+                      orderType: setup.orderType,
+                      tableLabel: setup.assignedTable?.label,
+                    );
+                    setupController.reset();
+                  }
+                : null,
           ),
         ],
       ),
@@ -340,15 +362,101 @@ class _StepButton extends StatelessWidget {
   }
 }
 
+/// The active order's service-mode summary shown right above Send (RF-114): an
+/// order-type chip plus, for dine-in, the assigned table chip.
+class _SelectionSummary extends StatelessWidget {
+  const _SelectionSummary({
+    required this.l10n,
+    required this.orderType,
+    required this.tableLabel,
+  });
+
+  final AppLocalizations l10n;
+  final OrderType orderType;
+  final String? tableLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final dineIn = orderType == OrderType.dineIn;
+    final typeLabel = dineIn
+        ? l10n.posOrderTypeDineIn
+        : l10n.posOrderTypeTakeaway;
+    final tableChipLabel = tableLabel == null
+        ? null
+        : '${l10n.posTableLabel} $tableLabel';
+
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Wrap(
+        spacing: RestoflowSpacing.sm,
+        runSpacing: RestoflowSpacing.xs,
+        children: [
+          _SummaryChip(
+            key: const Key('summary-order-type'),
+            icon: dineIn ? Icons.restaurant : Icons.takeout_dining,
+            label: typeLabel,
+          ),
+          if (tableChipLabel != null)
+            _SummaryChip(
+              key: const Key('summary-table'),
+              icon: Icons.event_seat,
+              label: tableChipLabel,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({required this.icon, required this.label, super.key});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.sm,
+        vertical: RestoflowSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: RestoflowSpacing.xs),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CartFooter extends StatelessWidget {
   const _CartFooter({
     required this.l10n,
     required this.subtotalText,
+    required this.orderType,
+    required this.tableLabel,
     required this.onSend,
   });
 
   final AppLocalizations l10n;
   final String subtotalText;
+  final OrderType orderType;
+  final String? tableLabel;
   final VoidCallback? onSend;
 
   @override
@@ -363,6 +471,12 @@ class _CartFooter extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            _SelectionSummary(
+              l10n: l10n,
+              orderType: orderType,
+              tableLabel: tableLabel,
+            ),
+            const SizedBox(height: RestoflowSpacing.sm),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

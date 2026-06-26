@@ -118,6 +118,60 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posNewOrder => 'طلب جديد';
 
   @override
+  String get posOrderTypeLabel => 'نوع الطلب';
+
+  @override
+  String get posOrderTypeDineIn => 'تناول في المطعم';
+
+  @override
+  String get posOrderTypeTakeaway => 'سفري';
+
+  @override
+  String get posTableLabel => 'طاولة';
+
+  @override
+  String get posAssignTable => 'تعيين طاولة';
+
+  @override
+  String get posChangeTable => 'تغيير الطاولة';
+
+  @override
+  String get posClearTableAssignment => 'إزالة الطاولة';
+
+  @override
+  String get posTableRequiredWarning =>
+      'طلبات تناول الطعام في المطعم تتطلب طاولة';
+
+  @override
+  String get posTableNotNeeded => 'لا حاجة لطاولة للطلبات السفري';
+
+  @override
+  String get posTablePickerTitle => 'اختر طاولة';
+
+  @override
+  String get posTableStatusAvailable => 'متاحة';
+
+  @override
+  String get posTableStatusOccupied => 'مشغولة';
+
+  @override
+  String get posTableStatusBlocked => 'خارج الخدمة';
+
+  @override
+  String posTableSeats(int count) {
+    return '$count مقاعد';
+  }
+
+  @override
+  String get posTablesDemoNotice => 'طاولات تجريبية — غير محمّلة من خادم.';
+
+  @override
+  String get posTablesEmpty => 'لا توجد طاولات لعرضها';
+
+  @override
+  String get posTablesError => 'تعذّر تحميل الطاولات';
+
+  @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
 
   @override
