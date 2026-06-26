@@ -431,11 +431,30 @@ The device **forward path** over the existing device schema (`devices` [DOMAIN_M
 - **Idempotency:** device-originated ops carry `device_id` + `local_operation_id` (**DECISION D-022**); management-initiated ops (e.g. create/issue) use `client_request_id`.
 - **Audit (D-013):** every provisioning mutation **and** denial emits an `audit_events` row (`device.<action>` / `*_denied`).
 - **Errors:** role/scope-denied → `{ok:false, error:'permission_denied'}` (audited); structural / cross-tenant / not-found / expired-code / already-consumed → `42501`.
+- **Activation + session start (DECISION D-034):** the `paired → active` activation and `start_device_session` are defined in **§4.28** / **§4.29** — `approve_device` here **stops at `paired`** and never activates, and **no session starts on a non-`active` pairing**.
+
+### 4.28 `activate_device` (RF-112, DECISION D-034)
+The **`paired → active`** lifecycle edge ([STATE_MACHINES](STATE_MACHINES.md) §9), as a **separate explicit** RPC — activation is **never** folded into `approve_device` (which stops at `paired`) and **never** done inside `start_device_session`. An `active` pairing is the precondition for opening a device session (§4.29).
+- **Implementation / exposure:** `app.activate_device` (`SECURITY DEFINER`, `search_path=''`, `authenticated` only) + a thin `public.activate_device` `SECURITY INVOKER` wrapper.
+- **Params:** `p_client_request_id uuid`, `p_device_pairing_id uuid`.
+- **Precondition (fail-closed):** the pairing must be **`paired`**; every other state (`code_issued`/`pending`/`active`/`suspended`/`revoked`/`code_expired`/`rejected`) is **rejected `42501`** (no re-activation, no skip); the device + branch/restaurant must be live (not soft-deleted) and the device `is_active`.
+- **Authorization (GUC-free, D-034):** caller via `app.current_app_user_id()`; scope **derived from the pairing row** and validated against `memberships` (`app.actor_rank_in_scope`). `org_owner` / `restaurant_owner` / `manager` covering the device's scope may activate; `cashier` / `kitchen_staff` / `accountant` → `permission_denied`; non-member / cross-org / out-of-scope → `42501`. `platform_admin` is never a tenant path (**DECISION D-026**); no `service_role` / `anon` (**DECISION D-011**).
+- **Idempotency:** `client_request_id` (the RF-112 management ledger). **Audit (D-013):** `device.activated` on success; `device.activate_denied` on role-denial. **No secret is minted** (the device credential `device_credential_ref` is provisioned separately — RF-021).
+- **Response / errors:** `{ok:true, device_pairing_id, status:'active', idempotent_replay}`; role-denied → `{ok:false, error:'permission_denied'}` (audited); structural / state / scope / not-found → `42501`.
+
+### 4.29 `start_device_session` (RF-112, DECISION D-034)
+Mints a `device_sessions` row **only on an `active` pairing** ([DOMAIN_MODEL](DOMAIN_MODEL.md) §3.5); `start_pin_session` (§4.13) only *consumes* a device session — it never creates one.
+- **Implementation / exposure:** `app.start_device_session` (`SECURITY DEFINER`, `search_path=''`, `authenticated` only) + a thin `public.start_device_session` `SECURITY INVOKER` wrapper.
+- **Precondition (fail-closed):** the pairing must be **`active`**; a `paired` / `pending` / `suspended` / `revoked` / `code_expired` / non-active pairing is **rejected `42501`** (**§14 T-004** / **RISK R-007**); the device + branch/restaurant must be live and the device `is_active`.
+- **Authorization (GUC-free, D-034):** **RF-112 management-initiated** — `org_owner` / `restaurant_owner` / `manager` covering the device's scope start the session (and securely hand the one-time token to the device); `cashier` / `kitchen_staff` / `accountant` → `permission_denied`; non-member / cross-org / out-of-scope / `anon` / platform-admin-only → `42501`. The fully **device-originated** form (the device authenticates with its own credential; idempotency `device_id` + `local_operation_id`, **DECISION D-022**) is a **follow-up** gated on the deferred device-auth bridge; the precondition, token handling, fail-closed states, and audit are identical.
+- **Token (SECURITY REQUIREMENT):** the session token is **generated server-side**, stored **only as `session_token_ref` = its hash** (sha-256), and the **plaintext token is returned exactly ONCE** (first/claiming call). A **replay never re-returns the token** — the idempotency ledger stores a **no-token** result. **No plaintext token** in the DB or in `audit_events`.
+- **Idempotency:** `client_request_id` (RF-112 management ledger); the device-originated follow-up uses `device_id` + `local_operation_id`. **Audit (D-013):** `device.session_started` on success (no token in the row); `device.session_start_denied` on role-denial.
+- **Response / errors:** first call → `{ok:true, device_session_id, device_pairing_id, session_token (once), idempotent_replay:false}`; replay → the same envelope **without** `session_token` and `idempotent_replay:true`; role-denied → `{ok:false, error:'permission_denied'}` (audited); structural / state / scope / not-found → `42501`.
 
 ---
 
 ## 5. Cross-References
-- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033).
+- Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (subset of the Q-001..Q-024 range: Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-017).
 - State transitions: [STATE_MACHINES](STATE_MACHINES.md).
 - Authorization, RLS, isolation tests, audit: [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md).

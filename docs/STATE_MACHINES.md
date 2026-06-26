@@ -338,6 +338,8 @@ Each transition row carries these columns. The legend applies to all 10 machines
 - `suspended → paired`, `active → paired`, `active → pending` — **FORBIDDEN** (no backward to enrollment).
 - Any device-initiated transition to `paired`/`active`/`suspended`/`revoked` — **FORBIDDEN**; only privileged human roles (or server for expiry) drive these. A device may only move `code_issued → pending`.
 
+> **Activation + session start (DECISION D-034, RF-112).** The `paired → active` edge is owned by the RF-112 **`activate_device`** RPC ([API_CONTRACT](API_CONTRACT.md) §4.28) — a **separate** management-authorized step, **never** folded into `approve_device` (which stops at `paired`, the `pending → paired` approval edge) and **never** performed inside session-start. **`pending → active` remains FORBIDDEN** (above) — activation can never skip approval. A **device session** (`start_device_session`, [API_CONTRACT](API_CONTRACT.md) §4.29) may be opened **only on an `active` pairing**; `paired`/`pending`/`suspended`/`revoked`/`code_expired` are rejected (fail-closed). See [DECISIONS](DECISIONS.md) D-034.
+
 ---
 
 ## 10. Sync operation
