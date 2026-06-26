@@ -479,6 +479,7 @@ class _ModifierFormDialogState extends ConsumerState<_ModifierFormDialog> {
   late bool _required = widget.initialRequired;
   late bool _active = widget.initialActive;
   MenuFieldError? _nameError;
+  MenuFieldError? _minError;
   MenuFieldError? _maxError;
   MenuWriteFailure? _writeError;
   bool _submitting = false;
@@ -494,17 +495,31 @@ class _ModifierFormDialogState extends ConsumerState<_ModifierFormDialog> {
 
   Future<void> _save() async {
     final nameError = validateName(_name.text);
-    final minSelect = int.tryParse(_min.text.trim()) ?? 0;
-    final maxSelect = _max.text.trim().isEmpty
-        ? null
-        : int.tryParse(_max.text.trim());
-    final maxError = validateMaxSelect(maxSelect, minSelect);
+
+    // min_select: blank => 0; non-empty must parse to an integer; then it must
+    // be >= 0. Never silently clamp negative/invalid operator input.
+    final minText = _min.text.trim();
+    final int? minSelect = minText.isEmpty ? 0 : int.tryParse(minText);
+    final MenuFieldError? minError = minSelect == null
+        ? MenuFieldError.notAnInteger
+        : validateMinSelect(minSelect);
+
+    // max_select: blank => null (no maximum); non-empty must parse; then it
+    // must be >= min (and >= 0), per validateMaxSelect.
+    final maxText = _max.text.trim();
+    final bool maxProvided = maxText.isNotEmpty;
+    final int? maxSelect = maxProvided ? int.tryParse(maxText) : null;
+    final MenuFieldError? maxError = (maxProvided && maxSelect == null)
+        ? MenuFieldError.notAnInteger
+        : validateMaxSelect(maxSelect, minSelect ?? 0);
+
     setState(() {
       _nameError = nameError;
+      _minError = minError;
       _maxError = maxError;
       _writeError = null;
     });
-    if (nameError != null || maxError != null) return;
+    if (nameError != null || minError != null || maxError != null) return;
 
     setState(() => _submitting = true);
     final outcome = await ref
@@ -514,7 +529,7 @@ class _ModifierFormDialogState extends ConsumerState<_ModifierFormDialog> {
           menuItemId: widget.menuItemId,
           name: _name.text.trim(),
           selectionType: _selectionType,
-          minSelect: minSelect < 0 ? 0 : minSelect,
+          minSelect: minSelect!,
           maxSelect: maxSelect,
           isRequired: _required,
           displayOrder: int.tryParse(_order.text.trim()) ?? 0,
@@ -570,14 +585,21 @@ class _ModifierFormDialogState extends ConsumerState<_ModifierFormDialog> {
           children: [
             Expanded(
               child: TextField(
+                key: const ValueKey('menu-modifier-min'),
                 controller: _min,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: l10n.menuMinSelectLabel),
+                decoration: InputDecoration(
+                  labelText: l10n.menuMinSelectLabel,
+                  errorText: _minError == null
+                      ? null
+                      : l10n.menuFieldErrorText(_minError!),
+                ),
               ),
             ),
             const SizedBox(width: RestoflowSpacing.md),
             Expanded(
               child: TextField(
+                key: const ValueKey('menu-modifier-max'),
                 controller: _max,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(

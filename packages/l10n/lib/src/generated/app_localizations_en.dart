@@ -459,4 +459,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuNoResultsBody => 'Try a different search or filter.';
+
+  @override
+  String get menuScopeUnavailableTitle => 'Menu not available for this access';
+
+  @override
+  String get menuScopeUnavailableBody =>
+      'This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.';
 }

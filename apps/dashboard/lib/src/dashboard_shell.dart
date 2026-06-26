@@ -7,15 +7,29 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'dashboard_home_screen.dart';
 
+/// Derives the menu scope for the dashboard from the active RF-108 membership.
+///
+///  * Demo mode (`membership == null`) uses the demo scope.
+///  * An auth-mode membership uses its EXACT org/restaurant/branch (and the demo
+///    currency) — never the demo scope.
+///  * An org-wide membership with no restaurant returns `null`: menu management
+///    is restaurant-scoped, so the surface shows a blocked state instead of
+///    silently falling back to the demo scope.
+MenuScope? dashboardMenuScopeFor(MembershipContext? membership) {
+  if (membership == null) return demoMenuScope;
+  return MenuScope.fromMembership(membership, currencyCode: demoCurrencyCode);
+}
+
 /// The owner/manager dashboard shell (RF-111): a branded side navigation
 /// (Overview + Menu) hosting the existing RF-104 overview and the RF-111 menu
 /// management surface.
 ///
-/// The menu surface is DEMO-BACKED: it runs the in-memory store + demo scope
-/// (held once in state so edits persist across navigation), with a clear demo
+/// The menu surface is DEMO-BACKED but scoped to the active membership: the
+/// in-memory store is seeded at the membership's org/restaurant/branch (so menu
+/// edits and RF-110 image-path previews carry the REAL scope), with a clear demo
 /// banner — real persistence is deferred to the auth/org-context bridge (D1/D3).
-/// The active [membership] is consumed (it gated entry and is shown as context),
-/// not discarded.
+/// The active [membership] is consumed (it gated entry, drives the scope, and is
+/// shown as context), never discarded.
 class DashboardShell extends StatefulWidget {
   const DashboardShell({this.membership, super.key});
 
@@ -30,7 +44,14 @@ class DashboardShell extends StatefulWidget {
 
 class _DashboardShellState extends State<DashboardShell> {
   int _index = 0;
-  late final InMemoryMenuStore _menuStore = buildDemoMenuStore();
+
+  /// The active menu scope (null when the membership is org-wide / restaurant-less).
+  late final MenuScope? _menuScope = dashboardMenuScopeFor(widget.membership);
+
+  /// The demo store, seeded at the active scope (null when there is no scope).
+  late final InMemoryMenuStore? _menuStore = _menuScope == null
+      ? null
+      : buildDemoMenuStore(scope: _menuScope);
 
   void _select(int value) => setState(() => _index = value);
 
@@ -81,6 +102,8 @@ class _DashboardShellState extends State<DashboardShell> {
   }
 
   Widget _menuSurface(BuildContext context, AppLocalizations l10n) {
+    final scope = _menuScope;
+    final store = _menuStore;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: RestoflowSpacing.lg,
@@ -91,26 +114,84 @@ class _DashboardShellState extends State<DashboardShell> {
         children: [
           if (widget.membership != null)
             _MembershipContextBar(membership: widget.membership!),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              RestoflowSpacing.lg,
-              RestoflowSpacing.md,
-              RestoflowSpacing.lg,
-              0,
-            ),
-            child: _MenuDemoBanner(message: l10n.menuDemoBanner),
-          ),
-          Expanded(
-            child: ProviderScope(
-              overrides: menuFeatureOverrides(
-                scope: demoMenuScope,
-                readSource: _menuStore,
-                writer: _menuStore,
+          if (scope == null || store == null)
+            const Expanded(child: _MenuUnavailable())
+          else ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                RestoflowSpacing.lg,
+                RestoflowSpacing.md,
+                RestoflowSpacing.lg,
+                0,
               ),
-              child: const MenuManagementScreen(),
+              child: _MenuDemoBanner(message: l10n.menuDemoBanner),
             ),
-          ),
+            Expanded(
+              child: ProviderScope(
+                overrides: menuFeatureOverrides(
+                  scope: scope,
+                  readSource: store,
+                  writer: store,
+                ),
+                child: const MenuManagementScreen(),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// The blocked state shown when the active membership is org-wide and has no
+/// restaurant scope (menu management is restaurant-scoped).
+class _MenuUnavailable extends StatelessWidget {
+  const _MenuUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(RestoflowSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.store_mall_directory_outlined,
+                size: 30,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: RestoflowSpacing.lg),
+            Text(
+              l10n.menuScopeUnavailableTitle,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: RestoflowSpacing.xs),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Text(
+                l10n.menuScopeUnavailableBody,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

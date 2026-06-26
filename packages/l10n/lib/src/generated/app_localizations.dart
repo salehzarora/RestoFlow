@@ -981,6 +981,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Try a different search or filter.'**
   String get menuNoResultsBody;
+
+  /// Blocked-state title when the active membership is organization-wide with no restaurant.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu not available for this access'**
+  String get menuScopeUnavailableTitle;
+
+  /// Blocked-state body explaining menu management needs a restaurant scope.
+  ///
+  /// In en, this message translates to:
+  /// **'This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.'**
+  String get menuScopeUnavailableBody;
 }
 
 class _AppLocalizationsDelegate

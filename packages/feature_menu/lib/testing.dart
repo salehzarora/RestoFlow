@@ -5,6 +5,16 @@ library;
 
 import 'restoflow_feature_menu.dart';
 
+// Test-only access to the form dialogs (used to drive validation in widget
+// tests without going through the full editor flow).
+export 'src/widgets/menu_entity_forms.dart'
+    show
+        PricedChildKind,
+        showCategoryFormDialog,
+        showMenuDeleteConfirm,
+        showModifierFormDialog,
+        showPricedChildFormDialog;
+
 /// A [MenuWriter] that returns a preset [outcome] for every operation and
 /// records the last operation name. Lets a widget test drive a specific
 /// success/failure (e.g. a `MenuPermissionDenied`) without a backend.

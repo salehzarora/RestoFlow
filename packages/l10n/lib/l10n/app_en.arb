@@ -441,5 +441,9 @@
   "menuNoResults": "No matches",
   "@menuNoResults": { "description": "Empty-state title when a search/filter returns nothing." },
   "menuNoResultsBody": "Try a different search or filter.",
-  "@menuNoResultsBody": { "description": "Empty-state description when a search/filter returns nothing." }
+  "@menuNoResultsBody": { "description": "Empty-state description when a search/filter returns nothing." },
+  "menuScopeUnavailableTitle": "Menu not available for this access",
+  "@menuScopeUnavailableTitle": { "description": "Blocked-state title when the active membership is organization-wide with no restaurant." },
+  "menuScopeUnavailableBody": "This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.",
+  "@menuScopeUnavailableBody": { "description": "Blocked-state body explaining menu management needs a restaurant scope." }
 }

@@ -457,4 +457,11 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get menuNoResultsBody => 'נסה חיפוש או סינון אחר.';
+
+  @override
+  String get menuScopeUnavailableTitle => 'התפריט אינו זמין לגישה זו';
+
+  @override
+  String get menuScopeUnavailableBody =>
+      'זו גישה ברמת הארגון ללא מסעדה נבחרת. פתח את ניהול התפריט ממסעדה או סניף ספציפיים.';
 }

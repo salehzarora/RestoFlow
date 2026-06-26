@@ -456,4 +456,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get menuNoResultsBody => 'جرّب بحثًا أو تصفية مختلفة.';
+
+  @override
+  String get menuScopeUnavailableTitle => 'القائمة غير متاحة لهذا الوصول';
+
+  @override
+  String get menuScopeUnavailableBody =>
+      'هذا وصول على مستوى المؤسسة دون اختيار مطعم. افتح إدارة القائمة من مطعم أو فرع محدد.';
 }

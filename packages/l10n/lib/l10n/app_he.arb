@@ -146,5 +146,7 @@
   "menuComingSoonBadge": "בקרוב",
   "menuItemDetailsSection": "פרטים",
   "menuNoResults": "אין תוצאות",
-  "menuNoResultsBody": "נסה חיפוש או סינון אחר."
+  "menuNoResultsBody": "נסה חיפוש או סינון אחר.",
+  "menuScopeUnavailableTitle": "התפריט אינו זמין לגישה זו",
+  "menuScopeUnavailableBody": "זו גישה ברמת הארגון ללא מסעדה נבחרת. פתח את ניהול התפריט ממסעדה או סניף ספציפיים."
 }
