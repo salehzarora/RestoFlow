@@ -252,16 +252,20 @@ begin
   if not exists (select 1 from public.app_users au where au.id = p_target_app_user_id and au.is_active) then
     raise exception 'grant_membership: target app_user not found or inactive' using errcode = '42501';
   end if;
-  -- target scope must exist in the SAME org (clean 42501 instead of a raw FK error)
+  -- target scope must exist in the SAME org AND be LIVE (not a soft-deleted tombstone) -- never create
+  -- authority on a dead scope (RF112-S1-B1). Clean 42501 instead of a raw FK error. Because a branch
+  -- target also carries a restaurant (branch_requires_restaurant above), the restaurant check below runs
+  -- first and rejects a branch whose PARENT restaurant is soft-deleted.
   if p_restaurant_id is not null and not exists (
        select 1 from public.restaurants r
-        where r.id = p_restaurant_id and r.organization_id = p_organization_id) then
-    raise exception 'grant_membership: restaurant not found in organization' using errcode = '42501';
+        where r.id = p_restaurant_id and r.organization_id = p_organization_id and r.deleted_at is null) then
+    raise exception 'grant_membership: restaurant not found in organization or is soft-deleted' using errcode = '42501';
   end if;
   if p_branch_id is not null and not exists (
        select 1 from public.branches b
-        where b.id = p_branch_id and b.organization_id = p_organization_id and b.restaurant_id = p_restaurant_id) then
-    raise exception 'grant_membership: branch not found in organization/restaurant' using errcode = '42501';
+        where b.id = p_branch_id and b.organization_id = p_organization_id
+          and b.restaurant_id = p_restaurant_id and b.deleted_at is null) then
+    raise exception 'grant_membership: branch not found in organization/restaurant or is soft-deleted' using errcode = '42501';
   end if;
 
   -- (c) committed idempotent replay (before authorization -> true idempotency)
@@ -365,6 +369,20 @@ begin
   end if;
   if v_m.status <> 'active' or v_m.deleted_at is not null then
     raise exception 'update_role: membership is not active' using errcode = '42501';
+  end if;
+  -- RF112-S1-B1: the membership's parent restaurant/branch scope must still be LIVE -- never mutate
+  -- authority on a soft-deleted scope. A branch membership also carries restaurant_id, so the
+  -- restaurant check below covers "parent restaurant not soft-deleted" for branch memberships.
+  if v_m.restaurant_id is not null and not exists (
+       select 1 from public.restaurants r
+        where r.id = v_m.restaurant_id and r.organization_id = v_m.organization_id and r.deleted_at is null) then
+    raise exception 'update_role: membership restaurant scope is soft-deleted' using errcode = '42501';
+  end if;
+  if v_m.branch_id is not null and not exists (
+       select 1 from public.branches b
+        where b.id = v_m.branch_id and b.organization_id = v_m.organization_id
+          and b.restaurant_id = v_m.restaurant_id and b.deleted_at is null) then
+    raise exception 'update_role: membership branch scope is soft-deleted' using errcode = '42501';
   end if;
 
   v_fp := md5(jsonb_build_object('membership', p_membership_id, 'new_role', p_new_role)::text);
@@ -676,10 +694,14 @@ begin
     v_st := p_status;
   end if;
 
+  -- RF112-S1-B1 (wider scan): the branch AND its parent restaurant must be LIVE (not soft-deleted).
   if not exists (select 1 from public.branches b
+                 join public.restaurants r
+                   on r.id = b.restaurant_id and r.organization_id = b.organization_id
                  where b.id = p_branch_id and b.organization_id = p_organization_id
-                   and b.restaurant_id = p_restaurant_id and b.deleted_at is null) then
-    raise exception 'update_branch_settings: branch not found in organization/restaurant' using errcode = '42501';
+                   and b.restaurant_id = p_restaurant_id
+                   and b.deleted_at is null and r.deleted_at is null) then
+    raise exception 'update_branch_settings: branch not found in organization/restaurant or scope is soft-deleted' using errcode = '42501';
   end if;
 
   v_fp := md5(jsonb_build_object('org', p_organization_id, 'restaurant', p_restaurant_id, 'branch', p_branch_id,
