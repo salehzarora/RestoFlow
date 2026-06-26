@@ -169,6 +169,8 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
 - **FKs:** `organization_id`, `restaurant_id`, `branch_id`.
 - **RISK R-007 / SECURITY REQUIREMENT:** revoking a device must remove **future** access including in the offline window (**OPEN QUESTION Q-009**); enforcement detail in [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md) and [OFFLINE_SYNC_SPEC](OFFLINE_SYNC_SPEC.md).
 
+> **Settings management (DECISION D-033, RF-112).** RF-112 adds GUC-free, audited `update_organization_settings` / `update_restaurant_settings` / `update_branch_settings` RPCs ([API_CONTRACT](API_CONTRACT.md) §4.25) over the **existing columns only** — org (`default_currency`, `country_code`, `status`; §2.1), restaurant (`name`, `currency_override`, `timezone`, `status`; §2.2), branch (`name`, `address`, `timezone`, `receipt_prefix`, `status`; §2.3). **No new tables / no settings blob**, and tax, rounding, locale, business hours, and receipt template/logo/header/footer are **out of RF-112** (each is net-new schema for its own ticket). Authorization is `org_owner` / `restaurant_owner` in scope (a `manager` may edit branch settings only).
+
 ---
 
 ## 3. Identity & access entities (D-004, D-005, D-006)
@@ -228,6 +230,8 @@ Six distinct concepts are kept structurally separate. **No shared accounts** (D-
   - **MFA required** for platform administrators (**OPEN QUESTION Q-008**).
   - **Every** platform-level access and mutation is audited as an `audit_event` (**DECISION D-013**), on the separate platform-admin audit path.
   - A platform-admin grant **never silently bypasses tenant protections** (RLS / membership scoping / RPC authorization remain in force; any cross-tenant platform action is explicit and audited).
+
+> **Tenant administration backend (DECISION D-033, RF-112).** RF-112 adds the forward management surface over these existing identity/device tables — `grant_membership` / `update_role` ([API_CONTRACT](API_CONTRACT.md) §4.26) and the device provisioning path `create_device` / `issue_device_enrollment_code` / redeem-pair / `approve_device` / `start_device_session` (§4.27) — reusing the RF-061 `revoke_employee` / `revoke_device` teardown. Authorization is **GUC-free** (caller via `app.current_app_user_id()`, scope validated directly from `memberships` against passed ids — never the org-GUC helpers) and adds a **role-rank guard** `org_owner > restaurant_owner > manager > {cashier, kitchen_staff, accountant}` (actor strictly outranks the assigned **and** existing role; a manager cannot assign manager/owner; no self-grant/self-escalation; downward-scope only; cross-org/restaurant/branch IDOR denied; accountant/cashier/kitchen_staff cannot manage; `platform_admin` is never assignable — **D-026/D-028**). **No invite/pending flow and no new `memberships.status` enum value** in RF-112 (the interim `active`/`revoked` set stands; grants are for existing `app_user`s). `approve_device` is the manager-approval edge **`pending → paired`** ([STATE_MACHINES](STATE_MACHINES.md) §9; the subsequent `paired → active` activation permits opening a device session); enrollment codes / session tokens are **return-once, hash-only**, codes are **consume-once** with a conservative TTL, and revoked/suspended/expired devices fail closed. Every mutation and denial is audited (**D-013**); see [SECURITY_AND_THREAT_MODEL](SECURITY_AND_THREAT_MODEL.md) §14 T-015.
 
 ---
 
