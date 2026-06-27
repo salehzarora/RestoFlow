@@ -118,6 +118,86 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posNewOrder => 'New order';
 
   @override
+  String get posOrderTypeLabel => 'Order type';
+
+  @override
+  String get posOrderTypeDineIn => 'Dine-in';
+
+  @override
+  String get posOrderTypeTakeaway => 'Takeaway';
+
+  @override
+  String get posTableLabel => 'Table';
+
+  @override
+  String get posAssignTable => 'Assign table';
+
+  @override
+  String get posChangeTable => 'Change table';
+
+  @override
+  String get posClearTableAssignment => 'Clear table';
+
+  @override
+  String get posTableRequiredWarning => 'Dine-in orders need a table';
+
+  @override
+  String get posTableNotNeeded => 'No table needed for takeaway';
+
+  @override
+  String get posTablePickerTitle => 'Choose a table';
+
+  @override
+  String get posTableStatusAvailable => 'Available';
+
+  @override
+  String get posTableStatusOccupied => 'Occupied';
+
+  @override
+  String get posTableStatusBlocked => 'Out of service';
+
+  @override
+  String posTableSeats(int count) {
+    return '$count seats';
+  }
+
+  @override
+  String get posTablesDemoNotice => 'Demo tables — not loaded from a backend.';
+
+  @override
+  String get posTablesEmpty => 'No tables to show';
+
+  @override
+  String get posTablesError => 'Couldn\'t load tables';
+
+  @override
+  String get posTableStatusSelected => 'Selected';
+
+  @override
+  String get posTableAreaMain => 'Main dining area';
+
+  @override
+  String get posTableAreaPatio => 'Patio';
+
+  @override
+  String get posTablesAisleLabel => 'Walkway';
+
+  @override
+  String get posTablesEdgeEntrance => 'Entrance';
+
+  @override
+  String get posTablesEdgeCounter => 'Counter';
+
+  @override
+  String get posTablesLayoutEditorHint =>
+      'Table positions are demo-only — layout editor coming later.';
+
+  @override
+  String posTableSelectedSemantic(String label) {
+    return '$label, selected';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'Today\'s overview';
 
   @override

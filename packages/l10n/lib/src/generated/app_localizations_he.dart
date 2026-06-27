@@ -118,6 +118,86 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posNewOrder => 'הזמנה חדשה';
 
   @override
+  String get posOrderTypeLabel => 'סוג הזמנה';
+
+  @override
+  String get posOrderTypeDineIn => 'ישיבה במקום';
+
+  @override
+  String get posOrderTypeTakeaway => 'טייק אווי';
+
+  @override
+  String get posTableLabel => 'שולחן';
+
+  @override
+  String get posAssignTable => 'שיוך שולחן';
+
+  @override
+  String get posChangeTable => 'החלפת שולחן';
+
+  @override
+  String get posClearTableAssignment => 'הסרת שולחן';
+
+  @override
+  String get posTableRequiredWarning => 'הזמנות לישיבה במקום דורשות שולחן';
+
+  @override
+  String get posTableNotNeeded => 'אין צורך בשולחן לטייק אווי';
+
+  @override
+  String get posTablePickerTitle => 'בחירת שולחן';
+
+  @override
+  String get posTableStatusAvailable => 'פנוי';
+
+  @override
+  String get posTableStatusOccupied => 'תפוס';
+
+  @override
+  String get posTableStatusBlocked => 'לא בשירות';
+
+  @override
+  String posTableSeats(int count) {
+    return '$count מקומות';
+  }
+
+  @override
+  String get posTablesDemoNotice => 'שולחנות הדגמה — לא נטענו משרת.';
+
+  @override
+  String get posTablesEmpty => 'אין שולחנות להצגה';
+
+  @override
+  String get posTablesError => 'טעינת השולחנות נכשלה';
+
+  @override
+  String get posTableStatusSelected => 'נבחר';
+
+  @override
+  String get posTableAreaMain => 'אזור הסעדה ראשי';
+
+  @override
+  String get posTableAreaPatio => 'מרפסת';
+
+  @override
+  String get posTablesAisleLabel => 'מעבר';
+
+  @override
+  String get posTablesEdgeEntrance => 'כניסה';
+
+  @override
+  String get posTablesEdgeCounter => 'דלפק';
+
+  @override
+  String get posTablesLayoutEditorHint =>
+      'מיקומי השולחנות הם להדגמה בלבד — עורך הפריסה יגיע בהמשך.';
+
+  @override
+  String posTableSelectedSemantic(String label) {
+    return '$label, נבחר';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'סקירת היום';
 
   @override

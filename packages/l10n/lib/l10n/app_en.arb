@@ -144,6 +144,108 @@
   "@posNewOrder": {
     "description": "POS action that dismisses the confirmation and starts a new empty order."
   },
+  "posOrderTypeLabel": "Order type",
+  "@posOrderTypeLabel": {
+    "description": "POS label above the order-type (dine-in / takeaway) selector."
+  },
+  "posOrderTypeDineIn": "Dine-in",
+  "@posOrderTypeDineIn": {
+    "description": "POS order-type option: the order is served at a table in the restaurant."
+  },
+  "posOrderTypeTakeaway": "Takeaway",
+  "@posOrderTypeTakeaway": {
+    "description": "POS order-type option: the order is taken away (no table)."
+  },
+  "posTableLabel": "Table",
+  "@posTableLabel": {
+    "description": "POS label preceding a dining-table name/number."
+  },
+  "posAssignTable": "Assign table",
+  "@posAssignTable": {
+    "description": "POS action that opens the table picker to assign a table to a dine-in order."
+  },
+  "posChangeTable": "Change table",
+  "@posChangeTable": {
+    "description": "POS action that reopens the table picker to change the assigned table."
+  },
+  "posClearTableAssignment": "Clear table",
+  "@posClearTableAssignment": {
+    "description": "POS action/tooltip that removes the assigned table from a dine-in order."
+  },
+  "posTableRequiredWarning": "Dine-in orders need a table",
+  "@posTableRequiredWarning": {
+    "description": "POS validation message shown when a dine-in order has no table assigned."
+  },
+  "posTableNotNeeded": "No table needed for takeaway",
+  "@posTableNotNeeded": {
+    "description": "POS hint shown for takeaway orders, which do not require a table."
+  },
+  "posTablePickerTitle": "Choose a table",
+  "@posTablePickerTitle": {
+    "description": "POS heading on the table-picker sheet."
+  },
+  "posTableStatusAvailable": "Available",
+  "@posTableStatusAvailable": {
+    "description": "POS table status: free and assignable."
+  },
+  "posTableStatusOccupied": "Occupied",
+  "@posTableStatusOccupied": {
+    "description": "POS table status: an open dine-in order is already on the table."
+  },
+  "posTableStatusBlocked": "Out of service",
+  "@posTableStatusBlocked": {
+    "description": "POS table status: the table is inactive and cannot be assigned."
+  },
+  "posTableSeats": "{count} seats",
+  "@posTableSeats": {
+    "description": "POS table seating capacity.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "posTablesDemoNotice": "Demo tables — not loaded from a backend.",
+  "@posTablesDemoNotice": {
+    "description": "POS notice on the table picker clarifying the tables are in-memory demo data."
+  },
+  "posTablesEmpty": "No tables to show",
+  "@posTablesEmpty": {
+    "description": "POS empty-state message on the table picker when there are no tables."
+  },
+  "posTablesError": "Couldn't load tables",
+  "@posTablesError": {
+    "description": "POS error-state message on the table picker when tables fail to load."
+  },
+  "posTableStatusSelected": "Selected",
+  "@posTableStatusSelected": {
+    "description": "POS table status / legend label for the currently assigned (selected) table."
+  },
+  "posTableAreaMain": "Main dining area",
+  "@posTableAreaMain": {
+    "description": "POS floor-map zone header for the main indoor dining area."
+  },
+  "posTableAreaPatio": "Patio",
+  "@posTableAreaPatio": {
+    "description": "POS floor-map zone header for the outdoor patio area."
+  },
+  "posTablesAisleLabel": "Walkway",
+  "@posTablesAisleLabel": {
+    "description": "POS floor-map label on the aisle/walkway separator between two table zones."
+  },
+  "posTablesEdgeEntrance": "Entrance",
+  "@posTablesEdgeEntrance": {
+    "description": "POS floor-map spatial edge label marking the entrance side of a zone."
+  },
+  "posTablesEdgeCounter": "Counter",
+  "@posTablesEdgeCounter": {
+    "description": "POS floor-map spatial edge label marking the service counter side of a zone."
+  },
+  "posTablesLayoutEditorHint": "Table positions are demo-only — layout editor coming later.",
+  "@posTablesLayoutEditorHint": {
+    "description": "POS footnote on the table picker noting the floor positions are demo-only and a layout editor will arrive later."
+  },
+  "posTableSelectedSemantic": "{label}, selected",
+  "@posTableSelectedSemantic": {
+    "description": "Screen-reader label announcing that a table tile is the selected one.",
+    "placeholders": { "label": { "type": "String" } }
+  },
   "dashboardOverviewHeading": "Today's overview",
   "@dashboardOverviewHeading": {
     "description": "Owner dashboard section heading above the daily KPI cards."

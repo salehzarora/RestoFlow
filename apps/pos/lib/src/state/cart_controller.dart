@@ -177,13 +177,18 @@ class CartController extends Notifier<CartViewState> {
   /// local/provisional demo number, then empties the cart so the confirmation
   /// stands on its own. No backend, RPC, payment, kitchen, printer, or
   /// persistence — purely a visible demo confirmation. No-op on an empty cart.
-  void submitOrder({OrderType orderType = OrderType.takeaway}) {
+  void submitOrder({
+    OrderType orderType = OrderType.takeaway,
+    String? tableLabel,
+  }) {
     if (_cart.isEmpty) return;
     final order = LocalOrder.submitFromCart(_cart, orderType: orderType);
     _orderSeq++;
     final orderNumber = 'DEMO-${_orderSeq.toString().padLeft(4, '0')}';
     _submittedOrder = SubmittedOrderView(
       orderNumber: orderNumber,
+      orderType: order.orderType,
+      tableLabel: tableLabel,
       currencyCode: order.currencyCode,
       subtotalMinor: order.subtotalMinorPreview,
       lines: order.items
