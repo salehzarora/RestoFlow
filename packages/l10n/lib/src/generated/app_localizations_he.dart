@@ -171,6 +171,33 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posTablesError => 'טעינת השולחנות נכשלה';
 
   @override
+  String get posTableStatusSelected => 'נבחר';
+
+  @override
+  String get posTableAreaMain => 'אזור הסעדה ראשי';
+
+  @override
+  String get posTableAreaPatio => 'מרפסת';
+
+  @override
+  String get posTablesAisleLabel => 'מעבר';
+
+  @override
+  String get posTablesEdgeEntrance => 'כניסה';
+
+  @override
+  String get posTablesEdgeCounter => 'דלפק';
+
+  @override
+  String get posTablesLayoutEditorHint =>
+      'מיקומי השולחנות הם להדגמה בלבד — עורך הפריסה יגיע בהמשך.';
+
+  @override
+  String posTableSelectedSemantic(String label) {
+    return '$label, נבחר';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'סקירת היום';
 
   @override

@@ -213,6 +213,39 @@
   "@posTablesError": {
     "description": "POS error-state message on the table picker when tables fail to load."
   },
+  "posTableStatusSelected": "Selected",
+  "@posTableStatusSelected": {
+    "description": "POS table status / legend label for the currently assigned (selected) table."
+  },
+  "posTableAreaMain": "Main dining area",
+  "@posTableAreaMain": {
+    "description": "POS floor-map zone header for the main indoor dining area."
+  },
+  "posTableAreaPatio": "Patio",
+  "@posTableAreaPatio": {
+    "description": "POS floor-map zone header for the outdoor patio area."
+  },
+  "posTablesAisleLabel": "Walkway",
+  "@posTablesAisleLabel": {
+    "description": "POS floor-map label on the aisle/walkway separator between two table zones."
+  },
+  "posTablesEdgeEntrance": "Entrance",
+  "@posTablesEdgeEntrance": {
+    "description": "POS floor-map spatial edge label marking the entrance side of a zone."
+  },
+  "posTablesEdgeCounter": "Counter",
+  "@posTablesEdgeCounter": {
+    "description": "POS floor-map spatial edge label marking the service counter side of a zone."
+  },
+  "posTablesLayoutEditorHint": "Table positions are demo-only — layout editor coming later.",
+  "@posTablesLayoutEditorHint": {
+    "description": "POS footnote on the table picker noting the floor positions are demo-only and a layout editor will arrive later."
+  },
+  "posTableSelectedSemantic": "{label}, selected",
+  "@posTableSelectedSemantic": {
+    "description": "Screen-reader label announcing that a table tile is the selected one.",
+    "placeholders": { "label": { "type": "String" } }
+  },
   "dashboardOverviewHeading": "Today's overview",
   "@dashboardOverviewHeading": {
     "description": "Owner dashboard section heading above the daily KPI cards."

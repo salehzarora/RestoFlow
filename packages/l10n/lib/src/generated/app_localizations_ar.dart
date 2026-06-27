@@ -172,6 +172,33 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posTablesError => 'تعذّر تحميل الطاولات';
 
   @override
+  String get posTableStatusSelected => 'محدد';
+
+  @override
+  String get posTableAreaMain => 'صالة الطعام الرئيسية';
+
+  @override
+  String get posTableAreaPatio => 'الفناء';
+
+  @override
+  String get posTablesAisleLabel => 'ممر';
+
+  @override
+  String get posTablesEdgeEntrance => 'المدخل';
+
+  @override
+  String get posTablesEdgeCounter => 'الكاونتر';
+
+  @override
+  String get posTablesLayoutEditorHint =>
+      'مواضع الطاولات تجريبية فقط — محرّر التخطيط قادم لاحقًا.';
+
+  @override
+  String posTableSelectedSemantic(String label) {
+    return '$label، محدد';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
 
   @override

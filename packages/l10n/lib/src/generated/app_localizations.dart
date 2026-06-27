@@ -418,6 +418,54 @@ abstract class AppLocalizations {
   /// **'Couldn\'t load tables'**
   String get posTablesError;
 
+  /// POS table status / legend label for the currently assigned (selected) table.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get posTableStatusSelected;
+
+  /// POS floor-map zone header for the main indoor dining area.
+  ///
+  /// In en, this message translates to:
+  /// **'Main dining area'**
+  String get posTableAreaMain;
+
+  /// POS floor-map zone header for the outdoor patio area.
+  ///
+  /// In en, this message translates to:
+  /// **'Patio'**
+  String get posTableAreaPatio;
+
+  /// POS floor-map label on the aisle/walkway separator between two table zones.
+  ///
+  /// In en, this message translates to:
+  /// **'Walkway'**
+  String get posTablesAisleLabel;
+
+  /// POS floor-map spatial edge label marking the entrance side of a zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Entrance'**
+  String get posTablesEdgeEntrance;
+
+  /// POS floor-map spatial edge label marking the service counter side of a zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Counter'**
+  String get posTablesEdgeCounter;
+
+  /// POS footnote on the table picker noting the floor positions are demo-only and a layout editor will arrive later.
+  ///
+  /// In en, this message translates to:
+  /// **'Table positions are demo-only — layout editor coming later.'**
+  String get posTablesLayoutEditorHint;
+
+  /// Screen-reader label announcing that a table tile is the selected one.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}, selected'**
+  String posTableSelectedSemantic(String label);
+
   /// Owner dashboard section heading above the daily KPI cards.
   ///
   /// In en, this message translates to:

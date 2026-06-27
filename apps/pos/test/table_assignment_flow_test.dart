@@ -143,6 +143,29 @@ void main() {
     expect(find.byKey(const Key('assigned-table-card')), findsNothing);
   });
 
+  testWidgets('a blocked (out-of-service) table cannot be assigned', (
+    tester,
+  ) async {
+    final l10n = await _en();
+    await _pump(tester);
+
+    await tester.tap(find.text(l10n.posOrderTypeDineIn));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('assign-table-button')));
+    await tester.pumpAndSettle();
+
+    // T10 is a seeded blocked table in the lower Patio zone — bring it on-screen
+    // then tap it; it must not assign.
+    final t10 = find.byKey(const ValueKey('table-tile-t10'));
+    await tester.ensureVisible(t10);
+    await tester.pumpAndSettle();
+    await tester.tap(t10);
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.posTablePickerTitle), findsOneWidget); // still open
+    expect(find.byKey(const Key('assigned-table-card')), findsNothing);
+  });
+
   testWidgets('switching back to takeaway clears the assigned table', (
     tester,
   ) async {
@@ -193,4 +216,89 @@ void main() {
     expect(find.text(ar.posOrderTypeDineIn), findsWidgets);
     expect(find.text(ar.posTableNotNeeded), findsOneWidget);
   });
+
+  testWidgets('the picker reads like a floor map: area zones, a walkway, a '
+      'legend, and a future-editor hint', (tester) async {
+    final l10n = await _en();
+    await _pump(tester);
+
+    await tester.tap(find.text(l10n.posOrderTypeDineIn));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('assign-table-button')));
+    await tester.pumpAndSettle();
+
+    // Tables are grouped into named area zones.
+    expect(find.text(l10n.posTableAreaMain), findsOneWidget);
+    expect(find.text(l10n.posTableAreaPatio), findsOneWidget);
+    // A labelled walkway separates the zones.
+    expect(find.text(l10n.posTablesAisleLabel), findsOneWidget);
+    // Spatial edge labels give the sheet a map feel.
+    expect(find.text(l10n.posTablesEdgeEntrance), findsOneWidget);
+    expect(find.text(l10n.posTablesEdgeCounter), findsOneWidget);
+    // The legend explains the colours (incl. the Selected swatch).
+    expect(find.text(l10n.posTableStatusSelected), findsWidgets);
+    // A non-intrusive future-layout-editor hint, not a broken element.
+    expect(find.text(l10n.posTablesLayoutEditorHint), findsOneWidget);
+  });
+
+  testWidgets('occupied and blocked tiles are visibly disabled with status '
+      'icons', (tester) async {
+    final l10n = await _en();
+    await _pump(tester);
+
+    await tester.tap(find.text(l10n.posOrderTypeDineIn));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('assign-table-button')));
+    await tester.pumpAndSettle();
+
+    // t3 is seeded occupied; t10 is seeded blocked (inactive).
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('table-tile-t3')),
+        matching: find.byIcon(Icons.do_not_disturb_on),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('table-tile-t10')),
+        matching: find.byIcon(Icons.block),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'the assigned table is highlighted as Selected when the picker is '
+    'reopened',
+    (tester) async {
+      final l10n = await _en();
+      await _pump(tester);
+
+      await tester.tap(find.text(l10n.posOrderTypeDineIn));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('assign-table-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('T1'));
+      await tester.pumpAndSettle();
+
+      // Reopen the picker via "Change table".
+      await tester.tap(find.text(l10n.posChangeTable));
+      await tester.pumpAndSettle();
+
+      final t1 = find.byKey(const ValueKey('table-tile-t1'));
+      expect(t1, findsOneWidget);
+      expect(
+        find.descendant(of: t1, matching: find.byIcon(Icons.check_circle)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: t1,
+          matching: find.text(l10n.posTableStatusSelected),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

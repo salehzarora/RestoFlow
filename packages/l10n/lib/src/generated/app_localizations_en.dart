@@ -171,6 +171,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posTablesError => 'Couldn\'t load tables';
 
   @override
+  String get posTableStatusSelected => 'Selected';
+
+  @override
+  String get posTableAreaMain => 'Main dining area';
+
+  @override
+  String get posTableAreaPatio => 'Patio';
+
+  @override
+  String get posTablesAisleLabel => 'Walkway';
+
+  @override
+  String get posTablesEdgeEntrance => 'Entrance';
+
+  @override
+  String get posTablesEdgeCounter => 'Counter';
+
+  @override
+  String get posTablesLayoutEditorHint =>
+      'Table positions are demo-only — layout editor coming later.';
+
+  @override
+  String posTableSelectedSemantic(String label) {
+    return '$label, selected';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'Today\'s overview';
 
   @override

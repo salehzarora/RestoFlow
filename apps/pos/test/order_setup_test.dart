@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_pos/src/data/demo_tables.dart';
 import 'package:restoflow_pos/src/state/order_setup_controller.dart';
+import 'package:restoflow_pos/src/widgets/table_picker_sheet.dart';
 
 DemoTable _demoTable(
   String id, {
@@ -65,6 +66,39 @@ void main() {
         );
         expect(occupied.table.isActive, isTrue);
         expect(occupied.isAssignable, isFalse);
+      },
+    );
+
+    test(
+      'groupTablesByArea orders Main then Patio and keeps every table',
+      () async {
+        final tables = await DemoTablesStore().loadTables();
+        final groups = groupTablesByArea(tables);
+
+        expect(groups.map((g) => g.areaKey).toList(), <String>[
+          'Main',
+          'Patio',
+        ]);
+        // No table is dropped or duplicated across the zones.
+        final ids = groups
+            .expand((g) => g.tables)
+            .map((t) => t.tableId)
+            .toSet();
+        expect(ids.length, tables.length);
+        // Tables land in the correct zone (membership, not just order/count).
+        final mainIds = groups
+            .firstWhere((g) => g.areaKey == 'Main')
+            .tables
+            .map((t) => t.tableId);
+        final patioIds = groups
+            .firstWhere((g) => g.areaKey == 'Patio')
+            .tables
+            .map((t) => t.tableId);
+        expect(
+          mainIds,
+          containsAll(<String>['t1', 't2', 't3', 't4', 't5', 't6']),
+        );
+        expect(patioIds, containsAll(<String>['t7', 't8', 't9', 't10']));
       },
     );
   });
