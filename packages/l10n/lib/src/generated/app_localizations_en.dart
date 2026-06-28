@@ -69,6 +69,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kdsReauthRequired => 'Sign-in required';
 
   @override
+  String get kdsDemoFeedBanner => 'Demo kitchen feed — not synced to a backend';
+
+  @override
+  String get kdsColNew => 'New';
+
+  @override
+  String get kdsColPreparing => 'Preparing';
+
+  @override
+  String get kdsColReady => 'Ready';
+
+  @override
+  String get kdsColCleared => 'Cleared';
+
+  @override
+  String get kdsCompleteAction => 'Complete';
+
+  @override
+  String get kdsNoteLabel => 'Note';
+
+  @override
+  String kdsElapsedMinutes(int minutes) {
+    return '${minutes}m';
+  }
+
+  @override
   String get posMenuHeading => 'Menu';
 
   @override

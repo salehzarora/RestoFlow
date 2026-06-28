@@ -80,6 +80,39 @@
   "@kdsReauthRequired": {
     "description": "KDS message shown when the session is revoked/expired and re-authentication is required."
   },
+  "kdsDemoFeedBanner": "Demo kitchen feed — not synced to a backend",
+  "@kdsDemoFeedBanner": {
+    "description": "KDS banner stating the board is a local demo feed, not backend-synced."
+  },
+  "kdsColNew": "New",
+  "@kdsColNew": {
+    "description": "KDS board column header for new (and acknowledged) kitchen orders."
+  },
+  "kdsColPreparing": "Preparing",
+  "@kdsColPreparing": {
+    "description": "KDS board column header for orders being prepared."
+  },
+  "kdsColReady": "Ready",
+  "@kdsColReady": {
+    "description": "KDS board column header for orders that are ready."
+  },
+  "kdsColCleared": "Cleared",
+  "@kdsColCleared": {
+    "description": "KDS board column header for completed/bumped (cleared) orders."
+  },
+  "kdsCompleteAction": "Complete",
+  "@kdsCompleteAction": {
+    "description": "KDS action that completes (bumps) a ready order off the active board."
+  },
+  "kdsNoteLabel": "Note",
+  "@kdsNoteLabel": {
+    "description": "KDS label preceding a kitchen note on an order item."
+  },
+  "kdsElapsedMinutes": "{minutes}m",
+  "@kdsElapsedMinutes": {
+    "description": "KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).",
+    "placeholders": { "minutes": { "type": "int" } }
+  },
   "posMenuHeading": "Menu",
   "@posMenuHeading": {
     "description": "POS heading above the menu item grid."

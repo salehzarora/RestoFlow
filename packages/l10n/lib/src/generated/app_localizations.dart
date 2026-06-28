@@ -220,6 +220,54 @@ abstract class AppLocalizations {
   /// **'Sign-in required'**
   String get kdsReauthRequired;
 
+  /// KDS banner stating the board is a local demo feed, not backend-synced.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo kitchen feed — not synced to a backend'**
+  String get kdsDemoFeedBanner;
+
+  /// KDS board column header for new (and acknowledged) kitchen orders.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get kdsColNew;
+
+  /// KDS board column header for orders being prepared.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing'**
+  String get kdsColPreparing;
+
+  /// KDS board column header for orders that are ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get kdsColReady;
+
+  /// KDS board column header for completed/bumped (cleared) orders.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared'**
+  String get kdsColCleared;
+
+  /// KDS action that completes (bumps) a ready order off the active board.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get kdsCompleteAction;
+
+  /// KDS label preceding a kitchen note on an order item.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get kdsNoteLabel;
+
+  /// KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}m'**
+  String kdsElapsedMinutes(int minutes);
+
   /// POS heading above the menu item grid.
   ///
   /// In en, this message translates to:
