@@ -466,6 +466,78 @@ abstract class AppLocalizations {
   /// **'{label}, selected'**
   String posTableSelectedSemantic(String label);
 
+  /// POS heading for the order's client outbox / sync status card on the confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync status'**
+  String get posSyncSectionTitle;
+
+  /// POS sync status: the order is queued locally and not yet sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending sync'**
+  String get posSyncStatePending;
+
+  /// POS sync status: the order is being delivered (demo push in progress).
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get posSyncStateSending;
+
+  /// POS sync status: the order's demo sync completed.
+  ///
+  /// In en, this message translates to:
+  /// **'Synced'**
+  String get posSyncStateSynced;
+
+  /// POS sync status: the order's demo delivery failed and can be retried.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync failed'**
+  String get posSyncStateFailed;
+
+  /// POS honest note that the queued order is stored locally and not yet pushed to a backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored locally — backend sync pending'**
+  String get posSyncStoredLocally;
+
+  /// POS honest note that the sync lifecycle is a local demo and nothing is sent to a real backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo sync — not sent to a real backend'**
+  String get posSyncDemoNotice;
+
+  /// POS action that runs the demo push of a locally-queued order.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now (demo)'**
+  String get posSyncNow;
+
+  /// POS action that re-queues and re-pushes a failed outbox entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get posSyncRetry;
+
+  /// POS label preceding the compact outbox operation reference (idempotency local_operation_id).
+  ///
+  /// In en, this message translates to:
+  /// **'Outbox ref'**
+  String get posOutboxRefLabel;
+
+  /// POS message shown when enqueuing the order to the outbox failed; the cart is kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t queue the order — please try again'**
+  String get posSubmitFailed;
+
+  /// POS cart-header chip showing how many submitted orders are still queued for sync.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} pending sync'**
+  String posSyncPendingCount(int count);
+
   /// Owner dashboard section heading above the daily KPI cards.
   ///
   /// In en, this message translates to:

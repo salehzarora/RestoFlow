@@ -4,9 +4,11 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
 import '../state/cart_controller.dart';
 import '../state/order_setup_controller.dart';
+import '../state/outbox_controller.dart';
 import 'order_confirmation.dart';
 import 'order_setup_section.dart';
 
@@ -41,6 +43,10 @@ class CartPanel extends ConsumerWidget {
     }
 
     final canSend = !cart.isEmpty && setup.isReadyToSubmit;
+    final pendingSync = ref
+        .watch(outboxControllerProvider)
+        .where((e) => e.syncState.isPending)
+        .length;
 
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -49,6 +55,7 @@ class CartPanel extends ConsumerWidget {
           _CartHeader(
             l10n: l10n,
             itemCount: cart.itemCount,
+            pendingSync: pendingSync,
             onClear: cart.isEmpty ? null : controller.clear,
           ),
           const Divider(height: 1),
@@ -83,13 +90,15 @@ class CartPanel extends ConsumerWidget {
             orderType: setup.orderType,
             tableLabel: setup.assignedTable?.label,
             onSend: canSend
-                ? () {
-                    controller.submitOrder(
-                      orderType: setup.orderType,
-                      tableLabel: setup.assignedTable?.label,
-                    );
-                    setupController.reset();
-                  }
+                ? () => _submitOrder(
+                    ref: ref,
+                    context: context,
+                    cart: cart,
+                    setup: setup,
+                    cartController: controller,
+                    setupController: setupController,
+                    l10n: l10n,
+                  )
                 : null,
           ),
         ],
@@ -98,15 +107,55 @@ class CartPanel extends ConsumerWidget {
   }
 }
 
+/// RF-115 Send Order: enqueue the order to the client outbox FIRST, and only on
+/// a successful enqueue materialize the confirmation + clear the cart + reset the
+/// order setup. If the enqueue fails the cart is left intact and a message is
+/// shown — the order is never silently lost.
+Future<void> _submitOrder({
+  required WidgetRef ref,
+  required BuildContext context,
+  required CartViewState cart,
+  required OrderSetupState setup,
+  required CartController cartController,
+  required OrderSetupController setupController,
+  required AppLocalizations l10n,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final outbox = ref.read(outboxControllerProvider.notifier);
+  try {
+    final result = await outbox.submit(
+      lines: cart.lines,
+      subtotalMinor: cart.subtotalMinor,
+      currencyCode: cart.currencyCode,
+      orderType: setup.orderType,
+      tableId: setup.assignedTable?.tableId,
+      tableLabel: setup.assignedTable?.label,
+    );
+    // Safe to clear now: the order is durably queued in the outbox.
+    cartController.submitOrder(
+      orderType: setup.orderType,
+      tableLabel: setup.assignedTable?.label,
+      orderNumber: result.orderNumber,
+      outboxEntryId: result.entry.id,
+      localOperationId: result.entry.localOperationId,
+    );
+    setupController.reset();
+  } on OrderSubmissionException {
+    messenger.showSnackBar(SnackBar(content: Text(l10n.posSubmitFailed)));
+  }
+}
+
 class _CartHeader extends StatelessWidget {
   const _CartHeader({
     required this.l10n,
     required this.itemCount,
+    required this.pendingSync,
     required this.onClear,
   });
 
   final AppLocalizations l10n;
   final int itemCount;
+  final int pendingSync;
   final VoidCallback? onClear;
 
   @override
@@ -125,10 +174,14 @@ class _CartHeader extends StatelessWidget {
         children: [
           Icon(Icons.shopping_cart_outlined, color: theme.colorScheme.primary),
           const SizedBox(width: RestoflowSpacing.sm),
-          Text(
-            l10n.posCartTitle,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              l10n.posCartTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           if (itemCount > 0) ...[
@@ -151,6 +204,13 @@ class _CartHeader extends StatelessWidget {
               ),
             ),
           ],
+          if (pendingSync > 0) ...[
+            const SizedBox(width: RestoflowSpacing.sm),
+            _PendingSyncChip(
+              count: pendingSync,
+              tooltip: l10n.posSyncPendingCount(pendingSync),
+            ),
+          ],
           const Spacer(),
           if (onClear != null)
             TextButton.icon(
@@ -159,6 +219,52 @@ class _CartHeader extends StatelessWidget {
               label: Text(l10n.posClearCart),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// A compact pending-sync indicator in the cart header (RF-115): a cloud icon +
+/// the queued count, with the full "N pending sync" wording as a tooltip. A
+/// persistent, honest reminder that locally-queued orders await (demo) sync.
+class _PendingSyncChip extends StatelessWidget {
+  const _PendingSyncChip({required this.count, required this.tooltip});
+
+  final int count;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: RestoflowSpacing.sm,
+          vertical: 2,
+        ),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.tertiaryContainer,
+          borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_queue,
+              size: 14,
+              color: theme.colorScheme.onTertiaryContainer,
+            ),
+            const SizedBox(width: RestoflowSpacing.xs),
+            Text(
+              count.toString(),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onTertiaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

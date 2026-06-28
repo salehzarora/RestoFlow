@@ -199,6 +199,45 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get posSyncSectionTitle => 'حالة المزامنة';
+
+  @override
+  String get posSyncStatePending => 'بانتظار المزامنة';
+
+  @override
+  String get posSyncStateSending => 'جارٍ الإرسال…';
+
+  @override
+  String get posSyncStateSynced => 'تمت المزامنة';
+
+  @override
+  String get posSyncStateFailed => 'فشلت المزامنة';
+
+  @override
+  String get posSyncStoredLocally =>
+      'مخزَّن محليًا — بانتظار المزامنة مع الخادم';
+
+  @override
+  String get posSyncDemoNotice => 'مزامنة تجريبية — لم تُرسل إلى خادم حقيقي';
+
+  @override
+  String get posSyncNow => 'المزامنة الآن (تجريبي)';
+
+  @override
+  String get posSyncRetry => 'إعادة المحاولة';
+
+  @override
+  String get posOutboxRefLabel => 'مرجع الصندوق الصادر';
+
+  @override
+  String get posSubmitFailed => 'تعذّر إدراج الطلب — يرجى المحاولة مرة أخرى';
+
+  @override
+  String posSyncPendingCount(int count) {
+    return '$count بانتظار المزامنة';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
 
   @override

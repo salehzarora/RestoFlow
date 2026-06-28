@@ -198,6 +198,44 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get posSyncSectionTitle => 'Sync status';
+
+  @override
+  String get posSyncStatePending => 'Pending sync';
+
+  @override
+  String get posSyncStateSending => 'Sending…';
+
+  @override
+  String get posSyncStateSynced => 'Synced';
+
+  @override
+  String get posSyncStateFailed => 'Sync failed';
+
+  @override
+  String get posSyncStoredLocally => 'Stored locally — backend sync pending';
+
+  @override
+  String get posSyncDemoNotice => 'Demo sync — not sent to a real backend';
+
+  @override
+  String get posSyncNow => 'Sync now (demo)';
+
+  @override
+  String get posSyncRetry => 'Retry';
+
+  @override
+  String get posOutboxRefLabel => 'Outbox ref';
+
+  @override
+  String get posSubmitFailed => 'Couldn\'t queue the order — please try again';
+
+  @override
+  String posSyncPendingCount(int count) {
+    return '$count pending sync';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'Today\'s overview';
 
   @override
