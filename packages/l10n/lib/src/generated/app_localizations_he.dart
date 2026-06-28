@@ -198,6 +198,44 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get posSyncSectionTitle => 'סטטוס סנכרון';
+
+  @override
+  String get posSyncStatePending => 'ממתין לסנכרון';
+
+  @override
+  String get posSyncStateSending => 'שולח…';
+
+  @override
+  String get posSyncStateSynced => 'סונכרן';
+
+  @override
+  String get posSyncStateFailed => 'הסנכרון נכשל';
+
+  @override
+  String get posSyncStoredLocally => 'נשמר מקומית — ממתין לסנכרון עם השרת';
+
+  @override
+  String get posSyncDemoNotice => 'סנכרון הדגמה — לא נשלח לשרת אמיתי';
+
+  @override
+  String get posSyncNow => 'סנכרן עכשיו (הדגמה)';
+
+  @override
+  String get posSyncRetry => 'נסה שוב';
+
+  @override
+  String get posOutboxRefLabel => 'מזהה תור יוצא';
+
+  @override
+  String get posSubmitFailed => 'לא ניתן היה להוסיף את ההזמנה לתור — נסה שוב';
+
+  @override
+  String posSyncPendingCount(int count) {
+    return '$count ממתינים לסנכרון';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'סקירת היום';
 
   @override

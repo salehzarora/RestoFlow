@@ -17,6 +17,8 @@ class SubmittedOrderView {
     required this.subtotalMinor,
     required this.lines,
     this.tableLabel,
+    this.outboxEntryId,
+    this.localOperationId,
   });
 
   final String orderNumber;
@@ -27,6 +29,14 @@ class SubmittedOrderView {
 
   /// The assigned dine-in table label, or null for takeaway / unassigned.
   final String? tableLabel;
+
+  /// Link to the client outbox entry this order was enqueued as (RF-115), so the
+  /// confirmation can show live sync status. Null for the in-memory RF-101 path.
+  final String? outboxEntryId;
+
+  /// The idempotency operation id `(deviceId, localOperationId)` (DECISION
+  /// D-022), shown compactly as the outbox reference.
+  final String? localOperationId;
 
   /// Non-authoritative subtotal preview as [Money] (no tax/discounts).
   Money get subtotal => Money(subtotalMinor, currencyCode);

@@ -246,6 +246,55 @@
     "description": "Screen-reader label announcing that a table tile is the selected one.",
     "placeholders": { "label": { "type": "String" } }
   },
+  "posSyncSectionTitle": "Sync status",
+  "@posSyncSectionTitle": {
+    "description": "POS heading for the order's client outbox / sync status card on the confirmation."
+  },
+  "posSyncStatePending": "Pending sync",
+  "@posSyncStatePending": {
+    "description": "POS sync status: the order is queued locally and not yet sent."
+  },
+  "posSyncStateSending": "Sending…",
+  "@posSyncStateSending": {
+    "description": "POS sync status: the order is being delivered (demo push in progress)."
+  },
+  "posSyncStateSynced": "Synced",
+  "@posSyncStateSynced": {
+    "description": "POS sync status: the order's demo sync completed."
+  },
+  "posSyncStateFailed": "Sync failed",
+  "@posSyncStateFailed": {
+    "description": "POS sync status: the order's demo delivery failed and can be retried."
+  },
+  "posSyncStoredLocally": "Stored locally — backend sync pending",
+  "@posSyncStoredLocally": {
+    "description": "POS honest note that the queued order is stored locally and not yet pushed to a backend."
+  },
+  "posSyncDemoNotice": "Demo sync — not sent to a real backend",
+  "@posSyncDemoNotice": {
+    "description": "POS honest note that the sync lifecycle is a local demo and nothing is sent to a real backend."
+  },
+  "posSyncNow": "Sync now (demo)",
+  "@posSyncNow": {
+    "description": "POS action that runs the demo push of a locally-queued order."
+  },
+  "posSyncRetry": "Retry",
+  "@posSyncRetry": {
+    "description": "POS action that re-queues and re-pushes a failed outbox entry."
+  },
+  "posOutboxRefLabel": "Outbox ref",
+  "@posOutboxRefLabel": {
+    "description": "POS label preceding the compact outbox operation reference (idempotency local_operation_id)."
+  },
+  "posSubmitFailed": "Couldn't queue the order — please try again",
+  "@posSubmitFailed": {
+    "description": "POS message shown when enqueuing the order to the outbox failed; the cart is kept."
+  },
+  "posSyncPendingCount": "{count} pending sync",
+  "@posSyncPendingCount": {
+    "description": "POS cart-header chip showing how many submitted orders are still queued for sync.",
+    "placeholders": { "count": { "type": "int" } }
+  },
   "dashboardOverviewHeading": "Today's overview",
   "@dashboardOverviewHeading": {
     "description": "Owner dashboard section heading above the daily KPI cards."

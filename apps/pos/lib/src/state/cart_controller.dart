@@ -180,15 +180,23 @@ class CartController extends Notifier<CartViewState> {
   void submitOrder({
     OrderType orderType = OrderType.takeaway,
     String? tableLabel,
+    String? orderNumber,
+    String? outboxEntryId,
+    String? localOperationId,
   }) {
     if (_cart.isEmpty) return;
     final order = LocalOrder.submitFromCart(_cart, orderType: orderType);
     _orderSeq++;
-    final orderNumber = 'DEMO-${_orderSeq.toString().padLeft(4, '0')}';
+    // RF-115: the outbox controller is the numbering authority for the real
+    // submit flow; fall back to a local number for the RF-101 in-memory path.
+    final resolvedNumber =
+        orderNumber ?? 'DEMO-${_orderSeq.toString().padLeft(4, '0')}';
     _submittedOrder = SubmittedOrderView(
-      orderNumber: orderNumber,
+      orderNumber: resolvedNumber,
       orderType: order.orderType,
       tableLabel: tableLabel,
+      outboxEntryId: outboxEntryId,
+      localOperationId: localOperationId,
       currencyCode: order.currencyCode,
       subtotalMinor: order.subtotalMinorPreview,
       lines: order.items
