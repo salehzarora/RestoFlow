@@ -27,6 +27,79 @@ class AppLocalizationsAr extends AppLocalizations {
   String get welcomeMessage => 'مرحبًا بك في ريستوفلو';
 
   @override
+  String get adminOverviewTitle => 'نظرة عامة على المنصة';
+
+  @override
+  String get adminOverviewAsOf => 'حتى';
+
+  @override
+  String get adminDemoDataTag => 'بيانات تجريبية';
+
+  @override
+  String get adminDemoDataNotice =>
+      'بيانات منصة تجريبية — محسوبة محليًا وغير متزامنة مع خادم. ربط بيانات إدارة المنصة الحقيقية مؤجل.';
+
+  @override
+  String get adminRefresh => 'تحديث';
+
+  @override
+  String get adminLoading => 'جارٍ تحميل بيانات المنصة…';
+
+  @override
+  String get adminError => 'تعذّر تحميل بيانات المنصة.';
+
+  @override
+  String get adminRetry => 'إعادة المحاولة';
+
+  @override
+  String get adminEmpty => 'لا توجد بيانات منصة بعد.';
+
+  @override
+  String get adminActiveLabel => 'نشط';
+
+  @override
+  String get adminKpiOrganizations => 'المؤسسات';
+
+  @override
+  String get adminKpiRestaurants => 'المطاعم';
+
+  @override
+  String get adminKpiBranches => 'الفروع';
+
+  @override
+  String get adminKpiActiveBranches => 'الفروع النشطة';
+
+  @override
+  String get adminKpiDevices => 'الأجهزة';
+
+  @override
+  String get adminKpiAlerts => 'التنبيهات المفتوحة';
+
+  @override
+  String get adminKpiOrdersToday => 'طلبات اليوم';
+
+  @override
+  String get adminOrganizationsHeading => 'المؤسسات';
+
+  @override
+  String get adminBranchHealthHeading => 'حالة الفروع';
+
+  @override
+  String get adminRecentActivityHeading => 'النشاط الأخير';
+
+  @override
+  String get adminCreatedLabel => 'أُنشئت';
+
+  @override
+  String get adminLastActivityLabel => 'آخر نشاط';
+
+  @override
+  String get adminOrdersTodayShort => 'طلبات اليوم';
+
+  @override
+  String get adminWarningChip => 'تحتاج إلى انتباه';
+
+  @override
   String get localeEnglish => 'الإنجليزية';
 
   @override
@@ -821,9 +894,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get adminStateErrorBody => 'تعذّر تحميل هذا. يرجى المحاولة مرة أخرى.';
-
-  @override
-  String get adminRetry => 'إعادة المحاولة';
 
   @override
   String get adminConflictMessage => 'هذا الإجراء غير مسموح في الحالة الحالية.';

@@ -24,6 +24,102 @@
   "@welcomeMessage": {
     "description": "Generic welcome message shown on the scaffold body."
   },
+  "adminOverviewTitle": "Platform overview",
+  "@adminOverviewTitle": {
+    "description": "Platform-admin overview page heading."
+  },
+  "adminOverviewAsOf": "As of",
+  "@adminOverviewAsOf": {
+    "description": "Platform-admin label preceding the overview's business day."
+  },
+  "adminDemoDataTag": "Demo data",
+  "@adminDemoDataTag": {
+    "description": "Platform-admin pill clarifying the overview is demo data, not live."
+  },
+  "adminDemoDataNotice": "Demo platform data — computed locally, not synced to a backend. Real platform admin data wiring is deferred.",
+  "@adminDemoDataNotice": {
+    "description": "Platform-admin banner honestly stating the overview is computed demo data, not a live backend."
+  },
+  "adminRefresh": "Refresh",
+  "@adminRefresh": {
+    "description": "Platform-admin action that reloads the overview."
+  },
+  "adminLoading": "Loading platform data…",
+  "@adminLoading": {
+    "description": "Platform-admin message shown while the overview is loading."
+  },
+  "adminError": "Couldn't load platform data.",
+  "@adminError": {
+    "description": "Platform-admin message shown when the overview fails to load."
+  },
+  "adminRetry": "Retry",
+  "@adminRetry": {
+    "description": "Platform-admin action that retries loading the overview after an error."
+  },
+  "adminEmpty": "No platform data yet.",
+  "@adminEmpty": {
+    "description": "Platform-admin message shown when there is no platform data."
+  },
+  "adminActiveLabel": "Active",
+  "@adminActiveLabel": {
+    "description": "Platform-admin caption word for an active count (e.g. active organizations)."
+  },
+  "adminKpiOrganizations": "Organizations",
+  "@adminKpiOrganizations": {
+    "description": "Platform-admin KPI card label for the organizations count."
+  },
+  "adminKpiRestaurants": "Restaurants",
+  "@adminKpiRestaurants": {
+    "description": "Platform-admin KPI card label for the restaurants count."
+  },
+  "adminKpiBranches": "Branches",
+  "@adminKpiBranches": {
+    "description": "Platform-admin KPI card label for the branches count."
+  },
+  "adminKpiActiveBranches": "Active branches",
+  "@adminKpiActiveBranches": {
+    "description": "Platform-admin KPI card label for the active branches count."
+  },
+  "adminKpiDevices": "Devices",
+  "@adminKpiDevices": {
+    "description": "Platform-admin KPI card label for the devices count."
+  },
+  "adminKpiAlerts": "Open alerts",
+  "@adminKpiAlerts": {
+    "description": "Platform-admin KPI card label for the count of branches needing attention."
+  },
+  "adminKpiOrdersToday": "Orders today",
+  "@adminKpiOrdersToday": {
+    "description": "Platform-admin KPI card label for the platform-wide order count today."
+  },
+  "adminOrganizationsHeading": "Organizations",
+  "@adminOrganizationsHeading": {
+    "description": "Platform-admin heading for the organizations summary list."
+  },
+  "adminBranchHealthHeading": "Branch health",
+  "@adminBranchHealthHeading": {
+    "description": "Platform-admin heading for the branch-health list."
+  },
+  "adminRecentActivityHeading": "Recent activity",
+  "@adminRecentActivityHeading": {
+    "description": "Platform-admin heading for the recent-activity feed."
+  },
+  "adminCreatedLabel": "Created",
+  "@adminCreatedLabel": {
+    "description": "Platform-admin label preceding an organization's created date."
+  },
+  "adminLastActivityLabel": "Last activity",
+  "@adminLastActivityLabel": {
+    "description": "Platform-admin label preceding a branch's last activity time."
+  },
+  "adminOrdersTodayShort": "orders today",
+  "@adminOrdersTodayShort": {
+    "description": "Platform-admin short suffix after a branch's order count (e.g. \"87 orders today\")."
+  },
+  "adminWarningChip": "Needs attention",
+  "@adminWarningChip": {
+    "description": "Platform-admin chip on a branch row that needs attention (inactive branch or suspended org)."
+  },
   "localeEnglish": "English",
   "@localeEnglish": {
     "description": "Display name of the English locale."
