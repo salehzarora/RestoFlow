@@ -97,10 +97,11 @@ void main() {
     // Honest demo / no-printer / provisional labelling (a hard RF-116 rule).
     expect(find.text(l10n.posReceiptDemoNote), findsOneWidget);
     expect(find.text(l10n.posReceiptProvisionalNote), findsOneWidget);
-    final printButton = tester.widget<OutlinedButton>(
-      find.byKey(const Key('print-receipt-button')),
+    // RF-118: the receipt offers a (browser) print-preview action.
+    final previewButton = tester.widget<OutlinedButton>(
+      find.byKey(const Key('open-print-preview-button')),
     );
-    expect(printButton.onPressed, isNull); // demo — never prints
+    expect(previewButton.onPressed, isNotNull);
   });
 
   testWidgets('an overpayment shows change due and records it on the receipt', (

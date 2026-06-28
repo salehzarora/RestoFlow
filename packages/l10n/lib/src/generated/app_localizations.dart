@@ -700,6 +700,54 @@ abstract class AppLocalizations {
   /// **'Print receipt (demo)'**
   String get posPrintReceiptDemo;
 
+  /// Action that opens the browser-style print preview (POS receipt).
+  ///
+  /// In en, this message translates to:
+  /// **'Print preview'**
+  String get printPreviewAction;
+
+  /// Print-preview action that triggers the browser print (web) of the preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Print'**
+  String get printPreviewPrint;
+
+  /// Print-preview action that closes the preview dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get printPreviewClose;
+
+  /// Honest hint in the print preview: it is a browser print preview, not a hardware printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Use your browser\'s print (Ctrl+P) to print this preview'**
+  String get printPreviewHint;
+
+  /// Title of the POS receipt print-preview dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt preview'**
+  String get receiptPreviewTitle;
+
+  /// Demo restaurant name printed at the top of the receipt preview.
+  ///
+  /// In en, this message translates to:
+  /// **'RestoFlow Demo Restaurant'**
+  String get receiptDemoRestaurantName;
+
+  /// KDS action on a kitchen order card that opens the kitchen-ticket print preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview ticket'**
+  String get kdsPreviewTicketAction;
+
+  /// Title of the KDS kitchen-ticket print-preview dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket preview'**
+  String get kdsTicketPreviewTitle;
+
   /// POS demo shift name shown in the shift/cash-drawer context bar.
   ///
   /// In en, this message translates to:
