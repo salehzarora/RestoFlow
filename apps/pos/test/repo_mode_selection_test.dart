@@ -10,8 +10,11 @@ import 'package:restoflow_pos/src/state/payment_controller.dart';
 
 /// RF (M7): the POS payment/outbox/tables seams pick Demo* (default) vs Real*
 /// purely from [runtimeConfigProvider]. No SupabaseClient, no network - the test
-/// only proves the SELECTION and that Real* skeletons refuse to contact a
-/// backend (they throw [RealRepoNotWiredError]).
+/// only proves the SELECTION and that the Real* repos contact no backend when
+/// unconfigured: the RF-129 real outbox fails closed with an
+/// [OrderSubmissionException] (no PIN/device session), while the still-unwired
+/// payment/tables repos throw [RealRepoNotWiredError]. The real outbox's
+/// public.sync_push wiring is covered by real_outbox_sync_push_test.dart.
 void main() {
   ProviderContainer containerFor({required bool isDemoMode}) {
     final container = ProviderContainer(
@@ -62,9 +65,10 @@ void main() {
           ),
           throwsA(isA<RealRepoNotWiredError>()),
         );
+        // RF-129: the real outbox fails closed without a PIN/device session.
         await expectLater(
           outbox.recentEntries(),
-          throwsA(isA<RealRepoNotWiredError>()),
+          throwsA(isA<OrderSubmissionException>()),
         );
         await expectLater(
           tables.loadTables(),
