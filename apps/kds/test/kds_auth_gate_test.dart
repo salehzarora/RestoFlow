@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_feature_auth/testing.dart';
 import 'package:restoflow_kds/main.dart';
-import 'package:restoflow_kds/src/kds_screen.dart';
+import 'package:restoflow_kds/src/kitchen_orders_home.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 MembershipContext mem(MembershipRole role) => MembershipContext(
@@ -54,7 +54,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(KdsScreen), findsOneWidget);
+    expect(find.byType(KitchenOrdersHome), findsOneWidget);
   });
 
   testWidgets('auth mode: a cashier is denied (wrong role) on KDS', (
@@ -71,7 +71,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final l10n = await en();
-    expect(find.byType(KdsScreen), findsNothing);
+    expect(find.byType(KitchenOrdersHome), findsNothing);
     expect(find.text(l10n.authWrongRole), findsOneWidget);
   });
 

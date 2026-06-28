@@ -7,9 +7,8 @@ import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 
-import 'src/data/demo_tickets.dart';
-import 'src/kds_screen.dart';
 import 'src/kds_synced_home.dart';
+import 'src/kitchen_orders_home.dart';
 
 void main() => runApp(const KdsApp());
 
@@ -64,10 +63,11 @@ class KdsApp extends StatelessWidget {
           ? const KdsSyncedHome()
           : AuthGatedHome(
               surface: AppSurface.kds,
-              demoHome: KdsScreen(tickets: demoKdsTickets()),
-              // Live KDS data needs an injected SyncSession (deferred); the
-              // authed entry renders the demo board for now.
-              onReady: (context, state) => KdsScreen(tickets: demoKdsTickets()),
+              // RF-117: the visible kitchen order board (demo feed) — status
+              // columns + kitchen actions. Live backend/realtime is deferred
+              // (the feature_kitchen polling path is the seam for that).
+              demoHome: const KitchenOrdersHome(),
+              onReady: (context, state) => const KitchenOrdersHome(),
               demoMode: demoMode,
               fetchContext: fetchContext,
             ),

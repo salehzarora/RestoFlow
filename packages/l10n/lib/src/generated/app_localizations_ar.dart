@@ -69,6 +69,32 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kdsReauthRequired => 'تسجيل الدخول مطلوب';
 
   @override
+  String get kdsDemoFeedBanner => 'تغذية مطبخ تجريبية — غير متزامنة مع خادم';
+
+  @override
+  String get kdsColNew => 'جديد';
+
+  @override
+  String get kdsColPreparing => 'قيد التحضير';
+
+  @override
+  String get kdsColReady => 'جاهز';
+
+  @override
+  String get kdsColCleared => 'تم الإنهاء';
+
+  @override
+  String get kdsCompleteAction => 'إنهاء';
+
+  @override
+  String get kdsNoteLabel => 'ملاحظة';
+
+  @override
+  String kdsElapsedMinutes(int minutes) {
+    return '$minutes د';
+  }
+
+  @override
   String get posMenuHeading => 'القائمة';
 
   @override

@@ -69,6 +69,32 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kdsReauthRequired => 'נדרשת התחברות מחדש';
 
   @override
+  String get kdsDemoFeedBanner => 'הזנת מטבח להדגמה — לא מסונכרנת לשרת';
+
+  @override
+  String get kdsColNew => 'חדש';
+
+  @override
+  String get kdsColPreparing => 'בהכנה';
+
+  @override
+  String get kdsColReady => 'מוכן';
+
+  @override
+  String get kdsColCleared => 'נוקה';
+
+  @override
+  String get kdsCompleteAction => 'סיום';
+
+  @override
+  String get kdsNoteLabel => 'הערה';
+
+  @override
+  String kdsElapsedMinutes(int minutes) {
+    return '$minutes ד׳';
+  }
+
+  @override
   String get posMenuHeading => 'תפריט';
 
   @override
