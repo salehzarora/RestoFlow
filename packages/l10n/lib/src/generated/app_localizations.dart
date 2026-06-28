@@ -136,6 +136,144 @@ abstract class AppLocalizations {
   /// **'Welcome to RestoFlow'**
   String get welcomeMessage;
 
+  /// Platform-admin overview page heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform overview'**
+  String get adminOverviewTitle;
+
+  /// Platform-admin label preceding the overview's business day.
+  ///
+  /// In en, this message translates to:
+  /// **'As of'**
+  String get adminOverviewAsOf;
+
+  /// Platform-admin pill clarifying the overview is demo data, not live.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo data'**
+  String get adminDemoDataTag;
+
+  /// Platform-admin banner honestly stating the overview is computed demo data, not a live backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo platform data — computed locally, not synced to a backend. Real platform admin data wiring is deferred.'**
+  String get adminDemoDataNotice;
+
+  /// Platform-admin action that reloads the overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get adminRefresh;
+
+  /// Platform-admin message shown while the overview is loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading platform data…'**
+  String get adminLoading;
+
+  /// Platform-admin message shown when the overview fails to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load platform data.'**
+  String get adminError;
+
+  /// Platform-admin message shown when there is no platform data.
+  ///
+  /// In en, this message translates to:
+  /// **'No platform data yet.'**
+  String get adminEmpty;
+
+  /// Platform-admin caption word for an active count (e.g. active organizations).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminActiveLabel;
+
+  /// Platform-admin KPI card label for the organizations count.
+  ///
+  /// In en, this message translates to:
+  /// **'Organizations'**
+  String get adminKpiOrganizations;
+
+  /// Platform-admin KPI card label for the restaurants count.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurants'**
+  String get adminKpiRestaurants;
+
+  /// Platform-admin KPI card label for the branches count.
+  ///
+  /// In en, this message translates to:
+  /// **'Branches'**
+  String get adminKpiBranches;
+
+  /// Platform-admin KPI card label for the active branches count.
+  ///
+  /// In en, this message translates to:
+  /// **'Active branches'**
+  String get adminKpiActiveBranches;
+
+  /// Platform-admin KPI card label for the devices count.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get adminKpiDevices;
+
+  /// Platform-admin KPI card label for the count of branches needing attention.
+  ///
+  /// In en, this message translates to:
+  /// **'Open alerts'**
+  String get adminKpiAlerts;
+
+  /// Platform-admin KPI card label for the platform-wide order count today.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders today'**
+  String get adminKpiOrdersToday;
+
+  /// Platform-admin heading for the organizations summary list.
+  ///
+  /// In en, this message translates to:
+  /// **'Organizations'**
+  String get adminOrganizationsHeading;
+
+  /// Platform-admin heading for the branch-health list.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch health'**
+  String get adminBranchHealthHeading;
+
+  /// Platform-admin heading for the recent-activity feed.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent activity'**
+  String get adminRecentActivityHeading;
+
+  /// Platform-admin label preceding an organization's created date.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get adminCreatedLabel;
+
+  /// Platform-admin label preceding a branch's last activity time.
+  ///
+  /// In en, this message translates to:
+  /// **'Last activity'**
+  String get adminLastActivityLabel;
+
+  /// Platform-admin short suffix after a branch's order count (e.g. "87 orders today").
+  ///
+  /// In en, this message translates to:
+  /// **'orders today'**
+  String get adminOrdersTodayShort;
+
+  /// Platform-admin chip on a branch row that needs attention (inactive branch or suspended org).
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get adminWarningChip;
+
   /// Display name of the English locale.
   ///
   /// In en, this message translates to:

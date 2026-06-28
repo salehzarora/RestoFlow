@@ -27,6 +27,76 @@ class AppLocalizationsHe extends AppLocalizations {
   String get welcomeMessage => 'ברוכים הבאים לרסטופלו';
 
   @override
+  String get adminOverviewTitle => 'סקירת הפלטפורמה';
+
+  @override
+  String get adminOverviewAsOf => 'נכון ל־';
+
+  @override
+  String get adminDemoDataTag => 'נתוני הדגמה';
+
+  @override
+  String get adminDemoDataNotice =>
+      'נתוני פלטפורמה להדגמה — מחושבים מקומית, ללא סנכרון לשרת. חיבור נתוני ניהול הפלטפורמה האמיתיים נדחה.';
+
+  @override
+  String get adminRefresh => 'רענון';
+
+  @override
+  String get adminLoading => 'טוען נתוני פלטפורמה…';
+
+  @override
+  String get adminError => 'לא ניתן לטעון נתוני פלטפורמה.';
+
+  @override
+  String get adminEmpty => 'אין עדיין נתוני פלטפורמה.';
+
+  @override
+  String get adminActiveLabel => 'פעיל';
+
+  @override
+  String get adminKpiOrganizations => 'ארגונים';
+
+  @override
+  String get adminKpiRestaurants => 'מסעדות';
+
+  @override
+  String get adminKpiBranches => 'סניפים';
+
+  @override
+  String get adminKpiActiveBranches => 'סניפים פעילים';
+
+  @override
+  String get adminKpiDevices => 'מכשירים';
+
+  @override
+  String get adminKpiAlerts => 'התראות פתוחות';
+
+  @override
+  String get adminKpiOrdersToday => 'הזמנות היום';
+
+  @override
+  String get adminOrganizationsHeading => 'ארגונים';
+
+  @override
+  String get adminBranchHealthHeading => 'תקינות סניפים';
+
+  @override
+  String get adminRecentActivityHeading => 'פעילות אחרונה';
+
+  @override
+  String get adminCreatedLabel => 'נוצר';
+
+  @override
+  String get adminLastActivityLabel => 'פעילות אחרונה';
+
+  @override
+  String get adminOrdersTodayShort => 'הזמנות היום';
+
+  @override
+  String get adminWarningChip => 'דורש תשומת לב';
+
+  @override
   String get localeEnglish => 'אנגלית';
 
   @override

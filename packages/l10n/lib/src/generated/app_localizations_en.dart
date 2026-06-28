@@ -27,6 +27,76 @@ class AppLocalizationsEn extends AppLocalizations {
   String get welcomeMessage => 'Welcome to RestoFlow';
 
   @override
+  String get adminOverviewTitle => 'Platform overview';
+
+  @override
+  String get adminOverviewAsOf => 'As of';
+
+  @override
+  String get adminDemoDataTag => 'Demo data';
+
+  @override
+  String get adminDemoDataNotice =>
+      'Demo platform data — computed locally, not synced to a backend. Real platform admin data wiring is deferred.';
+
+  @override
+  String get adminRefresh => 'Refresh';
+
+  @override
+  String get adminLoading => 'Loading platform data…';
+
+  @override
+  String get adminError => 'Couldn\'t load platform data.';
+
+  @override
+  String get adminEmpty => 'No platform data yet.';
+
+  @override
+  String get adminActiveLabel => 'Active';
+
+  @override
+  String get adminKpiOrganizations => 'Organizations';
+
+  @override
+  String get adminKpiRestaurants => 'Restaurants';
+
+  @override
+  String get adminKpiBranches => 'Branches';
+
+  @override
+  String get adminKpiActiveBranches => 'Active branches';
+
+  @override
+  String get adminKpiDevices => 'Devices';
+
+  @override
+  String get adminKpiAlerts => 'Open alerts';
+
+  @override
+  String get adminKpiOrdersToday => 'Orders today';
+
+  @override
+  String get adminOrganizationsHeading => 'Organizations';
+
+  @override
+  String get adminBranchHealthHeading => 'Branch health';
+
+  @override
+  String get adminRecentActivityHeading => 'Recent activity';
+
+  @override
+  String get adminCreatedLabel => 'Created';
+
+  @override
+  String get adminLastActivityLabel => 'Last activity';
+
+  @override
+  String get adminOrdersTodayShort => 'orders today';
+
+  @override
+  String get adminWarningChip => 'Needs attention';
+
+  @override
   String get localeEnglish => 'English';
 
   @override

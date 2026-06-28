@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_admin/main.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -34,33 +35,43 @@ MyContext ctx({
 Future<AppLocalizations> en() =>
     AppLocalizations.delegate.load(const Locale('en'));
 
+/// Pumps [app] under a ProviderScope (the platform overview uses Riverpod; in
+/// production main() supplies the scope around AdminApp) on a wide surface.
+Future<void> _pump(WidgetTester tester, Widget app) async {
+  tester.view.physicalSize = const Size(1200, 2200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(ProviderScope(child: app));
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('demo mode renders the existing admin shell', (tester) async {
-    await tester.pumpWidget(const AdminApp(demoMode: true));
-    await tester.pumpAndSettle();
+  testWidgets('demo mode renders the platform overview', (tester) async {
+    await _pump(tester, const AdminApp(demoMode: true));
     final l10n = await en();
-    // the minimal admin shell shows the welcome message
-    expect(find.text(l10n.welcomeMessage), findsOneWidget);
+    expect(find.text(l10n.adminOverviewTitle), findsOneWidget);
   });
 
-  testWidgets('auth mode: a platform admin reaches the admin shell', (
+  testWidgets('auth mode: a platform admin reaches the platform overview', (
     tester,
   ) async {
-    await tester.pumpWidget(
+    await _pump(
+      tester,
       AdminApp(
         demoMode: false,
         fetchContext: fetcherForContext(ctx(admin: true)),
       ),
     );
-    await tester.pumpAndSettle();
     final l10n = await en();
-    expect(find.text(l10n.welcomeMessage), findsOneWidget);
+    expect(find.text(l10n.adminOverviewTitle), findsOneWidget);
   });
 
   testWidgets(
     'auth mode: a tenant role without the platform flag is denied (even org_owner)',
     (tester) async {
-      await tester.pumpWidget(
+      await _pump(
+        tester,
         AdminApp(
           demoMode: false,
           fetchContext: fetcherForContext(
@@ -68,25 +79,24 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
       final l10n = await en();
-      expect(find.text(l10n.welcomeMessage), findsNothing);
+      expect(find.text(l10n.adminOverviewTitle), findsNothing);
       expect(find.text(l10n.authWrongRole), findsOneWidget);
     },
   );
 
   testWidgets(
-    'auth mode: a platform admin with zero memberships still reaches admin',
+    'auth mode: a platform admin with zero memberships still reaches the overview',
     (tester) async {
-      await tester.pumpWidget(
+      await _pump(
+        tester,
         AdminApp(
           demoMode: false,
           fetchContext: fetcherForContext(ctx(admin: true)),
         ),
       );
-      await tester.pumpAndSettle();
       final l10n = await en();
-      expect(find.text(l10n.welcomeMessage), findsOneWidget);
+      expect(find.text(l10n.adminOverviewTitle), findsOneWidget);
     },
   );
 }

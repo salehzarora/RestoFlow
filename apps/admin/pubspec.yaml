@@ -1,5 +1,5 @@
 name: restoflow_admin
-description: RestoFlow admin app - platform-admin app target (isolated, audited path). RF-108 Stage 4 wires the auth gate (platform-admin-only entry); no platform-admin features/data yet.
+description: RestoFlow admin app - platform-admin app target (isolated, audited path). RF-108 Stage 4 wires the auth gate (platform-admin-only entry); RF-120 adds the demo-backed platform overview (KPIs, organizations, branch health, recent activity) behind a repository seam.
 publish_to: none
 version: 0.0.1
 environment:
@@ -9,6 +9,9 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  # RF-120: the platform-admin overview is built on Riverpod (repository seam +
+  # FutureProvider), mirroring the RF-104/RF-119 owner dashboard pattern.
+  flutter_riverpod: '>=2.5.0 <3.0.0'
   restoflow_l10n:
     path: ../../packages/l10n
   restoflow_design_system:
