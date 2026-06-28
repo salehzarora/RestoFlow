@@ -1,4 +1,5 @@
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import 'kitchen_order.dart';
 
@@ -106,4 +107,25 @@ class DemoKitchenOrdersStore implements KitchenOrdersRepository {
       ),
     ];
   }
+}
+
+/// Real-mode placeholder for the kitchen-orders seam (RF-117).
+///
+/// The live KDS feed does NOT flow through this repository: in real mode the
+/// board is driven by the injected `KdsSyncSource` polling `sync_pull`
+/// (orders/order_items/order_item_modifiers; money-free per SECURITY T-003) via
+/// `KdsSyncedHome`. This [KitchenOrdersRepository] skeleton exists only so that
+/// if a real-mode build ever reaches the demo-board seam it FAILS CLOSED with a
+/// clear error instead of serving demo tickets under a real-mode label. It
+/// contacts no backend and fabricates no data; wiring is blocked on the deferred
+/// PIN/device session bridge.
+class RealKitchenOrdersRepository implements KitchenOrdersRepository {
+  const RealKitchenOrdersRepository();
+
+  @override
+  Future<List<KitchenOrderTicket>>
+  loadOrders() async => throw const RealRepoNotWiredError(
+    'kitchen-orders: real KDS data flows through the injected KdsSyncSource '
+    '(sync_pull, RF-063), blocked on a PIN/device SyncSession - not wired yet',
+  );
 }

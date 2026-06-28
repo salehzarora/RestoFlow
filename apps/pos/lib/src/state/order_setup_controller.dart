@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/demo_tables.dart';
 
@@ -66,11 +67,15 @@ final orderSetupControllerProvider =
       OrderSetupController.new,
     );
 
-/// The tables repository (RF-114). Defaults to the in-memory [DemoTablesStore];
-/// tests and the real data wiring can override this provider.
-final tablesRepositoryProvider = Provider<TablesRepository>(
-  (ref) => DemoTablesStore(),
-);
+/// The tables repository (RF-114). Selects by client runtime mode (M7): the
+/// in-memory [DemoTablesStore] in demo mode (the DEFAULT), or the
+/// [RealTablesRepository] skeleton in real mode. Tests can override either this
+/// provider or [runtimeConfigProvider] to force a mode.
+final tablesRepositoryProvider = Provider<TablesRepository>((ref) {
+  final cfg = ref.watch(runtimeConfigProvider);
+  if (cfg.isDemoMode) return DemoTablesStore();
+  return RealTablesRepository(cfg.supabase);
+});
 
 /// Loads the branch's tables for the picker. Async to mirror the future backend
 /// read; resolves immediately for the demo store.
