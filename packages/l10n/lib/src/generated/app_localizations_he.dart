@@ -428,6 +428,73 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardDemoNotice => 'נתוני הדגמה — לא משרת חי.';
 
   @override
+  String get dashboardReportsHeading => 'דוחות הבעלים';
+
+  @override
+  String get dashboardReportDayLabel => 'יום הדוח';
+
+  @override
+  String get dashboardDemoDay => 'יום הדגמה';
+
+  @override
+  String get dashboardRefresh => 'רענון';
+
+  @override
+  String get dashboardLoadingReports => 'טוען דוחות…';
+
+  @override
+  String get dashboardReportsError => 'לא ניתן לטעון דוחות.';
+
+  @override
+  String get dashboardRetry => 'נסה שוב';
+
+  @override
+  String get dashboardNoReportData => 'אין נתוני דוח ליום זה.';
+
+  @override
+  String get dashboardDemoReportsNotice =>
+      'דוחות הדגמה — מחושבים מקומית מהזמנות לדוגמה, ללא סנכרון לשרת. דיווח אמיתי מהשרת נדחה.';
+
+  @override
+  String get dashboardGrossSales => 'מכירות ברוטו';
+
+  @override
+  String get dashboardCashSales => 'מכירות במזומן';
+
+  @override
+  String get dashboardUnpaidOrders => 'הזמנות שלא שולמו';
+
+  @override
+  String get dashboardPaymentSummary => 'סיכום תשלום ומזומן';
+
+  @override
+  String get dashboardOpeningFloat => 'קופה פתיחה';
+
+  @override
+  String get dashboardExpectedDrawer => 'צפוי במגירה';
+
+  @override
+  String get dashboardCountedCash => 'מזומן שנספר';
+
+  @override
+  String get dashboardLastCashPayment => 'תשלום מזומן אחרון';
+
+  @override
+  String get dashboardPaymentMethods => 'אמצעי תשלום';
+
+  @override
+  String get dashboardPaymentMethodCash => 'מזומן';
+
+  @override
+  String get dashboardRecentOrders => 'הזמנות אחרונות';
+
+  @override
+  String get dashboardPaid => 'שולם';
+
+  @override
+  String get dashboardUnpaid => 'לא שולם';
+
+  @override
   String get authLoadingAccount => 'טוען חשבון…';
 
   @override

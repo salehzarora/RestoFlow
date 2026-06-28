@@ -1,13 +1,15 @@
-/// In-memory demo data for the RF-104 owner dashboard.
+/// The owner-report OUTPUT models for the RF-104/RF-119 dashboard.
 ///
-/// FAKE local data only — no Supabase, no report views, no backend. The field
-/// shapes mirror the real RF-075/RF-092 report views (integer `_minor` money,
-/// per-branch grain, currency code) so the demo is forward-compatible, but
-/// nothing here reads or wires those views. Money is integer MINOR units
-/// (DECISION D-007) — there is no floating-point money. Single currency (ILS).
+/// These are the immutable shapes the UI renders. They are PRODUCED by
+/// `computeOwnerReport` from a structured demo dataset (`owner_report_source`) —
+/// nothing here holds hardcoded totals. The field shapes mirror the real
+/// RF-075/RF-092 report views (integer `_minor` money, per-branch grain,
+/// currency code) so a future Supabase-backed repository can fill the same model
+/// without touching the UI. Money is integer MINOR units (DECISION D-007) —
+/// there is no floating-point money. Single currency (ILS) for the demo.
 library;
 
-/// ISO 4217 currency for the demo, locked to ILS / ₪ for RF-104.
+/// ISO 4217 currency for the demo, locked to ILS / ₪.
 const String kDemoCurrencyCode = 'ILS';
 
 /// One branch's daily sales row (mirrors `daily_branch_sales_report`).
@@ -26,8 +28,7 @@ class BranchSales {
   final String currencyCode;
 }
 
-/// One top-selling item row (illustrative demo only — there is no top-items
-/// report view in the real schema).
+/// One top-selling item row, ranked by net revenue.
 class TopItem {
   const TopItem({
     required this.name,
@@ -43,17 +44,69 @@ class TopItem {
   final String currencyCode;
 }
 
-/// An immutable, single-day owner/manager report snapshot.
+/// One recent-orders row (order number, time, type/table, status, paid flag and
+/// net total). Money is integer minor units.
+class RecentOrderRow {
+  const RecentOrderRow({
+    required this.orderNumber,
+    required this.timeLabel,
+    required this.isDineIn,
+    required this.status,
+    required this.isPaid,
+    required this.totalMinor,
+    required this.currencyCode,
+    this.tableLabel,
+  });
+
+  /// Display number (data, not localized chrome).
+  final String orderNumber;
+
+  /// Plain `HH:mm` data string.
+  final String timeLabel;
+  final bool isDineIn;
+  final String? tableLabel;
+
+  /// Canonical order status as a plain data string (e.g. `completed`).
+  final String status;
+  final bool isPaid;
+  final int totalMinor;
+  final String currencyCode;
+}
+
+/// One payment-method breakdown row (count + total). The MVP records cash only,
+/// so this honestly reports a single `cash` line.
+class PaymentMethodLine {
+  const PaymentMethodLine({
+    required this.method,
+    required this.count,
+    required this.totalMinor,
+    required this.currencyCode,
+  });
+
+  /// Canonical method key as a plain data string (e.g. `cash`).
+  final String method;
+  final int count;
+  final int totalMinor;
+  final String currencyCode;
+}
+
+/// An immutable, single-day owner/manager report. Every field is DERIVED from
+/// the source dataset by `computeOwnerReport`. Money fields are integer MINOR
+/// units (D-007); plain counts are never money.
 class DashboardReport {
   const DashboardReport({
     required this.currencyCode,
     required this.businessDateLabel,
+    required this.grossSalesMinor,
     required this.netSalesMinor,
+    required this.discountTotalMinor,
     required this.collectedMinor,
+    required this.cashSalesMinor,
+    required this.lastCashPaymentMinor,
     required this.orderCount,
     required this.completedOrderCount,
     required this.openOrderCount,
-    required this.discountTotalMinor,
+    required this.unpaidOrderCount,
     required this.voidCount,
     required this.voidTotalMinor,
     required this.openingFloatMinor,
@@ -62,6 +115,8 @@ class DashboardReport {
     required this.shiftStatus,
     required this.branches,
     required this.topItems,
+    required this.recentOrders,
+    required this.paymentMethods,
   });
 
   final String currencyCode;
@@ -70,9 +125,12 @@ class DashboardReport {
   final String businessDateLabel;
 
   // Money fields are integer MINOR units (D-007). No floats anywhere.
+  final int grossSalesMinor;
   final int netSalesMinor;
-  final int collectedMinor;
   final int discountTotalMinor;
+  final int collectedMinor;
+  final int cashSalesMinor;
+  final int lastCashPaymentMinor;
   final int voidTotalMinor;
   final int openingFloatMinor;
   final int expectedCashMinor;
@@ -82,13 +140,19 @@ class DashboardReport {
   final int orderCount;
   final int completedOrderCount;
   final int openOrderCount;
+  final int unpaidOrderCount;
   final int voidCount;
 
-  /// Current shift status as a plain data string (e.g. `open` / `reconciled`).
+  /// Current shift status as a plain data string (e.g. `open` / `closed`).
   final String shiftStatus;
 
   final List<BranchSales> branches;
   final List<TopItem> topItems;
+  final List<RecentOrderRow> recentOrders;
+  final List<PaymentMethodLine> paymentMethods;
+
+  /// True when there is nothing to report (drives the empty state).
+  bool get isEmpty => orderCount == 0 && recentOrders.isEmpty;
 
   /// Cash reconciliation variance = counted - expected (signed, integer minor).
   int get varianceMinor => countedCashMinor - expectedCashMinor;
@@ -98,68 +162,3 @@ class DashboardReport {
   int get avgOrderValueMinor =>
       orderCount == 0 ? 0 : netSalesMinor ~/ orderCount;
 }
-
-/// The single demo report rendered by the dashboard (in-memory; one org, three
-/// ILS branches). All money is integer minor units.
-DashboardReport demoDashboardReport() => const DashboardReport(
-  currencyCode: kDemoCurrencyCode,
-  businessDateLabel: '2026-06-24',
-  netSalesMinor: 1234500, // ₪12,345.00
-  collectedMinor: 1234500,
-  orderCount: 87,
-  completedOrderCount: 81,
-  openOrderCount: 6,
-  discountTotalMinor: 48000, // ₪480.00
-  voidCount: 3,
-  voidTotalMinor: 21500, // ₪215.00
-  openingFloatMinor: 50000, // ₪500.00
-  expectedCashMinor: 1284500,
-  countedCashMinor: 1283200, // variance -₪13.00
-  shiftStatus: 'open',
-  branches: [
-    BranchSales(
-      branchName: 'Downtown',
-      orderCount: 39,
-      netSalesMinor: 612300,
-      currencyCode: kDemoCurrencyCode,
-    ),
-    BranchSales(
-      branchName: 'Seaside',
-      orderCount: 31,
-      netSalesMinor: 428900,
-      currencyCode: kDemoCurrencyCode,
-    ),
-    BranchSales(
-      branchName: 'Airport',
-      orderCount: 17,
-      netSalesMinor: 193300,
-      currencyCode: kDemoCurrencyCode,
-    ),
-  ],
-  topItems: [
-    TopItem(
-      name: 'Classic Burger',
-      quantity: 64,
-      lineRevenueMinor: 268800,
-      currencyCode: kDemoCurrencyCode,
-    ),
-    TopItem(
-      name: 'Margherita Pizza',
-      quantity: 41,
-      lineRevenueMinor: 229600,
-      currencyCode: kDemoCurrencyCode,
-    ),
-    TopItem(
-      name: 'Fresh Lemonade',
-      quantity: 58,
-      lineRevenueMinor: 81200,
-      currencyCode: kDemoCurrencyCode,
-    ),
-    TopItem(
-      name: 'French Fries',
-      quantity: 73,
-      lineRevenueMinor: 116800,
-      currencyCode: kDemoCurrencyCode,
-    ),
-  ],
-);

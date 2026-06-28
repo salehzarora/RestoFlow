@@ -431,6 +431,73 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardDemoNotice => 'بيانات تجريبية — ليست من خادم مباشر.';
 
   @override
+  String get dashboardReportsHeading => 'تقارير المالك';
+
+  @override
+  String get dashboardReportDayLabel => 'يوم التقرير';
+
+  @override
+  String get dashboardDemoDay => 'يوم تجريبي';
+
+  @override
+  String get dashboardRefresh => 'تحديث';
+
+  @override
+  String get dashboardLoadingReports => 'جارٍ تحميل التقارير…';
+
+  @override
+  String get dashboardReportsError => 'تعذّر تحميل التقارير.';
+
+  @override
+  String get dashboardRetry => 'إعادة المحاولة';
+
+  @override
+  String get dashboardNoReportData => 'لا توجد بيانات تقرير لهذا اليوم.';
+
+  @override
+  String get dashboardDemoReportsNotice =>
+      'تقارير تجريبية — محسوبة محليًا من طلبات نموذجية، وغير متزامنة مع خادم. تقارير الخادم الحقيقية مؤجلة.';
+
+  @override
+  String get dashboardGrossSales => 'إجمالي المبيعات';
+
+  @override
+  String get dashboardCashSales => 'المبيعات النقدية';
+
+  @override
+  String get dashboardUnpaidOrders => 'الطلبات غير المدفوعة';
+
+  @override
+  String get dashboardPaymentSummary => 'ملخص الدفع والنقدية';
+
+  @override
+  String get dashboardOpeningFloat => 'الرصيد الافتتاحي';
+
+  @override
+  String get dashboardExpectedDrawer => 'المتوقع في الدرج';
+
+  @override
+  String get dashboardCountedCash => 'النقد المعدود';
+
+  @override
+  String get dashboardLastCashPayment => 'آخر دفعة نقدية';
+
+  @override
+  String get dashboardPaymentMethods => 'طرق الدفع';
+
+  @override
+  String get dashboardPaymentMethodCash => 'نقدًا';
+
+  @override
+  String get dashboardRecentOrders => 'أحدث الطلبات';
+
+  @override
+  String get dashboardPaid => 'مدفوع';
+
+  @override
+  String get dashboardUnpaid => 'غير مدفوع';
+
+  @override
   String get authLoadingAccount => 'جارٍ تحميل الحساب…';
 
   @override
