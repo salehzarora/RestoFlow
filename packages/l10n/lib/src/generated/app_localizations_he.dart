@@ -319,6 +319,46 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posPrintReceiptDemo => 'הדפסת קבלה (הדגמה)';
 
   @override
+  String get printPreviewAction => 'תצוגת הדפסה';
+
+  @override
+  String get printPreviewPrint => 'הדפס';
+
+  @override
+  String get printPreviewClose => 'סגור';
+
+  @override
+  String get printPreviewHint =>
+      'השתמש בהדפסת הדפדפן (Ctrl+P) כדי להדפיס תצוגה זו';
+
+  @override
+  String get receiptPreviewTitle => 'תצוגת הדפסת קבלה';
+
+  @override
+  String get receiptDemoRestaurantName => 'מסעדת RestoFlow להדגמה';
+
+  @override
+  String get kdsPreviewTicketAction => 'תצוגת כרטיס';
+
+  @override
+  String get kdsTicketPreviewTitle => 'תצוגת הדפסת כרטיס מטבח';
+
+  @override
+  String get kdsElapsedLabel => 'שחלף';
+
+  @override
+  String get languageSelectorTooltip => 'שפה';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageArabic => 'العربية';
+
+  @override
+  String get languageHebrew => 'עברית';
+
+  @override
   String get posShiftDemoName => 'משמרת בוקר להדגמה';
 
   @override

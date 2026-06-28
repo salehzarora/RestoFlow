@@ -404,6 +404,58 @@
   "@posPrintReceiptDemo": {
     "description": "POS disabled demo action that would print the receipt (no printer integration)."
   },
+  "printPreviewAction": "Print preview",
+  "@printPreviewAction": {
+    "description": "Action that opens the browser-style print preview (POS receipt)."
+  },
+  "printPreviewPrint": "Print",
+  "@printPreviewPrint": {
+    "description": "Print-preview action that triggers the browser print (web) of the preview."
+  },
+  "printPreviewClose": "Close",
+  "@printPreviewClose": {
+    "description": "Print-preview action that closes the preview dialog."
+  },
+  "printPreviewHint": "Use your browser's print (Ctrl+P) to print this preview",
+  "@printPreviewHint": {
+    "description": "Honest hint in the print preview: it is a browser print preview, not a hardware printer."
+  },
+  "receiptPreviewTitle": "Receipt preview",
+  "@receiptPreviewTitle": {
+    "description": "Title of the POS receipt print-preview dialog."
+  },
+  "receiptDemoRestaurantName": "RestoFlow Demo Restaurant",
+  "@receiptDemoRestaurantName": {
+    "description": "Demo restaurant name printed at the top of the receipt preview."
+  },
+  "kdsPreviewTicketAction": "Preview ticket",
+  "@kdsPreviewTicketAction": {
+    "description": "KDS action on a kitchen order card that opens the kitchen-ticket print preview."
+  },
+  "kdsTicketPreviewTitle": "Kitchen ticket preview",
+  "@kdsTicketPreviewTitle": {
+    "description": "Title of the KDS kitchen-ticket print-preview dialog."
+  },
+  "kdsElapsedLabel": "Elapsed",
+  "@kdsElapsedLabel": {
+    "description": "KDS label preceding the elapsed time since an order was submitted."
+  },
+  "languageSelectorTooltip": "Language",
+  "@languageSelectorTooltip": {
+    "description": "Tooltip for the EN/AR/HE language selector in the app bar."
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "Language selector option: English (endonym, same in every locale)."
+  },
+  "languageArabic": "العربية",
+  "@languageArabic": {
+    "description": "Language selector option: Arabic (endonym, same in every locale)."
+  },
+  "languageHebrew": "עברית",
+  "@languageHebrew": {
+    "description": "Language selector option: Hebrew (endonym, same in every locale)."
+  },
   "posShiftDemoName": "Demo morning shift",
   "@posShiftDemoName": {
     "description": "POS demo shift name shown in the shift/cash-drawer context bar."

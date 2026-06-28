@@ -6,6 +6,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/payment.dart';
 import '../format/money_format.dart';
 import '../state/submitted_order_view.dart';
+import 'receipt_print_preview.dart';
 
 /// A receipt-style preview card (RF-116) for a paid order: provisional receipt
 /// number, Paid status, order meta, itemised lines, totals, cash received +
@@ -115,10 +116,14 @@ class ReceiptPreview extends StatelessWidget {
             _Note(message: l10n.posReceiptDemoNote),
             const SizedBox(height: RestoflowSpacing.sm),
             OutlinedButton.icon(
-              key: const Key('print-receipt-button'),
-              onPressed: null, // demo only — no printer integration
+              key: const Key('open-print-preview-button'),
+              onPressed: () => ReceiptPrintPreview.show(
+                context,
+                order: order,
+                payment: payment,
+              ),
               icon: const Icon(Icons.print_outlined, size: 18),
-              label: Text(l10n.posPrintReceiptDemo),
+              label: Text(l10n.printPreviewAction),
             ),
           ],
         ),

@@ -322,6 +322,46 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posPrintReceiptDemo => 'طباعة الإيصال (تجريبي)';
 
   @override
+  String get printPreviewAction => 'معاينة الطباعة';
+
+  @override
+  String get printPreviewPrint => 'طباعة';
+
+  @override
+  String get printPreviewClose => 'إغلاق';
+
+  @override
+  String get printPreviewHint =>
+      'استخدم طباعة المتصفح (Ctrl+P) لطباعة هذه المعاينة';
+
+  @override
+  String get receiptPreviewTitle => 'معاينة الإيصال';
+
+  @override
+  String get receiptDemoRestaurantName => 'مطعم RestoFlow التجريبي';
+
+  @override
+  String get kdsPreviewTicketAction => 'معاينة التذكرة';
+
+  @override
+  String get kdsTicketPreviewTitle => 'معاينة تذكرة المطبخ';
+
+  @override
+  String get kdsElapsedLabel => 'المنقضي';
+
+  @override
+  String get languageSelectorTooltip => 'اللغة';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageArabic => 'العربية';
+
+  @override
+  String get languageHebrew => 'עברית';
+
+  @override
   String get posShiftDemoName => 'وردية صباحية تجريبية';
 
   @override

@@ -320,6 +320,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posPrintReceiptDemo => 'Print receipt (demo)';
 
   @override
+  String get printPreviewAction => 'Print preview';
+
+  @override
+  String get printPreviewPrint => 'Print';
+
+  @override
+  String get printPreviewClose => 'Close';
+
+  @override
+  String get printPreviewHint =>
+      'Use your browser\'s print (Ctrl+P) to print this preview';
+
+  @override
+  String get receiptPreviewTitle => 'Receipt preview';
+
+  @override
+  String get receiptDemoRestaurantName => 'RestoFlow Demo Restaurant';
+
+  @override
+  String get kdsPreviewTicketAction => 'Preview ticket';
+
+  @override
+  String get kdsTicketPreviewTitle => 'Kitchen ticket preview';
+
+  @override
+  String get kdsElapsedLabel => 'Elapsed';
+
+  @override
+  String get languageSelectorTooltip => 'Language';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageArabic => 'العربية';
+
+  @override
+  String get languageHebrew => 'עברית';
+
+  @override
   String get posShiftDemoName => 'Demo morning shift';
 
   @override

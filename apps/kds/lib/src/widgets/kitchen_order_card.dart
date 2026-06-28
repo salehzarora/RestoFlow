@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kitchen_order.dart';
 import 'kds_status_chip.dart';
+import 'kitchen_ticket_print_preview.dart';
 
 /// A large, kitchen-readable order ticket card (RF-117): order number + status
 /// chip, order-type / table / elapsed-time chips, the itemised lines with
@@ -61,6 +62,17 @@ class KitchenOrderCard extends StatelessWidget {
                 ),
                 const SizedBox(width: RestoflowSpacing.sm),
                 KdsStatusChip(status: ticket.status),
+                IconButton(
+                  key: Key('preview-ticket-${ticket.ticketId}'),
+                  onPressed: () => KitchenTicketPrintPreview.show(
+                    context,
+                    ticket: ticket,
+                    now: now,
+                  ),
+                  icon: const Icon(Icons.print_outlined),
+                  tooltip: l10n.kdsPreviewTicketAction,
+                  visualDensity: VisualDensity.compact,
+                ),
               ],
             ),
             const SizedBox(height: RestoflowSpacing.sm),
