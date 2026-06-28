@@ -295,6 +295,110 @@
     "description": "POS cart-header chip showing how many submitted orders are still queued for sync.",
     "placeholders": { "count": { "type": "int" } }
   },
+  "posPayCash": "Pay Cash",
+  "@posPayCash": {
+    "description": "POS action on the order confirmation that opens the cash-payment sheet."
+  },
+  "posPaymentTitle": "Cash payment",
+  "@posPaymentTitle": {
+    "description": "POS heading of the cash-payment sheet."
+  },
+  "posAmountDue": "Amount due",
+  "@posAmountDue": {
+    "description": "POS label for the order total the customer must pay."
+  },
+  "posCashReceived": "Cash received",
+  "@posCashReceived": {
+    "description": "POS label for the cash amount handed over by the customer."
+  },
+  "posCashExact": "Exact",
+  "@posCashExact": {
+    "description": "POS quick-cash button that fills the cash field with the exact amount due."
+  },
+  "posChangeDue": "Change due",
+  "@posChangeDue": {
+    "description": "POS label for the change to give back (cash received minus amount due)."
+  },
+  "posConfirmPayment": "Confirm payment",
+  "@posConfirmPayment": {
+    "description": "POS action that records the cash payment and marks the order paid."
+  },
+  "posCashInvalid": "Enter a valid amount",
+  "@posCashInvalid": {
+    "description": "POS validation message when the typed cash amount is empty or malformed."
+  },
+  "posCashInsufficient": "Cash received must cover the amount due",
+  "@posCashInsufficient": {
+    "description": "POS validation message when the cash received is less than the amount due."
+  },
+  "posPaidChip": "Paid",
+  "@posPaidChip": {
+    "description": "POS status chip shown on a paid order."
+  },
+  "posPaymentMethodLabel": "Payment method",
+  "@posPaymentMethodLabel": {
+    "description": "POS receipt label preceding the payment method."
+  },
+  "posPaymentMethodCash": "Cash",
+  "@posPaymentMethodCash": {
+    "description": "POS payment method value: cash."
+  },
+  "posPaidAtLabel": "Paid at",
+  "@posPaidAtLabel": {
+    "description": "POS receipt label preceding the payment timestamp."
+  },
+  "posReceiptTitle": "Receipt",
+  "@posReceiptTitle": {
+    "description": "POS heading of the receipt preview card."
+  },
+  "posReceiptNumberLabel": "Receipt no.",
+  "@posReceiptNumberLabel": {
+    "description": "POS receipt label preceding the receipt number/reference."
+  },
+  "posReceiptTotal": "Total",
+  "@posReceiptTotal": {
+    "description": "POS receipt label for the order total."
+  },
+  "posReceiptProvisionalNote": "Provisional — reconciled to a server receipt on sync",
+  "@posReceiptProvisionalNote": {
+    "description": "POS note that the receipt number is a local provisional id, reconciled to a server number on sync."
+  },
+  "posReceiptDemoNote": "Demo receipt — no printer connected",
+  "@posReceiptDemoNote": {
+    "description": "POS note that the receipt is a demo preview and nothing is printed."
+  },
+  "posPrintReceiptDemo": "Print receipt (demo)",
+  "@posPrintReceiptDemo": {
+    "description": "POS disabled demo action that would print the receipt (no printer integration)."
+  },
+  "posShiftDemoName": "Demo morning shift",
+  "@posShiftDemoName": {
+    "description": "POS demo shift name shown in the shift/cash-drawer context bar."
+  },
+  "posDrawerLabel": "Cash drawer",
+  "@posDrawerLabel": {
+    "description": "POS label for the cash drawer in the shift context bar."
+  },
+  "posDrawerOpen": "Open",
+  "@posDrawerOpen": {
+    "description": "POS cash-drawer state: open/active."
+  },
+  "posDrawerClosed": "Closed",
+  "@posDrawerClosed": {
+    "description": "POS cash-drawer state: closed."
+  },
+  "posCashInDrawer": "Cash in drawer",
+  "@posCashInDrawer": {
+    "description": "POS label for the running cash total in the drawer."
+  },
+  "posLastCashPayment": "Last cash payment",
+  "@posLastCashPayment": {
+    "description": "POS label for the amount of the most recent cash payment."
+  },
+  "posShiftDemoNote": "Demo shift — not synced",
+  "@posShiftDemoNote": {
+    "description": "POS honest note that the shift/cash-drawer context is a local demo and not synced."
+  },
   "dashboardOverviewHeading": "Today's overview",
   "@dashboardOverviewHeading": {
     "description": "Owner dashboard section heading above the daily KPI cards."

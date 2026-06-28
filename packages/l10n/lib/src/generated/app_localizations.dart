@@ -538,6 +538,162 @@ abstract class AppLocalizations {
   /// **'{count} pending sync'**
   String posSyncPendingCount(int count);
 
+  /// POS action on the order confirmation that opens the cash-payment sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay Cash'**
+  String get posPayCash;
+
+  /// POS heading of the cash-payment sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash payment'**
+  String get posPaymentTitle;
+
+  /// POS label for the order total the customer must pay.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get posAmountDue;
+
+  /// POS label for the cash amount handed over by the customer.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash received'**
+  String get posCashReceived;
+
+  /// POS quick-cash button that fills the cash field with the exact amount due.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact'**
+  String get posCashExact;
+
+  /// POS label for the change to give back (cash received minus amount due).
+  ///
+  /// In en, this message translates to:
+  /// **'Change due'**
+  String get posChangeDue;
+
+  /// POS action that records the cash payment and marks the order paid.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm payment'**
+  String get posConfirmPayment;
+
+  /// POS validation message when the typed cash amount is empty or malformed.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid amount'**
+  String get posCashInvalid;
+
+  /// POS validation message when the cash received is less than the amount due.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash received must cover the amount due'**
+  String get posCashInsufficient;
+
+  /// POS status chip shown on a paid order.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get posPaidChip;
+
+  /// POS receipt label preceding the payment method.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment method'**
+  String get posPaymentMethodLabel;
+
+  /// POS payment method value: cash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get posPaymentMethodCash;
+
+  /// POS receipt label preceding the payment timestamp.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid at'**
+  String get posPaidAtLabel;
+
+  /// POS heading of the receipt preview card.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get posReceiptTitle;
+
+  /// POS receipt label preceding the receipt number/reference.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt no.'**
+  String get posReceiptNumberLabel;
+
+  /// POS receipt label for the order total.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get posReceiptTotal;
+
+  /// POS note that the receipt number is a local provisional id, reconciled to a server number on sync.
+  ///
+  /// In en, this message translates to:
+  /// **'Provisional — reconciled to a server receipt on sync'**
+  String get posReceiptProvisionalNote;
+
+  /// POS note that the receipt is a demo preview and nothing is printed.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo receipt — no printer connected'**
+  String get posReceiptDemoNote;
+
+  /// POS disabled demo action that would print the receipt (no printer integration).
+  ///
+  /// In en, this message translates to:
+  /// **'Print receipt (demo)'**
+  String get posPrintReceiptDemo;
+
+  /// POS demo shift name shown in the shift/cash-drawer context bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo morning shift'**
+  String get posShiftDemoName;
+
+  /// POS label for the cash drawer in the shift context bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash drawer'**
+  String get posDrawerLabel;
+
+  /// POS cash-drawer state: open/active.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get posDrawerOpen;
+
+  /// POS cash-drawer state: closed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get posDrawerClosed;
+
+  /// POS label for the running cash total in the drawer.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash in drawer'**
+  String get posCashInDrawer;
+
+  /// POS label for the amount of the most recent cash payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Last cash payment'**
+  String get posLastCashPayment;
+
+  /// POS honest note that the shift/cash-drawer context is a local demo and not synced.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo shift — not synced'**
+  String get posShiftDemoNote;
+
   /// Owner dashboard section heading above the daily KPI cards.
   ///
   /// In en, this message translates to:
