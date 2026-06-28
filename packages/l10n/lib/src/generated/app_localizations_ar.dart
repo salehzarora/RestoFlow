@@ -238,6 +238,85 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get posPayCash => 'الدفع نقدًا';
+
+  @override
+  String get posPaymentTitle => 'دفع نقدي';
+
+  @override
+  String get posAmountDue => 'المبلغ المستحق';
+
+  @override
+  String get posCashReceived => 'النقد المستلم';
+
+  @override
+  String get posCashExact => 'بالضبط';
+
+  @override
+  String get posChangeDue => 'الباقي';
+
+  @override
+  String get posConfirmPayment => 'تأكيد الدفع';
+
+  @override
+  String get posCashInvalid => 'أدخل مبلغًا صالحًا';
+
+  @override
+  String get posCashInsufficient => 'يجب أن يغطي النقد المستلم المبلغ المستحق';
+
+  @override
+  String get posPaidChip => 'مدفوع';
+
+  @override
+  String get posPaymentMethodLabel => 'طريقة الدفع';
+
+  @override
+  String get posPaymentMethodCash => 'نقدًا';
+
+  @override
+  String get posPaidAtLabel => 'وقت الدفع';
+
+  @override
+  String get posReceiptTitle => 'إيصال';
+
+  @override
+  String get posReceiptNumberLabel => 'رقم الإيصال';
+
+  @override
+  String get posReceiptTotal => 'الإجمالي';
+
+  @override
+  String get posReceiptProvisionalNote =>
+      'مؤقّت — تتم مطابقته مع إيصال الخادم عند المزامنة';
+
+  @override
+  String get posReceiptDemoNote => 'إيصال تجريبي — لا توجد طابعة متصلة';
+
+  @override
+  String get posPrintReceiptDemo => 'طباعة الإيصال (تجريبي)';
+
+  @override
+  String get posShiftDemoName => 'وردية صباحية تجريبية';
+
+  @override
+  String get posDrawerLabel => 'درج النقد';
+
+  @override
+  String get posDrawerOpen => 'مفتوح';
+
+  @override
+  String get posDrawerClosed => 'مغلق';
+
+  @override
+  String get posCashInDrawer => 'النقد في الدرج';
+
+  @override
+  String get posLastCashPayment => 'آخر دفعة نقدية';
+
+  @override
+  String get posShiftDemoNote => 'وردية تجريبية — غير متزامنة';
+
+  @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
 
   @override

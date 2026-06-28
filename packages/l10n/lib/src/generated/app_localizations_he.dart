@@ -236,6 +236,84 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get posPayCash => 'תשלום במזומן';
+
+  @override
+  String get posPaymentTitle => 'תשלום מזומן';
+
+  @override
+  String get posAmountDue => 'סכום לתשלום';
+
+  @override
+  String get posCashReceived => 'מזומן שהתקבל';
+
+  @override
+  String get posCashExact => 'מדויק';
+
+  @override
+  String get posChangeDue => 'עודף';
+
+  @override
+  String get posConfirmPayment => 'אישור תשלום';
+
+  @override
+  String get posCashInvalid => 'הזן סכום תקין';
+
+  @override
+  String get posCashInsufficient => 'המזומן שהתקבל חייב לכסות את הסכום לתשלום';
+
+  @override
+  String get posPaidChip => 'שולם';
+
+  @override
+  String get posPaymentMethodLabel => 'אמצעי תשלום';
+
+  @override
+  String get posPaymentMethodCash => 'מזומן';
+
+  @override
+  String get posPaidAtLabel => 'שולם בשעה';
+
+  @override
+  String get posReceiptTitle => 'קבלה';
+
+  @override
+  String get posReceiptNumberLabel => 'מס׳ קבלה';
+
+  @override
+  String get posReceiptTotal => 'סך הכול';
+
+  @override
+  String get posReceiptProvisionalNote => 'זמני — יותאם לקבלת שרת בעת סנכרון';
+
+  @override
+  String get posReceiptDemoNote => 'קבלת הדגמה — אין מדפסת מחוברת';
+
+  @override
+  String get posPrintReceiptDemo => 'הדפסת קבלה (הדגמה)';
+
+  @override
+  String get posShiftDemoName => 'משמרת בוקר להדגמה';
+
+  @override
+  String get posDrawerLabel => 'מגירת מזומן';
+
+  @override
+  String get posDrawerOpen => 'פתוחה';
+
+  @override
+  String get posDrawerClosed => 'סגורה';
+
+  @override
+  String get posCashInDrawer => 'מזומן במגירה';
+
+  @override
+  String get posLastCashPayment => 'תשלום מזומן אחרון';
+
+  @override
+  String get posShiftDemoNote => 'משמרת הדגמה — לא מסונכרנת';
+
+  @override
   String get dashboardOverviewHeading => 'סקירת היום';
 
   @override

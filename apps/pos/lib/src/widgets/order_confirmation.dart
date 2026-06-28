@@ -7,7 +7,10 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/order_submission.dart';
 import '../format/money_format.dart';
 import '../state/outbox_controller.dart';
+import '../state/payment_controller.dart';
 import '../state/submitted_order_view.dart';
+import 'cash_payment_sheet.dart';
+import 'receipt_preview.dart';
 
 /// In-place confirmation shown inside the cart panel after a local demo submit
 /// (RF-101): success header, demo order number, a "Submitted" status chip, the
@@ -35,6 +38,11 @@ class OrderConfirmation extends ConsumerWidget {
     final entries = ref.watch(outboxControllerProvider);
     final entry = _entryForId(entries, order.outboxEntryId);
     final outbox = ref.read(outboxControllerProvider.notifier);
+
+    // RF-116: the recorded cash payment for this order, or null if unpaid.
+    final payment = ref
+        .watch(paymentControllerProvider)
+        .paymentFor(order.orderNumber);
 
     return Material(
       color: theme.colorScheme.surfaceContainerLow,
@@ -73,8 +81,14 @@ class OrderConfirmation extends ConsumerWidget {
                         const SizedBox(height: RestoflowSpacing.sm),
                         Align(
                           alignment: AlignmentDirectional.centerStart,
-                          child: _StatusChip(
-                            label: l10n.posOrderStatusSubmitted,
+                          child: Wrap(
+                            spacing: RestoflowSpacing.sm,
+                            runSpacing: RestoflowSpacing.xs,
+                            children: [
+                              _StatusChip(label: l10n.posOrderStatusSubmitted),
+                              if (payment != null)
+                                _PaidStatusChip(label: l10n.posPaidChip),
+                            ],
                           ),
                         ),
                         const SizedBox(height: RestoflowSpacing.sm),
@@ -95,27 +109,30 @@ class OrderConfirmation extends ConsumerWidget {
                       : null,
                 ),
                 const SizedBox(height: RestoflowSpacing.md),
-                for (final line in order.lines) _ConfirmationLine(line: line),
-                const Divider(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      l10n.posCartSubtotal,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    Text(
-                      subtotalText,
-                      key: const Key('confirmation-subtotal'),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.primary,
+                if (payment == null) ...[
+                  for (final line in order.lines) _ConfirmationLine(line: line),
+                  const Divider(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        l10n.posCartSubtotal,
+                        style: theme.textTheme.titleMedium,
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: RestoflowSpacing.md),
-                _DemoNotice(message: l10n.posDemoOrderNotice),
+                      Text(
+                        subtotalText,
+                        key: const Key('confirmation-subtotal'),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: RestoflowSpacing.md),
+                  _DemoNotice(message: l10n.posDemoOrderNotice),
+                ] else
+                  ReceiptPreview(order: order, payment: payment),
               ],
             ),
           ),
@@ -124,17 +141,49 @@ class OrderConfirmation extends ConsumerWidget {
             padding: const EdgeInsets.all(RestoflowSpacing.lg),
             child: SafeArea(
               top: false,
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onNewOrder,
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.posNewOrder),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                  ),
-                ),
-              ),
+              child: payment == null
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            key: const Key('pay-cash-button'),
+                            onPressed: () => CashPaymentSheet.show(
+                              context,
+                              orderNumber: order.orderNumber,
+                              amountMinor: order.subtotalMinor,
+                              currencyCode: order.currencyCode,
+                            ),
+                            icon: const Icon(Icons.payments_outlined),
+                            label: Text(l10n.posPayCash),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(52),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: RestoflowSpacing.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton.icon(
+                            onPressed: onNewOrder,
+                            icon: const Icon(Icons.add),
+                            label: Text(l10n.posNewOrder),
+                          ),
+                        ),
+                      ],
+                    )
+                  : SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onNewOrder,
+                        icon: const Icon(Icons.add),
+                        label: Text(l10n.posNewOrder),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                        ),
+                      ),
+                    ),
             ),
           ),
         ],
@@ -475,6 +524,47 @@ class _SyncChip extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: onColor,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A green "Paid" status chip (RF-116) shown on the order card once a cash
+/// payment is recorded.
+class _PaidStatusChip extends StatelessWidget {
+  const _PaidStatusChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.md,
+        vertical: RestoflowSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.check_circle,
+            size: 16,
+            color: theme.colorScheme.onPrimary,
+          ),
+          const SizedBox(width: RestoflowSpacing.xs),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],

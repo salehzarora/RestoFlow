@@ -11,6 +11,7 @@ import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
 import 'order_confirmation.dart';
 import 'order_setup_section.dart';
+import 'shift_context_bar.dart';
 
 /// The live cart/order panel: a header with item count + clear, the list of
 /// cart lines with quantity steppers + remove, and a footer with the subtotal
@@ -32,77 +33,86 @@ class CartPanel extends ConsumerWidget {
     final setupController = ref.read(orderSetupControllerProvider.notifier);
 
     final submittedOrder = cart.submittedOrder;
+    final Widget body;
     if (submittedOrder != null) {
-      return OrderConfirmation(
+      body = OrderConfirmation(
         order: submittedOrder,
         onNewOrder: () {
           controller.startNewOrder();
           setupController.reset();
         },
       );
+    } else {
+      final canSend = !cart.isEmpty && setup.isReadyToSubmit;
+      final pendingSync = ref
+          .watch(outboxControllerProvider)
+          .where((e) => e.syncState.isPending)
+          .length;
+
+      body = Material(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        child: Column(
+          children: [
+            _CartHeader(
+              l10n: l10n,
+              itemCount: cart.itemCount,
+              pendingSync: pendingSync,
+              onClear: cart.isEmpty ? null : controller.clear,
+            ),
+            const Divider(height: 1),
+            const OrderSetupSection(),
+            const Divider(height: 1),
+            Expanded(
+              child: cart.isEmpty
+                  ? _EmptyCart(message: l10n.posCartEmpty)
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: RestoflowSpacing.sm,
+                      ),
+                      itemCount: cart.lines.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final line = cart.lines[index];
+                        return _CartLineTile(
+                          line: line,
+                          l10n: l10n,
+                          onIncrease: () =>
+                              controller.increaseQuantity(line.lineId),
+                          onDecrease: () =>
+                              controller.decreaseQuantity(line.lineId),
+                          onRemove: () => controller.removeLine(line.lineId),
+                        );
+                      },
+                    ),
+            ),
+            _CartFooter(
+              l10n: l10n,
+              subtotalText: MoneyFormatter.format(cart.subtotal),
+              orderType: setup.orderType,
+              tableLabel: setup.assignedTable?.label,
+              onSend: canSend
+                  ? () => _submitOrder(
+                      ref: ref,
+                      context: context,
+                      cart: cart,
+                      setup: setup,
+                      cartController: controller,
+                      setupController: setupController,
+                      l10n: l10n,
+                    )
+                  : null,
+            ),
+          ],
+        ),
+      );
     }
 
-    final canSend = !cart.isEmpty && setup.isReadyToSubmit;
-    final pendingSync = ref
-        .watch(outboxControllerProvider)
-        .where((e) => e.syncState.isPending)
-        .length;
-
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      child: Column(
-        children: [
-          _CartHeader(
-            l10n: l10n,
-            itemCount: cart.itemCount,
-            pendingSync: pendingSync,
-            onClear: cart.isEmpty ? null : controller.clear,
-          ),
-          const Divider(height: 1),
-          const OrderSetupSection(),
-          const Divider(height: 1),
-          Expanded(
-            child: cart.isEmpty
-                ? _EmptyCart(message: l10n.posCartEmpty)
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: RestoflowSpacing.sm,
-                    ),
-                    itemCount: cart.lines.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final line = cart.lines[index];
-                      return _CartLineTile(
-                        line: line,
-                        l10n: l10n,
-                        onIncrease: () =>
-                            controller.increaseQuantity(line.lineId),
-                        onDecrease: () =>
-                            controller.decreaseQuantity(line.lineId),
-                        onRemove: () => controller.removeLine(line.lineId),
-                      );
-                    },
-                  ),
-          ),
-          _CartFooter(
-            l10n: l10n,
-            subtotalText: MoneyFormatter.format(cart.subtotal),
-            orderType: setup.orderType,
-            tableLabel: setup.assignedTable?.label,
-            onSend: canSend
-                ? () => _submitOrder(
-                    ref: ref,
-                    context: context,
-                    cart: cart,
-                    setup: setup,
-                    cartController: controller,
-                    setupController: setupController,
-                    l10n: l10n,
-                  )
-                : null,
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        const ShiftContextBar(),
+        const Divider(height: 1),
+        Expanded(child: body),
+      ],
     );
   }
 }

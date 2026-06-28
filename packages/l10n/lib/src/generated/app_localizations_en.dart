@@ -236,6 +236,85 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get posPayCash => 'Pay Cash';
+
+  @override
+  String get posPaymentTitle => 'Cash payment';
+
+  @override
+  String get posAmountDue => 'Amount due';
+
+  @override
+  String get posCashReceived => 'Cash received';
+
+  @override
+  String get posCashExact => 'Exact';
+
+  @override
+  String get posChangeDue => 'Change due';
+
+  @override
+  String get posConfirmPayment => 'Confirm payment';
+
+  @override
+  String get posCashInvalid => 'Enter a valid amount';
+
+  @override
+  String get posCashInsufficient => 'Cash received must cover the amount due';
+
+  @override
+  String get posPaidChip => 'Paid';
+
+  @override
+  String get posPaymentMethodLabel => 'Payment method';
+
+  @override
+  String get posPaymentMethodCash => 'Cash';
+
+  @override
+  String get posPaidAtLabel => 'Paid at';
+
+  @override
+  String get posReceiptTitle => 'Receipt';
+
+  @override
+  String get posReceiptNumberLabel => 'Receipt no.';
+
+  @override
+  String get posReceiptTotal => 'Total';
+
+  @override
+  String get posReceiptProvisionalNote =>
+      'Provisional — reconciled to a server receipt on sync';
+
+  @override
+  String get posReceiptDemoNote => 'Demo receipt — no printer connected';
+
+  @override
+  String get posPrintReceiptDemo => 'Print receipt (demo)';
+
+  @override
+  String get posShiftDemoName => 'Demo morning shift';
+
+  @override
+  String get posDrawerLabel => 'Cash drawer';
+
+  @override
+  String get posDrawerOpen => 'Open';
+
+  @override
+  String get posDrawerClosed => 'Closed';
+
+  @override
+  String get posCashInDrawer => 'Cash in drawer';
+
+  @override
+  String get posLastCashPayment => 'Last cash payment';
+
+  @override
+  String get posShiftDemoNote => 'Demo shift — not synced';
+
+  @override
   String get dashboardOverviewHeading => 'Today\'s overview';
 
   @override
