@@ -548,6 +548,94 @@
   "@dashboardDemoNotice": {
     "description": "Owner dashboard banner clarifying the figures are in-memory demo data, not live."
   },
+  "dashboardReportsHeading": "Owner reports",
+  "@dashboardReportsHeading": {
+    "description": "Owner dashboard reports section heading above the day context and KPI cards."
+  },
+  "dashboardReportDayLabel": "Report day",
+  "@dashboardReportDayLabel": {
+    "description": "Owner dashboard label preceding the business day a report covers."
+  },
+  "dashboardDemoDay": "Demo day",
+  "@dashboardDemoDay": {
+    "description": "Owner dashboard pill clarifying the report day is a demo day, not a live date."
+  },
+  "dashboardRefresh": "Refresh",
+  "@dashboardRefresh": {
+    "description": "Owner dashboard action that reloads the report."
+  },
+  "dashboardLoadingReports": "Loading reports…",
+  "@dashboardLoadingReports": {
+    "description": "Owner dashboard message shown while the report is loading."
+  },
+  "dashboardReportsError": "Couldn't load reports.",
+  "@dashboardReportsError": {
+    "description": "Owner dashboard message shown when the report fails to load."
+  },
+  "dashboardRetry": "Retry",
+  "@dashboardRetry": {
+    "description": "Owner dashboard action that retries loading the report after an error."
+  },
+  "dashboardNoReportData": "No report data for this day.",
+  "@dashboardNoReportData": {
+    "description": "Owner dashboard message shown when there is no report data for the day."
+  },
+  "dashboardDemoReportsNotice": "Demo reports — calculated locally from sample orders, not synced to a backend. Real backend reporting is deferred.",
+  "@dashboardDemoReportsNotice": {
+    "description": "Owner dashboard banner honestly stating the reports are computed from local demo data, not a live backend."
+  },
+  "dashboardGrossSales": "Gross sales",
+  "@dashboardGrossSales": {
+    "description": "Owner dashboard KPI card label for gross sales (before discounts)."
+  },
+  "dashboardCashSales": "Cash sales",
+  "@dashboardCashSales": {
+    "description": "Owner dashboard label for total completed cash sales."
+  },
+  "dashboardUnpaidOrders": "Unpaid orders",
+  "@dashboardUnpaidOrders": {
+    "description": "Owner dashboard KPI card label for the count of unpaid orders."
+  },
+  "dashboardPaymentSummary": "Payment & cash summary",
+  "@dashboardPaymentSummary": {
+    "description": "Owner dashboard heading for the payment and cash-drawer summary card."
+  },
+  "dashboardOpeningFloat": "Opening float",
+  "@dashboardOpeningFloat": {
+    "description": "Owner dashboard payment-summary row label for the shift opening cash float."
+  },
+  "dashboardExpectedDrawer": "Expected in drawer",
+  "@dashboardExpectedDrawer": {
+    "description": "Owner dashboard payment-summary row label for expected cash in the drawer (opening float + cash sales)."
+  },
+  "dashboardCountedCash": "Counted cash",
+  "@dashboardCountedCash": {
+    "description": "Owner dashboard payment-summary row label for the physically counted cash."
+  },
+  "dashboardLastCashPayment": "Last cash payment",
+  "@dashboardLastCashPayment": {
+    "description": "Owner dashboard payment-summary row label for the most recent cash payment amount."
+  },
+  "dashboardPaymentMethods": "Payment methods",
+  "@dashboardPaymentMethods": {
+    "description": "Owner dashboard heading for the payment-method breakdown."
+  },
+  "dashboardPaymentMethodCash": "Cash",
+  "@dashboardPaymentMethodCash": {
+    "description": "Owner dashboard payment-method label for cash."
+  },
+  "dashboardRecentOrders": "Recent orders",
+  "@dashboardRecentOrders": {
+    "description": "Owner dashboard heading for the recent-orders list."
+  },
+  "dashboardPaid": "Paid",
+  "@dashboardPaid": {
+    "description": "Owner dashboard recent-orders chip for a paid order."
+  },
+  "dashboardUnpaid": "Unpaid",
+  "@dashboardUnpaid": {
+    "description": "Owner dashboard recent-orders chip for an unpaid order."
+  },
   "authLoadingAccount": "Loading account…",
   "@authLoadingAccount": {
     "description": "Auth gate message shown while the user's context is loading."

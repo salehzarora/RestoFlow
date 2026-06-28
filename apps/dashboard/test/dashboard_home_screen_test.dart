@@ -2,50 +2,138 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
+import 'package:restoflow_dashboard/src/widgets/metric_card.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-Widget _wrap(Locale locale) => ProviderScope(
+Widget _wrap() => const ProviderScope(
   child: MaterialApp(
-    locale: locale,
+    locale: Locale('en'),
     localizationsDelegates: restoflowLocalizationsDelegates,
     supportedLocales: kSupportedLocales,
-    home: const DashboardHomeScreen(),
+    home: DashboardHomeScreen(),
   ),
 );
 
 void _useWideSurface(WidgetTester tester) {
-  tester.view.physicalSize = const Size(1400, 1000);
+  tester.view.physicalSize = const Size(1400, 2200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
+String _kpi(WidgetTester tester, String key) =>
+    tester.widget<MetricCard>(find.byKey(Key(key))).value;
+
 void main() {
-  testWidgets('renders KPI cards, daily summary, sections, and demo notice', (
+  testWidgets('renders the reports area: banner, day context, refresh', (
     tester,
   ) async {
     _useWideSurface(tester);
-    await tester.pumpWidget(_wrap(const Locale('en')));
+    await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
-    // Demo notice + section headings.
-    expect(find.text('Demo data — not from a live backend.'), findsOneWidget);
+    // Honest demo-data banner + reports heading + day context.
+    expect(find.byKey(const Key('reports-demo-banner')), findsOneWidget);
+    expect(
+      find.text(
+        'Demo reports — calculated locally from sample orders, not synced '
+        'to a backend. Real backend reporting is deferred.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('reports-heading')), findsOneWidget);
+    expect(find.text('Owner reports'), findsOneWidget);
+    expect(find.text('Report day: 2026-06-28'), findsOneWidget);
+    expect(find.text('Demo day'), findsOneWidget);
+    expect(find.byKey(const Key('reports-refresh-button')), findsOneWidget);
+  });
+
+  testWidgets('KPI cards show the values computed from the demo dataset', (
+    tester,
+  ) async {
+    _useWideSurface(tester);
+    await tester.pumpWidget(_wrap());
+    await tester.pumpAndSettle();
+
+    expect(_kpi(tester, 'kpi-gross-sales'), '₪626.00');
+    expect(_kpi(tester, 'kpi-net-sales'), '₪620.00');
+    expect(_kpi(tester, 'kpi-orders'), '7');
+    expect(_kpi(tester, 'kpi-avg-ticket'), '₪88.57'); // 62000 ~/ 7 integer math
+    expect(_kpi(tester, 'kpi-cash-sales'), '₪474.00');
+    expect(_kpi(tester, 'kpi-completed'), '5');
+    expect(_kpi(tester, 'kpi-unpaid'), '2');
+  });
+
+  testWidgets('payment & cash summary shows the expected drawer math', (
+    tester,
+  ) async {
+    _useWideSurface(tester);
+    await tester.pumpWidget(_wrap());
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('payment-summary-card')), findsOneWidget);
+    expect(find.text('Payment & cash summary'), findsOneWidget);
+    expect(find.text('Expected in drawer'), findsOneWidget);
+    expect(find.text('₪500.00'), findsWidgets); // opening float
+    expect(find.text('₪974.00'), findsWidgets); // expected drawer (50000+47400)
+    expect(find.text('₪972.50'), findsWidgets); // counted cash
+    expect(find.text('-₪1.50'), findsWidgets); // variance 97250 - 97400
+    expect(find.text('5 · ₪474.00'), findsOneWidget); // cash method breakdown
+  });
+
+  testWidgets('daily summary shows discounts and voids', (tester) async {
+    _useWideSurface(tester);
+    await tester.pumpWidget(_wrap());
+    await tester.pumpAndSettle();
+
     expect(find.text('Daily summary'), findsOneWidget);
+    expect(find.text('₪6.00'), findsWidgets); // discounts (62600 - 62000)
+    expect(find.text('1 · ₪42.00'), findsOneWidget); // void count · void total
+  });
+
+  testWidgets('branch, top-item and recent-order sections render', (
+    tester,
+  ) async {
+    _useWideSurface(tester);
+    await tester.pumpWidget(_wrap());
+    await tester.pumpAndSettle();
+
+    // Branches render, in order, scoped to the sales-by-branch card.
+    final branchCard = find.byKey(const Key('sales-by-branch-card'));
     expect(find.text('Sales by branch'), findsOneWidget);
+    for (final name in const ['Downtown', 'Seaside', 'Airport']) {
+      expect(
+        find.descendant(of: branchCard, matching: find.text(name)),
+        findsOneWidget,
+      );
+    }
+
+    // Top items: #1 and #2 ranked, with quantities.
     expect(find.text('Top items'), findsOneWidget);
-
-    // KPI labels.
-    expect(find.text("Today's sales"), findsOneWidget);
-    expect(find.text('Avg. order value'), findsOneWidget);
-    expect(find.text('Completed orders'), findsOneWidget);
-
-    // Money values rendered from integer minor units (no thousands separator).
-    expect(find.text('₪12345.00'), findsWidgets); // today's sales + net sales
-    expect(find.text('₪141.89'), findsOneWidget); // average order value
-    expect(find.text('-₪13.00'), findsOneWidget); // cash variance (negative)
-
-    // Demo data rows.
-    expect(find.text('Downtown'), findsOneWidget);
+    expect(find.text('Margherita Pizza'), findsOneWidget);
+    expect(find.text('#1 · ×4'), findsOneWidget);
     expect(find.text('Classic Burger'), findsOneWidget);
+    expect(find.text('#2 · ×4'), findsOneWidget);
+
+    // Recent orders: numbers, statuses and a dine-in table label.
+    expect(find.text('Recent orders'), findsOneWidget);
+    expect(find.text('O-1009'), findsOneWidget); // newest (cancelled)
+    expect(find.text('O-1005'), findsOneWidget); // a paid order
+    expect(find.text('cancelled'), findsWidgets); // O-1009 status pill
+    expect(find.text('completed'), findsWidgets); // a completed order status
+    expect(find.textContaining('Table T5'), findsWidgets); // dine-in table
+  });
+
+  testWidgets('refresh reloads the report (still renders after invalidate)', (
+    tester,
+  ) async {
+    _useWideSurface(tester);
+    await tester.pumpWidget(_wrap());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('reports-refresh-button')));
+    await tester.pumpAndSettle();
+
+    expect(_kpi(tester, 'kpi-net-sales'), '₪620.00');
   });
 }

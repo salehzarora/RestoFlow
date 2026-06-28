@@ -429,6 +429,73 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardDemoNotice => 'Demo data — not from a live backend.';
 
   @override
+  String get dashboardReportsHeading => 'Owner reports';
+
+  @override
+  String get dashboardReportDayLabel => 'Report day';
+
+  @override
+  String get dashboardDemoDay => 'Demo day';
+
+  @override
+  String get dashboardRefresh => 'Refresh';
+
+  @override
+  String get dashboardLoadingReports => 'Loading reports…';
+
+  @override
+  String get dashboardReportsError => 'Couldn\'t load reports.';
+
+  @override
+  String get dashboardRetry => 'Retry';
+
+  @override
+  String get dashboardNoReportData => 'No report data for this day.';
+
+  @override
+  String get dashboardDemoReportsNotice =>
+      'Demo reports — calculated locally from sample orders, not synced to a backend. Real backend reporting is deferred.';
+
+  @override
+  String get dashboardGrossSales => 'Gross sales';
+
+  @override
+  String get dashboardCashSales => 'Cash sales';
+
+  @override
+  String get dashboardUnpaidOrders => 'Unpaid orders';
+
+  @override
+  String get dashboardPaymentSummary => 'Payment & cash summary';
+
+  @override
+  String get dashboardOpeningFloat => 'Opening float';
+
+  @override
+  String get dashboardExpectedDrawer => 'Expected in drawer';
+
+  @override
+  String get dashboardCountedCash => 'Counted cash';
+
+  @override
+  String get dashboardLastCashPayment => 'Last cash payment';
+
+  @override
+  String get dashboardPaymentMethods => 'Payment methods';
+
+  @override
+  String get dashboardPaymentMethodCash => 'Cash';
+
+  @override
+  String get dashboardRecentOrders => 'Recent orders';
+
+  @override
+  String get dashboardPaid => 'Paid';
+
+  @override
+  String get dashboardUnpaid => 'Unpaid';
+
+  @override
   String get authLoadingAccount => 'Loading account…';
 
   @override

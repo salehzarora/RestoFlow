@@ -916,6 +916,138 @@ abstract class AppLocalizations {
   /// **'Demo data — not from a live backend.'**
   String get dashboardDemoNotice;
 
+  /// Owner dashboard reports section heading above the day context and KPI cards.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner reports'**
+  String get dashboardReportsHeading;
+
+  /// Owner dashboard label preceding the business day a report covers.
+  ///
+  /// In en, this message translates to:
+  /// **'Report day'**
+  String get dashboardReportDayLabel;
+
+  /// Owner dashboard pill clarifying the report day is a demo day, not a live date.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo day'**
+  String get dashboardDemoDay;
+
+  /// Owner dashboard action that reloads the report.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get dashboardRefresh;
+
+  /// Owner dashboard message shown while the report is loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading reports…'**
+  String get dashboardLoadingReports;
+
+  /// Owner dashboard message shown when the report fails to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load reports.'**
+  String get dashboardReportsError;
+
+  /// Owner dashboard action that retries loading the report after an error.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get dashboardRetry;
+
+  /// Owner dashboard message shown when there is no report data for the day.
+  ///
+  /// In en, this message translates to:
+  /// **'No report data for this day.'**
+  String get dashboardNoReportData;
+
+  /// Owner dashboard banner honestly stating the reports are computed from local demo data, not a live backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo reports — calculated locally from sample orders, not synced to a backend. Real backend reporting is deferred.'**
+  String get dashboardDemoReportsNotice;
+
+  /// Owner dashboard KPI card label for gross sales (before discounts).
+  ///
+  /// In en, this message translates to:
+  /// **'Gross sales'**
+  String get dashboardGrossSales;
+
+  /// Owner dashboard label for total completed cash sales.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash sales'**
+  String get dashboardCashSales;
+
+  /// Owner dashboard KPI card label for the count of unpaid orders.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid orders'**
+  String get dashboardUnpaidOrders;
+
+  /// Owner dashboard heading for the payment and cash-drawer summary card.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment & cash summary'**
+  String get dashboardPaymentSummary;
+
+  /// Owner dashboard payment-summary row label for the shift opening cash float.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening float'**
+  String get dashboardOpeningFloat;
+
+  /// Owner dashboard payment-summary row label for expected cash in the drawer (opening float + cash sales).
+  ///
+  /// In en, this message translates to:
+  /// **'Expected in drawer'**
+  String get dashboardExpectedDrawer;
+
+  /// Owner dashboard payment-summary row label for the physically counted cash.
+  ///
+  /// In en, this message translates to:
+  /// **'Counted cash'**
+  String get dashboardCountedCash;
+
+  /// Owner dashboard payment-summary row label for the most recent cash payment amount.
+  ///
+  /// In en, this message translates to:
+  /// **'Last cash payment'**
+  String get dashboardLastCashPayment;
+
+  /// Owner dashboard heading for the payment-method breakdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment methods'**
+  String get dashboardPaymentMethods;
+
+  /// Owner dashboard payment-method label for cash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get dashboardPaymentMethodCash;
+
+  /// Owner dashboard heading for the recent-orders list.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent orders'**
+  String get dashboardRecentOrders;
+
+  /// Owner dashboard recent-orders chip for a paid order.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get dashboardPaid;
+
+  /// Owner dashboard recent-orders chip for an unpaid order.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid'**
+  String get dashboardUnpaid;
+
   /// Auth gate message shown while the user's context is loading.
   ///
   /// In en, this message translates to:

@@ -2,25 +2,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/data/demo_report.dart';
 
 DashboardReport _report({
-  required int netSalesMinor,
-  required int orderCount,
+  int netSalesMinor = 0,
+  int orderCount = 0,
+  int expectedCashMinor = 0,
+  int countedCashMinor = 0,
+  List<RecentOrderRow> recentOrders = const [],
 }) => DashboardReport(
   currencyCode: 'ILS',
-  businessDateLabel: '2026-06-24',
+  businessDateLabel: '2026-06-28',
+  grossSalesMinor: netSalesMinor,
   netSalesMinor: netSalesMinor,
+  discountTotalMinor: 0,
   collectedMinor: 0,
+  cashSalesMinor: 0,
+  lastCashPaymentMinor: 0,
   orderCount: orderCount,
   completedOrderCount: 0,
   openOrderCount: 0,
-  discountTotalMinor: 0,
+  unpaidOrderCount: 0,
   voidCount: 0,
   voidTotalMinor: 0,
   openingFloatMinor: 0,
-  expectedCashMinor: 1284500,
-  countedCashMinor: 1283200,
+  expectedCashMinor: expectedCashMinor,
+  countedCashMinor: countedCashMinor,
   shiftStatus: 'open',
   branches: const [],
   topItems: const [],
+  recentOrders: recentOrders,
+  paymentMethods: const [],
 );
 
 void main() {
@@ -35,17 +44,32 @@ void main() {
   });
 
   test('varianceMinor is counted minus expected (signed integer minor)', () {
-    final report = _report(netSalesMinor: 0, orderCount: 1);
+    final report = _report(
+      expectedCashMinor: 1284500,
+      countedCashMinor: 1283200,
+    );
     expect(report.varianceMinor, -1300); // 1283200 - 1284500
   });
 
-  test('demo report is self-consistent: branch sales sum to net sales', () {
-    final report = demoDashboardReport();
-    final branchSum = report.branches.fold<int>(
-      0,
-      (sum, branch) => sum + branch.netSalesMinor,
+  test('isEmpty is true only when there are no orders and no recent rows', () {
+    expect(_report(orderCount: 0).isEmpty, isTrue);
+    expect(_report(orderCount: 7).isEmpty, isFalse);
+    expect(
+      _report(
+        orderCount: 0,
+        recentOrders: const [
+          RecentOrderRow(
+            orderNumber: 'O-1',
+            timeLabel: '12:00',
+            isDineIn: false,
+            status: 'voided',
+            isPaid: false,
+            totalMinor: 4200,
+            currencyCode: 'ILS',
+          ),
+        ],
+      ).isEmpty,
+      isFalse,
     );
-    expect(branchSum, report.netSalesMinor);
-    expect(report.currencyCode, kDemoCurrencyCode);
   });
 }

@@ -3,55 +3,143 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'data/demo_report.dart';
 import 'format/money_format.dart';
 import 'state/dashboard_providers.dart';
 import 'widgets/daily_summary_card.dart';
 import 'widgets/dashboard_status_pill.dart';
 import 'widgets/demo_notice_banner.dart';
 import 'widgets/metric_card.dart';
+import 'widgets/recent_order_tile.dart';
 import 'widgets/section_card.dart';
 
-/// The RF-104 owner/manager dashboard demo screen: a demo-data banner, daily
-/// KPI cards, a daily summary card, sales-by-branch, and top items.
+/// The RF-104/RF-119 owner/manager reports dashboard: a demo-data banner, the
+/// report day context, daily KPI cards (gross/net sales, orders, average ticket,
+/// cash sales, completed, unpaid), a daily summary, a payment & cash summary,
+/// sales-by-branch, ranked top items and recent orders.
 ///
-/// In-memory only (Riverpod over a demo report) — no Supabase, no report views,
-/// no backend. Money is integer minor units (DECISION D-007); chrome is
-/// localized; layout is responsive and RTL/LTR-correct.
+/// The report is loaded through the [dashboardReportProvider] seam (computed
+/// from a structured demo dataset — no Supabase, no report views, no backend),
+/// so the screen has honest loading / error / empty states and a refresh. Money
+/// is integer minor units (DECISION D-007); chrome is localized; layout is
+/// responsive and RTL/LTR-correct.
 class DashboardHomeScreen extends ConsumerWidget {
   const DashboardHomeScreen({super.key});
-
-  static const double _twoColBreakpoint = 900;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final report = ref.watch(dashboardReportProvider);
+    final reportAsync = ref.watch(dashboardReportProvider);
+
+    void refresh() => ref.invalidate(dashboardReportProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.insights_outlined, color: theme.colorScheme.primary),
+            const SizedBox(width: RestoflowSpacing.sm),
+            Text(l10n.dashboardAppTitle),
+          ],
+        ),
+        actions: [
+          IconButton(
+            key: const Key('reports-refresh-button'),
+            onPressed: refresh,
+            icon: const Icon(Icons.refresh),
+            tooltip: l10n.dashboardRefresh,
+          ),
+        ],
+      ),
+      body: reportAsync.when(
+        data: (report) => _ReportContent(report: report),
+        loading: () => const _LoadingState(),
+        error: (_, _) => _ErrorState(onRetry: refresh),
+      ),
+    );
+  }
+}
+
+/// The loaded report: a scrollable, responsive layout of all report sections.
+class _ReportContent extends StatelessWidget {
+  const _ReportContent({required this.report});
+
+  final DashboardReport report;
+
+  static const double _twoColBreakpoint = 900;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
 
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
 
+    final header = _ReportHeader(report: report);
+    final banner = DemoNoticeBanner(
+      key: const Key('reports-demo-banner'),
+      message: l10n.dashboardDemoReportsNotice,
+    );
+
+    if (report.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(RestoflowSpacing.lg),
+        children: [
+          banner,
+          const SizedBox(height: RestoflowSpacing.lg),
+          header,
+          const SizedBox(height: RestoflowSpacing.xl),
+          const _EmptyState(),
+        ],
+      );
+    }
+
+    final openCaption = '${l10n.dashboardOpenOrders}: ${report.openOrderCount}';
     final kpis = <Widget>[
       MetricCard(
+        key: const Key('kpi-gross-sales'),
+        label: l10n.dashboardGrossSales,
+        value: money(report.grossSalesMinor),
+        icon: Icons.point_of_sale_outlined,
+      ),
+      MetricCard(
+        key: const Key('kpi-net-sales'),
         label: l10n.dashboardTodaySales,
         value: money(report.netSalesMinor),
         icon: Icons.payments_outlined,
       ),
       MetricCard(
+        key: const Key('kpi-orders'),
         label: l10n.dashboardOrders,
         value: report.orderCount.toString(),
         icon: Icons.receipt_long_outlined,
       ),
       MetricCard(
+        key: const Key('kpi-avg-ticket'),
         label: l10n.dashboardAvgOrderValue,
         value: money(report.avgOrderValueMinor),
         icon: Icons.trending_up,
       ),
       MetricCard(
+        key: const Key('kpi-cash-sales'),
+        label: l10n.dashboardCashSales,
+        value: money(report.cashSalesMinor),
+        icon: Icons.account_balance_wallet_outlined,
+      ),
+      MetricCard(
+        key: const Key('kpi-completed'),
         label: l10n.dashboardCompletedOrders,
         value: report.completedOrderCount.toString(),
-        caption: '${l10n.dashboardOpenOrders}: ${report.openOrderCount}',
+        caption: openCaption,
         icon: Icons.task_alt,
+      ),
+      MetricCard(
+        key: const Key('kpi-unpaid'),
+        label: l10n.dashboardUnpaidOrders,
+        value: report.unpaidOrderCount.toString(),
+        icon: Icons.pending_actions_outlined,
       ),
     ];
 
@@ -85,7 +173,44 @@ class DashboardHomeScreen extends ConsumerWidget {
       ],
     );
 
+    final payment = DailySummaryCard(
+      key: const Key('payment-summary-card'),
+      title: l10n.dashboardPaymentSummary,
+      rows: [
+        SummaryRow(
+          label: l10n.dashboardOpeningFloat,
+          value: money(report.openingFloatMinor),
+        ),
+        SummaryRow(
+          label: l10n.dashboardCashSales,
+          value: money(report.cashSalesMinor),
+        ),
+        SummaryRow(
+          label: l10n.dashboardExpectedDrawer,
+          value: money(report.expectedCashMinor),
+        ),
+        SummaryRow(
+          label: l10n.dashboardCountedCash,
+          value: money(report.countedCashMinor),
+        ),
+        SummaryRow(
+          label: l10n.dashboardCashVariance,
+          value: money(report.varianceMinor),
+        ),
+        SummaryRow(
+          label: l10n.dashboardLastCashPayment,
+          value: money(report.lastCashPaymentMinor),
+        ),
+        for (final method in report.paymentMethods)
+          SummaryRow(
+            label: _methodLabel(l10n, method.method),
+            value: '${method.count} · ${money(method.totalMinor)}',
+          ),
+      ],
+    );
+
     final branches = SectionCard(
+      key: const Key('sales-by-branch-card'),
       title: l10n.dashboardSalesByBranch,
       children: [
         for (final branch in report.branches)
@@ -101,80 +226,131 @@ class DashboardHomeScreen extends ConsumerWidget {
     );
 
     final topItems = SectionCard(
+      key: const Key('top-items-card'),
       title: l10n.dashboardTopItems,
       children: [
-        for (final item in report.topItems)
+        for (var i = 0; i < report.topItems.length; i++)
           SectionRow(
-            label: item.name,
-            secondary: '×${item.quantity}',
+            label: report.topItems[i].name,
+            secondary: '#${i + 1} · ×${report.topItems[i].quantity}',
             trailingValue: MoneyFormatter.formatMinor(
-              item.lineRevenueMinor,
-              item.currencyCode,
+              report.topItems[i].lineRevenueMinor,
+              report.topItems[i].currencyCode,
             ),
           ),
       ],
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
+    final recentOrders = SectionCard(
+      key: const Key('recent-orders-card'),
+      title: l10n.dashboardRecentOrders,
+      children: [
+        for (final row in report.recentOrders) RecentOrderTile(row: row),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumn = constraints.maxWidth >= _twoColBreakpoint;
+        final sections = twoColumn
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        summary,
+                        const SizedBox(height: RestoflowSpacing.lg),
+                        payment,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: RestoflowSpacing.lg),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        branches,
+                        const SizedBox(height: RestoflowSpacing.lg),
+                        topItems,
+                        const SizedBox(height: RestoflowSpacing.lg),
+                        recentOrders,
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                children: [
+                  summary,
+                  const SizedBox(height: RestoflowSpacing.lg),
+                  payment,
+                  const SizedBox(height: RestoflowSpacing.lg),
+                  branches,
+                  const SizedBox(height: RestoflowSpacing.lg),
+                  topItems,
+                  const SizedBox(height: RestoflowSpacing.lg),
+                  recentOrders,
+                ],
+              );
+
+        return ListView(
+          padding: const EdgeInsets.all(RestoflowSpacing.lg),
           children: [
-            Icon(Icons.insights_outlined, color: theme.colorScheme.primary),
-            const SizedBox(width: RestoflowSpacing.sm),
-            Text(l10n.dashboardAppTitle),
+            banner,
+            const SizedBox(height: RestoflowSpacing.lg),
+            header,
+            const SizedBox(height: RestoflowSpacing.lg),
+            _KpiGrid(cards: kpis),
+            const SizedBox(height: RestoflowSpacing.lg),
+            sections,
+          ],
+        );
+      },
+    );
+  }
+
+  static String _methodLabel(AppLocalizations l10n, String method) =>
+      method == 'cash' ? l10n.dashboardPaymentMethodCash : method;
+}
+
+/// The reports title + the report day context (day + a "Demo day" pill).
+class _ReportHeader extends StatelessWidget {
+  const _ReportHeader({required this.report});
+
+  final DashboardReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final dayText =
+        '${l10n.dashboardReportDayLabel}: ${report.businessDateLabel}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.dashboardReportsHeading,
+          key: const Key('reports-heading'),
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.xs),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              dayText,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            DashboardStatusPill(label: l10n.dashboardDemoDay),
           ],
         ),
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final twoColumn = constraints.maxWidth >= _twoColBreakpoint;
-          final sections = twoColumn
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: summary),
-                    const SizedBox(width: RestoflowSpacing.lg),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          branches,
-                          const SizedBox(height: RestoflowSpacing.lg),
-                          topItems,
-                        ],
-                      ),
-                    ),
-                  ],
-                )
-              : Column(
-                  children: [
-                    summary,
-                    const SizedBox(height: RestoflowSpacing.lg),
-                    branches,
-                    const SizedBox(height: RestoflowSpacing.lg),
-                    topItems,
-                  ],
-                );
-
-          return ListView(
-            padding: const EdgeInsets.all(RestoflowSpacing.lg),
-            children: [
-              DemoNoticeBanner(message: l10n.dashboardDemoNotice),
-              const SizedBox(height: RestoflowSpacing.lg),
-              Text(
-                l10n.dashboardOverviewHeading,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: RestoflowSpacing.md),
-              _KpiGrid(cards: kpis),
-              const SizedBox(height: RestoflowSpacing.lg),
-              sections,
-            ],
-          );
-        },
-      ),
+      ],
     );
   }
 }
@@ -203,6 +379,102 @@ class _KpiGrid extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// The loading state while the report is fetched through the repository.
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Center(
+      key: const Key('reports-loading'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: RestoflowSpacing.lg),
+          Text(
+            l10n.dashboardLoadingReports,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The error state when the report fails to load, with a retry action.
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Center(
+      key: const Key('reports-error'),
+      child: Padding(
+        padding: const EdgeInsets.all(RestoflowSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
+            const SizedBox(height: RestoflowSpacing.md),
+            Text(
+              l10n.dashboardReportsError,
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: RestoflowSpacing.lg),
+            FilledButton.icon(
+              key: const Key('reports-retry-button'),
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: Text(l10n.dashboardRetry),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The empty state when there is no report data for the day.
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Center(
+      key: const Key('reports-empty'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.inbox_outlined,
+            size: 48,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          Text(
+            l10n.dashboardNoReportData,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
