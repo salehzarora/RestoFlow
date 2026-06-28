@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/payment.dart';
 import '../data/payment_repository.dart';
@@ -51,11 +52,15 @@ class PaymentController extends Notifier<PaymentState> {
   CashPayment? paymentFor(String orderNumber) => state.paymentFor(orderNumber);
 }
 
-/// The cash-payment repository. Defaults to the in-memory [DemoPaymentStore];
-/// tests / the real data bridge can override this provider.
-final paymentRepositoryProvider = Provider<PaymentRepository>(
-  (ref) => DemoPaymentStore(),
-);
+/// The cash-payment repository. Selects by client runtime mode (M7): the
+/// in-memory [DemoPaymentStore] in demo mode (the DEFAULT), or the
+/// [RealPaymentRepository] skeleton in real mode. Tests can override either this
+/// provider or [runtimeConfigProvider] to force a mode.
+final paymentRepositoryProvider = Provider<PaymentRepository>((ref) {
+  final cfg = ref.watch(runtimeConfigProvider);
+  if (cfg.isDemoMode) return DemoPaymentStore();
+  return RealPaymentRepository(cfg.supabase);
+});
 
 /// The POS payment controller (shift context + recorded payments).
 final paymentControllerProvider =

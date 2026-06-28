@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/order_submission.dart';
 import '../data/outbox_repository.dart';
@@ -151,11 +152,15 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   int get pendingCount => state.where((e) => e.syncState.isPending).length;
 }
 
-/// The client outbox repository. Defaults to the in-memory [DemoOutboxStore];
-/// tests / the real data bridge can override this provider.
-final outboxRepositoryProvider = Provider<OutboxRepository>(
-  (ref) => DemoOutboxStore(),
-);
+/// The client outbox repository. Selects by client runtime mode (M7): the
+/// in-memory [DemoOutboxStore] in demo mode (the DEFAULT), or the
+/// [RealOutboxRepository] skeleton in real mode. Tests can override either this
+/// provider or [runtimeConfigProvider] to force a mode.
+final outboxRepositoryProvider = Provider<OutboxRepository>((ref) {
+  final cfg = ref.watch(runtimeConfigProvider);
+  if (cfg.isDemoMode) return DemoOutboxStore();
+  return RealOutboxRepository(cfg.supabase);
+});
 
 /// The POS outbox controller (recent entries, most recent first).
 final outboxControllerProvider =

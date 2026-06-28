@@ -1,3 +1,6 @@
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+
 import 'order_submission.dart';
 
 /// Thrown when an order submission cannot be built or enqueued.
@@ -122,4 +125,38 @@ class DemoOutboxStore implements OutboxRepository {
     }
     throw OrderSubmissionException('unknown outbox entry: $entryId');
   }
+}
+
+/// REAL client outbox repository skeleton (M7). Selected by `runtimeConfigProvider`
+/// in real mode. NOT YET WIRED: the production path persists each operation in
+/// `data_local` (Drift `OutboxOperations`, keyed by `(deviceId, localOperationId)`
+/// - DECISION D-022) and the RF-056 push engine delivers it via `sync_push` to
+/// `app.submit_order` (RF-052). That transport seam and the device/PIN-session
+/// auth bridge do not exist yet, so every method throws [RealRepoNotWiredError];
+/// no backend is contacted. The idempotency key must be honored when wired.
+class RealOutboxRepository implements OutboxRepository {
+  const RealOutboxRepository(this.config);
+
+  /// The validated anon-key Supabase config (or null - fail-closed). Held for the
+  /// future push transport; no client is constructed yet.
+  final SupabaseBootstrapConfig? config;
+
+  static const String _reason =
+      'outbox: sync_push -> app.submit_order not wired yet';
+
+  @override
+  Future<OutboxEntry> enqueue(OutboxEntry entry) async =>
+      throw const RealRepoNotWiredError(_reason);
+
+  @override
+  Future<List<OutboxEntry>> recentEntries() async =>
+      throw const RealRepoNotWiredError(_reason);
+
+  @override
+  Future<OutboxEntry> push(String entryId) async =>
+      throw const RealRepoNotWiredError(_reason);
+
+  @override
+  Future<OutboxEntry> retry(String entryId) async =>
+      throw const RealRepoNotWiredError(_reason);
 }

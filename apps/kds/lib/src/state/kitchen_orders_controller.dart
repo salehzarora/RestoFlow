@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/kitchen_order.dart';
 import '../data/kitchen_orders_repository.dart';
@@ -86,11 +87,20 @@ class KitchenOrdersController extends AsyncNotifier<List<KitchenOrderTicket>> {
   }
 }
 
-/// The kitchen-orders repository. Defaults to the in-memory
-/// [DemoKitchenOrdersStore]; tests / the real data bridge can override this.
-final kitchenOrdersRepositoryProvider = Provider<KitchenOrdersRepository>(
-  (ref) => DemoKitchenOrdersStore(),
-);
+/// The kitchen-orders repository seam (RF-117). In demo mode - the DEFAULT
+/// (`RESTOFLOW_DEMO_MODE` defaults to true) - this is the in-memory
+/// [DemoKitchenOrdersStore]. In real mode the live kitchen feed runs through the
+/// injected `KdsSyncSource` (`sync_pull`, RF-063) on the `KdsSyncedHome` path,
+/// NOT this seam; so real mode resolves to a fail-closed
+/// [RealKitchenOrdersRepository] skeleton that throws rather than serve demo
+/// tickets under a real-mode label. Tests can still override this provider.
+final kitchenOrdersRepositoryProvider = Provider<KitchenOrdersRepository>((
+  ref,
+) {
+  final cfg = ref.watch(runtimeConfigProvider);
+  if (cfg.isDemoMode) return DemoKitchenOrdersStore();
+  return const RealKitchenOrdersRepository();
+});
 
 /// The KDS kitchen-orders controller (the demo board's state + actions).
 final kitchenOrdersControllerProvider =

@@ -1,4 +1,6 @@
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import 'payment.dart';
 
@@ -137,4 +139,39 @@ class DemoPaymentStore implements PaymentRepository {
       currencyCode: 'ILS',
     );
   }
+}
+
+/// REAL cash-payment repository skeleton (M7). Selected by `runtimeConfigProvider`
+/// in real mode. NOT YET WIRED: the production path is the RF-056 push engine
+/// delivering a `sync_push` operation to `app.record_payment` (RF-054), which
+/// needs (1) the `sync_push` transport seam (no `SyncPushTransport` /
+/// `SupabaseSyncPushTransport` exists yet) and (2) the device/PIN-session auth
+/// bridge that mints the authenticated session. Until both land every method
+/// throws [RealRepoNotWiredError], so no surface can claim live data and no
+/// backend is ever contacted. Money stays integer minor units (DECISION D-007).
+class RealPaymentRepository implements PaymentRepository {
+  const RealPaymentRepository(this.config);
+
+  /// The validated anon-key Supabase config (or null when real mode was selected
+  /// but config was missing/invalid - fail-closed). Held for the future
+  /// authenticated transport; no client is constructed yet.
+  final SupabaseBootstrapConfig? config;
+
+  static const String _reason =
+      'payment: sync_push -> app.record_payment not wired yet';
+
+  @override
+  Future<CashPayment> recordCashPayment({
+    required String orderNumber,
+    required int amountMinor,
+    required int tenderedMinor,
+    required String currencyCode,
+  }) async => throw const RealRepoNotWiredError(_reason);
+
+  @override
+  ShiftContext shiftContext() => throw const RealRepoNotWiredError(_reason);
+
+  @override
+  CashPayment? paymentFor(String orderNumber) =>
+      throw const RealRepoNotWiredError(_reason);
 }
