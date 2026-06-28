@@ -49,9 +49,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminError => 'Couldn\'t load platform data.';
 
   @override
-  String get adminRetry => 'Retry';
-
-  @override
   String get adminEmpty => 'No platform data yet.';
 
   @override
@@ -895,6 +892,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminStateErrorBody => 'We couldn’t load this. Please try again.';
+
+  @override
+  String get adminRetry => 'Retry';
 
   @override
   String get adminConflictMessage =>

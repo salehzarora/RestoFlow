@@ -49,9 +49,6 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminError => 'לא ניתן לטעון נתוני פלטפורמה.';
 
   @override
-  String get adminRetry => 'נסה שוב';
-
-  @override
   String get adminEmpty => 'אין עדיין נתוני פלטפורמה.';
 
   @override
@@ -892,6 +889,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get adminStateErrorBody => 'לא הצלחנו לטעון זאת. נסה שוב.';
+
+  @override
+  String get adminRetry => 'נסה שוב';
 
   @override
   String get adminConflictMessage => 'פעולה זו אינה מותרת במצב הנוכחי.';

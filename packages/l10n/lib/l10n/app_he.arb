@@ -13,7 +13,6 @@
   "adminRefresh": "רענון",
   "adminLoading": "טוען נתוני פלטפורמה…",
   "adminError": "לא ניתן לטעון נתוני פלטפורמה.",
-  "adminRetry": "נסה שוב",
   "adminEmpty": "אין עדיין נתוני פלטפורמה.",
   "adminActiveLabel": "פעיל",
   "adminKpiOrganizations": "ארגונים",

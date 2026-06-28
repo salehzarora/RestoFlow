@@ -52,10 +52,6 @@
   "@adminError": {
     "description": "Platform-admin message shown when the overview fails to load."
   },
-  "adminRetry": "Retry",
-  "@adminRetry": {
-    "description": "Platform-admin action that retries loading the overview after an error."
-  },
   "adminEmpty": "No platform data yet.",
   "@adminEmpty": {
     "description": "Platform-admin message shown when there is no platform data."

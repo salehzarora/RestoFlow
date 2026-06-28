@@ -49,9 +49,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminError => 'تعذّر تحميل بيانات المنصة.';
 
   @override
-  String get adminRetry => 'إعادة المحاولة';
-
-  @override
   String get adminEmpty => 'لا توجد بيانات منصة بعد.';
 
   @override
@@ -894,6 +891,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get adminStateErrorBody => 'تعذّر تحميل هذا. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get adminRetry => 'إعادة المحاولة';
 
   @override
   String get adminConflictMessage => 'هذا الإجراء غير مسموح في الحالة الحالية.';

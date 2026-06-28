@@ -13,7 +13,6 @@
   "adminRefresh": "تحديث",
   "adminLoading": "جارٍ تحميل بيانات المنصة…",
   "adminError": "تعذّر تحميل بيانات المنصة.",
-  "adminRetry": "إعادة المحاولة",
   "adminEmpty": "لا توجد بيانات منصة بعد.",
   "adminActiveLabel": "نشط",
   "adminKpiOrganizations": "المؤسسات",

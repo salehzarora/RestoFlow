@@ -178,12 +178,6 @@ abstract class AppLocalizations {
   /// **'Couldn\'t load platform data.'**
   String get adminError;
 
-  /// Platform-admin action that retries loading the overview after an error.
-  ///
-  /// In en, this message translates to:
-  /// **'Retry'**
-  String get adminRetry;
-
   /// Platform-admin message shown when there is no platform data.
   ///
   /// In en, this message translates to:
@@ -1821,6 +1815,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We couldn’t load this. Please try again.'**
   String get adminStateErrorBody;
+
+  /// No description provided for @adminRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get adminRetry;
 
   /// No description provided for @adminConflictMessage.
   ///
