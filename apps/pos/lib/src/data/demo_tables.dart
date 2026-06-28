@@ -1,4 +1,6 @@
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 /// Demo tenant scope for the in-memory tables. It only needs to be
 /// self-consistent so the domain [TableAssignmentService] tenant check passes
@@ -142,4 +144,25 @@ class DemoTablesStore implements TablesRepository {
     );
     return LocalOrder.submitFromCart(cart, orderType: OrderType.dineIn);
   }
+}
+
+/// REAL tables repository skeleton (M7). Selected by `runtimeConfigProvider` in
+/// real mode. NOT YET WIRED: the production path is an RLS-scoped
+/// `SELECT ... FROM public.tables` for the active branch. The exact
+/// column -> [DemoTable] mapping and the branch-scope binding are not ratified
+/// yet, so rather than guess the row shape this throws [RealRepoNotWiredError].
+/// It can be upgraded to a thin authenticated read once the column contract and
+/// branch scope are confirmed; no backend is contacted today.
+class RealTablesRepository implements TablesRepository {
+  const RealTablesRepository(this.config);
+
+  /// The validated anon-key Supabase config (or null - fail-closed). Held for the
+  /// future RLS-scoped read; no client is constructed yet.
+  final SupabaseBootstrapConfig? config;
+
+  @override
+  Future<List<DemoTable>> loadTables() async =>
+      throw const RealRepoNotWiredError(
+        'tables: RLS-scoped public.tables read not wired yet',
+      );
 }

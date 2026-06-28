@@ -12,4 +12,6 @@ export 'src/auth_gate_view.dart';
 export 'src/auth_gated_home.dart';
 export 'src/auth_state_views.dart';
 export 'src/membership_picker_view.dart';
+export 'src/real_repo_not_wired.dart';
 export 'src/role_label.dart';
+export 'src/runtime_config.dart';
