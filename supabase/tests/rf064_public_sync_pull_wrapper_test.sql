@@ -120,7 +120,7 @@ select hasnt_function('public', 'submit_order',                  'no public.subm
 select hasnt_function('public', 'record_payment',                'no public.record_payment wrapper exists');
 select hasnt_function('public', 'void_order',                    'no public.void_order wrapper exists');
 select hasnt_function('public', 'apply_discount',                'no public.apply_discount wrapper exists');
-select hasnt_function('public', 'sync_push',                     'no public.sync_push wrapper exists');
+select hasnt_function('public', 'open_shift',                    'no public.open_shift wrapper exists (sync_push is now intentionally wrapped under RF-126; open_shift stays dispatcher-only)');
 select hasnt_function('public', 'revoke_device',                 'no public.revoke_device wrapper exists');
 select hasnt_function('public', 'revoke_employee',               'no public.revoke_employee wrapper exists');
 select hasnt_function('public', 'platform_admin_list_organizations', 'no public.platform_admin_list_organizations wrapper exists');

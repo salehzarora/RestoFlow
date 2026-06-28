@@ -101,8 +101,9 @@ select ok(
   not has_function_privilege('public', 'public.start_pin_session(uuid, uuid, text, text)', 'execute'),
   'PUBLIC may NOT execute public.start_pin_session (revoked)');
 -- the `app` schema stays UNEXPOSED: no broad app exposure leaked into public
-select hasnt_function('public', 'sync_push',
-  'no broad app exposure regression: app.* stays unexposed (no public.sync_push sibling)');
+-- (sync_push is now intentionally wrapped under RF-126; close_shift stays dispatcher-only)
+select hasnt_function('public', 'close_shift',
+  'no broad app exposure regression: app.* stays unexposed (no public.close_shift sibling)');
 
 -- ============================================================================
 -- (C) FAITHFUL PASS-THROUGH SEMANTICS  (9-14)
