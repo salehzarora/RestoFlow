@@ -436,6 +436,26 @@
   "@kdsTicketPreviewTitle": {
     "description": "Title of the KDS kitchen-ticket print-preview dialog."
   },
+  "kdsElapsedLabel": "Elapsed",
+  "@kdsElapsedLabel": {
+    "description": "KDS label preceding the elapsed time since an order was submitted."
+  },
+  "languageSelectorTooltip": "Language",
+  "@languageSelectorTooltip": {
+    "description": "Tooltip for the EN/AR/HE language selector in the app bar."
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "Language selector option: English (endonym, same in every locale)."
+  },
+  "languageArabic": "العربية",
+  "@languageArabic": {
+    "description": "Language selector option: Arabic (endonym, same in every locale)."
+  },
+  "languageHebrew": "עברית",
+  "@languageHebrew": {
+    "description": "Language selector option: Hebrew (endonym, same in every locale)."
+  },
   "posShiftDemoName": "Demo morning shift",
   "@posShiftDemoName": {
     "description": "POS demo shift name shown in the shift/cash-drawer context bar."

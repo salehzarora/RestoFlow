@@ -344,6 +344,21 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kdsTicketPreviewTitle => 'תצוגת הדפסת כרטיס מטבח';
 
   @override
+  String get kdsElapsedLabel => 'שחלף';
+
+  @override
+  String get languageSelectorTooltip => 'שפה';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageArabic => 'العربية';
+
+  @override
+  String get languageHebrew => 'עברית';
+
+  @override
   String get posShiftDemoName => 'משמרת בוקר להדגמה';
 
   @override

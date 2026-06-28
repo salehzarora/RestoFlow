@@ -748,6 +748,36 @@ abstract class AppLocalizations {
   /// **'Kitchen ticket preview'**
   String get kdsTicketPreviewTitle;
 
+  /// KDS label preceding the elapsed time since an order was submitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Elapsed'**
+  String get kdsElapsedLabel;
+
+  /// Tooltip for the EN/AR/HE language selector in the app bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get languageSelectorTooltip;
+
+  /// Language selector option: English (endonym, same in every locale).
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageEnglish;
+
+  /// Language selector option: Arabic (endonym, same in every locale).
+  ///
+  /// In en, this message translates to:
+  /// **'العربية'**
+  String get languageArabic;
+
+  /// Language selector option: Hebrew (endonym, same in every locale).
+  ///
+  /// In en, this message translates to:
+  /// **'עברית'**
+  String get languageHebrew;
+
   /// POS demo shift name shown in the shift/cash-drawer context bar.
   ///
   /// In en, this message translates to:

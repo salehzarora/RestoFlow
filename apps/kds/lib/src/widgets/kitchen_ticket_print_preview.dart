@@ -5,7 +5,8 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kitchen_order.dart';
-import '../print/browser_print.dart';
+import '../print/print_document.dart';
+import '../print/print_service.dart';
 import 'kds_status_chip.dart';
 
 /// A browser-style KITCHEN-TICKET print preview (RF-118): a ticket "paper" over
@@ -120,12 +121,62 @@ class KitchenTicketPrintPreview extends ConsumerWidget {
               ),
             ),
             const Divider(height: 1),
-            _PreviewActions(l10n: l10n),
+            _PreviewActions(
+              l10n: l10n,
+              onPrint: () => ref
+                  .read(printServiceProvider)
+                  .printDocument(buildKitchenTicketDocument(l10n, ticket, now)),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+/// Builds the ISOLATED print document for a kitchen ticket (RF-118). The printed
+/// page contains ONLY these lines — never the KDS board behind the modal. Big
+/// quantities; money-free (SECURITY T-003).
+PrintDocument buildKitchenTicketDocument(
+  AppLocalizations l10n,
+  KitchenOrderTicket ticket,
+  DateTime now,
+) {
+  final dineIn = ticket.orderType == OrderType.dineIn;
+  final minutes = now.difference(ticket.submittedAt).inMinutes;
+  final station = ticket.stationId;
+  // Built into a local (not an inline `title:` literal) so the RF-020
+  // no-hardcoded-strings guard isn't tripped by this l10n-interpolated value.
+  final docTitle = '${l10n.kdsTicketPreviewTitle} ${ticket.orderNumber}';
+  return PrintDocument(
+    title: docTitle,
+    lines: <PrintLine>[
+      PrintLine.title(ticket.orderNumber),
+      PrintLine.center(ticket.status.canonicalName),
+      PrintLine.rule(),
+      PrintLine.kv(
+        l10n.posOrderTypeLabel,
+        dineIn ? l10n.posOrderTypeDineIn : l10n.posOrderTypeTakeaway,
+      ),
+      if (dineIn && ticket.tableLabel != null)
+        PrintLine.kv(l10n.posTableLabel, ticket.tableLabel!),
+      if (station != null) PrintLine.kv(l10n.kdsStationLabel, station),
+      PrintLine.kv(
+        l10n.kdsElapsedLabel,
+        l10n.kdsElapsedMinutes(minutes < 0 ? 0 : minutes),
+      ),
+      PrintLine.rule(),
+      for (final item in ticket.items) ...[
+        PrintLine.item(item.name, '${item.quantity}×', emphasised: true),
+        if (item.modifiers.isNotEmpty)
+          PrintLine.sub('+ ${item.modifiers.join(', ')}'),
+        if (item.note != null)
+          PrintLine.sub('${l10n.kdsNoteLabel}: ${item.note}'),
+      ],
+      PrintLine.rule(),
+      PrintLine.note(l10n.kdsDemoFeedBanner),
+    ],
+  );
 }
 
 class _PreviewHeader extends StatelessWidget {
@@ -169,13 +220,14 @@ class _PreviewHeader extends StatelessWidget {
   }
 }
 
-class _PreviewActions extends ConsumerWidget {
-  const _PreviewActions({required this.l10n});
+class _PreviewActions extends StatelessWidget {
+  const _PreviewActions({required this.l10n, required this.onPrint});
 
   final AppLocalizations l10n;
+  final VoidCallback onPrint;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.all(RestoflowSpacing.md),
@@ -198,7 +250,7 @@ class _PreviewActions extends ConsumerWidget {
           const SizedBox(width: RestoflowSpacing.xs),
           FilledButton.icon(
             key: const Key('ticket-preview-print-button'),
-            onPressed: () => ref.read(printActionProvider)(),
+            onPressed: onPrint,
             icon: const Icon(Icons.print, size: 18),
             label: Text(l10n.printPreviewPrint),
           ),

@@ -6,6 +6,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'src/pos_menu_screen.dart';
+import 'src/state/locale_controller.dart';
 
 void main() => runApp(const ProviderScope(child: PosApp()));
 
@@ -17,7 +18,7 @@ void main() => runApp(const ProviderScope(child: PosApp()));
 /// manager role gate (`AppSurface.pos`). No order submission/payments here
 /// (RF-108 wires entry only); the cashier scope-aware data binding is deferred
 /// to the real-data tickets. Localization/RTL + theme + Riverpod as before.
-class PosApp extends StatelessWidget {
+class PosApp extends ConsumerWidget {
   const PosApp({this.demoMode, this.fetchContext, super.key});
 
   /// Test-only override of the demo/auth mode (null => `RESTOFLOW_DEMO_MODE`).
@@ -27,11 +28,13 @@ class PosApp extends StatelessWidget {
   final AuthContextFetcher? fetchContext;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).posAppTitle,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
+      // RF-118 fix B: the user-selected language drives the app (RTL for ar/he).
+      locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
       theme: restoflowBaseTheme(),

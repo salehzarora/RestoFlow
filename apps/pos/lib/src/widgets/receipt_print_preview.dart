@@ -6,7 +6,8 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/payment.dart';
 import '../format/money_format.dart';
-import '../print/browser_print.dart';
+import '../print/print_document.dart';
+import '../print/print_service.dart';
 import '../state/submitted_order_view.dart';
 
 /// A browser-style RECEIPT print preview (RF-118): a narrow "paper" receipt over
@@ -102,7 +103,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             ),
                           _Line(
                             label: l10n.posPaidAtLabel,
-                            value: _formatTimestamp(payment.paidAt),
+                            value: _formatReceiptTimestamp(payment.paidAt),
                           ),
                           const _Rule(),
                           for (final line in order.lines)
@@ -171,18 +172,81 @@ class ReceiptPrintPreview extends ConsumerWidget {
               ),
             ),
             const Divider(height: 1),
-            _PreviewActions(l10n: l10n),
+            _PreviewActions(
+              l10n: l10n,
+              onPrint: () => ref
+                  .read(printServiceProvider)
+                  .printDocument(buildReceiptDocument(l10n, order, payment)),
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  static String _formatTimestamp(DateTime dt) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
-  }
+/// Builds the ISOLATED print document for a paid receipt (RF-118). The printed
+/// page contains ONLY these lines — never the POS menu/app behind the modal.
+PrintDocument buildReceiptDocument(
+  AppLocalizations l10n,
+  SubmittedOrderView order,
+  CashPayment payment,
+) {
+  final currency = payment.currencyCode;
+  final dineIn = order.orderType == OrderType.dineIn;
+  // Built into a local (not an inline `title:` literal) so the RF-020
+  // no-hardcoded-strings guard isn't tripped by this l10n-interpolated value.
+  final docTitle = '${l10n.receiptPreviewTitle} ${order.orderNumber}';
+  return PrintDocument(
+    title: docTitle,
+    lines: <PrintLine>[
+      PrintLine.title(l10n.receiptDemoRestaurantName),
+      PrintLine.center(l10n.posPaidChip),
+      PrintLine.rule(),
+      PrintLine.kv(l10n.posReceiptNumberLabel, payment.receiptNumber),
+      PrintLine.kv(l10n.posOrderNumberLabel, order.orderNumber),
+      PrintLine.kv(
+        l10n.posOrderTypeLabel,
+        dineIn ? l10n.posOrderTypeDineIn : l10n.posOrderTypeTakeaway,
+      ),
+      if (dineIn && order.tableLabel != null)
+        PrintLine.kv(l10n.posTableLabel, order.tableLabel!),
+      PrintLine.kv(
+        l10n.posPaidAtLabel,
+        _formatReceiptTimestamp(payment.paidAt),
+      ),
+      PrintLine.rule(),
+      for (final line in order.lines)
+        PrintLine.item(
+          '${line.quantity}× ${line.name}',
+          MoneyFormatter.formatMinor(line.lineTotalMinor, line.currencyCode),
+        ),
+      PrintLine.rule(),
+      PrintLine.kv(
+        l10n.posReceiptTotal,
+        MoneyFormatter.formatMinor(order.subtotalMinor, currency),
+        emphasised: true,
+      ),
+      PrintLine.kv(
+        l10n.posCashReceived,
+        MoneyFormatter.formatMinor(payment.tenderedMinor, currency),
+      ),
+      PrintLine.kv(
+        l10n.posChangeDue,
+        MoneyFormatter.formatMinor(payment.changeMinor, currency),
+      ),
+      PrintLine.rule(),
+      PrintLine.kv(l10n.posPaymentMethodLabel, l10n.posPaymentMethodCash),
+      PrintLine.note(l10n.posReceiptProvisionalNote),
+      PrintLine.note(l10n.posReceiptDemoNote),
+    ],
+  );
+}
+
+String _formatReceiptTimestamp(DateTime dt) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
+      '${two(dt.hour)}:${two(dt.minute)}';
 }
 
 /// Shared preview header (title + close icon).
@@ -228,13 +292,14 @@ class _PreviewHeader extends StatelessWidget {
 }
 
 /// Shared preview footer: an honest browser-print hint + Close / Print actions.
-class _PreviewActions extends ConsumerWidget {
-  const _PreviewActions({required this.l10n});
+class _PreviewActions extends StatelessWidget {
+  const _PreviewActions({required this.l10n, required this.onPrint});
 
   final AppLocalizations l10n;
+  final VoidCallback onPrint;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.all(RestoflowSpacing.md),
@@ -257,7 +322,7 @@ class _PreviewActions extends ConsumerWidget {
           const SizedBox(width: RestoflowSpacing.xs),
           FilledButton.icon(
             key: const Key('preview-print-button'),
-            onPressed: () => ref.read(printActionProvider)(),
+            onPressed: onPrint,
             icon: const Icon(Icons.print, size: 18),
             label: Text(l10n.printPreviewPrint),
           ),

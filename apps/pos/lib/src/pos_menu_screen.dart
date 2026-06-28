@@ -7,6 +7,7 @@ import 'state/cart_controller.dart';
 import 'state/menu_filter.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/cart_panel.dart';
+import 'widgets/language_selector.dart';
 import 'widgets/menu_item_card.dart';
 
 /// The RF-100 POS demo screen: a filterable menu grid beside a live cart panel.
@@ -36,6 +37,7 @@ class PosMenuScreen extends StatelessWidget {
             Text(l10n.posAppTitle),
           ],
         ),
+        actions: const [LanguageSelector()],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {

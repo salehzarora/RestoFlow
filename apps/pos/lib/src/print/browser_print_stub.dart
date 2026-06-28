@@ -1,10 +1,10 @@
-/// Browser-print launcher — non-web target (RF-118).
+/// Isolated browser-print launcher — non-web target (RF-118).
 ///
 /// On every non-web platform (Windows / macOS / Linux / mobile) and in tests
-/// there is no browser print dialog, so this is a safe no-op. The web variant
-/// ([browser_print_web.dart]) calls `window.print()`. Selected via the
-/// conditional import in `browser_print.dart`.
-void launchBrowserPrint() {
-  // No browser on this target — nothing to print. The print-preview UI still
-  // renders; the user can use the OS print path if available.
+/// there is no browser, so this is a safe no-op — the on-screen preview still
+/// renders. The web variant ([browser_print_web.dart]) opens the document in an
+/// isolated window and prints only it. Selected via the conditional export in
+/// `browser_print.dart`.
+void printHtmlDocument(String htmlContent, String title) {
+  // No browser on this target — nothing to print here.
 }

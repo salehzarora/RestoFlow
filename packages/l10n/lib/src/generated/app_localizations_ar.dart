@@ -347,6 +347,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kdsTicketPreviewTitle => 'معاينة تذكرة المطبخ';
 
   @override
+  String get kdsElapsedLabel => 'المنقضي';
+
+  @override
+  String get languageSelectorTooltip => 'اللغة';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageArabic => 'العربية';
+
+  @override
+  String get languageHebrew => 'עברית';
+
+  @override
   String get posShiftDemoName => 'وردية صباحية تجريبية';
 
   @override

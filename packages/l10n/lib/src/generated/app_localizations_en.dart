@@ -345,6 +345,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kdsTicketPreviewTitle => 'Kitchen ticket preview';
 
   @override
+  String get kdsElapsedLabel => 'Elapsed';
+
+  @override
+  String get languageSelectorTooltip => 'Language';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageArabic => 'العربية';
+
+  @override
+  String get languageHebrew => 'עברית';
+
+  @override
   String get posShiftDemoName => 'Demo morning shift';
 
   @override
