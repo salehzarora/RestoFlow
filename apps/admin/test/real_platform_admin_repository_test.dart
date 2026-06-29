@@ -173,6 +173,9 @@ void main() {
           fail('expected a PlatformAdminException');
         } on PlatformAdminException catch (e) {
           expect(e.message.toLowerCase(), contains('denied'));
+          // RF-134: a 42501 is categorized as access-denied so the UI can show
+          // the honest "grant + aal2 required" safe state.
+          expect(e.kind, PlatformAdminErrorKind.accessDenied);
           // No raw backend code or JSON wall reaches the message.
           expect(e.message, isNot(contains('42501')));
           expect(e.message, isNot(contains('{')));
@@ -180,22 +183,24 @@ void main() {
       },
     );
 
-    test(
-      'a transient/server transport error surfaces as a PlatformAdminException',
-      () async {
-        final transport = _RecordingTransport(
-          (_, _) async => throw const SyncTransportException(
-            SyncTransportErrorKind.transient,
-            message: 'timeout',
-          ),
-        );
-        final repo = RealPlatformAdminRepository(transport);
-        await expectLater(
-          repo.loadOverview(),
-          throwsA(isA<PlatformAdminException>()),
-        );
-      },
-    );
+    test('a transient/server transport error surfaces as a generic '
+        '(unexpected) PlatformAdminException', () async {
+      final transport = _RecordingTransport(
+        (_, _) async => throw const SyncTransportException(
+          SyncTransportErrorKind.transient,
+          message: 'timeout',
+        ),
+      );
+      final repo = RealPlatformAdminRepository(transport);
+      try {
+        await repo.loadOverview();
+        fail('expected a PlatformAdminException');
+      } on PlatformAdminException catch (e) {
+        // RF-134: not configured / not access-denied -> the generic, retryable
+        // error state.
+        expect(e.kind, PlatformAdminErrorKind.unexpected);
+      }
+    });
 
     test(
       'an unexpected response shape fails closed (PlatformAdminException)',
@@ -211,13 +216,21 @@ void main() {
 
     test(
       '(9) missing/invalid config (null transport) fails closed and contacts '
-      'no backend',
+      'no backend, categorized as notConfigured',
       () async {
         const repo = RealPlatformAdminRepository(null);
         await expectLater(
           repo.loadOverview(),
           throwsA(isA<PlatformAdminException>()),
         );
+        try {
+          await repo.loadOverview();
+          fail('expected a PlatformAdminException');
+        } on PlatformAdminException catch (e) {
+          // RF-134: surfaced as the "not configured" safe state, not a generic
+          // error.
+          expect(e.kind, PlatformAdminErrorKind.notConfigured);
+        }
       },
     );
   });

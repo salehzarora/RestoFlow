@@ -274,6 +274,42 @@ abstract class AppLocalizations {
   /// **'Needs attention'**
   String get adminWarningChip;
 
+  /// Platform-admin banner shown in real mode: the live panel is read-only and limited (some metrics and the MFA/grant management UX are not available yet).
+  ///
+  /// In en, this message translates to:
+  /// **'Live platform data — read-only and limited. Some operational metrics aren\'t available here yet, and platform-admin MFA step-up and grant management aren\'t part of this build.'**
+  String get adminRealModeNotice;
+
+  /// Platform-admin pill (real mode) marking the overview as live but limited, read-only data.
+  ///
+  /// In en, this message translates to:
+  /// **'Live · limited'**
+  String get adminLiveLimitedTag;
+
+  /// Platform-admin safe-state title shown when real mode is selected but the Supabase connection is not configured.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform admin isn\'t configured'**
+  String get adminNotConfiguredTitle;
+
+  /// Platform-admin safe-state body explaining that real mode needs Supabase configuration, or to run in demo mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Real mode is selected but the Supabase connection isn\'t configured, so no platform data can be loaded. Set the Supabase URL and anon key, or run in demo mode.'**
+  String get adminNotConfiguredBody;
+
+  /// Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up).
+  ///
+  /// In en, this message translates to:
+  /// **'Platform admin access denied'**
+  String get adminAccessDeniedTitle;
+
+  /// Platform-admin safe-state body explaining that an active platform-admin grant and MFA sign-in are required, and that the step-up/grant UX is not in this build.
+  ///
+  /// In en, this message translates to:
+  /// **'An active platform-admin grant and multi-factor (MFA) sign-in are required to view live platform data. Step-up sign-in and grant management aren\'t available in this build yet.'**
+  String get adminAccessDeniedBody;
+
   /// Display name of the English locale.
   ///
   /// In en, this message translates to:

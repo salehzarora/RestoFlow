@@ -42,12 +42,41 @@ class DemoPlatformAdminRepository implements PlatformAdminRepository {
   }
 }
 
-/// A failure loading the platform overview.
+/// Why the platform overview failed to load (RF-134). Drives a clear, honest
+/// safe state in the UI: a generic retryable error, a "not configured" notice,
+/// or an "access denied" notice. The exception [PlatformAdminException.message]
+/// stays developer-facing and is NEVER shown raw to the user.
+enum PlatformAdminErrorKind {
+  /// Real mode was selected but the Supabase config is missing/invalid, so the
+  /// real repo is fail-closed with no transport: platform admin is NOT
+  /// CONFIGURED. Retrying cannot help — the UI shows a config-needed notice.
+  notConfigured,
+
+  /// The backend refused the read (SQLSTATE 42501): an active platform-admin
+  /// grant and aal2 (MFA) step-up are required (D-026). The grant/step-up UX is
+  /// not part of this build, so the UI shows an honest "access denied" notice
+  /// rather than a retry.
+  accessDenied,
+
+  /// Any other failure (network, server, unexpected shape, or a demo-configured
+  /// failure). Rendered as the generic, retryable error state.
+  unexpected,
+}
+
+/// A failure loading the platform overview, categorized by [kind] so the UI can
+/// render an honest, specific safe state (RF-134).
 class PlatformAdminException implements Exception {
-  const PlatformAdminException(this.message);
+  const PlatformAdminException(
+    this.message, {
+    this.kind = PlatformAdminErrorKind.unexpected,
+  });
 
   final String message;
 
+  /// The failure category that drives the UI safe state. Defaults to
+  /// [PlatformAdminErrorKind.unexpected] (the generic, retryable error).
+  final PlatformAdminErrorKind kind;
+
   @override
-  String toString() => 'PlatformAdminException: $message';
+  String toString() => 'PlatformAdminException($kind): $message';
 }

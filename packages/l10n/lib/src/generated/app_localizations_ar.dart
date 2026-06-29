@@ -97,6 +97,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminWarningChip => 'تحتاج إلى انتباه';
 
   @override
+  String get adminRealModeNotice =>
+      'بيانات منصة مباشرة — للقراءة فقط ومحدودة. بعض مؤشرات التشغيل غير متوفرة هنا بعد، كما أن التحقق الثنائي (MFA) لإدارة المنصة وإدارة الصلاحيات ليسا ضمن هذا الإصدار.';
+
+  @override
+  String get adminLiveLimitedTag => 'مباشر · محدود';
+
+  @override
+  String get adminNotConfiguredTitle => 'إدارة المنصة غير مُهيأة';
+
+  @override
+  String get adminNotConfiguredBody =>
+      'الوضع الحقيقي مُحدَّد لكن اتصال Supabase غير مُهيأ، لذا تعذّر تحميل أي بيانات للمنصة. اضبط عنوان Supabase ومفتاح anon، أو شغّل الوضع التجريبي.';
+
+  @override
+  String get adminAccessDeniedTitle => 'تم رفض الوصول إلى إدارة المنصة';
+
+  @override
+  String get adminAccessDeniedBody =>
+      'يلزم وجود صلاحية فعّالة لإدارة المنصة وتسجيل دخول بالتحقق متعدد العوامل (MFA) لعرض بيانات المنصة المباشرة. تسجيل الدخول المعزز وإدارة الصلاحيات غير متوفرين في هذا الإصدار بعد.';
+
+  @override
   String get localeEnglish => 'الإنجليزية';
 
   @override
