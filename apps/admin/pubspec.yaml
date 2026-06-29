@@ -21,6 +21,10 @@ dependencies:
     path: ../../packages/auth_identity
   restoflow_feature_auth:
     path: ../../packages/feature_auth
+  # RF-128: the shared public-schema RPC transport (SyncRpcTransport) the real
+  # platform-admin repo calls the RF-125 public.platform_admin_* wrappers through.
+  restoflow_data_remote:
+    path: ../../packages/data_remote
 dev_dependencies:
   flutter_test:
     sdk: flutter
