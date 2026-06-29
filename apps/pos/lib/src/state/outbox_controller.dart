@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
@@ -167,18 +166,16 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 /// The client outbox repository. Selects by client runtime mode (M7): the
 /// in-memory [DemoOutboxStore] in demo mode (the DEFAULT), or the real
 /// [RealOutboxRepository] in real mode, which posts `order.submit` ops to the
-/// RF-126 `public.sync_push` wrapper. The real repo is built from the validated
-/// anon-key transport (`SupabaseAuthBootstrap`; no service-role key, D-011) and
-/// the current [posSyncSessionProvider] session; with no config or no session it
-/// fails closed (no backend contact). Tests can override either this provider,
-/// [runtimeConfigProvider], or [posSyncSessionProvider] to force a mode.
+/// RF-126 `public.sync_push` wrapper. The real repo is built from the shared
+/// validated anon-key transport ([posAuthTransportProvider]; no service-role key,
+/// D-011) and the current [posSyncSessionProvider] session (RF-131); with no
+/// transport (missing/invalid config) or no session it fails closed (no backend
+/// contact). Tests can override this provider, [runtimeConfigProvider],
+/// [posAuthTransportProvider], or [posSyncSessionProvider] to force a mode.
 final outboxRepositoryProvider = Provider<OutboxRepository>((ref) {
   final cfg = ref.watch(runtimeConfigProvider);
   if (cfg.isDemoMode) return DemoOutboxStore();
-  final supabase = cfg.supabase;
-  final transport = supabase == null
-      ? null
-      : SupabaseAuthBootstrap(config: supabase).createRpcTransport();
+  final transport = ref.watch(posAuthTransportProvider);
   return RealOutboxRepository(transport, ref.watch(posSyncSessionProvider));
 });
 
