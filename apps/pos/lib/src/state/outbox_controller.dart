@@ -5,6 +5,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../data/ids.dart';
 import '../data/order_submission.dart';
 import '../data/outbox_repository.dart';
 import 'cart_controller.dart';
@@ -60,8 +61,17 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 
     _seq++;
     final n = _seq.toString().padLeft(4, '0');
-    final orderId = 'demo-order-$n';
-    final localOperationId = 'demo-op-$n';
+    final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
+    // A REAL submission carries CLIENT-GENERATED UUIDs (DECISION D-010 / D-022):
+    // the [orderId] and [localOperationId] are sent to `public.sync_push` and
+    // MUST be valid UUIDs, never the demo `demo-order-*` / `demo-op-*` labels.
+    // Demo mode keeps its deterministic, clearly-labelled ids (no backend - the
+    // ids are never transmitted). The [orderNumber] stays a provisional display
+    // label (`DEMO-$n`); it is NOT part of the transport body.
+    final ids = isDemo ? null : ref.read(clientIdGeneratorProvider);
+    final orderId = isDemo ? 'demo-order-$n' : ids!.newId();
+    final localOperationId = isDemo ? 'demo-op-$n' : ids!.newId();
+    final entryId = isDemo ? 'demo-outbox-$n' : ids!.newId();
     final orderNumber = 'DEMO-$n';
     final createdAt = DateTime.now();
 
@@ -97,7 +107,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     );
 
     final entry = OutboxEntry(
-      id: 'demo-outbox-$n',
+      id: entryId,
       deviceId: kDemoDeviceId,
       localOperationId: localOperationId,
       operationType: 'order.submit',

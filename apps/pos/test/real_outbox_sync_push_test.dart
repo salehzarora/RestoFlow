@@ -284,4 +284,95 @@ void main() {
       );
     });
   });
+
+  group(
+    'RealOutboxRepository result parsing fails closed (RF-129 hardening)',
+    () {
+      Future<OutboxEntry> pushWith(Object? envelope) async {
+        final transport = _RecordingTransport((_, _) async => envelope);
+        final repo = RealOutboxRepository(transport, _session);
+        final entry = _entry();
+        await repo.enqueue(entry);
+        return repo.push(entry.id);
+      }
+
+      test('a malformed (non-Map) envelope -> rejected', () async {
+        final pushed = await pushWith('not-a-map');
+        expect(pushed.syncState, OutboxSyncState.rejected);
+        expect(pushed.lastErrorCode, 'malformed_response');
+      });
+
+      test('a missing results array -> rejected', () async {
+        final pushed = await pushWith(<String, dynamic>{
+          'ok': true,
+          'server_ts': '2026-06-29T09:00:01Z',
+        });
+        expect(pushed.syncState, OutboxSyncState.rejected);
+        expect(pushed.lastErrorCode, 'missing_results');
+      });
+
+      test('an empty results array -> rejected', () async {
+        final pushed = await pushWith(<String, dynamic>{
+          'ok': true,
+          'results': <dynamic>[],
+          'server_ts': '2026-06-29T09:00:01Z',
+        });
+        expect(pushed.syncState, OutboxSyncState.rejected);
+        expect(pushed.lastErrorCode, 'empty_results');
+      });
+
+      test(
+        'no result matching this op local_operation_id -> rejected',
+        () async {
+          final pushed = await pushWith(
+            _envelope(<String, dynamic>{
+              'local_operation_id': 'some-other-op',
+              'status': 'applied',
+            }),
+          );
+          expect(pushed.syncState, OutboxSyncState.rejected);
+          expect(pushed.lastErrorCode, 'no_matching_operation');
+        },
+      );
+
+      test('a matched result with a missing status -> rejected', () async {
+        final pushed = await pushWith(
+          _envelope(<String, dynamic>{
+            'local_operation_id': 'op-1',
+            'ok': true,
+          }),
+        );
+        expect(pushed.syncState, OutboxSyncState.rejected);
+        expect(pushed.lastErrorCode, 'missing_status');
+      });
+
+      test('a matched result with an unknown status -> rejected', () async {
+        final pushed = await pushWith(
+          _envelope(<String, dynamic>{
+            'local_operation_id': 'op-1',
+            'status': 'teleported',
+          }),
+        );
+        expect(pushed.syncState, OutboxSyncState.rejected);
+        expect(pushed.lastErrorCode, 'unknown_status');
+      });
+
+      test('an applied status contradicted by ok:false -> rejected', () async {
+        final pushed = await pushWith(
+          _envelope(<String, dynamic>{
+            'local_operation_id': 'op-1',
+            'status': 'applied',
+            'ok': false,
+          }),
+        );
+        expect(pushed.syncState, OutboxSyncState.rejected);
+        expect(pushed.lastErrorCode, 'applied_not_ok');
+      });
+
+      test('the diagnostic code never leaks raw backend JSON', () async {
+        final pushed = await pushWith('not-a-map');
+        expect(pushed.lastErrorCode, isNot(contains('{')));
+      });
+    },
+  );
 }

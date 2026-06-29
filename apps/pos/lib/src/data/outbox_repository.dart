@@ -277,36 +277,52 @@ class RealOutboxRepository implements OutboxRepository {
     };
   }
 
-  /// Applies the `public.sync_push` envelope result to [entry]: maps the per-op
-  /// `status` (applied / rejected / conflict / ...) to an [OutboxSyncState] and
-  /// records the op `error` (if any). A replayed op (`idempotency_replay`) simply
-  /// reflects the stored status - no duplicate is created.
+  /// Applies the `public.sync_push` envelope result to [entry], FAIL-CLOSED.
+  ///
+  /// The entry becomes [OutboxSyncState.applied] / `rejected` / `conflict` / etc.
+  /// ONLY when the matched per-op result carries a KNOWN status. Anything we
+  /// cannot positively parse - a malformed envelope, a missing/empty `results`,
+  /// no result matching this op's `local_operation_id`, a missing/unknown status,
+  /// or an `applied` status contradicted by `ok: false` - is treated as
+  /// `rejected` with a short diagnostic code (never silently applied, and never
+  /// the raw backend JSON). A replayed op (`idempotency_replay`) reflects its
+  /// stored status like any other; no duplicate is created.
   OutboxEntry _applyPushResult(OutboxEntry entry, Object? raw) {
-    final envelope = raw is Map
-        ? raw.cast<String, dynamic>()
-        : const <String, dynamic>{};
-    final results = envelope['results'];
+    OutboxEntry rejected(String code) => entry.copyWith(
+      syncState: OutboxSyncState.rejected,
+      attemptCount: entry.attemptCount + 1,
+      lastErrorCode: code,
+    );
+
+    if (raw is! Map) return rejected('malformed_response');
+    final results = raw['results'];
+    if (results is! List) return rejected('missing_results');
+    if (results.isEmpty) return rejected('empty_results');
+
     Map<String, dynamic>? opResult;
-    if (results is List) {
-      for (final r in results) {
-        if (r is Map && r['local_operation_id'] == entry.localOperationId) {
-          opResult = r.cast<String, dynamic>();
-          break;
-        }
-      }
-      if (opResult == null && results.isNotEmpty && results.first is Map) {
-        opResult = (results.first as Map).cast<String, dynamic>();
+    for (final r in results) {
+      if (r is Map && r['local_operation_id'] == entry.localOperationId) {
+        opResult = r.cast<String, dynamic>();
+        break;
       }
     }
-    final state =
-        _stateFromWire(opResult?['status'] as String?) ??
-        OutboxSyncState.applied;
-    final errorCode = opResult?['error'] as String?;
+    if (opResult == null) return rejected('no_matching_operation');
+
+    final statusWire = opResult['status'];
+    if (statusWire is! String) return rejected('missing_status');
+    final state = _stateFromWire(statusWire);
+    if (state == null) return rejected('unknown_status');
+    // An `applied` status contradicted by an explicit `ok: false` is not trusted.
+    if (state == OutboxSyncState.applied && opResult['ok'] == false) {
+      return rejected('applied_not_ok');
+    }
+
+    final errorCode = opResult['error'];
     return entry.copyWith(
       syncState: state,
       attemptCount: entry.attemptCount + 1,
-      lastErrorCode: errorCode,
-      clearError: errorCode == null,
+      lastErrorCode: errorCode is String ? errorCode : null,
+      clearError: errorCode is! String,
     );
   }
 
