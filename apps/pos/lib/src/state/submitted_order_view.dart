@@ -19,6 +19,7 @@ class SubmittedOrderView {
     this.tableLabel,
     this.outboxEntryId,
     this.localOperationId,
+    this.orderId,
   });
 
   final String orderNumber;
@@ -29,6 +30,11 @@ class SubmittedOrderView {
 
   /// The assigned dine-in table label, or null for takeaway / unassigned.
   final String? tableLabel;
+
+  /// The client-generated order id (a UUID in real mode) this order was
+  /// submitted with — `OutboxEntry.targetId` (RF-129). A real `payment.create`
+  /// references it as `order_id` (RF-130); null for the RF-101 in-memory path.
+  final String? orderId;
 
   /// Link to the client outbox entry this order was enqueued as (RF-115), so the
   /// confirmation can show live sync status. Null for the in-memory RF-101 path.

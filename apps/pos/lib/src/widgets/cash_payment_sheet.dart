@@ -19,6 +19,7 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     required this.orderNumber,
     required this.amountMinor,
     required this.currencyCode,
+    this.orderId,
     super.key,
   });
 
@@ -26,11 +27,16 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
   final int amountMinor;
   final String currencyCode;
 
+  /// The server order id (a UUID in real mode) a real `payment.create`
+  /// references (RF-130); null/empty on the demo in-memory path (ignored there).
+  final String? orderId;
+
   static Future<void> show(
     BuildContext context, {
     required String orderNumber,
     required int amountMinor,
     required String currencyCode,
+    String? orderId,
   }) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -39,6 +45,7 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
       orderNumber: orderNumber,
       amountMinor: amountMinor,
       currencyCode: currencyCode,
+      orderId: orderId,
     ),
   );
 
@@ -75,6 +82,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       await ref
           .read(paymentControllerProvider.notifier)
           .payCash(
+            orderId: widget.orderId ?? '',
             orderNumber: widget.orderNumber,
             amountMinor: widget.amountMinor,
             tenderedMinor: tendered,

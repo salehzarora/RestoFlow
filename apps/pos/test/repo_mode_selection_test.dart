@@ -12,9 +12,11 @@ import 'package:restoflow_pos/src/state/payment_controller.dart';
 /// purely from [runtimeConfigProvider]. No SupabaseClient, no network - the test
 /// only proves the SELECTION and that the Real* repos contact no backend when
 /// unconfigured: the RF-129 real outbox fails closed with an
-/// [OrderSubmissionException] (no PIN/device session), while the still-unwired
-/// payment/tables repos throw [RealRepoNotWiredError]. The real outbox's
-/// public.sync_push wiring is covered by real_outbox_sync_push_test.dart.
+/// [OrderSubmissionException] and the RF-130 real payment with a
+/// [PaymentException] (both need a PIN/device session), while the still-unwired
+/// tables repo throws [RealRepoNotWiredError]. The real outbox/payment
+/// public.sync_push wiring is covered by real_outbox_sync_push_test.dart and
+/// real_payment_sync_push_test.dart.
 void main() {
   ProviderContainer containerFor({required bool isDemoMode}) {
     final container = ProviderContainer(
@@ -58,12 +60,13 @@ void main() {
         // are used throughout; no float is introduced.
         await expectLater(
           payment.recordCashPayment(
+            orderId: 'order-1',
             orderNumber: 'DEMO-0001',
             amountMinor: 1000,
             tenderedMinor: 1000,
             currencyCode: 'ILS',
           ),
-          throwsA(isA<RealRepoNotWiredError>()),
+          throwsA(isA<PaymentException>()),
         );
         // RF-129: the real outbox fails closed without a PIN/device session.
         await expectLater(

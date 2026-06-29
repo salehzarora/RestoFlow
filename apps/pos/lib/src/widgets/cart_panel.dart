@@ -148,6 +148,8 @@ Future<void> _submitOrder({
       orderNumber: result.orderNumber,
       outboxEntryId: result.entry.id,
       localOperationId: result.entry.localOperationId,
+      // RF-130: the server order id a payment.create references (RF-129).
+      orderId: result.entry.targetId,
     );
     setupController.reset();
   } on OrderSubmissionException {

@@ -183,6 +183,7 @@ class CartController extends Notifier<CartViewState> {
     String? orderNumber,
     String? outboxEntryId,
     String? localOperationId,
+    String? orderId,
   }) {
     if (_cart.isEmpty) return;
     final order = LocalOrder.submitFromCart(_cart, orderType: orderType);
@@ -197,6 +198,7 @@ class CartController extends Notifier<CartViewState> {
       tableLabel: tableLabel,
       outboxEntryId: outboxEntryId,
       localOperationId: localOperationId,
+      orderId: orderId,
       currencyCode: order.currencyCode,
       subtotalMinor: order.subtotalMinorPreview,
       lines: order.items
