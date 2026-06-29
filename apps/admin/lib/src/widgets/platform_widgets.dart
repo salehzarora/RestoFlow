@@ -216,36 +216,55 @@ class PlatformStatusPill extends StatelessWidget {
   }
 }
 
-/// A banner clarifying the platform figures are computed demo data, not live.
-class PlatformDemoBanner extends StatelessWidget {
-  const PlatformDemoBanner({required this.message, super.key});
+/// The visual tone of a [PlatformNoticeBanner].
+enum NoticeTone {
+  /// The demo-data notice (informational).
+  info,
+
+  /// The real-mode "live but limited" notice (cautionary, read-only/limited).
+  caution,
+}
+
+/// A full-width notice banner that keeps the platform overview honest about its
+/// data source: an [NoticeTone.info] tone for the demo-data notice (RF-120) and
+/// an [NoticeTone.caution] tone for the real-mode "live but limited" notice
+/// (RF-134). Pure presentation — [message] is localized chrome.
+class PlatformNoticeBanner extends StatelessWidget {
+  const PlatformNoticeBanner({
+    required this.message,
+    this.tone = NoticeTone.info,
+    super.key,
+  });
 
   final String message;
+  final NoticeTone tone;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final caution = tone == NoticeTone.caution;
+    final bg = caution ? scheme.secondaryContainer : scheme.tertiaryContainer;
+    final fg = caution
+        ? scheme.onSecondaryContainer
+        : scheme.onTertiaryContainer;
+    final icon = caution ? Icons.warning_amber_outlined : Icons.info_outline;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(RestoflowSpacing.md),
       decoration: BoxDecoration(
-        color: theme.colorScheme.tertiaryContainer,
+        color: bg,
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.info_outline,
-            size: 20,
-            color: theme.colorScheme.onTertiaryContainer,
-          ),
+          Icon(icon, size: 20, color: fg),
           const SizedBox(width: RestoflowSpacing.sm),
           Expanded(
             child: Text(
               message,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onTertiaryContainer,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: fg),
             ),
           ),
         ],

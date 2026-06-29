@@ -17,9 +17,10 @@
 /// today's orders, active-branch counts, or per-branch health, so those KPIs are
 /// mapped to 0 / empty here (an honest "not provided by this read", not a
 /// fabricated value); the org/restaurant/branch counts, the active-org count,
-/// and the organization + activity lists are mapped from real data. A screen-
-/// level follow-up (gate the demo banner + hide the unavailable KPIs in real
-/// mode) should land with the platform-admin aal2/grant sign-in flow.
+/// and the organization + activity lists are mapped from real data. The screen
+/// (RF-134) gates the demo banner to demo mode and HIDES these unavailable KPIs
+/// (and the per-branch health section) in real mode, so the 0 / empty
+/// placeholders here are never presented to the user as real figures.
 ///
 /// FAIL-CLOSED: a missing transport (real mode selected but the Supabase config
 /// is absent/invalid) and any backend error - `42501` (no active
@@ -71,6 +72,7 @@ class RealPlatformAdminRepository implements PlatformAdminRepository {
       throw const PlatformAdminException(
         'platform admin real mode is not configured (no Supabase URL / anon '
         'key); staying fail-closed.',
+        kind: PlatformAdminErrorKind.notConfigured,
       );
     }
     try {
@@ -84,9 +86,9 @@ class RealPlatformAdminRepository implements PlatformAdminRepository {
       );
       return _mapOverview(overviewRaw, auditRaw);
     } on SyncTransportException catch (e) {
-      // Surface backend failures through the existing error state with a safe,
+      // Surface backend failures through a categorized safe state with a safe,
       // developer-facing message - never the raw code/JSON (no wall of text).
-      throw PlatformAdminException(_messageForTransport(e));
+      throw _exceptionForTransport(e);
     }
   }
 
@@ -158,20 +160,30 @@ class RealPlatformAdminRepository implements PlatformAdminRepository {
   }
 }
 
-/// Maps a transport failure to a safe, developer-facing message. The raw code
-/// and backend message are deliberately omitted so nothing leaks to the UI.
-String _messageForTransport(SyncTransportException e) => switch (e.kind) {
-  SyncTransportErrorKind.auth =>
-    'platform admin access denied: an active platform-admin grant and '
+/// Maps a transport failure to a categorized [PlatformAdminException]. The raw
+/// code and backend message are deliberately omitted so nothing leaks to the
+/// UI. A `42501` (no active platform-admin grant / missing aal2 MFA / rejected
+/// reason) is the one auth case and surfaces as
+/// [PlatformAdminErrorKind.accessDenied]; everything else is the generic,
+/// retryable [PlatformAdminErrorKind.unexpected].
+PlatformAdminException _exceptionForTransport(SyncTransportException e) =>
+    switch (e.kind) {
+      SyncTransportErrorKind.auth => const PlatformAdminException(
+        'platform admin access denied: an active platform-admin grant and '
         'multi-factor (aal2) sign-in are required (D-026 read-only).',
-  SyncTransportErrorKind.transient =>
-    'platform admin: a temporary network or server issue occurred - please '
+        kind: PlatformAdminErrorKind.accessDenied,
+      ),
+      SyncTransportErrorKind.transient => const PlatformAdminException(
+        'platform admin: a temporary network or server issue occurred - please '
         'retry.',
-  SyncTransportErrorKind.server =>
-    'platform admin: the server could not complete the request.',
-  SyncTransportErrorKind.unknown =>
-    'platform admin: an unexpected error occurred.',
-};
+      ),
+      SyncTransportErrorKind.server => const PlatformAdminException(
+        'platform admin: the server could not complete the request.',
+      ),
+      SyncTransportErrorKind.unknown => const PlatformAdminException(
+        'platform admin: an unexpected error occurred.',
+      ),
+    };
 
 Map<String, dynamic> _asMap(Object? value) {
   if (value is Map) return value.cast<String, dynamic>();
