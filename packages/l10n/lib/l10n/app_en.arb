@@ -116,6 +116,30 @@
   "@adminWarningChip": {
     "description": "Platform-admin chip on a branch row that needs attention (inactive branch or suspended org)."
   },
+  "adminRealModeNotice": "Live platform data — read-only and limited. Some operational metrics aren't available here yet, and platform-admin MFA step-up and grant management aren't part of this build.",
+  "@adminRealModeNotice": {
+    "description": "Platform-admin banner shown in real mode: the live panel is read-only and limited (some metrics and the MFA/grant management UX are not available yet)."
+  },
+  "adminLiveLimitedTag": "Live · limited",
+  "@adminLiveLimitedTag": {
+    "description": "Platform-admin pill (real mode) marking the overview as live but limited, read-only data."
+  },
+  "adminNotConfiguredTitle": "Platform admin isn't configured",
+  "@adminNotConfiguredTitle": {
+    "description": "Platform-admin safe-state title shown when real mode is selected but the Supabase connection is not configured."
+  },
+  "adminNotConfiguredBody": "Real mode is selected but the Supabase connection isn't configured, so no platform data can be loaded. Set the Supabase URL and anon key, or run in demo mode.",
+  "@adminNotConfiguredBody": {
+    "description": "Platform-admin safe-state body explaining that real mode needs Supabase configuration, or to run in demo mode."
+  },
+  "adminAccessDeniedTitle": "Platform admin access denied",
+  "@adminAccessDeniedTitle": {
+    "description": "Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up)."
+  },
+  "adminAccessDeniedBody": "An active platform-admin grant and multi-factor (MFA) sign-in are required to view live platform data. Step-up sign-in and grant management aren't available in this build yet.",
+  "@adminAccessDeniedBody": {
+    "description": "Platform-admin safe-state body explaining that an active platform-admin grant and MFA sign-in are required, and that the step-up/grant UX is not in this build."
+  },
   "localeEnglish": "English",
   "@localeEnglish": {
     "description": "Display name of the English locale."

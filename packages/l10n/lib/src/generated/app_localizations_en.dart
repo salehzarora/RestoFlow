@@ -97,6 +97,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminWarningChip => 'Needs attention';
 
   @override
+  String get adminRealModeNotice =>
+      'Live platform data — read-only and limited. Some operational metrics aren\'t available here yet, and platform-admin MFA step-up and grant management aren\'t part of this build.';
+
+  @override
+  String get adminLiveLimitedTag => 'Live · limited';
+
+  @override
+  String get adminNotConfiguredTitle => 'Platform admin isn\'t configured';
+
+  @override
+  String get adminNotConfiguredBody =>
+      'Real mode is selected but the Supabase connection isn\'t configured, so no platform data can be loaded. Set the Supabase URL and anon key, or run in demo mode.';
+
+  @override
+  String get adminAccessDeniedTitle => 'Platform admin access denied';
+
+  @override
+  String get adminAccessDeniedBody =>
+      'An active platform-admin grant and multi-factor (MFA) sign-in are required to view live platform data. Step-up sign-in and grant management aren\'t available in this build yet.';
+
+  @override
   String get localeEnglish => 'English';
 
   @override

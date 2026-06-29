@@ -97,6 +97,27 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminWarningChip => 'דורש תשומת לב';
 
   @override
+  String get adminRealModeNotice =>
+      'נתוני פלטפורמה חיים — לקריאה בלבד ומוגבלים. חלק ממדדי התפעול עדיין אינם זמינים כאן, ואימות רב-שלבי (MFA) לניהול הפלטפורמה וניהול ההרשאות אינם חלק מגרסה זו.';
+
+  @override
+  String get adminLiveLimitedTag => 'חי · מוגבל';
+
+  @override
+  String get adminNotConfiguredTitle => 'ניהול הפלטפורמה אינו מוגדר';
+
+  @override
+  String get adminNotConfiguredBody =>
+      'מצב אמיתי נבחר אך חיבור ה-Supabase אינו מוגדר, ולכן לא ניתן לטעון נתוני פלטפורמה. הגדירו את כתובת ה-Supabase ומפתח ה-anon, או הפעילו במצב הדגמה.';
+
+  @override
+  String get adminAccessDeniedTitle => 'הגישה לניהול הפלטפורמה נדחתה';
+
+  @override
+  String get adminAccessDeniedBody =>
+      'כדי לצפות בנתוני פלטפורמה חיים נדרשים הרשאת ניהול פלטפורמה פעילה והתחברות באימות רב-שלבי (MFA). התחברות מועצמת וניהול הרשאות אינם זמינים בגרסה זו עדיין.';
+
+  @override
   String get localeEnglish => 'אנגלית';
 
   @override
