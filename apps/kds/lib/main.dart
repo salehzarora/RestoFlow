@@ -9,20 +9,27 @@ import 'package:restoflow_sync/restoflow_sync.dart';
 
 import 'src/kds_synced_home.dart';
 import 'src/kitchen_orders_home.dart';
+import 'src/state/kds_session.dart';
 import 'src/state/locale_controller.dart';
 
 void main() => runApp(const KdsApp());
 
-/// Localized KDS app (RF-063 + RF-108 + RF-117 board).
+/// Localized KDS app (RF-063 + RF-108 + RF-117 board + RF-136 real sync).
 ///
-/// The root ALWAYS provides a [ProviderScope]. When a [KdsSyncSource] is
-/// injected, it renders the provider-backed live data path — polling-first
-/// `sync_pull` via `feature_kitchen` (no realtime; DECISION D-010). With NO
-/// source: in DEMO mode it shows the RF-117 kitchen order board; in auth mode it
+/// The root ALWAYS provides a [ProviderScope]. It renders the provider-backed
+/// live data path ([KdsSyncedHome] — polling-first `sync_pull` via
+/// `feature_kitchen`, no realtime; DECISION D-010) when EITHER a [KdsSyncSource]
+/// is injected (tests) OR a real `--dart-define`-configured session has been
+/// established ([kdsSyncSessionProvider] non-null, RF-136). Otherwise: in DEMO
+/// mode (the DEFAULT) it shows the RF-117 kitchen order board; in auth mode it
 /// routes through the kitchen_staff/owner/manager role gate (`AppSurface.kds`).
-/// Real live KDS data in auth mode needs an injected SyncSession (deferred), so
-/// the authed entry currently shows the board. RF-118: the UI language is
-/// user-selectable (RTL for ar/he).
+///
+/// RF-136 fail-closed: real mode only activates with a valid Supabase anon
+/// config AND a complete operator-supplied device/PIN context AND a successful
+/// `start_pin_session`. Any missing/failed piece -> null session -> demo/auth
+/// board (no backend touch, no fake live feed). The live path is DORMANT until
+/// GoTrue sign-in + device provisioning land (both still deferred). RF-118: the
+/// UI language is user-selectable (RTL for ar/he).
 class KdsApp extends StatelessWidget {
   const KdsApp({
     this.source,
@@ -52,7 +59,26 @@ class KdsApp extends StatelessWidget {
     final invSource = invalidationSource;
     return ProviderScope(
       overrides: [
-        if (injected != null) kdsSyncSourceProvider.overrideWithValue(injected),
+        if (injected != null)
+          kdsSyncSourceProvider.overrideWithValue(injected)
+        else
+          // RF-136 production wiring: build the real polling-first sync_pull
+          // coordinator from the established (--dart-define) session + transport.
+          // Lazy: only read when KdsSyncedHome is mounted, which is itself
+          // route-gated on a non-null session (below), so the demo/auth path
+          // never evaluates this and never touches a backend.
+          kdsSyncSourceProvider.overrideWith((ref) {
+            final realSource = ref.watch(kdsRealSyncSourceProvider);
+            if (realSource == null) {
+              // Unreachable in practice (route-gated on a non-null session). The
+              // guard keeps the non-null provider contract honest and fails
+              // closed loudly rather than ever fabricating a source.
+              throw StateError(
+                'kdsSyncSourceProvider read without an established real session.',
+              );
+            }
+            return realSource;
+          }),
         if (injected != null && invSource != null)
           kdsInvalidationSourceProvider.overrideWithValue(invSource),
       ],
@@ -80,6 +106,12 @@ class _KdsMaterialApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // RF-136: mount the live board when a source is injected (tests) OR a real
+    // session has been established from --dart-define config. A null session
+    // (demo, unconfigured, or a failed/anon start_pin_session) keeps the
+    // demo/auth board - fail-closed, never a fake live feed.
+    final hasRealSession = ref.watch(kdsSyncSessionProvider) != null;
+    final live = injected != null || hasRealSession;
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).kdsAppTitle,
       localizationsDelegates: restoflowLocalizationsDelegates,
@@ -88,7 +120,7 @@ class _KdsMaterialApp extends ConsumerWidget {
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
       theme: restoflowBaseTheme(),
-      home: injected != null
+      home: live
           ? const KdsSyncedHome()
           : AuthGatedHome(
               surface: AppSurface.kds,

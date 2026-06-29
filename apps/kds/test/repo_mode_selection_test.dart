@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_kds/src/data/kitchen_orders_repository.dart';
+import 'package:restoflow_kds/src/state/kds_session.dart';
 import 'package:restoflow_kds/src/state/kitchen_orders_controller.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 
@@ -97,6 +98,20 @@ void main() {
         addTearDown(container.dispose);
 
         expect(container.read(kdsSyncSourceProvider), same(fake));
+      },
+    );
+
+    test(
+      'RF-136: kdsRealSyncSourceProvider is null in real mode without a real '
+      'session (fail closed -> demo/auth board, no backend)',
+      () {
+        // Real mode but no Supabase config and no operator context: the shared
+        // anon transport and the session both resolve to null, so no real
+        // coordinator is built and the app stays on the demo/auth board.
+        final container = _container(isDemoMode: false);
+        addTearDown(container.dispose);
+
+        expect(container.read(kdsRealSyncSourceProvider), isNull);
       },
     );
   });
