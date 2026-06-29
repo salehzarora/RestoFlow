@@ -141,14 +141,21 @@ class DemoPaymentStore implements PaymentRepository {
   }
 }
 
-/// REAL cash-payment repository skeleton (M7). Selected by `runtimeConfigProvider`
-/// in real mode. NOT YET WIRED: the production path is the RF-056 push engine
-/// delivering a `sync_push` operation to `app.record_payment` (RF-054), which
-/// needs (1) the `sync_push` transport seam (no `SyncPushTransport` /
-/// `SupabaseSyncPushTransport` exists yet) and (2) the device/PIN-session auth
-/// bridge that mints the authenticated session. Until both land every method
-/// throws [RealRepoNotWiredError], so no surface can claim live data and no
-/// backend is ever contacted. Money stays integer minor units (DECISION D-007).
+/// REAL cash-payment repository (M7). Selected by `runtimeConfigProvider` in
+/// real mode. The production path delivers a `payment.create` op to the RF-126
+/// `public.sync_push` wrapper (dispatched server-side to `app.record_payment`,
+/// RF-054), where the server allocates the authoritative per-branch receipt
+/// number and computes change (D-021 / D-007).
+///
+/// STILL FAIL-CLOSED: unlike `order.submit` (wired in RF-129), a `payment.create`
+/// op needs the server `order_id` of an already-submitted order PLUS an open
+/// shift + active cash drawer (RF-062), AND the PIN/device session that
+/// authorizes the push. The current `recordCashPayment(orderNumber, ...)` seam
+/// carries only the provisional order NUMBER - not the server order_id / shift
+/// context - and the sign-in/shift flow is not wired yet. So every method throws
+/// [RealRepoNotWiredError]: no surface claims live data and no backend is
+/// contacted. Wiring it is a follow-up (thread the submit result's order_id + the
+/// open-shift context through the seam). Money stays integer minor units (D-007).
 class RealPaymentRepository implements PaymentRepository {
   const RealPaymentRepository(this.config);
 
@@ -158,7 +165,8 @@ class RealPaymentRepository implements PaymentRepository {
   final SupabaseBootstrapConfig? config;
 
   static const String _reason =
-      'payment: sync_push -> app.record_payment not wired yet';
+      'payment: sync_push -> app.record_payment needs the server order_id + an '
+      'open shift/drawer threaded from the submit/shift flow - not wired yet';
 
   @override
   Future<CashPayment> recordCashPayment({
