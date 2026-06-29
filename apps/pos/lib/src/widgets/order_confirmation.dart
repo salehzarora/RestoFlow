@@ -151,6 +151,7 @@ class OrderConfirmation extends ConsumerWidget {
                             key: const Key('pay-cash-button'),
                             onPressed: () => CashPaymentSheet.show(
                               context,
+                              orderId: order.orderId,
                               orderNumber: order.orderNumber,
                               amountMinor: order.subtotalMinor,
                               currencyCode: order.currencyCode,

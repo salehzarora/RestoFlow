@@ -33,6 +33,7 @@ void main() {
 
   test('an exact cash payment completes with zero change', () async {
     final p = await controller().payCash(
+      orderId: 'order-1',
       orderNumber: 'DEMO-0001',
       amountMinor: 4200,
       tenderedMinor: 4200,
@@ -50,6 +51,7 @@ void main() {
 
   test('an overpayment computes the change in integer minor units', () async {
     final p = await controller().payCash(
+      orderId: 'order-1',
       orderNumber: 'DEMO-0001',
       amountMinor: 4200,
       tenderedMinor: 5000,
@@ -63,6 +65,7 @@ void main() {
   test('insufficient cash is rejected and records nothing', () async {
     await expectLater(
       controller().payCash(
+        orderId: 'order-1',
         orderNumber: 'DEMO-0001',
         amountMinor: 4200,
         tenderedMinor: 4000,
@@ -78,6 +81,7 @@ void main() {
     'the drawer grows by the ORDER amount (not the tender) per payment',
     () async {
       await controller().payCash(
+        orderId: 'order-1',
         orderNumber: 'DEMO-0001',
         amountMinor: 4200,
         tenderedMinor: 5000, // ₪8.00 change handed back
@@ -87,6 +91,7 @@ void main() {
       expect(state().shift.lastPaymentMinor, 4200);
 
       await controller().payCash(
+        orderId: 'order-2',
         orderNumber: 'DEMO-0002',
         amountMinor: 900,
         tenderedMinor: 1000,
@@ -99,12 +104,14 @@ void main() {
 
   test('paying an already-paid order is idempotent', () async {
     final a = await controller().payCash(
+      orderId: 'order-1',
       orderNumber: 'DEMO-0001',
       amountMinor: 4200,
       tenderedMinor: 5000,
       currencyCode: 'ILS',
     );
     final b = await controller().payCash(
+      orderId: 'order-1',
       orderNumber: 'DEMO-0001',
       amountMinor: 4200,
       tenderedMinor: 9999,

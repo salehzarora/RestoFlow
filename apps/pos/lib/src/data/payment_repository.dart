@@ -1,7 +1,7 @@
-import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
-import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import 'ids.dart';
 import 'payment.dart';
 
 const String _demoOrgId = 'demo-org';
@@ -27,9 +27,12 @@ class PaymentException implements Exception {
 /// Supabase-backed implementation lands with the device/PIN-session auth bridge.
 /// Nothing here contacts a backend or a printer.
 abstract class PaymentRepository {
-  /// Records a completed cash payment for [orderNumber]. Throws
-  /// [PaymentException] if [tenderedMinor] is less than [amountMinor].
+  /// Records a completed cash payment for the order [orderId] (the server order
+  /// id a real `payment.create` references; ignored by the demo store which keys
+  /// on [orderNumber]). Throws [PaymentException] if [tenderedMinor] is less than
+  /// [amountMinor] (demo) or the real push fails / is unauthorized (fail-closed).
   Future<CashPayment> recordCashPayment({
+    required String orderId,
     required String orderNumber,
     required int amountMinor,
     required int tenderedMinor,
@@ -80,6 +83,8 @@ class DemoPaymentStore implements PaymentRepository {
 
   @override
   Future<CashPayment> recordCashPayment({
+    required String
+    orderId, // demo keys on orderNumber; orderId is ignored here
     required String orderNumber,
     required int amountMinor,
     required int tenderedMinor,
@@ -141,45 +146,209 @@ class DemoPaymentStore implements PaymentRepository {
   }
 }
 
-/// REAL cash-payment repository (M7). Selected by `runtimeConfigProvider` in
-/// real mode. The production path delivers a `payment.create` op to the RF-126
-/// `public.sync_push` wrapper (dispatched server-side to `app.record_payment`,
-/// RF-054), where the server allocates the authoritative per-branch receipt
-/// number and computes change (D-021 / D-007).
+/// REAL cash-payment repository (M7 / RF-130). Selected by
+/// `runtimeConfigProvider` in real mode. It delivers a `payment.create` op to the
+/// RF-126 `public.sync_push` wrapper (dispatched server-side to
+/// `app.record_payment`, RF-054/RF-055), reusing the same shared public-schema
+/// [SyncRpcTransport] + [SyncSession] as the real outbox (RF-129; anon key + the
+/// signed-in JWT, never the `app` schema, never a service-role key). The server
+/// is the authority for the per-branch receipt number (D-021) and the change due
+/// (D-007); the client sends ONLY the tendered amount + the order id and reads
+/// the receipt/change/payment id back from the per-op result.
 ///
-/// STILL FAIL-CLOSED: unlike `order.submit` (wired in RF-129), a `payment.create`
-/// op needs the server `order_id` of an already-submitted order PLUS an open
-/// shift + active cash drawer (RF-062), AND the PIN/device session that
-/// authorizes the push. The current `recordCashPayment(orderNumber, ...)` seam
-/// carries only the provisional order NUMBER - not the server order_id / shift
-/// context - and the sign-in/shift flow is not wired yet. So every method throws
-/// [RealRepoNotWiredError]: no surface claims live data and no backend is
-/// contacted. Wiring it is a follow-up (thread the submit result's order_id + the
-/// open-shift context through the seam). Money stays integer minor units (D-007).
+/// FAIL-CLOSED: with no [SyncSession]/[SyncRpcTransport] (sign-in not wired) or no
+/// [orderId], every call throws [PaymentException] - no backend contact, no false
+/// "live" payment. A non-`applied` result (wrong PIN/role, NO OPEN SHIFT
+/// precondition (RF-055), conflict, or a malformed envelope) also throws
+/// [PaymentException]; nothing is ever invented.
+///
+/// SCOPE (RF-130): this wires `payment.create` only. The server hard-requires an
+/// OPEN shift + active cash drawer (resolved from the session/device, RF-055);
+/// the client `shift.open` flow is a SEPARATE ticket, so until a shift is open
+/// server-side a real payment is honestly REJECTED (precondition). Client-side
+/// shift/drawer display is likewise deferred (no `sync_pull` here), so
+/// [shiftContext] returns a neutral placeholder. Money is integer minor units
+/// (D-007) - the tendered amount is passed through verbatim, the change is read
+/// back from the server, no float is introduced.
 class RealPaymentRepository implements PaymentRepository {
-  const RealPaymentRepository(this.config);
+  const RealPaymentRepository(
+    this._transport,
+    this._session,
+    this._idGenerator,
+  );
 
-  /// The validated anon-key Supabase config (or null when real mode was selected
-  /// but config was missing/invalid - fail-closed). Held for the future
-  /// authenticated transport; no client is constructed yet.
-  final SupabaseBootstrapConfig? config;
+  /// The shared public-schema RPC transport, or null when real mode was selected
+  /// but the Supabase config was missing/invalid (fail-closed).
+  final SyncRpcTransport? _transport;
 
-  static const String _reason =
-      'payment: sync_push -> app.record_payment needs the server order_id + an '
-      'open shift/drawer threaded from the submit/shift flow - not wired yet';
+  /// The authenticated PIN/device session, or null until the sign-in flow wires
+  /// one (fail-closed: no session => no real payment).
+  final SyncSession? _session;
+
+  /// Mints the payment's `local_operation_id` (idempotency key, D-022) and a
+  /// client provisional id for the op `target_id`. The RECORDED payment id is
+  /// always the server-authoritative `payment_id` from the result, never this.
+  final ClientIdGenerator _idGenerator;
 
   @override
   Future<CashPayment> recordCashPayment({
+    required String orderId,
     required String orderNumber,
     required int amountMinor,
     required int tenderedMinor,
     required String currencyCode,
-  }) async => throw const RealRepoNotWiredError(_reason);
+  }) async {
+    final transport = _transport;
+    final session = _session;
+    if (transport == null || session == null) {
+      throw const PaymentException(
+        'real payment unavailable: an authenticated PIN session on a paired, '
+        'active device is required (sign-in flow not wired yet) - failing '
+        'closed, no payment is recorded.',
+      );
+    }
+    if (orderId.trim().isEmpty) {
+      throw const PaymentException(
+        'real payment unavailable: the submitted order id is missing - failing '
+        'closed, no payment is recorded.',
+      );
+    }
 
-  @override
-  ShiftContext shiftContext() => throw const RealRepoNotWiredError(_reason);
+    final localOperationId = _idGenerator.newId();
+    final clientPaymentId = _idGenerator.newId();
+    final createdAt = DateTime.now();
+    // The op `payload` is the server-accepted subset (RF-056): order_id + the
+    // cash tender. The server reads the order total, computes change, allocates
+    // the receipt, and resolves the open shift/drawer from the session/device -
+    // none of which the client sends. Money is integer minor units (no float).
+    final op = <String, dynamic>{
+      'local_operation_id': localOperationId,
+      'operation_type': 'payment.create',
+      'target_entity': 'payment',
+      'target_id': clientPaymentId,
+      'client_created_at': createdAt.toIso8601String(),
+      'payload': <String, dynamic>{
+        'order_id': orderId,
+        'tender_type': PaymentMethod.cash.wire, // 'cash'
+        'amount_tendered_minor': tenderedMinor,
+      },
+    };
 
+    final Object? raw;
+    try {
+      raw = await transport.invoke('sync_push', <String, dynamic>{
+        'p_pin_session_id': session.pinSessionId,
+        'p_device_id': session.deviceId,
+        'p_operations': <dynamic>[op],
+      });
+    } on SyncTransportException catch (e) {
+      // A whole-batch failure (e.g. 42501 - revoked device / expired PIN
+      // session). Carry only the error code, never raw backend text.
+      throw PaymentException('payment failed: ${e.code ?? e.kind.name}');
+    }
+
+    return _applyPaymentResult(
+      raw: raw,
+      localOperationId: localOperationId,
+      orderNumber: orderNumber,
+      deviceId: session.deviceId,
+      amountMinor: amountMinor,
+      tenderedMinor: tenderedMinor,
+      currencyCode: currencyCode,
+      paidAt: createdAt,
+    );
+  }
+
+  /// Maps a `public.sync_push` envelope to a completed [CashPayment], FAIL-CLOSED.
+  ///
+  /// Only an `applied` per-op result carrying the server-authoritative
+  /// `payment_id` + `receipt_number` + integer `change_due_minor` yields a
+  /// payment; anything we cannot positively parse - a malformed envelope, a
+  /// missing/empty `results`, no result matching this op's `local_operation_id`,
+  /// a missing/unknown/non-`applied` status (rejected / conflict / the RF-055
+  /// no-open-shift precondition), an `applied` contradicted by `ok: false`, a
+  /// missing/blank/wrong-type `payment_id`, or a missing/non-integer money value
+  /// - throws [PaymentException] (never a fabricated payment, never a
+  /// client-generated id, never raw backend JSON).
+  CashPayment _applyPaymentResult({
+    required Object? raw,
+    required String localOperationId,
+    required String orderNumber,
+    required String deviceId,
+    required int amountMinor,
+    required int tenderedMinor,
+    required String currencyCode,
+    required DateTime paidAt,
+  }) {
+    Never reject(String code) =>
+        throw PaymentException('payment rejected: $code');
+
+    if (raw is! Map) reject('malformed_response');
+    final results = raw['results'];
+    if (results is! List) reject('missing_results');
+    if (results.isEmpty) reject('empty_results');
+
+    Map<String, dynamic>? op;
+    for (final r in results) {
+      if (r is Map && r['local_operation_id'] == localOperationId) {
+        op = r.cast<String, dynamic>();
+        break;
+      }
+    }
+    if (op == null) reject('no_matching_operation');
+
+    final status = op['status'];
+    if (status is! String) reject('missing_status');
+    if (status != 'applied') {
+      final error = op['error'];
+      reject(error is String ? error : status);
+    }
+    if (op['ok'] == false) reject('applied_not_ok');
+
+    final receiptNumber = op['receipt_number'];
+    if (receiptNumber is! String || receiptNumber.isEmpty) {
+      reject('missing_receipt_number');
+    }
+    // The payment id is SERVER-AUTHORITATIVE (RF-054): a missing / null / blank /
+    // wrong-type id fails closed and is NEVER replaced by a client-generated id.
+    final paymentId = op['payment_id'];
+    if (paymentId is! String || paymentId.isEmpty) reject('missing_payment_id');
+    // Integer minor units only - a float/absent change is a contract violation.
+    final changeMinor = op['change_due_minor'];
+    if (changeMinor is! int) reject('invalid_change_due_minor');
+
+    return CashPayment(
+      paymentId: paymentId,
+      orderNumber: orderNumber,
+      deviceId: deviceId,
+      localOperationId: localOperationId,
+      method: PaymentMethod.cash,
+      status: PaymentStatus.completed,
+      amountMinor: amountMinor,
+      tenderedMinor: tenderedMinor,
+      changeMinor: changeMinor,
+      currencyCode: currencyCode,
+      receiptNumber: receiptNumber,
+      paidAt: paidAt,
+    );
+  }
+
+  /// Real shift/drawer state is server-managed and not pulled client-side in
+  /// RF-130 (no `sync_pull` here) - return a neutral placeholder so the payment
+  /// UI composes without crashing; the server enforces the open-shift
+  /// precondition (RF-055) on the actual payment. Honest: no demo cash is shown.
   @override
-  CashPayment? paymentFor(String orderNumber) =>
-      throw const RealRepoNotWiredError(_reason);
+  ShiftContext shiftContext() => const ShiftContext(
+    shiftOpen: false,
+    drawerOpen: false,
+    openingFloatMinor: 0,
+    cashInDrawerMinor: 0,
+    lastPaymentMinor: null,
+    currencyCode: 'ILS',
+  );
+
+  /// No client-side payment cache in real mode (the controller holds recorded
+  /// payments in its state); a real lookup would be a `sync_pull` (deferred).
+  @override
+  CashPayment? paymentFor(String orderNumber) => null;
 }
