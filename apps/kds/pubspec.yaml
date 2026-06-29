@@ -25,6 +25,10 @@ dependencies:
     path: ../../packages/auth_identity
   restoflow_feature_auth:
     path: ../../packages/feature_auth
+  # RF-136: the shared public-schema RPC transport (SyncRpcTransport) + SyncSession
+  # + SyncPullApi the real KDS coordinator uses to poll public.sync_pull (RF-064).
+  restoflow_data_remote:
+    path: ../../packages/data_remote
 dev_dependencies:
   flutter_test:
     sdk: flutter
