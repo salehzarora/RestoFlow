@@ -7,7 +7,12 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 /// RF-102 is restyle-only: the chip's VISIBLE TEXT is the raw
 /// [KitchenTicketStatus] `canonicalName` (data) — it is not localized or
 /// altered, and no status value/transition is added (DECISION D-018; RF-103
-/// owns transitions). Only colour/shape are added for at-a-glance readability.
+/// owns transitions).
+///
+/// RF-141E: rendered through the shared [RestoflowStatusPill] so the chip is
+/// fully themeable (no hardcoded colours). Each status maps to a DISTINCT
+/// semantic [RestoflowTone], preserving the at-a-glance per-status colour
+/// coding, and `dense: false` keeps the kitchen-readable (larger) text.
 class KdsStatusChip extends StatelessWidget {
   const KdsStatusChip({required this.status, super.key});
 
@@ -15,49 +20,30 @@ class KdsStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final palette = _paletteFor(status, theme.colorScheme);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.sm,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: palette.background,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Text(
-        status.canonicalName,
-        style: theme.textTheme.labelLarge?.copyWith(
-          color: palette.foreground,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
-        ),
-      ),
+    return RestoflowStatusPill(
+      label: status.canonicalName,
+      tone: _toneFor(status),
+      dense: false,
     );
   }
 }
 
-class _ChipPalette {
-  const _ChipPalette(this.background, this.foreground);
-  final Color background;
-  final Color foreground;
-}
-
-_ChipPalette _paletteFor(KitchenTicketStatus status, ColorScheme scheme) {
+/// Maps each kitchen-ticket status to a distinct semantic tone — warm/amber for
+/// in-progress, green for ready, red for cancelled — so the kitchen keeps its
+/// at-a-glance colour coding without any hardcoded colours.
+RestoflowTone _toneFor(KitchenTicketStatus status) {
   switch (status) {
     case KitchenTicketStatus.newTicket:
-      return _ChipPalette(scheme.surfaceContainerHighest, scheme.onSurface);
+      return RestoflowTone.neutral;
     case KitchenTicketStatus.acknowledged:
-      return const _ChipPalette(Color(0xFFE0E7FF), Color(0xFF3730A3));
+      return RestoflowTone.info;
     case KitchenTicketStatus.inPreparation:
-      return const _ChipPalette(Color(0xFFFEF3C7), Color(0xFF92400E));
+      return RestoflowTone.warning;
     case KitchenTicketStatus.ready:
-      return const _ChipPalette(Color(0xFFDCFCE7), Color(0xFF166534));
+      return RestoflowTone.success;
     case KitchenTicketStatus.bumped:
-      return _ChipPalette(scheme.surfaceContainerHigh, scheme.onSurfaceVariant);
+      return RestoflowTone.neutral;
     case KitchenTicketStatus.cancelled:
-      return _ChipPalette(scheme.errorContainer, scheme.onErrorContainer);
+      return RestoflowTone.danger;
   }
 }

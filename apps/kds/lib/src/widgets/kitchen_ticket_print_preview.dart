@@ -86,24 +86,27 @@ class KitchenTicketPrintPreview extends ConsumerWidget {
                         spacing: RestoflowSpacing.sm,
                         runSpacing: RestoflowSpacing.xs,
                         children: [
-                          _MetaChip(
+                          RestoflowStatusPill(
                             icon: dineIn
                                 ? Icons.restaurant
                                 : Icons.takeout_dining,
                             label: typeLabel,
                           ),
                           if (dineIn && ticket.tableLabel != null)
-                            _MetaChip(
+                            RestoflowStatusPill(
                               icon: Icons.table_restaurant,
                               label:
                                   '${l10n.posTableLabel} ${ticket.tableLabel}',
                             ),
                           if (station != null)
-                            _MetaChip(
+                            RestoflowStatusPill(
                               icon: Icons.kitchen_outlined,
                               label: '${l10n.kdsStationLabel}: $station',
                             ),
-                          _MetaChip(icon: Icons.schedule, label: elapsed),
+                          RestoflowStatusPill(
+                            icon: Icons.schedule,
+                            label: elapsed,
+                          ),
                         ],
                       ),
                       const SizedBox(height: RestoflowSpacing.sm),
@@ -253,42 +256,6 @@ class _PreviewActions extends StatelessWidget {
             onPressed: onPrint,
             icon: const Icon(Icons.print, size: 18),
             label: Text(l10n.printPreviewPrint),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.sm,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
           ),
         ],
       ),

@@ -15,6 +15,7 @@ class RestoflowStatusPill extends StatelessWidget {
     required this.label,
     this.tone = RestoflowTone.neutral,
     this.icon,
+    this.dense = true,
     super.key,
   });
 
@@ -24,10 +25,18 @@ class RestoflowStatusPill extends StatelessWidget {
   /// Optional leading icon. When null, no icon is shown (the pill is text-only).
   final IconData? icon;
 
+  /// When false the pill uses larger, bolder text (`labelLarge`) and a larger
+  /// icon — for at-a-glance readability on a kitchen display (RF-141E). Defaults
+  /// to true (compact `labelSmall`) for inline POS/dashboard/admin pills.
+  final bool dense;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = tone.style(theme.colorScheme);
+    final textStyle =
+        (dense ? theme.textTheme.labelSmall : theme.textTheme.labelLarge)
+            ?.copyWith(color: style.onContainer, fontWeight: FontWeight.w700);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: RestoflowSpacing.sm,
@@ -41,16 +50,10 @@ class RestoflowStatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 14, color: style.onContainer),
+            Icon(icon, size: dense ? 14 : 16, color: style.onContainer),
             const SizedBox(width: RestoflowSpacing.xs),
           ],
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: style.onContainer,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text(label, style: textStyle),
         ],
       ),
     );

@@ -80,20 +80,22 @@ class KitchenOrderCard extends StatelessWidget {
               spacing: RestoflowSpacing.sm,
               runSpacing: RestoflowSpacing.xs,
               children: [
-                _MetaChip(
+                RestoflowStatusPill(
                   icon: dineIn ? Icons.restaurant : Icons.takeout_dining,
                   label: typeLabel,
                 ),
                 if (dineIn && ticket.tableLabel != null)
-                  _MetaChip(
+                  RestoflowStatusPill(
                     icon: Icons.table_restaurant,
                     label: '${l10n.posTableLabel} ${ticket.tableLabel}',
                   ),
-                _MetaChip(
+                // Elapsed time is emphasised (info tone) — it's the field the
+                // kitchen scans most.
+                RestoflowStatusPill(
                   key: Key('elapsed-${ticket.ticketId}'),
                   icon: Icons.schedule,
                   label: elapsed,
-                  strong: true,
+                  tone: RestoflowTone.info,
                 ),
               ],
             ),
@@ -112,54 +114,6 @@ class KitchenOrderCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({
-    required this.icon,
-    required this.label,
-    this.strong = false,
-    super.key,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool strong;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bg = strong
-        ? theme.colorScheme.primaryContainer
-        : theme.colorScheme.surfaceContainerHighest;
-    final fg = strong
-        ? theme.colorScheme.onPrimaryContainer
-        : theme.colorScheme.onSurfaceVariant;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.sm,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: fg),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
       ),
     );
   }
