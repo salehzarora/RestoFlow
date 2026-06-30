@@ -4,7 +4,6 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_report.dart';
 import '../format/money_format.dart';
-import 'dashboard_status_pill.dart';
 
 /// One recent-orders row: the order number + net total on the first line, then a
 /// muted meta line (time · type · table) with a status pill and a paid/unpaid
@@ -68,48 +67,18 @@ class RecentOrderTile extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              DashboardStatusPill(label: row.status),
-              _PaidChip(
-                isPaid: row.isPaid,
+              // RF-141C: shared status pills (info = order status, success/
+              // neutral = paid/unpaid).
+              RestoflowStatusPill(label: row.status, tone: RestoflowTone.info),
+              RestoflowStatusPill(
                 label: row.isPaid ? l10n.dashboardPaid : l10n.dashboardUnpaid,
+                tone: row.isPaid
+                    ? RestoflowTone.success
+                    : RestoflowTone.neutral,
               ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// A small paid/unpaid chip (subtle, not alarming for unpaid open orders).
-class _PaidChip extends StatelessWidget {
-  const _PaidChip({required this.isPaid, required this.label});
-
-  final bool isPaid;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final bg = isPaid
-        ? scheme.secondaryContainer
-        : scheme.surfaceContainerHighest;
-    final fg = isPaid ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.sm,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }

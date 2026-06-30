@@ -1,40 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
-/// A titled section card holding a vertical list of rows (used for the
-/// sales-by-branch and top-items lists).
-class SectionCard extends StatelessWidget {
-  const SectionCard({required this.title, required this.children, super.key});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: RestoflowSpacing.sm),
-            const Divider(height: 1),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A simple leading-label / trailing-value row for a [SectionCard]. [label] and
+/// A simple leading-label / trailing-value row for a section card (RF-141C: the
+/// section container is now the shared [RestoflowSectionCard]). [label] and
 /// [trailingValue] are pre-built data strings; [secondary] is an optional muted
 /// sub-line under the label (e.g. an item quantity).
 class SectionRow extends StatelessWidget {

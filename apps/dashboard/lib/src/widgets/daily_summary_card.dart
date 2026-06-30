@@ -21,25 +21,10 @@ class DailySummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: RestoflowSpacing.sm),
-            const Divider(height: 1),
-            for (final row in rows) _SummaryRowTile(row: row),
-          ],
-        ),
-      ),
+    // RF-141C: built on the shared section card for consistent chrome.
+    return RestoflowSectionCard(
+      title: title,
+      children: [for (final row in rows) _SummaryRowTile(row: row)],
     );
   }
 }
