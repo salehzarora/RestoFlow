@@ -127,6 +127,30 @@ void main() {
       );
       expect(find.text('2'), findsOneWidget);
     });
+
+    testWidgets('is display-only (no ink) without onTap (RF-141D)', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const RestoflowMetricCard(label: 'Orders', value: '7'),
+      );
+      expect(find.byType(InkWell), findsNothing);
+    });
+
+    testWidgets(
+      'becomes tappable with hover/ripple when onTap is set (RF-141D)',
+      (tester) async {
+        var taps = 0;
+        await _pump(
+          tester,
+          RestoflowMetricCard(label: 'Orders', value: '7', onTap: () => taps++),
+        );
+        expect(find.byType(InkWell), findsOneWidget);
+        await tester.tap(find.byType(RestoflowMetricCard));
+        expect(taps, 1);
+      },
+    );
   });
 
   group('RestoflowSectionCard', () {

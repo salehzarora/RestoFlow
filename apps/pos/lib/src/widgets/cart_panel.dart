@@ -36,6 +36,7 @@ class CartPanel extends ConsumerWidget {
     final Widget body;
     if (submittedOrder != null) {
       body = OrderConfirmation(
+        key: const ValueKey('order-confirmation-view'),
         order: submittedOrder,
         onNewOrder: () {
           controller.startNewOrder();
@@ -50,6 +51,7 @@ class CartPanel extends ConsumerWidget {
           .length;
 
       body = Material(
+        key: const ValueKey('cart-view'),
         color: Theme.of(context).colorScheme.surfaceContainerLow,
         child: Column(
           children: [
@@ -111,7 +113,17 @@ class CartPanel extends ConsumerWidget {
       children: [
         const ShiftContextBar(),
         const Divider(height: 1),
-        Expanded(child: body),
+        // RF-141D: a short, subtle fade softens the cart <-> confirmation swap
+        // (instead of a 1-frame jump). Within-cart rebuilds keep the same key,
+        // so they update in place without animating.
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: body,
+          ),
+        ),
       ],
     );
   }
