@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
@@ -55,6 +56,24 @@ void main() {
     expect(find.text(l10n.posSyncStoredLocally), findsOneWidget);
     expect(find.textContaining('demo-op-0001'), findsOneWidget);
     expect(find.byKey(const Key('sync-now-button')), findsOneWidget);
+  });
+
+  testWidgets('RF-141B: the confirmation uses the shared design-system '
+      'components (status pills + notice banner)', (tester) async {
+    final l10n = await _en();
+    await _pump(tester, repo: DemoOutboxStore(delay: (_) async {}));
+
+    await _addItem(tester);
+    await tester.tap(find.text(l10n.posSendOrder));
+    await tester.pumpAndSettle();
+
+    // Submitted status, order type, and sync state are all shared pills now;
+    // the demo-order notice is the shared notice banner.
+    expect(find.byType(RestoflowStatusPill), findsWidgets);
+    expect(find.byType(RestoflowNoticeBanner), findsOneWidget);
+    // Behaviour preserved: the existing labels still render verbatim.
+    expect(find.text(l10n.posOrderStatusSubmitted), findsOneWidget);
+    expect(find.text(l10n.posSyncStatePending), findsOneWidget);
   });
 
   testWidgets('Sync now (demo) moves the order to Synced', (tester) async {

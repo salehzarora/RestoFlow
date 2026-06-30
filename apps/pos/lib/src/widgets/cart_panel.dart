@@ -509,53 +509,18 @@ class _SelectionSummary extends StatelessWidget {
         spacing: RestoflowSpacing.sm,
         runSpacing: RestoflowSpacing.xs,
         children: [
-          _SummaryChip(
+          // RF-141B: shared design-system status pill (neutral tone).
+          RestoflowStatusPill(
             key: const Key('summary-order-type'),
             icon: dineIn ? Icons.restaurant : Icons.takeout_dining,
             label: typeLabel,
           ),
           if (tableChipLabel != null)
-            _SummaryChip(
+            RestoflowStatusPill(
               key: const Key('summary-table'),
               icon: Icons.event_seat,
               label: tableChipLabel,
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryChip extends StatelessWidget {
-  const _SummaryChip({required this.icon, required this.label, super.key});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.sm,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
         ],
       ),
     );
