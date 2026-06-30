@@ -157,7 +157,7 @@ abstract class AppLocalizations {
   /// Platform-admin banner honestly stating the overview is computed demo data, not a live backend.
   ///
   /// In en, this message translates to:
-  /// **'Demo platform data — computed locally, not synced to a backend. Real platform admin data wiring is deferred.'**
+  /// **'Demo platform data — computed locally on this device, not synced to a backend.'**
   String get adminDemoDataNotice;
 
   /// Platform-admin action that reloads the overview.
@@ -1141,8 +1141,20 @@ abstract class AppLocalizations {
   /// Owner dashboard banner honestly stating the reports are computed from local demo data, not a live backend.
   ///
   /// In en, this message translates to:
-  /// **'Demo reports — calculated locally from sample orders, not synced to a backend. Real backend reporting is deferred.'**
+  /// **'Demo reports — calculated locally from sample orders, not synced to a backend.'**
   String get dashboardDemoReportsNotice;
+
+  /// Owner dashboard real-mode banner: the reports are live but read-only and limited (RF-140).
+  ///
+  /// In en, this message translates to:
+  /// **'Live reports — read-only and limited. Some figures aren\'t available here yet.'**
+  String get dashboardRealModeNotice;
+
+  /// Owner dashboard pill shown in real mode in place of the 'Demo day' pill.
+  ///
+  /// In en, this message translates to:
+  /// **'Live · limited'**
+  String get dashboardLiveDataTag;
 
   /// Owner dashboard KPI card label for gross sales (before discounts).
   ///

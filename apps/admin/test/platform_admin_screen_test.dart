@@ -35,8 +35,8 @@ void main() {
     expect(find.byKey(const Key('platform-demo-banner')), findsOneWidget);
     expect(
       find.text(
-        'Demo platform data — computed locally, not synced to a backend. '
-        'Real platform admin data wiring is deferred.',
+        'Demo platform data — computed locally on this device, not synced '
+        'to a backend.',
       ),
       findsOneWidget,
     );

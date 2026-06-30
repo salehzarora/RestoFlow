@@ -37,7 +37,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get adminDemoDataNotice =>
-      'נתוני פלטפורמה להדגמה — מחושבים מקומית, ללא סנכרון לשרת. חיבור נתוני ניהול הפלטפורמה האמיתיים נדחה.';
+      'נתוני פלטפורמה להדגמה — מחושבים מקומית במכשיר זה, ללא סנכרון לשרת.';
 
   @override
   String get adminRefresh => 'רענון';
@@ -544,7 +544,14 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get dashboardDemoReportsNotice =>
-      'דוחות הדגמה — מחושבים מקומית מהזמנות לדוגמה, ללא סנכרון לשרת. דיווח אמיתי מהשרת נדחה.';
+      'דוחות הדגמה — מחושבים מקומית מהזמנות לדוגמה, ללא סנכרון לשרת.';
+
+  @override
+  String get dashboardRealModeNotice =>
+      'דוחות חיים — לקריאה בלבד ומוגבלים. חלק מהנתונים עדיין לא זמינים כאן.';
+
+  @override
+  String get dashboardLiveDataTag => 'חי · מוגבל';
 
   @override
   String get dashboardGrossSales => 'מכירות ברוטו';

@@ -36,7 +36,7 @@
   "@adminDemoDataTag": {
     "description": "Platform-admin pill clarifying the overview is demo data, not live."
   },
-  "adminDemoDataNotice": "Demo platform data — computed locally, not synced to a backend. Real platform admin data wiring is deferred.",
+  "adminDemoDataNotice": "Demo platform data — computed locally on this device, not synced to a backend.",
   "@adminDemoDataNotice": {
     "description": "Platform-admin banner honestly stating the overview is computed demo data, not a live backend."
   },
@@ -696,9 +696,17 @@
   "@dashboardNoReportData": {
     "description": "Owner dashboard message shown when there is no report data for the day."
   },
-  "dashboardDemoReportsNotice": "Demo reports — calculated locally from sample orders, not synced to a backend. Real backend reporting is deferred.",
+  "dashboardDemoReportsNotice": "Demo reports — calculated locally from sample orders, not synced to a backend.",
   "@dashboardDemoReportsNotice": {
     "description": "Owner dashboard banner honestly stating the reports are computed from local demo data, not a live backend."
+  },
+  "dashboardRealModeNotice": "Live reports — read-only and limited. Some figures aren't available here yet.",
+  "@dashboardRealModeNotice": {
+    "description": "Owner dashboard real-mode banner: the reports are live but read-only and limited (RF-140)."
+  },
+  "dashboardLiveDataTag": "Live · limited",
+  "@dashboardLiveDataTag": {
+    "description": "Owner dashboard pill shown in real mode in place of the 'Demo day' pill."
   },
   "dashboardGrossSales": "Gross sales",
   "@dashboardGrossSales": {

@@ -53,6 +53,13 @@ Demo mode is the **default** (`RESTOFLOW_DEMO_MODE` defaults to `true`), so the
 plain run commands below open each app's demo surface with no backend. You can
 force it explicitly with `--dart-define=RESTOFLOW_DEMO_MODE=true`.
 
+> **Performance note (judging "feel"):** Flutter **web debug** builds
+> (`flutter run -d chrome`, the default) are intentionally heavy — DDC/no
+> tree-shaking, asserts on — and feel slower and jankier than the real product.
+> When judging actual performance/smoothness, run in **profile** or **release**:
+> `flutter run -d chrome --profile` (or `--release`). Debug-mode jank is not a
+> product defect.
+
 ---
 
 ## 3. Baseline commands (run once, at the repo root)

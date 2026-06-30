@@ -37,7 +37,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get adminDemoDataNotice =>
-      'بيانات منصة تجريبية — محسوبة محليًا وغير متزامنة مع خادم. ربط بيانات إدارة المنصة الحقيقية مؤجل.';
+      'بيانات منصة تجريبية — محسوبة محليًا على هذا الجهاز، وغير متزامنة مع خادم.';
 
   @override
   String get adminRefresh => 'تحديث';
@@ -547,7 +547,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardDemoReportsNotice =>
-      'تقارير تجريبية — محسوبة محليًا من طلبات نموذجية، وغير متزامنة مع خادم. تقارير الخادم الحقيقية مؤجلة.';
+      'تقارير تجريبية — محسوبة محليًا من طلبات نموذجية، وغير متزامنة مع خادم.';
+
+  @override
+  String get dashboardRealModeNotice =>
+      'تقارير مباشرة — للقراءة فقط ومحدودة. بعض الأرقام غير متوفرة هنا بعد.';
+
+  @override
+  String get dashboardLiveDataTag => 'مباشر · محدود';
 
   @override
   String get dashboardGrossSales => 'إجمالي المبيعات';
