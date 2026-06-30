@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_admin/src/platform_admin_screen.dart';
-import 'package:restoflow_admin/src/widgets/platform_widgets.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 Widget _wrap() => const ProviderScope(
@@ -22,7 +22,7 @@ void _wide(WidgetTester tester) {
 }
 
 String _kpi(WidgetTester tester, String key) =>
-    tester.widget<PlatformMetricCard>(find.byKey(Key(key))).value;
+    tester.widget<RestoflowMetricCard>(find.byKey(Key(key))).value;
 
 void main() {
   testWidgets('renders the overview: banner, title, as-of, refresh', (

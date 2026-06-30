@@ -8,9 +8,6 @@ import 'data/demo_report.dart';
 import 'format/money_format.dart';
 import 'state/dashboard_providers.dart';
 import 'widgets/daily_summary_card.dart';
-import 'widgets/dashboard_status_pill.dart';
-import 'widgets/demo_notice_banner.dart';
-import 'widgets/metric_card.dart';
 import 'widgets/recent_order_tile.dart';
 import 'widgets/section_card.dart';
 
@@ -92,14 +89,14 @@ class _ReportContent extends StatelessWidget {
     // data. (Real mode currently fails closed before reaching this content; the
     // mode-aware banner keeps the screen honest for when real data lands.)
     final banner = isDemo
-        ? DemoNoticeBanner(
+        ? RestoflowNoticeBanner(
             key: const Key('reports-demo-banner'),
-            message: l10n.dashboardDemoReportsNotice,
+            body: l10n.dashboardDemoReportsNotice,
           )
-        : DemoNoticeBanner(
+        : RestoflowNoticeBanner(
             key: const Key('reports-realmode-banner'),
-            message: l10n.dashboardRealModeNotice,
-            tone: DemoNoticeTone.caution,
+            body: l10n.dashboardRealModeNotice,
+            tone: RestoflowTone.warning,
           );
 
     if (report.isEmpty) {
@@ -117,44 +114,44 @@ class _ReportContent extends StatelessWidget {
 
     final openCaption = '${l10n.dashboardOpenOrders}: ${report.openOrderCount}';
     final kpis = <Widget>[
-      MetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-gross-sales'),
         label: l10n.dashboardGrossSales,
         value: money(report.grossSalesMinor),
         icon: Icons.point_of_sale_outlined,
       ),
-      MetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-net-sales'),
         label: l10n.dashboardTodaySales,
         value: money(report.netSalesMinor),
         icon: Icons.payments_outlined,
       ),
-      MetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-orders'),
         label: l10n.dashboardOrders,
         value: report.orderCount.toString(),
         icon: Icons.receipt_long_outlined,
       ),
-      MetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-avg-ticket'),
         label: l10n.dashboardAvgOrderValue,
         value: money(report.avgOrderValueMinor),
         icon: Icons.trending_up,
       ),
-      MetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-cash-sales'),
         label: l10n.dashboardCashSales,
         value: money(report.cashSalesMinor),
         icon: Icons.account_balance_wallet_outlined,
       ),
-      MetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-completed'),
         label: l10n.dashboardCompletedOrders,
         value: report.completedOrderCount.toString(),
         caption: openCaption,
         icon: Icons.task_alt,
       ),
-      MetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-unpaid'),
         label: l10n.dashboardUnpaidOrders,
         value: report.unpaidOrderCount.toString(),
@@ -187,7 +184,10 @@ class _ReportContent extends StatelessWidget {
         ),
         SummaryRow(
           label: l10n.dashboardShiftStatus,
-          trailing: DashboardStatusPill(label: report.shiftStatus),
+          trailing: RestoflowStatusPill(
+            label: report.shiftStatus,
+            tone: RestoflowTone.info,
+          ),
         ),
       ],
     );
@@ -228,7 +228,7 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
-    final branches = SectionCard(
+    final branches = RestoflowSectionCard(
       key: const Key('sales-by-branch-card'),
       title: l10n.dashboardSalesByBranch,
       children: [
@@ -244,7 +244,7 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
-    final topItems = SectionCard(
+    final topItems = RestoflowSectionCard(
       key: const Key('top-items-card'),
       title: l10n.dashboardTopItems,
       children: [
@@ -260,7 +260,7 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
-    final recentOrders = SectionCard(
+    final recentOrders = RestoflowSectionCard(
       key: const Key('recent-orders-card'),
       title: l10n.dashboardRecentOrders,
       children: [
@@ -367,8 +367,9 @@ class _ReportHeader extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            DashboardStatusPill(
+            RestoflowStatusPill(
               label: isDemo ? l10n.dashboardDemoDay : l10n.dashboardLiveDataTag,
+              tone: RestoflowTone.info,
             ),
           ],
         ),

@@ -92,14 +92,14 @@ class _OverviewContent extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     final banner = isDemo
-        ? PlatformNoticeBanner(
+        ? RestoflowNoticeBanner(
             key: const Key('platform-demo-banner'),
-            message: l10n.adminDemoDataNotice,
+            body: l10n.adminDemoDataNotice,
           )
-        : PlatformNoticeBanner(
+        : RestoflowNoticeBanner(
             key: const Key('platform-realmode-banner'),
-            message: l10n.adminRealModeNotice,
-            tone: NoticeTone.caution,
+            body: l10n.adminRealModeNotice,
+            tone: RestoflowTone.warning,
           );
     final header = _OverviewHeader(overview: overview, isDemo: isDemo);
 
@@ -124,45 +124,45 @@ class _OverviewContent extends StatelessWidget {
     // NOT provided by that panel, so they are shown ONLY in demo mode — never as
     // a fabricated `0` in real mode (RF-134).
     final kpis = <Widget>[
-      PlatformMetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-organizations'),
         label: l10n.adminKpiOrganizations,
         value: overview.organizationCount.toString(),
         caption: activeOrgCaption,
         icon: Icons.domain_outlined,
       ),
-      PlatformMetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-restaurants'),
         label: l10n.adminKpiRestaurants,
         value: overview.restaurantCount.toString(),
         icon: Icons.restaurant_outlined,
       ),
-      PlatformMetricCard(
+      RestoflowMetricCard(
         key: const Key('kpi-branches'),
         label: l10n.adminKpiBranches,
         value: overview.branchCount.toString(),
         icon: Icons.store_mall_directory_outlined,
       ),
       if (isDemo) ...[
-        PlatformMetricCard(
+        RestoflowMetricCard(
           key: const Key('kpi-active-branches'),
           label: l10n.adminKpiActiveBranches,
           value: overview.activeBranchCount.toString(),
           icon: Icons.check_circle_outline,
         ),
-        PlatformMetricCard(
+        RestoflowMetricCard(
           key: const Key('kpi-devices'),
           label: l10n.adminKpiDevices,
           value: overview.deviceCount.toString(),
           icon: Icons.devices_outlined,
         ),
-        PlatformMetricCard(
+        RestoflowMetricCard(
           key: const Key('kpi-alerts'),
           label: l10n.adminKpiAlerts,
           value: overview.warningCount.toString(),
           icon: Icons.warning_amber_outlined,
         ),
-        PlatformMetricCard(
+        RestoflowMetricCard(
           key: const Key('kpi-orders-today'),
           label: l10n.adminKpiOrdersToday,
           value: overview.todayOrderCount.toString(),
@@ -171,7 +171,7 @@ class _OverviewContent extends StatelessWidget {
       ],
     ];
 
-    final organizations = PlatformSectionCard(
+    final organizations = RestoflowSectionCard(
       key: const Key('organizations-card'),
       title: l10n.adminOrganizationsHeading,
       children: [
@@ -183,17 +183,17 @@ class _OverviewContent extends StatelessWidget {
                 '${org.branchCount} ${l10n.adminKpiBranches} · '
                 '${l10n.adminCreatedLabel} ${org.createdAtLabel}',
             trailingValue: org.plan,
-            trailing: PlatformStatusPill(
+            trailing: RestoflowStatusPill(
               label: org.status,
               tone: org.status == 'active'
-                  ? PillTone.neutral
-                  : PillTone.warning,
+                  ? RestoflowTone.neutral
+                  : RestoflowTone.danger,
             ),
           ),
       ],
     );
 
-    final branchHealth = PlatformSectionCard(
+    final branchHealth = RestoflowSectionCard(
       key: const Key('branch-health-card'),
       title: l10n.adminBranchHealthHeading,
       children: [
@@ -207,16 +207,16 @@ class _OverviewContent extends StatelessWidget {
                 '${branch.todayOrderCount} ${l10n.adminOrdersTodayShort}',
             trailingValue: branch.status,
             trailing: branch.hasWarning
-                ? PlatformStatusPill(
+                ? RestoflowStatusPill(
                     label: l10n.adminWarningChip,
-                    tone: PillTone.warning,
+                    tone: RestoflowTone.danger,
                   )
                 : null,
           ),
       ],
     );
 
-    final activity = PlatformSectionCard(
+    final activity = RestoflowSectionCard(
       key: const Key('recent-activity-card'),
       title: l10n.adminRecentActivityHeading,
       children: [
@@ -311,7 +311,7 @@ class _OverviewHeader extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            PlatformStatusPill(
+            RestoflowStatusPill(
               key: const Key('platform-data-source-pill'),
               label: isDemo ? l10n.adminDemoDataTag : l10n.adminLiveLimitedTag,
             ),

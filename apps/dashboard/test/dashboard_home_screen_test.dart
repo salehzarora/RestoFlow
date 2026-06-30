@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
-import 'package:restoflow_dashboard/src/widgets/metric_card.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -45,7 +45,7 @@ void _useWideSurface(WidgetTester tester) {
 }
 
 String _kpi(WidgetTester tester, String key) =>
-    tester.widget<MetricCard>(find.byKey(Key(key))).value;
+    tester.widget<RestoflowMetricCard>(find.byKey(Key(key))).value;
 
 void main() {
   testWidgets('renders the reports area: banner, day context, refresh', (
