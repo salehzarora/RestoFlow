@@ -85,9 +85,18 @@ class OrderConfirmation extends ConsumerWidget {
                             spacing: RestoflowSpacing.sm,
                             runSpacing: RestoflowSpacing.xs,
                             children: [
-                              _StatusChip(label: l10n.posOrderStatusSubmitted),
+                              // RF-141B: shared status pills (info = submitted,
+                              // success = paid).
+                              RestoflowStatusPill(
+                                label: l10n.posOrderStatusSubmitted,
+                                tone: RestoflowTone.info,
+                              ),
                               if (payment != null)
-                                _PaidStatusChip(label: l10n.posPaidChip),
+                                RestoflowStatusPill(
+                                  label: l10n.posPaidChip,
+                                  tone: RestoflowTone.success,
+                                  icon: Icons.check_circle,
+                                ),
                             ],
                           ),
                         ),
@@ -130,7 +139,11 @@ class OrderConfirmation extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: RestoflowSpacing.md),
-                  _DemoNotice(message: l10n.posDemoOrderNotice),
+                  // RF-141B: shared design-system notice (subtle info tone).
+                  RestoflowNoticeBanner(
+                    body: l10n.posDemoOrderNotice,
+                    tone: RestoflowTone.info,
+                  ),
                 ] else
                   ReceiptPreview(order: order, payment: payment),
               ],
@@ -252,49 +265,14 @@ class _ServiceModeRow extends StatelessWidget {
       spacing: RestoflowSpacing.sm,
       runSpacing: RestoflowSpacing.xs,
       children: [
-        _InfoChip(
+        // RF-141B: shared design-system status pills (neutral tone).
+        RestoflowStatusPill(
           icon: dineIn ? Icons.restaurant : Icons.takeout_dining,
           label: typeLabel,
         ),
         if (tableChipLabel != null)
-          _InfoChip(icon: Icons.event_seat, label: tableChipLabel),
+          RestoflowStatusPill(icon: Icons.event_seat, label: tableChipLabel),
       ],
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.sm,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -308,25 +286,25 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
   return null;
 }
 
-/// Label + honest note + colour + icon for a sync state.
-({String label, String note, Color color, Color onColor, IconData icon})
-_syncVisual(OutboxSyncState state, ThemeData theme, AppLocalizations l10n) {
-  final scheme = theme.colorScheme;
+/// Label + honest note + semantic [RestoflowTone] + icon for a sync state
+/// (RF-141B: tones map to the shared design-system status pill).
+({String label, String note, RestoflowTone tone, IconData icon}) _syncVisual(
+  OutboxSyncState state,
+  AppLocalizations l10n,
+) {
   switch (state) {
     case OutboxSyncState.inFlight:
       return (
         label: l10n.posSyncStateSending,
         note: l10n.posSyncDemoNotice,
-        color: scheme.secondaryContainer,
-        onColor: scheme.onSecondaryContainer,
+        tone: RestoflowTone.info,
         icon: Icons.sync,
       );
     case OutboxSyncState.applied:
       return (
         label: l10n.posSyncStateSynced,
         note: l10n.posSyncDemoNotice,
-        color: scheme.primaryContainer,
-        onColor: scheme.onPrimaryContainer,
+        tone: RestoflowTone.success,
         icon: Icons.cloud_done_outlined,
       );
     case OutboxSyncState.rejected:
@@ -334,8 +312,7 @@ _syncVisual(OutboxSyncState state, ThemeData theme, AppLocalizations l10n) {
       return (
         label: l10n.posSyncStateFailed,
         note: l10n.posSyncDemoNotice,
-        color: scheme.errorContainer,
-        onColor: scheme.onErrorContainer,
+        tone: RestoflowTone.danger,
         icon: Icons.error_outline,
       );
     case OutboxSyncState.created:
@@ -345,8 +322,7 @@ _syncVisual(OutboxSyncState state, ThemeData theme, AppLocalizations l10n) {
       return (
         label: l10n.posSyncStatePending,
         note: l10n.posSyncStoredLocally,
-        color: scheme.tertiaryContainer,
-        onColor: scheme.onTertiaryContainer,
+        tone: RestoflowTone.warning,
         icon: Icons.schedule,
       );
   }
@@ -372,7 +348,7 @@ class _SyncStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = entry?.syncState ?? OutboxSyncState.pending;
-    final visual = _syncVisual(state, theme, l10n);
+    final visual = _syncVisual(state, l10n);
     final opRef = entry?.localOperationId;
     final sending = state == OutboxSyncState.inFlight;
     final refLine = opRef == null ? null : '${l10n.posOutboxRefLabel}: $opRef';
@@ -403,10 +379,9 @@ class _SyncStatusCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: RestoflowSpacing.sm),
-                _SyncChip(
+                RestoflowStatusPill(
                   label: visual.label,
-                  color: visual.color,
-                  onColor: visual.onColor,
+                  tone: visual.tone,
                   icon: visual.icon,
                 ),
               ],
@@ -490,118 +465,6 @@ class _SyncStatusCard extends StatelessWidget {
   }
 }
 
-class _SyncChip extends StatelessWidget {
-  const _SyncChip({
-    required this.label,
-    required this.color,
-    required this.onColor,
-    required this.icon,
-  });
-
-  final String label;
-  final Color color;
-  final Color onColor;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.sm,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: onColor),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: onColor,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A green "Paid" status chip (RF-116) shown on the order card once a cash
-/// payment is recorded.
-class _PaidStatusChip extends StatelessWidget {
-  const _PaidStatusChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.md,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.check_circle,
-            size: 16,
-            color: theme.colorScheme.onPrimary,
-          ),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.onPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.md,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelLarge?.copyWith(
-          color: theme.colorScheme.onPrimaryContainer,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
 class _ConfirmationLine extends StatelessWidget {
   const _ConfirmationLine({required this.line});
 
@@ -633,36 +496,6 @@ class _ConfirmationLine extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _DemoNotice extends StatelessWidget {
-  const _DemoNotice({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          Icons.info_outline,
-          size: 18,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: RestoflowSpacing.sm),
-        Expanded(
-          child: Text(
-            message,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
