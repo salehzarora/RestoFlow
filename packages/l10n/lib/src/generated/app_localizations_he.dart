@@ -1184,4 +1184,65 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get adminDeviceUpdated => 'המכשיר עודכן';
+
+  @override
+  String get authWelcomeTitle => 'ברוכים הבאים ל-RestoFlow';
+
+  @override
+  String get authSignInTab => 'התחברות';
+
+  @override
+  String get authCreateAccountTab => 'יצירת חשבון';
+
+  @override
+  String get authEmailLabel => 'אימייל';
+
+  @override
+  String get authPasswordLabel => 'סיסמה';
+
+  @override
+  String get authSignInAction => 'התחברות';
+
+  @override
+  String get authEmailRequired => 'הזינו אימייל';
+
+  @override
+  String get authPasswordRequired => 'הזינו סיסמה';
+
+  @override
+  String get authPasswordTooShort => 'השתמשו ב-6 תווים לפחות';
+
+  @override
+  String get authInvalidCredentials => 'אימייל או סיסמה שגויים';
+
+  @override
+  String get authSignUpFailed => 'לא ניתן ליצור את החשבון. נסו שוב.';
+
+  @override
+  String get authNetworkError => 'לא ניתן להגיע לשרת. בדקו את החיבור.';
+
+  @override
+  String get authEmailConfirmationSent =>
+      'בדקו את האימייל לאישור החשבון ואז התחברו.';
+
+  @override
+  String get onboardingTitle => 'הגדרת המסעדה שלך';
+
+  @override
+  String get onboardingIntro => 'צרו את המסעדה כדי להתחיל להשתמש ב-RestoFlow.';
+
+  @override
+  String get onboardingRestaurantNameLabel => 'שם המסעדה';
+
+  @override
+  String get onboardingBranchNameLabel => 'שם הסניף (אופציונלי)';
+
+  @override
+  String get onboardingRestaurantNameRequired => 'הזינו שם מסעדה';
+
+  @override
+  String get onboardingCreateAction => 'יצירת מסעדה';
+
+  @override
+  String get onboardingFailed => 'לא ניתן ליצור את המסעדה. נסו שוב.';
 }

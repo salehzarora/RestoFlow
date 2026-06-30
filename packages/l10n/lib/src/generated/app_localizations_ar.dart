@@ -1190,4 +1190,66 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get adminDeviceUpdated => 'تم تحديث الجهاز';
+
+  @override
+  String get authWelcomeTitle => 'مرحبًا بك في RestoFlow';
+
+  @override
+  String get authSignInTab => 'تسجيل الدخول';
+
+  @override
+  String get authCreateAccountTab => 'إنشاء حساب';
+
+  @override
+  String get authEmailLabel => 'البريد الإلكتروني';
+
+  @override
+  String get authPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get authSignInAction => 'تسجيل الدخول';
+
+  @override
+  String get authEmailRequired => 'أدخل بريدك الإلكتروني';
+
+  @override
+  String get authPasswordRequired => 'أدخل كلمة المرور';
+
+  @override
+  String get authPasswordTooShort => 'استخدم 6 أحرف على الأقل';
+
+  @override
+  String get authInvalidCredentials =>
+      'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+
+  @override
+  String get authSignUpFailed => 'تعذّر إنشاء حسابك. حاول مرة أخرى.';
+
+  @override
+  String get authNetworkError => 'تعذّر الوصول إلى الخادم. تحقّق من اتصالك.';
+
+  @override
+  String get authEmailConfirmationSent =>
+      'تحقّق من بريدك الإلكتروني لتأكيد حسابك ثم سجّل الدخول.';
+
+  @override
+  String get onboardingTitle => 'إعداد مطعمك';
+
+  @override
+  String get onboardingIntro => 'أنشئ مطعمك لبدء استخدام RestoFlow.';
+
+  @override
+  String get onboardingRestaurantNameLabel => 'اسم المطعم';
+
+  @override
+  String get onboardingBranchNameLabel => 'اسم الفرع (اختياري)';
+
+  @override
+  String get onboardingRestaurantNameRequired => 'أدخل اسم المطعم';
+
+  @override
+  String get onboardingCreateAction => 'إنشاء المطعم';
+
+  @override
+  String get onboardingFailed => 'تعذّر إنشاء مطعمك. حاول مرة أخرى.';
 }
