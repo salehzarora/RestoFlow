@@ -1,12 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
+import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_dashboard/src/widgets/metric_card.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 Widget _wrap() => const ProviderScope(
   child: MaterialApp(
+    locale: Locale('en'),
+    localizationsDelegates: restoflowLocalizationsDelegates,
+    supportedLocales: kSupportedLocales,
+    home: DashboardHomeScreen(),
+  ),
+);
+
+/// Wraps the screen forcing REAL mode. The demo repository still supplies the
+/// data, so what is under test is the mode-aware banner/pill (driven by
+/// [runtimeConfigProvider]) — not the repository (RF-140).
+Widget _wrapRealMode() => ProviderScope(
+  overrides: [
+    runtimeConfigProvider.overrideWithValue(
+      RuntimeConfig.test(isDemoMode: false),
+    ),
+    ownerReportsRepositoryProvider.overrideWithValue(
+      const DemoOwnerReportsRepository(),
+    ),
+  ],
+  child: const MaterialApp(
     locale: Locale('en'),
     localizationsDelegates: restoflowLocalizationsDelegates,
     supportedLocales: kSupportedLocales,
@@ -37,7 +60,7 @@ void main() {
     expect(
       find.text(
         'Demo reports — calculated locally from sample orders, not synced '
-        'to a backend. Real backend reporting is deferred.',
+        'to a backend.',
       ),
       findsOneWidget,
     );
@@ -46,6 +69,28 @@ void main() {
     expect(find.text('Report day: 2026-06-28'), findsOneWidget);
     expect(find.text('Demo day'), findsOneWidget);
     expect(find.byKey(const Key('reports-refresh-button')), findsOneWidget);
+  });
+
+  testWidgets('real mode shows the live·limited notice, not the demo banner', (
+    tester,
+  ) async {
+    _useWideSurface(tester);
+    await tester.pumpWidget(_wrapRealMode());
+    await tester.pumpAndSettle();
+
+    // The caution real-mode banner replaces the demo banner, and the header pill
+    // flips from "Demo day" to "Live · limited" (RF-140 honesty).
+    expect(find.byKey(const Key('reports-realmode-banner')), findsOneWidget);
+    expect(find.byKey(const Key('reports-demo-banner')), findsNothing);
+    expect(
+      find.text(
+        "Live reports — read-only and limited. Some figures aren't "
+        'available here yet.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Live · limited'), findsOneWidget);
+    expect(find.text('Demo day'), findsNothing);
   });
 
   testWidgets('KPI cards show the values computed from the demo dataset', (

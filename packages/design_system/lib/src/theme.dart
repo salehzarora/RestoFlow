@@ -13,10 +13,23 @@ import 'tokens.dart';
 /// Pass a [brightness] of [Brightness.dark] for a dark variant. Brand colours
 /// are data-driven by [seedColor]; RTL/LTR remains handled by the localization
 /// delegates (DECISION D-014), not the theme.
+ThemeData? _cachedDefaultTheme;
+
 ThemeData restoflowBaseTheme({
   Color seedColor = kRestoflowSeedColor,
   Brightness brightness = Brightness.light,
 }) {
+  // RF-140 perf: the DEFAULT light theme (used by all four apps' MaterialApp
+  // `theme:`) is built ONCE and reused, so the `ColorScheme.fromSeed`
+  // harmonization pass is not recomputed on every app rebuild (e.g. on each
+  // locale switch). Non-default args still build a fresh theme.
+  if (seedColor == kRestoflowSeedColor && brightness == Brightness.light) {
+    return _cachedDefaultTheme ??= _buildRestoflowTheme(seedColor, brightness);
+  }
+  return _buildRestoflowTheme(seedColor, brightness);
+}
+
+ThemeData _buildRestoflowTheme(Color seedColor, Brightness brightness) {
   final colorScheme = ColorScheme.fromSeed(
     seedColor: seedColor,
     brightness: brightness,

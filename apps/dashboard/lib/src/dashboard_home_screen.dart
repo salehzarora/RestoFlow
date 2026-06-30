@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'data/demo_report.dart';
@@ -30,6 +31,10 @@ class DashboardHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // RF-140: the same demo/real switch the repository seam reads, so the
+    // banner/header are honest about the data source (never claim demo data in
+    // real mode, nor vice versa). Demo is the DEFAULT.
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final reportAsync = ref.watch(dashboardReportProvider);
 
     void refresh() => ref.invalidate(dashboardReportProvider);
@@ -54,7 +59,7 @@ class DashboardHomeScreen extends ConsumerWidget {
         ],
       ),
       body: reportAsync.when(
-        data: (report) => _ReportContent(report: report),
+        data: (report) => _ReportContent(report: report, isDemo: isDemo),
         loading: () => const _LoadingState(),
         error: (_, _) => _ErrorState(onRetry: refresh),
       ),
@@ -64,9 +69,13 @@ class DashboardHomeScreen extends ConsumerWidget {
 
 /// The loaded report: a scrollable, responsive layout of all report sections.
 class _ReportContent extends StatelessWidget {
-  const _ReportContent({required this.report});
+  const _ReportContent({required this.report, required this.isDemo});
 
   final DashboardReport report;
+
+  /// Whether the report is demo data (computed locally) or real data. Drives the
+  /// banner + header pill so the data source is labelled honestly (RF-140).
+  final bool isDemo;
 
   static const double _twoColBreakpoint = 900;
 
@@ -77,11 +86,21 @@ class _ReportContent extends StatelessWidget {
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
 
-    final header = _ReportHeader(report: report);
-    final banner = DemoNoticeBanner(
-      key: const Key('reports-demo-banner'),
-      message: l10n.dashboardDemoReportsNotice,
-    );
+    final header = _ReportHeader(report: report, isDemo: isDemo);
+    // RF-140: demo mode shows the demo-data notice; real mode shows a slim
+    // "live · limited" caution notice — never a demo/deferred banner over real
+    // data. (Real mode currently fails closed before reaching this content; the
+    // mode-aware banner keeps the screen honest for when real data lands.)
+    final banner = isDemo
+        ? DemoNoticeBanner(
+            key: const Key('reports-demo-banner'),
+            message: l10n.dashboardDemoReportsNotice,
+          )
+        : DemoNoticeBanner(
+            key: const Key('reports-realmode-banner'),
+            message: l10n.dashboardRealModeNotice,
+            tone: DemoNoticeTone.caution,
+          );
 
     if (report.isEmpty) {
       return ListView(
@@ -313,11 +332,12 @@ class _ReportContent extends StatelessWidget {
       method == 'cash' ? l10n.dashboardPaymentMethodCash : method;
 }
 
-/// The reports title + the report day context (day + a "Demo day" pill).
+/// The reports title + the report day context (day + a demo/live pill).
 class _ReportHeader extends StatelessWidget {
-  const _ReportHeader({required this.report});
+  const _ReportHeader({required this.report, required this.isDemo});
 
   final DashboardReport report;
+  final bool isDemo;
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +367,9 @@ class _ReportHeader extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            DashboardStatusPill(label: l10n.dashboardDemoDay),
+            DashboardStatusPill(
+              label: isDemo ? l10n.dashboardDemoDay : l10n.dashboardLiveDataTag,
+            ),
           ],
         ),
       ],

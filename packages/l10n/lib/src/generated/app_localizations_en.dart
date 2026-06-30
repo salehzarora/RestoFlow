@@ -37,7 +37,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminDemoDataNotice =>
-      'Demo platform data — computed locally, not synced to a backend. Real platform admin data wiring is deferred.';
+      'Demo platform data — computed locally on this device, not synced to a backend.';
 
   @override
   String get adminRefresh => 'Refresh';
@@ -545,7 +545,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dashboardDemoReportsNotice =>
-      'Demo reports — calculated locally from sample orders, not synced to a backend. Real backend reporting is deferred.';
+      'Demo reports — calculated locally from sample orders, not synced to a backend.';
+
+  @override
+  String get dashboardRealModeNotice =>
+      'Live reports — read-only and limited. Some figures aren\'t available here yet.';
+
+  @override
+  String get dashboardLiveDataTag => 'Live · limited';
 
   @override
   String get dashboardGrossSales => 'Gross sales';
