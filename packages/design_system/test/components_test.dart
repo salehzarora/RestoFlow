@@ -60,6 +60,22 @@ void main() {
         expect(find.text(tone.name), findsOneWidget);
       }
     });
+
+    testWidgets('a non-dense pill uses larger text than the dense default '
+        '(RF-141E)', (tester) async {
+      await _pump(tester, const RestoflowStatusPill(label: 'ready'));
+      final denseSize = tester.widget<Text>(find.text('ready')).style?.fontSize;
+
+      await _pump(
+        tester,
+        const RestoflowStatusPill(label: 'ready', dense: false),
+      );
+      final largeSize = tester.widget<Text>(find.text('ready')).style?.fontSize;
+
+      expect(denseSize, isNotNull);
+      expect(largeSize, isNotNull);
+      expect(largeSize, greaterThan(denseSize!));
+    });
   });
 
   group('RestoflowNoticeBanner', () {
