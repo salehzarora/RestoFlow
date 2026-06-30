@@ -34,10 +34,13 @@ class MenuItemCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Container(
+              // RF-141D: Ink (not Container) so the InkWell tap/hover ripple
+              // renders OVER the tinted band, not hidden behind an opaque layer.
+              child: Ink(
                 color: category.color.withValues(alpha: 0.12),
-                alignment: Alignment.center,
-                child: Icon(category.icon, size: 40, color: category.color),
+                child: Center(
+                  child: Icon(category.icon, size: 40, color: category.color),
+                ),
               ),
             ),
             Padding(
