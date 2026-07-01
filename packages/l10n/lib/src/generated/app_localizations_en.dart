@@ -1192,4 +1192,69 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminDeviceUpdated => 'Device updated';
+
+  @override
+  String get authWelcomeTitle => 'Welcome to RestoFlow';
+
+  @override
+  String get authSignInTab => 'Sign in';
+
+  @override
+  String get authCreateAccountTab => 'Create account';
+
+  @override
+  String get authEmailLabel => 'Email';
+
+  @override
+  String get authPasswordLabel => 'Password';
+
+  @override
+  String get authSignInAction => 'Sign in';
+
+  @override
+  String get authEmailRequired => 'Enter your email';
+
+  @override
+  String get authPasswordRequired => 'Enter your password';
+
+  @override
+  String get authPasswordTooShort => 'Use at least 6 characters';
+
+  @override
+  String get authInvalidCredentials => 'Incorrect email or password';
+
+  @override
+  String get authSignUpFailed =>
+      'Couldn\'t create your account. Please try again.';
+
+  @override
+  String get authNetworkError =>
+      'Can\'t reach the server. Check your connection.';
+
+  @override
+  String get authEmailConfirmationSent =>
+      'Check your email to confirm your account, then sign in.';
+
+  @override
+  String get onboardingTitle => 'Set up your restaurant';
+
+  @override
+  String get onboardingIntro =>
+      'Create your restaurant to start using RestoFlow.';
+
+  @override
+  String get onboardingRestaurantNameLabel => 'Restaurant name';
+
+  @override
+  String get onboardingBranchNameLabel => 'Branch name (optional)';
+
+  @override
+  String get onboardingRestaurantNameRequired => 'Enter a restaurant name';
+
+  @override
+  String get onboardingCreateAction => 'Create restaurant';
+
+  @override
+  String get onboardingFailed =>
+      'Couldn\'t create your restaurant. Please try again.';
 }

@@ -2379,6 +2379,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Device updated'**
   String get adminDeviceUpdated;
+
+  /// Heading on the dashboard sign-in / create-account screen (RF-151).
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to RestoFlow'**
+  String get authWelcomeTitle;
+
+  /// Segmented control option / action for signing in (RF-151).
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get authSignInTab;
+
+  /// Segmented control option / action for creating an account (RF-151).
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get authCreateAccountTab;
+
+  /// Email text-field label on the sign-in / sign-up form.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get authEmailLabel;
+
+  /// Password text-field label on the sign-in / sign-up form.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get authPasswordLabel;
+
+  /// Primary button label that submits the sign-in form.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get authSignInAction;
+
+  /// Validation message when the email field is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email'**
+  String get authEmailRequired;
+
+  /// Validation message when the password field is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your password'**
+  String get authPasswordRequired;
+
+  /// Validation message when the sign-up password is too short.
+  ///
+  /// In en, this message translates to:
+  /// **'Use at least 6 characters'**
+  String get authPasswordTooShort;
+
+  /// Safe sign-in error shown for rejected credentials.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect email or password'**
+  String get authInvalidCredentials;
+
+  /// Safe generic error shown when account creation fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create your account. Please try again.'**
+  String get authSignUpFailed;
+
+  /// Safe error shown when the backend is unreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the server. Check your connection.'**
+  String get authNetworkError;
+
+  /// Honest state shown when sign-up requires email confirmation before a session.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email to confirm your account, then sign in.'**
+  String get authEmailConfirmationSent;
+
+  /// Heading on the restaurant onboarding screen (RF-151).
+  ///
+  /// In en, this message translates to:
+  /// **'Set up your restaurant'**
+  String get onboardingTitle;
+
+  /// Intro text on the restaurant onboarding screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your restaurant to start using RestoFlow.'**
+  String get onboardingIntro;
+
+  /// Restaurant-name field label on the onboarding form.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant name'**
+  String get onboardingRestaurantNameLabel;
+
+  /// Optional branch-name field label on the onboarding form.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch name (optional)'**
+  String get onboardingBranchNameLabel;
+
+  /// Validation message when the restaurant name is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a restaurant name'**
+  String get onboardingRestaurantNameRequired;
+
+  /// Primary button that submits the onboarding form (calls create_organization).
+  ///
+  /// In en, this message translates to:
+  /// **'Create restaurant'**
+  String get onboardingCreateAction;
+
+  /// Safe error shown when create_organization fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create your restaurant. Please try again.'**
+  String get onboardingFailed;
 }
 
 class _AppLocalizationsDelegate
