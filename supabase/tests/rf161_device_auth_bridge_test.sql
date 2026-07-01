@@ -9,7 +9,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(20);
+select plan(21);
 
 insert into organizations (id, name, slug, default_currency) values
   ('00000000-0000-0000-0000-000000161a00', 'Org A', 'rf161-a', 'USD'),
@@ -155,6 +155,16 @@ set local app.current_app_user_id = '';
 select is(
   (app.restore_device_session('00000000-0000-0000-0000-000000161d02', (select token from _sess where dev = 'kds')) ->> 'error'),
   'invalid_session', 'a revoked pairing invalidates device-session restore (owner revoke)');
+
+-- (21) a soft-deleted BRANCH invalidates restore (MF-1: redeem/restore tombstone symmetry).
+-- Org B's device (dB) has a live session (test 19); tombstone its branch and restore must fail.
+reset role;
+update branches set deleted_at = now() where id = '00000000-0000-0000-0000-000000161b1a';
+set local role authenticated;
+set local app.current_app_user_id = '';
+select is(
+  (app.restore_device_session('00000000-0000-0000-0000-000000161d0b', (select token from _sess where dev = 'b')) ->> 'error'),
+  'invalid_session', 'a soft-deleted branch invalidates device-session restore (decommission)');
 
 select * from finish();
 rollback;

@@ -177,11 +177,21 @@ begin
     return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'device_session');
   end if;
   v_hash := app.hash_provisioning_secret(btrim(p_session_token));
+  -- The branch + restaurant tombstone joins MIRROR redeem (fail closed on a dead scope):
+  -- decommissioning a branch/restaurant (soft-delete) must invalidate restore, not leave the
+  -- device serving a tombstoned scope (RISK R-003 / R-007). NOTE: the downstream operational
+  -- gates (start_pin_session/sync_push, RF-051/056) do NOT yet re-check these tombstones -- a
+  -- pre-existing gap tracked for the human sign-off (ADR RF-161 §7); this closes the redeem/
+  -- restore asymmetry introduced here.
   select ds.id, ds.organization_id, ds.restaurant_id, ds.branch_id, d.device_type
     into v_sid, v_org, v_rest, v_branch, v_dtype
     from public.device_sessions ds
     join public.device_pairings dp on dp.id = ds.device_pairing_id
     join public.devices d on d.id = ds.device_id
+    join public.branches b on b.organization_id = ds.organization_id
+      and b.restaurant_id = ds.restaurant_id and b.id = ds.branch_id and b.deleted_at is null
+    join public.restaurants r on r.organization_id = ds.organization_id
+      and r.id = ds.restaurant_id and r.deleted_at is null
     where ds.device_id = p_device_id
       and ds.session_token_ref = v_hash
       and ds.is_active and ds.revoked_at is null

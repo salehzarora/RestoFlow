@@ -77,7 +77,16 @@ Owner-side revoke reuses the existing `revoke_device` (RF-061), which invalidate
 
 Raw secrets are **never** stored plaintext in the DB, **never** in audit_events, **never**
 logged, and **never** placed in `SharedPreferences`. `list_devices` (RF-160) and all read
-RPCs never return a secret ref. A committed idempotent replay returns **no** token.
+RPCs never return a secret ref. Redeem is consume-once (a re-redeem of a spent code fails
+closed with `invalid_code` — it never re-mints/re-returns a token).
+
+**`device_session_id` is capability-bearing, not "non-secret context."** The existing
+operational chain (`start_pin_session` → `sync_push`/`sync_pull`) authorizes from the
+`device_session_id` **and never re-verifies the session token** (a pre-existing RF-051/RF-056
+property). So RF-161's client MUST NOT persist `device_session_id` in normal prefs — it is
+**re-derived from the raw token via `restore_device_session` on every launch** and held only
+in memory. Only the raw token (secure storage) + the non-secret `device_id` + display context
+(prefs) are persisted.
 
 ## 5. How POS/KDS restore + the order loop are authorized
 
@@ -109,6 +118,17 @@ RPCs never return a secret ref. A committed idempotent replay returns **no** tok
 - **Employee provisioning** (employee_profiles + PIN credentials) for real logins is deferred.
 - **Offline auth staleness** (Q-009 / RISK R-007): revoke→invalid-on-reconnect mechanism
   exists (RF-061); the validity window is interim, not frozen.
+- **No session expiry window.** `device_sessions.expires_at` is left NULL (Q-009/RF-112), so a
+  leaked token is valid **until an explicit owner-side revoke**. A bounded validity window is
+  recommended before real tenant service.
+- **Operational-chain tombstone gap (pre-existing).** `restore_device_session` now fails closed
+  on a soft-deleted branch/restaurant (RF-161 fix), but the downstream `start_pin_session` /
+  `sync_push` / `sync_pull` gates do **not** yet re-check those tombstones — an already-restored
+  session survives a mid-session branch decommission until `revoke_device`. Closing that requires
+  changes to frozen RPCs (tracked for the human sign-off; out of RF-161's additive scope).
+- **Rate-limiting / brute-force.** `redeem`/`restore`/`revoke` are callable by any authenticated
+  (incl. anonymous) principal with no attempt throttle; guessing resistance rests on 122-bit code/
+  token entropy. Anonymous-sign-in + RPC rate limits are an operational dependency to enforce.
 - **Mandatory human RLS/security sign-off + Codex review** before any real tenant use.
 - KDS still requires a PIN session (a device-session-only kitchen read path is a future
   simplification).
