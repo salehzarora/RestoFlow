@@ -11,6 +11,10 @@ library;
 export 'src/app_surface.dart';
 export 'src/app_user_context.dart';
 export 'src/auth_context_repository.dart';
+// RF-153: shared device/station pairing context + repository seam (reused by
+// dashboard/POS/KDS).
+export 'src/device_context.dart';
+export 'src/device_pairing_repository.dart';
 export 'src/auth_gate_state.dart';
 export 'src/auth_failure.dart';
 export 'src/membership_context.dart';

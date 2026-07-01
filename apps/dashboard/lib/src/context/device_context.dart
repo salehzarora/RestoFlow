@@ -1,48 +1,51 @@
 import 'package:flutter/foundation.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 
-/// A device/station pairing context, scoped to a selected organization + branch
-/// (RF-152 foundation). Present ONLY when a real device has been paired — this
-/// project never fabricates a paired device.
-@immutable
-class DeviceContext {
-  const DeviceContext({
-    required this.organizationId,
-    required this.branchId,
-    this.deviceId,
-    this.stationId,
-  });
+// The DeviceContext MODEL now lives in restoflow_auth_identity (shared with
+// POS/KDS — RF-153). Re-exported so existing dashboard imports keep working.
+export 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
+    show
+        DeviceContext,
+        DevicePairingRepository,
+        PairingFailure,
+        PairingFailureKind;
 
-  final String organizationId;
-  final String branchId;
-
-  /// The paired device id, or null when no device is paired yet.
-  final String? deviceId;
-
-  /// The bound station id, or null.
-  final String? stationId;
-
-  /// True only when a real device id is present. RF-152 never sets this (pairing
-  /// is deferred to RF-153/RF-154), so it is always false for now.
-  bool get isPaired => deviceId != null && deviceId!.isNotEmpty;
-}
-
-/// Holds the current [DeviceContext] (RF-152 foundation).
+/// Holds the current [DeviceContext] (RF-152 foundation; the model is now the
+/// shared `restoflow_auth_identity` one — RF-153).
 ///
 /// ABSENT (null) by DEFAULT — RestoFlow never claims a POS/KDS device is paired.
-/// Real device pairing UX + persistence are deferred to RF-153/RF-154; this only
-/// provides the model + a clearable, org/branch-scoped holder that is CLEARED on
-/// sign-out. Kept as a plain [ChangeNotifier] so it is injectable + unit-testable
-/// without a backend, and reusable by the later POS/KDS pairing flows.
+/// Real pairing (RF-153) uses [adopt] with a backend-verified, scope-matched
+/// context; it is cleared on sign-out. Kept as a plain [ChangeNotifier] so it is
+/// injectable + unit-testable without a backend.
 class DeviceContextController extends ChangeNotifier {
   DeviceContext? _context;
 
   /// The current device context, or null when no device is paired.
   DeviceContext? get context => _context;
 
-  /// Whether a real device is currently paired (always false until RF-153).
+  /// Whether a real device is currently paired (false until a real pairing).
   bool get hasPairedDevice => _context?.isPaired ?? false;
 
-  /// Clears the device context (called on sign-out). No-op when already absent.
+  /// Adopts a backend-verified device [context]. Fail-closed: ignores an unpaired
+  /// context or one that does not match the active selected [organizationId] /
+  /// [branchId] (never surfaces a device from another scope).
+  void adopt(
+    DeviceContext context, {
+    required String organizationId,
+    required String branchId,
+  }) {
+    if (!context.isPaired) return;
+    if (!context.matchesScope(
+      organizationId: organizationId,
+      branchId: branchId,
+    )) {
+      return;
+    }
+    _context = context;
+    notifyListeners();
+  }
+
+  /// Clears the device context (called on sign-out / unpair). No-op when absent.
   void clear() {
     if (_context == null) return;
     _context = null;
