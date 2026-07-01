@@ -18,10 +18,14 @@ class _FakePairing implements DevicePairingRepository {
   }) async => result;
 }
 
-/// A real-style repo that also restores a session on launch (RF-161).
+/// A real-style repo that also restores a session on launch (RF-161). It
+/// IGNORES [expectedDeviceType] (recording it only), so wrong-type tests prove
+/// the GATE itself rejects a mismatched restored context (belt-and-suspenders
+/// on top of the repo-level enforcement, which has its own unit tests).
 class _FakeRestorable implements DevicePairingRepository, DeviceSessionManager {
   _FakeRestorable(this._restored);
   final DeviceContext? _restored;
+  String? lastExpectedDeviceType;
 
   @override
   Future<Result<DeviceContext, PairingFailure>> pairWithCode({
@@ -30,7 +34,10 @@ class _FakeRestorable implements DevicePairingRepository, DeviceSessionManager {
   }) async => const Failure(PairingFailure(PairingFailureKind.invalidCode));
 
   @override
-  Future<DeviceContext?> restore() async => _restored;
+  Future<DeviceContext?> restore({String? expectedDeviceType}) async {
+    lastExpectedDeviceType = expectedDeviceType;
+    return _restored;
+  }
 
   @override
   Future<void> unpair() async {}
@@ -165,6 +172,55 @@ void main() {
       KdsApp(
         demoMode: false,
         devicePairingRepository: _FakeRestorable(null),
+        fetchContext: fetcherForContext(_kitchenCtx()),
+      ),
+    );
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    expect(find.byType(KitchenOrdersHome), findsNothing);
+  });
+
+  testWidgets('a restored POS session must NOT unlock the kitchen board — '
+      'fail closed to the (money-free) pairing screen', (tester) async {
+    final repo = _FakeRestorable(
+      const DeviceContext(
+        organizationId: 'o',
+        branchId: 'b',
+        deviceId: 'd',
+        deviceType: 'pos',
+      ),
+    );
+    await _pump(
+      tester,
+      KdsApp(
+        demoMode: false,
+        devicePairingRepository: repo,
+        fetchContext: fetcherForContext(_kitchenCtx()),
+      ),
+    );
+    // The gate asked the repo for a KDS session...
+    expect(repo.lastExpectedDeviceType, 'kds');
+    // ...and rejects the mismatched context itself even when the repo (this
+    // fake) fails to enforce it.
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    expect(find.byType(KitchenOrdersHome), findsNothing);
+    // Kitchen device: still no money anywhere (SECURITY T-003).
+    expect(find.textContaining('₪'), findsNothing);
+    expect(find.textContaining(r'$'), findsNothing);
+  });
+
+  testWidgets('a restored session with NO device type must NOT unlock the '
+      'kitchen board', (tester) async {
+    await _pump(
+      tester,
+      KdsApp(
+        demoMode: false,
+        devicePairingRepository: _FakeRestorable(
+          const DeviceContext(
+            organizationId: 'o',
+            branchId: 'b',
+            deviceId: 'd',
+          ),
+        ),
         fetchContext: fetcherForContext(_kitchenCtx()),
       ),
     );

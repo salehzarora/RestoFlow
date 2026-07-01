@@ -136,7 +136,8 @@ void main() {
         transport: t,
         secretStore: store,
       );
-      final ctx = await repo.restore();
+      // A MATCHING expected type passes the RF-161 surface check.
+      final ctx = await repo.restore(expectedDeviceType: 'kds');
       expect(t.calls.single.$1, 'restore_device_session');
       expect(t.calls.single.$2, {
         'p_device_id': 'dev-1',
@@ -144,6 +145,59 @@ void main() {
       });
       expect(ctx?.isPaired, isTrue);
       expect(ctx?.deviceType, 'kds');
+    });
+
+    test('a WRONG-type session is rejected: local secret cleared, session '
+        'NOT revoked server-side', () async {
+      final store = InMemoryDeviceSessionSecretStore();
+      await store.write(
+        const DeviceSessionCredential(deviceId: 'dev-1', sessionToken: 'tok'),
+      );
+      final t = _FakeTransport(
+        (fn, p) => {
+          'ok': true,
+          'device_session_id': 'sess-1',
+          'organization_id': 'org-1',
+          'restaurant_id': 'rest-1',
+          'branch_id': 'branch-1',
+          'device_id': 'dev-1',
+          'device_type': 'pos', // backend says POS…
+        },
+      );
+      final repo = SupabaseDevicePairingRepository(
+        transport: t,
+        secretStore: store,
+      );
+      // …but this surface expects KDS -> fail closed.
+      expect(await repo.restore(expectedDeviceType: 'kds'), isNull);
+      // the misplaced LOCAL copy is cleared…
+      expect(await store.read(), isNull);
+      // …but the session is NOT revoked (it may belong to the real POS device).
+      expect(t.calls.map((c) => c.$1), ['restore_device_session']);
+    });
+
+    test('without an expected type, restore keeps the prior (unenforced) '
+        'behaviour', () async {
+      final store = InMemoryDeviceSessionSecretStore();
+      await store.write(
+        const DeviceSessionCredential(deviceId: 'dev-1', sessionToken: 'tok'),
+      );
+      final t = _FakeTransport(
+        (fn, p) => {
+          'ok': true,
+          'organization_id': 'org-1',
+          'branch_id': 'branch-1',
+          'device_id': 'dev-1',
+          'device_type': 'pos',
+        },
+      );
+      final repo = SupabaseDevicePairingRepository(
+        transport: t,
+        secretStore: store,
+      );
+      final ctx = await repo.restore();
+      expect(ctx?.deviceType, 'pos');
+      expect(await store.read(), isNotNull); // untouched
     });
 
     test(

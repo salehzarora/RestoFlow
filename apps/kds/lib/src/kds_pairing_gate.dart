@@ -33,6 +33,10 @@ class KdsPairingGate extends StatefulWidget {
 }
 
 class _KdsPairingGateState extends State<KdsPairingGate> {
+  /// The only device type this surface accepts (a restored POS session must
+  /// NEVER unlock the KDS — fail closed to the pairing screen).
+  static const String _expectedDeviceType = 'kds';
+
   DeviceContext? _device;
   bool _restoring = false;
 
@@ -48,7 +52,9 @@ class _KdsPairingGateState extends State<KdsPairingGate> {
   }
 
   Future<void> _restore(DeviceSessionManager manager) async {
-    final restored = await manager.restore();
+    final restored = await manager.restore(
+      expectedDeviceType: _expectedDeviceType,
+    );
     if (!mounted) return;
     setState(() {
       _device = restored;
@@ -61,10 +67,18 @@ class _KdsPairingGateState extends State<KdsPairingGate> {
     if (_restoring) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (_device?.isPaired ?? false) return widget.signedInChild;
+    // Enter ONLY for a paired device of THIS surface's type; the repo enforces
+    // this on restore too, but the gate re-checks so an injected/restored
+    // context of the wrong type can never unlock the kitchen board.
+    final device = _device;
+    if (device != null &&
+        device.isPaired &&
+        device.deviceType == _expectedDeviceType) {
+      return widget.signedInChild;
+    }
     return DevicePairingScreen(
       repository: widget.repository,
-      deviceType: 'kds',
+      deviceType: _expectedDeviceType,
       onPaired: (context) => setState(() => _device = context),
     );
   }

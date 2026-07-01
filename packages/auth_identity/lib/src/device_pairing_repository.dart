@@ -61,8 +61,13 @@ abstract interface class DevicePairingRepository {
 /// [restore] proves possession of the securely-stored device-session token against
 /// the backend and returns the server-validated [DeviceContext], or null when there
 /// is no valid stored session (fail-closed — the caller then shows the pairing UI).
+/// When [expectedDeviceType] is given (`pos`/`kds`), a restored session for any
+/// OTHER device type is rejected (null) and its LOCAL secret is cleared, so a
+/// misplaced token can never unlock the wrong surface (a KDS session must never
+/// unlock a POS); the session is NOT revoked server-side — it may legitimately
+/// belong to the real device of that type.
 /// [unpair] revokes the session server-side and clears the stored secret.
 abstract interface class DeviceSessionManager {
-  Future<DeviceContext?> restore();
+  Future<DeviceContext?> restore({String? expectedDeviceType});
   Future<void> unpair();
 }

@@ -12,7 +12,10 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 ///    [DeviceContext]. The raw token is NEVER returned to the caller or logged.
 ///  * [restore] re-proves the stored token via `restore_device_session` on launch;
 ///    a definitively invalid/revoked session clears the stale secret (fail-closed),
-///    while a transient/offline error keeps it for a later retry.
+///    while a transient/offline error keeps it for a later retry. A session whose
+///    server-reported device type does not match [expectedDeviceType] is rejected
+///    the same way (local clear only, NO server revoke) so a misplaced token can
+///    never unlock the wrong surface.
 ///  * [unpair] revokes the session via `revoke_device_session` and clears the secret.
 ///
 /// Scope is always server-derived; the device supplies only the code (redeem) or the
@@ -63,7 +66,7 @@ class SupabaseDevicePairingRepository
   }
 
   @override
-  Future<DeviceContext?> restore() async {
+  Future<DeviceContext?> restore({String? expectedDeviceType}) async {
     final cred = await _store.read();
     if (cred == null) return null;
     final Object? raw;
@@ -83,7 +86,17 @@ class SupabaseDevicePairingRepository
       await _store.clear();
       return null;
     }
-    return _contextFrom(raw, cred.deviceId);
+    final context = _contextFrom(raw, cred.deviceId);
+    if (expectedDeviceType != null &&
+        context.deviceType != expectedDeviceType) {
+      // A valid session for the WRONG surface (e.g. a KDS token on a POS) must
+      // never unlock this app: clear the misplaced LOCAL copy and fail closed.
+      // Deliberately NOT revoked server-side — the session may be the live one
+      // of the real device of that type.
+      await _store.clear();
+      return null;
+    }
+    return context;
   }
 
   @override
