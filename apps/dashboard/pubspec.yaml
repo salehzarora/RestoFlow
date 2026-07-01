@@ -32,6 +32,10 @@ dependencies:
   restoflow_data_remote:
     path: ../../packages/data_remote
   supabase: '>=2.0.0 <3.0.0'
+  # RF-151 review fix: SHA-256 for a DETERMINISTIC (non-random) onboarding
+  # idempotency key + fallback slug, so retries replay instead of duplicating.
+  # Already in the workspace dependency graph (transitive); declared directly.
+  crypto: '>=3.0.0 <4.0.0'
   # RF-111: the owner menu management surface (demo-backed; no real backend yet).
   restoflow_feature_menu:
     path: ../../packages/feature_menu

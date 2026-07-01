@@ -1,5 +1,6 @@
-import 'dart:math';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
@@ -44,7 +45,10 @@ buildDashboardRealAuth(SupabaseClient client) {
   final transport = SupabaseSyncRpcTransport(client);
   return (
     auth: SupabaseDashboardAuthRepository(client),
-    onboarding: SupabaseOnboardingRepository(transport),
+    onboarding: SupabaseOnboardingRepository(
+      transport,
+      currentUserId: () => client.auth.currentUser?.id,
+    ),
     fetchContext: AuthContextRepository(transport).fetchMyContext,
   );
 }
@@ -117,10 +121,24 @@ class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
 }
 
 /// `public.create_organization`-backed [OnboardingRepository].
+///
+/// IDEMPOTENT RETRIES (RF-151 review fix): both the `p_client_request_id` and the
+/// non-Latin fallback slug are DERIVED DETERMINISTICALLY from the current auth
+/// user id + the normalized form values — never randomly. Retrying the SAME
+/// onboarding input (e.g. after an ambiguous success where the response was lost)
+/// reuses the SAME request id, so `public.create_organization` replays the
+/// existing tenant instead of creating a duplicate. Meaningfully different form
+/// values produce a different key/slug (a new attempt). The auth user id is a
+/// non-secret identifier (never the raw email); no value is persisted.
 class SupabaseOnboardingRepository implements OnboardingRepository {
-  SupabaseOnboardingRepository(this._transport);
+  SupabaseOnboardingRepository(this._transport, {required this.currentUserId});
 
   final SyncRpcTransport _transport;
+
+  /// The current authenticated user's id (e.g. `auth.uid()`), used only as a
+  /// non-secret salt so keys/slugs are stable per user + input. Null when there
+  /// is no session (onboarding is never reached without one).
+  final String? Function() currentUserId;
 
   @override
   Future<OnboardingOutcome> createOrganization({
@@ -131,13 +149,19 @@ class SupabaseOnboardingRepository implements OnboardingRepository {
     final branch = (branchName?.trim().isNotEmpty ?? false)
         ? branchName!.trim()
         : name; // backend requires a non-empty branch; default to the restaurant.
+    final userId = currentUserId() ?? '';
+
+    // Stable per (user + restaurant + branch): a retry of the same attempt reuses
+    // the same idempotency key. The slug is stable per (user + restaurant).
+    final requestSeed = _seed([userId, name, branch]);
+    final slugSeed = _seed([userId, name]);
 
     final Object? raw;
     try {
       raw = await _transport.invoke('create_organization', <String, dynamic>{
-        'p_client_request_id': _uuidV4(),
+        'p_client_request_id': _deterministicRequestId(requestSeed),
         'p_organization_name': name,
-        'p_organization_slug': _slug(name),
+        'p_organization_slug': _slug(name, slugSeed),
         'p_restaurant_name': name,
         'p_branch_name': branch,
         'p_currency_code': kDefaultOnboardingCurrency,
@@ -167,27 +191,57 @@ class SupabaseOnboardingRepository implements OnboardingRepository {
       };
 }
 
-/// A random RFC-4122 v4 UUID for the create_organization idempotency key.
-String _uuidV4() {
-  final rnd = Random.secure();
-  final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
-  String hex(int start, int end) => bytes
+/// Builds a stable seed from normalized [parts]. Each part is LENGTH-PREFIXED
+/// (`<len>:<value>;`) so parts can't run together — name "a b" + branch "c" must
+/// NOT collide with name "a" + branch "b c". Normalization collapses trivial
+/// edits (case/whitespace) so a retry of the "same" input maps to the same seed.
+String _seed(List<String> parts) {
+  final buffer = StringBuffer();
+  for (final part in parts) {
+    final value = _normalize(part);
+    buffer
+      ..write(value.length)
+      ..write(':')
+      ..write(value)
+      ..write(';');
+  }
+  return buffer.toString();
+}
+
+String _normalize(String s) =>
+    s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+/// A DETERMINISTIC RFC-4122-shaped UUID (name-based, v5-style) from [seed] via
+/// SHA-256. Same seed => same UUID, so retries replay instead of duplicating.
+String _deterministicRequestId(String seed) {
+  final bytes = sha256
+      .convert(utf8.encode('rf151:onboarding:request:$seed'))
+      .bytes
+      .sublist(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50; // version 5 (name-based)
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC-4122 variant
+  String hx(int start, int end) => bytes
       .sublist(start, end)
       .map((b) => b.toRadixString(16).padLeft(2, '0'))
       .join();
-  return '${hex(0, 4)}-${hex(4, 6)}-${hex(6, 8)}-${hex(8, 10)}-${hex(10, 16)}';
+  return '${hx(0, 4)}-${hx(4, 6)}-${hx(6, 8)}-${hx(8, 10)}-${hx(10, 16)}';
 }
 
 /// Slugifies [name] to the backend's `^[a-z0-9]+(-[a-z0-9]+)*$` shape. A
 /// non-Latin name (e.g. Arabic/Hebrew) that slugifies to empty falls back to a
-/// generated, always-valid slug so onboarding never fails the slug check.
-String _slug(String name) {
+/// STABLE, deterministic slug derived from [seed] (user id + restaurant name) —
+/// so a retry never generates a new random slug that would duplicate the org.
+String _slug(String name, String seed) {
   final base = name
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'(^-+)|(-+$)'), '');
   if (RegExp(r'^[a-z0-9]+(-[a-z0-9]+)*$').hasMatch(base)) return base;
-  return 'r-${_uuidV4().substring(0, 8)}';
+  final suffix = sha256
+      .convert(utf8.encode('rf151:onboarding:slug:$seed'))
+      .bytes
+      .sublist(0, 5)
+      .map((b) => b.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return 'r-$suffix';
 }
