@@ -132,3 +132,29 @@ in memory. Only the raw token (secure storage) + the non-secret `device_id` + di
 - **Mandatory human RLS/security sign-off + Codex review** before any real tenant use.
 - KDS still requires a PIN session (a device-session-only kitchen read path is a future
   simplification).
+
+## 8. RF-161 delivered vs deferred (the order loop)
+
+**Delivered + tested (this ticket):** the DEVICE-AUTH BRIDGE, end to end —
+- backend `redeem_device_pairing` / `restore_device_session` / `revoke_device_session`
+  (21 pgTAP incl. cross-tenant isolation; an adversarial security review pass);
+- secure device-session storage (`DeviceSessionSecretStore` + `flutter_secure_storage`);
+- the real `SupabaseDevicePairingRepository` (redeem + restore + unpair);
+- POS + KDS wired to build it in real mode (anonymous sign-in), gate restore-on-launch,
+  demo default + fail-closed preserved.
+
+So an owner can issue a code (RF-160) and a POS/KDS device can **really pair, mint a
+device session, persist it securely, and restore it on relaunch**.
+
+**Deferred to the next ticket (the operational loop, Phase F):** a real POS order and a
+real KDS ticket both flow through `sync_push` / `sync_pull`, which require a **PIN session**
+(`start_pin_session`). That needs (a) real **employee + PIN-credential provisioning** (none
+exists yet) and (b) a **production PIN verifier** — the current one is explicitly interim/
+dev-only (RF-051, "MUST NOT be treated as production cryptography"). Wiring the loop on the
+interim verifier would be a non-production, largely-unverifiable path, so it is NOT built
+here. The device session this ticket mints is exactly the input `start_pin_session` consumes,
+so the loop is unblocked structurally — it is a provisioning + PIN-verifier ticket, not an
+architecture gap.
+
+**Real-first (Phase G) is therefore deferred:** making real mode the default before the
+order loop works would leave a paired device that cannot transact. Demo stays the default.
