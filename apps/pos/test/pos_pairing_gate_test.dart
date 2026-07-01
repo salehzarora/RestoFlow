@@ -19,6 +19,24 @@ class _FakePairing implements DevicePairingRepository {
   }) async => result;
 }
 
+/// A real-style repo that also restores a session on launch (RF-161).
+class _FakeRestorable implements DevicePairingRepository, DeviceSessionManager {
+  _FakeRestorable(this._restored);
+  final DeviceContext? _restored;
+
+  @override
+  Future<Result<DeviceContext, PairingFailure>> pairWithCode({
+    required String code,
+    required String deviceType,
+  }) async => const Failure(PairingFailure(PairingFailureKind.invalidCode));
+
+  @override
+  Future<DeviceContext?> restore() async => _restored;
+
+  @override
+  Future<void> unpair() async {}
+}
+
 MyContext _managerCtx() => const MyContext(
   appUser: AppUserContext(
     id: 'u',
@@ -114,5 +132,43 @@ void main() {
     );
     expect(find.byType(PosMenuScreen), findsOneWidget);
     expect(find.byType(DevicePairingScreen), findsNothing);
+  });
+
+  testWidgets('a restored device session enters the POS surface on launch', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      PosApp(
+        demoMode: false,
+        devicePairingRepository: _FakeRestorable(
+          const DeviceContext(
+            organizationId: 'o',
+            branchId: 'b',
+            deviceId: 'd',
+            deviceType: 'pos',
+          ),
+        ),
+        fetchContext: fetcherForContext(_managerCtx()),
+      ),
+    );
+    // Restored automatically -> the POS surface, never the pairing screen.
+    expect(find.byType(PosMenuScreen), findsOneWidget);
+    expect(find.byType(DevicePairingScreen), findsNothing);
+  });
+
+  testWidgets('no restorable session falls back to the pairing screen', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      PosApp(
+        demoMode: false,
+        devicePairingRepository: _FakeRestorable(null),
+        fetchContext: fetcherForContext(_managerCtx()),
+      ),
+    );
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    expect(find.byType(PosMenuScreen), findsNothing);
   });
 }
