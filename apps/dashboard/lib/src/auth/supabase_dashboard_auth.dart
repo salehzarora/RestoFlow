@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
+    show AdminRepository, AdminScope;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show AuthContextFetcher;
 import 'package:supabase/supabase.dart';
 
+import '../admin/supabase_admin_device_repository.dart';
 import 'dashboard_auth_repository.dart';
 import 'onboarding_repository.dart';
 
@@ -40,16 +43,25 @@ const String kDefaultOnboardingTimezone = 'UTC';
   DashboardAuthRepository auth,
   OnboardingRepository onboarding,
   AuthContextFetcher fetchContext,
+  AdminRepository Function(AdminScope scope) deviceRepositoryFor,
 })
 buildDashboardRealAuth(SupabaseClient client) {
   final transport = SupabaseSyncRpcTransport(client);
+  String? currentUserId() => client.auth.currentUser?.id;
   return (
     auth: SupabaseDashboardAuthRepository(client),
     onboarding: SupabaseOnboardingRepository(
       transport,
-      currentUserId: () => client.auth.currentUser?.id,
+      currentUserId: currentUserId,
     ),
     fetchContext: AuthContextRepository(transport).fetchMyContext,
+    // RF-160: the real device repository, built per active admin scope. Only the
+    // dashboard Devices tab consumes it (management-driven device provisioning).
+    deviceRepositoryFor: (scope) => SupabaseAdminDeviceRepository(
+      transport: transport,
+      scope: scope,
+      currentUserId: currentUserId,
+    ),
   );
 }
 
