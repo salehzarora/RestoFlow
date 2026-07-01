@@ -36,6 +36,11 @@ dependencies:
   # idempotency key + fallback slug, so retries replay instead of duplicating.
   # Already in the workspace dependency graph (transitive); declared directly.
   crypto: '>=3.0.0 <4.0.0'
+  # RF-152: the OFFICIAL Supabase/Flutter session-persistence mechanism (survives
+  # browser refresh / app restart; anon key only, no service-role — DECISION D-011).
+  # shared_preferences persists the NON-SECRET selected-membership id (never a token).
+  supabase_flutter: '>=2.0.0 <3.0.0'
+  shared_preferences: '>=2.0.0 <3.0.0'
   # RF-111: the owner menu management surface (demo-backed; no real backend yet).
   restoflow_feature_menu:
     path: ../../packages/feature_menu
