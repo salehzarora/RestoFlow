@@ -30,6 +30,20 @@ class SupabaseAuthBootstrap {
   /// and `PinSessionService`. The same injected transport keeps those services
   /// SDK-agnostic and unit-testable.
   SyncRpcTransport createRpcTransport() => _transportBuilder(_config);
+
+  /// RF-161: builds an anon-key client, signs the DEVICE in ANONYMOUSLY, and
+  /// returns the transport carrying that session. This reaches the `authenticated`
+  /// grant gate for the device-auth-bridge RPCs (`redeem_device_pairing` etc.)
+  /// WITHOUT a service-role key or any membership (DECISION D-011): an anonymous
+  /// authenticated principal carries ZERO tenant authority — authorization is the
+  /// one-time pairing code / device-session token, verified server-side. Runtime
+  /// only (constructs a real client); throws if anonymous sign-in is unavailable,
+  /// so the composition root can fall back to a dormant (no-pairing) state.
+  Future<SyncRpcTransport> createAnonymousDeviceTransport() async {
+    final client = SupabaseClient(_config.url, _config.anonKey);
+    await client.auth.signInAnonymously();
+    return SupabaseSyncRpcTransport(client);
+  }
 }
 
 /// The default transport: a real anon-key `SupabaseClient` (pure-Dart `supabase`

@@ -52,3 +52,17 @@ abstract interface class DevicePairingRepository {
     required String deviceType,
   });
 }
+
+/// Restores / clears a previously-paired device SESSION (RF-161). Kept separate
+/// from [DevicePairingRepository] so the pairing screen (which only redeems a code)
+/// is unaffected; the real implementation implements BOTH. A gate can opt into
+/// restore-on-launch by checking `repository is DeviceSessionManager`.
+///
+/// [restore] proves possession of the securely-stored device-session token against
+/// the backend and returns the server-validated [DeviceContext], or null when there
+/// is no valid stored session (fail-closed — the caller then shows the pairing UI).
+/// [unpair] revokes the session server-side and clears the stored secret.
+abstract interface class DeviceSessionManager {
+  Future<DeviceContext?> restore();
+  Future<void> unpair();
+}
