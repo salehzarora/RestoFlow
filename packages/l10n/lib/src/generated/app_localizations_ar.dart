@@ -1252,4 +1252,33 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get onboardingFailed => 'تعذّر إنشاء مطعمك. حاول مرة أخرى.';
+
+  @override
+  String get pairingTitle => 'اقتران هذا الجهاز';
+
+  @override
+  String get pairingIntro =>
+      'أدخل رمز الاقتران الذي أُنشئ في لوحة تحكم المطعم لربط هذا الجهاز.';
+
+  @override
+  String get pairingCodeLabel => 'رمز الاقتران';
+
+  @override
+  String get pairingCodeRequired => 'أدخل رمز الاقتران';
+
+  @override
+  String get pairingPairAction => 'اقتران الجهاز';
+
+  @override
+  String get pairingInvalidCode =>
+      'لم يُقبل رمز الاقتران. تحقّق منه وحاول مرة أخرى.';
+
+  @override
+  String get pairingExpired => 'انتهت صلاحية رمز الاقتران. اطلب رمزًا جديدًا.';
+
+  @override
+  String get pairingWrongScope => 'هذا الرمز لمطعم أو فرع مختلف.';
+
+  @override
+  String get pairingFailed => 'تعذّر اقتران هذا الجهاز. حاول مرة أخرى.';
 }

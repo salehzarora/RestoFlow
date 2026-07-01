@@ -8,6 +8,7 @@ library;
 
 export 'src/auth_context_fetcher.dart';
 export 'src/auth_gate_host.dart';
+export 'src/device_pairing_screen.dart';
 export 'src/auth_gate_view.dart';
 export 'src/auth_gated_home.dart';
 export 'src/auth_state_views.dart';

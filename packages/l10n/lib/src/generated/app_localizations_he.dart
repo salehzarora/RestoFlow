@@ -1245,4 +1245,32 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get onboardingFailed => 'לא ניתן ליצור את המסעדה. נסו שוב.';
+
+  @override
+  String get pairingTitle => 'צימוד המכשיר';
+
+  @override
+  String get pairingIntro =>
+      'הזינו את קוד הצימוד שנוצר בלוח הבקרה של המסעדה כדי לחבר את המכשיר.';
+
+  @override
+  String get pairingCodeLabel => 'קוד צימוד';
+
+  @override
+  String get pairingCodeRequired => 'הזינו קוד צימוד';
+
+  @override
+  String get pairingPairAction => 'צימוד מכשיר';
+
+  @override
+  String get pairingInvalidCode => 'קוד הצימוד לא התקבל. בדקו אותו ונסו שוב.';
+
+  @override
+  String get pairingExpired => 'תוקף קוד הצימוד פג. בקשו קוד חדש.';
+
+  @override
+  String get pairingWrongScope => 'הקוד שייך למסעדה או לסניף אחר.';
+
+  @override
+  String get pairingFailed => 'לא ניתן לצמד את המכשיר. נסו שוב.';
 }

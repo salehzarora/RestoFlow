@@ -7,6 +7,7 @@ import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 
+import 'src/kds_pairing_gate.dart';
 import 'src/kds_synced_home.dart';
 import 'src/kitchen_orders_home.dart';
 import 'src/state/kds_session.dart';
@@ -36,11 +37,20 @@ class KdsApp extends StatelessWidget {
     this.invalidationSource,
     this.demoMode,
     this.fetchContext,
+    this.devicePairingRepository,
+    this.initialDevice,
     super.key,
   });
 
   /// The injected sync source (authenticated). Null -> demo/auth-gate path.
   final KdsSyncSource? source;
+
+  /// RF-153 device-pairing seam. Null => the pairing gate is dormant (current
+  /// behaviour); non-null => real (non-live) mode requires a paired KDS device.
+  final DevicePairingRepository? devicePairingRepository;
+
+  /// A pre-existing paired device context, or null.
+  final DeviceContext? initialDevice;
 
   /// RF-058: an OPTIONAL realtime invalidation source. When provided (and a sync
   /// [source] is too), realtime hints are bridged to refresh() on top of
@@ -86,6 +96,8 @@ class KdsApp extends StatelessWidget {
         injected: injected,
         demoMode: demoMode,
         fetchContext: fetchContext,
+        devicePairingRepository: devicePairingRepository,
+        initialDevice: initialDevice,
       ),
     );
   }
@@ -98,11 +110,15 @@ class _KdsMaterialApp extends ConsumerWidget {
     required this.injected,
     required this.demoMode,
     required this.fetchContext,
+    required this.devicePairingRepository,
+    required this.initialDevice,
   });
 
   final KdsSyncSource? injected;
   final bool? demoMode;
   final AuthContextFetcher? fetchContext;
+  final DevicePairingRepository? devicePairingRepository;
+  final DeviceContext? initialDevice;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -112,6 +128,28 @@ class _KdsMaterialApp extends ConsumerWidget {
     // demo/auth board - fail-closed, never a fake live feed.
     final hasRealSession = ref.watch(kdsSyncSessionProvider) != null;
     final live = injected != null || hasRealSession;
+
+    final gate = AuthGatedHome(
+      surface: AppSurface.kds,
+      // RF-117: the visible kitchen order board (demo feed).
+      demoHome: const KitchenOrdersHome(),
+      onReady: (context, state) => const KitchenOrdersHome(),
+      demoMode: demoMode,
+      fetchContext: fetchContext,
+    );
+    // RF-153: in real (non-demo, non-live) mode with a wired pairing repo, require
+    // a paired KDS device first. Money-FREE (kitchen); dormant in production
+    // (repo null), so no fake pairing and the current behaviour is preserved.
+    final demo = demoMode ?? authDemoModeEnabled();
+    final pairingRepo = devicePairingRepository;
+    final nonLiveHome = (!demo && pairingRepo != null)
+        ? KdsPairingGate(
+            repository: pairingRepo,
+            initialDevice: initialDevice,
+            signedInChild: gate,
+          )
+        : gate;
+
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).kdsAppTitle,
       localizationsDelegates: restoflowLocalizationsDelegates,
@@ -120,16 +158,7 @@ class _KdsMaterialApp extends ConsumerWidget {
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
       theme: restoflowBaseTheme(),
-      home: live
-          ? const KdsSyncedHome()
-          : AuthGatedHome(
-              surface: AppSurface.kds,
-              // RF-117: the visible kitchen order board (demo feed).
-              demoHome: const KitchenOrdersHome(),
-              onReady: (context, state) => const KitchenOrdersHome(),
-              demoMode: demoMode,
-              fetchContext: fetchContext,
-            ),
+      home: live ? const KdsSyncedHome() : nonLiveHome,
     );
   }
 }

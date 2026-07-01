@@ -2499,6 +2499,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t create your restaurant. Please try again.'**
   String get onboardingFailed;
+
+  /// Heading on the POS/KDS device pairing screen (RF-153).
+  ///
+  /// In en, this message translates to:
+  /// **'Pair this device'**
+  String get pairingTitle;
+
+  /// Intro text on the device pairing screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the pairing code created in the restaurant dashboard to connect this device.'**
+  String get pairingIntro;
+
+  /// Pairing-code text-field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Pairing code'**
+  String get pairingCodeLabel;
+
+  /// Validation message when the pairing code is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the pairing code'**
+  String get pairingCodeRequired;
+
+  /// Primary button that submits the pairing code.
+  ///
+  /// In en, this message translates to:
+  /// **'Pair device'**
+  String get pairingPairAction;
+
+  /// Safe error when the pairing code is rejected.
+  ///
+  /// In en, this message translates to:
+  /// **'That pairing code wasn\'t accepted. Check it and try again.'**
+  String get pairingInvalidCode;
+
+  /// Safe error when the pairing code has expired.
+  ///
+  /// In en, this message translates to:
+  /// **'This pairing code has expired. Ask for a new one.'**
+  String get pairingExpired;
+
+  /// Safe error when the code belongs to another org/branch.
+  ///
+  /// In en, this message translates to:
+  /// **'This code is for a different restaurant or branch.'**
+  String get pairingWrongScope;
+
+  /// Safe generic error when pairing fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t pair this device. Please try again.'**
+  String get pairingFailed;
 }
 
 class _AppLocalizationsDelegate

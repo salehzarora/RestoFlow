@@ -404,5 +404,14 @@
   "onboardingBranchNameLabel": "שם הסניף (אופציונלי)",
   "onboardingRestaurantNameRequired": "הזינו שם מסעדה",
   "onboardingCreateAction": "יצירת מסעדה",
-  "onboardingFailed": "לא ניתן ליצור את המסעדה. נסו שוב."
+  "onboardingFailed": "לא ניתן ליצור את המסעדה. נסו שוב.",
+  "pairingTitle": "צימוד המכשיר",
+  "pairingIntro": "הזינו את קוד הצימוד שנוצר בלוח הבקרה של המסעדה כדי לחבר את המכשיר.",
+  "pairingCodeLabel": "קוד צימוד",
+  "pairingCodeRequired": "הזינו קוד צימוד",
+  "pairingPairAction": "צימוד מכשיר",
+  "pairingInvalidCode": "קוד הצימוד לא התקבל. בדקו אותו ונסו שוב.",
+  "pairingExpired": "תוקף קוד הצימוד פג. בקשו קוד חדש.",
+  "pairingWrongScope": "הקוד שייך למסעדה או לסניף אחר.",
+  "pairingFailed": "לא ניתן לצמד את המכשיר. נסו שוב."
 }
