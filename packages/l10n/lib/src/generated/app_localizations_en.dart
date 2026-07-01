@@ -1257,4 +1257,35 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get onboardingFailed =>
       'Couldn\'t create your restaurant. Please try again.';
+
+  @override
+  String get pairingTitle => 'Pair this device';
+
+  @override
+  String get pairingIntro =>
+      'Enter the pairing code created in the restaurant dashboard to connect this device.';
+
+  @override
+  String get pairingCodeLabel => 'Pairing code';
+
+  @override
+  String get pairingCodeRequired => 'Enter the pairing code';
+
+  @override
+  String get pairingPairAction => 'Pair device';
+
+  @override
+  String get pairingInvalidCode =>
+      'That pairing code wasn\'t accepted. Check it and try again.';
+
+  @override
+  String get pairingExpired =>
+      'This pairing code has expired. Ask for a new one.';
+
+  @override
+  String get pairingWrongScope =>
+      'This code is for a different restaurant or branch.';
+
+  @override
+  String get pairingFailed => 'Couldn\'t pair this device. Please try again.';
 }

@@ -404,5 +404,14 @@
   "onboardingBranchNameLabel": "اسم الفرع (اختياري)",
   "onboardingRestaurantNameRequired": "أدخل اسم المطعم",
   "onboardingCreateAction": "إنشاء المطعم",
-  "onboardingFailed": "تعذّر إنشاء مطعمك. حاول مرة أخرى."
+  "onboardingFailed": "تعذّر إنشاء مطعمك. حاول مرة أخرى.",
+  "pairingTitle": "اقتران هذا الجهاز",
+  "pairingIntro": "أدخل رمز الاقتران الذي أُنشئ في لوحة تحكم المطعم لربط هذا الجهاز.",
+  "pairingCodeLabel": "رمز الاقتران",
+  "pairingCodeRequired": "أدخل رمز الاقتران",
+  "pairingPairAction": "اقتران الجهاز",
+  "pairingInvalidCode": "لم يُقبل رمز الاقتران. تحقّق منه وحاول مرة أخرى.",
+  "pairingExpired": "انتهت صلاحية رمز الاقتران. اطلب رمزًا جديدًا.",
+  "pairingWrongScope": "هذا الرمز لمطعم أو فرع مختلف.",
+  "pairingFailed": "تعذّر اقتران هذا الجهاز. حاول مرة أخرى."
 }

@@ -13,9 +13,6 @@ class _FakePairing implements DevicePairingRepository {
   Future<Result<DeviceContext, PairingFailure>> pairWithCode({
     required String code,
     required String deviceType,
-    required String organizationId,
-    required String branchId,
-    String? restaurantId,
   }) async {
     lastCode = code;
     lastDeviceType = deviceType;
@@ -92,12 +89,7 @@ void main() {
           ),
         ),
       );
-      final result = await repo.pairWithCode(
-        code: 'ABC123',
-        deviceType: 'pos',
-        organizationId: 'o',
-        branchId: 'b',
-      );
+      final result = await repo.pairWithCode(code: 'ABC123', deviceType: 'pos');
       expect(repo.lastCode, 'ABC123');
       expect(repo.lastDeviceType, 'pos');
       expect(result.isSuccess, isTrue);
@@ -112,12 +104,7 @@ void main() {
         final repo = _FakePairing(
           const Failure(PairingFailure(PairingFailureKind.invalidCode)),
         );
-        final result = await repo.pairWithCode(
-          code: 'nope',
-          deviceType: 'kds',
-          organizationId: 'o',
-          branchId: 'b',
-        );
+        final result = await repo.pairWithCode(code: 'nope', deviceType: 'kds');
         expect(result.isFailure, isTrue);
         expect(
           (result as Failure<DeviceContext, PairingFailure>).failure.kind,

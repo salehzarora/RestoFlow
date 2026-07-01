@@ -34,24 +34,21 @@ class PairingFailure {
 /// Pairs a POS/KDS device to a branch/station using a backend-issued enrollment
 /// code, returning a validated [DeviceContext] (RF-153).
 ///
-/// Contract:
+/// This is the DEVICE side of pairing: the device submits only the [code] (the
+/// backend RESOLVES the org/branch/station the code was issued for — the device
+/// does not pre-know its scope). Contract:
 ///  - identity + scope are server-derived/verified; a real implementation calls
 ///    the RF-112 public device RPCs (`redeem_device_enrollment_code` etc.).
 ///  - NEVER fabricates a device: a failure yields a [PairingFailure]; a success
-///    yields a [DeviceContext] whose [DeviceContext.isPaired] is true.
-///  - The returned context is scoped to the target org/branch; the caller
-///    additionally validates it against the active selection
-///    ([DeviceContext.matchesScope]).
+///    yields a [DeviceContext] whose [DeviceContext.isPaired] is true and whose
+///    org/branch/station come from the backend.
 ///  - The sensitive device session token is never returned here (it is handled
 ///    per backend policy; secure persistence is a follow-up — see RF-154).
 abstract interface class DevicePairingRepository {
-  /// Redeems [code] to pair a device of [deviceType] (`pos`/`kds`) to the given
-  /// org/branch scope. Fails closed with a [PairingFailure] on any rejection.
+  /// Redeems [code] to pair a device of [deviceType] (`pos`/`kds`). Fails closed
+  /// with a safe [PairingFailure] on any rejection.
   Future<Result<DeviceContext, PairingFailure>> pairWithCode({
     required String code,
     required String deviceType,
-    required String organizationId,
-    required String branchId,
-    String? restaurantId,
   });
 }
