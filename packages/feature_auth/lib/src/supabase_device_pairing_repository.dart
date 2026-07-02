@@ -67,7 +67,14 @@ class SupabaseDevicePairingRepository
 
   @override
   Future<DeviceContext?> restore({String? expectedDeviceType}) async {
-    final cred = await _store.read();
+    final DeviceSessionCredential? cred;
+    try {
+      cred = await _store.read();
+    } catch (_) {
+      // A throwing secure-storage read fails closed to the pairing screen
+      // (keep the stored secret — it may be readable on a later launch).
+      return null;
+    }
     if (cred == null) return null;
     final Object? raw;
     try {
@@ -122,6 +129,10 @@ class SupabaseDevicePairingRepository
         restaurantId: raw['restaurant_id']?.toString(),
         deviceId: deviceId,
         deviceType: raw['device_type']?.toString(),
+        // The server-minted session HANDLE (never the token): held in memory
+        // only, re-derived via restore each launch, consumed by
+        // start_pin_session (RF-051 p_device_session_id).
+        deviceSessionId: raw['device_session_id']?.toString(),
       );
 
   static PairingFailureKind _mapError(String? error) => switch (error) {

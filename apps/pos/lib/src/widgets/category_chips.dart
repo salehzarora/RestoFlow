@@ -6,10 +6,13 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/demo_menu.dart';
 import '../state/menu_filter.dart';
 
-/// Horizontal category filter chips (All + each demo category). Selecting a chip
-/// updates [selectedCategoryProvider], which filters the menu grid.
+/// Horizontal category filter chips (All + each category of the ACTIVE menu —
+/// demo or real). Selecting a chip updates [selectedCategoryProvider], which
+/// filters the menu grid.
 class CategoryChips extends ConsumerWidget {
-  const CategoryChips({super.key});
+  const CategoryChips({required this.categories, super.key});
+
+  final List<DemoCategory> categories;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,7 +35,7 @@ class CategoryChips extends ConsumerWidget {
               selected: selected == kAllCategoriesId,
               onSelected: () => select(kAllCategoriesId),
             ),
-            for (final category in kDemoCategories)
+            for (final category in categories)
               _CategoryChip(
                 label: category.name,
                 icon: category.icon,

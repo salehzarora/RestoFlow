@@ -19,15 +19,26 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 class PosPairingGate extends StatefulWidget {
   const PosPairingGate({
     required this.repository,
-    required this.signedInChild,
+    this.signedInChild,
+    this.signedInBuilder,
     this.initialDevice,
     super.key,
-  });
+  }) : assert(
+         signedInChild != null || signedInBuilder != null,
+         'provide signedInChild or signedInBuilder',
+       );
 
   final DevicePairingRepository repository;
 
-  /// Rendered once a device is paired (the existing POS entry).
-  final Widget signedInChild;
+  /// Rendered once a device is paired (the existing POS entry). Ignored when
+  /// [signedInBuilder] is provided.
+  final Widget? signedInChild;
+
+  /// Builds the paired surface WITH the validated [DeviceContext] (so the next
+  /// gate can consume the in-memory device-session handle). Takes precedence
+  /// over [signedInChild].
+  final Widget Function(BuildContext context, DeviceContext device)?
+  signedInBuilder;
 
   /// A pre-existing paired context (e.g. restored), or null.
   final DeviceContext? initialDevice;
@@ -79,7 +90,8 @@ class _PosPairingGateState extends State<PosPairingGate> {
     if (device != null &&
         device.isPaired &&
         device.deviceType == _expectedDeviceType) {
-      return widget.signedInChild;
+      return widget.signedInBuilder?.call(context, device) ??
+          widget.signedInChild!;
     }
     return DevicePairingScreen(
       repository: widget.repository,

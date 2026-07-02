@@ -3,6 +3,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_money/restoflow_money.dart';
 
 import '../data/demo_menu.dart';
+import 'pos_menu_provider.dart';
 import 'submitted_order_view.dart';
 
 /// Immutable view of a single cart line for the POS UI.
@@ -101,12 +102,18 @@ class CartController extends Notifier<CartViewState> {
   int _orderSeq = 0;
   SubmittedOrderView? _submittedOrder;
 
+  /// The ACTIVE menu currency (real backend currency in real mode; the demo
+  /// constant otherwise). Read at cart (re)creation so price snapshots and the
+  /// cart currency always agree with the menu being sold from (D-007/D-008).
+  String _activeCurrency() =>
+      ref.read(posMenuProvider).valueOrNull?.currencyCode ?? kDemoCurrencyCode;
+
   Cart _freshCart() => Cart(
     orderId: 'demo-order',
     organizationId: 'demo-org',
     restaurantId: 'demo-restaurant',
     branchId: 'demo-branch',
-    currencyCode: kDemoCurrencyCode,
+    currencyCode: _activeCurrency(),
   );
 
   @override
@@ -121,6 +128,11 @@ class CartController extends Notifier<CartViewState> {
   /// item while a confirmation is showing dismisses it and starts a fresh order.
   void addItem(DemoMenuItem item) {
     _submittedOrder = null;
+    // An EMPTY cart re-binds to the active menu currency before its first line
+    // (the menu can finish loading after the cart was first built).
+    if (_cart.lines.isEmpty && _cart.currencyCode != _activeCurrency()) {
+      _cart = _freshCart();
+    }
     final existing = _lineForMenuItem(item.id);
     if (existing != null) {
       _cart.changeQuantity(existing.lineId, existing.quantity + 1);
@@ -131,7 +143,7 @@ class CartController extends Notifier<CartViewState> {
           menuItemId: item.id,
           itemNameSnapshot: item.name,
           basePriceMinorSnapshot: item.priceMinor,
-          currencyCodeSnapshot: kDemoCurrencyCode,
+          currencyCodeSnapshot: _cart.currencyCode,
         ),
       );
     }

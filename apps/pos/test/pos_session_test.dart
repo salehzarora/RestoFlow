@@ -156,17 +156,28 @@ void main() {
       expect(session.deviceId, 'device-abc');
       expect(container.read(posSyncSessionProvider), session);
 
-      // exactly one call, to the PUBLIC wrapper - never the app schema.
-      expect(transport.functions, <String>['start_pin_session']);
+      // Let the fire-and-forget shift bootstrap (RF-055 sprint fix) settle.
+      await pumpEventQueue();
+
+      // The sign-in call hits the PUBLIC wrapper - never the app schema - and
+      // is followed by the best-effort shift.open push (payments require an
+      // open shift since RF-055; the POS has no shift UI yet).
+      expect(transport.functions.first, 'start_pin_session');
+      expect(transport.functions, <String>['start_pin_session', 'sync_push']);
       expect(transport.functions.any((f) => f.contains('app.')), isFalse);
 
-      final params = transport.params.single;
+      final params = transport.params.first;
       expect(params['p_device_session_id'], 'devsess-1');
       expect(params['p_employee_profile_id'], 'emp-1');
       expect(params['p_pin_verifier'], 'verifier-xyz');
       // the idempotency key (D-022) is generated and forwarded.
       expect(params['p_local_operation_id'], isA<String>());
       expect((params['p_local_operation_id'] as String).isNotEmpty, isTrue);
+
+      final shiftOp =
+          ((transport.params[1]['p_operations'] as List).single as Map);
+      expect(shiftOp['operation_type'], 'shift.open');
+      expect((shiftOp['payload'] as Map)['opening_float_minor'], 0);
     });
 
     test('real mode: a wrong PIN (NULL) fails closed', () async {

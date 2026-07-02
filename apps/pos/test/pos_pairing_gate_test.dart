@@ -19,6 +19,19 @@ class _FakePairing implements DevicePairingRepository {
   }) async => result;
 }
 
+/// A minimal PIN-pad staff directory (the PIN gate needs one to render).
+class _FakeStaffDirectory implements DeviceStaffRepository {
+  @override
+  Future<Result<List<DeviceStaffMember>, DeviceStaffFailure>>
+  listStaff() async => const Success([
+    DeviceStaffMember(
+      employeeProfileId: 'emp-1',
+      displayName: 'Amira K.',
+      role: 'cashier',
+    ),
+  ]);
+}
+
 /// A real-style repo that also restores a session on launch (RF-161). It
 /// IGNORES [expectedDeviceType] (recording it only), so wrong-type tests prove
 /// the GATE itself rejects a mismatched restored context (belt-and-suspenders
@@ -102,7 +115,8 @@ void main() {
     expect(find.byType(PosMenuScreen), findsNothing);
   });
 
-  testWidgets('a successful pairing enters the POS surface', (tester) async {
+  testWidgets('a successful pairing advances to the staff PIN gate (D-006 — '
+      'never straight into the POS)', (tester) async {
     await _pump(
       tester,
       PosApp(
@@ -114,9 +128,11 @@ void main() {
               branchId: 'b',
               deviceId: 'd',
               deviceType: 'pos',
+              deviceSessionId: 'ds-1',
             ),
           ),
         ),
+        deviceStaffRepository: _FakeStaffDirectory(),
         fetchContext: fetcherForContext(_managerCtx()),
       ),
     );
@@ -126,7 +142,9 @@ void main() {
     await tester.tap(find.byKey(const Key('pairing-submit')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(PosMenuScreen), findsOneWidget);
+    // Paired -> the staff PIN sign-in, NOT the POS surface (no session yet).
+    expect(find.byType(PinLoginScreen), findsOneWidget);
+    expect(find.byType(PosMenuScreen), findsNothing);
     expect(find.byType(DevicePairingScreen), findsNothing);
   });
 
@@ -141,9 +159,8 @@ void main() {
     expect(find.byType(DevicePairingScreen), findsNothing);
   });
 
-  testWidgets('a restored device session enters the POS surface on launch', (
-    tester,
-  ) async {
+  testWidgets('a restored device session advances to the staff PIN gate on '
+      'launch (D-006 — never straight into the POS)', (tester) async {
     await _pump(
       tester,
       PosApp(
@@ -154,13 +171,17 @@ void main() {
             branchId: 'b',
             deviceId: 'd',
             deviceType: 'pos',
+            deviceSessionId: 'ds-1',
           ),
         ),
+        deviceStaffRepository: _FakeStaffDirectory(),
         fetchContext: fetcherForContext(_managerCtx()),
       ),
     );
-    // Restored automatically -> the POS surface, never the pairing screen.
-    expect(find.byType(PosMenuScreen), findsOneWidget);
+    // Restored automatically -> the PIN sign-in (a session is still required);
+    // never the pairing screen, never the POS surface without a session.
+    expect(find.byType(PinLoginScreen), findsOneWidget);
+    expect(find.byType(PosMenuScreen), findsNothing);
     expect(find.byType(DevicePairingScreen), findsNothing);
   });
 

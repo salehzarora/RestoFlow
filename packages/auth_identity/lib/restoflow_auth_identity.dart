@@ -17,6 +17,8 @@ export 'src/device_context.dart';
 export 'src/device_pairing_repository.dart';
 // RF-161: the device-session secret store abstraction (raw token -> secure storage).
 export 'src/device_session_secret_store.dart';
+// Sprint: the money-free device staff directory for the POS/KDS PIN pad.
+export 'src/device_staff.dart';
 export 'src/auth_gate_state.dart';
 export 'src/auth_failure.dart';
 export 'src/membership_context.dart';

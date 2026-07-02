@@ -12,20 +12,30 @@ import '../format/money_format.dart';
 /// DATA (rendered via a variable) and the price is formatted integer minor-unit
 /// money; only the add action's tooltip is localized chrome.
 class MenuItemCard extends StatelessWidget {
-  const MenuItemCard({required this.item, required this.onAdd, super.key});
+  const MenuItemCard({
+    required this.item,
+    required this.onAdd,
+    this.category,
+    this.currencyCode = kDemoCurrencyCode,
+    super.key,
+  });
 
   final DemoMenuItem item;
   final VoidCallback onAdd;
+
+  /// The owning category of the ACTIVE menu (real categories carry their own
+  /// palette entry); null falls back to the demo lookup.
+  final DemoCategory? category;
+
+  /// The ACTIVE menu currency (ISO 4217); demo default preserved.
+  final String currencyCode;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final category = categoryById(item.categoryId);
-    final priceText = MoneyFormatter.formatMinor(
-      item.priceMinor,
-      kDemoCurrencyCode,
-    );
+    final category = this.category ?? categoryById(item.categoryId);
+    final priceText = MoneyFormatter.formatMinor(item.priceMinor, currencyCode);
 
     return Card(
       child: InkWell(

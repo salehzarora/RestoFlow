@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'state/cart_controller.dart';
 import 'state/menu_filter.dart';
+import 'state/pos_menu_provider.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/language_selector.dart';
@@ -66,6 +67,9 @@ class PosMenuScreen extends StatelessWidget {
 }
 
 /// The menu side: heading, category filter chips, and the filtered item grid.
+/// Sells from the ACTIVE menu ([posMenuProvider]): the demo consts in demo
+/// mode, the real backend menu in real mode — with honest loading/error/empty
+/// states (never a fake menu).
 class _MenuPane extends ConsumerWidget {
   const _MenuPane();
 
@@ -73,9 +77,7 @@ class _MenuPane extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final controller = ref.read(cartControllerProvider.notifier);
-    final selectedCategory = ref.watch(selectedCategoryProvider);
-    final items = menuItemsForCategory(selectedCategory);
+    final menuAsync = ref.watch(posMenuProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,7 +96,83 @@ class _MenuPane extends ConsumerWidget {
             ),
           ),
         ),
-        const CategoryChips(),
+        Expanded(
+          child: menuAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, _) =>
+                _MenuLoadError(onRetry: () => ref.invalidate(posMenuProvider)),
+            data: (menu) => _MenuGrid(menu: menu),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MenuLoadError extends StatelessWidget {
+  const _MenuLoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(RestoflowSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 40),
+            const SizedBox(height: RestoflowSpacing.md),
+            Text(l10n.posMenuLoadError, textAlign: TextAlign.center),
+            const SizedBox(height: RestoflowSpacing.md),
+            FilledButton.tonalIcon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: Text(l10n.authTryAgain),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuGrid extends ConsumerWidget {
+  const _MenuGrid({required this.menu});
+
+  final PosMenuData menu;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final controller = ref.read(cartControllerProvider.notifier);
+    final selectedCategory = ref.watch(selectedCategoryProvider);
+    final items = menuItemsForCategory(menu.items, selectedCategory);
+
+    if (menu.items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(RestoflowSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.restaurant_menu_outlined, size: 40),
+              const SizedBox(height: RestoflowSpacing.md),
+              Text(l10n.posMenuEmptyTitle, style: theme.textTheme.titleMedium),
+              const SizedBox(height: RestoflowSpacing.xs),
+              Text(l10n.posMenuEmptyBody, textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CategoryChips(categories: menu.categories),
         const SizedBox(height: RestoflowSpacing.sm),
         Expanded(
           child: GridView.builder(
@@ -110,6 +188,8 @@ class _MenuPane extends ConsumerWidget {
               final item = items[index];
               return MenuItemCard(
                 item: item,
+                category: menu.categoryOf(item.categoryId),
+                currencyCode: menu.currencyCode,
                 onAdd: () => controller.addItem(item),
               );
             },

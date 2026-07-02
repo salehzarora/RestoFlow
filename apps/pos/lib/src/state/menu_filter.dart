@@ -11,10 +11,14 @@ final selectedCategoryProvider = StateProvider<String>(
   (ref) => kAllCategoriesId,
 );
 
-/// The demo menu filtered by [categoryId]; [kAllCategoriesId] returns all items.
-List<DemoMenuItem> menuItemsForCategory(String categoryId) {
-  if (categoryId == kAllCategoriesId) return kDemoMenu;
-  return kDemoMenu
+/// [items] filtered by [categoryId]; [kAllCategoriesId] returns all items.
+/// Pure over the ACTIVE menu (demo consts or the real backend menu).
+List<DemoMenuItem> menuItemsForCategory(
+  List<DemoMenuItem> items,
+  String categoryId,
+) {
+  if (categoryId == kAllCategoriesId) return items;
+  return items
       .where((item) => item.categoryId == categoryId)
       .toList(growable: false);
 }
