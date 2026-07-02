@@ -37,11 +37,15 @@ class DeviceSignInUnavailableView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
+    // The shared help-page pattern: a warning banner stating the honest cause
+    // + a how-to card with the config snippet (RestoflowCodeBlock keeps
+    // config text LTR, even under ar/he).
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
+          constraints: const BoxConstraints(
+            maxWidth: RestoflowPanelWidths.helpPanel,
+          ),
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.all(RestoflowSpacing.xl),
@@ -56,22 +60,8 @@ class DeviceSignInUnavailableView extends StatelessWidget {
               RestoflowSectionCard(
                 title: l10n.authDeviceSignInUnavailableHowTo,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(RestoflowSpacing.md),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-                    ),
-                    // Config text is always LTR, even under ar/he.
-                    child: Text(
-                      configSnippet,
-                      textDirection: TextDirection.ltr,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: RestoflowSpacing.sm),
+                  RestoflowCodeBlock(lines: configSnippet.split('\n')),
                   const SizedBox(height: RestoflowSpacing.md),
                   Text(l10n.authDeviceSignInUnavailableFix),
                 ],

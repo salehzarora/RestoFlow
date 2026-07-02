@@ -32,7 +32,9 @@ class MembershipPickerView extends StatelessWidget {
       padding: const EdgeInsets.all(RestoflowSpacing.lg),
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: RestoflowSpacing.md),
+          padding: const EdgeInsetsDirectional.only(
+            bottom: RestoflowSpacing.md,
+          ),
           child: Text(
             l10n.authChooseLocation,
             style: theme.textTheme.titleLarge,
@@ -54,37 +56,82 @@ class _MembershipTile extends StatelessWidget {
   final MembershipContext membership;
   final VoidCallback onTap;
 
+  /// First grapheme of the organization NAME (data derivation, never copy;
+  /// uppercasing is a no-op for Arabic/Hebrew).
+  static String _monogram(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '';
+    return trimmed.characters.first.toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return Card(
-      margin: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
+      margin: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.sm),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
         child: Padding(
           padding: const EdgeInsets.all(RestoflowSpacing.lg),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Names only - never the membership UUID.
-              _LabeledValue(
-                label: l10n.authOrganization,
-                value: membership.organizationName,
+              // Org monogram — derived from the name, never an id.
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(RestoflowRadii.md),
+                ),
+                child: Text(
+                  _monogram(membership.organizationName),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-              if (membership.restaurantName != null)
-                _LabeledValue(
-                  label: l10n.authRestaurant,
-                  value: membership.restaurantName!,
+              const SizedBox(width: RestoflowSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Names only - never the membership UUID.
+                    Text(
+                      membership.organizationName,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (membership.restaurantName != null ||
+                        membership.branchName != null)
+                      const SizedBox(height: RestoflowSpacing.xs),
+                    if (membership.restaurantName != null)
+                      _LabeledValue(
+                        label: l10n.authRestaurant,
+                        value: membership.restaurantName!,
+                      ),
+                    if (membership.branchName != null)
+                      _LabeledValue(
+                        label: l10n.authBranch,
+                        value: membership.branchName!,
+                      ),
+                    const SizedBox(height: RestoflowSpacing.sm),
+                    RestoflowStatusPill(
+                      label: membershipRoleLabel(l10n, membership.role),
+                    ),
+                  ],
                 ),
-              if (membership.branchName != null)
-                _LabeledValue(
-                  label: l10n.authBranch,
-                  value: membership.branchName!,
-                ),
-              _LabeledValue(
-                label: l10n.authRole,
-                value: membershipRoleLabel(l10n, membership.role),
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              // Auto-mirrors under RTL.
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ],
           ),

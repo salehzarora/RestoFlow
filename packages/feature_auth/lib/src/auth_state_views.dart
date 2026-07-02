@@ -2,49 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-/// A simple centered auth-state scaffold: an icon, a localized message, and
-/// optional action buttons. Shared by the auth-gate state views below. All text
-/// is supplied localized (RF-020 / D-014) - no hardcoded strings.
+/// A tone-aware auth-state scaffold: a hero icon in a semantic tone circle, a
+/// localized message, and optional action buttons — so a denied/error state
+/// LOOKS like a failure instead of a brand moment. Delegates its presentation
+/// to [RestoflowStateView] (which falls back to plain [ColorScheme] roles when
+/// the RestoFlow theme extension is absent, e.g. bare test harnesses). Shared
+/// by the auth-gate state views below. All text is supplied localized
+/// (RF-020 / D-014) - no hardcoded strings.
 class AuthMessageView extends StatelessWidget {
   const AuthMessageView({
     required this.icon,
     required this.message,
+    this.tone,
     this.actions = const <Widget>[],
     super.key,
   });
 
   final IconData icon;
   final String message;
+
+  /// Semantic accent for the icon circle (danger/warning/info). Null keeps
+  /// the quiet neutral treatment.
+  final RestoflowTone? tone;
+
   final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: theme.colorScheme.primary),
-            const SizedBox(height: RestoflowSpacing.lg),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium,
-            ),
-            if (actions.isNotEmpty) ...[
-              const SizedBox(height: RestoflowSpacing.lg),
-              Wrap(
-                spacing: RestoflowSpacing.sm,
-                runSpacing: RestoflowSpacing.sm,
-                alignment: WrapAlignment.center,
-                children: actions,
-              ),
-            ],
-          ],
-        ),
-      ),
+    return RestoflowStateView(
+      icon: icon,
+      title: message,
+      tone: tone,
+      actions: actions,
     );
   }
 }
@@ -101,9 +90,13 @@ class AuthDeniedView extends StatelessWidget {
     return AuthMessageView(
       icon: Icons.account_circle_outlined,
       message: l10n.authAccessDenied,
+      tone: RestoflowTone.danger,
       actions: [
         if (onRetry != null)
-          TextButton(onPressed: onRetry, child: Text(l10n.authTryAgain)),
+          FilledButton.tonal(
+            onPressed: onRetry,
+            child: Text(l10n.authTryAgain),
+          ),
         if (onSignOut != null)
           TextButton(onPressed: onSignOut, child: Text(l10n.authSignOut)),
       ],
@@ -123,6 +116,7 @@ class AuthErrorView extends StatelessWidget {
     return AuthMessageView(
       icon: Icons.error_outline,
       message: l10n.authError,
+      tone: RestoflowTone.danger,
       actions: [
         if (onRetry != null)
           FilledButton(onPressed: onRetry, child: Text(l10n.authTryAgain)),
@@ -143,6 +137,7 @@ class AuthNoAccessView extends StatelessWidget {
     return AuthMessageView(
       icon: Icons.do_not_disturb_alt,
       message: l10n.authNoAccess,
+      tone: RestoflowTone.warning,
       actions: [
         if (onSignOut != null)
           TextButton(onPressed: onSignOut, child: Text(l10n.authSignOut)),
@@ -163,6 +158,7 @@ class AuthWrongRoleView extends StatelessWidget {
     return AuthMessageView(
       icon: Icons.block,
       message: l10n.authWrongRole,
+      tone: RestoflowTone.warning,
       actions: [
         if (onSignOut != null)
           TextButton(onPressed: onSignOut, child: Text(l10n.authSignOut)),
@@ -183,6 +179,7 @@ class AuthDeferredRoleView extends StatelessWidget {
     return AuthMessageView(
       icon: Icons.schedule,
       message: l10n.authComingSoon,
+      tone: RestoflowTone.info,
       actions: [
         if (onSignOut != null)
           TextButton(onPressed: onSignOut, child: Text(l10n.authSignOut)),
@@ -203,6 +200,7 @@ class AuthPlatformAdminView extends StatelessWidget {
     return AuthMessageView(
       icon: Icons.admin_panel_settings_outlined,
       message: l10n.authPlatformAdmin,
+      tone: RestoflowTone.info,
       actions: [
         if (onSignOut != null)
           TextButton(onPressed: onSignOut, child: Text(l10n.authSignOut)),

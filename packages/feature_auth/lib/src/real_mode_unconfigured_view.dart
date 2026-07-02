@@ -21,16 +21,20 @@ class RealModeUnconfiguredView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     final defines = [
       '--dart-define=$demoModeEnvName=false',
       '--dart-define=${SupabaseBootstrapConfig.urlEnvName}=<supabase-url>',
       '--dart-define=${SupabaseBootstrapConfig.anonKeyEnvName}=<anon-key>',
-    ].join('\n');
+    ];
+    // The shared help-page pattern: a warning banner stating the honest cause
+    // + a how-to card with the config snippet (RestoflowCodeBlock keeps
+    // command-line text LTR, even under ar/he).
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
+          constraints: const BoxConstraints(
+            maxWidth: RestoflowPanelWidths.helpPanel,
+          ),
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.all(RestoflowSpacing.xl),
@@ -45,22 +49,8 @@ class RealModeUnconfiguredView extends StatelessWidget {
               RestoflowSectionCard(
                 title: l10n.authRealModeUnconfiguredHowTo,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(RestoflowSpacing.md),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-                    ),
-                    // Command-line text is always LTR, even under ar/he.
-                    child: Text(
-                      defines,
-                      textDirection: TextDirection.ltr,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: RestoflowSpacing.sm),
+                  RestoflowCodeBlock(lines: defines),
                   const SizedBox(height: RestoflowSpacing.md),
                   Text(l10n.authRealModeUnconfiguredDemoHint),
                 ],

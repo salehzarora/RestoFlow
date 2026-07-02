@@ -164,6 +164,9 @@ void main() {
     // Switch to the "Create account" tab (the segment is unique in sign-in mode).
     await tester.tap(find.text(l10n.authCreateAccountTab));
     await tester.pumpAndSettle();
+    // The sign-up card (brand hero + four fields) can extend past the default
+    // test viewport — scroll the submit into view before tapping.
+    await tester.ensureVisible(find.byKey(const Key('auth-submit')));
     await tester.tap(find.byKey(const Key('auth-submit')));
     await tester.pumpAndSettle();
 

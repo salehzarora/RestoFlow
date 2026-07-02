@@ -80,6 +80,42 @@ void main() {
     expect(gotPin, '1234');
   });
 
+  testWidgets('the on-screen keypad feeds the same PIN field (digits + '
+      'backspace), and the field stays enterText-compatible', (tester) async {
+    String? gotPin;
+    await _pump(
+      tester,
+      staff: _FakeStaff(const Success(_staff)),
+      onStart: (_, pin) async {
+        gotPin = pin;
+        return null;
+      },
+    );
+    await tester.tap(find.byKey(const Key('pin-staff-emp-1')));
+    await tester.pumpAndSettle();
+
+    // Keypad taps append to the field; backspace removes the last digit.
+    for (final d in ['1', '2', '3', '9']) {
+      await tester.tap(find.byKey(Key('keypad-$d')));
+      await tester.pump();
+    }
+    await tester.tap(find.byKey(const Key('keypad-backspace')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('pin-input')))
+          .controller!
+          .text,
+      '123',
+    );
+
+    // The field itself is still directly editable (single source of truth).
+    await tester.enterText(find.byKey(const Key('pin-input')), '1234');
+    await tester.tap(find.byKey(const Key('pin-submit')));
+    await tester.pumpAndSettle();
+    expect(gotPin, '1234');
+  });
+
   testWidgets('a wrong PIN shows the safe error and stays on the pad', (
     tester,
   ) async {
