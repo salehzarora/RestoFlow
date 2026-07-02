@@ -1,10 +1,21 @@
 # RF-161 — Device-auth bridge + real POS/KDS order loop (ADR)
 
-> **Status: PROPOSED for human + Codex review. Security-critical (RISK R-003 CRITICAL).**
-> This closes the frozen device-auth gap flagged at RF-160. It is additive and
-> forward-only, does **not** weaken RLS/auth, uses **no** service-role key, and adds
-> **no** anon-role path. It **must not** serve real tenant data until the mandatory
-> human RLS/security sign-off + Codex review (AGENTS.md §1).
+> **Status: MERGED to main (PR #98) after Codex review (the RF161-B1 type-check fix
+> landed). Security-critical (RISK R-003 CRITICAL); the human RLS/security sign-off
+> before real tenant data remains a hard gate (AGENTS.md §1).**
+>
+> **STATUS UPDATE (product-rescue sprint, 2026-07-02).** §8's deferred order loop is
+> now largely DELIVERED: the sprint added staff/PIN provisioning
+> (`create_staff_member` / `set_employee_pin`, bcrypt hashes), a PRODUCTION
+> `app.verify_pin_credential` (the RF-051 interim equality seam is dead — legacy
+> refs fail closed), the device-facing `list_device_staff` PIN pad, the shared
+> POS/KDS PIN sign-in over `start_pin_session`, the real POS menu (`pos_menu`,
+> kitchen money-redacted), real order submission + cash payment via `sync_push`
+> (RF-129/130 plumbing now reachable), the KDS `order.status` op (kitchen bump
+> persists), and the dashboard `sales_summary`. Demo mode remains the default;
+> real mode requires explicit configuration (see
+> [LOCAL_RUNBOOK.md](LOCAL_RUNBOOK.md)). §7's residual limits (no session expiry
+> window, no rate limiting, anonymous-actor audit gaps) still stand.
 
 ## 1. Problem — the frozen gap
 

@@ -1,5 +1,16 @@
 # RF-160 — Real dashboard device management (Phase B) + sprint status
 
+> **STATUS UPDATE (product-rescue sprint, 2026-07-02).** The "deferred" notes below
+> are HISTORICAL: RF-161 shipped the device-auth bridge (device-originated
+> redemption → device session → secure storage → type-checked restore), and the
+> product-rescue sprint added dashboard **revoke** (`public.revoke_device_management`),
+> the **Printers** and **Staff/PIN** surfaces, the shared **PIN sign-in** on POS/KDS
+> (production bcrypt verifier), the real POS menu + order submission, KDS
+> `order.status` persistence, and the Overview `sales_summary`. The manager-side
+> redeem/approve/activate simulation no longer applies to the real backend (the
+> device pairs itself); the dashboard hides those actions in real mode. See
+> [LOCAL_RUNBOOK.md](LOCAL_RUNBOOK.md) for the end-to-end local flow.
+
 > Scope decision (owner, Saleh): **keep the M0A architecture freeze; implement only
 > the safe, achievable parts.** This ticket delivers real owner/manager **device
 > management** in the dashboard against the existing RF-112 backend, plus one small
