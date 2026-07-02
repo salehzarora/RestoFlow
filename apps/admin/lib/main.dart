@@ -6,8 +6,24 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'src/platform_admin_screen.dart';
+import 'src/state/locale_controller.dart';
 
-void main() => runApp(const ProviderScope(child: AdminApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Language before first frame: the persisted per-device choice wins; the
+  // FIRST-LAUNCH default is ARABIC (the official language — sprint).
+  final persistedLocale = await readPersistedLocale();
+  runApp(
+    ProviderScope(
+      overrides: [
+        initialLocaleProvider.overrideWithValue(
+          persistedLocale ?? const Locale('ar'),
+        ),
+      ],
+      child: const AdminApp(),
+    ),
+  );
+}
 
 /// Localized platform-admin app (RF-020 + RF-108 + RF-120), behind the shared
 /// auth gate.
@@ -18,7 +34,7 @@ void main() => runApp(const ProviderScope(child: AdminApp()));
 /// `is_platform_admin == true` (D-026 - never a tenant role). The overview is
 /// demo data behind a repository seam (real RF-091 platform-admin RPC wiring is
 /// deferred). RTL/LTR via the shared `packages/l10n` wiring.
-class AdminApp extends StatelessWidget {
+class AdminApp extends ConsumerWidget {
   const AdminApp({this.demoMode, this.fetchContext, super.key});
 
   /// Test-only override of the demo/auth mode (null => `RESTOFLOW_DEMO_MODE`).
@@ -28,11 +44,13 @@ class AdminApp extends StatelessWidget {
   final AuthContextFetcher? fetchContext;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).adminAppTitle,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
+      // Sprint (I): the persisted user-selected language drives the app.
+      locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
       theme: restoflowBaseTheme(),

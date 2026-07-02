@@ -17,6 +17,9 @@ import 'src/state/locale_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Language before first frame: the persisted per-device choice wins; the
+  // FIRST-LAUNCH default is ARABIC (the official language — sprint).
+  final persistedLocale = await readPersistedLocale();
   final real = await _realDeviceAuth();
   final seams = real.seams;
   runApp(
@@ -25,6 +28,7 @@ Future<void> main() async {
       deviceStaffRepository: seams?.staff,
       authTransport: seams?.transport,
       realAuthProblem: real.problem,
+      initialLocale: persistedLocale ?? const Locale('ar'),
     ),
   );
 }
@@ -106,6 +110,7 @@ class KdsApp extends StatelessWidget {
     this.authTransport,
     this.realAuthProblem,
     this.initialDevice,
+    this.initialLocale,
     super.key,
   });
 
@@ -132,6 +137,10 @@ class KdsApp extends StatelessWidget {
   /// A pre-existing paired device context, or null.
   final DeviceContext? initialDevice;
 
+  /// The locale the app starts in (sprint: persisted choice ?? Arabic).
+  /// Null (tests) keeps [initialLocaleProvider]'s default.
+  final Locale? initialLocale;
+
   /// RF-058: an OPTIONAL realtime invalidation source. When provided (and a sync
   /// [source] is too), realtime hints are bridged to refresh() on top of
   /// polling. Null -> polling-only (realtime is never required).
@@ -149,6 +158,8 @@ class KdsApp extends StatelessWidget {
     final invSource = invalidationSource;
     return ProviderScope(
       overrides: [
+        if (initialLocale case final locale?)
+          initialLocaleProvider.overrideWithValue(locale),
         // Sprint: the PIN/session + sync calls ride the SAME authenticated
         // (anonymous) transport as the pairing repo (D-011/RF-161).
         if (authTransport case final transport?)

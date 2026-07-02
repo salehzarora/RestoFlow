@@ -21,6 +21,7 @@ import 'src/context/tenant_context_resolver.dart';
 import 'src/dashboard_shell.dart';
 import 'src/printers/printers_repository.dart';
 import 'src/staff/staff_repository.dart';
+import 'src/state/locale_controller.dart';
 import 'src/tables/tables_repository.dart';
 
 /// Composition root (RF-151 + RF-152). In DEMO mode (`RESTOFLOW_DEMO_MODE`
@@ -32,9 +33,19 @@ import 'src/tables/tables_repository.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final config = RuntimeConfig.fromEnvironment();
+  // Language before first frame: the persisted per-device choice wins; the
+  // FIRST-LAUNCH default is ARABIC (the official language — sprint).
+  final localeOverride = initialLocaleProvider.overrideWithValue(
+    await readPersistedLocale() ?? const Locale('ar'),
+  );
 
   if (config.isDemoMode) {
-    runApp(const ProviderScope(child: DashboardApp(demoMode: true)));
+    runApp(
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const DashboardApp(demoMode: true),
+      ),
+    );
     return;
   }
 
@@ -43,8 +54,9 @@ Future<void> main() async {
     // Real mode but the anon-key config is missing/invalid/service-role: an honest
     // unconfigured state. Real* repos never contact a backend without valid config.
     runApp(
-      const ProviderScope(
-        child: DashboardApp(demoMode: false, realModeUnconfigured: true),
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const DashboardApp(demoMode: false, realModeUnconfigured: true),
       ),
     );
     return;
@@ -66,8 +78,9 @@ Future<void> main() async {
     // must never crash or blank the dashboard — show the honest config help
     // page instead. Never echo the offending value.
     runApp(
-      const ProviderScope(
-        child: DashboardApp(demoMode: false, realModeUnconfigured: true),
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const DashboardApp(demoMode: false, realModeUnconfigured: true),
       ),
     );
     return;
@@ -75,6 +88,7 @@ Future<void> main() async {
   final real = buildDashboardRealAuth(Supabase.instance.client);
   runApp(
     ProviderScope(
+      overrides: [localeOverride],
       child: DashboardApp(
         demoMode: false,
         authRepository: real.auth,
@@ -99,7 +113,7 @@ Future<void> main() async {
 /// through [DashboardAuthFlow]: sign in / sign up -> restaurant onboarding ->
 /// (validated) org/branch selection -> the role-gated real dashboard. Money is
 /// integer minor units (DECISION D-007).
-class DashboardApp extends StatelessWidget {
+class DashboardApp extends ConsumerWidget {
   const DashboardApp({
     this.demoMode,
     this.fetchContext,
@@ -163,12 +177,14 @@ class DashboardApp extends StatelessWidget {
   final bool realModeUnconfigured;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       onGenerateTitle: (context) =>
           AppLocalizations.of(context).dashboardAppTitle,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
+      // Sprint (I): the persisted user-selected language drives the app.
+      locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
       theme: restoflowBaseTheme(),

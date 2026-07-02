@@ -8,6 +8,7 @@ import 'data/platform_admin_repository.dart';
 import 'data/platform_overview.dart';
 import 'state/platform_admin_providers.dart';
 import 'widgets/platform_widgets.dart';
+import 'widgets/language_selector.dart';
 
 /// The RF-120 / RF-128 / RF-134 platform-admin overview: a data-source notice
 /// banner, the platform "as of" context, platform KPI cards, an organizations
@@ -56,6 +57,8 @@ class PlatformAdminScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          // Sprint (I): the language switcher is visible on the admin surface.
+          const LanguageSelector(),
           IconButton(
             key: const Key('platform-refresh-button'),
             onPressed: refresh,

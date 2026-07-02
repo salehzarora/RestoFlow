@@ -16,6 +16,7 @@ import 'setup/setup_center.dart';
 import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
+import 'widgets/language_selector.dart';
 import 'tables/tables_repository.dart';
 import 'tables/tables_screen.dart';
 
@@ -528,6 +529,9 @@ class _ShellHeaderBar extends StatelessWidget {
             tone: isReal ? RestoflowTone.success : RestoflowTone.info,
             icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
           ),
+          // Sprint (I): the language switcher lives on the persistent header,
+          // so it is visible on EVERY dashboard page.
+          const LanguageSelector(),
           if (onSignOut != null) ...[
             const SizedBox(width: RestoflowSpacing.sm),
             IconButton(

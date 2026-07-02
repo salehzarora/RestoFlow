@@ -3,6 +3,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'dashboard_auth_repository.dart';
+import '../widgets/language_selector.dart';
 
 /// The dashboard real-auth entry (RF-151): a Sign in / Create account form with
 /// basic validation and safe, localized loading / error / email-confirmation
@@ -112,6 +113,8 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
     final l10n = AppLocalizations.of(context);
     final isSignUp = _mode == _AuthMode.signUp;
     return Scaffold(
+      // Sprint (I): the language switcher is reachable BEFORE sign-in too.
+      appBar: AppBar(actions: const [LanguageSelector()]),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

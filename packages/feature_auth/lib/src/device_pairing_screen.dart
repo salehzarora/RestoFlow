@@ -17,6 +17,7 @@ class DevicePairingScreen extends StatefulWidget {
     required this.repository,
     required this.deviceType,
     required this.onPaired,
+    this.appBarActions = const <Widget>[],
     super.key,
   });
 
@@ -27,6 +28,10 @@ class DevicePairingScreen extends StatefulWidget {
 
   /// Called with the backend-verified context on a successful pair.
   final void Function(DeviceContext context) onPaired;
+
+  /// Host-provided app-bar actions (sprint I: the language switcher must be
+  /// reachable on EVERY page, including pre-pairing).
+  final List<Widget> appBarActions;
 
   @override
   State<DevicePairingScreen> createState() => _DevicePairingScreenState();
@@ -81,6 +86,9 @@ class _DevicePairingScreenState extends State<DevicePairingScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
+      appBar: widget.appBarActions.isEmpty
+          ? null
+          : AppBar(actions: widget.appBarActions),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

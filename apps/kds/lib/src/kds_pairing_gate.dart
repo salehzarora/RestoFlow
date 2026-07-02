@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import 'widgets/language_selector.dart';
+
 /// RF-153 KDS device-pairing gate. Money-FREE (a kitchen device never sees money
 /// — SECURITY T-003): the shared [DevicePairingScreen] shows no money, and the
 /// paired [DeviceContext] carries none.
@@ -92,6 +94,8 @@ class _KdsPairingGateState extends State<KdsPairingGate> {
       repository: widget.repository,
       deviceType: _expectedDeviceType,
       onPaired: (context) => setState(() => _device = context),
+      // Sprint (I): the language switcher is reachable before pairing too.
+      appBarActions: const [LanguageSelector()],
     );
   }
 }

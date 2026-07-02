@@ -4,6 +4,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import 'state/pos_session.dart';
+import 'widgets/language_selector.dart';
 
 /// The POS staff PIN gate (DECISION D-006): after the device is PAIRED, a
 /// personal staff PIN session is required before the POS surface.
@@ -49,6 +50,8 @@ class PosPinGate extends ConsumerWidget {
       staffRepository: staff,
       // POS wording for the no-staff guidance (cashier/manager PINs).
       surface: AppSurface.pos,
+      // Sprint (I): the language switcher is reachable on the PIN screen too.
+      appBarActions: const [LanguageSelector()],
       onStartSession: (employeeProfileId, pin) => ref
           .read(posSessionControllerProvider.notifier)
           .signInWithPin(

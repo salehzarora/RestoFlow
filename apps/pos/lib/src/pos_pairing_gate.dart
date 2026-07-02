@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import 'widgets/language_selector.dart';
+
 /// RF-153 POS device-pairing gate: in real mode, require a paired device before
 /// the POS surface.
 ///
@@ -97,6 +99,8 @@ class _PosPairingGateState extends State<PosPairingGate> {
       repository: widget.repository,
       deviceType: _expectedDeviceType,
       onPaired: (context) => setState(() => _device = context),
+      // Sprint (I): the language switcher is reachable before pairing too.
+      appBarActions: const [LanguageSelector()],
     );
   }
 }

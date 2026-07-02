@@ -303,13 +303,16 @@ void main() {
     'login + onboarding screens render in Arabic (RTL) without error',
     (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
-          locale: const Locale('ar'),
-          localizationsDelegates: restoflowLocalizationsDelegates,
-          supportedLocales: kSupportedLocales,
-          home: LoginSignupScreen(
-            authRepository: FakeAuthRepository(),
-            onSignedUpWithSession: (_, _) {},
+        // ProviderScope: the login app bar hosts the language selector (I).
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: LoginSignupScreen(
+              authRepository: FakeAuthRepository(),
+              onSignedUpWithSession: (_, _) {},
+            ),
           ),
         ),
       );

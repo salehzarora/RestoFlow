@@ -14,11 +14,17 @@ import 'src/state/pos_session.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Language before first frame: the persisted per-device choice wins; the
+  // FIRST-LAUNCH default is ARABIC (the official language — sprint).
+  final persistedLocale = await readPersistedLocale();
   final real = await _realDeviceAuth();
   final seams = real.seams;
   runApp(
     ProviderScope(
       overrides: [
+        initialLocaleProvider.overrideWithValue(
+          persistedLocale ?? const Locale('ar'),
+        ),
         // The PIN/session + sync_push calls must ride the SAME authenticated
         // (anonymous) transport as the pairing repo — the plain anon transport
         // cannot reach the authenticated-only RPC grants (D-011/RF-161).

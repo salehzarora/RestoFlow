@@ -22,6 +22,7 @@ class PinLoginScreen extends StatefulWidget {
     required this.staffRepository,
     required this.onStartSession,
     this.surface,
+    this.appBarActions = const <Widget>[],
     super.key,
   });
 
@@ -30,6 +31,10 @@ class PinLoginScreen extends StatefulWidget {
   /// The hosting surface (POS/KDS). Drives the no-staff guidance wording —
   /// which roles can sign in here. Null => the generic fallback body.
   final AppSurface? surface;
+
+  /// Host-provided app-bar actions (sprint I: the language switcher must be
+  /// reachable on EVERY page, including the PIN screen).
+  final List<Widget> appBarActions;
 
   /// Starts the PIN session; returns null on success (the host rebuilds past
   /// this screen) or a typed error to show.
@@ -86,7 +91,10 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.pinLoginTitle)),
+      appBar: AppBar(
+        title: Text(l10n.pinLoginTitle),
+        actions: widget.appBarActions,
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),

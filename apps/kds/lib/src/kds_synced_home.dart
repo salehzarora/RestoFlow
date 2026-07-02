@@ -8,6 +8,7 @@ import 'kds_screen.dart';
 import 'state/kds_session.dart';
 import 'state/kds_status_pusher.dart';
 import 'widgets/kds_state_message.dart';
+import 'widgets/language_selector.dart';
 
 /// The provider-backed KDS home (RF-063): watches [kdsViewStateProvider] and
 /// renders the shared [KdsScreen] for live/stale data, a spinner before the
@@ -113,6 +114,8 @@ class KdsSyncedHome extends ConsumerWidget {
               Text(l10n.kdsAppTitle),
             ],
           ),
+          // Sprint (I): the language switcher is visible on the LIVE board too.
+          actions: const [LanguageSelector()],
         ),
         body: body,
       );

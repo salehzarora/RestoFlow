@@ -4,6 +4,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import 'state/kds_session.dart';
+import 'widgets/language_selector.dart';
 
 /// The KDS staff PIN gate (DECISION D-006): after the device is PAIRED, a
 /// personal staff PIN session is required before the kitchen board.
@@ -48,6 +49,8 @@ class KdsPinGate extends ConsumerWidget {
       staffRepository: staff,
       // KDS wording for the no-staff guidance (kitchen staff/manager PINs).
       surface: AppSurface.kds,
+      // Sprint (I): the language switcher is reachable on the PIN screen too.
+      appBarActions: const [LanguageSelector()],
       onStartSession: (employeeProfileId, pin) => ref
           .read(kdsSessionControllerProvider.notifier)
           .signInWithPin(
