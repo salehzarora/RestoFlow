@@ -682,12 +682,21 @@ class _SideNavTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.xs),
       child: Material(
-        color: selected ? semantic.sidebarActiveBackground : Colors.transparent,
+        color: Colors.transparent,
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
           borderRadius: radius,
-          child: Padding(
+          // Subtle interaction polish: the active fill fades in/out (finite
+          // implicit animation — settles under pumpAndSettle).
+          child: AnimatedContainer(
+            duration: RestoflowDurations.fast,
+            decoration: BoxDecoration(
+              color: selected
+                  ? semantic.sidebarActiveBackground
+                  : Colors.transparent,
+              borderRadius: radius,
+            ),
             padding: const EdgeInsetsDirectional.fromSTEB(
               RestoflowSpacing.md,
               RestoflowSpacing.md,

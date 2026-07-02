@@ -550,53 +550,59 @@ class _TableTile extends StatelessWidget {
       label: selected ? l10n.posTableSelectedSemantic(table.label) : null,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 132, maxWidth: 168),
-        child: Material(
-          color: fill,
-          shape: RoundedRectangleBorder(
+        // Subtle interaction polish: selection fill/border fades (finite
+        // implicit animation; ink rides a transparent Material on top).
+        child: AnimatedContainer(
+          duration: RestoflowDurations.fast,
+          decoration: BoxDecoration(
+            color: fill,
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            side: BorderSide(color: borderColor, width: borderWidth),
+            border: Border.all(color: borderColor, width: borderWidth),
           ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            child: Padding(
-              padding: const EdgeInsets.all(RestoflowSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.event_seat, size: 18, color: onFill),
-                      const SizedBox(width: RestoflowSpacing.xs),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              child: Padding(
+                padding: const EdgeInsets.all(RestoflowSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.event_seat, size: 18, color: onFill),
+                        const SizedBox(width: RestoflowSpacing.xs),
+                        Text(
+                          table.label,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: onFill,
+                          ),
+                        ),
+                        if (glyph != null) ...[const Spacer(), glyph],
+                      ],
+                    ),
+                    if (table.seats != null) ...[
+                      const SizedBox(height: RestoflowSpacing.xs),
                       Text(
-                        table.label,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: onFill,
+                        l10n.posTableSeats(table.seats!),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: onFill.withValues(alpha: 0.8),
                         ),
                       ),
-                      if (glyph != null) ...[const Spacer(), glyph],
                     ],
-                  ),
-                  if (table.seats != null) ...[
-                    const SizedBox(height: RestoflowSpacing.xs),
+                    const SizedBox(height: RestoflowSpacing.sm),
                     Text(
-                      l10n.posTableSeats(table.seats!),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: onFill.withValues(alpha: 0.8),
+                      statusLabel,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: onFill,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
-                  const SizedBox(height: RestoflowSpacing.sm),
-                  Text(
-                    statusLabel,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: onFill,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

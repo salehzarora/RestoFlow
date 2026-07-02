@@ -268,55 +268,62 @@ class _OptionTile extends StatelessWidget {
     // zero-padding ListTiles. The ValueKey stays on the tappable InkWell.
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xxs),
-      child: Material(
-        color: selected ? scheme.primaryContainer : scheme.surface,
-        shape: RoundedRectangleBorder(
+      // Subtle interaction polish: selection tint/border fades (finite
+      // implicit animation; the ink ripple rides a transparent Material on
+      // top so it stays visible).
+      child: AnimatedContainer(
+        duration: RestoflowDurations.fast,
+        decoration: BoxDecoration(
+          color: selected ? scheme.primaryContainer : scheme.surface,
           borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          side: BorderSide(
+          border: Border.all(
             color: selected ? scheme.primary : scheme.outlineVariant,
             width: selected ? 2 : 1,
           ),
         ),
-        child: InkWell(
-          onTap: onToggle,
-          borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: RestoflowSpacing.md,
-                vertical: RestoflowSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  control,
-                  const SizedBox(width: RestoflowSpacing.md),
-                  Expanded(
-                    child: Text(
-                      option.name,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: selected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: selected
-                            ? scheme.onPrimaryContainer
-                            : scheme.onSurface,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: RestoflowSpacing.md,
+                  vertical: RestoflowSpacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    control,
+                    const SizedBox(width: RestoflowSpacing.md),
+                    Expanded(
+                      child: Text(
+                        option.name,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: selected
+                              ? scheme.onPrimaryContainer
+                              : scheme.onSurface,
+                        ),
                       ),
                     ),
-                  ),
-                  if (deltaText != null) ...[
-                    const SizedBox(width: RestoflowSpacing.sm),
-                    Text(
-                      deltaText,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: selected
-                            ? scheme.onPrimaryContainer
-                            : scheme.onSurfaceVariant,
+                    if (deltaText != null) ...[
+                      const SizedBox(width: RestoflowSpacing.sm),
+                      Text(
+                        deltaText,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? scheme.onPrimaryContainer
+                              : scheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
