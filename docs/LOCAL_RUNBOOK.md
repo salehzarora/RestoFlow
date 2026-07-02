@@ -147,7 +147,19 @@ misleading "Account access denied"):
 The dashboard's **Overview** shows a **Setup** panel in real mode with four
 counters (Menu items · Devices · Printers · Staff PINs) and a banner for each
 missing step, each with a button that opens the right tab. Following the
-banners top-to-bottom IS the setup flow. Written out:
+banners top-to-bottom IS the setup flow.
+
+The short version, in order:
+
+1. Add a menu category + item first (Menu tab).
+2. Add POS and KDS devices and issue pairing codes (Devices tab).
+3. Pair the POS and KDS apps with those codes.
+4. If POS/KDS says **"No staff PINs yet"** — go Dashboard → Staff and create
+   a staff member with a PIN (cashier for POS, kitchen staff for KDS).
+5. Return to the POS/KDS and tap **Try again**.
+6. Sign in with the PIN and submit an order.
+
+Written out in full:
 
 1. **Sign up** (dashboard, real mode): email + password (local auth has email
    confirmation disabled, so sign-up signs you straight in). The onboarding
@@ -171,11 +183,16 @@ banners top-to-bottom IS the setup flow. Written out:
    type-checked per surface: a KDS code/session can never unlock a POS).
    **Revoke** on a device card ends its access; the device falls back to the
    pairing screen.
+   > A freshly paired device with no staff yet shows **"No staff PINs yet"**
+   > with the setup steps — that is the normal state, not an error. Do step 5,
+   > then tap **Try again** on the device.
 5. **Create staff + PIN** (Staff tab): **Add staff member** (name + role:
    cashier / kitchen staff / manager), then **Set PIN** (4–8 digits, entered
    obscured; the backend stores a bcrypt hash only; wrong-PIN attempts are
    rate-limited with lockout). The paired POS/KDS PIN screens list these
-   people for sign-in.
+   people for sign-in: on the POS a **cashier or manager** PIN signs in; on
+   the KDS a **kitchen staff or manager** PIN. Back on the device, tap
+   **Try again** and the new names appear.
 6. **Add a printer** (Printers tab, optional for the order loop): name, role
    (receipt / kitchen), connection:
    - **Network / Wi-Fi**: enter the printer's **IP address**; the port hides
