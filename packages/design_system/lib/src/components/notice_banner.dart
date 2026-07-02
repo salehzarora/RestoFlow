@@ -39,7 +39,7 @@ class RestoflowNoticeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final style = tone.style(theme.colorScheme);
+    final style = tone.styleOf(theme);
     final titleText = title;
     return Container(
       width: double.infinity,

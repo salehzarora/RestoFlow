@@ -40,7 +40,7 @@ class RestoflowMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final accent = tone == null ? scheme.primary : tone!.style(scheme).accent;
+    final accent = tone == null ? scheme.primary : tone!.styleOf(theme).accent;
     final captionText = caption;
 
     final content = Padding(
