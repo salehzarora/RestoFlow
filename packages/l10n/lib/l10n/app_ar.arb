@@ -62,6 +62,7 @@
   "posCartEmpty": "سلتك فارغة",
   "posCartSubtotal": "المجموع الفرعي",
   "posAddToCart": "إضافة",
+  "posAddToCartWithTotal": "إضافة · {total}",
   "posClearCart": "مسح",
   "posRemoveItem": "إزالة",
   "posIncreaseQuantity": "زيادة الكمية",

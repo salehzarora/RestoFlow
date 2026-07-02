@@ -201,6 +201,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posAddToCart => 'إضافة';
 
   @override
+  String posAddToCartWithTotal(String total) {
+    return 'إضافة · $total';
+  }
+
+  @override
   String get posClearCart => 'مسح';
 
   @override

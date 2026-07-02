@@ -472,6 +472,12 @@ abstract class AppLocalizations {
   /// **'Add'**
   String get posAddToCart;
 
+  /// POS modifier-sheet confirm button: add the configured item, showing the running line total (already currency-formatted).
+  ///
+  /// In en, this message translates to:
+  /// **'Add · {total}'**
+  String posAddToCartWithTotal(String total);
+
   /// POS action that removes all items from the cart.
   ///
   /// In en, this message translates to:

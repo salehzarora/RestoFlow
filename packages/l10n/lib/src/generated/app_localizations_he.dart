@@ -201,6 +201,11 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posAddToCart => 'הוספה';
 
   @override
+  String posAddToCartWithTotal(String total) {
+    return 'הוספה · $total';
+  }
+
+  @override
   String get posClearCart => 'ניקוי';
 
   @override

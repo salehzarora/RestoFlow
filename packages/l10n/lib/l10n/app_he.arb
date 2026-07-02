@@ -62,6 +62,7 @@
   "posCartEmpty": "העגלה ריקה",
   "posCartSubtotal": "סכום ביניים",
   "posAddToCart": "הוספה",
+  "posAddToCartWithTotal": "הוספה · {total}",
   "posClearCart": "ניקוי",
   "posRemoveItem": "הסרה",
   "posIncreaseQuantity": "הגדלת כמות",

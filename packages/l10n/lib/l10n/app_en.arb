@@ -249,6 +249,11 @@
   "@posAddToCart": {
     "description": "POS action that adds a menu item to the cart."
   },
+  "posAddToCartWithTotal": "Add · {total}",
+  "@posAddToCartWithTotal": {
+    "description": "POS modifier-sheet confirm button: add the configured item, showing the running line total (already currency-formatted).",
+    "placeholders": { "total": { "type": "String" } }
+  },
   "posClearCart": "Clear",
   "@posClearCart": {
     "description": "POS action that removes all items from the cart."

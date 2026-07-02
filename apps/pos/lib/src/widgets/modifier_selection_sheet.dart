@@ -192,7 +192,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                         }
                       : null,
                   icon: const Icon(Icons.add_shopping_cart),
-                  label: Text('${l10n.posAddToCart} · $totalText'),
+                  label: Text(l10n.posAddToCartWithTotal(totalText)),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
                   ),
