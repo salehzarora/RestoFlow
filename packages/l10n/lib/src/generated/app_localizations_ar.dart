@@ -1550,6 +1550,50 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printersSave => 'حفظ';
 
   @override
+  String get printersWizardStepPurpose => 'ماذا تريد أن تطبع؟';
+
+  @override
+  String get printersPurposeReceiptsHint => 'فواتير للعملاء عند الكاشير.';
+
+  @override
+  String get printersPurposeKitchenHint => 'تذاكر لطاقم المطبخ.';
+
+  @override
+  String get printersWizardStepConnection => 'كيف تتصل الطابعة؟';
+
+  @override
+  String get printersConnNetworkHint =>
+      'يجب أن تكون الطابعة على نفس شبكة Wi-Fi/الشبكة التي يستخدمها هذا الجهاز.';
+
+  @override
+  String get printersWizardStepDetails => 'تفاصيل الطابعة';
+
+  @override
+  String get printersNext => 'التالي';
+
+  @override
+  String get printersBack => 'رجوع';
+
+  @override
+  String get printersStatusDisabled => 'معطّلة';
+
+  @override
+  String get printersStatusNeedsBridge => 'تتطلب جسر الطباعة';
+
+  @override
+  String get printersStatusConfigOnly => 'مُهيأة فقط';
+
+  @override
+  String get printersStatusReadyNetwork => 'جاهزة عبر محوّل الشبكة';
+
+  @override
+  String get printersTestPrint => 'طباعة تجريبية';
+
+  @override
+  String get printersTestPrintUnavailable =>
+      'الطباعة التجريبية تتطلب محوّل الطباعة أو الجسر — غير متاحة في إصدار الويب هذا.';
+
+  @override
   String get staffTitle => 'الموظفون';
 
   @override

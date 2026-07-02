@@ -165,12 +165,22 @@ void main() {
       expect(find.textContaining('printed'), findsNothing);
     });
 
-    testWidgets('adds a network printer through the dialog', (tester) async {
+    testWidgets('adds a network printer through the wizard', (tester) async {
       final store = InMemoryPrintersStore();
       await pump(tester, store);
       await tester.tap(find.text('Add printer'));
       await tester.pumpAndSettle();
 
+      // Step 1: purpose (receipt preselected) -> Next.
+      expect(find.text('What do you want to print?'), findsOneWidget);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      // Step 2: connection (network preselected) -> Next.
+      expect(find.text('How is the printer connected?'), findsOneWidget);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      // Step 3: details — name + host are all a network printer needs.
+      expect(find.text('Printer details'), findsOneWidget);
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Display name'),
         'Bar printer',
@@ -232,16 +242,68 @@ void main() {
       );
     });
 
-    // Sprint UX simplification: the dialog leads with name/role/connection,
-    // hides technical fields under Advanced, and is honest per transport.
-    group('simplified add dialog', () {
+    // Sprint UX: the dialog is a guided 3-step wizard (purpose -> connection
+    // -> details), hides technical fields under Advanced, and is honest per
+    // transport.
+    group('guided add wizard', () {
+      testWidgets('step titles render in order and Back returns a step', (
+        tester,
+      ) async {
+        await pump(tester, InMemoryPrintersStore());
+        await tester.tap(find.text('Add printer'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('What do you want to print?'), findsOneWidget);
+        expect(find.text('How is the printer connected?'), findsNothing);
+        expect(find.text('Printer details'), findsNothing);
+        // Save only exists on the last step; Back never on the first.
+        expect(find.text('Save'), findsNothing);
+        expect(find.text('Back'), findsNothing);
+
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        expect(find.text('How is the printer connected?'), findsOneWidget);
+
+        // Back returns to step 1 without losing the flow.
+        await tester.tap(find.text('Back'));
+        await tester.pumpAndSettle();
+        expect(find.text('What do you want to print?'), findsOneWidget);
+
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        expect(find.text('Printer details'), findsOneWidget);
+        expect(find.text('Next'), findsNothing);
+        expect(find.text('Save'), findsOneWidget);
+      });
+
       testWidgets('network: the port is hidden under Advanced (default 9100) '
           'and the dialog says it saves config only', (tester) async {
         await pump(tester, InMemoryPrintersStore());
         await tester.tap(find.text('Add printer'));
         await tester.pumpAndSettle();
 
-        // Simple by default: host is asked for, the port is NOT.
+        // Purpose tiles carry plain-language hints.
+        expect(
+          find.text('Bills for customers at the counter.'),
+          findsOneWidget,
+        );
+        expect(find.text('Tickets for the kitchen staff.'), findsOneWidget);
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+
+        // Step 2: network is preselected and shows its honest requirement.
+        expect(
+          find.text(
+            'The printer must be on the same Wi-Fi/network as this device.',
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+
+        // Step 3, simple by default: host is asked for, the port is NOT.
         expect(
           find.widgetWithText(TextFormField, 'Host / IP address'),
           findsOneWidget,
@@ -265,18 +327,30 @@ void main() {
         expect(find.text('9100'), findsOneWidget);
       });
 
-      testWidgets('bluetooth: shows the web-discovery message, requires no '
-          'identifier, and still saves', (tester) async {
+      testWidgets('bluetooth: the selected tile and the details step show the '
+          'web-discovery message, no identifier is required, and it still '
+          'saves', (tester) async {
         final store = InMemoryPrintersStore();
         await pump(tester, store);
         await tester.tap(find.text('Add printer'));
         await tester.pumpAndSettle();
-
-        await tester.tap(find.text('Network (Wi-Fi/LAN)'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Bluetooth').last);
+        await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
 
+        // Selecting the Bluetooth tile surfaces the honest hint under it.
+        await tester.tap(find.text('Bluetooth'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text(
+            'Bluetooth discovery is not available in the web app yet. Save '
+            'configuration only.',
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+
+        // Step 3 repeats the honesty banner instead of demanding a host.
         expect(
           find.text(
             'Bluetooth discovery is not available in the web app yet. Save '
@@ -310,12 +384,11 @@ void main() {
         await pump(tester, InMemoryPrintersStore());
         await tester.tap(find.text('Add printer'));
         await tester.pumpAndSettle();
-
-        await tester.tap(find.text('Network (Wi-Fi/LAN)'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('USB').last);
+        await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
 
+        await tester.tap(find.text('USB'));
+        await tester.pumpAndSettle();
         expect(
           find.text(
             'USB printing requires the desktop/native printer adapter. Save '
@@ -323,6 +396,79 @@ void main() {
           ),
           findsOneWidget,
         );
+
+        // The details step repeats the same honest message.
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text(
+            'USB printing requires the desktop/native printer adapter. Save '
+            'configuration only.',
+          ),
+          findsOneWidget,
+        );
+      });
+    });
+
+    // Honest per-printer status + the permanently disabled test print.
+    group('printer status and test print', () {
+      testWidgets('status pills are honest per state', (tester) async {
+        final store = InMemoryPrintersStore();
+        await store.upsertPrinter(
+          displayName: 'Paused printer',
+          connectionType: PrinterConnectionType.network,
+          role: PrinterRole.receipt,
+          paperWidth: '80mm',
+          connectionConfig: const {'host': '10.0.0.9', 'port': 9100},
+          isEnabled: false,
+        );
+        await store.upsertPrinter(
+          displayName: 'Belt printer',
+          connectionType: PrinterConnectionType.bluetooth,
+          role: PrinterRole.receipt,
+          paperWidth: '58mm',
+          connectionConfig: const {'bluetooth_id': 'BT-9'},
+          isEnabled: true,
+        );
+        await pump(tester, store);
+
+        // Both enabled demo network printers: config saved, no adapter.
+        expect(find.text('Configured only'), findsNWidgets(2));
+        // The enabled Bluetooth printer needs the (absent) print bridge.
+        expect(find.text('Requires print bridge'), findsOneWidget);
+        // The paused printer: the enabled pill AND the status pill both read
+        // Disabled on that one card.
+        expect(find.text('Disabled'), findsNWidgets(2));
+        // HONESTY: no print adapter is registered in this build, so the
+        // "ready" status must be unreachable — never faked.
+        expect(find.text('Ready via network adapter'), findsNothing);
+      });
+
+      testWidgets('test print is always disabled with an honest explanation', (
+        tester,
+      ) async {
+        await pump(tester, InMemoryPrintersStore());
+
+        // One affordance per card (two demo printers) — all disabled.
+        final buttons = tester
+            .widgetList<TextButton>(
+              find.widgetWithText(TextButton, 'Test print'),
+            )
+            .toList();
+        expect(buttons, hasLength(2));
+        for (final button in buttons) {
+          expect(button.onPressed, isNull);
+        }
+        expect(
+          find.text(
+            'Test print needs the print adapter or bridge — not available in '
+            'this web build.',
+          ),
+          findsNWidgets(2),
+        );
+        // Never a fake success path anywhere on the page.
+        expect(find.textContaining('print succeeded'), findsNothing);
+        expect(find.textContaining('printed'), findsNothing);
       });
     });
   });

@@ -3040,6 +3040,90 @@ abstract class AppLocalizations {
   /// **'Save'**
   String get printersSave;
 
+  /// Printer wizard step 1 title: choose the printer's purpose (receipts vs kitchen tickets).
+  ///
+  /// In en, this message translates to:
+  /// **'What do you want to print?'**
+  String get printersWizardStepPurpose;
+
+  /// Hint under the receipt-purpose choice tile in the printer wizard.
+  ///
+  /// In en, this message translates to:
+  /// **'Bills for customers at the counter.'**
+  String get printersPurposeReceiptsHint;
+
+  /// Hint under the kitchen-purpose choice tile in the printer wizard.
+  ///
+  /// In en, this message translates to:
+  /// **'Tickets for the kitchen staff.'**
+  String get printersPurposeKitchenHint;
+
+  /// Printer wizard step 2 title: choose the connection type.
+  ///
+  /// In en, this message translates to:
+  /// **'How is the printer connected?'**
+  String get printersWizardStepConnection;
+
+  /// Honest hint under the selected network tile in the printer wizard.
+  ///
+  /// In en, this message translates to:
+  /// **'The printer must be on the same Wi-Fi/network as this device.'**
+  String get printersConnNetworkHint;
+
+  /// Printer wizard step 3 title: name, address, and options.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer details'**
+  String get printersWizardStepDetails;
+
+  /// Printer wizard forward button (steps 1-2).
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get printersNext;
+
+  /// Printer wizard back button (steps 2-3).
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get printersBack;
+
+  /// Printer status pill: the printer is switched off in configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get printersStatusDisabled;
+
+  /// Printer status pill for Bluetooth/USB printers: printing needs the native print bridge, which this build does not include.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires print bridge'**
+  String get printersStatusNeedsBridge;
+
+  /// Printer status pill for network printers in this build: the configuration is saved but no print adapter is registered, so nothing can be dispatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Configured only'**
+  String get printersStatusConfigOnly;
+
+  /// Printer status pill RESERVED for builds that register a real network print adapter. In this web build no adapter exists (hasPrintAdapter is const false in code), so this status is intentionally unreachable — it must never be shown without a real adapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready via network adapter'**
+  String get printersStatusReadyNetwork;
+
+  /// Per-printer test-print button label. In this build the button is ALWAYS disabled (no print transport); it must never fake a success.
+  ///
+  /// In en, this message translates to:
+  /// **'Test print'**
+  String get printersTestPrint;
+
+  /// Explanation next to the permanently disabled test-print button in this build.
+  ///
+  /// In en, this message translates to:
+  /// **'Test print needs the print adapter or bridge — not available in this web build.'**
+  String get printersTestPrintUnavailable;
+
   /// Staff page title.
   ///
   /// In en, this message translates to:

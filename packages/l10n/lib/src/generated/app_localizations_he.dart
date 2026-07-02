@@ -1539,6 +1539,50 @@ class AppLocalizationsHe extends AppLocalizations {
   String get printersSave => 'שמירה';
 
   @override
+  String get printersWizardStepPurpose => 'מה תרצו להדפיס?';
+
+  @override
+  String get printersPurposeReceiptsHint => 'חשבונות ללקוחות בדלפק.';
+
+  @override
+  String get printersPurposeKitchenHint => 'כרטיסים לצוות המטבח.';
+
+  @override
+  String get printersWizardStepConnection => 'איך המדפסת מחוברת?';
+
+  @override
+  String get printersConnNetworkHint =>
+      'המדפסת חייבת להיות באותה רשת Wi-Fi/רשת כמו מכשיר זה.';
+
+  @override
+  String get printersWizardStepDetails => 'פרטי המדפסת';
+
+  @override
+  String get printersNext => 'הבא';
+
+  @override
+  String get printersBack => 'חזרה';
+
+  @override
+  String get printersStatusDisabled => 'מושבתת';
+
+  @override
+  String get printersStatusNeedsBridge => 'דורשת גשר הדפסה';
+
+  @override
+  String get printersStatusConfigOnly => 'מוגדרת בלבד';
+
+  @override
+  String get printersStatusReadyNetwork => 'מוכנה דרך מתאם רשת';
+
+  @override
+  String get printersTestPrint => 'הדפסת ניסיון';
+
+  @override
+  String get printersTestPrintUnavailable =>
+      'הדפסת ניסיון דורשת את מתאם ההדפסה או הגשר — לא זמינה בגרסת אינטרנט זו.';
+
+  @override
   String get staffTitle => 'צוות';
 
   @override

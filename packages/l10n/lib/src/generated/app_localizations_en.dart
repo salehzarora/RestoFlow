@@ -1556,6 +1556,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get printersSave => 'Save';
 
   @override
+  String get printersWizardStepPurpose => 'What do you want to print?';
+
+  @override
+  String get printersPurposeReceiptsHint =>
+      'Bills for customers at the counter.';
+
+  @override
+  String get printersPurposeKitchenHint => 'Tickets for the kitchen staff.';
+
+  @override
+  String get printersWizardStepConnection => 'How is the printer connected?';
+
+  @override
+  String get printersConnNetworkHint =>
+      'The printer must be on the same Wi-Fi/network as this device.';
+
+  @override
+  String get printersWizardStepDetails => 'Printer details';
+
+  @override
+  String get printersNext => 'Next';
+
+  @override
+  String get printersBack => 'Back';
+
+  @override
+  String get printersStatusDisabled => 'Disabled';
+
+  @override
+  String get printersStatusNeedsBridge => 'Requires print bridge';
+
+  @override
+  String get printersStatusConfigOnly => 'Configured only';
+
+  @override
+  String get printersStatusReadyNetwork => 'Ready via network adapter';
+
+  @override
+  String get printersTestPrint => 'Test print';
+
+  @override
+  String get printersTestPrintUnavailable =>
+      'Test print needs the print adapter or bridge — not available in this web build.';
+
+  @override
   String get staffTitle => 'Staff';
 
   @override

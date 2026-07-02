@@ -12,6 +12,17 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'printer_models.dart';
 import 'printers_repository.dart';
 
+/// Whether a REAL print adapter (network dispatch transport) is registered in
+/// this build.
+///
+/// HONESTY GUARD: this web build ships NO print adapter and NO print bridge,
+/// so this is a compile-time `false`. It exists to make the
+/// `printersStatusReadyNetwork` status STRUCTURALLY unreachable instead of
+/// faked: a printer card may only claim "Ready via network adapter" in a
+/// build that registers an actual transport and flips this single seam.
+/// Never set this to `true` without wiring a real adapter.
+const bool hasPrintAdapter = false;
+
 /// The dashboard Printers surface (RF-150 backend): list, add, edit,
 /// enable/disable, route-to-station, and remove printer CONFIGURATION.
 ///
@@ -271,6 +282,31 @@ class _PrinterCard extends StatelessWidget {
         .map((s) => s.name)
         .join(', ');
 
+    // Honest per-printer status. There is deliberately NO "ready" claim in
+    // this build: [hasPrintAdapter] is a compile-time false, so the
+    // "Ready via network adapter" pill stays unreachable until a real
+    // adapter is registered — never faked.
+    final String statusLabel;
+    final Color statusColor;
+    final IconData statusIcon;
+    if (!printer.isEnabled) {
+      statusLabel = l10n.printersStatusDisabled;
+      statusColor = scheme.error;
+      statusIcon = Icons.pause_circle_outline;
+    } else if (printer.connectionType != PrinterConnectionType.network) {
+      statusLabel = l10n.printersStatusNeedsBridge;
+      statusColor = scheme.tertiary;
+      statusIcon = Icons.extension_off_outlined;
+    } else if (hasPrintAdapter) {
+      statusLabel = l10n.printersStatusReadyNetwork;
+      statusColor = scheme.primary;
+      statusIcon = Icons.check_circle_outline;
+    } else {
+      statusLabel = l10n.printersStatusConfigOnly;
+      statusColor = scheme.secondary;
+      statusIcon = Icons.settings_outlined;
+    }
+
     return Card(
       elevation: 0,
       color: scheme.surfaceContainerLow,
@@ -339,6 +375,12 @@ class _PrinterCard extends StatelessWidget {
                       ? Icons.check_circle_outline
                       : Icons.pause_circle_outline,
                 ),
+                const SizedBox(width: RestoflowSpacing.xs),
+                AdminPill(
+                  label: statusLabel,
+                  color: statusColor,
+                  icon: statusIcon,
+                ),
               ],
             ),
             if (printer.connectionType != PrinterConnectionType.network) ...[
@@ -374,6 +416,26 @@ class _PrinterCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: RestoflowSpacing.sm),
+            // Test print stays visible but ALWAYS disabled in this build:
+            // there is no print adapter/bridge to dispatch through, and the
+            // repo honesty rule forbids a fake success path.
+            Row(
+              children: [
+                TextButton(
+                  onPressed: null,
+                  child: Text(l10n.printersTestPrint),
+                ),
+                const SizedBox(width: RestoflowSpacing.xs),
+                Expanded(
+                  child: Text(
+                    l10n.printersTestPrintUnavailable,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             Row(
               children: [
                 Switch(value: printer.isEnabled, onChanged: onToggleEnabled),
@@ -424,7 +486,15 @@ class _PrinterDialog extends StatefulWidget {
 }
 
 class _PrinterDialogState extends State<_PrinterDialog> {
+  static const int _stepPurpose = 0;
+  static const int _stepConnection = 1;
+  static const int _stepDetails = 2;
+
   final _formKey = GlobalKey<FormState>();
+
+  /// Guided-wizard position. Editing an existing printer also starts at the
+  /// first step, fully prefilled, so owners can review every choice.
+  int _step = _stepPurpose;
   late final TextEditingController _name = TextEditingController(
     text: widget.printer?.displayName ?? '',
   );
@@ -485,11 +555,11 @@ class _PrinterDialogState extends State<_PrinterDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    InputDecoration deco(String label) => InputDecoration(
-      labelText: label,
-      border: const OutlineInputBorder(),
-      isDense: true,
-    );
+    final stepTitle = switch (_step) {
+      _stepPurpose => l10n.printersWizardStepPurpose,
+      _stepConnection => l10n.printersWizardStepConnection,
+      _ => l10n.printersWizardStepDetails,
+    };
     return AlertDialog(
       title: Text(
         widget.printer == null ? l10n.printersAdd : l10n.printersEdit,
@@ -501,137 +571,15 @@ class _PrinterDialogState extends State<_PrinterDialog> {
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextFormField(
-                  controller: _name,
-                  decoration: deco(l10n.printersFieldName),
-                  validator: (v) =>
-                      (v ?? '').trim().isEmpty ? l10n.adminErrName : null,
-                ),
+                Text(stepTitle, style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: RestoflowSpacing.md),
-                DropdownButtonFormField<PrinterRole>(
-                  initialValue: _role,
-                  decoration: deco(l10n.printersFieldRole),
-                  items: [
-                    DropdownMenuItem(
-                      value: PrinterRole.receipt,
-                      child: Text(l10n.printersRoleReceipt),
-                    ),
-                    DropdownMenuItem(
-                      value: PrinterRole.kitchen,
-                      child: Text(l10n.printersRoleKitchen),
-                    ),
-                  ],
-                  onChanged: (v) => setState(() => _role = v ?? _role),
-                ),
-                const SizedBox(height: RestoflowSpacing.md),
-                DropdownButtonFormField<PrinterConnectionType>(
-                  initialValue: _connection,
-                  decoration: deco(l10n.printersFieldConnection),
-                  items: [
-                    DropdownMenuItem(
-                      value: PrinterConnectionType.network,
-                      child: Text(l10n.printersConnNetwork),
-                    ),
-                    DropdownMenuItem(
-                      value: PrinterConnectionType.bluetooth,
-                      child: Text(l10n.printersConnBluetooth),
-                    ),
-                    DropdownMenuItem(
-                      value: PrinterConnectionType.usb,
-                      child: Text(l10n.printersConnUsb),
-                    ),
-                  ],
-                  onChanged: (v) =>
-                      setState(() => _connection = v ?? _connection),
-                ),
-                const SizedBox(height: RestoflowSpacing.md),
-                // Per-type fields, kept SIMPLE for non-technical users:
-                // network asks only for the host up front (port hides under
-                // Advanced, default 9100); Bluetooth/USB ask for nothing and
-                // say honestly what this build can/cannot do — no fake scan,
-                // no required identifiers (they live under Advanced).
-                if (_connection == PrinterConnectionType.network) ...[
-                  TextFormField(
-                    controller: _host,
-                    decoration: deco(l10n.printersFieldHost),
-                    validator: (v) =>
-                        (v ?? '').trim().isEmpty ? l10n.printersErrHost : null,
-                  ),
-                ] else if (_connection == PrinterConnectionType.bluetooth)
-                  RestoflowNoticeBanner(
-                    tone: RestoflowTone.warning,
-                    icon: Icons.bluetooth_disabled_outlined,
-                    body: l10n.printersConnBluetoothWeb,
-                  )
-                else
-                  RestoflowNoticeBanner(
-                    tone: RestoflowTone.warning,
-                    icon: Icons.usb_outlined,
-                    body: l10n.printersConnUsbAdapter,
-                  ),
-                // Technical extras stay out of the main flow. A collapsed
-                // (default) tile never registers its fields with the Form, so
-                // an untouched port can never block a save (9100 fallback).
-                ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  childrenPadding: const EdgeInsets.only(
-                    bottom: RestoflowSpacing.md,
-                  ),
-                  title: Text(
-                    l10n.printersAdvanced,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  children: [
-                    if (_connection == PrinterConnectionType.network)
-                      TextFormField(
-                        controller: _port,
-                        decoration: deco(l10n.printersFieldPort),
-                        keyboardType: TextInputType.number,
-                        validator: (v) {
-                          final port = int.tryParse((v ?? '').trim());
-                          return (port == null || port < 1 || port > 65535)
-                              ? l10n.printersErrPort
-                              : null;
-                        },
-                      )
-                    else if (_connection == PrinterConnectionType.bluetooth)
-                      TextFormField(
-                        controller: _bluetoothId,
-                        decoration: deco(l10n.printersFieldBluetoothId),
-                      )
-                    else
-                      TextFormField(
-                        controller: _usbPath,
-                        decoration: deco(l10n.printersFieldUsbPath),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: RestoflowSpacing.sm),
-                // ALWAYS honest, for every connection type: saving here
-                // configures the printer — this build never prints.
-                RestoflowNoticeBanner(
-                  tone: RestoflowTone.info,
-                  icon: Icons.info_outline,
-                  body: l10n.printersDialogSavesConfigOnly,
-                ),
-                const SizedBox(height: RestoflowSpacing.md),
-                DropdownButtonFormField<String>(
-                  initialValue: _paper,
-                  decoration: deco(l10n.printersFieldPaper),
-                  items: [
-                    for (final width in kPaperWidths)
-                      DropdownMenuItem(value: width, child: Text(width)),
-                  ],
-                  onChanged: (v) => setState(() => _paper = v ?? _paper),
-                ),
-                const SizedBox(height: RestoflowSpacing.md),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l10n.printersEnabled),
-                  value: _enabled,
-                  onChanged: (v) => setState(() => _enabled = v),
-                ),
+                ...switch (_step) {
+                  _stepPurpose => _purposeStep(l10n),
+                  _stepConnection => _connectionStep(l10n),
+                  _ => _detailsStep(context, l10n),
+                },
               ],
             ),
           ),
@@ -642,11 +590,263 @@ class _PrinterDialogState extends State<_PrinterDialog> {
           onPressed: _busy ? null : () => Navigator.of(context).pop(),
           child: Text(l10n.adminCancel),
         ),
-        FilledButton(
-          onPressed: _busy ? null : _submit,
-          child: Text(l10n.printersSave),
-        ),
+        if (_step > _stepPurpose)
+          TextButton(
+            onPressed: _busy ? null : () => setState(() => _step -= 1),
+            child: Text(l10n.printersBack),
+          ),
+        if (_step < _stepDetails)
+          FilledButton(
+            onPressed: () => setState(() => _step += 1),
+            child: Text(l10n.printersNext),
+          )
+        else
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            child: Text(l10n.printersSave),
+          ),
       ],
+    );
+  }
+
+  /// Step 1 — "What do you want to print?": two big purpose tiles.
+  List<Widget> _purposeStep(AppLocalizations l10n) => [
+    _ChoiceTile(
+      selected: _role == PrinterRole.receipt,
+      icon: Icons.receipt_long_outlined,
+      title: l10n.printersRoleReceipt,
+      hint: l10n.printersPurposeReceiptsHint,
+      onTap: () => setState(() => _role = PrinterRole.receipt),
+    ),
+    const SizedBox(height: RestoflowSpacing.sm),
+    _ChoiceTile(
+      selected: _role == PrinterRole.kitchen,
+      icon: Icons.soup_kitchen_outlined,
+      title: l10n.printersRoleKitchen,
+      hint: l10n.printersPurposeKitchenHint,
+      onTap: () => setState(() => _role = PrinterRole.kitchen),
+    ),
+  ];
+
+  /// Step 2 — "How is the printer connected?": three connection tiles. The
+  /// honest hint shows only under the SELECTED tile: what a network printer
+  /// needs, or what Bluetooth/USB can NOT do in this web build (no fake scan).
+  List<Widget> _connectionStep(AppLocalizations l10n) {
+    Widget tile({
+      required PrinterConnectionType type,
+      required IconData icon,
+      required String title,
+      required String hint,
+    }) => _ChoiceTile(
+      selected: _connection == type,
+      icon: icon,
+      title: title,
+      hint: _connection == type ? hint : null,
+      onTap: () => setState(() => _connection = type),
+    );
+    return [
+      tile(
+        type: PrinterConnectionType.network,
+        icon: Icons.wifi_outlined,
+        title: l10n.printersConnNetwork,
+        hint: l10n.printersConnNetworkHint,
+      ),
+      const SizedBox(height: RestoflowSpacing.sm),
+      tile(
+        type: PrinterConnectionType.bluetooth,
+        icon: Icons.bluetooth_outlined,
+        title: l10n.printersConnBluetooth,
+        hint: l10n.printersConnBluetoothWeb,
+      ),
+      const SizedBox(height: RestoflowSpacing.sm),
+      tile(
+        type: PrinterConnectionType.usb,
+        icon: Icons.usb_outlined,
+        title: l10n.printersConnUsb,
+        hint: l10n.printersConnUsbAdapter,
+      ),
+    ];
+  }
+
+  /// Step 3 — "Printer details": name + per-connection fields, kept SIMPLE
+  /// for non-technical users. Network asks only for the host up front (port
+  /// hides under Advanced, default 9100); Bluetooth/USB ask for nothing and
+  /// say honestly what this build can/cannot do — no fake scan, no required
+  /// identifiers (they live under Advanced).
+  List<Widget> _detailsStep(BuildContext context, AppLocalizations l10n) {
+    InputDecoration deco(String label) => InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+      isDense: true,
+    );
+    return [
+      TextFormField(
+        controller: _name,
+        decoration: deco(l10n.printersFieldName),
+        validator: (v) => (v ?? '').trim().isEmpty ? l10n.adminErrName : null,
+      ),
+      const SizedBox(height: RestoflowSpacing.md),
+      if (_connection == PrinterConnectionType.network)
+        TextFormField(
+          controller: _host,
+          decoration: deco(l10n.printersFieldHost),
+          validator: (v) =>
+              (v ?? '').trim().isEmpty ? l10n.printersErrHost : null,
+        )
+      else if (_connection == PrinterConnectionType.bluetooth)
+        RestoflowNoticeBanner(
+          tone: RestoflowTone.warning,
+          icon: Icons.bluetooth_disabled_outlined,
+          body: l10n.printersConnBluetoothWeb,
+        )
+      else
+        RestoflowNoticeBanner(
+          tone: RestoflowTone.warning,
+          icon: Icons.usb_outlined,
+          body: l10n.printersConnUsbAdapter,
+        ),
+      // Technical extras stay out of the main flow. A collapsed (default)
+      // tile never registers its fields with the Form, so an untouched port
+      // can never block a save (9100 fallback).
+      ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: RestoflowSpacing.md),
+        title: Text(
+          l10n.printersAdvanced,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        children: [
+          if (_connection == PrinterConnectionType.network)
+            TextFormField(
+              controller: _port,
+              decoration: deco(l10n.printersFieldPort),
+              keyboardType: TextInputType.number,
+              validator: (v) {
+                final port = int.tryParse((v ?? '').trim());
+                return (port == null || port < 1 || port > 65535)
+                    ? l10n.printersErrPort
+                    : null;
+              },
+            )
+          else if (_connection == PrinterConnectionType.bluetooth)
+            TextFormField(
+              controller: _bluetoothId,
+              decoration: deco(l10n.printersFieldBluetoothId),
+            )
+          else
+            TextFormField(
+              controller: _usbPath,
+              decoration: deco(l10n.printersFieldUsbPath),
+            ),
+        ],
+      ),
+      const SizedBox(height: RestoflowSpacing.sm),
+      DropdownButtonFormField<String>(
+        initialValue: _paper,
+        decoration: deco(l10n.printersFieldPaper),
+        items: [
+          for (final width in kPaperWidths)
+            DropdownMenuItem(value: width, child: Text(width)),
+        ],
+        onChanged: (v) => setState(() => _paper = v ?? _paper),
+      ),
+      const SizedBox(height: RestoflowSpacing.sm),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(l10n.printersEnabled),
+        value: _enabled,
+        onChanged: (v) => setState(() => _enabled = v),
+      ),
+      const SizedBox(height: RestoflowSpacing.sm),
+      // ALWAYS honest, for every connection type: saving here configures the
+      // printer — this build never prints.
+      RestoflowNoticeBanner(
+        tone: RestoflowTone.info,
+        icon: Icons.info_outline,
+        body: l10n.printersDialogSavesConfigOnly,
+      ),
+    ];
+  }
+}
+
+/// One big selectable wizard choice (purpose / connection type): a bordered
+/// card with a radio affordance, highlighted when selected. The optional
+/// [hint] renders under the title (the wizard uses it for the always-visible
+/// purpose hints and the selected-only honest connection hints).
+class _ChoiceTile extends StatelessWidget {
+  const _ChoiceTile({
+    required this.selected,
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.hint,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final borderRadius = BorderRadius.circular(RestoflowRadii.lg);
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: selected
+          ? scheme.primary.withValues(alpha: 0.08)
+          : scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: borderRadius,
+        side: BorderSide(
+          color: selected ? scheme.primary : scheme.outlineVariant,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: borderRadius,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(RestoflowSpacing.md),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                icon,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: RestoflowSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.titleSmall),
+                    if (hint != null) ...[
+                      const SizedBox(height: RestoflowSpacing.xs),
+                      Text(
+                        hint!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
