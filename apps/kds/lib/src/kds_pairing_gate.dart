@@ -16,15 +16,26 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 class KdsPairingGate extends StatefulWidget {
   const KdsPairingGate({
     required this.repository,
-    required this.signedInChild,
+    this.signedInChild,
+    this.signedInBuilder,
     this.initialDevice,
     super.key,
-  });
+  }) : assert(
+         signedInChild != null || signedInBuilder != null,
+         'provide signedInChild or signedInBuilder',
+       );
 
   final DevicePairingRepository repository;
 
-  /// Rendered once a KDS device is paired (the existing KDS entry).
-  final Widget signedInChild;
+  /// Rendered once a KDS device is paired (the existing KDS entry). Ignored
+  /// when [signedInBuilder] is provided.
+  final Widget? signedInChild;
+
+  /// Builds the paired surface WITH the validated [DeviceContext] (so the PIN
+  /// gate can consume the in-memory device-session handle). Takes precedence
+  /// over [signedInChild]. Money-free like everything on this surface.
+  final Widget Function(BuildContext context, DeviceContext device)?
+  signedInBuilder;
 
   final DeviceContext? initialDevice;
 
@@ -74,7 +85,8 @@ class _KdsPairingGateState extends State<KdsPairingGate> {
     if (device != null &&
         device.isPaired &&
         device.deviceType == _expectedDeviceType) {
-      return widget.signedInChild;
+      return widget.signedInBuilder?.call(context, device) ??
+          widget.signedInChild!;
     }
     return DevicePairingScreen(
       repository: widget.repository,

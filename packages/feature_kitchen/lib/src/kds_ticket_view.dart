@@ -27,11 +27,17 @@ class KdsTicketView {
     required this.stationId,
     required this.items,
     this.status = KitchenTicketStatus.ready,
+    this.orderId,
   });
 
   final String kitchenTicketId;
   final String stationId;
   final List<KdsItemView> items;
+
+  /// The owning ORDER id when the ticket was built from a real `sync_pull`
+  /// (RF-063 mapper) — the target of an `order.status` push. Null for local
+  /// demo fixtures (no backend order exists; nothing is pushed).
+  final String? orderId;
 
   /// The current local status; mutated by bump/recall on the screen.
   KitchenTicketStatus status;

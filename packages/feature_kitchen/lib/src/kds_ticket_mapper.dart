@@ -92,6 +92,7 @@ class KdsTicketMapper {
         () => _TicketBuilder(
           kitchenTicketId: key,
           stationId: station,
+          orderId: orderId,
           status: _ticketStatusFor(orderStatus[orderId]!),
         ),
       );
@@ -106,6 +107,7 @@ class KdsTicketMapper {
                 stationId: b.stationId,
                 items: b.items,
                 status: b.status,
+                orderId: b.orderId,
               ),
             )
             .toList()
@@ -129,11 +131,13 @@ class _TicketBuilder {
   _TicketBuilder({
     required this.kitchenTicketId,
     required this.stationId,
+    required this.orderId,
     required this.status,
   });
 
   final String kitchenTicketId;
   final String stationId;
+  final String orderId;
   final KitchenTicketStatus status;
   final List<KdsItemView> items = [];
 }

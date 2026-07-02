@@ -18,6 +18,19 @@ class _FakePairing implements DevicePairingRepository {
   }) async => result;
 }
 
+/// A minimal PIN-pad staff directory (the PIN gate needs one to render).
+class _FakeStaffDirectory implements DeviceStaffRepository {
+  @override
+  Future<Result<List<DeviceStaffMember>, DeviceStaffFailure>>
+  listStaff() async => const Success([
+    DeviceStaffMember(
+      employeeProfileId: 'emp-9',
+      displayName: 'Yosef L.',
+      role: 'kitchen_staff',
+    ),
+  ]);
+}
+
 /// A real-style repo that also restores a session on launch (RF-161). It
 /// IGNORES [expectedDeviceType] (recording it only), so wrong-type tests prove
 /// the GATE itself rejects a mismatched restored context (belt-and-suspenders
@@ -103,7 +116,8 @@ void main() {
     expect(find.textContaining(r'$'), findsNothing);
   });
 
-  testWidgets('a successful pairing enters the kitchen board', (tester) async {
+  testWidgets('a successful pairing advances to the money-free staff PIN gate '
+      '(D-006 — never straight onto the board)', (tester) async {
     await _pump(
       tester,
       KdsApp(
@@ -115,9 +129,11 @@ void main() {
               branchId: 'b',
               deviceId: 'd',
               deviceType: 'kds',
+              deviceSessionId: 'ds-9',
             ),
           ),
         ),
+        deviceStaffRepository: _FakeStaffDirectory(),
         fetchContext: fetcherForContext(_kitchenCtx()),
       ),
     );
@@ -127,8 +143,13 @@ void main() {
     await tester.tap(find.byKey(const Key('pairing-submit')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(KitchenOrdersHome), findsOneWidget);
+    // Paired -> the staff PIN sign-in, NOT the board (no session yet). Still
+    // money-free (SECURITY T-003).
+    expect(find.byType(PinLoginScreen), findsOneWidget);
+    expect(find.byType(KitchenOrdersHome), findsNothing);
     expect(find.byType(DevicePairingScreen), findsNothing);
+    expect(find.textContaining('₪'), findsNothing);
+    expect(find.textContaining(r'$'), findsNothing);
   });
 
   testWidgets('with NO pairing repo the gate is dormant (existing behaviour)', (
@@ -142,9 +163,8 @@ void main() {
     expect(find.byType(DevicePairingScreen), findsNothing);
   });
 
-  testWidgets('a restored device session enters the kitchen board on launch', (
-    tester,
-  ) async {
+  testWidgets('a restored device session advances to the staff PIN gate on '
+      'launch (D-006 — never straight onto the board)', (tester) async {
     await _pump(
       tester,
       KdsApp(
@@ -155,12 +175,15 @@ void main() {
             branchId: 'b',
             deviceId: 'd',
             deviceType: 'kds',
+            deviceSessionId: 'ds-9',
           ),
         ),
+        deviceStaffRepository: _FakeStaffDirectory(),
         fetchContext: fetcherForContext(_kitchenCtx()),
       ),
     );
-    expect(find.byType(KitchenOrdersHome), findsOneWidget);
+    expect(find.byType(PinLoginScreen), findsOneWidget);
+    expect(find.byType(KitchenOrdersHome), findsNothing);
     expect(find.byType(DevicePairingScreen), findsNothing);
   });
 

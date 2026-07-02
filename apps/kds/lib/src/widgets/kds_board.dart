@@ -26,7 +26,9 @@ class KdsBoard extends StatelessWidget {
   final List<KdsTicketView> tickets;
   final AppLocalizations l10n;
   final void Function(KdsTicketView ticket, KitchenTicketStatus to) onAdvance;
-  final void Function(KdsTicketView ticket) onRecall;
+
+  /// Null hides the recall action (the LIVE board — forward-only backend).
+  final void Function(KdsTicketView ticket)? onRecall;
 
   List<_Station> _stations() {
     final byStation = <String, List<KdsTicketView>>{};
@@ -79,7 +81,7 @@ class KdsBoard extends StatelessWidget {
                   ticket: ticket,
                   l10n: l10n,
                   onAdvance: (to) => onAdvance(ticket, to),
-                  onRecall: () => onRecall(ticket),
+                  onRecall: onRecall == null ? null : () => onRecall!(ticket),
                 ),
               const SizedBox(height: RestoflowSpacing.md),
             ],
@@ -101,7 +103,7 @@ class _StationColumn extends StatelessWidget {
   final _Station station;
   final AppLocalizations l10n;
   final void Function(KdsTicketView ticket, KitchenTicketStatus to) onAdvance;
-  final void Function(KdsTicketView ticket) onRecall;
+  final void Function(KdsTicketView ticket)? onRecall;
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +120,7 @@ class _StationColumn extends StatelessWidget {
                   ticket: ticket,
                   l10n: l10n,
                   onAdvance: (to) => onAdvance(ticket, to),
-                  onRecall: () => onRecall(ticket),
+                  onRecall: onRecall == null ? null : () => onRecall!(ticket),
                 ),
             ],
           ),

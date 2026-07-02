@@ -26,10 +26,12 @@ import 'package:restoflow_sync/restoflow_sync.dart';
 /// The KDS then stays on the demo/auth board and never contacts a backend - there
 /// is no path to a fake "live" feed.
 ///
-/// SECURITY: [pinVerifier] is the RF-051 INTERIM verifier seam (the backend
-/// currently checks it by plaintext equality - NOT production crypto; a salted
-/// credential scheme is deferred). It is forwarded to the RPC, never logged, and
-/// must be passed at run time only (never committed to source).
+/// SECURITY: [pinVerifier] is the operator's PIN, verified SERVER-SIDE against a
+/// bcrypt hash (the sprint's production verifier replaced the RF-051 interim
+/// equality seam). It is forwarded to the RPC over TLS, never logged, and must be
+/// passed at run time only (never committed to source). The PREFERRED production
+/// path is the interactive PIN screen ([KdsSessionController.signInWithPin]);
+/// this dart-define config remains an operator fallback.
 class KdsRealSessionConfig {
   const KdsRealSessionConfig._({
     required this.deviceId,
@@ -186,6 +188,46 @@ class KdsSessionController extends AsyncNotifier<SyncSession?> {
       (failure) => null,
     );
   }
+
+  /// INTERACTIVE PIN sign-in (sprint): establishes the session from the RESTORED
+  /// device context (paired device id + in-memory device-session handle) plus
+  /// the staff member + typed PIN from the shared, money-free [PinLoginScreen].
+  /// Verified server-side (bcrypt); the PIN is never stored or logged. Returns
+  /// null on success (the live board mounts via [kdsSyncSessionProvider]) or a
+  /// typed, safe [PinLoginError]. Fail-closed: any failure leaves the session
+  /// null and the KDS never fakes a live feed.
+  Future<PinLoginError?> signInWithPin({
+    required String deviceId,
+    required String deviceSessionId,
+    required String employeeProfileId,
+    required String pin,
+  }) async {
+    final transport = ref.read(kdsAuthTransportProvider);
+    if (transport == null) return PinLoginError.unavailable;
+    final result = await PinSessionService(transport).startPinSession(
+      deviceSessionId: deviceSessionId,
+      employeeProfileId: employeeProfileId,
+      pinVerifier: pin,
+    );
+    return result.fold<PinLoginError?>(
+      (started) {
+        state = AsyncData(
+          SyncSession(pinSessionId: started.pinSessionId, deviceId: deviceId),
+        );
+        return null;
+      },
+      (failure) => switch (failure) {
+        AuthWrongPinFailure() => PinLoginError.wrongPin,
+        AuthLockedOrPreconditionFailure() => PinLoginError.locked,
+        AuthNetworkFailure() => PinLoginError.network,
+        _ => PinLoginError.unavailable,
+      },
+    );
+  }
+
+  /// Ends the current staff session locally (the server window expires on its
+  /// own — Q-009). The KDS falls back to the PIN screen.
+  void endSession() => state = const AsyncData(null);
 }
 
 /// Owns [KdsSessionController].

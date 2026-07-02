@@ -5,6 +5,8 @@ import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'kds_screen.dart';
+import 'state/kds_session.dart';
+import 'state/kds_status_pusher.dart';
 import 'widgets/kds_state_message.dart';
 
 /// The provider-backed KDS home (RF-063): watches [kdsViewStateProvider] and
@@ -35,13 +37,28 @@ class KdsSyncedHome extends ConsumerWidget {
       ),
       data: (vs) {
         if (vs.isReauthRequired) {
-          // Revoked/expired session: re-auth required, polling stopped.
+          // Revoked/expired session: re-auth required, polling stopped. The
+          // action ENDS the local session, so the app root falls back to the
+          // staff PIN screen (review fix — never a dead end until restart).
           return _scaffold(
             context,
             l10n,
-            KdsStateMessage(
-              icon: Icons.lock_outline,
-              message: l10n.kdsReauthRequired,
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                KdsStateMessage(
+                  icon: Icons.lock_outline,
+                  message: l10n.kdsReauthRequired,
+                ),
+                const SizedBox(height: RestoflowSpacing.lg),
+                FilledButton.tonalIcon(
+                  onPressed: () => ref
+                      .read(kdsSessionControllerProvider.notifier)
+                      .endSession(),
+                  icon: const Icon(Icons.pin_outlined),
+                  label: Text(l10n.kdsSignInAgain),
+                ),
+              ],
             ),
           );
         }
@@ -57,7 +74,19 @@ class KdsSyncedHome extends ConsumerWidget {
         }
         // data / offlineStale (and any state once we have tickets): show the
         // shared screen. Stale data is the last good pull, retained on purpose.
-        return KdsScreen(tickets: vs.tickets);
+        // A live advance is PERSISTED via the status pusher (order.status
+        // through sync_push); the next poll re-syncs to the server's state.
+        // RECALL is hidden on the LIVE board (review fix): the backend allows
+        // forward transitions only, so a local-only recall would lie and then
+        // revert on the next poll.
+        final pusher = ref.watch(kdsStatusPusherProvider);
+        return KdsScreen(
+          tickets: vs.tickets,
+          allowRecall: false,
+          onAdvanced: pusher == null
+              ? null
+              : (ticket, to) => pusher.push(ticket, to),
+        );
       },
     );
   }

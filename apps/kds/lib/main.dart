@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
@@ -8,6 +9,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 
 import 'src/kds_pairing_gate.dart';
+import 'src/kds_pin_gate.dart';
 import 'src/kds_synced_home.dart';
 import 'src/kitchen_orders_home.dart';
 import 'src/state/kds_session.dart';
@@ -15,16 +17,32 @@ import 'src/state/locale_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(KdsApp(devicePairingRepository: await _realDevicePairing()));
+  final real = await _realDeviceAuth();
+  runApp(
+    KdsApp(
+      devicePairingRepository: real?.pairing,
+      deviceStaffRepository: real?.staff,
+      authTransport: real?.transport,
+    ),
+  );
 }
 
-/// RF-161: the REAL device-pairing repository for production KDS. In real mode with
-/// a valid Supabase config it signs the device in anonymously (an authenticated,
-/// membership-less principal — DECISION D-011, no service-role key) and returns the
-/// backend-backed [SupabaseDevicePairingRepository] over OS-backed secure storage.
-/// Returns null (the gate stays dormant, prior behaviour) in demo mode, when
+/// RF-161 + sprint: the REAL device-auth seams for production KDS. In real mode
+/// with a valid Supabase config it signs the device in anonymously (an
+/// authenticated, membership-less principal — DECISION D-011, no service-role
+/// key) and returns the backend-backed pairing repository, the token-proven
+/// staff directory for the PIN pad, and the shared transport (the SAME
+/// authenticated transport carries `start_pin_session` + `sync_pull`/`sync_push`).
+/// Returns null (the gates stay dormant, prior behaviour) in demo mode, when
 /// unconfigured, or when anonymous sign-in is unavailable — NEVER a fake pairing.
-Future<DevicePairingRepository?> _realDevicePairing() async {
+Future<
+  ({
+    DevicePairingRepository pairing,
+    DeviceStaffRepository staff,
+    SyncRpcTransport transport,
+  })?
+>
+_realDeviceAuth() async {
   if (authDemoModeEnabled()) return null;
   final SupabaseBootstrapConfig config;
   try {
@@ -36,9 +54,17 @@ Future<DevicePairingRepository?> _realDevicePairing() async {
     final transport = await SupabaseAuthBootstrap(
       config: config,
     ).createAnonymousDeviceTransport();
-    return SupabaseDevicePairingRepository(
+    final store = FlutterSecureDeviceSessionStore();
+    return (
+      pairing: SupabaseDevicePairingRepository(
+        transport: transport,
+        secretStore: store,
+      ),
+      staff: SupabaseDeviceStaffRepository(
+        transport: transport,
+        secretStore: store,
+      ),
       transport: transport,
-      secretStore: FlutterSecureDeviceSessionStore(),
     );
   } catch (_) {
     return null; // fail closed (e.g. anonymous sign-in disabled) -> no fake pairing.
@@ -68,6 +94,8 @@ class KdsApp extends StatelessWidget {
     this.demoMode,
     this.fetchContext,
     this.devicePairingRepository,
+    this.deviceStaffRepository,
+    this.authTransport,
     this.initialDevice,
     super.key,
   });
@@ -78,6 +106,14 @@ class KdsApp extends StatelessWidget {
   /// RF-153 device-pairing seam. Null => the pairing gate is dormant (current
   /// behaviour); non-null => real (non-live) mode requires a paired KDS device.
   final DevicePairingRepository? devicePairingRepository;
+
+  /// The PIN-pad staff directory (sprint). Null with a pairing repo present
+  /// => the PIN gate fails closed (honest unavailable state).
+  final DeviceStaffRepository? deviceStaffRepository;
+
+  /// The authenticated (anonymous) transport shared by pairing + PIN + sync
+  /// (sprint). Null => [kdsAuthTransportProvider] keeps its default.
+  final SyncRpcTransport? authTransport;
 
   /// A pre-existing paired device context, or null.
   final DeviceContext? initialDevice;
@@ -99,6 +135,10 @@ class KdsApp extends StatelessWidget {
     final invSource = invalidationSource;
     return ProviderScope(
       overrides: [
+        // Sprint: the PIN/session + sync calls ride the SAME authenticated
+        // (anonymous) transport as the pairing repo (D-011/RF-161).
+        if (authTransport case final transport?)
+          kdsAuthTransportProvider.overrideWithValue(transport),
         if (injected != null)
           kdsSyncSourceProvider.overrideWithValue(injected)
         else
@@ -127,6 +167,7 @@ class KdsApp extends StatelessWidget {
         demoMode: demoMode,
         fetchContext: fetchContext,
         devicePairingRepository: devicePairingRepository,
+        deviceStaffRepository: deviceStaffRepository,
         initialDevice: initialDevice,
       ),
     );
@@ -141,6 +182,7 @@ class _KdsMaterialApp extends ConsumerWidget {
     required this.demoMode,
     required this.fetchContext,
     required this.devicePairingRepository,
+    required this.deviceStaffRepository,
     required this.initialDevice,
   });
 
@@ -148,6 +190,7 @@ class _KdsMaterialApp extends ConsumerWidget {
   final bool? demoMode;
   final AuthContextFetcher? fetchContext;
   final DevicePairingRepository? devicePairingRepository;
+  final DeviceStaffRepository? deviceStaffRepository;
   final DeviceContext? initialDevice;
 
   @override
@@ -167,16 +210,22 @@ class _KdsMaterialApp extends ConsumerWidget {
       demoMode: demoMode,
       fetchContext: fetchContext,
     );
-    // RF-153: in real (non-demo, non-live) mode with a wired pairing repo, require
-    // a paired KDS device first. Money-FREE (kitchen); dormant in production
-    // (repo null), so no fake pairing and the current behaviour is preserved.
+    // RF-153 + sprint: in real (non-live-yet) mode with a wired pairing repo,
+    // the honest production chain is paired KDS device -> staff PIN session ->
+    // (the app root mounts the LIVE board off that session, above). Money-FREE
+    // throughout (kitchen — SECURITY T-003). Dormant when unconfigured; no fake
+    // pairing, no fake session, no fake feed.
     final demo = demoMode ?? authDemoModeEnabled();
     final pairingRepo = devicePairingRepository;
     final nonLiveHome = (!demo && pairingRepo != null)
         ? KdsPairingGate(
             repository: pairingRepo,
             initialDevice: initialDevice,
-            signedInChild: gate,
+            signedInBuilder: (context, device) => KdsPinGate(
+              device: device,
+              staffRepository: deviceStaffRepository,
+              child: gate,
+            ),
           )
         : gate;
 

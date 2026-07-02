@@ -29,7 +29,8 @@ class KdsTicketCard extends StatelessWidget {
   final void Function(KitchenTicketStatus to) onAdvance;
 
   /// Recall a bumped ticket (existing audited `bumped -> in_preparation`).
-  final VoidCallback onRecall;
+  /// Null hides the action (the LIVE board — forward-only backend).
+  final VoidCallback? onRecall;
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +112,7 @@ class _TicketAction extends StatelessWidget {
   final KitchenTicketStatus status;
   final AppLocalizations l10n;
   final void Function(KitchenTicketStatus to) onAdvance;
-  final VoidCallback onRecall;
+  final VoidCallback? onRecall;
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +142,9 @@ class _TicketAction extends StatelessWidget {
           onPressed: () => onAdvance(KitchenTicketStatus.bumped),
         );
       case KitchenTicketStatus.bumped:
+        // No recall sink (the LIVE board): a bumped ticket shows no action —
+        // never a button whose effect would silently revert on the next poll.
+        if (onRecall == null) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
           child: SizedBox(
