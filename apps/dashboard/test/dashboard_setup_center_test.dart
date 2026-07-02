@@ -8,6 +8,7 @@ import 'package:restoflow_dashboard/src/setup/setup_center.dart';
 import 'package:restoflow_dashboard/src/staff/staff_models.dart';
 import 'package:restoflow_dashboard/src/staff/staff_repository.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
+import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// A devices repo stub: only [loadDevices] matters for the setup center.
@@ -68,10 +69,44 @@ class _StaffStub implements StaffRepository {
   }) async => throw UnimplementedError();
 }
 
+/// A printers stub with a fixed snapshot (the setup center only loads).
+class _PrintersStub extends _EmptyPrinters {
+  _PrintersStub(this._snapshot);
+  final PrintersSnapshot _snapshot;
+
+  @override
+  Future<AdminResult<PrintersSnapshot>> load() async => Success(_snapshot);
+}
+
+class _MenuStub implements MenuReadSource {
+  _MenuStub(this._snapshot);
+  final MenuSnapshot _snapshot;
+
+  @override
+  Future<MenuSnapshot> load(MenuScope scope) async => _snapshot;
+}
+
+MenuItem _menuItem({required bool isActive}) => MenuItem(
+  id: 'item-$isActive',
+  organizationId: 'org-1',
+  restaurantId: 'rest-1',
+  branchId: null,
+  menuCategoryId: 'cat-1',
+  name: 'Item',
+  description: null,
+  basePriceMinor: 1200,
+  currencyCode: 'USD',
+  defaultStationId: null,
+  displayOrder: 0,
+  isActive: isActive,
+);
+
 Future<void> _pump(
   WidgetTester tester, {
   required List<AdminDevice> devices,
   required List<StaffMember> staff,
+  List<MenuItem>? menuItems,
+  PrintersSnapshot? printers,
   void Function(String)? onOpen,
 }) async {
   tester.view.physicalSize = const Size(1400, 2200);
@@ -86,8 +121,15 @@ Future<void> _pump(
         body: SingleChildScrollView(
           child: DashboardSetupCenter(
             devicesRepository: _DevicesStub(devices),
-            printersRepository: _EmptyPrinters(),
+            printersRepository: printers == null
+                ? _EmptyPrinters()
+                : _PrintersStub(printers),
             staffRepository: _StaffStub(staff),
+            menuReadSource: menuItems == null
+                ? null
+                : _MenuStub(MenuSnapshot(items: menuItems)),
+            menuScope: menuItems == null ? null : demoMenuScope,
+            onOpenMenu: () => onOpen?.call('menu'),
             onOpenDevices: () => onOpen?.call('devices'),
             onOpenPrinters: () => onOpen?.call('printers'),
             onOpenStaff: () => onOpen?.call('staff'),
@@ -115,18 +157,54 @@ const _staffWithPin = StaffMember(
   employmentStatus: 'active',
 );
 
+const _activeKds = AdminDevice(
+  id: 'd-2',
+  label: 'Kitchen display',
+  deviceType: 'kds',
+  branchLabel: 'Main',
+  status: DeviceLifecycleStatus.active,
+);
+
+const _onePrinter = PrintersSnapshot(
+  printers: [
+    PrinterDevice(
+      id: 'p-1',
+      displayName: 'Front counter',
+      connectionType: PrinterConnectionType.network,
+      role: PrinterRole.receipt,
+      paperWidth: '80mm',
+      connectionConfig: {'host': '10.0.0.50', 'port': 9100},
+      isEnabled: true,
+    ),
+  ],
+  routes: [],
+  stations: [],
+);
+
 void main() {
-  testWidgets('empty branch: next-step guidance for devices/printers/staff', (
-    tester,
-  ) async {
-    await _pump(tester, devices: const [], staff: const []);
+  testWidgets('empty workspace: a guided checklist with a fixing action per '
+      'step (menu, POS, KDS, printer)', (tester) async {
+    await _pump(
+      tester,
+      devices: const [],
+      staff: const [],
+      menuItems: const [],
+    );
     expect(find.text('Setup'), findsOneWidget);
-    expect(find.text('0/0'), findsNWidgets(3));
-    expect(find.textContaining('No devices yet'), findsOneWidget);
+    // Four metrics now: menu + devices + printers + staff PINs.
+    expect(find.text('0/0'), findsNWidgets(4));
+    expect(find.textContaining('No menu items yet'), findsOneWidget);
+    expect(find.text('Add your first menu item'), findsOneWidget);
+    expect(find.textContaining('No POS device yet'), findsOneWidget);
+    expect(find.text('Create POS device'), findsOneWidget);
+    expect(find.textContaining('No kitchen display yet'), findsOneWidget);
+    expect(find.text('Create kitchen display'), findsOneWidget);
     expect(find.textContaining('No printers configured yet'), findsOneWidget);
+    expect(find.text('Add printer'), findsOneWidget);
   });
 
-  testWidgets('unpaired devices raise the pairing warning', (tester) async {
+  testWidgets('unpaired devices raise the pairing warning AND explain how '
+      'to pair', (tester) async {
     await _pump(
       tester,
       devices: const [
@@ -141,39 +219,87 @@ void main() {
       staff: const [_staffWithPin],
     );
     expect(find.textContaining('No device is paired yet'), findsOneWidget);
-  });
-
-  testWidgets('a ready branch shows the ready banner', (tester) async {
-    await _pump(
-      tester,
-      devices: const [_activeDevice],
-      staff: const [_staffWithPin],
+    // The concrete instruction the owner asked for.
+    expect(
+      find.textContaining('enter the pairing code from the Devices tab'),
+      findsOneWidget,
     );
-    expect(find.text('1/1'), findsNWidgets(2)); // devices + staff metrics
-    expect(find.textContaining('No device is paired'), findsNothing);
-    expect(find.textContaining('ready'), findsWidgets);
   });
 
-  testWidgets('metric cards navigate to their tabs', (tester) async {
-    final opened = <String>[];
-    await _pump(
-      tester,
-      devices: const [_activeDevice],
-      staff: const [_staffWithPin],
-      onOpen: opened.add,
-    );
-    await tester.tap(find.text('Devices'));
-    await tester.tap(find.text('Printers'));
-    await tester.tap(find.text('Staff PINs'));
-    expect(opened, ['devices', 'printers', 'staff']);
-  });
-
-  testWidgets('no staff with a PIN blocks the order loop (warning)', (
+  testWidgets('a fully set-up branch shows the ready banner and no steps', (
     tester,
   ) async {
     await _pump(
       tester,
-      devices: const [_activeDevice],
+      devices: const [_activeDevice, _activeKds],
+      staff: const [_staffWithPin],
+      menuItems: [_menuItem(isActive: true)],
+      printers: _onePrinter,
+    );
+    expect(
+      find.text('This branch is ready: paired device and staff PIN in place.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('No device is paired'), findsNothing);
+    expect(find.textContaining('No menu items yet'), findsNothing);
+    expect(find.textContaining('No POS device yet'), findsNothing);
+  });
+
+  testWidgets('metric cards navigate to their tabs (menu included)', (
+    tester,
+  ) async {
+    final opened = <String>[];
+    await _pump(
+      tester,
+      devices: const [_activeDevice, _activeKds],
+      staff: const [_staffWithPin],
+      menuItems: [_menuItem(isActive: true)],
+      printers: _onePrinter,
+      onOpen: opened.add,
+    );
+    await tester.tap(find.text('Menu items'));
+    await tester.tap(find.text('Devices'));
+    await tester.tap(find.text('Printers'));
+    await tester.tap(find.text('Staff PINs'));
+    expect(opened, ['menu', 'devices', 'printers', 'staff']);
+  });
+
+  testWidgets('checklist buttons navigate to the fixing tab', (tester) async {
+    final opened = <String>[];
+    await _pump(
+      tester,
+      devices: const [],
+      staff: const [],
+      menuItems: const [],
+      onOpen: opened.add,
+    );
+    await tester.tap(find.text('Add your first menu item'));
+    await tester.tap(find.text('Create POS device'));
+    await tester.tap(find.text('Create kitchen display'));
+    await tester.tap(find.text('Add printer'));
+    expect(opened, ['menu', 'devices', 'devices', 'printers']);
+  });
+
+  testWidgets('a menu of ONLY disabled items still warns (nothing to sell)', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      devices: const [_activeDevice, _activeKds],
+      staff: const [_staffWithPin],
+      menuItems: [_menuItem(isActive: false)],
+      printers: _onePrinter,
+    );
+    expect(find.text('0/1'), findsOneWidget); // active / total
+    expect(find.textContaining('No menu items yet'), findsOneWidget);
+  });
+
+  testWidgets('no staff with a PIN blocks the order loop (warning + action)', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      devices: const [_activeDevice, _activeKds],
       staff: const [
         StaffMember(
           employeeProfileId: 'e-2',
@@ -188,5 +314,6 @@ void main() {
       find.textContaining('No staff member has a PIN yet'),
       findsOneWidget,
     );
+    expect(find.text('Create staff PIN'), findsOneWidget);
   });
 }

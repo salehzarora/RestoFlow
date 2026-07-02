@@ -1385,6 +1385,43 @@ class AppLocalizationsAr extends AppLocalizations {
       'هذا الفرع جاهز: جهاز مقترن ورقم PIN للموظفين متوفران.';
 
   @override
+  String get setupMenu => 'أصناف القائمة';
+
+  @override
+  String get setupMenuCaption => 'نشِط / الإجمالي';
+
+  @override
+  String get setupNoMenu =>
+      'لا توجد أصناف في القائمة بعد — لا يوجد ما تبيعه نقطة البيع.';
+
+  @override
+  String get setupAddMenuItem => 'أضف أول صنف في القائمة';
+
+  @override
+  String get setupNoPosDevice =>
+      'لا يوجد جهاز نقطة بيع بعد — يحتاج الكاشير إلى جهاز لاستقبال الطلبات.';
+
+  @override
+  String get setupCreatePos => 'إنشاء جهاز نقطة بيع';
+
+  @override
+  String get setupNoKdsDevice =>
+      'لا توجد شاشة مطبخ بعد — لن يرى المطبخ الطلبات الواردة.';
+
+  @override
+  String get setupCreateKds => 'إنشاء شاشة مطبخ';
+
+  @override
+  String get setupPairingHint =>
+      'افتح تطبيق نقطة البيع أو شاشة المطبخ على ذلك الجهاز وأدخل رمز الاقتران من تبويب الأجهزة.';
+
+  @override
+  String get setupAddPrinter => 'إضافة طابعة';
+
+  @override
+  String get setupCreatePin => 'إنشاء رمز PIN للموظف';
+
+  @override
   String get printersTitle => 'الطابعات';
 
   @override

@@ -1376,6 +1376,42 @@ class AppLocalizationsHe extends AppLocalizations {
   String get setupReady => 'הסניף מוכן: מכשיר מצומד וקוד PIN לצוות קיימים.';
 
   @override
+  String get setupMenu => 'פריטי תפריט';
+
+  @override
+  String get setupMenuCaption => 'פעילים / סה״כ';
+
+  @override
+  String get setupNoMenu => 'אין עדיין פריטי תפריט — לקופה אין מה למכור.';
+
+  @override
+  String get setupAddMenuItem => 'הוסיפו את פריט התפריט הראשון';
+
+  @override
+  String get setupNoPosDevice =>
+      'אין עדיין מכשיר קופה — הדלפק זקוק לאחד כדי לקבל הזמנות.';
+
+  @override
+  String get setupCreatePos => 'יצירת מכשיר קופה';
+
+  @override
+  String get setupNoKdsDevice =>
+      'אין עדיין צג מטבח — המטבח לא יראה הזמנות נכנסות.';
+
+  @override
+  String get setupCreateKds => 'יצירת צג מטבח';
+
+  @override
+  String get setupPairingHint =>
+      'פתחו את אפליקציית הקופה או צג המטבח במכשיר והזינו את קוד הצימוד מלשונית המכשירים.';
+
+  @override
+  String get setupAddPrinter => 'הוספת מדפסת';
+
+  @override
+  String get setupCreatePin => 'יצירת קוד PIN לעובד';
+
+  @override
   String get printersTitle => 'מדפסות';
 
   @override

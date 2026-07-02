@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminDevice, AdminRepository, DeviceLifecycleStatus;
+import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
+    show MenuReadSource, MenuScope, MenuSnapshot;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../printers/printer_models.dart';
@@ -9,9 +11,10 @@ import '../printers/printers_repository.dart';
 import '../staff/staff_models.dart';
 import '../staff/staff_repository.dart';
 
-/// A compact "is this branch ready for service?" panel shown at the top of the
-/// real-mode Overview: live device / printer / staff-PIN counts (tappable, they
-/// jump to the owning tab) + the next setup step as honest warnings.
+/// A guided "is this branch ready for service?" checklist at the top of the
+/// real-mode Overview: live menu / device / printer / staff-PIN counts
+/// (tappable, they jump to the owning tab) + the concrete next step as honest
+/// banners, each with a button that opens the tab that fixes it.
 ///
 /// Data comes from the SAME real repositories the tabs use — never invented.
 /// A failed load shows a neutral unavailable value (no fake zeroes-as-success).
@@ -20,15 +23,25 @@ class DashboardSetupCenter extends StatefulWidget {
     required this.devicesRepository,
     required this.printersRepository,
     required this.staffRepository,
+    required this.onOpenMenu,
     required this.onOpenDevices,
     required this.onOpenPrinters,
     required this.onOpenStaff,
+    this.menuReadSource,
+    this.menuScope,
     super.key,
   });
 
   final AdminRepository devicesRepository;
   final PrintersRepository printersRepository;
   final StaffRepository staffRepository;
+
+  /// The real menu read + scope (sprint). Null (e.g. the scope could not be
+  /// resolved) => the menu card/step is omitted rather than showing fake data.
+  final MenuReadSource? menuReadSource;
+  final MenuScope? menuScope;
+
+  final VoidCallback onOpenMenu;
   final VoidCallback onOpenDevices;
   final VoidCallback onOpenPrinters;
   final VoidCallback onOpenStaff;
@@ -41,44 +54,70 @@ class _Counts {
   const _Counts({
     this.devicesTotal,
     this.devicesActive,
+    this.posDevices,
+    this.kdsDevices,
     this.printersTotal,
     this.printersEnabled,
     this.staffTotal,
     this.staffWithPin,
+    this.menuTotal,
+    this.menuActive,
   });
 
   // Null => that load failed (shown as unavailable, never as a fake 0).
   final int? devicesTotal;
   final int? devicesActive;
+  final int? posDevices;
+  final int? kdsDevices;
   final int? printersTotal;
   final int? printersEnabled;
   final int? staffTotal;
   final int? staffWithPin;
+  final int? menuTotal;
+  final int? menuActive;
 }
 
 class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
   late Future<_Counts> _future = _load();
 
   Future<_Counts> _load() async {
-    // Kick all three off concurrently, then await each (typed).
+    // Kick everything off concurrently, then await each (typed).
     final devicesFuture = widget.devicesRepository.loadDevices();
     final printersFuture = widget.printersRepository.load();
     final staffFuture = widget.staffRepository.load();
+    final menuSource = widget.menuReadSource;
+    final menuScope = widget.menuScope;
+    final menuFuture = (menuSource != null && menuScope != null)
+        ? menuSource.load(menuScope)
+        : null;
     List<AdminDevice>? devices;
     (await devicesFuture).fold((value) => devices = value, (_) {});
     PrintersSnapshot? printers;
     (await printersFuture).fold((value) => printers = value, (_) {});
     List<StaffMember>? staff;
     (await staffFuture).fold((value) => staff = value, (_) {});
+    MenuSnapshot? menu;
+    if (menuFuture != null) {
+      try {
+        menu = await menuFuture;
+      } catch (_) {
+        menu = null; // load failed -> unavailable, never a fake 0.
+      }
+    }
+    final liveItems = menu?.items.where((i) => !i.isDeleted);
     return _Counts(
       devicesTotal: devices?.length,
       devicesActive: devices
           ?.where((d) => d.status == DeviceLifecycleStatus.active)
           .length,
+      posDevices: devices?.where((d) => d.deviceType == 'pos').length,
+      kdsDevices: devices?.where((d) => d.deviceType == 'kds').length,
       printersTotal: printers?.printers.length,
       printersEnabled: printers?.printers.where((p) => p.isEnabled).length,
       staffTotal: staff?.length,
       staffWithPin: staff?.where((s) => s.isActive && s.hasPin).length,
+      menuTotal: liveItems?.length,
+      menuActive: liveItems?.where((i) => i.isActive).length,
     );
   }
 
@@ -88,6 +127,9 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
       _future = _load();
     });
   }
+
+  bool get _menuCountable =>
+      widget.menuReadSource != null && widget.menuScope != null;
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +155,17 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
               spacing: RestoflowSpacing.md,
               runSpacing: RestoflowSpacing.md,
               children: [
+                if (_menuCountable)
+                  SizedBox(
+                    width: 220,
+                    child: RestoflowMetricCard(
+                      label: l10n.setupMenu,
+                      value: value(counts.menuActive, counts.menuTotal),
+                      caption: l10n.setupMenuCaption,
+                      icon: Icons.restaurant_menu_outlined,
+                      onTap: widget.onOpenMenu,
+                    ),
+                  ),
                 SizedBox(
                   width: 220,
                   child: RestoflowMetricCard(
@@ -152,25 +205,90 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
     );
   }
 
+  /// The guided checklist, in the order a fresh workspace should follow:
+  /// menu -> POS device -> kitchen display -> pair them -> printer -> PIN.
+  /// Each banner carries the button that opens the fixing tab.
   List<Widget> _nextSteps(AppLocalizations l10n, _Counts c, bool loading) {
     if (loading) return const [];
     final steps = <Widget>[];
-    void add(RestoflowTone tone, IconData icon, String body) {
+    void add(
+      RestoflowTone tone,
+      IconData icon,
+      String body, {
+      String? title,
+      String? actionLabel,
+      VoidCallback? onAction,
+    }) {
       steps
         ..add(const SizedBox(height: RestoflowSpacing.md))
-        ..add(RestoflowNoticeBanner(tone: tone, icon: icon, body: body));
+        ..add(
+          RestoflowNoticeBanner(
+            tone: tone,
+            icon: icon,
+            title: title,
+            body: body,
+            action: (actionLabel == null || onAction == null)
+                ? null
+                : TextButton(onPressed: onAction, child: Text(actionLabel)),
+          ),
+        );
     }
 
-    if (c.devicesTotal == 0) {
-      add(RestoflowTone.info, Icons.devices_outlined, l10n.setupNoDevices);
-    } else if (c.devicesTotal != null && c.devicesActive == 0) {
-      add(RestoflowTone.warning, Icons.link_off, l10n.setupNoActiveDevice);
+    if (_menuCountable && c.menuTotal != null && c.menuActive == 0) {
+      add(
+        RestoflowTone.warning,
+        Icons.restaurant_menu_outlined,
+        l10n.setupNoMenu,
+        actionLabel: l10n.setupAddMenuItem,
+        onAction: widget.onOpenMenu,
+      );
+    }
+    if (c.posDevices == 0) {
+      add(
+        RestoflowTone.info,
+        Icons.point_of_sale_outlined,
+        l10n.setupNoPosDevice,
+        actionLabel: l10n.setupCreatePos,
+        onAction: widget.onOpenDevices,
+      );
+    }
+    if (c.kdsDevices == 0) {
+      add(
+        RestoflowTone.info,
+        Icons.countertops_outlined,
+        l10n.setupNoKdsDevice,
+        actionLabel: l10n.setupCreateKds,
+        onAction: widget.onOpenDevices,
+      );
+    }
+    if (c.devicesTotal != null && c.devicesTotal! > 0 && c.devicesActive == 0) {
+      // Devices exist but none is paired: say exactly HOW pairing works.
+      add(
+        RestoflowTone.warning,
+        Icons.link_off,
+        l10n.setupPairingHint,
+        title: l10n.setupNoActiveDevice,
+        actionLabel: l10n.dashboardNavDevices,
+        onAction: widget.onOpenDevices,
+      );
     }
     if (c.printersTotal == 0) {
-      add(RestoflowTone.info, Icons.print_outlined, l10n.setupNoPrinters);
+      add(
+        RestoflowTone.info,
+        Icons.print_outlined,
+        l10n.setupNoPrinters,
+        actionLabel: l10n.setupAddPrinter,
+        onAction: widget.onOpenPrinters,
+      );
     }
     if (c.staffTotal != null && c.staffWithPin == 0) {
-      add(RestoflowTone.warning, Icons.pin_outlined, l10n.setupNoStaffPin);
+      add(
+        RestoflowTone.warning,
+        Icons.pin_outlined,
+        l10n.setupNoStaffPin,
+        actionLabel: l10n.setupCreatePin,
+        onAction: widget.onOpenStaff,
+      );
     }
     if (steps.isEmpty &&
         c.devicesActive != null &&

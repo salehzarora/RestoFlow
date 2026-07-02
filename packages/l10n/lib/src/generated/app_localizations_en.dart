@@ -1392,6 +1392,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'This branch is ready: paired device and staff PIN in place.';
 
   @override
+  String get setupMenu => 'Menu items';
+
+  @override
+  String get setupMenuCaption => 'active / total';
+
+  @override
+  String get setupNoMenu => 'No menu items yet — the POS has nothing to sell.';
+
+  @override
+  String get setupAddMenuItem => 'Add your first menu item';
+
+  @override
+  String get setupNoPosDevice =>
+      'No POS device yet — the counter needs one to take orders.';
+
+  @override
+  String get setupCreatePos => 'Create POS device';
+
+  @override
+  String get setupNoKdsDevice =>
+      'No kitchen display yet — the kitchen won\'t see incoming orders.';
+
+  @override
+  String get setupCreateKds => 'Create kitchen display';
+
+  @override
+  String get setupPairingHint =>
+      'Open the POS or KDS app on that device and enter the pairing code from the Devices tab.';
+
+  @override
+  String get setupAddPrinter => 'Add printer';
+
+  @override
+  String get setupCreatePin => 'Create staff PIN';
+
+  @override
   String get printersTitle => 'Printers';
 
   @override

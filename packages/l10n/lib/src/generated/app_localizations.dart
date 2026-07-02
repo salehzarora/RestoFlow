@@ -2734,6 +2734,72 @@ abstract class AppLocalizations {
   /// **'This branch is ready: paired device and staff PIN in place.'**
   String get setupReady;
 
+  /// Setup-center metric label for the menu-items count.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu items'**
+  String get setupMenu;
+
+  /// Caption under the menu-items metric (active items vs all items).
+  ///
+  /// In en, this message translates to:
+  /// **'active / total'**
+  String get setupMenuCaption;
+
+  /// Setup checklist warning when the branch has no active menu items.
+  ///
+  /// In en, this message translates to:
+  /// **'No menu items yet — the POS has nothing to sell.'**
+  String get setupNoMenu;
+
+  /// Checklist action that jumps to the Menu tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your first menu item'**
+  String get setupAddMenuItem;
+
+  /// Setup checklist step when no POS-type device exists.
+  ///
+  /// In en, this message translates to:
+  /// **'No POS device yet — the counter needs one to take orders.'**
+  String get setupNoPosDevice;
+
+  /// Checklist action that jumps to the Devices tab to create a POS device.
+  ///
+  /// In en, this message translates to:
+  /// **'Create POS device'**
+  String get setupCreatePos;
+
+  /// Setup checklist step when no KDS-type device exists.
+  ///
+  /// In en, this message translates to:
+  /// **'No kitchen display yet — the kitchen won\'t see incoming orders.'**
+  String get setupNoKdsDevice;
+
+  /// Checklist action that jumps to the Devices tab to create a KDS device.
+  ///
+  /// In en, this message translates to:
+  /// **'Create kitchen display'**
+  String get setupCreateKds;
+
+  /// Explains HOW to pair: shown under the no-device-paired warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the POS or KDS app on that device and enter the pairing code from the Devices tab.'**
+  String get setupPairingHint;
+
+  /// Checklist action that jumps to the Printers tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Add printer'**
+  String get setupAddPrinter;
+
+  /// Checklist action that jumps to the Staff tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Create staff PIN'**
+  String get setupCreatePin;
+
   /// Printers page title.
   ///
   /// In en, this message translates to:

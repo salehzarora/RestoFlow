@@ -291,6 +291,11 @@ class _DashboardShellState extends State<DashboardShell> {
               devicesRepository: devices,
               printersRepository: _printersRepo,
               staffRepository: _staffRepo,
+              // The guided checklist counts the REAL menu when its seams are
+              // wired (sprint); a null scope/read source just omits the card.
+              menuReadSource: widget.menuReadSource,
+              menuScope: _menuScope,
+              onOpenMenu: () => _select(1),
               onOpenDevices: () => _select(2),
               onOpenPrinters: () => _select(3),
               onOpenStaff: () => _select(4),
