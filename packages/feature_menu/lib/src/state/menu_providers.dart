@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_core/restoflow_core.dart' show Failure;
 
 import '../data/menu_management_repository.dart';
 import '../data/menu_read_source.dart';
@@ -6,6 +7,7 @@ import '../data/menu_writer.dart';
 import '../models/menu_entity_type.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
+import '../models/menu_write_failure.dart';
 
 /// The active menu scope (RF-108 membership). MUST be overridden at the surface
 /// root — unoverridden it throws (deny-by-default; never a guessed scope).
@@ -69,9 +71,28 @@ class MenuWriteController {
   Future<MenuWriteOutcome> _run(
     Future<MenuWriteOutcome> Function() operation,
   ) async {
-    final outcome = await operation();
+    final MenuWriteOutcome outcome;
+    try {
+      outcome = await operation();
+    } catch (_) {
+      // Defensive: a writer/wiring error that THROWS (instead of returning a
+      // Failure) must still surface as a visible, safe dialog error — never
+      // strand a submitting state, never leak a raw error/SQL string (the UI
+      // renders MenuServerFailure as the generic write-problem message).
+      return const Failure(MenuServerFailure());
+    }
     if (outcome.isSuccess) {
-      _ref.invalidate(menuSnapshotProvider);
+      // Deferred: the save dialog pops in the SAME tick this future completes,
+      // and a synchronous invalidate then delivers a cross-subtree
+      // markNeedsBuild while the overlay is mid-build ("setState() called
+      // during build" — crashes debug web). A zero-delay timer refreshes the
+      // surface right after the frame instead. Swallow only the
+      // disposed-container race (surface already gone -> nothing to refresh).
+      Future<void>.delayed(Duration.zero, () {
+        try {
+          _ref.invalidate(menuSnapshotProvider);
+        } catch (_) {}
+      });
     }
     return outcome;
   }

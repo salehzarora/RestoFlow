@@ -43,14 +43,29 @@ Future<bool> showMenuDeleteConfirm(BuildContext context) async {
   return confirmed ?? false;
 }
 
+/// Resolves the caller's scoped write controller for a dialog.
+///
+/// `showDialog` builds its child under the ROOT navigator's overlay — ABOVE
+/// the menu feature's nested `ProviderScope` (the dashboard wires the scope +
+/// read/write seams per surface). A provider lookup from INSIDE a dialog
+/// therefore resolves against the wrong (root) container, where the menu
+/// seams throw `UnimplementedError` ("must be overridden") mid-save — the bug
+/// that left the Save button stuck forever in real mode. The controller is
+/// read HERE, from the caller's context (inside the scope), and handed to a
+/// plain dialog that performs no provider lookups of its own.
+MenuWriteController _controllerOf(BuildContext callerContext) =>
+    ProviderScope.containerOf(callerContext).read(menuWriteControllerProvider);
+
 /// Shows the create/edit form for a category. Returns true on a successful save.
 Future<bool> showCategoryFormDialog(
   BuildContext context, {
   MenuCategory? existing,
 }) async {
+  final controller = _controllerOf(context);
   final saved = await showDialog<bool>(
     context: context,
-    builder: (context) => _CategoryFormDialog(existing: existing),
+    builder: (_) =>
+        _CategoryFormDialog(controller: controller, existing: existing),
   );
   return saved ?? false;
 }
@@ -67,9 +82,11 @@ Future<bool> showPricedChildFormDialog(
   int initialDisplayOrder = 0,
   bool initialActive = true,
 }) async {
+  final controller = _controllerOf(context);
   final saved = await showDialog<bool>(
     context: context,
-    builder: (context) => _PricedChildFormDialog(
+    builder: (_) => _PricedChildFormDialog(
+      controller: controller,
       kind: kind,
       parentId: parentId,
       currencyCode: currencyCode,
@@ -96,9 +113,11 @@ Future<bool> showModifierFormDialog(
   int initialDisplayOrder = 0,
   bool initialActive = true,
 }) async {
+  final controller = _controllerOf(context);
   final saved = await showDialog<bool>(
     context: context,
-    builder: (context) => _ModifierFormDialog(
+    builder: (_) => _ModifierFormDialog(
+      controller: controller,
       menuItemId: menuItemId,
       id: id,
       initialName: initialName,
@@ -179,17 +198,19 @@ class _DialogShell extends StatelessWidget {
   }
 }
 
-class _CategoryFormDialog extends ConsumerStatefulWidget {
-  const _CategoryFormDialog({this.existing});
+class _CategoryFormDialog extends StatefulWidget {
+  const _CategoryFormDialog({required this.controller, this.existing});
 
+  /// The CALLER's scoped write controller (see [_controllerOf]) — the dialog
+  /// itself performs no provider lookups (it lives above the nested scope).
+  final MenuWriteController controller;
   final MenuCategory? existing;
 
   @override
-  ConsumerState<_CategoryFormDialog> createState() =>
-      _CategoryFormDialogState();
+  State<_CategoryFormDialog> createState() => _CategoryFormDialogState();
 }
 
-class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
+class _CategoryFormDialogState extends State<_CategoryFormDialog> {
   late final TextEditingController _name = TextEditingController(
     text: widget.existing?.name ?? '',
   );
@@ -217,14 +238,12 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
     if (nameError != null) return;
 
     setState(() => _submitting = true);
-    final outcome = await ref
-        .read(menuWriteControllerProvider)
-        .upsertCategory(
-          id: widget.existing?.id,
-          name: _name.text.trim(),
-          displayOrder: int.tryParse(_order.text.trim()) ?? 0,
-          isActive: _active,
-        );
+    final outcome = await widget.controller.upsertCategory(
+      id: widget.existing?.id,
+      name: _name.text.trim(),
+      displayOrder: int.tryParse(_order.text.trim()) ?? 0,
+      isActive: _active,
+    );
     if (!mounted) return;
     outcome.fold(
       (_) => Navigator.of(context).pop(true),
@@ -273,8 +292,9 @@ class _CategoryFormDialogState extends ConsumerState<_CategoryFormDialog> {
   }
 }
 
-class _PricedChildFormDialog extends ConsumerStatefulWidget {
+class _PricedChildFormDialog extends StatefulWidget {
   const _PricedChildFormDialog({
+    required this.controller,
     required this.kind,
     required this.parentId,
     required this.currencyCode,
@@ -285,6 +305,8 @@ class _PricedChildFormDialog extends ConsumerStatefulWidget {
     required this.initialActive,
   });
 
+  /// The CALLER's scoped write controller (see [_controllerOf]).
+  final MenuWriteController controller;
   final PricedChildKind kind;
   final String parentId;
   final String currencyCode;
@@ -295,12 +317,10 @@ class _PricedChildFormDialog extends ConsumerStatefulWidget {
   final bool initialActive;
 
   @override
-  ConsumerState<_PricedChildFormDialog> createState() =>
-      _PricedChildFormDialogState();
+  State<_PricedChildFormDialog> createState() => _PricedChildFormDialogState();
 }
 
-class _PricedChildFormDialogState
-    extends ConsumerState<_PricedChildFormDialog> {
+class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
   late final TextEditingController _name = TextEditingController(
     text: widget.initialName,
   );
@@ -345,7 +365,7 @@ class _PricedChildFormDialogState
     if (nameError != null || deltaError != null) return;
 
     setState(() => _submitting = true);
-    final controller = ref.read(menuWriteControllerProvider);
+    final controller = widget.controller;
     final name = _name.text.trim();
     final order = int.tryParse(_order.text.trim()) ?? 0;
     final outcome = await switch (widget.kind) {
@@ -434,8 +454,9 @@ class _PricedChildFormDialogState
   }
 }
 
-class _ModifierFormDialog extends ConsumerStatefulWidget {
+class _ModifierFormDialog extends StatefulWidget {
   const _ModifierFormDialog({
+    required this.controller,
     required this.menuItemId,
     required this.id,
     required this.initialName,
@@ -447,6 +468,8 @@ class _ModifierFormDialog extends ConsumerStatefulWidget {
     required this.initialActive,
   });
 
+  /// The CALLER's scoped write controller (see [_controllerOf]).
+  final MenuWriteController controller;
   final String menuItemId;
   final String? id;
   final String initialName;
@@ -458,11 +481,10 @@ class _ModifierFormDialog extends ConsumerStatefulWidget {
   final bool initialActive;
 
   @override
-  ConsumerState<_ModifierFormDialog> createState() =>
-      _ModifierFormDialogState();
+  State<_ModifierFormDialog> createState() => _ModifierFormDialogState();
 }
 
-class _ModifierFormDialogState extends ConsumerState<_ModifierFormDialog> {
+class _ModifierFormDialogState extends State<_ModifierFormDialog> {
   late final TextEditingController _name = TextEditingController(
     text: widget.initialName,
   );
@@ -522,19 +544,17 @@ class _ModifierFormDialogState extends ConsumerState<_ModifierFormDialog> {
     if (nameError != null || minError != null || maxError != null) return;
 
     setState(() => _submitting = true);
-    final outcome = await ref
-        .read(menuWriteControllerProvider)
-        .upsertModifier(
-          id: widget.id,
-          menuItemId: widget.menuItemId,
-          name: _name.text.trim(),
-          selectionType: _selectionType,
-          minSelect: minSelect!,
-          maxSelect: maxSelect,
-          isRequired: _required,
-          displayOrder: int.tryParse(_order.text.trim()) ?? 0,
-          isActive: _active,
-        );
+    final outcome = await widget.controller.upsertModifier(
+      id: widget.id,
+      menuItemId: widget.menuItemId,
+      name: _name.text.trim(),
+      selectionType: _selectionType,
+      minSelect: minSelect!,
+      maxSelect: maxSelect,
+      isRequired: _required,
+      displayOrder: int.tryParse(_order.text.trim()) ?? 0,
+      isActive: _active,
+    );
     if (!mounted) return;
     outcome.fold(
       (_) => Navigator.of(context).pop(true),

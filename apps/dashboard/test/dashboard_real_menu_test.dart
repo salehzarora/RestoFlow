@@ -90,16 +90,44 @@ class _RecordingReadSource implements MenuReadSource {
   }
 }
 
-/// An empty writer stand-in — these tests never write; the RpcMenuWriter has
+/// An empty writer stand-in — most tests never write; the RpcMenuWriter has
 /// its own unit suite.
 class _NeverWriter extends InMemoryMenuStore {
   _NeverWriter();
 }
 
+/// Records the scope each category write received (the add-category dialog
+/// regression: the REAL resolved scope must reach the writer).
+class _RecordingWriter extends InMemoryMenuStore {
+  MenuScope? lastScope;
+
+  @override
+  Future<MenuWriteOutcome> upsertCategory({
+    required MenuScope scope,
+    String? id,
+    required String name,
+    int displayOrder = 0,
+    bool isActive = true,
+  }) {
+    lastScope = scope;
+    return super.upsertCategory(
+      scope: scope,
+      id: id,
+      name: name,
+      displayOrder: displayOrder,
+      isActive: isActive,
+    );
+  }
+}
+
 Future<AppLocalizations> en() =>
     AppLocalizations.delegate.load(const Locale('en'));
 
-Future<void> _pumpToMenu(WidgetTester tester, MenuReadSource source) async {
+Future<void> _pumpToMenu(
+  WidgetTester tester,
+  MenuReadSource source, {
+  MenuWriter? writer,
+}) async {
   tester.view.physicalSize = const Size(1400, 2200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -112,7 +140,7 @@ Future<void> _pumpToMenu(WidgetTester tester, MenuReadSource source) async {
         fetchContext: fetcherForContext(_ctx()),
         reportsTransport: _StructureTransport(),
         menuReadSource: source,
-        menuWriter: _NeverWriter(),
+        menuWriter: writer ?? _NeverWriter(),
       ),
     ),
   );
@@ -154,6 +182,34 @@ void main() {
   ) async {
     await _pumpToMenu(tester, _RecordingReadSource());
     expect(find.textContaining('Main hall'), findsOneWidget);
+  });
+
+  testWidgets('Add category through the REAL shell wiring saves with the '
+      'resolved branch scope and closes the dialog (hang regression)', (
+    tester,
+  ) async {
+    final l10n = await en();
+    final writer = _RecordingWriter();
+    await _pumpToMenu(tester, _RecordingReadSource(), writer: writer);
+
+    await tester.tap(find.text(l10n.menuAddCategory).first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('menu-category-name')),
+      'drinks',
+    );
+    await tester.tap(find.text(l10n.menuSaveAction));
+    await tester.pumpAndSettle();
+
+    // The dialog closed (no stuck submitting state) and the write carried the
+    // RESOLVED real scope — org, first restaurant/branch, real currency.
+    expect(find.byKey(const ValueKey('menu-category-name')), findsNothing);
+    final scope = writer.lastScope;
+    expect(scope, isNotNull);
+    expect(scope!.organizationId, 'org-1');
+    expect(scope.restaurantId, 'rest-1');
+    expect(scope.branchId, 'branch-1');
+    expect(scope.currencyCode, 'ILS');
   });
 
   testWidgets('backend menu rows render — including a disabled item the '
