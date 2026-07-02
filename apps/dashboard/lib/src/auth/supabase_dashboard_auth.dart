@@ -10,6 +10,8 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 import 'package:supabase/supabase.dart';
 
 import '../admin/supabase_admin_device_repository.dart';
+import '../printers/printers_repository.dart';
+import '../staff/staff_repository.dart';
 import 'dashboard_auth_repository.dart';
 import 'onboarding_repository.dart';
 
@@ -44,6 +46,9 @@ const String kDefaultOnboardingTimezone = 'UTC';
   OnboardingRepository onboarding,
   AuthContextFetcher fetchContext,
   AdminRepository Function(AdminScope scope) deviceRepositoryFor,
+  PrintersRepository Function(AdminScope scope) printersRepositoryFor,
+  StaffRepository Function(AdminScope scope) staffRepositoryFor,
+  SyncRpcTransport transport,
 })
 buildDashboardRealAuth(SupabaseClient client) {
   final transport = SupabaseSyncRpcTransport(client);
@@ -62,6 +67,20 @@ buildDashboardRealAuth(SupabaseClient client) {
       scope: scope,
       currentUserId: currentUserId,
     ),
+    // Sprint: real printers (RF-150 backend) + staff/PIN provisioning surfaces.
+    printersRepositoryFor: (scope) => SupabasePrintersRepository(
+      transport: transport,
+      scope: scope,
+      currentUserId: currentUserId,
+    ),
+    staffRepositoryFor: (scope) => SupabaseStaffRepository(
+      transport: transport,
+      scope: scope,
+      currentUserId: currentUserId,
+    ),
+    // The session-carrying transport itself (sprint): the Overview's real
+    // sales-summary read rides the SAME authenticated client.
+    transport: transport,
   );
 }
 
