@@ -1418,6 +1418,21 @@ class AppLocalizationsHe extends AppLocalizations {
   String get printersConnConfigOnly => 'תצורה בלבד — ערוץ זה עדיין לא מותקן.';
 
   @override
+  String get printersAdvanced => 'מתקדם';
+
+  @override
+  String get printersDialogSavesConfigOnly =>
+      'גרסה זו שומרת את הגדרות המדפסת בלבד — עדיין לא מתבצעת הדפסה.';
+
+  @override
+  String get printersConnBluetoothWeb =>
+      'גילוי Bluetooth עדיין אינו זמין באפליקציית האינטרנט. תישמר תצורה בלבד.';
+
+  @override
+  String get printersConnUsbAdapter =>
+      'הדפסת USB דורשת את מתאם המדפסת של גרסת שולחן העבודה. תישמר תצורה בלבד.';
+
+  @override
   String get printersFieldName => 'שם תצוגה';
 
   @override

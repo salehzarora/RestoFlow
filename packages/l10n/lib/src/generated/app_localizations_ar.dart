@@ -1428,6 +1428,21 @@ class AppLocalizationsAr extends AppLocalizations {
       'إعدادات فقط — وسيلة النقل هذه غير مُركّبة بعد.';
 
   @override
+  String get printersAdvanced => 'خيارات متقدمة';
+
+  @override
+  String get printersDialogSavesConfigOnly =>
+      'هذا الإصدار يحفظ إعدادات الطابعة فقط — لا تتم أي طباعة بعد.';
+
+  @override
+  String get printersConnBluetoothWeb =>
+      'اكتشاف البلوتوث غير متاح في تطبيق الويب بعد. سيتم حفظ الإعدادات فقط.';
+
+  @override
+  String get printersConnUsbAdapter =>
+      'الطباعة عبر USB تتطلب محوّل الطابعة لسطح المكتب/الأصلي. سيتم حفظ الإعدادات فقط.';
+
+  @override
   String get printersFieldName => 'الاسم المعروض';
 
   @override

@@ -2812,6 +2812,30 @@ abstract class AppLocalizations {
   /// **'Configuration only — this transport is not installed yet.'**
   String get printersConnConfigOnly;
 
+  /// Collapsed section in the printer dialog holding technical fields (port, device identifiers).
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get printersAdvanced;
+
+  /// Honest note shown in the printer dialog for EVERY connection type: saving config never prints.
+  ///
+  /// In en, this message translates to:
+  /// **'This build saves the printer configuration only — nothing is printed yet.'**
+  String get printersDialogSavesConfigOnly;
+
+  /// Honest note when Bluetooth is selected in the printer dialog on web: no scan, config only.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth discovery is not available in the web app yet. Save configuration only.'**
+  String get printersConnBluetoothWeb;
+
+  /// Honest note when USB is selected in the printer dialog: needs the native adapter, config only.
+  ///
+  /// In en, this message translates to:
+  /// **'USB printing requires the desktop/native printer adapter. Save configuration only.'**
+  String get printersConnUsbAdapter;
+
   /// Printer form field: display name.
   ///
   /// In en, this message translates to:

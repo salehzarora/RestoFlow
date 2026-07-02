@@ -231,5 +231,99 @@ void main() {
         findsOneWidget,
       );
     });
+
+    // Sprint UX simplification: the dialog leads with name/role/connection,
+    // hides technical fields under Advanced, and is honest per transport.
+    group('simplified add dialog', () {
+      testWidgets('network: the port is hidden under Advanced (default 9100) '
+          'and the dialog says it saves config only', (tester) async {
+        await pump(tester, InMemoryPrintersStore());
+        await tester.tap(find.text('Add printer'));
+        await tester.pumpAndSettle();
+
+        // Simple by default: host is asked for, the port is NOT.
+        expect(
+          find.widgetWithText(TextFormField, 'Host / IP address'),
+          findsOneWidget,
+        );
+        expect(find.widgetWithText(TextFormField, 'Port'), findsNothing);
+        // Honest for every type: saving configures, never prints.
+        expect(
+          find.text(
+            'This build saves the printer configuration only — nothing is '
+            'printed yet.',
+          ),
+          findsOneWidget,
+        );
+        // Never a fake print success.
+        expect(find.textContaining('print succeeded'), findsNothing);
+
+        // Advanced reveals the port, pre-filled with the 9100 default.
+        await tester.tap(find.text('Advanced'));
+        await tester.pumpAndSettle();
+        expect(find.widgetWithText(TextFormField, 'Port'), findsOneWidget);
+        expect(find.text('9100'), findsOneWidget);
+      });
+
+      testWidgets('bluetooth: shows the web-discovery message, requires no '
+          'identifier, and still saves', (tester) async {
+        final store = InMemoryPrintersStore();
+        await pump(tester, store);
+        await tester.tap(find.text('Add printer'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Network (Wi-Fi/LAN)'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Bluetooth').last);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(
+            'Bluetooth discovery is not available in the web app yet. Save '
+            'configuration only.',
+          ),
+          findsOneWidget,
+        );
+        // No host demanded, no fake scan — a name alone saves the config.
+        expect(
+          find.widgetWithText(TextFormField, 'Host / IP address'),
+          findsNothing,
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Display name'),
+          'Belt printer',
+        );
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+
+        final snapshot = (await store.load()).fold(
+          (s) => s,
+          (f) => fail('expected success'),
+        );
+        final saved = snapshot.printers.singleWhere(
+          (p) => p.displayName == 'Belt printer',
+        );
+        expect(saved.connectionType, PrinterConnectionType.bluetooth);
+      });
+
+      testWidgets('usb: shows the native-adapter message', (tester) async {
+        await pump(tester, InMemoryPrintersStore());
+        await tester.tap(find.text('Add printer'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Network (Wi-Fi/LAN)'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('USB').last);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(
+            'USB printing requires the desktop/native printer adapter. Save '
+            'configuration only.',
+          ),
+          findsOneWidget,
+        );
+      });
+    });
   });
 }

@@ -1435,6 +1435,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Configuration only — this transport is not installed yet.';
 
   @override
+  String get printersAdvanced => 'Advanced';
+
+  @override
+  String get printersDialogSavesConfigOnly =>
+      'This build saves the printer configuration only — nothing is printed yet.';
+
+  @override
+  String get printersConnBluetoothWeb =>
+      'Bluetooth discovery is not available in the web app yet. Save configuration only.';
+
+  @override
+  String get printersConnUsbAdapter =>
+      'USB printing requires the desktop/native printer adapter. Save configuration only.';
+
+  @override
   String get printersFieldName => 'Display name';
 
   @override

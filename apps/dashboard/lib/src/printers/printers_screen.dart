@@ -546,6 +546,11 @@ class _PrinterDialogState extends State<_PrinterDialog> {
                       setState(() => _connection = v ?? _connection),
                 ),
                 const SizedBox(height: RestoflowSpacing.md),
+                // Per-type fields, kept SIMPLE for non-technical users:
+                // network asks only for the host up front (port hides under
+                // Advanced, default 9100); Bluetooth/USB ask for nothing and
+                // say honestly what this build can/cannot do — no fake scan,
+                // no required identifiers (they live under Advanced).
                 if (_connection == PrinterConnectionType.network) ...[
                   TextFormField(
                     controller: _host,
@@ -553,36 +558,63 @@ class _PrinterDialogState extends State<_PrinterDialog> {
                     validator: (v) =>
                         (v ?? '').trim().isEmpty ? l10n.printersErrHost : null,
                   ),
-                  const SizedBox(height: RestoflowSpacing.md),
-                  TextFormField(
-                    controller: _port,
-                    decoration: deco(l10n.printersFieldPort),
-                    keyboardType: TextInputType.number,
-                    validator: (v) {
-                      final port = int.tryParse((v ?? '').trim());
-                      return (port == null || port < 1 || port > 65535)
-                          ? l10n.printersErrPort
-                          : null;
-                    },
-                  ),
                 ] else if (_connection == PrinterConnectionType.bluetooth)
-                  TextFormField(
-                    controller: _bluetoothId,
-                    decoration: deco(l10n.printersFieldBluetoothId),
-                  )
-                else
-                  TextFormField(
-                    controller: _usbPath,
-                    decoration: deco(l10n.printersFieldUsbPath),
-                  ),
-                if (_connection != PrinterConnectionType.network) ...[
-                  const SizedBox(height: RestoflowSpacing.md),
                   RestoflowNoticeBanner(
                     tone: RestoflowTone.warning,
-                    icon: Icons.info_outline,
-                    body: l10n.printersConnConfigOnly,
+                    icon: Icons.bluetooth_disabled_outlined,
+                    body: l10n.printersConnBluetoothWeb,
+                  )
+                else
+                  RestoflowNoticeBanner(
+                    tone: RestoflowTone.warning,
+                    icon: Icons.usb_outlined,
+                    body: l10n.printersConnUsbAdapter,
                   ),
-                ],
+                // Technical extras stay out of the main flow. A collapsed
+                // (default) tile never registers its fields with the Form, so
+                // an untouched port can never block a save (9100 fallback).
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(
+                    bottom: RestoflowSpacing.md,
+                  ),
+                  title: Text(
+                    l10n.printersAdvanced,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  children: [
+                    if (_connection == PrinterConnectionType.network)
+                      TextFormField(
+                        controller: _port,
+                        decoration: deco(l10n.printersFieldPort),
+                        keyboardType: TextInputType.number,
+                        validator: (v) {
+                          final port = int.tryParse((v ?? '').trim());
+                          return (port == null || port < 1 || port > 65535)
+                              ? l10n.printersErrPort
+                              : null;
+                        },
+                      )
+                    else if (_connection == PrinterConnectionType.bluetooth)
+                      TextFormField(
+                        controller: _bluetoothId,
+                        decoration: deco(l10n.printersFieldBluetoothId),
+                      )
+                    else
+                      TextFormField(
+                        controller: _usbPath,
+                        decoration: deco(l10n.printersFieldUsbPath),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+                // ALWAYS honest, for every connection type: saving here
+                // configures the printer — this build never prints.
+                RestoflowNoticeBanner(
+                  tone: RestoflowTone.info,
+                  icon: Icons.info_outline,
+                  body: l10n.printersDialogSavesConfigOnly,
+                ),
                 const SizedBox(height: RestoflowSpacing.md),
                 DropdownButtonFormField<String>(
                   initialValue: _paper,
