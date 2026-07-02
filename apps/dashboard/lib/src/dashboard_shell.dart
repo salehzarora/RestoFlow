@@ -547,7 +547,12 @@ class _ShellHeaderBar extends StatelessWidget {
             IconButton(
               tooltip: l10n.authSignOut,
               onPressed: () => onSignOut!(),
-              icon: const Icon(Icons.logout, size: RestoflowIconSizes.md),
+              // Icons.logout is NOT auto-mirrored by Flutter; flip it under
+              // RTL so the exit arrow points out of the app chrome.
+              icon: Transform.flip(
+                flipX: Directionality.of(context) == TextDirection.rtl,
+                child: const Icon(Icons.logout, size: RestoflowIconSizes.md),
+              ),
             ),
           ],
         ],

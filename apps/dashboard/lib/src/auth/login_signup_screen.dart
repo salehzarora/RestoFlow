@@ -140,7 +140,14 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                           ButtonSegment(
                             value: _AuthMode.signIn,
                             label: Text(l10n.authSignInTab),
-                            icon: const Icon(Icons.login),
+                            // Icons.login is NOT auto-mirrored; flip under RTL
+                            // so the arrow points into the door.
+                            icon: Transform.flip(
+                              flipX:
+                                  Directionality.of(context) ==
+                                  TextDirection.rtl,
+                              child: const Icon(Icons.login),
+                            ),
                           ),
                           ButtonSegment(
                             value: _AuthMode.signUp,
