@@ -1783,7 +1783,7 @@ abstract class AppLocalizations {
   /// Validation error: invalid currency code.
   ///
   /// In en, this message translates to:
-  /// **'Use a 3-letter code (e.g. USD)'**
+  /// **'Use a 3-letter code (e.g. ILS)'**
   String get menuErrorCurrency;
 
   /// Validation error: invalid selection type.
@@ -1981,7 +1981,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminErrCurrency.
   ///
   /// In en, this message translates to:
-  /// **'Use a 3-letter code (e.g. USD)'**
+  /// **'Use a 3-letter code (e.g. ILS)'**
   String get adminErrCurrency;
 
   /// No description provided for @adminErrCountry.

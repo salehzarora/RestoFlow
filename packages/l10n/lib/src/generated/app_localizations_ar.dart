@@ -880,7 +880,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuErrorNegativePrice => 'لا يمكن أن يكون سالبًا';
 
   @override
-  String get menuErrorCurrency => 'استخدم رمزًا من 3 أحرف (مثل USD)';
+  String get menuErrorCurrency => 'استخدم رمزًا من 3 أحرف (مثل ILS)';
 
   @override
   String get menuErrorSelectionType => 'اختر مفرد أو متعدد';
@@ -985,7 +985,7 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذّر إتمام الإجراء — يرجى المحاولة مرة أخرى.';
 
   @override
-  String get adminErrCurrency => 'استخدم رمزًا من 3 أحرف (مثل USD)';
+  String get adminErrCurrency => 'استخدم رمزًا من 3 أحرف (مثل ILS)';
 
   @override
   String get adminErrCountry => 'استخدم رمزًا من حرفين (مثل US)';

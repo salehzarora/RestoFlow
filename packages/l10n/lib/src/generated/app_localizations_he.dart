@@ -876,7 +876,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuErrorNegativePrice => 'לא יכול להיות שלילי';
 
   @override
-  String get menuErrorCurrency => 'השתמש בקוד בן 3 אותיות (למשל USD)';
+  String get menuErrorCurrency => 'השתמש בקוד בן 3 אותיות (למשל ILS)';
 
   @override
   String get menuErrorSelectionType => 'בחר יחיד או מרובה';
@@ -981,7 +981,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminActionProblem => 'לא ניתן היה להשלים את הפעולה — נסה שוב.';
 
   @override
-  String get adminErrCurrency => 'השתמש בקוד בן 3 אותיות (למשל USD)';
+  String get adminErrCurrency => 'השתמש בקוד בן 3 אותיות (למשל ILS)';
 
   @override
   String get adminErrCountry => 'השתמש בקוד בן 2 אותיות (למשל US)';

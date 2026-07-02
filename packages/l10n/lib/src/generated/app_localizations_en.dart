@@ -880,7 +880,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuErrorNegativePrice => 'Cannot be negative';
 
   @override
-  String get menuErrorCurrency => 'Use a 3-letter code (e.g. USD)';
+  String get menuErrorCurrency => 'Use a 3-letter code (e.g. ILS)';
 
   @override
   String get menuErrorSelectionType => 'Choose single or multiple';
@@ -989,7 +989,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn’t complete the action — please try again.';
 
   @override
-  String get adminErrCurrency => 'Use a 3-letter code (e.g. USD)';
+  String get adminErrCurrency => 'Use a 3-letter code (e.g. ILS)';
 
   @override
   String get adminErrCountry => 'Use a 2-letter code (e.g. US)';
