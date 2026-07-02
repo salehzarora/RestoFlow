@@ -81,7 +81,7 @@ class ReceiptPreview extends ConsumerWidget {
             if (dineIn && order.tableLabel != null)
               _ReceiptLine(label: l10n.posTableLabel, value: order.tableLabel!),
             const _DashedRule(),
-            for (final line in order.lines)
+            for (final line in order.lines) ...[
               _ReceiptItemLine(
                 label: '${line.quantity}× ${line.name}',
                 value: MoneyFormatter.formatMinor(
@@ -89,6 +89,9 @@ class ReceiptPreview extends ConsumerWidget {
                   line.currencyCode,
                 ),
               ),
+              for (final modifier in line.modifiers)
+                _ReceiptItemLine(label: '  + $modifier', value: ''),
+            ],
             const _DashedRule(),
             _ReceiptLine(
               label: l10n.posReceiptTotal,

@@ -84,7 +84,18 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
             nameSnapshot: l.name,
             quantity: l.quantity,
             unitPriceMinorSnapshot: l.unitPriceMinor,
+            // Already includes the line's modifier deltas (RF-052 formula) —
+            // the server recomputes qty×unit + Σmodifiers and must match.
             lineTotalMinor: l.lineTotalMinor,
+            modifiers: [
+              for (final m in l.modifiers)
+                OrderSubmissionModifier(
+                  modifierOptionId: m.optionId,
+                  optionNameSnapshot: m.optionName,
+                  modifierNameSnapshot: m.groupName,
+                  priceMinorSnapshot: m.priceDeltaMinor,
+                ),
+            ],
           ),
         )
         .toList(growable: false);

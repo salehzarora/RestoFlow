@@ -494,22 +494,40 @@ class _ConfirmationLine extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.bodyLarge,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyLarge,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                lineTotalText,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-          Text(
-            lineTotalText,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
+          // Selected modifiers (snapshots) — the deltas are in the total.
+          for (final modifier in line.modifiers)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                '+ $modifier',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );

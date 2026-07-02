@@ -35,9 +35,38 @@ enum OutboxSyncState {
   bool get isFailed => this == rejected || this == dead;
 }
 
+/// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
+/// per-item `modifiers[]` array `app.submit_order` validates and snapshots
+/// into `order_item_modifiers` (RF-052, D-008). [priceMinorSnapshot] is a
+/// SIGNED integer minor-unit delta, counted ONCE per line in the server's
+/// total formula.
+class OrderSubmissionModifier {
+  const OrderSubmissionModifier({
+    required this.modifierOptionId,
+    required this.optionNameSnapshot,
+    this.modifierNameSnapshot,
+    required this.priceMinorSnapshot,
+  });
+
+  final String modifierOptionId;
+  final String optionNameSnapshot;
+  final String? modifierNameSnapshot;
+  final int priceMinorSnapshot;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'modifier_option_id': modifierOptionId,
+    'option_name_snapshot': optionNameSnapshot,
+    'modifier_name_snapshot': modifierNameSnapshot,
+    'price_minor_snapshot': priceMinorSnapshot,
+    'quantity': 1,
+  };
+}
+
 /// A single line on an [OrderSubmissionPayload]. Money is integer minor units
 /// only (DECISION D-007); the name + unit price are snapshots captured at order
-/// time (DECISION D-008), never recomputed from a live menu.
+/// time (DECISION D-008), never recomputed from a live menu. [lineTotalMinor]
+/// follows the RF-052 server formula `qty × unit + Σmodifiers` (the server
+/// recomputes and rejects any mismatch).
 class OrderSubmissionItem {
   const OrderSubmissionItem({
     required this.menuItemId,
@@ -45,6 +74,7 @@ class OrderSubmissionItem {
     required this.quantity,
     required this.unitPriceMinorSnapshot,
     required this.lineTotalMinor,
+    this.modifiers = const <OrderSubmissionModifier>[],
   });
 
   final String menuItemId;
@@ -52,6 +82,7 @@ class OrderSubmissionItem {
   final int quantity;
   final int unitPriceMinorSnapshot;
   final int lineTotalMinor;
+  final List<OrderSubmissionModifier> modifiers;
 
   /// Mirrors an element of the `submit_order` RPC `order_items[]` (RF-052).
   Map<String, Object?> toJson() => <String, Object?>{
@@ -60,6 +91,8 @@ class OrderSubmissionItem {
     'quantity': quantity,
     'unit_price_minor_snapshot': unitPriceMinorSnapshot,
     'line_total_minor': lineTotalMinor,
+    if (modifiers.isNotEmpty)
+      'modifiers': modifiers.map((m) => m.toJson()).toList(growable: false),
   };
 }
 

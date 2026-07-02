@@ -57,12 +57,18 @@ class SubmittedLineView {
     required this.quantity,
     required this.lineTotalMinor,
     required this.currencyCode,
+    this.modifiers = const <String>[],
   });
 
   final String name;
   final int quantity;
   final int lineTotalMinor;
   final String currencyCode;
+
+  /// Selected modifier option names (order-time snapshots, D-008), rendered
+  /// as sub-lines on the confirmation/receipt. [lineTotalMinor] already
+  /// includes their price deltas (RF-052 formula).
+  final List<String> modifiers;
 
   Money get lineTotal => Money(lineTotalMinor, currencyCode);
 }

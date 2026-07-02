@@ -6,10 +6,30 @@ import '../data/demo_menu.dart';
 import 'pos_menu_provider.dart';
 import 'submitted_order_view.dart';
 
+/// One SELECTED modifier option on a cart line (demo-readiness sprint) — the
+/// order-time snapshot (D-008) the payload sends as an `order_item_modifiers`
+/// entry: option id + group/option name snapshots + a SIGNED minor-unit price
+/// delta. Counted ONCE per line (the frozen RF-052 total formula:
+/// `line_total = qty × unit + Σmodifiers − discount`).
+class SelectedModifier {
+  const SelectedModifier({
+    required this.optionId,
+    required this.groupName,
+    required this.optionName,
+    required this.priceDeltaMinor,
+  });
+
+  final String optionId;
+  final String groupName;
+  final String optionName;
+  final int priceDeltaMinor;
+}
+
 /// Immutable view of a single cart line for the POS UI.
 ///
 /// Money fields are integer minor units (DECISION D-007); [unitPrice] and
 /// [lineTotal] expose them as [Money] for type-safe display formatting.
+/// [lineTotalMinor] uses the SERVER's formula: `qty × unit + Σmodifiers`.
 class CartLineView {
   const CartLineView({
     required this.lineId,
@@ -19,6 +39,7 @@ class CartLineView {
     required this.unitPriceMinor,
     required this.lineTotalMinor,
     required this.currencyCode,
+    this.modifiers = const <SelectedModifier>[],
   });
 
   final String lineId;
@@ -28,6 +49,7 @@ class CartLineView {
   final int unitPriceMinor;
   final int lineTotalMinor;
   final String currencyCode;
+  final List<SelectedModifier> modifiers;
 
   Money get unitPrice => Money(unitPriceMinor, currencyCode);
   Money get lineTotal => Money(lineTotalMinor, currencyCode);
@@ -44,26 +66,34 @@ class CartViewState {
 
   /// Builds an immutable view from the mutable domain [Cart], optionally
   /// carrying the last locally-submitted order snapshot (RF-101).
+  /// [lineModifiers] adds each line's selected modifier snapshots; totals
+  /// follow the server formula (modifiers counted once per line — RF-052).
   factory CartViewState.fromCart(
     Cart cart, {
     SubmittedOrderView? submittedOrder,
+    Map<String, List<SelectedModifier>> lineModifiers = const {},
   }) {
+    var modifiersTotal = 0;
     final views = cart.lines
-        .map(
-          (line) => CartLineView(
+        .map((line) {
+          final mods = lineModifiers[line.lineId] ?? const <SelectedModifier>[];
+          final modSum = mods.fold<int>(0, (sum, m) => sum + m.priceDeltaMinor);
+          modifiersTotal += modSum;
+          return CartLineView(
             lineId: line.lineId,
             menuItemId: line.menuItemId,
             name: line.itemNameSnapshot,
             quantity: line.quantity,
             unitPriceMinor: line.unitPriceMinor,
-            lineTotalMinor: line.lineTotalMinor,
+            lineTotalMinor: line.lineTotalMinor + modSum,
             currencyCode: line.currencyCodeSnapshot,
-          ),
-        )
+            modifiers: mods,
+          );
+        })
         .toList(growable: false);
     return CartViewState(
       lines: views,
-      subtotalMinor: cart.subtotalMinor,
+      subtotalMinor: cart.subtotalMinor + modifiersTotal,
       currencyCode: cart.currencyCode,
       submittedOrder: submittedOrder,
     );
@@ -102,6 +132,10 @@ class CartController extends Notifier<CartViewState> {
   int _orderSeq = 0;
   SubmittedOrderView? _submittedOrder;
 
+  /// Selected modifier snapshots per line id (the domain [Cart] predates
+  /// modifiers; the app carries them alongside — D-008 snapshots).
+  final Map<String, List<SelectedModifier>> _lineModifiers = {};
+
   /// The ACTIVE menu currency (real backend currency in real mode; the demo
   /// constant otherwise). Read at cart (re)creation so price snapshots and the
   /// cart currency always agree with the menu being sold from (D-007/D-008).
@@ -120,12 +154,14 @@ class CartController extends Notifier<CartViewState> {
   CartViewState build() {
     _cart = _freshCart();
     _submittedOrder = null;
+    _lineModifiers.clear();
     return CartViewState.fromCart(_cart);
   }
 
-  /// Adds [item] to the cart. If a line for the same menu item already exists,
-  /// its quantity is incremented instead of adding a duplicate line. Adding an
-  /// item while a confirmation is showing dismisses it and starts a fresh order.
+  /// Adds [item] to the cart. If a PLAIN line (no modifiers) for the same menu
+  /// item already exists, its quantity is incremented instead of adding a
+  /// duplicate line. Adding an item while a confirmation is showing dismisses
+  /// it and starts a fresh order.
   void addItem(DemoMenuItem item) {
     _submittedOrder = null;
     // An EMPTY cart re-binds to the active menu currency before its first line
@@ -134,7 +170,8 @@ class CartController extends Notifier<CartViewState> {
       _cart = _freshCart();
     }
     final existing = _lineForMenuItem(item.id);
-    if (existing != null) {
+    if (existing != null &&
+        !(_lineModifiers[existing.lineId]?.isNotEmpty ?? false)) {
       _cart.changeQuantity(existing.lineId, existing.quantity + 1);
     } else {
       _cart.addLine(
@@ -147,6 +184,32 @@ class CartController extends Notifier<CartViewState> {
         ),
       );
     }
+    _emit();
+  }
+
+  /// Adds a CONFIGURED [item] with its selected [modifiers] as its OWN line
+  /// (never merged — each configured item is priced/kitchen-routed on its own;
+  /// the RF-052 formula counts modifiers once per line).
+  void addItemWithModifiers(
+    DemoMenuItem item,
+    List<SelectedModifier> modifiers,
+  ) {
+    if (modifiers.isEmpty) return addItem(item);
+    _submittedOrder = null;
+    if (_cart.lines.isEmpty && _cart.currencyCode != _activeCurrency()) {
+      _cart = _freshCart();
+    }
+    final lineId = 'line-${_lineSeq++}';
+    _cart.addLine(
+      CartLine.snapshot(
+        lineId: lineId,
+        menuItemId: item.id,
+        itemNameSnapshot: item.name,
+        basePriceMinorSnapshot: item.priceMinor,
+        currencyCodeSnapshot: _cart.currencyCode,
+      ),
+    );
+    _lineModifiers[lineId] = List.unmodifiable(modifiers);
     _emit();
   }
 
@@ -174,6 +237,7 @@ class CartController extends Notifier<CartViewState> {
   void removeLine(String lineId) {
     if (_lineById(lineId) == null) return;
     _cart.removeLine(lineId);
+    _lineModifiers.remove(lineId);
     _emit();
   }
 
@@ -181,6 +245,7 @@ class CartController extends Notifier<CartViewState> {
   /// `clear()`); line ids keep advancing so they stay unique.
   void clear() {
     _cart = _freshCart();
+    _lineModifiers.clear();
     _emit();
   }
 
@@ -204,6 +269,25 @@ class CartController extends Notifier<CartViewState> {
     // submit flow; fall back to a local number for the RF-101 in-memory path.
     final resolvedNumber =
         orderNumber ?? 'DEMO-${_orderSeq.toString().padLeft(4, '0')}';
+    // Line totals mirror the RF-052 server formula (modifiers once per line).
+    var modifiersTotal = 0;
+    final lines = <SubmittedLineView>[];
+    for (final item in order.items) {
+      // LocalOrderItem.orderItemId carries the source cart line id.
+      final mods =
+          _lineModifiers[item.orderItemId] ?? const <SelectedModifier>[];
+      final modSum = mods.fold<int>(0, (sum, m) => sum + m.priceDeltaMinor);
+      modifiersTotal += modSum;
+      lines.add(
+        SubmittedLineView(
+          name: item.itemNameSnapshot,
+          quantity: item.quantity,
+          lineTotalMinor: item.lineTotalMinorPreview + modSum,
+          currencyCode: item.currencyCodeSnapshot,
+          modifiers: [for (final m in mods) m.optionName],
+        ),
+      );
+    }
     _submittedOrder = SubmittedOrderView(
       orderNumber: resolvedNumber,
       orderType: order.orderType,
@@ -212,19 +296,11 @@ class CartController extends Notifier<CartViewState> {
       localOperationId: localOperationId,
       orderId: orderId,
       currencyCode: order.currencyCode,
-      subtotalMinor: order.subtotalMinorPreview,
-      lines: order.items
-          .map(
-            (item) => SubmittedLineView(
-              name: item.itemNameSnapshot,
-              quantity: item.quantity,
-              lineTotalMinor: item.lineTotalMinorPreview,
-              currencyCode: item.currencyCodeSnapshot,
-            ),
-          )
-          .toList(growable: false),
+      subtotalMinor: order.subtotalMinorPreview + modifiersTotal,
+      lines: lines,
     );
     _cart = _freshCart();
+    _lineModifiers.clear();
     _emit();
   }
 
@@ -232,6 +308,7 @@ class CartController extends Notifier<CartViewState> {
   void startNewOrder() {
     _submittedOrder = null;
     _cart = _freshCart();
+    _lineModifiers.clear();
     _emit();
   }
 
@@ -249,8 +326,11 @@ class CartController extends Notifier<CartViewState> {
     return null;
   }
 
-  void _emit() =>
-      state = CartViewState.fromCart(_cart, submittedOrder: _submittedOrder);
+  void _emit() => state = CartViewState.fromCart(
+    _cart,
+    submittedOrder: _submittedOrder,
+    lineModifiers: _lineModifiers,
+  );
 }
 
 /// Provider for the in-memory POS cart controller (demo-only).

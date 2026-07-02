@@ -375,6 +375,17 @@ class _CartLineTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                // Selected modifiers (order-time snapshots) as compact
+                // sub-lines; their deltas are already in the line total.
+                for (final modifier in line.modifiers)
+                  Text(
+                    '+ ${modifier.optionName}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 const SizedBox(height: 2),
                 Text(
                   unitPriceText,

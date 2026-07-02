@@ -114,7 +114,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             value: _formatReceiptTimestamp(payment.paidAt),
                           ),
                           const _Rule(),
-                          for (final line in order.lines)
+                          for (final line in order.lines) ...[
                             _ItemLine(
                               label: '${line.quantity}× ${line.name}',
                               value: MoneyFormatter.formatMinor(
@@ -122,6 +122,9 @@ class ReceiptPrintPreview extends ConsumerWidget {
                                 line.currencyCode,
                               ),
                             ),
+                            for (final modifier in line.modifiers)
+                              _ItemLine(label: '  + $modifier', value: ''),
+                          ],
                           const _Rule(),
                           _Line(
                             label: l10n.posReceiptTotal,
@@ -240,11 +243,14 @@ PrintDocument buildReceiptDocument(
         _formatReceiptTimestamp(payment.paidAt),
       ),
       PrintLine.rule(),
-      for (final line in order.lines)
+      for (final line in order.lines) ...[
         PrintLine.item(
           '${line.quantity}× ${line.name}',
           MoneyFormatter.formatMinor(line.lineTotalMinor, line.currencyCode),
         ),
+        for (final modifier in line.modifiers)
+          PrintLine.item('  + $modifier', ''),
+      ],
       PrintLine.rule(),
       PrintLine.kv(
         l10n.posReceiptTotal,

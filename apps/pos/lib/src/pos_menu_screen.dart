@@ -10,6 +10,7 @@ import 'widgets/category_chips.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/language_selector.dart';
 import 'widgets/menu_item_card.dart';
+import 'widgets/modifier_selection_sheet.dart';
 
 /// The RF-100 POS demo screen: a filterable menu grid beside a live cart panel.
 ///
@@ -186,11 +187,23 @@ class _MenuGrid extends ConsumerWidget {
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];
+              // An item WITH modifier groups opens the option picker first
+              // (required groups enforced there); plain items add directly.
+              final groups = menu.groupsForItem(item.id);
               return MenuItemCard(
                 item: item,
                 category: menu.categoryOf(item.categoryId),
                 currencyCode: menu.currencyCode,
-                onAdd: () => controller.addItem(item),
+                onAdd: groups.isEmpty
+                    ? () => controller.addItem(item)
+                    : () => ModifierSelectionSheet.show(
+                        context,
+                        item: item,
+                        groups: groups,
+                        currencyCode: menu.currencyCode,
+                        onConfirm: (selections) =>
+                            controller.addItemWithModifiers(item, selections),
+                      ),
               );
             },
           ),
