@@ -1330,6 +1330,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardModeReal => 'Real';
 
   @override
+  String get dashboardUsersNotConnectedTitle =>
+      'User management not connected yet';
+
+  @override
+  String get dashboardUsersNotConnectedBody =>
+      'This build cannot list or invite real members yet — there is no member directory API. Instead of showing sample people, this page stays empty. Demo mode previews how the flow will work.';
+
+  @override
+  String get dashboardSettingsWorkspace => 'Workspace';
+
+  @override
+  String get dashboardSettingsRealNotice =>
+      'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.';
+
+  @override
   String get setupTitle => 'Setup';
 
   @override

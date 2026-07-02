@@ -1323,6 +1323,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardModeReal => 'حقيقي';
 
   @override
+  String get dashboardUsersNotConnectedTitle =>
+      'إدارة المستخدمين غير متصلة بعد';
+
+  @override
+  String get dashboardUsersNotConnectedBody =>
+      'لا يمكن لهذا الإصدار عرض الأعضاء الحقيقيين أو دعوتهم بعد — لا توجد واجهة لقراءة الأعضاء. بدلاً من عرض أشخاص تجريبيين تبقى هذه الصفحة فارغة. الوضع التجريبي يعرض كيف سيعمل هذا المسار.';
+
+  @override
+  String get dashboardSettingsWorkspace => 'مساحة العمل';
+
+  @override
+  String get dashboardSettingsRealNotice =>
+      'هذه هي القيم الحقيقية لمساحة العمل. تعديل الإعدادات غير متصل في هذا الإصدار بعد، لذا لا يوجد شيء للحفظ هنا.';
+
+  @override
   String get setupTitle => 'الإعداد';
 
   @override

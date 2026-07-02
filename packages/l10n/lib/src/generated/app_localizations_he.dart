@@ -1316,6 +1316,20 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardModeReal => 'אמת';
 
   @override
+  String get dashboardUsersNotConnectedTitle => 'ניהול המשתמשים עדיין לא מחובר';
+
+  @override
+  String get dashboardUsersNotConnectedBody =>
+      'גרסה זו עדיין אינה יכולה להציג או להזמין חברים אמיתיים — אין ממשק לקריאת חברים. במקום להציג אנשים לדוגמה, העמוד נשאר ריק. מצב הדמו מדגים כיצד המסך יעבוד.';
+
+  @override
+  String get dashboardSettingsWorkspace => 'סביבת העבודה';
+
+  @override
+  String get dashboardSettingsRealNotice =>
+      'אלה הערכים האמיתיים של סביבת העבודה. עריכת ההגדרות עדיין אינה מחוברת בגרסה זו, ולכן אין כאן מה לשמור.';
+
+  @override
   String get setupTitle => 'הגדרה';
 
   @override

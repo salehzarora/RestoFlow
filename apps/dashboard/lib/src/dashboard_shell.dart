@@ -8,6 +8,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'admin/real_admin_views.dart';
 import 'dashboard_home_screen.dart';
 import 'printers/printers_repository.dart';
 import 'printers/printers_screen.dart';
@@ -179,16 +180,29 @@ class _DashboardShellState extends State<DashboardShell> {
           StaffScreen(repository: _staffRepo),
           demo: _staffDemo,
         ),
-        5 => _adminSurface(
-          const AdminUsersScreen(),
-          repository: _adminStore,
-          demo: true,
-        ),
-        _ => _adminSurface(
-          const AdminSettingsScreen(),
-          repository: _adminStore,
-          demo: true,
-        ),
+        // Users/Settings (sprint): REAL mode never renders the demo store's
+        // fabricated people/values — it shows the honest not-connected state
+        // and the real workspace values instead. Demo mode keeps the labelled
+        // demo surfaces.
+        5 =>
+          widget.membership == null
+              ? _adminSurface(
+                  const AdminUsersScreen(),
+                  repository: _adminStore,
+                  demo: true,
+                )
+              : const RealUsersUnavailableView(),
+        _ =>
+          widget.membership == null
+              ? _adminSurface(
+                  const AdminSettingsScreen(),
+                  repository: _adminStore,
+                  demo: true,
+                )
+              : RealSettingsView(
+                  membership: widget.membership!,
+                  currencyCode: widget.currencyCode,
+                ),
       },
     );
 

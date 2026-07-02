@@ -2626,6 +2626,30 @@ abstract class AppLocalizations {
   /// **'Real'**
   String get dashboardModeReal;
 
+  /// Honest real-mode Users tab state: no member read API exists yet, so no list is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'User management not connected yet'**
+  String get dashboardUsersNotConnectedTitle;
+
+  /// Body of the honest real-mode Users tab state.
+  ///
+  /// In en, this message translates to:
+  /// **'This build cannot list or invite real members yet — there is no member directory API. Instead of showing sample people, this page stays empty. Demo mode previews how the flow will work.'**
+  String get dashboardUsersNotConnectedBody;
+
+  /// Title of the real-mode settings card showing the signed-in workspace values.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace'**
+  String get dashboardSettingsWorkspace;
+
+  /// Honest notice on the real-mode Settings tab: values are real, saving is not wired.
+  ///
+  /// In en, this message translates to:
+  /// **'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.'**
+  String get dashboardSettingsRealNotice;
+
   /// Title of the real-mode setup center on the dashboard overview.
   ///
   /// In en, this message translates to:
