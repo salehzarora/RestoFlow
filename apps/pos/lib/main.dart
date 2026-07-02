@@ -9,7 +9,41 @@ import 'src/pos_menu_screen.dart';
 import 'src/pos_pairing_gate.dart';
 import 'src/state/locale_controller.dart';
 
-void main() => runApp(const ProviderScope(child: PosApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    ProviderScope(
+      child: PosApp(devicePairingRepository: await _realDevicePairing()),
+    ),
+  );
+}
+
+/// RF-161: the REAL device-pairing repository for production POS. In real mode with
+/// a valid Supabase config it signs the device in anonymously (an authenticated,
+/// membership-less principal — DECISION D-011, no service-role key) and returns the
+/// backend-backed [SupabaseDevicePairingRepository] over OS-backed secure storage.
+/// Returns null (the gate stays dormant, prior behaviour) in demo mode, when
+/// unconfigured, or when anonymous sign-in is unavailable — NEVER a fake pairing.
+Future<DevicePairingRepository?> _realDevicePairing() async {
+  if (authDemoModeEnabled()) return null;
+  final SupabaseBootstrapConfig config;
+  try {
+    config = SupabaseBootstrapConfig.fromEnvironment();
+  } on SupabaseConfigException {
+    return null; // unconfigured -> dormant.
+  }
+  try {
+    final transport = await SupabaseAuthBootstrap(
+      config: config,
+    ).createAnonymousDeviceTransport();
+    return SupabaseDevicePairingRepository(
+      transport: transport,
+      secretStore: FlutterSecureDeviceSessionStore(),
+    );
+  } catch (_) {
+    return null; // fail closed (e.g. anonymous sign-in disabled) -> no fake pairing.
+  }
+}
 
 /// RestoFlow POS app (RF-100 + RF-108 + RF-153): the demo menu + cart screen,
 /// behind the shared auth gate, with a real-mode device-pairing gate.

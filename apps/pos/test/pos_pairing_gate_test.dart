@@ -19,6 +19,31 @@ class _FakePairing implements DevicePairingRepository {
   }) async => result;
 }
 
+/// A real-style repo that also restores a session on launch (RF-161). It
+/// IGNORES [expectedDeviceType] (recording it only), so wrong-type tests prove
+/// the GATE itself rejects a mismatched restored context (belt-and-suspenders
+/// on top of the repo-level enforcement, which has its own unit tests).
+class _FakeRestorable implements DevicePairingRepository, DeviceSessionManager {
+  _FakeRestorable(this._restored);
+  final DeviceContext? _restored;
+  String? lastExpectedDeviceType;
+
+  @override
+  Future<Result<DeviceContext, PairingFailure>> pairWithCode({
+    required String code,
+    required String deviceType,
+  }) async => const Failure(PairingFailure(PairingFailureKind.invalidCode));
+
+  @override
+  Future<DeviceContext?> restore({String? expectedDeviceType}) async {
+    lastExpectedDeviceType = expectedDeviceType;
+    return _restored;
+  }
+
+  @override
+  Future<void> unpair() async {}
+}
+
 MyContext _managerCtx() => const MyContext(
   appUser: AppUserContext(
     id: 'u',
@@ -114,5 +139,89 @@ void main() {
     );
     expect(find.byType(PosMenuScreen), findsOneWidget);
     expect(find.byType(DevicePairingScreen), findsNothing);
+  });
+
+  testWidgets('a restored device session enters the POS surface on launch', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      PosApp(
+        demoMode: false,
+        devicePairingRepository: _FakeRestorable(
+          const DeviceContext(
+            organizationId: 'o',
+            branchId: 'b',
+            deviceId: 'd',
+            deviceType: 'pos',
+          ),
+        ),
+        fetchContext: fetcherForContext(_managerCtx()),
+      ),
+    );
+    // Restored automatically -> the POS surface, never the pairing screen.
+    expect(find.byType(PosMenuScreen), findsOneWidget);
+    expect(find.byType(DevicePairingScreen), findsNothing);
+  });
+
+  testWidgets('no restorable session falls back to the pairing screen', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      PosApp(
+        demoMode: false,
+        devicePairingRepository: _FakeRestorable(null),
+        fetchContext: fetcherForContext(_managerCtx()),
+      ),
+    );
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    expect(find.byType(PosMenuScreen), findsNothing);
+  });
+
+  testWidgets('a restored KDS session must NOT unlock the POS — fail closed '
+      'to the pairing screen', (tester) async {
+    final repo = _FakeRestorable(
+      const DeviceContext(
+        organizationId: 'o',
+        branchId: 'b',
+        deviceId: 'd',
+        deviceType: 'kds',
+      ),
+    );
+    await _pump(
+      tester,
+      PosApp(
+        demoMode: false,
+        devicePairingRepository: repo,
+        fetchContext: fetcherForContext(_managerCtx()),
+      ),
+    );
+    // The gate asked the repo for a POS session...
+    expect(repo.lastExpectedDeviceType, 'pos');
+    // ...and rejects the mismatched context itself even when the repo (this
+    // fake) fails to enforce it.
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    expect(find.byType(PosMenuScreen), findsNothing);
+  });
+
+  testWidgets('a restored session with NO device type must NOT unlock the '
+      'POS', (tester) async {
+    await _pump(
+      tester,
+      PosApp(
+        demoMode: false,
+        devicePairingRepository: _FakeRestorable(
+          const DeviceContext(
+            organizationId: 'o',
+            branchId: 'b',
+            deviceId: 'd',
+          ),
+        ),
+        fetchContext: fetcherForContext(_managerCtx()),
+      ),
+    );
+    expect(find.byType(DevicePairingScreen), findsOneWidget);
+    expect(find.byType(PosMenuScreen), findsNothing);
   });
 }

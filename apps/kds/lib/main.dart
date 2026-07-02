@@ -13,7 +13,37 @@ import 'src/kitchen_orders_home.dart';
 import 'src/state/kds_session.dart';
 import 'src/state/locale_controller.dart';
 
-void main() => runApp(const KdsApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(KdsApp(devicePairingRepository: await _realDevicePairing()));
+}
+
+/// RF-161: the REAL device-pairing repository for production KDS. In real mode with
+/// a valid Supabase config it signs the device in anonymously (an authenticated,
+/// membership-less principal — DECISION D-011, no service-role key) and returns the
+/// backend-backed [SupabaseDevicePairingRepository] over OS-backed secure storage.
+/// Returns null (the gate stays dormant, prior behaviour) in demo mode, when
+/// unconfigured, or when anonymous sign-in is unavailable — NEVER a fake pairing.
+Future<DevicePairingRepository?> _realDevicePairing() async {
+  if (authDemoModeEnabled()) return null;
+  final SupabaseBootstrapConfig config;
+  try {
+    config = SupabaseBootstrapConfig.fromEnvironment();
+  } on SupabaseConfigException {
+    return null; // unconfigured -> dormant.
+  }
+  try {
+    final transport = await SupabaseAuthBootstrap(
+      config: config,
+    ).createAnonymousDeviceTransport();
+    return SupabaseDevicePairingRepository(
+      transport: transport,
+      secretStore: FlutterSecureDeviceSessionStore(),
+    );
+  } catch (_) {
+    return null; // fail closed (e.g. anonymous sign-in disabled) -> no fake pairing.
+  }
+}
 
 /// Localized KDS app (RF-063 + RF-108 + RF-117 board + RF-136 real sync).
 ///

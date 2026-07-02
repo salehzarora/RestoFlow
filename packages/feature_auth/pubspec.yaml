@@ -23,6 +23,11 @@ dependencies:
   # The single localization owner (ar/he/en + RTL/LTR delegates).
   restoflow_l10n:
     path: ../l10n
+  # RF-161: OS-backed secure storage for the raw device-session token (never prefs).
+  flutter_secure_storage: '>=9.0.0 <10.0.0'
+  # RF-161: the neutral RPC transport seam (SyncRpcTransport) for the real pairing repo.
+  restoflow_data_remote:
+    path: ../data_remote
 dev_dependencies:
   flutter_test:
     sdk: flutter
