@@ -632,6 +632,20 @@ class AppLocalizationsHe extends AppLocalizations {
       'כדי לנסות את הדמו במקום זאת, הפעל את האפליקציה ללא כל הגדרה — מצב הדמו הוא ברירת המחדל.';
 
   @override
+  String get authDeviceSignInUnavailableTitle => 'כניסת המכשיר אינה זמינה';
+
+  @override
+  String get authDeviceSignInUnavailableBody =>
+      'כניסת מכשירים אנונימית מושבתת או שאימות Supabase אינו מוגדר.';
+
+  @override
+  String get authDeviceSignInUnavailableHowTo => 'איך לתקן';
+
+  @override
+  String get authDeviceSignInUnavailableFix =>
+      'אפשרו כניסה אנונימית בהגדרות האימות של Supabase, הפעילו מחדש את השרת ואז את האפליקציה. אין צורך בחשבון אישי במכשיר זה — הצימוד מחבר את המכשיר בעצמו.';
+
+  @override
   String get authTryAgain => 'נסה שוב';
 
   @override

@@ -5,6 +5,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_auth/testing.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/main.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 
@@ -244,5 +245,57 @@ void main() {
     );
     expect(find.byType(DevicePairingScreen), findsOneWidget);
     expect(find.byType(PosMenuScreen), findsNothing);
+  });
+
+  // Sprint fix: a POS device never has an owner account, so when the real
+  // device bootstrap fails the app must say WHY — never the legacy account
+  // gate's misleading "Account access denied".
+  group('real mode without seams shows the honest bootstrap problem', () {
+    testWidgets('anonymous sign-in unavailable -> the actionable help page, '
+        'never "Account access denied"', (tester) async {
+      await _pump(
+        tester,
+        const PosApp(
+          demoMode: false,
+          realAuthProblem: RealDeviceAuthProblem.signInUnavailable,
+        ),
+      );
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.byType(DeviceSignInUnavailableView), findsOneWidget);
+      expect(find.text(l10n.authDeviceSignInUnavailableBody), findsOneWidget);
+      expect(find.text(l10n.authAccessDenied), findsNothing);
+      expect(find.byType(PosMenuScreen), findsNothing);
+      expect(find.byType(DevicePairingScreen), findsNothing);
+    });
+
+    testWidgets('missing Supabase config -> the unconfigured help page, '
+        'never "Account access denied"', (tester) async {
+      await _pump(
+        tester,
+        const PosApp(
+          demoMode: false,
+          realAuthProblem: RealDeviceAuthProblem.unconfigured,
+        ),
+      );
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.byType(RealModeUnconfiguredView), findsOneWidget);
+      expect(find.text(l10n.authAccessDenied), findsNothing);
+      expect(find.byType(PosMenuScreen), findsNothing);
+    });
+
+    testWidgets('the pairing repo wins over a problem flag (paired flow is '
+        'unaffected)', (tester) async {
+      await _pump(
+        tester,
+        PosApp(
+          demoMode: false,
+          devicePairingRepository: _FakeRestorable(null),
+          realAuthProblem: RealDeviceAuthProblem.signInUnavailable,
+          fetchContext: fetcherForContext(_managerCtx()),
+        ),
+      );
+      expect(find.byType(DevicePairingScreen), findsOneWidget);
+      expect(find.byType(DeviceSignInUnavailableView), findsNothing);
+    });
   });
 }

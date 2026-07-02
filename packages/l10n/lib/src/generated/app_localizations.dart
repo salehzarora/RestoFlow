@@ -1306,6 +1306,30 @@ abstract class AppLocalizations {
   /// **'To explore the demo instead, run the app without any configuration — demo mode is the default.'**
   String get authRealModeUnconfiguredDemoHint;
 
+  /// Title of the help page shown when POS/KDS device bootstrap fails because anonymous sign-in is rejected by the backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Device sign-in unavailable'**
+  String get authDeviceSignInUnavailableTitle;
+
+  /// Body of the device-sign-in-unavailable help page: the exact reason pairing cannot start.
+  ///
+  /// In en, this message translates to:
+  /// **'Anonymous device sign-in is disabled or Supabase auth is not configured.'**
+  String get authDeviceSignInUnavailableBody;
+
+  /// Heading above the code block showing the Supabase auth setting that enables anonymous device sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'How to fix it'**
+  String get authDeviceSignInUnavailableHowTo;
+
+  /// Hint on the device-sign-in-unavailable help page explaining the fix and that no owner account is required on a POS/KDS device.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow anonymous sign-ins in the Supabase Auth settings, restart the backend, then restart this app. No personal account is needed on this device — pairing signs the device in by itself.'**
+  String get authDeviceSignInUnavailableFix;
+
   /// Auth gate action that retries loading the account context.
   ///
   /// In en, this message translates to:

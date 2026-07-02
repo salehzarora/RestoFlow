@@ -632,6 +632,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'To explore the demo instead, run the app without any configuration — demo mode is the default.';
 
   @override
+  String get authDeviceSignInUnavailableTitle => 'Device sign-in unavailable';
+
+  @override
+  String get authDeviceSignInUnavailableBody =>
+      'Anonymous device sign-in is disabled or Supabase auth is not configured.';
+
+  @override
+  String get authDeviceSignInUnavailableHowTo => 'How to fix it';
+
+  @override
+  String get authDeviceSignInUnavailableFix =>
+      'Allow anonymous sign-ins in the Supabase Auth settings, restart the backend, then restart this app. No personal account is needed on this device — pairing signs the device in by itself.';
+
+  @override
   String get authTryAgain => 'Try again';
 
   @override

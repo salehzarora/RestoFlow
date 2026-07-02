@@ -15,44 +15,47 @@ import 'src/state/pos_session.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final real = await _realDeviceAuth();
+  final seams = real.seams;
   runApp(
     ProviderScope(
       overrides: [
         // The PIN/session + sync_push calls must ride the SAME authenticated
         // (anonymous) transport as the pairing repo — the plain anon transport
         // cannot reach the authenticated-only RPC grants (D-011/RF-161).
-        if (real != null)
-          posAuthTransportProvider.overrideWithValue(real.transport),
+        if (seams != null)
+          posAuthTransportProvider.overrideWithValue(seams.transport),
       ],
       child: PosApp(
-        devicePairingRepository: real?.pairing,
-        deviceStaffRepository: real?.staff,
+        devicePairingRepository: seams?.pairing,
+        deviceStaffRepository: seams?.staff,
+        realAuthProblem: real.problem,
       ),
     ),
   );
 }
 
+typedef _RealDeviceSeams = ({
+  DevicePairingRepository pairing,
+  DeviceStaffRepository staff,
+  SyncRpcTransport transport,
+});
+
 /// RF-161 + sprint: the REAL device-auth seams for production POS. In real mode
 /// with a valid Supabase config it signs the device in anonymously (an
 /// authenticated, membership-less principal — DECISION D-011, no service-role
 /// key) and returns the backend-backed pairing repository, the token-proven
-/// staff directory for the PIN pad, and the shared transport. Returns null (the
-/// gates stay dormant, prior behaviour) in demo mode, when unconfigured, or when
-/// anonymous sign-in is unavailable — NEVER a fake pairing or staff list.
-Future<
-  ({
-    DevicePairingRepository pairing,
-    DeviceStaffRepository staff,
-    SyncRpcTransport transport,
-  })?
->
+/// staff directory for the PIN pad, and the shared transport. When the seams
+/// cannot be built, `problem` says WHY, so the app can show an honest state
+/// instead of the legacy account gate (which used to surface a misleading
+/// "Account access denied" on devices) — NEVER a fake pairing or staff list.
+Future<({_RealDeviceSeams? seams, RealDeviceAuthProblem? problem})>
 _realDeviceAuth() async {
-  if (authDemoModeEnabled()) return null;
+  if (authDemoModeEnabled()) return (seams: null, problem: null);
   final SupabaseBootstrapConfig config;
   try {
     config = SupabaseBootstrapConfig.fromEnvironment();
   } on SupabaseConfigException {
-    return null; // unconfigured -> dormant.
+    return (seams: null, problem: RealDeviceAuthProblem.unconfigured);
   }
   try {
     final transport = await SupabaseAuthBootstrap(
@@ -60,18 +63,23 @@ _realDeviceAuth() async {
     ).createAnonymousDeviceTransport();
     final store = FlutterSecureDeviceSessionStore();
     return (
-      pairing: SupabaseDevicePairingRepository(
+      seams: (
+        pairing: SupabaseDevicePairingRepository(
+          transport: transport,
+          secretStore: store,
+        ),
+        staff: SupabaseDeviceStaffRepository(
+          transport: transport,
+          secretStore: store,
+        ),
         transport: transport,
-        secretStore: store,
       ),
-      staff: SupabaseDeviceStaffRepository(
-        transport: transport,
-        secretStore: store,
-      ),
-      transport: transport,
+      problem: null,
     );
   } catch (_) {
-    return null; // fail closed (e.g. anonymous sign-in disabled) -> no fake pairing.
+    // Fail closed (e.g. anonymous sign-ins disabled on the project): no fake
+    // pairing — the app renders DeviceSignInUnavailableView with the fix.
+    return (seams: null, problem: RealDeviceAuthProblem.signInUnavailable);
   }
 }
 
@@ -83,14 +91,17 @@ _realDeviceAuth() async {
 /// PIN session (PIN gate over `start_pin_session`) → the POS surface selling
 /// the REAL backend menu, submitting orders and cash payments through
 /// `public.sync_push` with the session (RF-129/RF-130/RF-131). Real mode
-/// WITHOUT the seams (unconfigured) falls back to the legacy auth gate — no
-/// fake pairing, no fake session, no fake menu. Localization/RTL as before.
+/// WITHOUT the seams shows the honest reason ([realAuthProblem]) — the
+/// unconfigured help page or the device-sign-in-unavailable page — never the
+/// legacy account gate's misleading denial, and never a fake pairing, session,
+/// or menu. Localization/RTL as before.
 class PosApp extends ConsumerWidget {
   const PosApp({
     this.demoMode,
     this.fetchContext,
     this.devicePairingRepository,
     this.deviceStaffRepository,
+    this.realAuthProblem,
     this.initialDevice,
     super.key,
   });
@@ -109,6 +120,11 @@ class PosApp extends ConsumerWidget {
   /// => the PIN gate fails closed (honest unavailable state).
   final DeviceStaffRepository? deviceStaffRepository;
 
+  /// Why the real device-auth bootstrap produced no seams (real mode only).
+  /// Non-null with no pairing repo => the matching honest help page renders
+  /// instead of the legacy account gate. Null => prior behaviour.
+  final RealDeviceAuthProblem? realAuthProblem;
+
   /// A pre-existing paired device context, or null.
   final DeviceContext? initialDevice;
 
@@ -123,6 +139,7 @@ class PosApp extends ConsumerWidget {
     );
     final demo = demoMode ?? authDemoModeEnabled();
     final pairingRepo = devicePairingRepository;
+    final problem = realAuthProblem;
     final home = (!demo && pairingRepo != null)
         ? PosPairingGate(
             repository: pairingRepo,
@@ -136,6 +153,15 @@ class PosApp extends ConsumerWidget {
               child: const PosMenuScreen(),
             ),
           )
+        : (!demo && problem != null)
+        // A POS device never has an owner account, so the legacy gate's
+        // "Account access denied" would be a lie here — say what is wrong.
+        ? switch (problem) {
+            RealDeviceAuthProblem.unconfigured =>
+              const RealModeUnconfiguredView(),
+            RealDeviceAuthProblem.signInUnavailable =>
+              const DeviceSignInUnavailableView(),
+          }
         : gate;
 
     return MaterialApp(

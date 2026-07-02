@@ -18,14 +18,22 @@ import 'src/state/locale_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final real = await _realDeviceAuth();
+  final seams = real.seams;
   runApp(
     KdsApp(
-      devicePairingRepository: real?.pairing,
-      deviceStaffRepository: real?.staff,
-      authTransport: real?.transport,
+      devicePairingRepository: seams?.pairing,
+      deviceStaffRepository: seams?.staff,
+      authTransport: seams?.transport,
+      realAuthProblem: real.problem,
     ),
   );
 }
+
+typedef _RealDeviceSeams = ({
+  DevicePairingRepository pairing,
+  DeviceStaffRepository staff,
+  SyncRpcTransport transport,
+});
 
 /// RF-161 + sprint: the REAL device-auth seams for production KDS. In real mode
 /// with a valid Supabase config it signs the device in anonymously (an
@@ -33,22 +41,17 @@ Future<void> main() async {
 /// key) and returns the backend-backed pairing repository, the token-proven
 /// staff directory for the PIN pad, and the shared transport (the SAME
 /// authenticated transport carries `start_pin_session` + `sync_pull`/`sync_push`).
-/// Returns null (the gates stay dormant, prior behaviour) in demo mode, when
-/// unconfigured, or when anonymous sign-in is unavailable — NEVER a fake pairing.
-Future<
-  ({
-    DevicePairingRepository pairing,
-    DeviceStaffRepository staff,
-    SyncRpcTransport transport,
-  })?
->
+/// When the seams cannot be built, `problem` says WHY, so the app can show an
+/// honest state instead of the legacy account gate (which used to surface a
+/// misleading "Account access denied" on devices) — NEVER a fake pairing.
+Future<({_RealDeviceSeams? seams, RealDeviceAuthProblem? problem})>
 _realDeviceAuth() async {
-  if (authDemoModeEnabled()) return null;
+  if (authDemoModeEnabled()) return (seams: null, problem: null);
   final SupabaseBootstrapConfig config;
   try {
     config = SupabaseBootstrapConfig.fromEnvironment();
   } on SupabaseConfigException {
-    return null; // unconfigured -> dormant.
+    return (seams: null, problem: RealDeviceAuthProblem.unconfigured);
   }
   try {
     final transport = await SupabaseAuthBootstrap(
@@ -56,18 +59,23 @@ _realDeviceAuth() async {
     ).createAnonymousDeviceTransport();
     final store = FlutterSecureDeviceSessionStore();
     return (
-      pairing: SupabaseDevicePairingRepository(
+      seams: (
+        pairing: SupabaseDevicePairingRepository(
+          transport: transport,
+          secretStore: store,
+        ),
+        staff: SupabaseDeviceStaffRepository(
+          transport: transport,
+          secretStore: store,
+        ),
         transport: transport,
-        secretStore: store,
       ),
-      staff: SupabaseDeviceStaffRepository(
-        transport: transport,
-        secretStore: store,
-      ),
-      transport: transport,
+      problem: null,
     );
   } catch (_) {
-    return null; // fail closed (e.g. anonymous sign-in disabled) -> no fake pairing.
+    // Fail closed (e.g. anonymous sign-ins disabled on the project): no fake
+    // pairing — the app renders DeviceSignInUnavailableView with the fix.
+    return (seams: null, problem: RealDeviceAuthProblem.signInUnavailable);
   }
 }
 
@@ -96,6 +104,7 @@ class KdsApp extends StatelessWidget {
     this.devicePairingRepository,
     this.deviceStaffRepository,
     this.authTransport,
+    this.realAuthProblem,
     this.initialDevice,
     super.key,
   });
@@ -114,6 +123,11 @@ class KdsApp extends StatelessWidget {
   /// The authenticated (anonymous) transport shared by pairing + PIN + sync
   /// (sprint). Null => [kdsAuthTransportProvider] keeps its default.
   final SyncRpcTransport? authTransport;
+
+  /// Why the real device-auth bootstrap produced no seams (real mode only).
+  /// Non-null with no pairing repo => the matching honest help page renders
+  /// instead of the legacy account gate. Null => prior behaviour.
+  final RealDeviceAuthProblem? realAuthProblem;
 
   /// A pre-existing paired device context, or null.
   final DeviceContext? initialDevice;
@@ -168,6 +182,7 @@ class KdsApp extends StatelessWidget {
         fetchContext: fetchContext,
         devicePairingRepository: devicePairingRepository,
         deviceStaffRepository: deviceStaffRepository,
+        realAuthProblem: realAuthProblem,
         initialDevice: initialDevice,
       ),
     );
@@ -183,6 +198,7 @@ class _KdsMaterialApp extends ConsumerWidget {
     required this.fetchContext,
     required this.devicePairingRepository,
     required this.deviceStaffRepository,
+    required this.realAuthProblem,
     required this.initialDevice,
   });
 
@@ -191,6 +207,7 @@ class _KdsMaterialApp extends ConsumerWidget {
   final AuthContextFetcher? fetchContext;
   final DevicePairingRepository? devicePairingRepository;
   final DeviceStaffRepository? deviceStaffRepository;
+  final RealDeviceAuthProblem? realAuthProblem;
   final DeviceContext? initialDevice;
 
   @override
@@ -217,6 +234,7 @@ class _KdsMaterialApp extends ConsumerWidget {
     // pairing, no fake session, no fake feed.
     final demo = demoMode ?? authDemoModeEnabled();
     final pairingRepo = devicePairingRepository;
+    final problem = realAuthProblem;
     final nonLiveHome = (!demo && pairingRepo != null)
         ? KdsPairingGate(
             repository: pairingRepo,
@@ -227,6 +245,15 @@ class _KdsMaterialApp extends ConsumerWidget {
               child: gate,
             ),
           )
+        : (!demo && problem != null)
+        // A KDS device never has an owner account, so the legacy gate's
+        // "Account access denied" would be a lie here — say what is wrong.
+        ? switch (problem) {
+            RealDeviceAuthProblem.unconfigured =>
+              const RealModeUnconfiguredView(),
+            RealDeviceAuthProblem.signInUnavailable =>
+              const DeviceSignInUnavailableView(),
+          }
         : gate;
 
     return MaterialApp(

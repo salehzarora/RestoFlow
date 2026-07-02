@@ -634,6 +634,20 @@ class AppLocalizationsAr extends AppLocalizations {
       'لاستكشاف النسخة التجريبية بدلاً من ذلك، شغّل التطبيق دون أي إعدادات — الوضع التجريبي هو الافتراضي.';
 
   @override
+  String get authDeviceSignInUnavailableTitle => 'تسجيل دخول الجهاز غير متاح';
+
+  @override
+  String get authDeviceSignInUnavailableBody =>
+      'تسجيل الدخول المجهول للأجهزة معطَّل أو أن مصادقة Supabase غير مهيأة.';
+
+  @override
+  String get authDeviceSignInUnavailableHowTo => 'كيفية الإصلاح';
+
+  @override
+  String get authDeviceSignInUnavailableFix =>
+      'فعِّل تسجيل الدخول المجهول في إعدادات مصادقة Supabase، ثم أعد تشغيل الخادم وهذا التطبيق. لا يحتاج هذا الجهاز إلى حساب شخصي — الاقتران يسجّل دخول الجهاز بنفسه.';
+
+  @override
   String get authTryAgain => 'حاول مرة أخرى';
 
   @override
