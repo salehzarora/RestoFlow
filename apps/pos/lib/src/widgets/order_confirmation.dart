@@ -451,11 +451,7 @@ class _SyncStatusCard extends StatelessWidget {
               const SizedBox(height: RestoflowSpacing.md),
               Row(
                 children: [
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  const RestoflowInlineSpinner(size: 16),
                   const SizedBox(width: RestoflowSpacing.sm),
                   Text(
                     l10n.posSyncStateSending,

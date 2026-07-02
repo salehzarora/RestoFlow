@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 
 /// In-memory demo menu data for the RF-100 POS demo screen.
 ///
@@ -63,31 +64,31 @@ const List<DemoCategory> kDemoCategories = <DemoCategory>[
     id: 'burgers',
     name: 'Burgers',
     icon: Icons.lunch_dining,
-    color: Color(0xFFE8590C),
+    color: RestoflowCategoryPalette.terracotta,
   ),
   DemoCategory(
     id: 'mains',
     name: 'Mains',
     icon: Icons.dinner_dining,
-    color: Color(0xFF0F766E),
+    color: RestoflowCategoryPalette.teal,
   ),
   DemoCategory(
     id: 'sides',
     name: 'Sides',
     icon: Icons.fastfood,
-    color: Color(0xFFB45309),
+    color: RestoflowCategoryPalette.amber,
   ),
   DemoCategory(
     id: 'drinks',
     name: 'Drinks',
     icon: Icons.local_bar,
-    color: Color(0xFF1D4ED8),
+    color: RestoflowCategoryPalette.blue,
   ),
   DemoCategory(
     id: 'coffee',
     name: 'Coffee',
     icon: Icons.local_cafe,
-    color: Color(0xFF6F4E37),
+    color: RestoflowCategoryPalette.coffee,
   ),
 ];
 

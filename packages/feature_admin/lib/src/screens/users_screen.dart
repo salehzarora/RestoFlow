@@ -185,7 +185,7 @@ class _UserTile extends StatelessWidget {
                       ],
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: RestoflowSpacing.xxs),
                   Text(
                     user.email,
                     style: theme.textTheme.bodySmall?.copyWith(

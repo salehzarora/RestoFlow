@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/demo_menu.dart';
@@ -172,12 +173,12 @@ const List<PosModifierGroup> kDemoModifierGroups = <PosModifierGroup>[
 /// A stable, data-driven icon/colour palette for REAL categories (the backend
 /// carries no iconography). Assigned by category order — presentation only.
 const List<(IconData, Color)> _kCategoryPalette = [
-  (Icons.lunch_dining, Color(0xFFE8590C)),
-  (Icons.dinner_dining, Color(0xFF0F766E)),
-  (Icons.fastfood, Color(0xFFB45309)),
-  (Icons.local_bar, Color(0xFF1D4ED8)),
-  (Icons.local_cafe, Color(0xFF6F4E37)),
-  (Icons.icecream, Color(0xFF9D174D)),
+  (Icons.lunch_dining, RestoflowCategoryPalette.terracotta),
+  (Icons.dinner_dining, RestoflowCategoryPalette.teal),
+  (Icons.fastfood, RestoflowCategoryPalette.amber),
+  (Icons.local_bar, RestoflowCategoryPalette.blue),
+  (Icons.local_cafe, RestoflowCategoryPalette.coffee),
+  (Icons.icecream, RestoflowCategoryPalette.berry),
 ];
 
 final posMenuProvider = FutureProvider<PosMenuData>((ref) async {

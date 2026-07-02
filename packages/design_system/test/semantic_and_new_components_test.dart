@@ -111,6 +111,20 @@ void main() {
     });
   });
 
+  group('RestoflowCategoryPalette', () {
+    test('carries six distinct warm accents in a stable order', () {
+      expect(RestoflowCategoryPalette.ordered, hasLength(6));
+      expect(
+        RestoflowCategoryPalette.ordered.toSet(),
+        hasLength(RestoflowCategoryPalette.ordered.length),
+      );
+      expect(
+        RestoflowCategoryPalette.ordered.first,
+        RestoflowCategoryPalette.terracotta,
+      );
+    });
+  });
+
   group('theme coverage', () {
     test('inputs, dialogs, sheets, buttons and typography are themed', () {
       final theme = restoflowBaseTheme();
