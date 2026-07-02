@@ -423,6 +423,7 @@ class _PricedChildSection extends ConsumerWidget {
     required this.parentId,
     required this.currencyCode,
     required this.rows,
+    this.embedded = false,
   });
 
   final String title;
@@ -432,6 +433,11 @@ class _PricedChildSection extends ConsumerWidget {
   final String parentId;
   final String currencyCode;
   final List<_PricedChildVm> rows;
+
+  /// When true the section renders WITHOUT its own card chrome (a plain
+  /// header row + rows) — used inside the modifier tiles so options stop
+  /// being a card-in-card-in-card.
+  final bool embedded;
 
   Future<void> _delete(BuildContext context, WidgetRef ref, String id) async {
     final l10n = AppLocalizations.of(context);
@@ -455,52 +461,85 @@ class _PricedChildSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final addButton = TextButton.icon(
+      onPressed: () => showPricedChildFormDialog(
+        context,
+        kind: kind,
+        parentId: parentId,
+        currencyCode: currencyCode,
+      ),
+      icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
+      label: Text(addLabel),
+    );
+    final content = rows.isEmpty
+        ? Padding(
+            padding: EdgeInsets.all(
+              embedded ? RestoflowSpacing.sm : RestoflowSpacing.lg,
+            ),
+            child: Text(
+              '—',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        : Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0) const Divider(height: 1),
+                _PricedChildRow(
+                  row: rows[i],
+                  currencyCode: currencyCode,
+                  onEdit: () => showPricedChildFormDialog(
+                    context,
+                    kind: kind,
+                    parentId: parentId,
+                    currencyCode: currencyCode,
+                    id: rows[i].id,
+                    initialName: rows[i].name,
+                    initialDeltaMinor: rows[i].deltaMinor,
+                    initialActive: rows[i].isActive,
+                  ),
+                  onDelete: () => _delete(context, ref, rows[i].id),
+                ),
+              ],
+            ],
+          );
+    if (embedded) {
+      // Chrome-free variant for nesting inside a modifier tile: a light
+      // header row + the option rows, no extra card/border/divider layers.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: RestoflowIconSizes.sm,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              addButton,
+            ],
+          ),
+          content,
+        ],
+      );
+    }
     return MenuSectionCard(
       title: title,
       icon: icon,
       contentPadding: EdgeInsets.zero,
-      trailing: TextButton.icon(
-        onPressed: () => showPricedChildFormDialog(
-          context,
-          kind: kind,
-          parentId: parentId,
-          currencyCode: currencyCode,
-        ),
-        icon: const Icon(Icons.add, size: 18),
-        label: Text(addLabel),
-      ),
-      child: rows.isEmpty
-          ? Padding(
-              padding: const EdgeInsets.all(RestoflowSpacing.lg),
-              child: Text(
-                '—',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            )
-          : Column(
-              children: [
-                for (var i = 0; i < rows.length; i++) ...[
-                  if (i > 0) const Divider(height: 1),
-                  _PricedChildRow(
-                    row: rows[i],
-                    currencyCode: currencyCode,
-                    onEdit: () => showPricedChildFormDialog(
-                      context,
-                      kind: kind,
-                      parentId: parentId,
-                      currencyCode: currencyCode,
-                      id: rows[i].id,
-                      initialName: rows[i].name,
-                      initialDeltaMinor: rows[i].deltaMinor,
-                      initialActive: rows[i].isActive,
-                    ),
-                    onDelete: () => _delete(context, ref, rows[i].id),
-                  ),
-                ],
-              ],
-            ),
+      trailing: addButton,
+      child: content,
     );
   }
 }
@@ -674,11 +713,13 @@ class _ModifierCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // A soft tinted tile, not another bordered card: the options list inside
+    // renders chrome-free (embedded), so the editor stops stacking three
+    // nested card borders.
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       padding: const EdgeInsets.all(RestoflowSpacing.md),
       child: Column(
@@ -686,8 +727,14 @@ class _ModifierCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              Icon(
+                Icons.layers_outlined,
+                size: RestoflowIconSizes.md,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
               Expanded(
-                child: Text(modifier.name, style: theme.textTheme.titleSmall),
+                child: Text(modifier.name, style: theme.textTheme.titleMedium),
               ),
               MenuEntityBadges(
                 isActive: modifier.isActive,
@@ -724,6 +771,9 @@ class _ModifierCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          const Divider(height: 1),
+          const SizedBox(height: RestoflowSpacing.sm),
           _PricedChildSection(
             title: l10n.menuOptionsHeading,
             icon: Icons.tonality,
@@ -731,6 +781,7 @@ class _ModifierCard extends StatelessWidget {
             kind: PricedChildKind.option,
             parentId: modifier.id,
             currencyCode: currencyCode,
+            embedded: true,
             rows: options
                 .map(
                   (o) => _PricedChildVm(

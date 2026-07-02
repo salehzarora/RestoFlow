@@ -29,6 +29,7 @@ class AdminUsersScreen extends ConsumerWidget {
         AdminPageHeader(
           title: l10n.adminUsersTitle,
           subtitle: l10n.adminUsersSubtitle,
+          icon: Icons.group_outlined,
           actions: [
             FilledButton.icon(
               onPressed: manage
@@ -56,7 +57,7 @@ class AdminUsersScreen extends ConsumerWidget {
                 );
               }
               return ListView(
-                padding: const EdgeInsets.fromLTRB(
+                padding: const EdgeInsetsDirectional.fromSTEB(
                   RestoflowSpacing.lg,
                   0,
                   RestoflowSpacing.lg,
@@ -203,11 +204,13 @@ class _UserTile extends StatelessWidget {
                         color: scheme.onSurfaceVariant,
                         icon: Icons.place_outlined,
                       ),
-                      AdminPill(
+                      AdminPill.tone(
                         label: revoked
                             ? l10n.adminStatusRevoked
                             : l10n.adminStatusActive,
-                        color: revoked ? scheme.error : scheme.primary,
+                        tone: revoked
+                            ? RestoflowTone.danger
+                            : RestoflowTone.success,
                         icon: revoked
                             ? Icons.block
                             : Icons.check_circle_outline,

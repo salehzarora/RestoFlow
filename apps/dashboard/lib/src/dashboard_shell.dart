@@ -116,7 +116,7 @@ class DashboardShell extends StatefulWidget {
   /// (demo mode / legacy tests).
   final Future<void> Function()? onSignOut;
 
-  static const double _wideBreakpoint = 900;
+  static const double _wideBreakpoint = RestoflowBreakpoints.wide;
 
   @override
   State<DashboardShell> createState() => _DashboardShellState();
@@ -237,8 +237,11 @@ class _DashboardShellState extends State<DashboardShell> {
                 if (isWide) {
                   return Row(
                     children: [
-                      _SideNav(selectedIndex: _index, onSelected: _select),
-                      const VerticalDivider(width: 1),
+                      _SideNav(
+                        destinations: _destinations(l10n),
+                        selectedIndex: _index,
+                        onSelected: _select,
+                      ),
                       Expanded(child: content),
                     ],
                   );
@@ -296,7 +299,7 @@ class _DashboardShellState extends State<DashboardShell> {
       children: [
         if (showSetup)
           Padding(
-            padding: const EdgeInsets.fromLTRB(
+            padding: const EdgeInsetsDirectional.fromSTEB(
               RestoflowSpacing.lg,
               RestoflowSpacing.md,
               RestoflowSpacing.lg,
@@ -333,7 +336,7 @@ class _DashboardShellState extends State<DashboardShell> {
       children: [
         if (demo)
           const Padding(
-            padding: EdgeInsets.fromLTRB(
+            padding: EdgeInsetsDirectional.fromSTEB(
               RestoflowSpacing.lg,
               RestoflowSpacing.md,
               RestoflowSpacing.lg,
@@ -361,7 +364,7 @@ class _DashboardShellState extends State<DashboardShell> {
     children: [
       if (demo)
         const Padding(
-          padding: EdgeInsets.fromLTRB(
+          padding: EdgeInsetsDirectional.fromSTEB(
             RestoflowSpacing.lg,
             RestoflowSpacing.md,
             RestoflowSpacing.lg,
@@ -380,53 +383,49 @@ class _DashboardShellState extends State<DashboardShell> {
     // scope => `list_menu` + `menu_upsert_*` against the backend, no demo
     // banner. Otherwise: the labelled demo store (demo mode / tests), or the
     // blocked state when no restaurant scope could be resolved.
+    //
+    // MenuManagementScreen renders its own page header (menuManagementTitle),
+    // so this wrapper adds NO title of its own — exactly one title on the tab.
     final readSource = widget.menuReadSource;
     final writer = widget.menuWriter;
     final real = readSource != null && writer != null && scope != null;
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: RestoflowSpacing.lg,
-        title: Text(l10n.menuManagementTitle),
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (real)
-            Expanded(
-              child: ProviderScope(
-                overrides: menuFeatureOverrides(
-                  scope: scope,
-                  readSource: readSource,
-                  writer: writer,
-                ),
-                child: const MenuManagementScreen(),
-              ),
-            )
-          else if (scope == null || store == null)
-            const Expanded(child: _MenuUnavailable())
-          else ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                RestoflowSpacing.lg,
-                RestoflowSpacing.md,
-                RestoflowSpacing.lg,
-                0,
-              ),
-              child: _MenuDemoBanner(message: l10n.menuDemoBanner),
+    if (real) {
+      return ProviderScope(
+        overrides: menuFeatureOverrides(
+          scope: scope,
+          readSource: readSource,
+          writer: writer,
+        ),
+        child: const MenuManagementScreen(),
+      );
+    }
+    if (scope == null || store == null) return const _MenuUnavailable();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            RestoflowSpacing.lg,
+            RestoflowSpacing.md,
+            RestoflowSpacing.lg,
+            0,
+          ),
+          child: RestoflowNoticeBanner(
+            icon: Icons.science_outlined,
+            body: l10n.menuDemoBanner,
+          ),
+        ),
+        Expanded(
+          child: ProviderScope(
+            overrides: menuFeatureOverrides(
+              scope: scope,
+              readSource: store,
+              writer: store,
             ),
-            Expanded(
-              child: ProviderScope(
-                overrides: menuFeatureOverrides(
-                  scope: scope,
-                  readSource: store,
-                  writer: store,
-                ),
-                child: const MenuManagementScreen(),
-              ),
-            ),
-          ],
-        ],
-      ),
+            child: const MenuManagementScreen(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -502,42 +501,53 @@ class _ShellHeaderBar extends StatelessWidget {
     final contextLabel = m == null
         ? l10n.dashboardAppTitle
         : '${m.organizationName} · ${m.branchName ?? m.restaurantName ?? m.organizationName}';
+    final scheme = theme.colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
+      padding: const EdgeInsetsDirectional.symmetric(
         horizontal: RestoflowSpacing.lg,
         vertical: RestoflowSpacing.sm,
       ),
-      color: theme.colorScheme.surfaceContainerHigh,
+      color: scheme.surfaceContainerHigh,
       child: Row(
         children: [
-          Icon(
-            Icons.storefront_outlined,
-            size: 18,
-            color: theme.colorScheme.primary,
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer,
+              borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+            ),
+            child: Icon(
+              Icons.storefront_outlined,
+              size: RestoflowIconSizes.sm,
+              color: scheme.onPrimaryContainer,
+            ),
           ),
           const SizedBox(width: RestoflowSpacing.sm),
           Expanded(
             child: Text(
               contextLabel,
-              style: theme.textTheme.bodySmall,
+              style: theme.textTheme.titleSmall,
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          const SizedBox(width: RestoflowSpacing.sm),
           RestoflowStatusPill(
             label: isReal ? l10n.dashboardModeReal : l10n.dashboardModeDemo,
             tone: isReal ? RestoflowTone.success : RestoflowTone.info,
             icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
           ),
+          const SizedBox(width: RestoflowSpacing.xs),
           // Sprint (I): the language switcher lives on the persistent header,
           // so it is visible on EVERY dashboard page.
           const LanguageSelector(),
           if (onSignOut != null) ...[
-            const SizedBox(width: RestoflowSpacing.sm),
+            const SizedBox(width: RestoflowSpacing.xs),
             IconButton(
               tooltip: l10n.authSignOut,
               onPressed: () => onSignOut!(),
-              icon: const Icon(Icons.logout, size: 20),
+              icon: const Icon(Icons.logout, size: RestoflowIconSizes.md),
             ),
           ],
         ],
@@ -554,43 +564,86 @@ class _MenuUnavailable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    return RestoflowStateView(
+      icon: Icons.store_mall_directory_outlined,
+      title: l10n.menuScopeUnavailableTitle,
+      message: l10n.menuScopeUnavailableBody,
+    );
+  }
+}
+
+/// The premium dark side panel (wide layout): a brand lockup on top and one
+/// tappable labelled row per destination. Colours come from the dark-sidebar
+/// palette in [RestoflowSemanticColors]; the active item gets a rounded brand
+/// fill, inactive items stay muted. RTL-safe (Rows + directional padding).
+class _SideNav extends StatelessWidget {
+  const _SideNav({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  final List<_NavItem> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  static const double _width = 240;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.xl),
+    final semantic =
+        theme.extension<RestoflowSemanticColors>() ??
+        RestoflowSemanticColors.of(theme.brightness);
+    return Material(
+      color: semantic.sidebarSurface,
+      child: SizedBox(
+        width: _width,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                shape: BoxShape.circle,
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                RestoflowSpacing.lg,
+                RestoflowSpacing.xl,
+                RestoflowSpacing.lg,
+                RestoflowSpacing.xl,
               ),
-              child: Icon(
-                Icons.store_mall_directory_outlined,
-                size: 30,
-                color: theme.colorScheme.primary,
+              child: Row(
+                children: [
+                  const RestoflowBrandMark(size: 40),
+                  const SizedBox(width: RestoflowSpacing.md),
+                  Expanded(
+                    child: Text(
+                      l10n.dashboardAppTitle,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: semantic.sidebarOnSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: RestoflowSpacing.lg),
-            Text(
-              l10n.menuScopeUnavailableTitle,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: RestoflowSpacing.xs),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Text(
-                l10n.menuScopeUnavailableBody,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsetsDirectional.fromSTEB(
+                  RestoflowSpacing.sm,
+                  0,
+                  RestoflowSpacing.sm,
+                  RestoflowSpacing.lg,
                 ),
+                children: [
+                  for (var i = 0; i < destinations.length; i++)
+                    _SideNavTile(
+                      item: destinations[i],
+                      selected: i == selectedIndex,
+                      semantic: semantic,
+                      onTap: () => onSelected(i),
+                    ),
+                ],
               ),
             ),
           ],
@@ -600,118 +653,64 @@ class _MenuUnavailable extends StatelessWidget {
   }
 }
 
-/// The branded wide-screen side navigation.
-class _SideNav extends StatelessWidget {
-  const _SideNav({required this.selectedIndex, required this.onSelected});
+/// One sidebar destination: icon + a visible, tappable label Text.
+class _SideNavTile extends StatelessWidget {
+  const _SideNavTile({
+    required this.item,
+    required this.selected,
+    required this.semantic,
+    required this.onTap,
+  });
 
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    return NavigationRail(
-      backgroundColor: scheme.surfaceContainer,
-      selectedIndex: selectedIndex,
-      onDestinationSelected: onSelected,
-      labelType: NavigationRailLabelType.all,
-      groupAlignment: -0.9,
-      leading: Padding(
-        padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.lg),
-        child: CircleAvatar(
-          radius: 22,
-          backgroundColor: scheme.primary,
-          child: Icon(Icons.restaurant, color: scheme.onPrimary),
-        ),
-      ),
-      destinations: [
-        NavigationRailDestination(
-          icon: const Icon(Icons.dashboard_outlined),
-          selectedIcon: const Icon(Icons.dashboard),
-          label: Text(l10n.dashboardNavOverview),
-        ),
-        NavigationRailDestination(
-          icon: const Icon(Icons.restaurant_menu_outlined),
-          selectedIcon: const Icon(Icons.restaurant_menu),
-          label: Text(l10n.dashboardNavMenu),
-        ),
-        NavigationRailDestination(
-          icon: const Icon(Icons.devices_outlined),
-          selectedIcon: const Icon(Icons.devices),
-          label: Text(l10n.dashboardNavDevices),
-        ),
-        NavigationRailDestination(
-          icon: const Icon(Icons.print_outlined),
-          selectedIcon: const Icon(Icons.print),
-          label: Text(l10n.dashboardNavPrinters),
-        ),
-        NavigationRailDestination(
-          icon: const Icon(Icons.badge_outlined),
-          selectedIcon: const Icon(Icons.badge),
-          label: Text(l10n.dashboardNavStaff),
-        ),
-        NavigationRailDestination(
-          icon: const Icon(Icons.table_restaurant_outlined),
-          selectedIcon: const Icon(Icons.table_restaurant),
-          label: Text(l10n.dashboardNavTables),
-        ),
-        NavigationRailDestination(
-          icon: const Icon(Icons.group_outlined),
-          selectedIcon: const Icon(Icons.group),
-          label: Text(l10n.dashboardNavUsers),
-        ),
-        NavigationRailDestination(
-          icon: const Icon(Icons.tune_outlined),
-          selectedIcon: const Icon(Icons.tune),
-          label: Text(l10n.dashboardNavSettings),
-        ),
-      ],
-    );
-  }
-}
-
-/// A professional demo banner: an accent bar, an icon, and the message.
-class _MenuDemoBanner extends StatelessWidget {
-  const _MenuDemoBanner({required this.message});
-
-  final String message;
+  final _NavItem item;
+  final bool selected;
+  final RestoflowSemanticColors semantic;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        border: BorderDirectional(
-          start: BorderSide(color: scheme.tertiary, width: 4),
-        ),
-      ),
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.md,
-        RestoflowSpacing.sm,
-        RestoflowSpacing.md,
-        RestoflowSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.science_outlined,
-            size: 20,
-            color: scheme.onTertiaryContainer,
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onTertiaryContainer,
-              ),
+    final foreground = selected
+        ? semantic.sidebarActiveForeground
+        : semantic.sidebarMuted;
+    final radius = BorderRadius.circular(RestoflowRadii.md);
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.xs),
+      child: Material(
+        color: selected ? semantic.sidebarActiveBackground : Colors.transparent,
+        borderRadius: radius,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.md,
+              RestoflowSpacing.md,
+              RestoflowSpacing.md,
+              RestoflowSpacing.md,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected ? item.selectedIcon : item.icon,
+                  size: RestoflowIconSizes.md,
+                  color: foreground,
+                ),
+                const SizedBox(width: RestoflowSpacing.md),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: foreground,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

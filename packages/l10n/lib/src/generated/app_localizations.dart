@@ -334,6 +334,18 @@ abstract class AppLocalizations {
   /// **'No active tickets'**
   String get kdsEmptyState;
 
+  /// Placeholder inside an empty KDS board column.
+  ///
+  /// In en, this message translates to:
+  /// **'No tickets'**
+  String get kdsColumnEmpty;
+
+  /// KDS warning pill when polling fails and the board shows cached (possibly stale) tickets.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing last synced tickets'**
+  String get kdsStaleBanner;
+
   /// KDS action that marks a ready ticket as bumped (done).
   ///
   /// In en, this message translates to:
@@ -2488,6 +2500,12 @@ abstract class AppLocalizations {
   /// **'Welcome to RestoFlow'**
   String get authWelcomeTitle;
 
+  /// Muted tagline under the brand mark on login/pairing screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant operating system'**
+  String get authBrandTagline;
+
   /// Segmented control option / action for signing in (RF-151).
   ///
   /// In en, this message translates to:
@@ -2613,6 +2631,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter the pairing code created in the restaurant dashboard to connect this device.'**
   String get pairingIntro;
+
+  /// Helper line on the pairing screen pointing to where codes are issued.
+  ///
+  /// In en, this message translates to:
+  /// **'Get a pairing code from the Dashboard → Devices tab.'**
+  String get pairingWhereCode;
 
   /// Pairing-code text-field label.
   ///

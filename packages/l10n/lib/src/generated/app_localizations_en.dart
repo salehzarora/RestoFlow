@@ -130,6 +130,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kdsEmptyState => 'No active tickets';
 
   @override
+  String get kdsColumnEmpty => 'No tickets';
+
+  @override
+  String get kdsStaleBanner => 'Offline — showing last synced tickets';
+
+  @override
   String get kdsBumpAction => 'Bump';
 
   @override
@@ -1258,6 +1264,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authWelcomeTitle => 'Welcome to RestoFlow';
 
   @override
+  String get authBrandTagline => 'Restaurant operating system';
+
+  @override
   String get authSignInTab => 'Sign in';
 
   @override
@@ -1325,6 +1334,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get pairingIntro =>
       'Enter the pairing code created in the restaurant dashboard to connect this device.';
+
+  @override
+  String get pairingWhereCode =>
+      'Get a pairing code from the Dashboard → Devices tab.';
 
   @override
   String get pairingCodeLabel => 'Pairing code';

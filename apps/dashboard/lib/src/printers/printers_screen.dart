@@ -73,16 +73,17 @@ class _PrintersScreenState extends State<PrintersScreen> {
         AdminPageHeader(
           title: l10n.printersTitle,
           subtitle: l10n.printersSubtitle,
+          icon: Icons.print_outlined,
           actions: [
             FilledButton.icon(
               onPressed: () => _showPrinterDialog(context),
-              icon: const Icon(Icons.add, size: 18),
+              icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
               label: Text(l10n.printersAdd),
             ),
           ],
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(
+          padding: const EdgeInsetsDirectional.fromSTEB(
             RestoflowSpacing.lg,
             0,
             RestoflowSpacing.lg,
@@ -125,7 +126,7 @@ class _PrintersScreenState extends State<PrintersScreen> {
       );
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.lg,
         0,
         RestoflowSpacing.lg,
@@ -134,7 +135,9 @@ class _PrintersScreenState extends State<PrintersScreen> {
       children: [
         for (final printer in snapshot.printers)
           Padding(
-            padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
+            padding: const EdgeInsetsDirectional.only(
+              bottom: RestoflowSpacing.sm,
+            ),
             child: _PrinterCard(
               printer: printer,
               snapshot: snapshot,
@@ -285,27 +288,29 @@ class _PrinterCard extends StatelessWidget {
     // Honest per-printer status. There is deliberately NO "ready" claim in
     // this build: [hasPrintAdapter] is a compile-time false, so the
     // "Ready via network adapter" pill stays unreachable until a real
-    // adapter is registered — never faked.
+    // adapter is registered — never faked. Statuses ride the TRUE semantic
+    // tones (danger red / warning amber / info blue / success green).
     final String statusLabel;
-    final Color statusColor;
+    final RestoflowTone statusTone;
     final IconData statusIcon;
     if (!printer.isEnabled) {
       statusLabel = l10n.printersStatusDisabled;
-      statusColor = scheme.error;
+      statusTone = RestoflowTone.danger;
       statusIcon = Icons.pause_circle_outline;
     } else if (printer.connectionType != PrinterConnectionType.network) {
       statusLabel = l10n.printersStatusNeedsBridge;
-      statusColor = scheme.tertiary;
+      statusTone = RestoflowTone.warning;
       statusIcon = Icons.extension_off_outlined;
     } else if (hasPrintAdapter) {
       statusLabel = l10n.printersStatusReadyNetwork;
-      statusColor = scheme.primary;
+      statusTone = RestoflowTone.success;
       statusIcon = Icons.check_circle_outline;
     } else {
       statusLabel = l10n.printersStatusConfigOnly;
-      statusColor = scheme.secondary;
+      statusTone = RestoflowTone.info;
       statusIcon = Icons.settings_outlined;
     }
+    final warningStyle = RestoflowTone.warning.styleOf(theme);
 
     return Card(
       elevation: 0,
@@ -321,14 +326,19 @@ class _PrinterCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: scheme.surfaceContainerHighest,
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(RestoflowRadii.md),
+                  ),
                   child: Icon(
                     isReceipt
                         ? Icons.receipt_long_outlined
                         : Icons.soup_kitchen_outlined,
-                    color: scheme.primary,
+                    size: RestoflowIconSizes.lg,
+                    color: scheme.onPrimaryContainer,
                   ),
                 ),
                 const SizedBox(width: RestoflowSpacing.md),
@@ -338,10 +348,10 @@ class _PrinterCard extends StatelessWidget {
                     children: [
                       Text(
                         printer.displayName,
-                        style: theme.textTheme.titleSmall,
+                        style: theme.textTheme.titleMedium,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: RestoflowSpacing.xxs),
                       Text(
                         [
                           connectionLabel,
@@ -356,29 +366,38 @@ class _PrinterCard extends StatelessWidget {
                     ],
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: RestoflowSpacing.sm),
+            // A Wrap, not a Row: long localized (Arabic/Hebrew) pill labels
+            // flow to the next line instead of overflowing the card.
+            Wrap(
+              spacing: RestoflowSpacing.xs,
+              runSpacing: RestoflowSpacing.xs,
+              children: [
                 AdminPill(
                   label: isReceipt
                       ? l10n.printersRoleReceipt
                       : l10n.printersRoleKitchen,
-                  color: isReceipt ? scheme.primary : scheme.tertiary,
+                  color: scheme.primary,
                   icon: isReceipt
                       ? Icons.receipt_long_outlined
                       : Icons.soup_kitchen_outlined,
                 ),
-                const SizedBox(width: RestoflowSpacing.xs),
-                AdminPill(
+                AdminPill.tone(
                   label: printer.isEnabled
                       ? l10n.printersEnabled
                       : l10n.printersDisabled,
-                  color: printer.isEnabled ? scheme.primary : scheme.error,
+                  tone: printer.isEnabled
+                      ? RestoflowTone.success
+                      : RestoflowTone.danger,
                   icon: printer.isEnabled
                       ? Icons.check_circle_outline
                       : Icons.pause_circle_outline,
                 ),
-                const SizedBox(width: RestoflowSpacing.xs),
-                AdminPill(
+                AdminPill.tone(
                   label: statusLabel,
-                  color: statusColor,
+                  tone: statusTone,
                   icon: statusIcon,
                 ),
               ],
@@ -387,13 +406,17 @@ class _PrinterCard extends StatelessWidget {
               const SizedBox(height: RestoflowSpacing.sm),
               Row(
                 children: [
-                  Icon(Icons.info_outline, size: 14, color: scheme.tertiary),
+                  Icon(
+                    Icons.info_outline,
+                    size: RestoflowIconSizes.xs,
+                    color: warningStyle.accent,
+                  ),
                   const SizedBox(width: RestoflowSpacing.xs),
                   Expanded(
                     child: Text(
                       l10n.printersConnConfigOnly,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.tertiary,
+                        color: warningStyle.accent,
                       ),
                     ),
                   ),
@@ -404,7 +427,11 @@ class _PrinterCard extends StatelessWidget {
               const SizedBox(height: RestoflowSpacing.sm),
               Row(
                 children: [
-                  Icon(Icons.route_outlined, size: 14, color: scheme.primary),
+                  Icon(
+                    Icons.route_outlined,
+                    size: RestoflowIconSizes.xs,
+                    color: scheme.primary,
+                  ),
                   const SizedBox(width: RestoflowSpacing.xs),
                   Expanded(
                     child: Text(
@@ -442,18 +469,25 @@ class _PrinterCard extends StatelessWidget {
                 const Spacer(),
                 TextButton.icon(
                   onPressed: onRoute,
-                  icon: const Icon(Icons.route_outlined, size: 18),
+                  icon: const Icon(
+                    Icons.route_outlined,
+                    size: RestoflowIconSizes.sm,
+                  ),
                   label: Text(l10n.printersRoute),
                 ),
                 TextButton.icon(
                   onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: RestoflowIconSizes.sm,
+                  ),
                   label: Text(l10n.printersEdit),
                 ),
                 IconButton(
                   tooltip: l10n.printersDelete,
+                  style: RestoflowButtonStyles.dangerGhost(context),
                   onPressed: onDelete,
-                  icon: Icon(Icons.delete_outline, color: scheme.error),
+                  icon: const Icon(Icons.delete_outline),
                 ),
               ],
             ),
@@ -565,7 +599,7 @@ class _PrinterDialogState extends State<_PrinterDialog> {
         widget.printer == null ? l10n.printersAdd : l10n.printersEdit,
       ),
       content: SizedBox(
-        width: 420,
+        width: RestoflowPanelWidths.dialog,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -573,6 +607,8 @@ class _PrinterDialogState extends State<_PrinterDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _WizardStepDots(current: _step, total: _stepDetails + 1),
+                const SizedBox(height: RestoflowSpacing.md),
                 Text(stepTitle, style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: RestoflowSpacing.md),
                 ...switch (_step) {
@@ -769,6 +805,37 @@ class _PrinterDialogState extends State<_PrinterDialog> {
   }
 }
 
+/// A quiet, textless step indicator for the guided wizard: one dot per step,
+/// the current one stretched and brand-filled. Static (no animation loops).
+class _WizardStepDots extends StatelessWidget {
+  const _WizardStepDots({required this.current, required this.total});
+
+  final int current;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        for (var i = 0; i < total; i++) ...[
+          if (i > 0) const SizedBox(width: RestoflowSpacing.xs),
+          Container(
+            width: i == current ? 24 : 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: i <= current
+                  ? scheme.primary
+                  : scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 /// One big selectable wizard choice (purpose / connection type): a bordered
 /// card with a radio affordance, highlighted when selected. The optional
 /// [hint] renders under the title (the wizard uses it for the always-visible
@@ -797,33 +864,51 @@ class _ChoiceTile extends StatelessWidget {
       elevation: 0,
       margin: EdgeInsets.zero,
       color: selected
-          ? scheme.primary.withValues(alpha: 0.08)
+          ? scheme.primaryContainer.withValues(alpha: 0.45)
           : scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: borderRadius,
         side: BorderSide(
           color: selected ? scheme.primary : scheme.outlineVariant,
-          width: selected ? 1.5 : 1,
+          width: selected ? 2 : 1,
         ),
       ),
       child: InkWell(
         borderRadius: borderRadius,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(RestoflowSpacing.md),
+          padding: const EdgeInsets.all(RestoflowSpacing.lg),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                icon,
-                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? scheme.primaryContainer
+                      : scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+                ),
+                child: Icon(
+                  icon,
+                  size: RestoflowIconSizes.md,
+                  color: selected
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(width: RestoflowSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: theme.textTheme.titleSmall),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(
+                        top: RestoflowSpacing.xs,
+                      ),
+                      child: Text(title, style: theme.textTheme.titleSmall),
+                    ),
                     if (hint != null) ...[
                       const SizedBox(height: RestoflowSpacing.xs),
                       Text(

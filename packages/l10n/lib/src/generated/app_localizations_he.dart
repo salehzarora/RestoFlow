@@ -130,6 +130,12 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kdsEmptyState => 'אין כרטיסים פעילים';
 
   @override
+  String get kdsColumnEmpty => 'אין כרטיסים';
+
+  @override
+  String get kdsStaleBanner => 'לא מחובר — מוצגים הכרטיסים האחרונים שסונכרנו';
+
+  @override
   String get kdsBumpAction => 'סיום';
 
   @override
@@ -1247,6 +1253,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get authWelcomeTitle => 'ברוכים הבאים ל-RestoFlow';
 
   @override
+  String get authBrandTagline => 'מערכת הפעלה למסעדות';
+
+  @override
   String get authSignInTab => 'התחברות';
 
   @override
@@ -1310,6 +1319,9 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get pairingIntro =>
       'הזינו את קוד הצימוד שנוצר בלוח הבקרה של המסעדה כדי לחבר את המכשיר.';
+
+  @override
+  String get pairingWhereCode => 'קבלו קוד צימוד מלוח הבקרה ← לשונית מכשירים.';
 
   @override
   String get pairingCodeLabel => 'קוד צימוד';

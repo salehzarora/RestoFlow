@@ -49,10 +49,14 @@ class _StaffScreenState extends State<StaffScreen> {
         AdminPageHeader(
           title: l10n.staffTitle,
           subtitle: l10n.staffSubtitle,
+          icon: Icons.badge_outlined,
           actions: [
             FilledButton.icon(
               onPressed: () => _showCreateDialog(context),
-              icon: const Icon(Icons.person_add_alt, size: 18),
+              icon: const Icon(
+                Icons.person_add_alt,
+                size: RestoflowIconSizes.sm,
+              ),
               label: Text(l10n.staffAdd),
             ),
           ],
@@ -88,7 +92,7 @@ class _StaffScreenState extends State<StaffScreen> {
     }
     final missingPins = staff.where((s) => s.isActive && !s.hasPin).isNotEmpty;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.lg,
         0,
         RestoflowSpacing.lg,
@@ -105,7 +109,9 @@ class _StaffScreenState extends State<StaffScreen> {
         ],
         for (final member in staff)
           Padding(
-            padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
+            padding: const EdgeInsetsDirectional.only(
+              bottom: RestoflowSpacing.sm,
+            ),
             child: _StaffCard(
               member: member,
               onSetPin: () => _showPinDialog(context, member),
@@ -188,10 +194,18 @@ class _StaffCard extends StatelessWidget {
         padding: const EdgeInsets.all(RestoflowSpacing.md),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: scheme.surfaceContainerHighest,
-              child: Icon(Icons.badge_outlined, color: scheme.primary),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              ),
+              child: Icon(
+                Icons.badge_outlined,
+                size: RestoflowIconSizes.lg,
+                color: scheme.onPrimaryContainer,
+              ),
             ),
             const SizedBox(width: RestoflowSpacing.md),
             Expanded(
@@ -200,10 +214,10 @@ class _StaffCard extends StatelessWidget {
                 children: [
                   Text(
                     member.displayName,
-                    style: theme.textTheme.titleSmall,
+                    style: theme.textTheme.titleMedium,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: RestoflowSpacing.xxs),
                   Text(
                     adminRoleLabel(l10n, member.role),
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -214,22 +228,24 @@ class _StaffCard extends StatelessWidget {
               ),
             ),
             if (!member.isActive) ...[
-              AdminPill(
+              AdminPill.tone(
                 label: l10n.staffInactive,
-                color: scheme.error,
+                tone: RestoflowTone.danger,
                 icon: Icons.pause_circle_outline,
               ),
               const SizedBox(width: RestoflowSpacing.xs),
             ],
-            AdminPill(
+            AdminPill.tone(
               label: member.hasPin ? l10n.staffPinSet : l10n.staffNoPin,
-              color: member.hasPin ? scheme.primary : scheme.error,
+              tone: member.hasPin
+                  ? RestoflowTone.success
+                  : RestoflowTone.danger,
               icon: member.hasPin ? Icons.pin_outlined : Icons.priority_high,
             ),
             const SizedBox(width: RestoflowSpacing.sm),
             FilledButton.tonalIcon(
               onPressed: member.isActive ? onSetPin : null,
-              icon: const Icon(Icons.password, size: 18),
+              icon: const Icon(Icons.password, size: RestoflowIconSizes.sm),
               label: Text(
                 member.hasPin ? l10n.staffResetPin : l10n.staffSetPin,
               ),

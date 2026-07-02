@@ -178,7 +178,7 @@ class _ItemTile extends StatelessWidget {
                     ),
                     if (item.description != null &&
                         item.description!.trim().isNotEmpty) ...[
-                      const SizedBox(height: RestoflowSpacing.xs / 2),
+                      const SizedBox(height: RestoflowSpacing.xxs),
                       Text(
                         item.description!,
                         style: theme.textTheme.bodySmall?.copyWith(

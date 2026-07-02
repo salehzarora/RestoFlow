@@ -38,10 +38,11 @@ class AdminSettingsScreen extends ConsumerWidget {
           AdminPageHeader(
             title: l10n.adminSettingsTitle,
             subtitle: l10n.adminSettingsSubtitle,
+            icon: Icons.tune_outlined,
           ),
           if (!canEdit)
             const Padding(
-              padding: EdgeInsets.fromLTRB(
+              padding: EdgeInsetsDirectional.fromSTEB(
                 RestoflowSpacing.lg,
                 0,
                 RestoflowSpacing.lg,

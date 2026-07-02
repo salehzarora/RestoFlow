@@ -60,10 +60,11 @@ class _TablesScreenState extends State<TablesScreen> {
         AdminPageHeader(
           title: l10n.tablesTitle,
           subtitle: l10n.tablesSubtitle,
+          icon: Icons.table_restaurant_outlined,
           actions: [
             FilledButton.icon(
               onPressed: () => _showTableDialog(context),
-              icon: const Icon(Icons.add, size: 18),
+              icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
               label: Text(l10n.tablesAdd),
             ),
           ],
@@ -97,30 +98,37 @@ class _TablesScreenState extends State<TablesScreen> {
         body: l10n.tablesEmptyBody,
         action: FilledButton.icon(
           onPressed: () => _showTableDialog(context),
-          icon: const Icon(Icons.add, size: 18),
+          icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
           label: Text(l10n.tablesAdd),
         ),
       );
     }
+    // A floor-manager grid: one status-coloured tile per table.
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.lg,
         0,
         RestoflowSpacing.lg,
         RestoflowSpacing.xxl,
       ),
       children: [
-        for (final table in tables)
-          Padding(
-            padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
-            child: _TableCard(
-              table: table,
-              onSetStatus: (status) =>
-                  _run(() => widget.repository.setStatus(table.id, status)),
-              onEdit: () => _showTableDialog(context, table: table),
-              onDelete: () => _confirmDelete(context, table),
-            ),
-          ),
+        Wrap(
+          spacing: RestoflowSpacing.md,
+          runSpacing: RestoflowSpacing.md,
+          children: [
+            for (final table in tables)
+              SizedBox(
+                width: 280,
+                child: _TableCard(
+                  table: table,
+                  onSetStatus: (status) =>
+                      _run(() => widget.repository.setStatus(table.id, status)),
+                  onEdit: () => _showTableDialog(context, table: table),
+                  onDelete: () => _confirmDelete(context, table),
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -178,39 +186,40 @@ class _TablesScreenState extends State<TablesScreen> {
   }
 }
 
-/// The localized label + tone colour + icon for a table status. Colours ride
-/// the shared semantic tones (success/warning/info/danger), so the pills stay
-/// themeable (no hardcoded palette).
-({String label, Color color, IconData icon}) _statusVisual(
+/// The localized label + semantic tone + icon for a table status. Tones ride
+/// the shared TRUE semantic palette (success/warning/info/danger), so the
+/// tiles stay themeable (no hardcoded palette).
+({String label, RestoflowTone tone, IconData icon}) _statusVisual(
   BuildContext context,
   DiningTableStatus status,
 ) {
   final l10n = AppLocalizations.of(context);
-  final scheme = Theme.of(context).colorScheme;
   return switch (status) {
     DiningTableStatus.available => (
       label: l10n.tablesStatusAvailable,
-      color: RestoflowTone.success.style(scheme).accent,
+      tone: RestoflowTone.success,
       icon: Icons.check_circle_outline,
     ),
     DiningTableStatus.occupied => (
       label: l10n.tablesStatusOccupied,
-      color: RestoflowTone.warning.style(scheme).accent,
+      tone: RestoflowTone.warning,
       icon: Icons.people_alt_outlined,
     ),
     DiningTableStatus.reserved => (
       label: l10n.tablesStatusReserved,
-      color: RestoflowTone.info.style(scheme).accent,
+      tone: RestoflowTone.info,
       icon: Icons.event_seat_outlined,
     ),
     DiningTableStatus.outOfService => (
       label: l10n.tablesStatusOutOfService,
-      color: RestoflowTone.danger.style(scheme).accent,
+      tone: RestoflowTone.danger,
       icon: Icons.block_outlined,
     ),
   };
 }
 
+/// One floor tile: a status accent edge, a big table label, the seats/area
+/// meta, status + inactive pills, and the per-table actions.
 class _TableCard extends StatelessWidget {
   const _TableCard({
     required this.table,
@@ -230,132 +239,172 @@ class _TableCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final status = _statusVisual(context, table.status);
+    final statusStyle = status.tone.styleOf(theme);
     final detail = [
       if (table.seats != null) '${l10n.tablesFieldSeats}: ${table.seats}',
       if (table.area != null) table.area!,
     ].join(' · ');
 
-    return Card(
-      elevation: 0,
-      color: scheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(RestoflowRadii.lg),
-        side: BorderSide(color: scheme.outlineVariant),
+        border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.md),
-        child: Column(
+      // IntrinsicHeight: the tile sits in a Wrap (unbounded height), so the
+      // stretched accent edge needs the row's intrinsic height as its bound.
+      child: IntrinsicHeight(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: scheme.surfaceContainerHighest,
-                  child: Icon(
-                    Icons.table_restaurant_outlined,
-                    color: scheme.primary,
-                  ),
-                ),
-                const SizedBox(width: RestoflowSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        table.label,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+            // The status accent edge (start side; mirrors under RTL).
+            Container(width: 6, color: statusStyle.accent),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(RestoflowSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            table.label,
+                            style: theme.textTheme.titleLarge,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (detail.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          detail,
-                          style: theme.textTheme.bodySmall?.copyWith(
+                        const SizedBox(width: RestoflowSpacing.sm),
+                        Icon(
+                          Icons.table_restaurant_outlined,
+                          size: RestoflowIconSizes.md,
+                          color: statusStyle.accent,
+                        ),
+                      ],
+                    ),
+                    if (detail.isNotEmpty) ...[
+                      const SizedBox(height: RestoflowSpacing.xxs),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.event_seat_outlined,
+                            size: RestoflowIconSizes.xs,
                             color: scheme.onSurfaceVariant,
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (!table.isActive) ...[
-                  AdminPill(
-                    label: l10n.tablesInactive,
-                    color: scheme.error,
-                    icon: Icons.pause_circle_outline,
-                  ),
-                  const SizedBox(width: RestoflowSpacing.xs),
-                ],
-                AdminPill(
-                  label: status.label,
-                  color: status.color,
-                  icon: status.icon,
-                ),
-              ],
-            ),
-            const SizedBox(height: RestoflowSpacing.sm),
-            Row(
-              children: [
-                PopupMenuButton<DiningTableStatus>(
-                  tooltip: l10n.tablesSetStatus,
-                  onSelected: onSetStatus,
-                  itemBuilder: (context) => [
-                    for (final value in DiningTableStatus.values)
-                      PopupMenuItem(
-                        value: value,
-                        child: Row(
-                          children: [
-                            Icon(
-                              _statusVisual(context, value).icon,
-                              size: 18,
-                              color: _statusVisual(context, value).color,
+                          const SizedBox(width: RestoflowSpacing.xs),
+                          Expanded(
+                            child: Text(
+                              detail,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(width: RestoflowSpacing.sm),
-                            Text(_statusVisual(context, value).label),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: RestoflowSpacing.sm,
-                      vertical: RestoflowSpacing.xs,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    ],
+                    const SizedBox(height: RestoflowSpacing.sm),
+                    Wrap(
+                      spacing: RestoflowSpacing.xs,
+                      runSpacing: RestoflowSpacing.xs,
                       children: [
-                        Icon(
-                          Icons.swap_horiz_outlined,
-                          size: 18,
-                          color: scheme.primary,
+                        AdminPill.tone(
+                          label: status.label,
+                          tone: status.tone,
+                          icon: status.icon,
                         ),
-                        const SizedBox(width: RestoflowSpacing.xs),
-                        Text(
-                          l10n.tablesSetStatus,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: scheme.primary,
+                        if (!table.isActive)
+                          AdminPill.tone(
+                            label: l10n.tablesInactive,
+                            tone: RestoflowTone.danger,
+                            icon: Icons.pause_circle_outline,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: RestoflowSpacing.sm),
+                    Row(
+                      children: [
+                        // Expanded + ellipsis: the trigger label must never
+                        // overflow the 280px tile (long ar/he labels).
+                        Expanded(
+                          child: PopupMenuButton<DiningTableStatus>(
+                            tooltip: l10n.tablesSetStatus,
+                            onSelected: onSetStatus,
+                            itemBuilder: (context) => [
+                              for (final value in DiningTableStatus.values)
+                                PopupMenuItem(
+                                  value: value,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _statusVisual(context, value).icon,
+                                        size: RestoflowIconSizes.sm,
+                                        color: _statusVisual(
+                                          context,
+                                          value,
+                                        ).tone.styleOf(theme).accent,
+                                      ),
+                                      const SizedBox(
+                                        width: RestoflowSpacing.sm,
+                                      ),
+                                      Text(_statusVisual(context, value).label),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                            child: Padding(
+                              padding: const EdgeInsetsDirectional.symmetric(
+                                horizontal: RestoflowSpacing.sm,
+                                vertical: RestoflowSpacing.xs,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.swap_horiz_outlined,
+                                    size: RestoflowIconSizes.sm,
+                                    color: scheme.primary,
+                                  ),
+                                  const SizedBox(width: RestoflowSpacing.xs),
+                                  Flexible(
+                                    child: Text(
+                                      l10n.tablesSetStatus,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.labelLarge
+                                          ?.copyWith(color: scheme.primary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: l10n.tablesEdit,
+                          onPressed: onEdit,
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            size: RestoflowIconSizes.md,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: l10n.tablesDelete,
+                          style: RestoflowButtonStyles.dangerGhost(context),
+                          onPressed: onDelete,
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: RestoflowIconSizes.md,
                           ),
                         ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: Text(l10n.tablesEdit),
-                ),
-                IconButton(
-                  tooltip: l10n.tablesDelete,
-                  onPressed: onDelete,
-                  icon: Icon(Icons.delete_outline, color: scheme.error),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -430,7 +479,7 @@ class _TableDialogState extends State<_TableDialog> {
     return AlertDialog(
       title: Text(widget.table == null ? l10n.tablesAdd : l10n.tablesEdit),
       content: SizedBox(
-        width: 420,
+        width: RestoflowPanelWidths.dialog,
         child: Form(
           key: _formKey,
           child: Column(

@@ -31,6 +31,7 @@ class AdminDevicesScreen extends ConsumerWidget {
         AdminPageHeader(
           title: l10n.adminDevicesTitle,
           subtitle: l10n.adminDevicesSubtitle,
+          icon: Icons.devices_outlined,
           actions: [
             FilledButton.icon(
               onPressed: manage
@@ -58,7 +59,7 @@ class AdminDevicesScreen extends ConsumerWidget {
                 );
               }
               return ListView(
-                padding: const EdgeInsets.fromLTRB(
+                padding: const EdgeInsetsDirectional.fromSTEB(
                   RestoflowSpacing.lg,
                   0,
                   RestoflowSpacing.lg,
@@ -69,7 +70,7 @@ class AdminDevicesScreen extends ConsumerWidget {
                   const SizedBox(height: RestoflowSpacing.md),
                   for (final d in list)
                     Padding(
-                      padding: const EdgeInsets.only(
+                      padding: const EdgeInsetsDirectional.only(
                         bottom: RestoflowSpacing.sm,
                       ),
                       child: _DeviceTile(device: d, canManage: manage),
@@ -100,7 +101,11 @@ class _LifecycleNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.route_outlined, size: 18, color: scheme.primary),
+          Icon(
+            Icons.route_outlined,
+            size: RestoflowIconSizes.sm,
+            color: scheme.primary,
+          ),
           const SizedBox(width: RestoflowSpacing.sm),
           Expanded(
             child: Text(
@@ -265,12 +270,8 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
     return FilledButton.tonalIcon(
       onPressed: _busy ? null : spec.run,
       icon: _busy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(spec.icon, size: 18),
+          ? const RestoflowInlineSpinner(size: 16)
+          : Icon(spec.icon, size: RestoflowIconSizes.sm),
       label: Text(spec.label),
     );
   }
@@ -280,8 +281,20 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final semantic =
+        theme.extension<RestoflowSemanticColors>() ??
+        RestoflowSemanticColors.of(theme.brightness);
     final visual = deviceStatusVisual(context, widget.device.status);
     final isKds = widget.device.deviceType == 'kds';
+    final warningStyle = RestoflowTone.warning.styleOf(theme);
+    // POS vs KDS at a glance: distinct icon + a distinctly tinted badge.
+    final typeIcon = isKds ? Icons.countertops_outlined : Icons.point_of_sale;
+    final typeBackground = isKds
+        ? semantic.infoContainer
+        : semantic.accentContainer;
+    final typeForeground = isKds
+        ? semantic.onInfoContainer
+        : semantic.onAccentContainer;
     return Card(
       elevation: 0,
       color: scheme.surfaceContainerLow,
@@ -296,12 +309,17 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: scheme.surfaceContainerHighest,
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: typeBackground,
+                    borderRadius: BorderRadius.circular(RestoflowRadii.md),
+                  ),
                   child: Icon(
-                    isKds ? Icons.kitchen_outlined : Icons.point_of_sale,
-                    color: scheme.primary,
+                    typeIcon,
+                    size: RestoflowIconSizes.lg,
+                    color: typeForeground,
                   ),
                 ),
                 const SizedBox(width: RestoflowSpacing.md),
@@ -311,23 +329,38 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                     children: [
                       Text(
                         widget.device.label,
-                        style: theme.textTheme.titleSmall,
+                        style: theme.textTheme.titleMedium,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${isKds ? l10n.adminDeviceTypeKds : l10n.adminDeviceTypePos} · ${widget.device.branchLabel}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: RestoflowSpacing.xxs),
+                      Wrap(
+                        spacing: RestoflowSpacing.sm,
+                        runSpacing: RestoflowSpacing.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          AdminPill(
+                            label: isKds
+                                ? l10n.adminDeviceTypeKds
+                                : l10n.adminDeviceTypePos,
+                            color: typeForeground,
+                            icon: typeIcon,
+                          ),
+                          Text(
+                            widget.device.branchLabel,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                AdminPill(
+                const SizedBox(width: RestoflowSpacing.sm),
+                AdminPill.tone(
                   label: visual.label,
-                  color: visual.color,
+                  tone: visual.tone,
                   icon: visual.icon,
                 ),
               ],
@@ -336,12 +369,16 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
               const SizedBox(height: RestoflowSpacing.sm),
               Row(
                 children: [
-                  Icon(Icons.bolt, size: 14, color: scheme.primary),
+                  Icon(
+                    Icons.bolt,
+                    size: RestoflowIconSizes.xs,
+                    color: semantic.success,
+                  ),
                   const SizedBox(width: RestoflowSpacing.xs),
                   Text(
                     l10n.adminSessionOpen,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: scheme.primary,
+                      color: semantic.success,
                     ),
                   ),
                 ],
@@ -354,13 +391,17 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
               const SizedBox(height: RestoflowSpacing.sm),
               Row(
                 children: [
-                  Icon(Icons.smartphone, size: 14, color: scheme.tertiary),
+                  Icon(
+                    Icons.smartphone,
+                    size: RestoflowIconSizes.xs,
+                    color: warningStyle.accent,
+                  ),
                   const SizedBox(width: RestoflowSpacing.xs),
                   Expanded(
                     child: Text(
                       l10n.adminPairOnDevice,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.tertiary,
+                        color: warningStyle.accent,
                       ),
                     ),
                   ),
@@ -374,12 +415,13 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                 children: [
                   if (_revocable)
                     TextButton.icon(
+                      style: RestoflowButtonStyles.dangerGhost(context),
                       onPressed: _busy ? null : _revoke,
-                      icon: Icon(Icons.block, size: 18, color: scheme.error),
-                      label: Text(
-                        l10n.adminRevoke,
-                        style: TextStyle(color: scheme.error),
+                      icon: const Icon(
+                        Icons.block,
+                        size: RestoflowIconSizes.sm,
                       ),
+                      label: Text(l10n.adminRevoke),
                     ),
                   if (_action() case final action?) ...[
                     const SizedBox(width: RestoflowSpacing.sm),

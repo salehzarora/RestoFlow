@@ -156,6 +156,14 @@
   "@kdsEmptyState": {
     "description": "KDS message shown when there are no tickets to display."
   },
+  "kdsColumnEmpty": "No tickets",
+  "@kdsColumnEmpty": {
+    "description": "Placeholder inside an empty KDS board column."
+  },
+  "kdsStaleBanner": "Offline — showing last synced tickets",
+  "@kdsStaleBanner": {
+    "description": "KDS warning pill when polling fails and the board shows cached (possibly stale) tickets."
+  },
   "kdsBumpAction": "Bump",
   "@kdsBumpAction": {
     "description": "KDS action that marks a ready ticket as bumped (done)."
@@ -1168,6 +1176,8 @@
   "adminDeviceUpdated": "Device updated",
   "authWelcomeTitle": "Welcome to RestoFlow",
   "@authWelcomeTitle": {"description": "Heading on the dashboard sign-in / create-account screen (RF-151)."},
+  "authBrandTagline": "Restaurant operating system",
+  "@authBrandTagline": {"description": "Muted tagline under the brand mark on login/pairing screens."},
   "authSignInTab": "Sign in",
   "@authSignInTab": {"description": "Segmented control option / action for signing in (RF-151)."},
   "authCreateAccountTab": "Create account",
@@ -1210,6 +1220,8 @@
   "@pairingTitle": {"description": "Heading on the POS/KDS device pairing screen (RF-153)."},
   "pairingIntro": "Enter the pairing code created in the restaurant dashboard to connect this device.",
   "@pairingIntro": {"description": "Intro text on the device pairing screen."},
+  "pairingWhereCode": "Get a pairing code from the Dashboard → Devices tab.",
+  "@pairingWhereCode": {"description": "Helper line on the pairing screen pointing to where codes are issued."},
   "pairingCodeLabel": "Pairing code",
   "@pairingCodeLabel": {"description": "Pairing-code text-field label."},
   "pairingCodeRequired": "Enter the pairing code",

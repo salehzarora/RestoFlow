@@ -130,6 +130,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kdsEmptyState => 'لا توجد تذاكر نشطة';
 
   @override
+  String get kdsColumnEmpty => 'لا توجد تذاكر';
+
+  @override
+  String get kdsStaleBanner => 'غير متصل — تُعرض آخر التذاكر المتزامنة';
+
+  @override
   String get kdsBumpAction => 'إنهاء';
 
   @override
@@ -1254,6 +1260,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get authWelcomeTitle => 'مرحبًا بك في RestoFlow';
 
   @override
+  String get authBrandTagline => 'نظام تشغيل المطاعم';
+
+  @override
   String get authSignInTab => 'تسجيل الدخول';
 
   @override
@@ -1318,6 +1327,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get pairingIntro =>
       'أدخل رمز الاقتران الذي أُنشئ في لوحة تحكم المطعم لربط هذا الجهاز.';
+
+  @override
+  String get pairingWhereCode =>
+      'احصل على رمز الاقتران من لوحة التحكم ← تبويب الأجهزة.';
 
   @override
   String get pairingCodeLabel => 'رمز الاقتران';

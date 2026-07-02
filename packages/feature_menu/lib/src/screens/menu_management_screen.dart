@@ -22,7 +22,7 @@ import 'item_editor_screen.dart';
 class MenuManagementScreen extends ConsumerStatefulWidget {
   const MenuManagementScreen({super.key});
 
-  static const double _wideBreakpoint = 900;
+  static const double _wideBreakpoint = RestoflowBreakpoints.wide;
 
   @override
   ConsumerState<MenuManagementScreen> createState() =>
@@ -98,7 +98,7 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(
+          padding: const EdgeInsetsDirectional.fromSTEB(
             RestoflowSpacing.lg,
             RestoflowSpacing.lg,
             RestoflowSpacing.lg,
@@ -226,7 +226,10 @@ class _MasterDetail extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(width: 360, child: _categoryList()),
+              SizedBox(
+                width: RestoflowPanelWidths.masterPane,
+                child: _categoryList(),
+              ),
               const VerticalDivider(width: 1),
               Expanded(child: _itemsPanel(context)),
             ],

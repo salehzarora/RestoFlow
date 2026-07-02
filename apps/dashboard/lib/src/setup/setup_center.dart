@@ -142,6 +142,39 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
         String value(int? part, int? total) => loading || total == null
             ? l10n.setupMetricUnavailable
             : '$part/$total';
+        // A dimension is "ready" once at least one live thing exists in it.
+        bool ready(int? part, int? total) =>
+            !loading && total != null && (part ?? 0) > 0;
+        // Unknown counts (loading / failed load) stay neutral — never a fake
+        // green or a false alarm.
+        RestoflowTone? tone(int? part, int? total) => loading || total == null
+            ? null
+            : (ready(part, total)
+                  ? RestoflowTone.success
+                  : RestoflowTone.warning);
+
+        final dimensions = <({bool countable, bool done})>[
+          (
+            countable: _menuCountable,
+            done: ready(counts.menuActive, counts.menuTotal),
+          ),
+          (
+            countable: true,
+            done: ready(counts.devicesActive, counts.devicesTotal),
+          ),
+          (
+            countable: true,
+            done: ready(counts.printersEnabled, counts.printersTotal),
+          ),
+          (
+            countable: true,
+            done: ready(counts.staffWithPin, counts.staffTotal),
+          ),
+        ].where((d) => d.countable).toList();
+        final progress = dimensions.isEmpty
+            ? 0.0
+            : dimensions.where((d) => d.done).length / dimensions.length;
+
         return RestoflowSectionCard(
           title: l10n.setupTitle,
           subtitle: l10n.setupSubtitle,
@@ -151,6 +184,11 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
             icon: const Icon(Icons.refresh),
           ),
           children: [
+            const SizedBox(height: RestoflowSpacing.md),
+            if (!loading) ...[
+              _SetupProgressBar(value: progress),
+              const SizedBox(height: RestoflowSpacing.md),
+            ],
             Wrap(
               spacing: RestoflowSpacing.md,
               runSpacing: RestoflowSpacing.md,
@@ -163,6 +201,7 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
                       value: value(counts.menuActive, counts.menuTotal),
                       caption: l10n.setupMenuCaption,
                       icon: Icons.restaurant_menu_outlined,
+                      tone: tone(counts.menuActive, counts.menuTotal),
                       onTap: widget.onOpenMenu,
                     ),
                   ),
@@ -173,6 +212,7 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
                     value: value(counts.devicesActive, counts.devicesTotal),
                     caption: l10n.setupDevicesCaption,
                     icon: Icons.devices_outlined,
+                    tone: tone(counts.devicesActive, counts.devicesTotal),
                     onTap: widget.onOpenDevices,
                   ),
                 ),
@@ -183,6 +223,7 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
                     value: value(counts.printersEnabled, counts.printersTotal),
                     caption: l10n.setupPrintersCaption,
                     icon: Icons.print_outlined,
+                    tone: tone(counts.printersEnabled, counts.printersTotal),
                     onTap: widget.onOpenPrinters,
                   ),
                 ),
@@ -193,6 +234,7 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
                     value: value(counts.staffWithPin, counts.staffTotal),
                     caption: l10n.setupStaffCaption,
                     icon: Icons.badge_outlined,
+                    tone: tone(counts.staffWithPin, counts.staffTotal),
                     onTap: widget.onOpenStaff,
                   ),
                 ),
@@ -207,37 +249,31 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
 
   /// The guided checklist, in the order a fresh workspace should follow:
   /// menu -> POS device -> kitchen display -> pair them -> printer -> PIN.
-  /// Each banner carries the button that opens the fixing tab.
+  /// Each pending step is a numbered tile carrying the button that opens the
+  /// fixing tab; a fully ready branch shows the success banner instead.
   List<Widget> _nextSteps(AppLocalizations l10n, _Counts c, bool loading) {
     if (loading) return const [];
     final steps = <Widget>[];
     void add(
-      RestoflowTone tone,
-      IconData icon,
-      String body, {
-      String? title,
+      String title, {
+      String? description,
       String? actionLabel,
       VoidCallback? onAction,
     }) {
-      steps
-        ..add(const SizedBox(height: RestoflowSpacing.md))
-        ..add(
-          RestoflowNoticeBanner(
-            tone: tone,
-            icon: icon,
-            title: title,
-            body: body,
-            action: (actionLabel == null || onAction == null)
-                ? null
-                : TextButton(onPressed: onAction, child: Text(actionLabel)),
-          ),
-        );
+      steps.add(
+        RestoflowStepTile(
+          index: steps.length + 1,
+          title: title,
+          description: description,
+          action: (actionLabel == null || onAction == null)
+              ? null
+              : TextButton(onPressed: onAction, child: Text(actionLabel)),
+        ),
+      );
     }
 
     if (_menuCountable && c.menuTotal != null && c.menuActive == 0) {
       add(
-        RestoflowTone.warning,
-        Icons.restaurant_menu_outlined,
         l10n.setupNoMenu,
         actionLabel: l10n.setupAddMenuItem,
         onAction: widget.onOpenMenu,
@@ -245,8 +281,6 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
     }
     if (c.posDevices == 0) {
       add(
-        RestoflowTone.info,
-        Icons.point_of_sale_outlined,
         l10n.setupNoPosDevice,
         actionLabel: l10n.setupCreatePos,
         onAction: widget.onOpenDevices,
@@ -254,8 +288,6 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
     }
     if (c.kdsDevices == 0) {
       add(
-        RestoflowTone.info,
-        Icons.countertops_outlined,
         l10n.setupNoKdsDevice,
         actionLabel: l10n.setupCreateKds,
         onAction: widget.onOpenDevices,
@@ -264,18 +296,14 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
     if (c.devicesTotal != null && c.devicesTotal! > 0 && c.devicesActive == 0) {
       // Devices exist but none is paired: say exactly HOW pairing works.
       add(
-        RestoflowTone.warning,
-        Icons.link_off,
-        l10n.setupPairingHint,
-        title: l10n.setupNoActiveDevice,
+        l10n.setupNoActiveDevice,
+        description: l10n.setupPairingHint,
         actionLabel: l10n.dashboardNavDevices,
         onAction: widget.onOpenDevices,
       );
     }
     if (c.printersTotal == 0) {
       add(
-        RestoflowTone.info,
-        Icons.print_outlined,
         l10n.setupNoPrinters,
         actionLabel: l10n.setupAddPrinter,
         onAction: widget.onOpenPrinters,
@@ -283,20 +311,49 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
     }
     if (c.staffTotal != null && c.staffWithPin == 0) {
       add(
-        RestoflowTone.warning,
-        Icons.pin_outlined,
         l10n.setupNoStaffPin,
         actionLabel: l10n.setupCreatePin,
         onAction: widget.onOpenStaff,
       );
     }
-    if (steps.isEmpty &&
-        c.devicesActive != null &&
-        c.devicesActive! > 0 &&
-        c.staffWithPin != null &&
-        c.staffWithPin! > 0) {
-      add(RestoflowTone.success, Icons.check_circle_outline, l10n.setupReady);
+    if (steps.isEmpty) {
+      if (c.devicesActive != null &&
+          c.devicesActive! > 0 &&
+          c.staffWithPin != null &&
+          c.staffWithPin! > 0) {
+        return [
+          const SizedBox(height: RestoflowSpacing.md),
+          RestoflowNoticeBanner(
+            tone: RestoflowTone.success,
+            icon: Icons.check_circle_outline,
+            body: l10n.setupReady,
+          ),
+        ];
+      }
+      return const [];
     }
-    return steps;
+    return [const SizedBox(height: RestoflowSpacing.md), ...steps];
+  }
+}
+
+/// A quiet, static readiness bar (finite — safe for pumpAndSettle harnesses).
+class _SetupProgressBar extends StatelessWidget {
+  const _SetupProgressBar({required this.value});
+
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final successStyle = RestoflowTone.success.styleOf(theme);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+      child: LinearProgressIndicator(
+        value: value,
+        minHeight: 6,
+        color: successStyle.accent,
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+      ),
+    );
   }
 }

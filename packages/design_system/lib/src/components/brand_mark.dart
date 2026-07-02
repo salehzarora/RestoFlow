@@ -57,19 +57,30 @@ class RestoflowBrandMark extends StatelessWidget {
       children: [
         tile,
         const SizedBox(width: RestoflowSpacing.md),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(titleText, style: theme.textTheme.titleLarge),
-            if (taglineText != null)
+        // Flexible + ellipsis: the lockup must degrade gracefully in narrow
+        // parents (sidebar, 440px auth cards) instead of overflowing.
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                taglineText,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                titleText,
+                style: theme.textTheme.titleLarge,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-          ],
+              if (taglineText != null)
+                Text(
+                  taglineText,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
         ),
       ],
     );

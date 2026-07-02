@@ -22,17 +22,10 @@ class RealUsersUnavailableView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            RestoflowSpacing.lg,
-            RestoflowSpacing.lg,
-            RestoflowSpacing.lg,
-            0,
-          ),
-          child: AdminPageHeader(
-            title: l10n.adminUsersTitle,
-            subtitle: l10n.adminUsersSubtitle,
-          ),
+        AdminPageHeader(
+          title: l10n.adminUsersTitle,
+          subtitle: l10n.adminUsersSubtitle,
+          icon: Icons.group_outlined,
         ),
         Expanded(
           child: AdminStateView(
@@ -69,6 +62,7 @@ class RealSettingsView extends StatelessWidget {
         AdminPageHeader(
           title: l10n.adminSettingsTitle,
           subtitle: l10n.adminSettingsSubtitle,
+          icon: Icons.tune_outlined,
         ),
         const SizedBox(height: RestoflowSpacing.md),
         RestoflowNoticeBanner(
@@ -80,20 +74,23 @@ class RealSettingsView extends StatelessWidget {
         AdminSectionCard(
           title: l10n.dashboardSettingsWorkspace,
           icon: Icons.storefront_outlined,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          // A responsive field grid (stacked label-over-value tiles that wrap)
+          // instead of the old rigid fixed-width label column.
+          child: Wrap(
+            spacing: RestoflowSpacing.xl,
+            runSpacing: RestoflowSpacing.md,
             children: [
-              _ValueRow(
+              _ValueField(
                 label: l10n.authOrganization,
                 value: membership.organizationName,
               ),
-              _ValueRow(
+              _ValueField(
                 label: l10n.authRestaurant,
                 value: membership.restaurantName,
               ),
-              _ValueRow(label: l10n.authBranch, value: membership.branchName),
-              _ValueRow(label: l10n.menuCurrencyLabel, value: currencyCode),
-              _ValueRow(
+              _ValueField(label: l10n.authBranch, value: membership.branchName),
+              _ValueField(label: l10n.menuCurrencyLabel, value: currencyCode),
+              _ValueField(
                 label: l10n.authRole,
                 value: adminRoleLabel(l10n, membership.role),
               ),
@@ -105,8 +102,9 @@ class RealSettingsView extends StatelessWidget {
   }
 }
 
-class _ValueRow extends StatelessWidget {
-  const _ValueRow({required this.label, required this.value});
+/// One read-only workspace field: a muted label stacked over its value.
+class _ValueField extends StatelessWidget {
+  const _ValueField({required this.label, required this.value});
 
   final String label;
   final String? value;
@@ -116,28 +114,22 @@ class _ValueRow extends StatelessWidget {
     final theme = Theme.of(context);
     // An unresolved value renders as an em dash — never a fabricated default.
     final display = (value == null || value!.isEmpty) ? '—' : value!;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
-      child: Row(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 180, maxWidth: 260),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            child: Text(
-              display,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+          const SizedBox(height: RestoflowSpacing.xxs),
+          Text(
+            display,
+            style: theme.textTheme.titleSmall,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
