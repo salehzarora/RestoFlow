@@ -19,22 +19,35 @@ import 'state/dashboard_providers.dart';
 /// Derives the menu scope for the dashboard from the active RF-108 membership.
 ///
 ///  * Demo mode (`membership == null`) uses the demo scope.
-///  * An auth-mode membership uses its EXACT org/restaurant/branch (and the demo
-///    currency) — never the demo scope.
+///  * An auth-mode membership uses its EXACT org/restaurant/branch and the
+///    resolved real [currencyCode] (falling back to the demo currency only
+///    when no real currency was resolvable) — never the demo scope.
 ///  * An org-wide membership with no restaurant returns `null`: menu management
 ///    is restaurant-scoped, so the surface shows a blocked state instead of
 ///    silently falling back to the demo scope.
-MenuScope? dashboardMenuScopeFor(MembershipContext? membership) {
+MenuScope? dashboardMenuScopeFor(
+  MembershipContext? membership, {
+  String? currencyCode,
+}) {
   if (membership == null) return demoMenuScope;
-  return MenuScope.fromMembership(membership, currencyCode: demoCurrencyCode);
+  return MenuScope.fromMembership(
+    membership,
+    currencyCode: currencyCode ?? demoCurrencyCode,
+  );
 }
 
 /// Derives the administration scope (RF-113) from the active membership. Unlike
 /// the menu, the admin surfaces (settings/users/devices) work at ANY scope — an
 /// org-wide membership is fine — so there is no blocked state.
-AdminScope dashboardAdminScopeFor(MembershipContext? membership) {
+AdminScope dashboardAdminScopeFor(
+  MembershipContext? membership, {
+  String? currencyCode,
+}) {
   if (membership == null) return AdminScope.demo;
-  return AdminScope.fromMembership(membership, currencyCode: demoCurrencyCode);
+  return AdminScope.fromMembership(
+    membership,
+    currencyCode: currencyCode ?? demoCurrencyCode,
+  );
 }
 
 /// The owner/manager dashboard shell: a branded navigation
@@ -50,7 +63,10 @@ AdminScope dashboardAdminScopeFor(MembershipContext? membership) {
 class DashboardShell extends StatefulWidget {
   const DashboardShell({
     this.membership,
+    this.currencyCode,
     this.deviceRepositoryFor,
+    this.menuReadSource,
+    this.menuWriter,
     this.printersRepository,
     this.staffRepository,
     this.reportsTransport,
@@ -61,9 +77,21 @@ class DashboardShell extends StatefulWidget {
   /// The RF-108 active membership (null in demo mode).
   final MembershipContext? membership;
 
+  /// The resolved REAL currency for money-bearing surfaces (menu item
+  /// creation). Null in demo mode / when the structure read failed — the demo
+  /// currency is used only for demo scopes, never silently for real writes.
+  final String? currencyCode;
+
   /// Builds the REAL device repository for the active admin scope (RF-160).
   /// Null in demo mode / widget tests -> the Devices tab uses the demo store.
   final AdminRepository Function(AdminScope scope)? deviceRepositoryFor;
+
+  /// The REAL menu read (`public.list_menu`) — with [menuWriter], the Menu tab
+  /// manages the real backend menu; null => the labelled demo store.
+  final MenuReadSource? menuReadSource;
+
+  /// The REAL menu writer (`public.menu_upsert_*` / `menu_soft_delete`).
+  final MenuWriter? menuWriter;
 
   /// The REAL printers repository (null => labelled demo store).
   final PrintersRepository? printersRepository;
@@ -90,16 +118,23 @@ class _DashboardShellState extends State<DashboardShell> {
   int _index = 0;
 
   /// The active menu scope (null when the membership is org-wide / restaurant-less).
-  late final MenuScope? _menuScope = dashboardMenuScopeFor(widget.membership);
+  late final MenuScope? _menuScope = dashboardMenuScopeFor(
+    widget.membership,
+    currencyCode: widget.currencyCode,
+  );
 
-  /// The demo menu store, seeded at the active scope (null when there is no scope).
+  /// The demo menu store, seeded at the active scope (null when there is no
+  /// scope). Used ONLY when no real menu seams are injected.
   late final InMemoryMenuStore? _menuStore = _menuScope == null
       ? null
       : buildDemoMenuStore(scope: _menuScope);
 
   /// The active administration scope + its demo store (shared by the demo admin
   /// surfaces, so edits persist across tab switches within a session).
-  late final AdminScope _adminScope = dashboardAdminScopeFor(widget.membership);
+  late final AdminScope _adminScope = dashboardAdminScopeFor(
+    widget.membership,
+    currencyCode: widget.currencyCode,
+  );
   late final DemoAdminStore _adminStore = DemoAdminStore(scope: _adminScope);
 
   /// The real device repository for the active scope (RF-160), built once. Null in
@@ -307,6 +342,13 @@ class _DashboardShellState extends State<DashboardShell> {
   Widget _menuSurface(BuildContext context, AppLocalizations l10n) {
     final scope = _menuScope;
     final store = _menuStore;
+    // REAL menu management (sprint): both real seams injected + a concrete
+    // scope => `list_menu` + `menu_upsert_*` against the backend, no demo
+    // banner. Otherwise: the labelled demo store (demo mode / tests), or the
+    // blocked state when no restaurant scope could be resolved.
+    final readSource = widget.menuReadSource;
+    final writer = widget.menuWriter;
+    final real = readSource != null && writer != null && scope != null;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: RestoflowSpacing.lg,
@@ -315,7 +357,18 @@ class _DashboardShellState extends State<DashboardShell> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (scope == null || store == null)
+          if (real)
+            Expanded(
+              child: ProviderScope(
+                overrides: menuFeatureOverrides(
+                  scope: scope,
+                  readSource: readSource,
+                  writer: writer,
+                ),
+                child: const MenuManagementScreen(),
+              ),
+            )
+          else if (scope == null || store == null)
             const Expanded(child: _MenuUnavailable())
           else ...[
             Padding(

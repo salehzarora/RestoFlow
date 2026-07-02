@@ -7,6 +7,8 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminRepository, AdminScope;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show AuthContextFetcher;
+import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
+    show MenuReadSource, MenuWriter, RpcMenuReadSource, RpcMenuWriter;
 import 'package:supabase/supabase.dart';
 
 import '../admin/supabase_admin_device_repository.dart';
@@ -46,6 +48,8 @@ const String kDefaultOnboardingTimezone = 'UTC';
   OnboardingRepository onboarding,
   AuthContextFetcher fetchContext,
   AdminRepository Function(AdminScope scope) deviceRepositoryFor,
+  MenuReadSource menuReadSource,
+  MenuWriter menuWriter,
   PrintersRepository Function(AdminScope scope) printersRepositoryFor,
   StaffRepository Function(AdminScope scope) staffRepositoryFor,
   SyncRpcTransport transport,
@@ -67,6 +71,10 @@ buildDashboardRealAuth(SupabaseClient client) {
       scope: scope,
       currentUserId: currentUserId,
     ),
+    // Sprint: the REAL menu seams (list_menu + menu_upsert_*) — the Menu tab
+    // manages the backend menu the POS sells from.
+    menuReadSource: RpcMenuReadSource(transport),
+    menuWriter: RpcMenuWriter(transport),
     // Sprint: real printers (RF-150 backend) + staff/PIN provisioning surfaces.
     printersRepositoryFor: (scope) => SupabasePrintersRepository(
       transport: transport,

@@ -6,6 +6,8 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminRepository, AdminScope;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
+    show MenuReadSource, MenuWriter;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -15,6 +17,7 @@ import 'src/auth/onboarding_repository.dart';
 import 'src/auth/supabase_dashboard_auth.dart';
 import 'src/context/device_context.dart';
 import 'src/context/selected_context_store.dart';
+import 'src/context/tenant_context_resolver.dart';
 import 'src/dashboard_shell.dart';
 import 'src/printers/printers_repository.dart';
 import 'src/staff/staff_repository.dart';
@@ -77,6 +80,8 @@ Future<void> main() async {
         onboardingRepository: real.onboarding,
         fetchContext: real.fetchContext,
         deviceRepositoryFor: real.deviceRepositoryFor,
+        menuReadSource: real.menuReadSource,
+        menuWriter: real.menuWriter,
         printersRepositoryFor: real.printersRepositoryFor,
         staffRepositoryFor: real.staffRepositoryFor,
         reportsTransport: real.transport,
@@ -101,6 +106,8 @@ class DashboardApp extends StatelessWidget {
     this.selectedContextStore,
     this.deviceContext,
     this.deviceRepositoryFor,
+    this.menuReadSource,
+    this.menuWriter,
     this.printersRepositoryFor,
     this.staffRepositoryFor,
     this.reportsTransport,
@@ -130,6 +137,11 @@ class DashboardApp extends StatelessWidget {
   /// only in authenticated real mode; the dashboard Devices tab uses it there and
   /// falls back to the demo store otherwise (demo default preserved).
   final AdminRepository Function(AdminScope scope)? deviceRepositoryFor;
+
+  /// The REAL menu seams (sprint): `list_menu` read + `menu_upsert_*` writer.
+  /// Null in demo mode / tests => the Menu tab keeps its labelled demo store.
+  final MenuReadSource? menuReadSource;
+  final MenuWriter? menuWriter;
 
   /// Builds the REAL printers repository (RF-150 backend) per admin scope.
   final PrintersRepository Function(AdminScope scope)? printersRepositoryFor;
@@ -173,19 +185,33 @@ class DashboardApp extends StatelessWidget {
       fetchContext: fetchContext!,
       selectedContextStore: selectedContextStore,
       deviceContext: deviceContext,
-      onReady: (context, membership) {
-        final scope = dashboardAdminScopeFor(membership);
-        return DashboardShell(
-          membership: membership,
-          deviceRepositoryFor: deviceRepositoryFor,
-          printersRepository: printersRepositoryFor?.call(scope),
-          staffRepository: staffRepositoryFor?.call(scope),
-          reportsTransport: reportsTransport,
-          // Sign-out from the shell header; the auth flow's session stream
-          // drives the transition + context clearing.
-          onSignOut: authRepository == null ? null : authRepository!.signOut,
-        );
-      },
+      // Resolve the EFFECTIVE tenant context first (sprint): an org-wide
+      // owner membership gets a concrete restaurant/branch + the real
+      // currency from `list_org_structure`, so the menu/printers/staff
+      // surfaces work instead of showing scope-blocked states.
+      onReady: (context, membership) => TenantContextLoader(
+        membership: membership,
+        transport: reportsTransport,
+        builder: (context, resolved) {
+          final scope = dashboardAdminScopeFor(
+            resolved.membership,
+            currencyCode: resolved.currencyCode,
+          );
+          return DashboardShell(
+            membership: resolved.membership,
+            currencyCode: resolved.currencyCode,
+            deviceRepositoryFor: deviceRepositoryFor,
+            menuReadSource: menuReadSource,
+            menuWriter: menuWriter,
+            printersRepository: printersRepositoryFor?.call(scope),
+            staffRepository: staffRepositoryFor?.call(scope),
+            reportsTransport: reportsTransport,
+            // Sign-out from the shell header; the auth flow's session stream
+            // drives the transition + context clearing.
+            onSignOut: authRepository == null ? null : authRepository!.signOut,
+          );
+        },
+      ),
     );
   }
 }
