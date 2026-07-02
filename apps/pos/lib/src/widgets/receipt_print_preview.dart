@@ -77,6 +77,8 @@ class ReceiptPrintPreview extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // No letterSpacing: tracking breaks Arabic glyph
+                          // joining under the ar default locale (D-014).
                           Center(
                             child: Text(
                               isDemo
@@ -85,12 +87,17 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               textAlign: TextAlign.center,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: 1.0,
                               ),
                             ),
                           ),
                           const SizedBox(height: RestoflowSpacing.xs),
-                          Center(child: _PaidChip(label: l10n.posPaidChip)),
+                          Center(
+                            child: RestoflowStatusPill(
+                              label: l10n.posPaidChip,
+                              tone: RestoflowTone.success,
+                              icon: Icons.check_circle,
+                            ),
+                          ),
                           const SizedBox(height: RestoflowSpacing.md),
                           _Line(
                             label: l10n.posReceiptNumberLabel,
@@ -358,45 +365,6 @@ class _PreviewActions extends StatelessWidget {
             onPressed: onPrint,
             icon: const Icon(Icons.print, size: 18),
             label: Text(l10n.printPreviewPrint),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaidChip extends StatelessWidget {
-  const _PaidChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.md,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.check_circle,
-            size: 14,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.w800,
-            ),
           ),
         ],
       ),

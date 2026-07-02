@@ -59,7 +59,7 @@ class OrderConfirmation extends ConsumerWidget {
               padding: const EdgeInsets.all(RestoflowSpacing.lg),
               children: [
                 _SuccessHeader(title: l10n.posOrderSubmittedTitle),
-                const SizedBox(height: RestoflowSpacing.lg),
+                const SizedBox(height: RestoflowSpacing.md),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(RestoflowSpacing.md),
@@ -67,7 +67,7 @@ class OrderConfirmation extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
                               l10n.posOrderNumberLabel,
@@ -75,11 +75,24 @@ class OrderConfirmation extends ConsumerWidget {
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
-                            Text(
-                              order.orderNumber,
-                              key: const Key('order-number'),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
+                            const SizedBox(width: RestoflowSpacing.sm),
+                            // Design-polish: the number the cashier calls out
+                            // gets the card's largest type; long provisional
+                            // codes scale down instead of overflowing (the
+                            // Text keeps its full data for the key finder).
+                            Expanded(
+                              child: Align(
+                                alignment: AlignmentDirectional.centerEnd,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    order.orderNumber,
+                                    key: const Key('order-number'),
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -181,9 +194,7 @@ class OrderConfirmation extends ConsumerWidget {
                             ),
                             icon: const Icon(Icons.payments_outlined),
                             label: Text(l10n.posPayCash),
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(52),
-                            ),
+                            style: RestoflowButtonStyles.big(context),
                           ),
                         ),
                         const SizedBox(height: RestoflowSpacing.sm),
@@ -203,9 +214,7 @@ class OrderConfirmation extends ConsumerWidget {
                         onPressed: onNewOrder,
                         icon: const Icon(Icons.add),
                         label: Text(l10n.posNewOrder),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                        ),
+                        style: RestoflowButtonStyles.big(context),
                       ),
                     ),
             ),
@@ -216,6 +225,9 @@ class OrderConfirmation extends ConsumerWidget {
   }
 }
 
+/// Design-polish: a compact HORIZONTAL success header (true-green tone) —
+/// the confirmation is a ~10-second interaction, so the old 72px hero circle
+/// gave way to content the cashier actually needs on-screen.
 class _SuccessHeader extends StatelessWidget {
   const _SuccessHeader({required this.title});
 
@@ -224,27 +236,31 @@ class _SuccessHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
+    final success = RestoflowTone.success.styleOf(theme);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
-          width: 72,
-          height: 72,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer,
+            color: success.container,
             shape: BoxShape.circle,
           ),
           child: Icon(
             Icons.check_circle,
-            size: 44,
-            color: theme.colorScheme.primary,
+            size: RestoflowIconSizes.lg,
+            color: success.accent,
           ),
         ),
-        const SizedBox(height: RestoflowSpacing.md),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
+        const SizedBox(width: RestoflowSpacing.md),
+        Flexible(
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],

@@ -46,10 +46,16 @@ class MenuItemCard extends StatelessWidget {
             Expanded(
               // RF-141D: Ink (not Container) so the InkWell tap/hover ripple
               // renders OVER the tinted band, not hidden behind an opaque layer.
+              // Design-polish: a subtler tint + smaller glyph so the band reads
+              // as category colour-coding, not the tile's main content.
               child: Ink(
-                color: category.color.withValues(alpha: 0.12),
+                color: category.color.withValues(alpha: 0.08),
                 child: Center(
-                  child: Icon(category.icon, size: 40, color: category.color),
+                  child: Icon(
+                    category.icon,
+                    size: RestoflowIconSizes.xl,
+                    color: category.color.withValues(alpha: 0.85),
+                  ),
                 ),
               ),
             ),
@@ -67,23 +73,35 @@ class MenuItemCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: RestoflowSpacing.sm),
+                  const SizedBox(height: RestoflowSpacing.xxs),
                   Row(
                     children: [
                       Expanded(
                         child: Text(
                           priceText,
-                          style: theme.textTheme.titleMedium?.copyWith(
+                          style: theme.textTheme.titleLarge?.copyWith(
                             color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      const SizedBox(width: RestoflowSpacing.xs),
+                      // The cashier's main affordance: a >=48dp filled add
+                      // button (the icon is the canonical add gesture in the
+                      // widget-test corpus — never change it).
                       IconButton.filled(
                         onPressed: onAdd,
                         tooltip: l10n.posAddToCart,
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.add_shopping_cart, size: 20),
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 48,
+                        ),
+                        icon: const Icon(
+                          Icons.add_shopping_cart,
+                          size: RestoflowIconSizes.md,
+                        ),
                       ),
                     ],
                   ),

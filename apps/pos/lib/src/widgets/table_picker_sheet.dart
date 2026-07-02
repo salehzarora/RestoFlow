@@ -366,10 +366,11 @@ class _TableLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    final available = _statusFill(TableStatusKind.available, scheme);
-    final occupied = _statusFill(TableStatusKind.occupied, scheme);
-    final blocked = _statusFill(TableStatusKind.blocked, scheme);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final available = _statusFill(TableStatusKind.available, theme);
+    final occupied = _statusFill(TableStatusKind.occupied, theme);
+    final blocked = _statusFill(TableStatusKind.blocked, theme);
     return Wrap(
       spacing: RestoflowSpacing.lg,
       runSpacing: RestoflowSpacing.sm,
@@ -449,12 +450,15 @@ class _LegendItem extends StatelessWidget {
 }
 
 /// Fill + on-colour + border for a status, shared by BOTH the legend swatches
-/// and the tile bodies so the two can never drift apart: available reads as a
-/// plain "empty" table, occupied as a tertiary tint, blocked as an error tint.
+/// and the tile bodies so the two can never drift apart. Design-polish: the
+/// fills come from the shared semantic tones — available reads as a plain
+/// "empty" table, occupied as a true-amber WARNING, blocked as a red DANGER —
+/// each with a matching accent border so the states survive a quick glance.
 ({Color fill, Color onFill, Color border}) _statusFill(
   TableStatusKind kind,
-  ColorScheme scheme,
+  ThemeData theme,
 ) {
+  final scheme = theme.colorScheme;
   switch (kind) {
     case TableStatusKind.available:
       return (
@@ -463,16 +467,18 @@ class _LegendItem extends StatelessWidget {
         border: scheme.outlineVariant,
       );
     case TableStatusKind.occupied:
+      final warning = RestoflowTone.warning.styleOf(theme);
       return (
-        fill: scheme.tertiaryContainer,
-        onFill: scheme.onTertiaryContainer,
-        border: scheme.outlineVariant,
+        fill: warning.container,
+        onFill: warning.onContainer,
+        border: warning.accent.withValues(alpha: 0.5),
       );
     case TableStatusKind.blocked:
+      final danger = RestoflowTone.danger.styleOf(theme);
       return (
-        fill: scheme.errorContainer,
-        onFill: scheme.onErrorContainer,
-        border: scheme.outlineVariant,
+        fill: danger.container,
+        onFill: danger.onContainer,
+        border: danger.accent.withValues(alpha: 0.5),
       );
   }
 }
@@ -509,7 +515,7 @@ class _TableTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final base = _statusFill(table.status, scheme);
+    final base = _statusFill(table.status, theme);
     final Color fill = selected ? scheme.primaryContainer : base.fill;
     final Color onFill = selected ? scheme.onPrimaryContainer : base.onFill;
     final Color borderColor = selected ? scheme.primary : base.border;

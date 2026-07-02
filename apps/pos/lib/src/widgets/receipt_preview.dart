@@ -56,15 +56,20 @@ class ReceiptPreview extends ConsumerWidget {
                     size: 28,
                   ),
                   const SizedBox(height: RestoflowSpacing.xs),
+                  // No letterSpacing: tracking breaks Arabic glyph joining
+                  // under the ar default locale (D-014).
                   Text(
                     l10n.posReceiptTitle,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
                     ),
                   ),
                   const SizedBox(height: RestoflowSpacing.xs),
-                  _PaidChip(label: l10n.posPaidChip),
+                  RestoflowStatusPill(
+                    label: l10n.posPaidChip,
+                    tone: RestoflowTone.success,
+                    icon: Icons.check_circle,
+                  ),
                 ],
               ),
             ),
@@ -148,45 +153,6 @@ class ReceiptPreview extends ConsumerWidget {
     String two(int v) => v.toString().padLeft(2, '0');
     return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
         '${two(dt.hour)}:${two(dt.minute)}';
-  }
-}
-
-class _PaidChip extends StatelessWidget {
-  const _PaidChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.md,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.check_circle,
-            size: 16,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

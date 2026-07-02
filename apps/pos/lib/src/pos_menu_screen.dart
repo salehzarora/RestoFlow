@@ -21,8 +21,8 @@ import 'widgets/modifier_selection_sheet.dart';
 class PosMenuScreen extends StatelessWidget {
   const PosMenuScreen({super.key});
 
-  static const double _cartPanelWidth = 400;
-  static const double _twoPaneBreakpoint = 820;
+  static const double _cartPanelWidth = RestoflowPanelWidths.cartPanel;
+  static const double _twoPaneBreakpoint = RestoflowBreakpoints.posTwoPane;
 
   @override
   Widget build(BuildContext context) {
@@ -83,12 +83,14 @@ class _MenuPane extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Design-polish: a tighter heading row — the menu is a work surface,
+        // not a landing page, so the title spends less vertical space.
         Padding(
-          padding: const EdgeInsets.fromLTRB(
+          padding: const EdgeInsetsDirectional.fromSTEB(
             RestoflowSpacing.lg,
+            RestoflowSpacing.md,
             RestoflowSpacing.lg,
-            RestoflowSpacing.lg,
-            RestoflowSpacing.sm,
+            RestoflowSpacing.xs,
           ),
           child: Text(
             l10n.posMenuHeading,
@@ -99,10 +101,61 @@ class _MenuPane extends ConsumerWidget {
         ),
         Expanded(
           child: menuAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const _MenuSkeleton(),
             error: (_, _) =>
                 _MenuLoadError(onRetry: () => ref.invalidate(posMenuProvider)),
             data: (menu) => _MenuGrid(menu: menu),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A static skeleton of the chips strip + item grid while the menu loads
+/// (design-polish sprint): shows the layout that is coming instead of a bare
+/// spinner. Deliberately non-animated (test harnesses pumpAndSettle) and free
+/// of CircularProgressIndicator (spinner-count assertions elsewhere).
+class _MenuSkeleton extends StatelessWidget {
+  const _MenuSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            RestoflowSpacing.lg,
+            RestoflowSpacing.sm,
+            RestoflowSpacing.lg,
+            RestoflowSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              for (var i = 0; i < 4; i++) ...[
+                const RestoflowSkeleton(
+                  width: 96,
+                  height: 40,
+                  radius: RestoflowRadii.sm,
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.all(RestoflowSpacing.lg),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 220,
+              mainAxisExtent: 188,
+              crossAxisSpacing: RestoflowSpacing.md,
+              mainAxisSpacing: RestoflowSpacing.md,
+            ),
+            itemCount: 8,
+            itemBuilder: (_, _) =>
+                const RestoflowSkeleton(height: 188, radius: RestoflowRadii.md),
           ),
         ),
       ],
@@ -118,24 +171,17 @@ class _MenuLoadError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.cloud_off_outlined, size: 40),
-            const SizedBox(height: RestoflowSpacing.md),
-            Text(l10n.posMenuLoadError, textAlign: TextAlign.center),
-            const SizedBox(height: RestoflowSpacing.md),
-            FilledButton.tonalIcon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.authTryAgain),
-            ),
-          ],
+    return RestoflowStateView(
+      icon: Icons.cloud_off_outlined,
+      tone: RestoflowTone.danger,
+      message: l10n.posMenuLoadError,
+      actions: [
+        FilledButton.tonalIcon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.authTryAgain),
         ),
-      ),
+      ],
     );
   }
 }
@@ -148,39 +194,28 @@ class _MenuGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     final controller = ref.read(cartControllerProvider.notifier);
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final items = menuItemsForCategory(menu.items, selectedCategory);
 
     if (menu.items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(RestoflowSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.restaurant_menu_outlined, size: 40),
-              const SizedBox(height: RestoflowSpacing.md),
-              Text(l10n.posMenuEmptyTitle, style: theme.textTheme.titleMedium),
-              const SizedBox(height: RestoflowSpacing.xs),
-              Text(l10n.posMenuEmptyBody, textAlign: TextAlign.center),
-            ],
-          ),
-        ),
+      return RestoflowStateView(
+        icon: Icons.restaurant_menu_outlined,
+        title: l10n.posMenuEmptyTitle,
+        message: l10n.posMenuEmptyBody,
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         CategoryChips(categories: menu.categories),
-        const SizedBox(height: RestoflowSpacing.sm),
+        const SizedBox(height: RestoflowSpacing.xs),
         Expanded(
           child: GridView.builder(
             padding: const EdgeInsets.all(RestoflowSpacing.lg),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 220,
-              mainAxisExtent: 176,
+              mainAxisExtent: 188,
               crossAxisSpacing: RestoflowSpacing.md,
               mainAxisSpacing: RestoflowSpacing.md,
             ),

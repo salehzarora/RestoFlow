@@ -180,6 +180,26 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                 ),
               ),
               const SizedBox(height: RestoflowSpacing.md),
+              // Design-polish: a visible running total ABOVE the confirm
+              // button, so the price consequence of each pick is readable
+              // without parsing the button label.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    l10n.posReceiptTotal,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  Text(
+                    totalText,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: RestoflowSpacing.sm),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -193,9 +213,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                       : null,
                   icon: const Icon(Icons.add_shopping_cart),
                   label: Text(l10n.posAddToCartWithTotal(totalText)),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                  ),
+                  style: RestoflowButtonStyles.big(context),
                 ),
               ),
             ],
@@ -225,6 +243,7 @@ class _OptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     // A SIGNED delta renders as +/− money; a free option shows no price.
     final delta = option.priceDeltaMinor;
     final deltaText = delta == 0
@@ -237,31 +256,72 @@ class _OptionTile extends StatelessWidget {
             selected
                 ? Icons.radio_button_checked
                 : Icons.radio_button_unchecked,
-            color: selected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurfaceVariant,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
           )
         : Icon(
             selected ? Icons.check_box : Icons.check_box_outline_blank,
-            color: selected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurfaceVariant,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
           );
 
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      leading: control,
-      title: Text(option.name),
-      trailing: deltaText == null
-          ? null
-          : Text(
-              deltaText,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+    // Design-polish: options are >=48dp bordered tiles with an unmistakable
+    // selected state (primary tint + accent border) instead of dense,
+    // zero-padding ListTiles. The ValueKey stays on the tappable InkWell.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xxs),
+      child: Material(
+        color: selected ? scheme.primaryContainer : scheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          side: BorderSide(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: InkWell(
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.md,
+                vertical: RestoflowSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  control,
+                  const SizedBox(width: RestoflowSpacing.md),
+                  Expanded(
+                    child: Text(
+                      option.name,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: selected
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  if (deltaText != null) ...[
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    Text(
+                      deltaText,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: selected
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-      onTap: onToggle,
+          ),
+        ),
+      ),
     );
   }
 }

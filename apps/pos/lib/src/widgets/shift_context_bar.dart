@@ -83,11 +83,14 @@ class ShiftContextBar extends ConsumerWidget {
         children: [
           _ShiftItem(icon: Icons.badge_outlined, label: l10n.posShiftDemoName),
           _ShiftItem(icon: Icons.point_of_sale, label: drawerLine),
+          // Design-polish: the figure a cashier actually checks reads at a
+          // glance (larger, heavier type) instead of matching the meta rows.
           _ShiftItem(
             key: const Key('cash-in-drawer'),
             icon: Icons.account_balance_wallet_outlined,
             label: cashLine,
             strong: true,
+            prominent: true,
           ),
           if (lastLine != null)
             _ShiftItem(icon: Icons.payments_outlined, label: lastLine),
@@ -109,6 +112,7 @@ class _ShiftItem extends StatelessWidget {
     required this.icon,
     required this.label,
     this.strong = false,
+    this.prominent = false,
     super.key,
   });
 
@@ -116,24 +120,36 @@ class _ShiftItem extends StatelessWidget {
   final String label;
   final bool strong;
 
+  /// Larger at-a-glance type for the figure the cashier actually reads
+  /// (cash in drawer); the label stays a single Text so descendant
+  /// text-equality finders keep working.
+  final bool prominent;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = strong
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
+    final textStyle = prominent
+        ? theme.textTheme.titleSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w800,
+          )
+        : theme.textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
+          );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: RestoflowSpacing.xs),
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: color,
-            fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
-          ),
+        Icon(
+          icon,
+          size: prominent ? RestoflowIconSizes.sm : RestoflowIconSizes.xs,
+          color: color,
         ),
+        const SizedBox(width: RestoflowSpacing.xs),
+        Text(label, style: textStyle),
       ],
     );
   }

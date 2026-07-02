@@ -23,7 +23,7 @@ class CategoryChips extends ConsumerWidget {
         ref.read(selectedCategoryProvider.notifier).state = id;
 
     return SizedBox(
-      height: 52,
+      height: 56,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: RestoflowSpacing.lg),
@@ -64,12 +64,26 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final foreground = selected ? scheme.onPrimary : scheme.onSurfaceVariant;
+
+    // Design-polish: >=44dp-tall chips with a saturated selected fill so the
+    // active filter is unmistakable mid-rush. The label Text stays the tap
+    // target the tests use (find.text(<category name>)).
     return Padding(
       padding: const EdgeInsetsDirectional.only(end: RestoflowSpacing.sm),
       child: ChoiceChip(
         label: Text(label),
-        avatar: Icon(icon, size: 18),
+        labelStyle: theme.textTheme.labelLarge?.copyWith(color: foreground),
+        avatar: Icon(icon, size: RestoflowIconSizes.sm, color: foreground),
+        padding: const EdgeInsets.symmetric(
+          horizontal: RestoflowSpacing.md,
+          vertical: RestoflowSpacing.md,
+        ),
         selected: selected,
+        selectedColor: scheme.primary,
+        checkmarkColor: foreground,
         onSelected: (_) => onSelected(),
       ),
     );

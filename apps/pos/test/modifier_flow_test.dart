@@ -74,11 +74,13 @@ void main() {
     expect(tester.widget<FilledButton>(_addButton()).onPressed, isNotNull);
 
     // A PAID topping (+₪3.00) updates the running total: 48.00 -> 51.00.
+    // Design-polish: the total renders twice while the sheet is open — the
+    // summary row above the confirm button AND the Add button label.
     await tester.tap(
       find.byKey(const ValueKey('modifier-option-demo-opt-cheese')),
     );
     await tester.pump();
-    expect(find.textContaining('₪51.00'), findsOneWidget);
+    expect(find.textContaining('₪51.00'), findsNWidgets(2));
 
     await tester.tap(_addButton());
     await tester.pumpAndSettle();
@@ -102,15 +104,16 @@ void main() {
       find.byKey(const ValueKey('modifier-option-demo-opt-extra-patty')),
     );
     await tester.pump();
-    // Both extras selected: base 48.00 + 3.00 + 9.00 = 60.00.
-    expect(find.textContaining('₪60.00'), findsOneWidget);
+    // Both extras selected: base 48.00 + 3.00 + 9.00 = 60.00 (running total
+    // renders twice since the design polish: summary row + Add button label).
+    expect(find.textContaining('₪60.00'), findsNWidgets(2));
     // A third selection in the same group cannot exist (only 2 options), but
     // deselecting works: remove the patty -> total drops back to 45.00.
     await tester.tap(
       find.byKey(const ValueKey('modifier-option-demo-opt-extra-patty')),
     );
     await tester.pump();
-    expect(find.textContaining('₪51.00'), findsOneWidget);
+    expect(find.textContaining('₪51.00'), findsNWidgets(2));
   });
 
   testWidgets('a plain item still adds directly — no sheet', (tester) async {

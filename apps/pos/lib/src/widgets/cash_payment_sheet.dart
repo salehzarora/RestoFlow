@@ -9,11 +9,16 @@ import '../format/cash_input.dart';
 import '../format/money_format.dart';
 import '../state/payment_controller.dart';
 
+/// The ASCII decimal separator the cash field accepts (mirrors the input
+/// formatter's `[0-9.]`). A format character, not user-facing copy.
+const String _decimalSeparator = '.';
+
 /// Modal cash-payment entry (RF-116): amount due, a cash-received field with
-/// quick-cash buttons, LIVE change due, and validation (cash must cover the
-/// total; reject empty / invalid / insufficient). Confirm records a completed
-/// cash payment via [paymentControllerProvider] and closes the sheet. Money is
-/// integer minor units throughout — no floats.
+/// an on-screen numeric keypad + quick-cash buttons, LIVE change due, and
+/// validation (cash must cover the total; reject empty / invalid /
+/// insufficient). Confirm records a completed cash payment via
+/// [paymentControllerProvider] and closes the sheet. Money is integer minor
+/// units throughout — no floats.
 class CashPaymentSheet extends ConsumerStatefulWidget {
   const CashPaymentSheet({
     required this.orderNumber,
@@ -70,6 +75,25 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     final digits = minor % 100;
     final text = '${minor ~/ 100}.${digits.toString().padLeft(2, '0')}';
     _controller.text = text;
+    setState(() {});
+  }
+
+  /// Keypad wiring (design-polish): the on-screen keypad appends into the SAME
+  /// controller behind the cash-received TextField, which stays the single
+  /// source of truth (and keeps `tester.enterText` working).
+  void _appendChar(String ch) {
+    final text = _controller.text + ch;
+    _controller.text = text;
+    _controller.selection = TextSelection.collapsed(offset: text.length);
+    setState(() {});
+  }
+
+  void _backspace() {
+    final text = _controller.text;
+    if (text.isEmpty) return;
+    final next = text.substring(0, text.length - 1);
+    _controller.text = next;
+    _controller.selection = TextSelection.collapsed(offset: next.length);
     setState(() {});
   }
 
@@ -186,6 +210,11 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                         ? const Key('quick-cash-exact')
                         : null,
                     onPressed: () => _setAmount(amount),
+                    // Design-polish: >=48dp quick-cash targets.
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(64, 48),
+                      textStyle: theme.textTheme.titleSmall,
+                    ),
                     child: Text(
                       amount == widget.amountMinor
                           ? l10n.posCashExact
@@ -198,7 +227,26 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
               ],
             ),
             const SizedBox(height: RestoflowSpacing.md),
-            _AmountRow(
+            // Design-polish: a large on-screen keypad (touch terminals have no
+            // OS keyboard) appending into the same controller as the field.
+            RestoflowNumericKeypad(
+              onDigit: _appendChar,
+              onBackspace: _backspace,
+              enabled: !_submitting,
+              buttonHeight: 52,
+              trailingKey: FilledButton.tonal(
+                onPressed: _submitting
+                    ? null
+                    : () => _appendChar(_decimalSeparator),
+                style: FilledButton.styleFrom(
+                  textStyle: theme.textTheme.titleLarge,
+                  padding: EdgeInsets.zero,
+                ),
+                child: const Text(_decimalSeparator),
+              ),
+            ),
+            const SizedBox(height: RestoflowSpacing.md),
+            _ChangeDueRow(
               label: l10n.posChangeDue,
               value: changeMinor == null
                   ? '—'
@@ -206,9 +254,9 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                       changeMinor,
                       widget.currencyCode,
                     ),
-              valueKey: const Key('change-due-amount'),
+              hasChange: changeMinor != null,
             ),
-            const SizedBox(height: RestoflowSpacing.lg),
+            const SizedBox(height: RestoflowSpacing.md),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -216,13 +264,70 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                 onPressed: canConfirm ? _confirm : null,
                 icon: const Icon(Icons.check),
                 label: Text(l10n.posConfirmPayment),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                ),
+                style: RestoflowButtonStyles.big(context),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The change-due readout — deliberately the LOUDEST element on the sheet:
+/// it is the number the cashier reads aloud while handing coins back. Fills
+/// with the true-green SUCCESS tone once the tender covers the total; shows a
+/// quiet em-dash placeholder until then (exact text format unchanged).
+class _ChangeDueRow extends StatelessWidget {
+  const _ChangeDueRow({
+    required this.label,
+    required this.value,
+    required this.hasChange,
+  });
+
+  final String label;
+  final String value;
+  final bool hasChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final success = RestoflowTone.success.styleOf(theme);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.md,
+        vertical: RestoflowSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: hasChange
+            ? success.container
+            : theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: hasChange
+                  ? success.onContainer
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Text(
+            value,
+            key: const Key('change-due-amount'),
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: hasChange
+                  ? success.onContainer
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -233,13 +338,11 @@ class _AmountRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.emphasised = false,
-    this.valueKey,
   });
 
   final String label;
   final String value;
   final bool emphasised;
-  final Key? valueKey;
 
   @override
   Widget build(BuildContext context) {
@@ -254,7 +357,7 @@ class _AmountRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: theme.textTheme.titleMedium),
-        Text(value, key: valueKey, style: valueStyle),
+        Text(value, style: valueStyle),
       ],
     );
   }
