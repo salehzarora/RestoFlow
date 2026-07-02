@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart'
+    show SyncRpcTransport;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminRepository, AdminScope;
@@ -14,6 +16,8 @@ import 'src/auth/supabase_dashboard_auth.dart';
 import 'src/context/device_context.dart';
 import 'src/context/selected_context_store.dart';
 import 'src/dashboard_shell.dart';
+import 'src/printers/printers_repository.dart';
+import 'src/staff/staff_repository.dart';
 
 /// Composition root (RF-151 + RF-152). In DEMO mode (`RESTOFLOW_DEMO_MODE`
 /// default true) the app renders the existing in-memory demo shell. In REAL mode
@@ -48,10 +52,22 @@ Future<void> main() async {
   // public.* RPC calls (identity server-derived from auth.uid()).
   // `publishableKey` is the current name for the PUBLIC anon key (the config
   // already rejects any service-role/secret key — DECISION D-011).
-  await Supabase.initialize(
-    url: supabase.url,
-    publishableKey: supabase.anonKey,
-  );
+  try {
+    await Supabase.initialize(
+      url: supabase.url,
+      publishableKey: supabase.anonKey,
+    );
+  } catch (_) {
+    // Fail-closed: a backend bootstrap failure (malformed URL, storage error)
+    // must never crash or blank the dashboard — show the honest config help
+    // page instead. Never echo the offending value.
+    runApp(
+      const ProviderScope(
+        child: DashboardApp(demoMode: false, realModeUnconfigured: true),
+      ),
+    );
+    return;
+  }
   final real = buildDashboardRealAuth(Supabase.instance.client);
   runApp(
     ProviderScope(
@@ -61,6 +77,9 @@ Future<void> main() async {
         onboardingRepository: real.onboarding,
         fetchContext: real.fetchContext,
         deviceRepositoryFor: real.deviceRepositoryFor,
+        printersRepositoryFor: real.printersRepositoryFor,
+        staffRepositoryFor: real.staffRepositoryFor,
+        reportsTransport: real.transport,
         selectedContextStore: SharedPreferencesSelectedContextStore(),
       ),
     ),
@@ -82,6 +101,9 @@ class DashboardApp extends StatelessWidget {
     this.selectedContextStore,
     this.deviceContext,
     this.deviceRepositoryFor,
+    this.printersRepositoryFor,
+    this.staffRepositoryFor,
+    this.reportsTransport,
     this.realModeUnconfigured = false,
     super.key,
   });
@@ -109,6 +131,16 @@ class DashboardApp extends StatelessWidget {
   /// falls back to the demo store otherwise (demo default preserved).
   final AdminRepository Function(AdminScope scope)? deviceRepositoryFor;
 
+  /// Builds the REAL printers repository (RF-150 backend) per admin scope.
+  final PrintersRepository Function(AdminScope scope)? printersRepositoryFor;
+
+  /// Builds the REAL staff/PIN repository per admin scope.
+  final StaffRepository Function(AdminScope scope)? staffRepositoryFor;
+
+  /// The authenticated dashboard transport for the Overview's real
+  /// sales-summary read (sprint). Null in demo mode / tests.
+  final SyncRpcTransport? reportsTransport;
+
   /// True in real mode when the Supabase anon-key config was missing/invalid.
   final bool realModeUnconfigured;
 
@@ -130,9 +162,10 @@ class DashboardApp extends StatelessWidget {
     final demo = demoMode ?? authDemoModeEnabled();
     if (demo) return const DashboardShell();
     if (realModeUnconfigured || fetchContext == null) {
-      // Real mode without a usable context fetcher: honest generic error state
-      // (mirrors the prior real-mode-unconfigured behaviour).
-      return const Scaffold(body: AuthErrorView());
+      // Real mode without a usable backend: an honest help page that explains
+      // exactly which --dart-define values real mode needs (never a crash, never
+      // a silent demo fallback).
+      return const RealModeUnconfiguredView();
     }
     return DashboardAuthFlow(
       authRepository: authRepository,
@@ -140,10 +173,19 @@ class DashboardApp extends StatelessWidget {
       fetchContext: fetchContext!,
       selectedContextStore: selectedContextStore,
       deviceContext: deviceContext,
-      onReady: (context, membership) => DashboardShell(
-        membership: membership,
-        deviceRepositoryFor: deviceRepositoryFor,
-      ),
+      onReady: (context, membership) {
+        final scope = dashboardAdminScopeFor(membership);
+        return DashboardShell(
+          membership: membership,
+          deviceRepositoryFor: deviceRepositoryFor,
+          printersRepository: printersRepositoryFor?.call(scope),
+          staffRepository: staffRepositoryFor?.call(scope),
+          reportsTransport: reportsTransport,
+          // Sign-out from the shell header; the auth flow's session stream
+          // drives the transition + context clearing.
+          onSignOut: authRepository == null ? null : authRepository!.signOut,
+        );
+      },
     );
   }
 }

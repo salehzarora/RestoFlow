@@ -618,6 +618,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authError => 'Something went wrong';
 
   @override
+  String get authRealModeUnconfiguredTitle => 'Real mode is not configured';
+
+  @override
+  String get authRealModeUnconfiguredBody =>
+      'The app was started in real mode, but the backend connection settings are missing or invalid. RestoFlow never fakes a backend, so real mode stays locked until valid settings are provided.';
+
+  @override
+  String get authRealModeUnconfiguredHowTo => 'Start the app with these values';
+
+  @override
+  String get authRealModeUnconfiguredDemoHint =>
+      'To explore the demo instead, run the app without any configuration — demo mode is the default.';
+
+  @override
   String get authTryAgain => 'Try again';
 
   @override
@@ -1288,4 +1302,310 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pairingFailed => 'Couldn\'t pair this device. Please try again.';
+
+  @override
+  String get dashboardNavPrinters => 'Printers';
+
+  @override
+  String get dashboardNavStaff => 'Staff';
+
+  @override
+  String get dashboardModeDemo => 'Demo';
+
+  @override
+  String get dashboardModeReal => 'Real';
+
+  @override
+  String get setupTitle => 'Setup';
+
+  @override
+  String get setupSubtitle => 'Get this branch ready for service';
+
+  @override
+  String get setupDevices => 'Devices';
+
+  @override
+  String get setupDevicesCaption => 'active / total';
+
+  @override
+  String get setupPrinters => 'Printers';
+
+  @override
+  String get setupPrintersCaption => 'enabled / total';
+
+  @override
+  String get setupStaffPin => 'Staff PINs';
+
+  @override
+  String get setupStaffCaption => 'with PIN / total';
+
+  @override
+  String get setupMetricUnavailable => 'n/a';
+
+  @override
+  String get setupNoDevices =>
+      'No devices yet — create a POS or KDS device and issue a pairing code.';
+
+  @override
+  String get setupNoActiveDevice =>
+      'No device is paired yet — issue a code in Devices and redeem it on the device\'s pairing screen.';
+
+  @override
+  String get setupNoPrinters =>
+      'No printers configured yet — add a receipt or kitchen printer.';
+
+  @override
+  String get setupNoStaffPin =>
+      'No staff member has a PIN yet — POS/KDS sign-in (and the live order flow) needs at least one.';
+
+  @override
+  String get setupReady =>
+      'This branch is ready: paired device and staff PIN in place.';
+
+  @override
+  String get printersTitle => 'Printers';
+
+  @override
+  String get printersSubtitle => 'Receipt and kitchen printers for this branch';
+
+  @override
+  String get printersAdd => 'Add printer';
+
+  @override
+  String get printersEmptyTitle => 'No printers yet';
+
+  @override
+  String get printersEmptyBody =>
+      'Add a receipt or kitchen printer to prepare this branch for printing.';
+
+  @override
+  String get printersTransportNoticeTitle =>
+      'Configuration only — no print transport yet';
+
+  @override
+  String get printersTransportNotice =>
+      'Printer settings are saved and validated on the backend, but this build does not send anything to physical printers. The print engine ships network-first; Bluetooth and USB transports are not installed yet. No fake print success is ever shown.';
+
+  @override
+  String get printersRoleReceipt => 'Receipt';
+
+  @override
+  String get printersRoleKitchen => 'Kitchen';
+
+  @override
+  String get printersConnNetwork => 'Network (Wi-Fi/LAN)';
+
+  @override
+  String get printersConnBluetooth => 'Bluetooth';
+
+  @override
+  String get printersConnUsb => 'USB';
+
+  @override
+  String get printersConnConfigOnly =>
+      'Configuration only — this transport is not installed yet.';
+
+  @override
+  String get printersFieldName => 'Display name';
+
+  @override
+  String get printersFieldRole => 'Printer role';
+
+  @override
+  String get printersFieldConnection => 'Connection type';
+
+  @override
+  String get printersFieldPaper => 'Paper width';
+
+  @override
+  String get printersFieldHost => 'Host / IP address';
+
+  @override
+  String get printersFieldPort => 'Port';
+
+  @override
+  String get printersFieldBluetoothId => 'Bluetooth device id / name';
+
+  @override
+  String get printersFieldUsbPath => 'USB path / identifier';
+
+  @override
+  String get printersEnabled => 'Enabled';
+
+  @override
+  String get printersDisabled => 'Disabled';
+
+  @override
+  String get printersEdit => 'Edit';
+
+  @override
+  String get printersRoute => 'Route to station';
+
+  @override
+  String get printersRouteTitle => 'Route printer to a station';
+
+  @override
+  String get printersRouteStation => 'Station';
+
+  @override
+  String get printersRouteActive => 'Route enabled';
+
+  @override
+  String get printersRoutedTo => 'Routes to';
+
+  @override
+  String get printersDelete => 'Remove printer';
+
+  @override
+  String get printersDeleteConfirm =>
+      'Remove this printer? Its station routes are removed too.';
+
+  @override
+  String get printersSaved => 'Saved';
+
+  @override
+  String get printersNoStations => 'No stations found for this branch yet.';
+
+  @override
+  String get printersErrHost => 'Enter the printer host / IP';
+
+  @override
+  String get printersErrPort => 'Enter a valid port (1–65535)';
+
+  @override
+  String get printersSave => 'Save';
+
+  @override
+  String get staffTitle => 'Staff';
+
+  @override
+  String get staffSubtitle => 'Employees and PIN sign-in for this branch';
+
+  @override
+  String get staffAdd => 'Add staff member';
+
+  @override
+  String get staffEmptyTitle => 'No staff yet';
+
+  @override
+  String get staffEmptyBody =>
+      'Create your cashiers, kitchen staff, and managers, then set each one a PIN for POS/KDS sign-in.';
+
+  @override
+  String get staffFieldName => 'Display name';
+
+  @override
+  String get staffFieldRole => 'Role';
+
+  @override
+  String get staffPinSet => 'PIN set';
+
+  @override
+  String get staffNoPin => 'No PIN';
+
+  @override
+  String get staffSetPin => 'Set PIN';
+
+  @override
+  String get staffResetPin => 'Reset PIN';
+
+  @override
+  String get staffPinDialogTitle => 'Set sign-in PIN';
+
+  @override
+  String get staffPinDialogBody =>
+      '4–8 digits. Stored as a secure hash — it can never be read back; setting a new PIN replaces the old one.';
+
+  @override
+  String get staffFieldPin => 'PIN (4–8 digits)';
+
+  @override
+  String get staffFieldPinConfirm => 'Confirm PIN';
+
+  @override
+  String get staffPinMismatch => 'PINs don\'t match';
+
+  @override
+  String get staffPinInvalid => 'Enter 4–8 digits';
+
+  @override
+  String get staffPinSaved => 'PIN saved';
+
+  @override
+  String get staffCreated => 'Staff member created';
+
+  @override
+  String get staffNoPinWarning =>
+      'Staff without a PIN can\'t sign in on POS/KDS.';
+
+  @override
+  String get staffInactive => 'Inactive';
+
+  @override
+  String get adminRevokeConfirm =>
+      'Revoke this device? Its pairing and sessions end immediately and the device returns to its pairing screen.';
+
+  @override
+  String get adminPairOnDevice =>
+      'Enter the one-time code on this device\'s pairing screen to pair it.';
+
+  @override
+  String get pinLoginTitle => 'Staff sign-in';
+
+  @override
+  String get pinLoginPickName => 'Tap your name';
+
+  @override
+  String get pinLoginEmptyTitle => 'No staff available';
+
+  @override
+  String get pinLoginEmptyBody =>
+      'Ask a manager to add staff members and set their PINs in the dashboard.';
+
+  @override
+  String get pinLoginLoadError =>
+      'Couldn\'t load the staff list. Check the connection and try again.';
+
+  @override
+  String get pinLoginSessionInvalid =>
+      'This device\'s session is no longer valid. Pair the device again.';
+
+  @override
+  String get pinLoginWrongPin => 'Wrong PIN — try again.';
+
+  @override
+  String get pinLoginLocked =>
+      'Too many attempts. This sign-in is temporarily locked.';
+
+  @override
+  String get pinLoginNetworkError => 'Connection problem — try again.';
+
+  @override
+  String get pinLoginUnavailable => 'Sign-in isn\'t available right now.';
+
+  @override
+  String get pinLoginSubmit => 'Sign in';
+
+  @override
+  String get pinLoginBack => 'Back';
+
+  @override
+  String get pinFieldLabel => 'PIN';
+
+  @override
+  String get posSignOutStaff => 'End staff session';
+
+  @override
+  String get posMenuLoadError =>
+      'Couldn\'t load the menu. Check the connection and try again.';
+
+  @override
+  String get posMenuEmptyTitle => 'No menu items yet';
+
+  @override
+  String get posMenuEmptyBody =>
+      'Add menu items in the dashboard to start selling.';
+
+  @override
+  String get kdsSignInAgain => 'Sign in again';
 }

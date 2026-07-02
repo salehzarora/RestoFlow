@@ -1282,6 +1282,30 @@ abstract class AppLocalizations {
   /// **'Something went wrong'**
   String get authError;
 
+  /// Title of the help page shown when the app starts in real mode without valid Supabase connection settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Real mode is not configured'**
+  String get authRealModeUnconfiguredTitle;
+
+  /// Body of the real-mode-unconfigured help page explaining why the app is locked.
+  ///
+  /// In en, this message translates to:
+  /// **'The app was started in real mode, but the backend connection settings are missing or invalid. RestoFlow never fakes a backend, so real mode stays locked until valid settings are provided.'**
+  String get authRealModeUnconfiguredBody;
+
+  /// Heading above the code block listing the required --dart-define values for real mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Start the app with these values'**
+  String get authRealModeUnconfiguredHowTo;
+
+  /// Hint on the real-mode-unconfigured help page explaining how to run the demo.
+  ///
+  /// In en, this message translates to:
+  /// **'To explore the demo instead, run the app without any configuration — demo mode is the default.'**
+  String get authRealModeUnconfiguredDemoHint;
+
   /// Auth gate action that retries loading the account context.
   ///
   /// In en, this message translates to:
@@ -2553,6 +2577,576 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t pair this device. Please try again.'**
   String get pairingFailed;
+
+  /// Dashboard navigation label for the printers surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Printers'**
+  String get dashboardNavPrinters;
+
+  /// Dashboard navigation label for the staff/PIN surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff'**
+  String get dashboardNavStaff;
+
+  /// Header mode pill when the app runs on in-memory demo data.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo'**
+  String get dashboardModeDemo;
+
+  /// Header mode pill when the app runs against the real backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Real'**
+  String get dashboardModeReal;
+
+  /// Title of the real-mode setup center on the dashboard overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup'**
+  String get setupTitle;
+
+  /// Subtitle of the setup center.
+  ///
+  /// In en, this message translates to:
+  /// **'Get this branch ready for service'**
+  String get setupSubtitle;
+
+  /// Setup metric label: paired devices.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get setupDevices;
+
+  /// Caption under the devices setup metric.
+  ///
+  /// In en, this message translates to:
+  /// **'active / total'**
+  String get setupDevicesCaption;
+
+  /// Setup metric label: configured printers.
+  ///
+  /// In en, this message translates to:
+  /// **'Printers'**
+  String get setupPrinters;
+
+  /// Caption under the printers setup metric.
+  ///
+  /// In en, this message translates to:
+  /// **'enabled / total'**
+  String get setupPrintersCaption;
+
+  /// Setup metric label: staff with a sign-in PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff PINs'**
+  String get setupStaffPin;
+
+  /// Caption under the staff setup metric.
+  ///
+  /// In en, this message translates to:
+  /// **'with PIN / total'**
+  String get setupStaffCaption;
+
+  /// Shown when a setup metric could not be loaded (never a fake zero).
+  ///
+  /// In en, this message translates to:
+  /// **'n/a'**
+  String get setupMetricUnavailable;
+
+  /// Setup next-step when the branch has no devices.
+  ///
+  /// In en, this message translates to:
+  /// **'No devices yet — create a POS or KDS device and issue a pairing code.'**
+  String get setupNoDevices;
+
+  /// Setup next-step when devices exist but none is actively paired.
+  ///
+  /// In en, this message translates to:
+  /// **'No device is paired yet — issue a code in Devices and redeem it on the device\'s pairing screen.'**
+  String get setupNoActiveDevice;
+
+  /// Setup next-step when no printers are configured.
+  ///
+  /// In en, this message translates to:
+  /// **'No printers configured yet — add a receipt or kitchen printer.'**
+  String get setupNoPrinters;
+
+  /// Setup warning when no active staff member has a PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'No staff member has a PIN yet — POS/KDS sign-in (and the live order flow) needs at least one.'**
+  String get setupNoStaffPin;
+
+  /// Setup success banner when the readiness checks pass.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch is ready: paired device and staff PIN in place.'**
+  String get setupReady;
+
+  /// Printers page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Printers'**
+  String get printersTitle;
+
+  /// Printers page subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt and kitchen printers for this branch'**
+  String get printersSubtitle;
+
+  /// Button that opens the add-printer dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Add printer'**
+  String get printersAdd;
+
+  /// Empty-state title on the printers page.
+  ///
+  /// In en, this message translates to:
+  /// **'No printers yet'**
+  String get printersEmptyTitle;
+
+  /// Empty-state body on the printers page.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a receipt or kitchen printer to prepare this branch for printing.'**
+  String get printersEmptyBody;
+
+  /// Title of the honest transport-status notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration only — no print transport yet'**
+  String get printersTransportNoticeTitle;
+
+  /// Body of the honest transport-status notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer settings are saved and validated on the backend, but this build does not send anything to physical printers. The print engine ships network-first; Bluetooth and USB transports are not installed yet. No fake print success is ever shown.'**
+  String get printersTransportNotice;
+
+  /// Printer role: customer receipts.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get printersRoleReceipt;
+
+  /// Printer role: kitchen tickets.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen'**
+  String get printersRoleKitchen;
+
+  /// Connection type label: network.
+  ///
+  /// In en, this message translates to:
+  /// **'Network (Wi-Fi/LAN)'**
+  String get printersConnNetwork;
+
+  /// Connection type label: Bluetooth.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get printersConnBluetooth;
+
+  /// Connection type label: USB.
+  ///
+  /// In en, this message translates to:
+  /// **'USB'**
+  String get printersConnUsb;
+
+  /// Honest note on Bluetooth/USB printers: config is saved, transport missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration only — this transport is not installed yet.'**
+  String get printersConnConfigOnly;
+
+  /// Printer form field: display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get printersFieldName;
+
+  /// Printer form field: role.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer role'**
+  String get printersFieldRole;
+
+  /// Printer form field: connection type.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection type'**
+  String get printersFieldConnection;
+
+  /// Printer form field: paper width.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper width'**
+  String get printersFieldPaper;
+
+  /// Printer form field: network host.
+  ///
+  /// In en, this message translates to:
+  /// **'Host / IP address'**
+  String get printersFieldHost;
+
+  /// Printer form field: network port.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get printersFieldPort;
+
+  /// Printer form field: Bluetooth identifier (configuration only).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth device id / name'**
+  String get printersFieldBluetoothId;
+
+  /// Printer form field: USB identifier (configuration only).
+  ///
+  /// In en, this message translates to:
+  /// **'USB path / identifier'**
+  String get printersFieldUsbPath;
+
+  /// Printer state pill/switch: enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get printersEnabled;
+
+  /// Printer state pill: disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get printersDisabled;
+
+  /// Edit-printer action.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get printersEdit;
+
+  /// Action that opens the route-to-station dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Route to station'**
+  String get printersRoute;
+
+  /// Route dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Route printer to a station'**
+  String get printersRouteTitle;
+
+  /// Route dialog station dropdown label.
+  ///
+  /// In en, this message translates to:
+  /// **'Station'**
+  String get printersRouteStation;
+
+  /// Route dialog enabled switch label.
+  ///
+  /// In en, this message translates to:
+  /// **'Route enabled'**
+  String get printersRouteActive;
+
+  /// Prefix before the list of stations a printer routes to.
+  ///
+  /// In en, this message translates to:
+  /// **'Routes to'**
+  String get printersRoutedTo;
+
+  /// Delete-printer action + confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove printer'**
+  String get printersDelete;
+
+  /// Delete-printer confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this printer? Its station routes are removed too.'**
+  String get printersDeleteConfirm;
+
+  /// Snackbar after a successful printer save/route/removal.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get printersSaved;
+
+  /// Shown when routing is attempted with no stations.
+  ///
+  /// In en, this message translates to:
+  /// **'No stations found for this branch yet.'**
+  String get printersNoStations;
+
+  /// Validation message for a missing network host.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the printer host / IP'**
+  String get printersErrHost;
+
+  /// Validation message for an invalid network port.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid port (1–65535)'**
+  String get printersErrPort;
+
+  /// Printer dialog save button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get printersSave;
+
+  /// Staff page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff'**
+  String get staffTitle;
+
+  /// Staff page subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Employees and PIN sign-in for this branch'**
+  String get staffSubtitle;
+
+  /// Button that opens the add-staff dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Add staff member'**
+  String get staffAdd;
+
+  /// Empty-state title on the staff page.
+  ///
+  /// In en, this message translates to:
+  /// **'No staff yet'**
+  String get staffEmptyTitle;
+
+  /// Empty-state body on the staff page.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your cashiers, kitchen staff, and managers, then set each one a PIN for POS/KDS sign-in.'**
+  String get staffEmptyBody;
+
+  /// Staff form field: display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get staffFieldName;
+
+  /// Staff form field: role.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get staffFieldRole;
+
+  /// Pill: this staff member has a PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN set'**
+  String get staffPinSet;
+
+  /// Pill: this staff member has no PIN yet.
+  ///
+  /// In en, this message translates to:
+  /// **'No PIN'**
+  String get staffNoPin;
+
+  /// Action that opens the set-PIN dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Set PIN'**
+  String get staffSetPin;
+
+  /// Action label when a PIN already exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset PIN'**
+  String get staffResetPin;
+
+  /// Set-PIN dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Set sign-in PIN'**
+  String get staffPinDialogTitle;
+
+  /// Set-PIN dialog explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'4–8 digits. Stored as a secure hash — it can never be read back; setting a new PIN replaces the old one.'**
+  String get staffPinDialogBody;
+
+  /// Set-PIN dialog PIN field label.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN (4–8 digits)'**
+  String get staffFieldPin;
+
+  /// Set-PIN dialog confirm field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm PIN'**
+  String get staffFieldPinConfirm;
+
+  /// Validation message when PIN and confirmation differ.
+  ///
+  /// In en, this message translates to:
+  /// **'PINs don\'t match'**
+  String get staffPinMismatch;
+
+  /// Validation message for a malformed PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 4–8 digits'**
+  String get staffPinInvalid;
+
+  /// Snackbar after a successful PIN save.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN saved'**
+  String get staffPinSaved;
+
+  /// Snackbar after creating a staff member.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff member created'**
+  String get staffCreated;
+
+  /// Warning banner when active staff lack PINs.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff without a PIN can\'t sign in on POS/KDS.'**
+  String get staffNoPinWarning;
+
+  /// Pill for a suspended/terminated staff member.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get staffInactive;
+
+  /// Device revoke confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke this device? Its pairing and sessions end immediately and the device returns to its pairing screen.'**
+  String get adminRevokeConfirm;
+
+  /// Hint shown for a code_issued device in real mode (device-originated pairing).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the one-time code on this device\'s pairing screen to pair it.'**
+  String get adminPairOnDevice;
+
+  /// PIN sign-in screen title (POS/KDS).
+  ///
+  /// In en, this message translates to:
+  /// **'Staff sign-in'**
+  String get pinLoginTitle;
+
+  /// Heading above the staff list on the PIN sign-in screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap your name'**
+  String get pinLoginPickName;
+
+  /// PIN sign-in empty-state title when the branch has no active staff.
+  ///
+  /// In en, this message translates to:
+  /// **'No staff available'**
+  String get pinLoginEmptyTitle;
+
+  /// PIN sign-in empty-state body.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a manager to add staff members and set their PINs in the dashboard.'**
+  String get pinLoginEmptyBody;
+
+  /// PIN sign-in staff-list load failure message.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the staff list. Check the connection and try again.'**
+  String get pinLoginLoadError;
+
+  /// PIN sign-in message when the stored device session was rejected.
+  ///
+  /// In en, this message translates to:
+  /// **'This device\'s session is no longer valid. Pair the device again.'**
+  String get pinLoginSessionInvalid;
+
+  /// PIN sign-in wrong-PIN message.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong PIN — try again.'**
+  String get pinLoginWrongPin;
+
+  /// PIN sign-in lockout message.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. This sign-in is temporarily locked.'**
+  String get pinLoginLocked;
+
+  /// PIN sign-in transient network message.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection problem — try again.'**
+  String get pinLoginNetworkError;
+
+  /// PIN sign-in generic unavailable message.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in isn\'t available right now.'**
+  String get pinLoginUnavailable;
+
+  /// PIN sign-in submit button.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get pinLoginSubmit;
+
+  /// PIN sign-in back-to-staff-list button.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get pinLoginBack;
+
+  /// PIN input field label.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN'**
+  String get pinFieldLabel;
+
+  /// POS/KDS action that ends the current staff PIN session.
+  ///
+  /// In en, this message translates to:
+  /// **'End staff session'**
+  String get posSignOutStaff;
+
+  /// POS real-menu load failure message.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the menu. Check the connection and try again.'**
+  String get posMenuLoadError;
+
+  /// POS real-menu empty-state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No menu items yet'**
+  String get posMenuEmptyTitle;
+
+  /// POS real-menu empty-state body.
+  ///
+  /// In en, this message translates to:
+  /// **'Add menu items in the dashboard to start selling.'**
+  String get posMenuEmptyBody;
+
+  /// KDS action shown when the live session expired/was revoked; returns to the staff PIN screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again'**
+  String get kdsSignInAgain;
 }
 
 class _AppLocalizationsDelegate

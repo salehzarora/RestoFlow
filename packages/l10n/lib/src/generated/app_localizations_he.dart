@@ -617,6 +617,21 @@ class AppLocalizationsHe extends AppLocalizations {
   String get authError => 'משהו השתבש';
 
   @override
+  String get authRealModeUnconfiguredTitle => 'מצב אמת אינו מוגדר';
+
+  @override
+  String get authRealModeUnconfiguredBody =>
+      'האפליקציה הופעלה במצב אמת, אך הגדרות החיבור לשרת חסרות או שגויות. RestoFlow לעולם אינו מזייף שרת, ולכן מצב האמת נשאר נעול עד שיסופקו הגדרות תקינות.';
+
+  @override
+  String get authRealModeUnconfiguredHowTo =>
+      'הפעל את האפליקציה עם הערכים הבאים';
+
+  @override
+  String get authRealModeUnconfiguredDemoHint =>
+      'כדי לנסות את הדמו במקום זאת, הפעל את האפליקציה ללא כל הגדרה — מצב הדמו הוא ברירת המחדל.';
+
+  @override
   String get authTryAgain => 'נסה שוב';
 
   @override
@@ -1273,4 +1288,307 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get pairingFailed => 'לא ניתן לצמד את המכשיר. נסו שוב.';
+
+  @override
+  String get dashboardNavPrinters => 'מדפסות';
+
+  @override
+  String get dashboardNavStaff => 'צוות';
+
+  @override
+  String get dashboardModeDemo => 'דמו';
+
+  @override
+  String get dashboardModeReal => 'אמת';
+
+  @override
+  String get setupTitle => 'הגדרה';
+
+  @override
+  String get setupSubtitle => 'הכינו את הסניף הזה לשירות';
+
+  @override
+  String get setupDevices => 'מכשירים';
+
+  @override
+  String get setupDevicesCaption => 'פעילים / סה״כ';
+
+  @override
+  String get setupPrinters => 'מדפסות';
+
+  @override
+  String get setupPrintersCaption => 'מופעלות / סה״כ';
+
+  @override
+  String get setupStaffPin => 'קודי PIN לצוות';
+
+  @override
+  String get setupStaffCaption => 'עם PIN / סה״כ';
+
+  @override
+  String get setupMetricUnavailable => 'לא זמין';
+
+  @override
+  String get setupNoDevices =>
+      'אין מכשירים עדיין — צרו מכשיר קופה או מסך מטבח והנפיקו קוד צימוד.';
+
+  @override
+  String get setupNoActiveDevice =>
+      'אף מכשיר אינו מצומד עדיין — הנפיקו קוד בעמוד המכשירים והזינו אותו במסך הצימוד של המכשיר.';
+
+  @override
+  String get setupNoPrinters =>
+      'אין מדפסות מוגדרות עדיין — הוסיפו מדפסת קבלות או מדפסת מטבח.';
+
+  @override
+  String get setupNoStaffPin =>
+      'לאף איש צוות אין PIN עדיין — כניסה לקופה/מסך המטבח (ומחזור ההזמנות החי) דורשת לפחות אחד.';
+
+  @override
+  String get setupReady => 'הסניף מוכן: מכשיר מצומד וקוד PIN לצוות קיימים.';
+
+  @override
+  String get printersTitle => 'מדפסות';
+
+  @override
+  String get printersSubtitle => 'מדפסות קבלות ומטבח לסניף זה';
+
+  @override
+  String get printersAdd => 'הוספת מדפסת';
+
+  @override
+  String get printersEmptyTitle => 'אין מדפסות עדיין';
+
+  @override
+  String get printersEmptyBody =>
+      'הוסיפו מדפסת קבלות או מדפסת מטבח כדי להכין את הסניף להדפסה.';
+
+  @override
+  String get printersTransportNoticeTitle =>
+      'תצורה בלבד — אין עדיין ערוץ הדפסה';
+
+  @override
+  String get printersTransportNotice =>
+      'הגדרות המדפסת נשמרות ומאומתות בשרת, אך גרסה זו אינה שולחת דבר למדפסות פיזיות. מנוע ההדפסה בנוי רשת-תחילה; ערוצי Bluetooth ו-USB עדיין לא מותקנים. לעולם לא מוצגת הצלחת הדפסה מזויפת.';
+
+  @override
+  String get printersRoleReceipt => 'קבלות';
+
+  @override
+  String get printersRoleKitchen => 'מטבח';
+
+  @override
+  String get printersConnNetwork => 'רשת (Wi-Fi/LAN)';
+
+  @override
+  String get printersConnBluetooth => 'Bluetooth';
+
+  @override
+  String get printersConnUsb => 'USB';
+
+  @override
+  String get printersConnConfigOnly => 'תצורה בלבד — ערוץ זה עדיין לא מותקן.';
+
+  @override
+  String get printersFieldName => 'שם תצוגה';
+
+  @override
+  String get printersFieldRole => 'תפקיד המדפסת';
+
+  @override
+  String get printersFieldConnection => 'סוג חיבור';
+
+  @override
+  String get printersFieldPaper => 'רוחב נייר';
+
+  @override
+  String get printersFieldHost => 'מארח / כתובת IP';
+
+  @override
+  String get printersFieldPort => 'פורט';
+
+  @override
+  String get printersFieldBluetoothId => 'מזהה / שם התקן Bluetooth';
+
+  @override
+  String get printersFieldUsbPath => 'נתיב / מזהה USB';
+
+  @override
+  String get printersEnabled => 'מופעלת';
+
+  @override
+  String get printersDisabled => 'מושבתת';
+
+  @override
+  String get printersEdit => 'עריכה';
+
+  @override
+  String get printersRoute => 'ניתוב לתחנה';
+
+  @override
+  String get printersRouteTitle => 'ניתוב המדפסת לתחנה';
+
+  @override
+  String get printersRouteStation => 'תחנה';
+
+  @override
+  String get printersRouteActive => 'הניתוב מופעל';
+
+  @override
+  String get printersRoutedTo => 'מנתבת אל';
+
+  @override
+  String get printersDelete => 'הסרת מדפסת';
+
+  @override
+  String get printersDeleteConfirm =>
+      'להסיר את המדפסת הזו? גם ניתובי התחנות שלה יוסרו.';
+
+  @override
+  String get printersSaved => 'נשמר';
+
+  @override
+  String get printersNoStations => 'אין תחנות לסניף זה עדיין.';
+
+  @override
+  String get printersErrHost => 'הזינו מארח / כתובת IP של המדפסת';
+
+  @override
+  String get printersErrPort => 'הזינו פורט תקין (1–65535)';
+
+  @override
+  String get printersSave => 'שמירה';
+
+  @override
+  String get staffTitle => 'צוות';
+
+  @override
+  String get staffSubtitle => 'עובדים וכניסת PIN לסניף זה';
+
+  @override
+  String get staffAdd => 'הוספת איש צוות';
+
+  @override
+  String get staffEmptyTitle => 'אין צוות עדיין';
+
+  @override
+  String get staffEmptyBody =>
+      'צרו קופאים, אנשי מטבח ומנהלים, ואז הגדירו לכל אחד PIN לכניסה לקופה/מסך המטבח.';
+
+  @override
+  String get staffFieldName => 'שם תצוגה';
+
+  @override
+  String get staffFieldRole => 'תפקיד';
+
+  @override
+  String get staffPinSet => 'PIN הוגדר';
+
+  @override
+  String get staffNoPin => 'אין PIN';
+
+  @override
+  String get staffSetPin => 'הגדרת PIN';
+
+  @override
+  String get staffResetPin => 'איפוס PIN';
+
+  @override
+  String get staffPinDialogTitle => 'הגדרת PIN לכניסה';
+
+  @override
+  String get staffPinDialogBody =>
+      '4–8 ספרות. נשמר כגיבוב מאובטח — לא ניתן לקרוא אותו לעולם; הגדרת PIN חדש מחליפה את הישן.';
+
+  @override
+  String get staffFieldPin => 'PIN (4–8 ספרות)';
+
+  @override
+  String get staffFieldPinConfirm => 'אישור PIN';
+
+  @override
+  String get staffPinMismatch => 'קודי ה-PIN אינם תואמים';
+
+  @override
+  String get staffPinInvalid => 'הזינו 4–8 ספרות';
+
+  @override
+  String get staffPinSaved => 'ה-PIN נשמר';
+
+  @override
+  String get staffCreated => 'איש הצוות נוצר';
+
+  @override
+  String get staffNoPinWarning =>
+      'איש צוות ללא PIN אינו יכול להיכנס לקופה/מסך המטבח.';
+
+  @override
+  String get staffInactive => 'לא פעיל';
+
+  @override
+  String get adminRevokeConfirm =>
+      'לבטל את המכשיר הזה? הצימוד וההפעלות שלו יסתיימו מיד והמכשיר יחזור למסך הצימוד.';
+
+  @override
+  String get adminPairOnDevice =>
+      'הזינו את הקוד החד-פעמי במסך הצימוד של המכשיר כדי לצמד אותו.';
+
+  @override
+  String get pinLoginTitle => 'כניסת צוות';
+
+  @override
+  String get pinLoginPickName => 'הקישו על השם שלכם';
+
+  @override
+  String get pinLoginEmptyTitle => 'אין צוות זמין';
+
+  @override
+  String get pinLoginEmptyBody =>
+      'בקשו ממנהל להוסיף אנשי צוות ולהגדיר להם PIN בלוח הבקרה.';
+
+  @override
+  String get pinLoginLoadError =>
+      'לא ניתן לטעון את רשימת הצוות. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get pinLoginSessionInvalid =>
+      'הפעלת המכשיר אינה תקפה עוד. צמדו את המכשיר מחדש.';
+
+  @override
+  String get pinLoginWrongPin => 'PIN שגוי — נסו שוב.';
+
+  @override
+  String get pinLoginLocked => 'יותר מדי ניסיונות. הכניסה נעולה זמנית.';
+
+  @override
+  String get pinLoginNetworkError => 'בעיית חיבור — נסו שוב.';
+
+  @override
+  String get pinLoginUnavailable => 'הכניסה אינה זמינה כעת.';
+
+  @override
+  String get pinLoginSubmit => 'כניסה';
+
+  @override
+  String get pinLoginBack => 'חזרה';
+
+  @override
+  String get pinFieldLabel => 'PIN';
+
+  @override
+  String get posSignOutStaff => 'סיום הפעלת צוות';
+
+  @override
+  String get posMenuLoadError =>
+      'לא ניתן לטעון את התפריט. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get posMenuEmptyTitle => 'אין פריטי תפריט עדיין';
+
+  @override
+  String get posMenuEmptyBody =>
+      'הוסיפו פריטי תפריט בלוח הבקרה כדי להתחיל למכור.';
+
+  @override
+  String get kdsSignInAgain => 'כניסה מחדש';
 }
