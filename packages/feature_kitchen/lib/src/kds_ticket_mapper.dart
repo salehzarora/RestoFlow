@@ -38,16 +38,37 @@ class KdsTicketMapper {
     required List<Map<String, dynamic>> orders,
     required List<Map<String, dynamic>> orderItems,
     required List<Map<String, dynamic>> modifiers,
+    List<Map<String, dynamic>> tables = const [],
   }) {
-    // Active orders: not tombstoned, kitchen-relevant status. orderId -> status.
-    final orderStatus = <String, String>{};
+    // Dining-table labels (tables entity, money-free): id -> label.
+    final tableLabels = <String, String>{};
+    for (final t in tables) {
+      if (t['deleted_at'] != null) continue;
+      final id = t['id'];
+      final label = t['label'];
+      if (id is! String || label is! String) continue;
+      tableLabels[id] = label;
+    }
+
+    // Active orders: not tombstoned, kitchen-relevant status. An EXPLICIT
+    // money-free pluck per order (status, type, table, notes) — never the raw
+    // row (T-003: money keys exist on the wire for non-kitchen roles).
+    final orderInfo = <String, _OrderInfo>{};
     for (final o in orders) {
       if (o['deleted_at'] != null) continue;
       final id = o['id'];
       final status = o['status'];
       if (id is! String || status is! String) continue;
       if (!_activeOrderStatuses.contains(status)) continue;
-      orderStatus[id] = status;
+      final tableId = o['table_id'];
+      final orderType = o['order_type'];
+      final notes = o['notes'];
+      orderInfo[id] = _OrderInfo(
+        status: status,
+        orderType: orderType is String ? orderType : null,
+        tableLabel: tableId is String ? tableLabels[tableId] : null,
+        notes: notes is String && notes.isNotEmpty ? notes : null,
+      );
     }
 
     // Modifier option names per order_item_id (skip tombstoned modifiers).
@@ -67,7 +88,8 @@ class KdsTicketMapper {
       final itemId = it['id'];
       final orderId = it['order_id'];
       if (itemId is! String || orderId is! String) continue;
-      if (!orderStatus.containsKey(orderId)) continue; // parent not active
+      final info = orderInfo[orderId];
+      if (info == null) continue; // parent not active
       final itemStatus = it['status'];
       if (itemStatus is String && _excludedItemStatuses.contains(itemStatus)) {
         continue;
@@ -80,11 +102,8 @@ class KdsTicketMapper {
       final name = nameRaw is String ? nameRaw : '';
       final qty = it['quantity'];
       final quantity = qty is int ? qty : int.tryParse('$qty') ?? 0;
-
-      final mods = modsByItem[itemId];
-      final label = (mods == null || mods.isEmpty)
-          ? name
-          : '$name (${mods.join(', ')})';
+      final noteRaw = it['notes'];
+      final note = noteRaw is String && noteRaw.isNotEmpty ? noteRaw : null;
 
       final key = '$orderId:$station';
       final builder = grouped.putIfAbsent(
@@ -93,10 +112,19 @@ class KdsTicketMapper {
           kitchenTicketId: key,
           stationId: station,
           orderId: orderId,
-          status: _ticketStatusFor(orderStatus[orderId]!),
+          status: _ticketStatusFor(info.status),
+          info: info,
         ),
       );
-      builder.items.add(KdsItemView(name: label, quantity: quantity));
+      builder.items.add(
+        KdsItemView(
+          name: name,
+          quantity: quantity,
+          // Structured modifier lines (was: flattened into the name).
+          modifiers: modsByItem[itemId] ?? const <String>[],
+          note: note,
+        ),
+      );
     }
 
     final tickets =
@@ -108,6 +136,11 @@ class KdsTicketMapper {
                 items: b.items,
                 status: b.status,
                 orderId: b.orderId,
+                // The SAME display code the POS shows (shared derivation).
+                orderNumber: displayOrderCode(b.orderId),
+                orderType: b.info.orderType,
+                tableLabel: b.info.tableLabel,
+                notes: b.info.notes,
               ),
             )
             .toList()
@@ -133,11 +166,28 @@ class _TicketBuilder {
     required this.stationId,
     required this.orderId,
     required this.status,
+    required this.info,
   });
 
   final String kitchenTicketId;
   final String stationId;
   final String orderId;
   final KitchenTicketStatus status;
+  final _OrderInfo info;
   final List<KdsItemView> items = [];
+}
+
+/// The explicit money-free pluck of one active order's display fields.
+class _OrderInfo {
+  const _OrderInfo({
+    required this.status,
+    required this.orderType,
+    required this.tableLabel,
+    required this.notes,
+  });
+
+  final String status;
+  final String? orderType;
+  final String? tableLabel;
+  final String? notes;
 }

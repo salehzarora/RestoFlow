@@ -57,6 +57,7 @@ class KdsRepository {
         orders: s.rowsFor('orders'),
         orderItems: s.rowsFor('order_items'),
         modifiers: s.rowsFor('order_item_modifiers'),
+        tables: s.rowsFor('tables'),
       ),
     );
   }

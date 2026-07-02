@@ -54,42 +54,80 @@ void main() {
       },
     );
 
-    test(
-      'attaches modifier option names to the item label (uses modifiers rows)',
-      () {
-        final tickets = KdsTicketMapper.map(
-          orders: [
-            {'id': 'o1', 'status': 'preparing'},
-          ],
-          orderItems: [
-            {
-              'id': 'i1',
-              'order_id': 'o1',
-              'station_id': 'grill',
-              'status': 'preparing',
-              'quantity': 1,
-              'menu_item_name_snapshot': 'Burger',
-            },
-          ],
-          modifiers: [
-            {
-              'id': 'm1',
-              'order_item_id': 'i1',
-              'option_name_snapshot': 'no onion',
-            },
-            {
-              'id': 'm2',
-              'order_item_id': 'i1',
-              'option_name_snapshot': 'extra cheese',
-            },
-          ],
-        );
-        expect(
-          tickets.single.items.single.name,
-          'Burger (no onion, extra cheese)',
-        );
-      },
-    );
+    test('carries modifier option names as STRUCTURED lines (demo-readiness '
+        'sprint — no longer flattened into the item name)', () {
+      final tickets = KdsTicketMapper.map(
+        orders: [
+          {'id': 'o1', 'status': 'preparing'},
+        ],
+        orderItems: [
+          {
+            'id': 'i1',
+            'order_id': 'o1',
+            'station_id': 'grill',
+            'status': 'preparing',
+            'quantity': 1,
+            'menu_item_name_snapshot': 'Burger',
+          },
+        ],
+        modifiers: [
+          {
+            'id': 'm1',
+            'order_item_id': 'i1',
+            'option_name_snapshot': 'no onion',
+          },
+          {
+            'id': 'm2',
+            'order_item_id': 'i1',
+            'option_name_snapshot': 'extra cheese',
+          },
+        ],
+      );
+      final item = tickets.single.items.single;
+      expect(item.name, 'Burger');
+      expect(item.modifiers, ['no onion', 'extra cheese']);
+    });
+
+    test('plucks the display fields: SAME order number as the POS, order '
+        'type, table label (via the tables entity), and notes', () {
+      final tickets = KdsTicketMapper.map(
+        orders: [
+          {
+            'id': '4c7d2f10-1111-2222-3333-abcdefabc123',
+            'status': 'submitted',
+            'order_type': 'dine_in',
+            'table_id': 'tbl-1',
+            'notes': 'rush order',
+          },
+        ],
+        orderItems: [
+          {
+            'id': 'i1',
+            'order_id': '4c7d2f10-1111-2222-3333-abcdefabc123',
+            'station_id': 'grill',
+            'status': 'pending',
+            'quantity': 2,
+            'menu_item_name_snapshot': 'Burger',
+            'notes': 'well done',
+          },
+        ],
+        modifiers: const [],
+        tables: [
+          {'id': 'tbl-1', 'label': 'T3'},
+        ],
+      );
+      final ticket = tickets.single;
+      // The shared display code — identical to the POS confirmation number.
+      expect(
+        ticket.orderNumber,
+        displayOrderCode('4c7d2f10-1111-2222-3333-abcdefabc123'),
+      );
+      expect(ticket.orderNumber, '#ABC123');
+      expect(ticket.orderType, 'dine_in');
+      expect(ticket.tableLabel, 'T3');
+      expect(ticket.notes, 'rush order');
+      expect(ticket.items.single.note, 'well done');
+    });
 
     test(
       'ignores tombstoned orders, items, and modifiers (deleted_at != null)',

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_kds/main.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 
@@ -85,8 +86,11 @@ void main() {
     await tester.pump(); // deliver the data state
 
     expect(find.text('Burger ×2'), findsOneWidget);
-    // The mapped ticket id is order:station (no money anywhere on screen).
-    expect(find.textContaining('o1:grill'), findsOneWidget);
+    // Demo-readiness sprint: the card title is the HUMAN display code derived
+    // from the order id — the same code the POS shows — never the raw
+    // order:station key (and no money anywhere on screen).
+    expect(find.text(displayOrderCode('o1')), findsOneWidget);
+    expect(find.textContaining('o1:grill'), findsNothing);
   });
 
   testWidgets(

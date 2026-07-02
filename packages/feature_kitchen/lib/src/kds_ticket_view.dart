@@ -7,20 +7,34 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 /// (ARCHITECTURE §3); the app shell only hosts them. Display data only — it
 /// carries NO money field (kitchen redaction, SECURITY T-003).
 class KdsItemView {
-  const KdsItemView({required this.name, required this.quantity});
+  const KdsItemView({
+    required this.name,
+    required this.quantity,
+    this.modifiers = const <String>[],
+    this.note,
+  });
 
   /// Display name snapshot (data — rendered as-is, not a localized string).
   final String name;
 
   /// Item quantity (integer; never money).
   final int quantity;
+
+  /// Selected modifier option name snapshots (e.g. "no onion", "extra
+  /// cheese") — rendered as their own lines under the item, never money.
+  final List<String> modifiers;
+
+  /// The per-item kitchen note (order_items.notes), if any.
+  final String? note;
 }
 
 /// A KDS-local, mutable view model for one kitchen ticket.
 ///
 /// Holds the routing shape (id, station, items) plus a mutable
 /// [KitchenTicketStatus] the KDS screen drives via bump/recall. Built fresh from
-/// each pull (RF-063) or from a local fixture (RF-034 fallback). No money field.
+/// each pull (RF-063) or from a local fixture (RF-034 fallback). Every field is
+/// an EXPLICIT money-free pluck from the wire rows (SECURITY T-003) — never a
+/// raw-row passthrough.
 class KdsTicketView {
   KdsTicketView({
     required this.kitchenTicketId,
@@ -28,6 +42,10 @@ class KdsTicketView {
     required this.items,
     this.status = KitchenTicketStatus.ready,
     this.orderId,
+    this.orderNumber,
+    this.orderType,
+    this.tableLabel,
+    this.notes,
   });
 
   final String kitchenTicketId;
@@ -38,6 +56,21 @@ class KdsTicketView {
   /// (RF-063 mapper) — the target of an `order.status` push. Null for local
   /// demo fixtures (no backend order exists; nothing is pushed).
   final String? orderId;
+
+  /// The HUMAN display number for the order — the SAME `displayOrderCode`
+  /// the POS shows on its confirmation/receipt (derived from [orderId]), so
+  /// cashier and kitchen talk about one number. Null for demo fixtures.
+  final String? orderNumber;
+
+  /// Order type wire value ('dine_in' | 'takeaway'), when known.
+  final String? orderType;
+
+  /// The dining table's human label (resolved from the pulled `tables`
+  /// entity), if the order is attached to a table.
+  final String? tableLabel;
+
+  /// The order-level kitchen note (orders.notes), if any.
+  final String? notes;
 
   /// The current local status; mutated by bump/recall on the screen.
   KitchenTicketStatus status;

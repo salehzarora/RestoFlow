@@ -85,7 +85,15 @@ class KdsSyncedHome extends ConsumerWidget {
           allowRecall: false,
           onAdvanced: pusher == null
               ? null
-              : (ticket, to) => pusher.push(ticket, to),
+              : (ticket, to) async {
+                  await pusher.push(ticket, to);
+                  // Snappy server confirm (demo-readiness sprint): pull right
+                  // after the push instead of waiting for the next poll tick.
+                  // Best-effort — a failure just leaves the regular poll.
+                  try {
+                    await ref.read(kdsRepositoryProvider).refresh();
+                  } catch (_) {}
+                },
         );
       },
     );
