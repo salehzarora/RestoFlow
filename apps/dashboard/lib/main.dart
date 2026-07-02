@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
+    show AdminRepository, AdminScope;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,6 +60,7 @@ Future<void> main() async {
         authRepository: real.auth,
         onboardingRepository: real.onboarding,
         fetchContext: real.fetchContext,
+        deviceRepositoryFor: real.deviceRepositoryFor,
         selectedContextStore: SharedPreferencesSelectedContextStore(),
       ),
     ),
@@ -78,6 +81,7 @@ class DashboardApp extends StatelessWidget {
     this.onboardingRepository,
     this.selectedContextStore,
     this.deviceContext,
+    this.deviceRepositoryFor,
     this.realModeUnconfigured = false,
     super.key,
   });
@@ -99,6 +103,11 @@ class DashboardApp extends StatelessWidget {
 
   /// The device/station context holder (RF-152 foundation). Null => internal.
   final DeviceContextController? deviceContext;
+
+  /// Builds the REAL device repository for a given admin scope (RF-160). Non-null
+  /// only in authenticated real mode; the dashboard Devices tab uses it there and
+  /// falls back to the demo store otherwise (demo default preserved).
+  final AdminRepository Function(AdminScope scope)? deviceRepositoryFor;
 
   /// True in real mode when the Supabase anon-key config was missing/invalid.
   final bool realModeUnconfigured;
@@ -131,7 +140,10 @@ class DashboardApp extends StatelessWidget {
       fetchContext: fetchContext!,
       selectedContextStore: selectedContextStore,
       deviceContext: deviceContext,
-      onReady: (context, membership) => DashboardShell(membership: membership),
+      onReady: (context, membership) => DashboardShell(
+        membership: membership,
+        deviceRepositoryFor: deviceRepositoryFor,
+      ),
     );
   }
 }

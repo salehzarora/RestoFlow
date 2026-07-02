@@ -39,10 +39,17 @@ AdminScope dashboardAdminScopeFor(MembershipContext? membership) {
 /// bridge. The active [membership] gated entry, drives the scope, and is shown as
 /// context; it is never discarded.
 class DashboardShell extends StatefulWidget {
-  const DashboardShell({this.membership, super.key});
+  const DashboardShell({this.membership, this.deviceRepositoryFor, super.key});
 
   /// The RF-108 active membership (null in demo mode).
   final MembershipContext? membership;
+
+  /// Builds the REAL device repository for the active admin scope (RF-160). Non-null
+  /// only in authenticated real mode; null in demo mode / widget tests, in which case
+  /// the Devices tab uses the demo store (the demo default is preserved). Only the
+  /// Devices tab consumes it — Settings/Users stay on the demo store until their read
+  /// RPCs land.
+  final AdminRepository Function(AdminScope scope)? deviceRepositoryFor;
 
   static const double _wideBreakpoint = 900;
 
@@ -66,6 +73,11 @@ class _DashboardShellState extends State<DashboardShell> {
   late final AdminScope _adminScope = dashboardAdminScopeFor(widget.membership);
   late final DemoAdminStore _adminStore = DemoAdminStore(scope: _adminScope);
 
+  /// The real device repository for the active scope (RF-160), built once. Null in
+  /// demo mode / tests -> the Devices tab falls back to the demo store.
+  late final AdminRepository? _realDeviceRepo = widget.deviceRepositoryFor
+      ?.call(_adminScope);
+
   void _select(int value) => setState(() => _index = value);
 
   @override
@@ -74,9 +86,22 @@ class _DashboardShellState extends State<DashboardShell> {
     final content = switch (_index) {
       0 => const DashboardHomeScreen(),
       1 => _menuSurface(context, l10n),
-      2 => _adminSurface(const AdminSettingsScreen()),
-      3 => _adminSurface(const AdminUsersScreen()),
-      _ => _adminSurface(const AdminDevicesScreen()),
+      2 => _adminSurface(
+        const AdminSettingsScreen(),
+        repository: _adminStore,
+        demo: true,
+      ),
+      3 => _adminSurface(
+        const AdminUsersScreen(),
+        repository: _adminStore,
+        demo: true,
+      ),
+      _ => _adminSurface(
+        const AdminDevicesScreen(),
+        // Real device management in authenticated mode; demo store otherwise.
+        repository: _realDeviceRepo ?? _adminStore,
+        demo: _realDeviceRepo == null,
+      ),
     };
 
     return Scaffold(
@@ -115,28 +140,34 @@ class _DashboardShellState extends State<DashboardShell> {
     );
   }
 
-  /// Wraps an RF-113 admin screen with the membership context strip, the demo
-  /// banner, and the feature [ProviderScope] overrides (scope + demo store).
-  Widget _adminSurface(Widget screen) {
+  /// Wraps an RF-113 admin screen with the membership context strip, the feature
+  /// [ProviderScope] overrides (scope + [repository]), and — only when [demo] — the
+  /// demo banner. A real repository (RF-160 Devices) shows NO demo banner.
+  Widget _adminSurface(
+    Widget screen, {
+    required AdminRepository repository,
+    required bool demo,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.membership != null)
           _MembershipContextBar(membership: widget.membership!),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(
-            RestoflowSpacing.lg,
-            RestoflowSpacing.md,
-            RestoflowSpacing.lg,
-            0,
+        if (demo)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(
+              RestoflowSpacing.lg,
+              RestoflowSpacing.md,
+              RestoflowSpacing.lg,
+              0,
+            ),
+            child: AdminDemoBanner(),
           ),
-          child: AdminDemoBanner(),
-        ),
         Expanded(
           child: ProviderScope(
             overrides: adminFeatureOverrides(
               scope: _adminScope,
-              repository: _adminStore,
+              repository: repository,
             ),
             child: screen,
           ),
