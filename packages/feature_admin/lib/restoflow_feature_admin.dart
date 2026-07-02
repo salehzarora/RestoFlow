@@ -26,8 +26,18 @@ export 'src/data/demo_admin_store.dart';
 // State (Riverpod providers + the write controller + overrides).
 export 'src/state/admin_providers.dart';
 
-// UI (the three owner admin surfaces + the reusable demo banner).
+// UI (the three owner admin surfaces + reusable building blocks: the demo
+// banner, the page header/section/state/pill primitives, and the failure/role
+// label mappers — shared with the dashboard's Printers/Staff surfaces).
 export 'src/screens/devices_screen.dart';
 export 'src/screens/settings_screen.dart';
 export 'src/screens/users_screen.dart';
-export 'src/widgets/admin_common.dart' show AdminDemoBanner;
+export 'src/widgets/admin_common.dart'
+    show
+        AdminDemoBanner,
+        AdminPageHeader,
+        AdminPill,
+        AdminSectionCard,
+        AdminStateView,
+        adminFailureMessage,
+        adminRoleLabel;

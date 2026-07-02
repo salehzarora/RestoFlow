@@ -185,10 +185,49 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
     r.fold((_) => _snack(l10n.adminDeviceUpdated), _onFailure);
   }
 
+  Future<void> _revoke() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.adminRevoke),
+        content: Text(l10n.adminRevokeConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.adminCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.adminRevoke),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _transition(() => _ctrl.revokeDevice(widget.device.id));
+  }
+
+  /// Whether the device currently has a revocable pairing/session.
+  bool get _revocable => switch (widget.device.status) {
+    DeviceLifecycleStatus.codeIssued ||
+    DeviceLifecycleStatus.pending ||
+    DeviceLifecycleStatus.paired ||
+    DeviceLifecycleStatus.active ||
+    DeviceLifecycleStatus.suspended => true,
+    _ => false,
+  };
+
   /// The single next provisioning action for the current lifecycle status.
+  ///
+  /// With a REAL backend ([AdminController.supportsManualLifecycle] false) the
+  /// device pairs ITSELF by redeeming the code on its own pairing screen
+  /// (RF-161), so the manual redeem/approve/activate/start-session simulation is
+  /// hidden — only issue-code (and revoke, rendered separately) remain.
   Widget? _action() {
     final l10n = AppLocalizations.of(context);
     if (!widget.canManage) return null;
+    final manual = _ctrl.supportsManualLifecycle;
     final id = widget.device.id;
     ({String label, IconData icon, Future<void> Function() run})? spec =
         switch (widget.device.status) {
@@ -200,27 +239,27 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
             icon: Icons.qr_code_2,
             run: _issueCode,
           ),
-          DeviceLifecycleStatus.codeIssued => (
+          DeviceLifecycleStatus.codeIssued when manual => (
             label: l10n.adminRedeem,
             icon: Icons.smartphone,
             run: () => _transition(() => _ctrl.redeemEnrollmentCode(id)),
           ),
-          DeviceLifecycleStatus.pending => (
+          DeviceLifecycleStatus.pending when manual => (
             label: l10n.adminApprove,
             icon: Icons.verified_user_outlined,
             run: () => _transition(() => _ctrl.approveDevice(id)),
           ),
-          DeviceLifecycleStatus.paired => (
+          DeviceLifecycleStatus.paired when manual => (
             label: l10n.adminActivate,
             icon: Icons.power_settings_new,
             run: () => _transition(() => _ctrl.activateDevice(id)),
           ),
-          DeviceLifecycleStatus.active => (
+          DeviceLifecycleStatus.active when manual => (
             label: l10n.adminStartSession,
             icon: Icons.vpn_key_outlined,
             run: _startSession,
           ),
-          DeviceLifecycleStatus.suspended => null,
+          _ => null,
         };
     if (spec == null) return null;
     return FilledButton.tonalIcon(
@@ -308,9 +347,46 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
                 ],
               ),
             ],
-            if (_action() case final action?) ...[
+            // Real backend: the device redeems its code itself (RF-161) — say so
+            // instead of showing a manual redeem button.
+            if (!_ctrl.supportsManualLifecycle &&
+                widget.device.status == DeviceLifecycleStatus.codeIssued) ...[
+              const SizedBox(height: RestoflowSpacing.sm),
+              Row(
+                children: [
+                  Icon(Icons.smartphone, size: 14, color: scheme.tertiary),
+                  const SizedBox(width: RestoflowSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      l10n.adminPairOnDevice,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.tertiary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (widget.canManage && (_revocable || _action() != null)) ...[
               const SizedBox(height: RestoflowSpacing.md),
-              Align(alignment: AlignmentDirectional.centerEnd, child: action),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (_revocable)
+                    TextButton.icon(
+                      onPressed: _busy ? null : _revoke,
+                      icon: Icon(Icons.block, size: 18, color: scheme.error),
+                      label: Text(
+                        l10n.adminRevoke,
+                        style: TextStyle(color: scheme.error),
+                      ),
+                    ),
+                  if (_action() case final action?) ...[
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    action,
+                  ],
+                ],
+              ),
             ],
           ],
         ),

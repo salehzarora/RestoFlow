@@ -12,21 +12,25 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 /// RPCs through an authenticated anon-key [SyncRpcTransport] (DECISION D-011 — no
 /// service-role key; identity is server-derived from `auth.uid()`, never sent).
 ///
-/// HONEST SCOPE. The RF-112 device backend is MANAGEMENT-driven and still has NO
-/// device-auth bridge (a device cannot yet authenticate as itself), so from the
-/// dashboard an owner/manager can:
+/// HONEST SCOPE. Pairing is DEVICE-originated since RF-161: the owner/manager
+/// creates a device, issues its one-time enrollment code, and the DEVICE redeems
+/// that code on its own pairing screen (`redeem_device_pairing` collapses
+/// `code_issued -> active` and mints the device session). So from the dashboard
+/// an owner/manager can:
 ///   * list the branch/restaurant/org devices with their live lifecycle status,
-///   * create a device, and
-///   * issue a one-time enrollment code (shown exactly once).
-/// The device-side redemption (`code_issued -> pending`) and every edge past it are
-/// DEFERRED WITH the device-auth bridge, so [redeemEnrollmentCode] / [approveDevice]
-/// / [activateDevice] / [startDeviceSession] return a typed, localized conflict
-/// rather than FAKING a transition. The SETTINGS + USERS reads have no public list
-/// RPC yet, so this repo is wired ONLY behind the Devices tab; Settings/Users keep
-/// the demo store (their methods here are never invoked and fail closed).
+///   * create a device,
+///   * issue a one-time enrollment code (shown exactly once), and
+///   * REVOKE a device (`revoke_device_management` — ends its pairing/sessions).
+/// The MANAGER-side lifecycle simulation (redeem/approve/activate/start-session)
+/// does not apply to the real backend ([supportsManualLifecycle] is false — the
+/// UI hides those actions); if ever invoked they fail closed with a typed
+/// conflict rather than FAKING a transition. The SETTINGS + USERS reads have no
+/// public list RPC yet, so this repo is wired ONLY behind the Devices tab;
+/// Settings/Users keep the demo store (their methods here fail closed).
 ///
 /// No secret is ever logged or surfaced; only safe, typed [AdminFailure]s cross the
-/// boundary. The `list_devices` read RPC is pending RISK R-003 human RLS sign-off.
+/// boundary. Human RLS/security sign-off before real tenant data remains a gate
+/// (RISK R-003; AGENTS.md).
 class SupabaseAdminDeviceRepository implements AdminRepository {
   SupabaseAdminDeviceRepository({
     required SyncRpcTransport transport,
@@ -163,26 +167,55 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
     );
   }
 
-  // The device-side redemption + the lifecycle beyond `code_issued` are DEFERRED
-  // with the device-auth bridge (RF-112 is management-driven; a device cannot yet
-  // authenticate as itself). Return an honest, localized conflict — never a fake move.
+  // Pairing is DEVICE-originated (RF-161): the device redeems its code itself,
+  // so the manager-side lifecycle simulation does not apply here. The UI hides
+  // these actions ([supportsManualLifecycle] false); fail closed if invoked.
   @override
   Future<AdminResult<AdminDevice>> redeemEnrollmentCode(
     String deviceId,
-  ) async => const Failure(AdminConflict('device_bridge_pending'));
+  ) async => const Failure(AdminConflict('device_originated'));
 
   @override
   Future<AdminResult<AdminDevice>> approveDevice(String deviceId) async =>
-      const Failure(AdminConflict('device_bridge_pending'));
+      const Failure(AdminConflict('device_originated'));
 
   @override
   Future<AdminResult<AdminDevice>> activateDevice(String deviceId) async =>
-      const Failure(AdminConflict('device_bridge_pending'));
+      const Failure(AdminConflict('device_originated'));
 
   @override
   Future<AdminResult<SessionStarted>> startDeviceSession(
     String deviceId,
-  ) async => const Failure(AdminConflict('device_bridge_pending'));
+  ) async => const Failure(AdminConflict('device_originated'));
+
+  @override
+  bool get supportsManualLifecycle => false;
+
+  @override
+  Future<AdminResult<AdminDevice>> revokeDevice(String deviceId) async {
+    final Object? raw;
+    try {
+      raw = await _t.invoke('revoke_device_management', <String, dynamic>{
+        'p_client_request_id': _requestId('revoke', [deviceId]),
+        'p_device_id': deviceId,
+        'p_reason': null,
+      });
+    } on SyncTransportException catch (e) {
+      return Failure(_mapTransport(e));
+    } catch (_) {
+      return const Failure(AdminTransient());
+    }
+    if (raw is! Map || raw['ok'] != true) return Failure(_mapError(raw));
+    return Success(
+      AdminDevice(
+        id: deviceId,
+        label: '',
+        deviceType: 'pos',
+        branchLabel: _scope.scopeLabel,
+        status: DeviceLifecycleStatus.revoked,
+      ),
+    );
+  }
 
   // -------------------------------------------- settings + users (never used) ---
   // This repository backs ONLY the Devices tab; Settings/Users use the demo store
