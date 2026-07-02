@@ -21,10 +21,15 @@ class PinLoginScreen extends StatefulWidget {
   const PinLoginScreen({
     required this.staffRepository,
     required this.onStartSession,
+    this.surface,
     super.key,
   });
 
   final DeviceStaffRepository staffRepository;
+
+  /// The hosting surface (POS/KDS). Drives the no-staff guidance wording —
+  /// which roles can sign in here. Null => the generic fallback body.
+  final AppSurface? surface;
 
   /// Starts the PIN session; returns null on success (the host rebuilds past
   /// this screen) or a typed error to show.
@@ -139,34 +144,79 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     if (staff.isEmpty) {
-      return Padding(
+      // Action-oriented, surface-specific guidance: WHO can sign in on this
+      // device (cashier vs kitchen staff) and exactly where PINs come from.
+      // Still money-free (a kitchen device renders this too — T-003), and
+      // never a fake/auto-created member.
+      final body = switch (widget.surface) {
+        AppSurface.pos => l10n.pinLoginEmptyBodyPos,
+        AppSurface.kds => l10n.pinLoginEmptyBodyKds,
+        _ => l10n.pinLoginEmptyBody,
+      };
+      return ListView(
+        shrinkWrap: true,
         padding: const EdgeInsets.all(RestoflowSpacing.xl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.badge_outlined,
-              size: 48,
-              color: theme.colorScheme.primary,
+        children: [
+          Icon(
+            Icons.badge_outlined,
+            size: 48,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(height: RestoflowSpacing.lg),
+          Text(
+            l10n.pinLoginEmptyTitle,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: RestoflowSpacing.xs),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: RestoflowSpacing.lg),
-            Text(l10n.pinLoginEmptyTitle, style: theme.textTheme.titleMedium),
-            const SizedBox(height: RestoflowSpacing.xs),
-            Text(
-              l10n.pinLoginEmptyBody,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+          ),
+          const SizedBox(height: RestoflowSpacing.lg),
+          Container(
+            padding: const EdgeInsets.all(RestoflowSpacing.md),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
             ),
-            const SizedBox(height: RestoflowSpacing.lg),
-            FilledButton.tonalIcon(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.pinLoginStepsTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: RestoflowSpacing.xs),
+                for (final step in [
+                  l10n.pinLoginStep1,
+                  l10n.pinLoginStep2,
+                  l10n.pinLoginStep3,
+                  l10n.pinLoginStep4,
+                  l10n.pinLoginStep5,
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
+                    child: Text(step, style: theme.textTheme.bodyMedium),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.lg),
+          Center(
+            child: FilledButton.tonalIcon(
               onPressed: _reload,
               icon: const Icon(Icons.refresh),
               label: Text(l10n.authTryAgain),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
     return ListView(

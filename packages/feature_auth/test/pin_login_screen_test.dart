@@ -8,10 +8,14 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 class _FakeStaff implements DeviceStaffRepository {
   _FakeStaff(this._result);
   final Result<List<DeviceStaffMember>, DeviceStaffFailure> _result;
+  int listCalls = 0;
 
   @override
   Future<Result<List<DeviceStaffMember>, DeviceStaffFailure>>
-  listStaff() async => _result;
+  listStaff() async {
+    listCalls++;
+    return _result;
+  }
 }
 
 const _staff = [
@@ -31,16 +35,24 @@ Future<void> _pump(
   WidgetTester tester, {
   required DeviceStaffRepository staff,
   required Future<PinLoginError?> Function(String, String) onStart,
+  AppSurface? surface,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
-      home: PinLoginScreen(staffRepository: staff, onStartSession: onStart),
+      home: PinLoginScreen(
+        staffRepository: staff,
+        onStartSession: onStart,
+        surface: surface,
+      ),
     ),
   );
   await tester.pumpAndSettle();
 }
+
+Future<AppLocalizations> _en() =>
+    AppLocalizations.delegate.load(const Locale('en'));
 
 void main() {
   testWidgets('lists staff, signs in with a correct PIN', (tester) async {
@@ -104,15 +116,69 @@ void main() {
     );
   });
 
-  testWidgets('an empty staff list shows the honest empty state', (
-    tester,
-  ) async {
-    await _pump(
+  group('no-staff guidance (sprint UX fix)', () {
+    testWidgets('POS: action-oriented title, cashier wording, setup steps, '
+        'and Try again refreshes the list', (tester) async {
+      final l10n = await _en();
+      final staff = _FakeStaff(const Success([]));
+      await _pump(
+        tester,
+        staff: staff,
+        onStart: (_, _) async => fail('no sign-in without staff'),
+        surface: AppSurface.pos,
+      );
+
+      expect(find.text(l10n.pinLoginEmptyTitle), findsOneWidget);
+      expect(find.text('No staff PINs yet'), findsOneWidget);
+      // POS wording: cashier/manager + the Dashboard -> Staff path.
+      expect(find.text(l10n.pinLoginEmptyBodyPos), findsOneWidget);
+      expect(find.textContaining('cashier'), findsOneWidget);
+      expect(find.textContaining('Dashboard'), findsWidgets);
+      // The numbered setup steps.
+      expect(find.text(l10n.pinLoginStepsTitle), findsOneWidget);
+      expect(find.text(l10n.pinLoginStep1), findsOneWidget);
+      expect(find.text(l10n.pinLoginStep5), findsOneWidget);
+      // Never the misleading account denial, never fake staff.
+      expect(find.text(l10n.authAccessDenied), findsNothing);
+      expect(find.byKey(const Key('pin-input')), findsNothing);
+
+      // Try again re-queries the token-proven staff directory.
+      expect(staff.listCalls, 1);
+      await tester.tap(find.text(l10n.authTryAgain));
+      await tester.pumpAndSettle();
+      expect(staff.listCalls, 2);
+    });
+
+    testWidgets('KDS: kitchen wording, steps, and still money-free (T-003)', (
       tester,
-      staff: _FakeStaff(const Success([])),
-      onStart: (_, _) async => null,
-    );
-    expect(find.text('No staff available'), findsOneWidget);
+    ) async {
+      final l10n = await _en();
+      await _pump(
+        tester,
+        staff: _FakeStaff(const Success([])),
+        onStart: (_, _) async => fail('no sign-in without staff'),
+        surface: AppSurface.kds,
+      );
+
+      expect(find.text(l10n.pinLoginEmptyTitle), findsOneWidget);
+      expect(find.text(l10n.pinLoginEmptyBodyKds), findsOneWidget);
+      expect(find.textContaining('kitchen staff'), findsOneWidget);
+      expect(find.text(l10n.pinLoginStepsTitle), findsOneWidget);
+      // The kitchen no-staff state exposes no money (SECURITY T-003).
+      expect(find.textContaining('₪'), findsNothing);
+      expect(find.textContaining(r'$'), findsNothing);
+    });
+
+    testWidgets('no surface given: the generic fallback body', (tester) async {
+      final l10n = await _en();
+      await _pump(
+        tester,
+        staff: _FakeStaff(const Success([])),
+        onStart: (_, _) async => null,
+      );
+      expect(find.text(l10n.pinLoginEmptyTitle), findsOneWidget);
+      expect(find.text(l10n.pinLoginEmptyBody), findsOneWidget);
+    });
   });
 
   testWidgets('an invalid device session shows the re-pair message', (

@@ -3190,17 +3190,65 @@ abstract class AppLocalizations {
   /// **'Tap your name'**
   String get pinLoginPickName;
 
-  /// PIN sign-in empty-state title when the branch has no active staff.
+  /// PIN sign-in empty-state title when the branch has no active staff with PINs.
   ///
   /// In en, this message translates to:
-  /// **'No staff available'**
+  /// **'No staff PINs yet'**
   String get pinLoginEmptyTitle;
 
-  /// PIN sign-in empty-state body.
+  /// PIN sign-in empty-state body (generic fallback when no surface is given).
   ///
   /// In en, this message translates to:
   /// **'Ask a manager to add staff members and set their PINs in the dashboard.'**
   String get pinLoginEmptyBody;
+
+  /// PIN sign-in empty-state body on the POS: which roles can sign in and what to do.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Dashboard → Staff, add a cashier or manager, set their PIN, then come back and tap Try again.'**
+  String get pinLoginEmptyBodyPos;
+
+  /// PIN sign-in empty-state body on the KDS: which roles can sign in and what to do.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Dashboard → Staff, add a kitchen staff member or manager, set their PIN, then come back and tap Try again.'**
+  String get pinLoginEmptyBodyKds;
+
+  /// Heading of the numbered setup-steps list on the no-staff PIN screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup steps'**
+  String get pinLoginStepsTitle;
+
+  /// No-staff setup step 1.
+  ///
+  /// In en, this message translates to:
+  /// **'1. Open the Dashboard'**
+  String get pinLoginStep1;
+
+  /// No-staff setup step 2.
+  ///
+  /// In en, this message translates to:
+  /// **'2. Go to Staff'**
+  String get pinLoginStep2;
+
+  /// No-staff setup step 3.
+  ///
+  /// In en, this message translates to:
+  /// **'3. Add a staff member'**
+  String get pinLoginStep3;
+
+  /// No-staff setup step 4.
+  ///
+  /// In en, this message translates to:
+  /// **'4. Set a PIN'**
+  String get pinLoginStep4;
+
+  /// No-staff setup step 5.
+  ///
+  /// In en, this message translates to:
+  /// **'5. Return here and tap Try again'**
+  String get pinLoginStep5;
 
   /// PIN sign-in staff-list load failure message.
   ///

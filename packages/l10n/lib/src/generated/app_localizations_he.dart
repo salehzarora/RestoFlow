@@ -1619,11 +1619,37 @@ class AppLocalizationsHe extends AppLocalizations {
   String get pinLoginPickName => 'הקישו על השם שלכם';
 
   @override
-  String get pinLoginEmptyTitle => 'אין צוות זמין';
+  String get pinLoginEmptyTitle => 'אין עדיין קודי PIN לצוות';
 
   @override
   String get pinLoginEmptyBody =>
       'בקשו ממנהל להוסיף אנשי צוות ולהגדיר להם PIN בלוח הבקרה.';
+
+  @override
+  String get pinLoginEmptyBodyPos =>
+      'פתחו את לוח הבקרה ← צוות, הוסיפו קופאי או מנהל והגדירו קוד PIN, ואז חזרו והקישו \"נסה שוב\".';
+
+  @override
+  String get pinLoginEmptyBodyKds =>
+      'פתחו את לוח הבקרה ← צוות, הוסיפו איש צוות מטבח או מנהל והגדירו קוד PIN, ואז חזרו והקישו \"נסה שוב\".';
+
+  @override
+  String get pinLoginStepsTitle => 'שלבי הגדרה';
+
+  @override
+  String get pinLoginStep1 => '1. פתחו את לוח הבקרה';
+
+  @override
+  String get pinLoginStep2 => '2. עברו אל צוות';
+
+  @override
+  String get pinLoginStep3 => '3. הוסיפו איש צוות';
+
+  @override
+  String get pinLoginStep4 => '4. הגדירו קוד PIN';
+
+  @override
+  String get pinLoginStep5 => '5. חזרו לכאן והקישו \"נסה שוב\"';
 
   @override
   String get pinLoginLoadError =>

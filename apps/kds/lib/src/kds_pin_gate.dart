@@ -46,6 +46,8 @@ class KdsPinGate extends ConsumerWidget {
     }
     return PinLoginScreen(
       staffRepository: staff,
+      // KDS wording for the no-staff guidance (kitchen staff/manager PINs).
+      surface: AppSurface.kds,
       onStartSession: (employeeProfileId, pin) => ref
           .read(kdsSessionControllerProvider.notifier)
           .signInWithPin(

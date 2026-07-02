@@ -12,7 +12,8 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 /// container, whose menu providers throw `UnimplementedError`, the save future
 /// failed uncaught, and `_submitting` stayed true forever. These tests pump
 /// the SAME nesting the dashboard uses (root scope WITHOUT overrides) — they
-/// hang/fail without the container bridge in menu_entity_forms.dart.
+/// hang/fail unless the dialogs receive the CALLER's scoped controller
+/// (menu_entity_forms.dart `_controllerOf`).
 
 const _scope = MenuScope(
   organizationId: 'org-1',

@@ -1630,11 +1630,37 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pinLoginPickName => 'اختر اسمك';
 
   @override
-  String get pinLoginEmptyTitle => 'لا يوجد موظفون متاحون';
+  String get pinLoginEmptyTitle => 'لا توجد رموز PIN للموظفين بعد';
 
   @override
   String get pinLoginEmptyBody =>
       'اطلب من المدير إضافة الموظفين وتعيين أرقام PIN في لوحة التحكم.';
+
+  @override
+  String get pinLoginEmptyBodyPos =>
+      'افتح لوحة التحكم ← الموظفون، أضف كاشيرًا أو مديرًا وعيّن له رمز PIN، ثم ارجع واضغط \"حاول مرة أخرى\".';
+
+  @override
+  String get pinLoginEmptyBodyKds =>
+      'افتح لوحة التحكم ← الموظفون، أضف موظف مطبخ أو مديرًا وعيّن له رمز PIN، ثم ارجع واضغط \"حاول مرة أخرى\".';
+
+  @override
+  String get pinLoginStepsTitle => 'خطوات الإعداد';
+
+  @override
+  String get pinLoginStep1 => '1. افتح لوحة التحكم';
+
+  @override
+  String get pinLoginStep2 => '2. انتقل إلى الموظفين';
+
+  @override
+  String get pinLoginStep3 => '3. أضف موظفًا';
+
+  @override
+  String get pinLoginStep4 => '4. عيّن رمز PIN';
+
+  @override
+  String get pinLoginStep5 => '5. ارجع إلى هنا واضغط \"حاول مرة أخرى\"';
 
   @override
   String get pinLoginLoadError =>

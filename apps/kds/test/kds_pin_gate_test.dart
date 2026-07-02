@@ -44,6 +44,7 @@ const _device = DeviceContext(
 Future<void> _pump(
   WidgetTester tester, {
   required SyncRpcTransport transport,
+  DeviceStaffRepository? staff,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -53,7 +54,7 @@ Future<void> _pump(
         supportedLocales: kSupportedLocales,
         home: KdsPinGate(
           device: _device,
-          staffRepository: _FakeStaff(),
+          staffRepository: staff ?? _FakeStaff(),
           child: const Text('KDS-BOARD', key: Key('kds-board')),
         ),
       ),
@@ -107,4 +108,30 @@ void main() {
     expect(find.byKey(const Key('kds-board')), findsNothing);
     expect(find.text('Wrong PIN — try again.'), findsOneWidget);
   });
+
+  testWidgets('no staff yet -> the KDS-specific Dashboard -> Staff guidance '
+      '(sprint UX fix), money-free, never an account denial', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await _pump(
+      tester,
+      transport: _FakeTransport((fn, p) => fail('no sign-in without staff')),
+      staff: _EmptyStaff(),
+    );
+    expect(find.text(l10n.pinLoginEmptyTitle), findsOneWidget);
+    expect(find.text(l10n.pinLoginEmptyBodyKds), findsOneWidget);
+    expect(find.textContaining('kitchen staff'), findsOneWidget);
+    expect(find.text(l10n.pinLoginStepsTitle), findsOneWidget);
+    expect(find.text(l10n.authTryAgain), findsOneWidget);
+    expect(find.text(l10n.authAccessDenied), findsNothing);
+    expect(find.byKey(const Key('kds-board')), findsNothing);
+    // Kitchen device: still no money anywhere (SECURITY T-003).
+    expect(find.textContaining('₪'), findsNothing);
+    expect(find.textContaining(r'$'), findsNothing);
+  });
+}
+
+class _EmptyStaff implements DeviceStaffRepository {
+  @override
+  Future<Result<List<DeviceStaffMember>, DeviceStaffFailure>>
+  listStaff() async => const Success([]);
 }

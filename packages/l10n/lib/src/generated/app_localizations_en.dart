@@ -1636,11 +1636,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pinLoginPickName => 'Tap your name';
 
   @override
-  String get pinLoginEmptyTitle => 'No staff available';
+  String get pinLoginEmptyTitle => 'No staff PINs yet';
 
   @override
   String get pinLoginEmptyBody =>
       'Ask a manager to add staff members and set their PINs in the dashboard.';
+
+  @override
+  String get pinLoginEmptyBodyPos =>
+      'Open Dashboard → Staff, add a cashier or manager, set their PIN, then come back and tap Try again.';
+
+  @override
+  String get pinLoginEmptyBodyKds =>
+      'Open Dashboard → Staff, add a kitchen staff member or manager, set their PIN, then come back and tap Try again.';
+
+  @override
+  String get pinLoginStepsTitle => 'Setup steps';
+
+  @override
+  String get pinLoginStep1 => '1. Open the Dashboard';
+
+  @override
+  String get pinLoginStep2 => '2. Go to Staff';
+
+  @override
+  String get pinLoginStep3 => '3. Add a staff member';
+
+  @override
+  String get pinLoginStep4 => '4. Set a PIN';
+
+  @override
+  String get pinLoginStep5 => '5. Return here and tap Try again';
 
   @override
   String get pinLoginLoadError =>

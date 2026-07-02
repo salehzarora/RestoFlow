@@ -47,6 +47,8 @@ class PosPinGate extends ConsumerWidget {
     }
     return PinLoginScreen(
       staffRepository: staff,
+      // POS wording for the no-staff guidance (cashier/manager PINs).
+      surface: AppSurface.pos,
       onStartSession: (employeeProfileId, pin) => ref
           .read(posSessionControllerProvider.notifier)
           .signInWithPin(

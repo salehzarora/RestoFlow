@@ -135,4 +135,27 @@ void main() {
     expect(find.byType(RealModeUnconfiguredView), findsOneWidget);
     expect(find.byKey(const Key('pos-surface')), findsNothing);
   });
+
+  testWidgets('no staff yet -> the POS-specific Dashboard -> Staff guidance '
+      '(sprint UX fix), never an account denial', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await _pump(
+      tester,
+      transport: _FakeTransport((fn, p) => fail('no sign-in without staff')),
+      staff: _EmptyStaff(),
+    );
+    expect(find.text(l10n.pinLoginEmptyTitle), findsOneWidget);
+    expect(find.text(l10n.pinLoginEmptyBodyPos), findsOneWidget);
+    expect(find.textContaining('cashier'), findsOneWidget);
+    expect(find.text(l10n.pinLoginStepsTitle), findsOneWidget);
+    expect(find.text(l10n.authTryAgain), findsOneWidget);
+    expect(find.text(l10n.authAccessDenied), findsNothing);
+    expect(find.byKey(const Key('pos-surface')), findsNothing);
+  });
+}
+
+class _EmptyStaff implements DeviceStaffRepository {
+  @override
+  Future<Result<List<DeviceStaffMember>, DeviceStaffFailure>>
+  listStaff() async => const Success([]);
 }
