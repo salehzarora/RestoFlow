@@ -34,7 +34,11 @@ class KdsSyncedHome extends ConsumerWidget {
       error: (_, __) => _scaffold(
         context,
         l10n,
-        KdsStateMessage(icon: Icons.error_outline, message: l10n.kdsErrorState),
+        KdsStateMessage(
+          icon: Icons.error_outline,
+          tone: RestoflowTone.danger,
+          message: l10n.kdsErrorState,
+        ),
       ),
       data: (vs) {
         if (vs.isReauthRequired) {
@@ -49,6 +53,7 @@ class KdsSyncedHome extends ConsumerWidget {
               children: [
                 KdsStateMessage(
                   icon: Icons.lock_outline,
+                  tone: RestoflowTone.warning,
                   message: l10n.kdsReauthRequired,
                 ),
                 const SizedBox(height: RestoflowSpacing.lg),
@@ -69,6 +74,7 @@ class KdsSyncedHome extends ConsumerWidget {
             l10n,
             KdsStateMessage(
               icon: Icons.error_outline,
+              tone: RestoflowTone.danger,
               message: l10n.kdsErrorState,
             ),
           );
@@ -84,6 +90,10 @@ class KdsSyncedHome extends ConsumerWidget {
         return KdsScreen(
           tickets: vs.tickets,
           allowRecall: false,
+          // Sprint (I): the language switcher is visible on the LIVE data
+          // board too; stale (last good pull) data is visibly flagged.
+          appBarActions: const [LanguageSelector()],
+          showStaleBanner: vs.isStale,
           onAdvanced: pusher == null
               ? null
               : (ticket, to) async {

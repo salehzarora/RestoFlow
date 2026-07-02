@@ -48,6 +48,7 @@ class KitchenOrdersHome extends ConsumerWidget {
               ),
               error: (_, _) => KdsStateMessage(
                 icon: Icons.error_outline,
+                tone: RestoflowTone.danger,
                 message: l10n.kdsErrorState,
               ),
               data: (tickets) => tickets.isEmpty

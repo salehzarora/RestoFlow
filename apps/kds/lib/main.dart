@@ -274,7 +274,10 @@ class _KdsMaterialApp extends ConsumerWidget {
       locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
-      theme: restoflowBaseTheme(),
+      // Design-polish sprint: the kitchen display runs the DARK high-contrast
+      // variant of the shared theme (glare-free at a distance). Semantic
+      // status colours come from RestoflowSemanticColors.dark via the tones.
+      theme: restoflowBaseTheme(brightness: Brightness.dark),
       home: live ? const KdsSyncedHome() : nonLiveHome,
     );
   }

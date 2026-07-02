@@ -4,6 +4,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'kds_board_column.dart';
 import 'kds_ticket_card.dart';
 
 /// The LIVE KDS board: tickets in WORKFLOW STATUS columns
@@ -26,8 +27,8 @@ class KdsBoard extends StatelessWidget {
     super.key,
   });
 
-  static const double _wideBreakpoint = 900;
-  static const double _columnWidth = 340;
+  static const double _wideBreakpoint = RestoflowBreakpoints.wide;
+  static const double _columnWidth = RestoflowPanelWidths.kdsColumn;
 
   final List<KdsTicketView> tickets;
   final AppLocalizations l10n;
@@ -100,21 +101,38 @@ class KdsBoard extends StatelessWidget {
             ),
           );
         }
+        // Narrow stacked path: each column keeps its Key so tests (and tools)
+        // can assert cards stay descendants of their status column — parity
+        // with KitchenBoard and the wide layout.
         return ListView(
           padding: const EdgeInsets.all(RestoflowSpacing.md),
           children: [
-            for (final column in columns) ...[
-              _ColumnHeader(column: column),
-              const SizedBox(height: RestoflowSpacing.sm),
-              for (final ticket in column.tickets)
-                KdsTicketCard(
-                  ticket: ticket,
-                  l10n: l10n,
-                  onAdvance: (to) => onAdvance(ticket, to),
-                  onRecall: onRecall == null ? null : () => onRecall!(ticket),
-                ),
-              const SizedBox(height: RestoflowSpacing.md),
-            ],
+            for (final column in columns)
+              Column(
+                key: Key('kds-col-${column.key}'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  KdsColumnHeader(
+                    columnKey: column.key,
+                    label: column.label,
+                    count: column.tickets.length,
+                  ),
+                  const SizedBox(height: RestoflowSpacing.sm),
+                  if (column.tickets.isEmpty)
+                    const KdsEmptyColumnPlaceholder()
+                  else
+                    for (final ticket in column.tickets)
+                      KdsTicketCard(
+                        ticket: ticket,
+                        l10n: l10n,
+                        onAdvance: (to) => onAdvance(ticket, to),
+                        onRecall: onRecall == null
+                            ? null
+                            : () => onRecall!(ticket),
+                      ),
+                  const SizedBox(height: RestoflowSpacing.md),
+                ],
+              ),
           ],
         );
       },
@@ -141,85 +159,33 @@ class _StatusColumn extends StatelessWidget {
       key: Key('kds-col-${column.key}'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ColumnHeader(column: column),
+        KdsColumnHeader(
+          columnKey: column.key,
+          label: column.label,
+          count: column.tickets.length,
+        ),
         const SizedBox(height: RestoflowSpacing.sm),
         Expanded(
-          child: ListView(
-            children: [
-              for (final ticket in column.tickets)
-                KdsTicketCard(
-                  ticket: ticket,
-                  l10n: l10n,
-                  onAdvance: (to) => onAdvance(ticket, to),
-                  onRecall: onRecall == null ? null : () => onRecall!(ticket),
+          child: column.tickets.isEmpty
+              ? const Align(
+                  alignment: AlignmentDirectional.topCenter,
+                  child: KdsEmptyColumnPlaceholder(),
+                )
+              : ListView(
+                  children: [
+                    for (final ticket in column.tickets)
+                      KdsTicketCard(
+                        ticket: ticket,
+                        l10n: l10n,
+                        onAdvance: (to) => onAdvance(ticket, to),
+                        onRecall: onRecall == null
+                            ? null
+                            : () => onRecall!(ticket),
+                      ),
+                  ],
                 ),
-            ],
-          ),
         ),
       ],
-    );
-  }
-}
-
-class _ColumnHeader extends StatelessWidget {
-  const _ColumnHeader({required this.column});
-
-  final _BoardColumn column;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final countText = column.tickets.length.toString();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.md,
-        vertical: RestoflowSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.view_column_outlined,
-            size: 20,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            child: Text(
-              column.label,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w700,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: RestoflowSpacing.sm,
-              vertical: 2,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.onPrimaryContainer.withValues(
-                alpha: 0.15,
-              ),
-              borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-            ),
-            child: Text(
-              countText,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

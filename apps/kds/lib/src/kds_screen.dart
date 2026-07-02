@@ -18,11 +18,23 @@ class KdsScreen extends StatefulWidget {
     this.onRecall,
     this.onAdvanced,
     this.allowRecall = true,
+    this.appBarActions = const <Widget>[],
+    this.showStaleBanner = false,
     super.key,
   });
 
   /// Local fixture/view models supplied by the caller (no repository).
   final List<KdsTicketView> tickets;
+
+  /// Extra AppBar actions (design-polish sprint): the LIVE board threads the
+  /// app's LanguageSelector through here. Injected rather than embedded so this
+  /// screen stays pumpable in bare (provider-less) test harnesses.
+  final List<Widget> appBarActions;
+
+  /// Renders the offline/stale warning banner above the board (design-polish
+  /// sprint): the LIVE board sets this from `KdsViewState.isStale` so a
+  /// last-good-pull board is visibly marked instead of silently ageing.
+  final bool showStaleBanner;
 
   /// Optional sink for the in-memory recall audit placeholder (test/observer).
   final void Function(RecallAuditEvent event)? onRecall;
@@ -81,6 +93,18 @@ class _KdsScreenState extends State<KdsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
+    final body = widget.tickets.isEmpty
+        ? KdsStateMessage(
+            icon: Icons.restaurant_outlined,
+            message: l10n.kdsEmptyState,
+          )
+        : KdsBoard(
+            tickets: widget.tickets,
+            l10n: l10n,
+            onAdvance: _advance,
+            onRecall: widget.allowRecall ? _recall : null,
+          );
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -94,18 +118,28 @@ class _KdsScreenState extends State<KdsScreen> {
             Text(l10n.kdsAppTitle),
           ],
         ),
+        actions: widget.appBarActions,
       ),
-      body: widget.tickets.isEmpty
-          ? KdsStateMessage(
-              icon: Icons.restaurant_outlined,
-              message: l10n.kdsEmptyState,
+      body: widget.showStaleBanner
+          ? Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(
+                    RestoflowSpacing.md,
+                    RestoflowSpacing.md,
+                    RestoflowSpacing.md,
+                    0,
+                  ),
+                  child: RestoflowNoticeBanner(
+                    tone: RestoflowTone.warning,
+                    icon: Icons.cloud_off_outlined,
+                    body: l10n.kdsStaleBanner,
+                  ),
+                ),
+                Expanded(child: body),
+              ],
             )
-          : KdsBoard(
-              tickets: widget.tickets,
-              l10n: l10n,
-              onAdvance: _advance,
-              onRecall: widget.allowRecall ? _recall : null,
-            ),
+          : body,
     );
   }
 }

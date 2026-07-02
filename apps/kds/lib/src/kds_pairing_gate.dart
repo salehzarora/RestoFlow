@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'widgets/language_selector.dart';
 
@@ -78,7 +80,23 @@ class _KdsPairingGateState extends State<KdsPairingGate> {
   @override
   Widget build(BuildContext context) {
     if (_restoring) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      // Branded session-restore state (design-polish sprint): the first thing
+      // a real kitchen device shows on every boot is the product, not a bare
+      // spinner. Still exactly ONE progress indicator on screen.
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RestoflowBrandMark(
+                title: AppLocalizations.of(context).kdsAppTitle,
+              ),
+              const SizedBox(height: RestoflowSpacing.xl),
+              const CircularProgressIndicator(),
+            ],
+          ),
+        ),
+      );
     }
     // Enter ONLY for a paired device of THIS surface's type; the repo enforces
     // this on restore too, but the gate re-checks so an injected/restored

@@ -22,7 +22,7 @@ class KdsStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return RestoflowStatusPill(
       label: status.canonicalName,
-      tone: _toneFor(status),
+      tone: kdsStatusTone(status),
       dense: false,
     );
   }
@@ -30,8 +30,10 @@ class KdsStatusChip extends StatelessWidget {
 
 /// Maps each kitchen-ticket status to a distinct semantic tone — warm/amber for
 /// in-progress, green for ready, red for cancelled — so the kitchen keeps its
-/// at-a-glance colour coding without any hardcoded colours.
-RestoflowTone _toneFor(KitchenTicketStatus status) {
+/// at-a-glance colour coding without any hardcoded colours. Shared by the chip
+/// AND the ticket cards' status-accent edge (design-polish sprint) so the two
+/// signals can never disagree.
+RestoflowTone kdsStatusTone(KitchenTicketStatus status) {
   switch (status) {
     case KitchenTicketStatus.newTicket:
       return RestoflowTone.neutral;

@@ -11,6 +11,11 @@ import 'kitchen_ticket_print_preview.dart';
 /// chip, order-type / table / elapsed-time chips, the itemised lines with
 /// quantities + modifiers/notes, and the single status-gated lifecycle action
 /// (Start / Mark ready / Complete / Recall). Money-free (SECURITY T-003).
+///
+/// Design-polish sprint: a 4px status-accent start edge matching the chip's
+/// tone, age-escalating elapsed pill (info → warning → danger), warning-accent
+/// notes, and the same type scale/icons as the live [KdsTicketCard] so the two
+/// boards read identically.
 class KitchenOrderCard extends StatelessWidget {
   const KitchenOrderCard({
     required this.ticket,
@@ -29,6 +34,15 @@ class KitchenOrderCard extends StatelessWidget {
   final VoidCallback onComplete;
   final VoidCallback onRecall;
 
+  /// Age-based urgency for the elapsed pill — the kitchen's primary scan
+  /// signal. Static (computed at build, like the minutes themselves): fresh
+  /// (<10m) info, ageing (10–19m) warning, late (≥20m) danger.
+  static RestoflowTone elapsedTone(int minutes) {
+    if (minutes >= 20) return RestoflowTone.danger;
+    if (minutes >= 10) return RestoflowTone.warning;
+    return RestoflowTone.info;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -37,82 +51,99 @@ class KitchenOrderCard extends StatelessWidget {
     final typeLabel = dineIn
         ? l10n.posOrderTypeDineIn
         : l10n.posOrderTypeTakeaway;
-    final minutes = now.difference(ticket.submittedAt).inMinutes;
-    final elapsed = l10n.kdsElapsedMinutes(minutes < 0 ? 0 : minutes);
+    final rawMinutes = now.difference(ticket.submittedAt).inMinutes;
+    final minutes = rawMinutes < 0 ? 0 : rawMinutes;
+    final elapsed = l10n.kdsElapsedMinutes(minutes);
+    // Shared with the live card: edge tone == chip tone; notes in the warning
+    // accent so kitchen instructions stand out on the dark board.
+    final statusAccent = kdsStatusTone(ticket.status).styleOf(theme).accent;
+    final noteColor = RestoflowTone.warning.styleOf(theme).accent;
 
     return Card(
       key: Key('kitchen-card-${ticket.ticketId}'),
-      margin: const EdgeInsets.only(bottom: RestoflowSpacing.md),
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    ticket.orderNumber,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
+      margin: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.md),
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Container(
+        decoration: BoxDecoration(
+          border: BorderDirectional(
+            start: BorderSide(color: statusAccent, width: 4),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(RestoflowSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      ticket.orderNumber,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(width: RestoflowSpacing.sm),
-                KdsStatusChip(status: ticket.status),
-                IconButton(
-                  key: Key('preview-ticket-${ticket.ticketId}'),
-                  onPressed: () => KitchenTicketPrintPreview.show(
-                    context,
-                    ticket: ticket,
-                    now: now,
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  KdsStatusChip(status: ticket.status),
+                  IconButton(
+                    key: Key('preview-ticket-${ticket.ticketId}'),
+                    onPressed: () => KitchenTicketPrintPreview.show(
+                      context,
+                      ticket: ticket,
+                      now: now,
+                    ),
+                    icon: const Icon(Icons.print_outlined),
+                    tooltip: l10n.kdsPreviewTicketAction,
+                    visualDensity: VisualDensity.compact,
                   ),
-                  icon: const Icon(Icons.print_outlined),
-                  tooltip: l10n.kdsPreviewTicketAction,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-            const SizedBox(height: RestoflowSpacing.sm),
-            Wrap(
-              spacing: RestoflowSpacing.sm,
-              runSpacing: RestoflowSpacing.xs,
-              children: [
-                RestoflowStatusPill(
-                  icon: dineIn ? Icons.restaurant : Icons.takeout_dining,
-                  label: typeLabel,
-                ),
-                if (dineIn && ticket.tableLabel != null)
+                ],
+              ),
+              const SizedBox(height: RestoflowSpacing.sm),
+              Wrap(
+                spacing: RestoflowSpacing.sm,
+                runSpacing: RestoflowSpacing.xs,
+                children: [
                   RestoflowStatusPill(
-                    icon: Icons.table_restaurant,
-                    label: '${l10n.posTableLabel} ${ticket.tableLabel}',
+                    icon: dineIn ? Icons.restaurant : Icons.takeout_dining,
+                    label: typeLabel,
                   ),
-                // Elapsed time is emphasised (info tone) — it's the field the
-                // kitchen scans most.
-                RestoflowStatusPill(
-                  key: Key('elapsed-${ticket.ticketId}'),
-                  icon: Icons.schedule,
-                  label: elapsed,
-                  tone: RestoflowTone.info,
+                  if (dineIn && ticket.tableLabel != null)
+                    RestoflowStatusPill(
+                      icon: Icons.event_seat,
+                      label: '${l10n.posTableLabel} ${ticket.tableLabel}',
+                    ),
+                  // Elapsed time is emphasised and ESCALATES with age — it's
+                  // the field the kitchen scans most.
+                  RestoflowStatusPill(
+                    key: Key('elapsed-${ticket.ticketId}'),
+                    icon: Icons.schedule,
+                    label: elapsed,
+                    tone: elapsedTone(minutes),
+                  ),
+                ],
+              ),
+              const SizedBox(height: RestoflowSpacing.sm),
+              const Divider(height: 1),
+              const SizedBox(height: RestoflowSpacing.sm),
+              for (final item in ticket.items)
+                _ItemBlock(
+                  item: item,
+                  noteLabel: l10n.kdsNoteLabel,
+                  noteColor: noteColor,
                 ),
-              ],
-            ),
-            const SizedBox(height: RestoflowSpacing.sm),
-            const Divider(height: 1),
-            const SizedBox(height: RestoflowSpacing.sm),
-            for (final item in ticket.items)
-              _ItemBlock(item: item, noteLabel: l10n.kdsNoteLabel),
-            _ActionButton(
-              status: ticket.status,
-              l10n: l10n,
-              onStart: onStart,
-              onMarkReady: onMarkReady,
-              onComplete: onComplete,
-              onRecall: onRecall,
-            ),
-          ],
+              _ActionButton(
+                status: ticket.status,
+                l10n: l10n,
+                onStart: onStart,
+                onMarkReady: onMarkReady,
+                onComplete: onComplete,
+                onRecall: onRecall,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -120,10 +151,15 @@ class KitchenOrderCard extends StatelessWidget {
 }
 
 class _ItemBlock extends StatelessWidget {
-  const _ItemBlock({required this.item, required this.noteLabel});
+  const _ItemBlock({
+    required this.item,
+    required this.noteLabel,
+    required this.noteColor,
+  });
 
   final KitchenOrderItem item;
   final String noteLabel;
+  final Color noteColor;
 
   @override
   Widget build(BuildContext context) {
@@ -137,24 +173,35 @@ class _ItemBlock extends StatelessWidget {
         children: [
           Text(
             line,
-            style: theme.textTheme.titleMedium?.copyWith(
+            style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
               height: 1.2,
             ),
           ),
-          if (item.modifiers.isNotEmpty)
-            Text(
-              '+ ${item.modifiers.join(', ')}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+          // One readable sub-line per modifier — same as the live card.
+          for (final modifier in item.modifiers)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                '+ $modifier',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           if (note != null)
-            Text(
-              '$noteLabel: $note',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontStyle: FontStyle.italic,
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                '$noteLabel: $note',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: noteColor,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
         ],
@@ -164,7 +211,8 @@ class _ItemBlock extends StatelessWidget {
 }
 
 /// The single status-gated lifecycle action. Forward actions are full-width
-/// filled buttons; recall is an outlined button; terminal/no-action renders
+/// filled buttons (≥48dp); Complete — this board's bump — uses the big
+/// touch-first style; recall is an outlined button; terminal/no-action renders
 /// nothing.
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
@@ -203,15 +251,19 @@ class _ActionButton extends StatelessWidget {
         return _Forward(
           icon: Icons.done_all,
           label: l10n.kdsCompleteAction,
+          style: RestoflowButtonStyles.big(context),
           onPressed: onComplete,
         );
       case KitchenTicketStatus.bumped:
         return Padding(
-          padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+          padding: const EdgeInsetsDirectional.only(top: RestoflowSpacing.sm),
           child: SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: onRecall,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
               icon: const Icon(Icons.undo),
               label: Text(l10n.kdsRecallAction),
             ),
@@ -228,23 +280,27 @@ class _Forward extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.style,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final ButtonStyle? style;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+      padding: const EdgeInsetsDirectional.only(top: RestoflowSpacing.sm),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
           onPressed: onPressed,
+          style:
+              style ??
+              FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
           icon: Icon(icon),
           label: Text(label),
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
         ),
       ),
     );

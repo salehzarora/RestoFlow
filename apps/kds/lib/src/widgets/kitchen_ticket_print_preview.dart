@@ -36,14 +36,6 @@ class KitchenTicketPrintPreview extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final dineIn = ticket.orderType == OrderType.dineIn;
-    final typeLabel = dineIn
-        ? l10n.posOrderTypeDineIn
-        : l10n.posOrderTypeTakeaway;
-    final minutes = now.difference(ticket.submittedAt).inMinutes;
-    final elapsed = l10n.kdsElapsedMinutes(minutes < 0 ? 0 : minutes);
-    final station = ticket.stationId;
 
     return Dialog(
       key: const Key('kitchen-ticket-preview'),
@@ -58,68 +50,12 @@ class KitchenTicketPrintPreview extends ConsumerWidget {
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(RestoflowSpacing.lg),
-                child: Container(
-                  padding: const EdgeInsets.all(RestoflowSpacing.lg),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              ticket.orderNumber,
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                          KdsStatusChip(status: ticket.status),
-                        ],
-                      ),
-                      const SizedBox(height: RestoflowSpacing.sm),
-                      Wrap(
-                        spacing: RestoflowSpacing.sm,
-                        runSpacing: RestoflowSpacing.xs,
-                        children: [
-                          RestoflowStatusPill(
-                            icon: dineIn
-                                ? Icons.restaurant
-                                : Icons.takeout_dining,
-                            label: typeLabel,
-                          ),
-                          if (dineIn && ticket.tableLabel != null)
-                            RestoflowStatusPill(
-                              icon: Icons.table_restaurant,
-                              label:
-                                  '${l10n.posTableLabel} ${ticket.tableLabel}',
-                            ),
-                          if (station != null)
-                            RestoflowStatusPill(
-                              icon: Icons.kitchen_outlined,
-                              label: '${l10n.kdsStationLabel}: $station',
-                            ),
-                          RestoflowStatusPill(
-                            icon: Icons.schedule,
-                            label: elapsed,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: RestoflowSpacing.sm),
-                      const _Rule(),
-                      const SizedBox(height: RestoflowSpacing.sm),
-                      for (final item in ticket.items)
-                        _TicketItem(item: item, noteLabel: l10n.kdsNoteLabel),
-                      const SizedBox(height: RestoflowSpacing.sm),
-                      const _Rule(),
-                      const SizedBox(height: RestoflowSpacing.sm),
-                      _Note(message: l10n.kdsDemoFeedBanner),
-                    ],
-                  ),
+                // A receipt is PAPER (design-polish sprint): the ticket sheet
+                // is a LIGHT-themed island — explicit light surface + dark
+                // text — regardless of the surrounding (dark kitchen) theme.
+                child: Theme(
+                  data: restoflowBaseTheme(),
+                  child: _TicketPaper(ticket: ticket, now: now),
                 ),
               ),
             ),
@@ -132,6 +68,87 @@ class KitchenTicketPrintPreview extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The light "paper" sheet of the preview. Reads its colours from the
+/// (light) Theme injected above it, so every nested widget — status chip,
+/// pills, rules, item lines — renders paper-correct dark-on-light.
+class _TicketPaper extends StatelessWidget {
+  const _TicketPaper({required this.ticket, required this.now});
+
+  final KitchenOrderTicket ticket;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final dineIn = ticket.orderType == OrderType.dineIn;
+    final typeLabel = dineIn
+        ? l10n.posOrderTypeDineIn
+        : l10n.posOrderTypeTakeaway;
+    final minutes = now.difference(ticket.submittedAt).inMinutes;
+    final elapsed = l10n.kdsElapsedMinutes(minutes < 0 ? 0 : minutes);
+    final station = ticket.stationId;
+
+    return Container(
+      padding: const EdgeInsets.all(RestoflowSpacing.lg),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  ticket.orderNumber,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              KdsStatusChip(status: ticket.status),
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          Wrap(
+            spacing: RestoflowSpacing.sm,
+            runSpacing: RestoflowSpacing.xs,
+            children: [
+              RestoflowStatusPill(
+                icon: dineIn ? Icons.restaurant : Icons.takeout_dining,
+                label: typeLabel,
+              ),
+              if (dineIn && ticket.tableLabel != null)
+                RestoflowStatusPill(
+                  icon: Icons.event_seat,
+                  label: '${l10n.posTableLabel} ${ticket.tableLabel}',
+                ),
+              if (station != null)
+                RestoflowStatusPill(
+                  icon: Icons.kitchen_outlined,
+                  label: '${l10n.kdsStationLabel}: $station',
+                ),
+              RestoflowStatusPill(icon: Icons.schedule, label: elapsed),
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          const _Rule(),
+          const SizedBox(height: RestoflowSpacing.sm),
+          for (final item in ticket.items)
+            _TicketItem(item: item, noteLabel: l10n.kdsNoteLabel),
+          const SizedBox(height: RestoflowSpacing.sm),
+          const _Rule(),
+          const SizedBox(height: RestoflowSpacing.sm),
+          _Note(message: l10n.kdsDemoFeedBanner),
+        ],
       ),
     );
   }
