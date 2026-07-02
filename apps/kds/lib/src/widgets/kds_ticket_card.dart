@@ -6,8 +6,10 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'kds_status_chip.dart';
 
-/// A polished KDS ticket card: a header row (ticket id + colour-coded status
-/// chip), large readable item lines, and the status-gated lifecycle action.
+/// A polished KDS ticket card: a header row (the HUMAN order number — the same
+/// `displayOrderCode` the POS shows — + colour-coded status chip), order-type/
+/// table/station pills, large readable item lines with their modifier and note
+/// sub-lines, the order-level note, and the status-gated lifecycle action.
 ///
 /// RF-103: the action advances the ticket through its existing lifecycle —
 /// Acknowledge / Start / Mark ready / Bump (forward, via [onAdvance]) and Recall
@@ -35,7 +37,16 @@ class KdsTicketCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ticketHeader = '${l10n.kdsTicketLabel} ${ticket.kitchenTicketId}';
+    // The HUMAN number leads; demo fixtures without one keep the ticket id.
+    final ticketHeader =
+        ticket.orderNumber ??
+        '${l10n.kdsTicketLabel} ${ticket.kitchenTicketId}';
+    final dineIn = ticket.orderType == 'dine_in';
+    final takeaway = ticket.orderType == 'takeaway';
+    final tableLabel = ticket.tableLabel;
+    final showStation =
+        ticket.stationId != KdsTicketMapper.unassignedStation &&
+        ticket.stationId.isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.only(bottom: RestoflowSpacing.md),
@@ -60,10 +71,49 @@ class KdsTicketCard extends StatelessWidget {
                 KdsStatusChip(status: ticket.status),
               ],
             ),
+            if (dineIn || takeaway || tableLabel != null || showStation) ...[
+              const SizedBox(height: RestoflowSpacing.xs),
+              Wrap(
+                spacing: RestoflowSpacing.xs,
+                runSpacing: RestoflowSpacing.xs,
+                children: [
+                  if (dineIn)
+                    RestoflowStatusPill(
+                      icon: Icons.restaurant,
+                      label: l10n.posOrderTypeDineIn,
+                    ),
+                  if (takeaway)
+                    RestoflowStatusPill(
+                      icon: Icons.takeout_dining,
+                      label: l10n.posOrderTypeTakeaway,
+                    ),
+                  if (tableLabel != null)
+                    RestoflowStatusPill(
+                      icon: Icons.event_seat,
+                      label: '${l10n.posTableLabel} $tableLabel',
+                    ),
+                  if (showStation)
+                    RestoflowStatusPill(
+                      icon: Icons.kitchen_outlined,
+                      label: '${l10n.kdsStationLabel}: ${ticket.stationId}',
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: RestoflowSpacing.sm),
             const Divider(height: 1),
             const SizedBox(height: RestoflowSpacing.sm),
-            for (final item in ticket.items) _ItemLine(item: item),
+            for (final item in ticket.items) _ItemLine(item: item, l10n: l10n),
+            if (ticket.notes case final note?) ...[
+              const SizedBox(height: RestoflowSpacing.xs),
+              Text(
+                '${l10n.kdsNoteLabel}: $note',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: theme.colorScheme.tertiary,
+                ),
+              ),
+            ],
             _TicketAction(
               status: ticket.status,
               l10n: l10n,
@@ -78,9 +128,10 @@ class KdsTicketCard extends StatelessWidget {
 }
 
 class _ItemLine extends StatelessWidget {
-  const _ItemLine({required this.item});
+  const _ItemLine({required this.item, required this.l10n});
 
   final KdsItemView item;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -90,9 +141,37 @@ class _ItemLine extends StatelessWidget {
     final line = '${item.name} ×${item.quantity}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
-      child: Text(
-        line,
-        style: theme.textTheme.titleMedium?.copyWith(height: 1.2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(line, style: theme.textTheme.titleMedium?.copyWith(height: 1.2)),
+          // Modifier options as their own readable sub-lines (never money).
+          for (final modifier in item.modifiers)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                '+ $modifier',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          if (item.note case final note?)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                '${l10n.kdsNoteLabel}: $note',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: theme.colorScheme.tertiary,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -6,11 +6,17 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'kds_ticket_card.dart';
 
-/// The KDS board: tickets grouped by station, deterministically ordered.
+/// The LIVE KDS board: tickets in WORKFLOW STATUS columns
+/// (New → Preparing → Ready → Cleared), deterministically ordered inside each
+/// column (demo-readiness sprint — replaces the old station-grouped layout;
+/// the station is now a per-card pill).
 ///
-/// Responsive — station COLUMNS side by side on wide screens (a real kitchen
-/// display), and readable STACKED sections when narrow. Lifecycle actions are
-/// delegated per ticket: [onAdvance] (forward transitions) and [onRecall].
+/// A ticket moves column purely by its status: Acknowledge moves New →
+/// Preparing, Ready moves to Ready, Bump moves to Cleared — the screen's
+/// setState re-buckets the card and the next poll confirms (server wins).
+/// Responsive — columns side by side on wide screens (a real kitchen display),
+/// stacked sections when narrow. Lifecycle actions are delegated per ticket:
+/// [onAdvance] (forward transitions) and [onRecall].
 class KdsBoard extends StatelessWidget {
   const KdsBoard({
     required this.tickets,
@@ -30,18 +36,42 @@ class KdsBoard extends StatelessWidget {
   /// Null hides the recall action (the LIVE board — forward-only backend).
   final void Function(KdsTicketView ticket)? onRecall;
 
-  List<_Station> _stations() {
-    final byStation = <String, List<KdsTicketView>>{};
+  /// Buckets a status into its workflow column key.
+  static String _bucket(KitchenTicketStatus status) => switch (status) {
+    KitchenTicketStatus.newTicket => 'new',
+    KitchenTicketStatus.acknowledged ||
+    KitchenTicketStatus.inPreparation => 'preparing',
+    KitchenTicketStatus.ready => 'ready',
+    KitchenTicketStatus.bumped || KitchenTicketStatus.cancelled => 'cleared',
+  };
+
+  List<_BoardColumn> _columns() {
+    final byBucket = <String, List<KdsTicketView>>{};
     for (final ticket in tickets) {
-      (byStation[ticket.stationId] ??= <KdsTicketView>[]).add(ticket);
+      (byBucket[_bucket(ticket.status)] ??= <KdsTicketView>[]).add(ticket);
     }
-    final ids = byStation.keys.toList()..sort();
-    return [for (final id in ids) _Station(id, byStation[id]!)];
+    for (final list in byBucket.values) {
+      list.sort((a, b) => a.kitchenTicketId.compareTo(b.kitchenTicketId));
+    }
+    return [
+      _BoardColumn('new', l10n.kdsColNew, byBucket['new'] ?? const []),
+      _BoardColumn(
+        'preparing',
+        l10n.kdsColPreparing,
+        byBucket['preparing'] ?? const [],
+      ),
+      _BoardColumn('ready', l10n.kdsColReady, byBucket['ready'] ?? const []),
+      _BoardColumn(
+        'cleared',
+        l10n.kdsColCleared,
+        byBucket['cleared'] ?? const [],
+      ),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
-    final stations = _stations();
+    final columns = _columns();
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= _wideBreakpoint) {
@@ -51,15 +81,15 @@ class KdsBoard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final station in stations)
+                for (final column in columns)
                   Padding(
                     padding: const EdgeInsetsDirectional.only(
                       end: RestoflowSpacing.md,
                     ),
                     child: SizedBox(
                       width: _columnWidth,
-                      child: _StationColumn(
-                        station: station,
+                      child: _StatusColumn(
+                        column: column,
                         l10n: l10n,
                         onAdvance: onAdvance,
                         onRecall: onRecall,
@@ -73,10 +103,10 @@ class KdsBoard extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(RestoflowSpacing.md),
           children: [
-            for (final station in stations) ...[
-              _StationHeader(station: station, l10n: l10n),
+            for (final column in columns) ...[
+              _ColumnHeader(column: column),
               const SizedBox(height: RestoflowSpacing.sm),
-              for (final ticket in station.tickets)
+              for (final ticket in column.tickets)
                 KdsTicketCard(
                   ticket: ticket,
                   l10n: l10n,
@@ -92,15 +122,15 @@ class KdsBoard extends StatelessWidget {
   }
 }
 
-class _StationColumn extends StatelessWidget {
-  const _StationColumn({
-    required this.station,
+class _StatusColumn extends StatelessWidget {
+  const _StatusColumn({
+    required this.column,
     required this.l10n,
     required this.onAdvance,
     required this.onRecall,
   });
 
-  final _Station station;
+  final _BoardColumn column;
   final AppLocalizations l10n;
   final void Function(KdsTicketView ticket, KitchenTicketStatus to) onAdvance;
   final void Function(KdsTicketView ticket)? onRecall;
@@ -108,14 +138,15 @@ class _StationColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      key: Key('kds-col-${column.key}'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _StationHeader(station: station, l10n: l10n),
+        _ColumnHeader(column: column),
         const SizedBox(height: RestoflowSpacing.sm),
         Expanded(
           child: ListView(
             children: [
-              for (final ticket in station.tickets)
+              for (final ticket in column.tickets)
                 KdsTicketCard(
                   ticket: ticket,
                   l10n: l10n,
@@ -130,18 +161,15 @@ class _StationColumn extends StatelessWidget {
   }
 }
 
-class _StationHeader extends StatelessWidget {
-  const _StationHeader({required this.station, required this.l10n});
+class _ColumnHeader extends StatelessWidget {
+  const _ColumnHeader({required this.column});
 
-  final _Station station;
-  final AppLocalizations l10n;
+  final _BoardColumn column;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Data: station label + raw station id (kept so it stays findable/legible).
-    final headerText = '${l10n.kdsStationLabel}: ${station.id}';
-    final countText = station.tickets.length.toString();
+    final countText = column.tickets.length.toString();
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -155,14 +183,14 @@ class _StationHeader extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.kitchen_outlined,
+            Icons.view_column_outlined,
             size: 20,
             color: theme.colorScheme.onPrimaryContainer,
           ),
           const SizedBox(width: RestoflowSpacing.sm),
           Expanded(
             child: Text(
-              headerText,
+              column.label,
               style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.onPrimaryContainer,
                 fontWeight: FontWeight.w700,
@@ -196,8 +224,9 @@ class _StationHeader extends StatelessWidget {
   }
 }
 
-class _Station {
-  const _Station(this.id, this.tickets);
-  final String id;
+class _BoardColumn {
+  const _BoardColumn(this.key, this.label, this.tickets);
+  final String key;
+  final String label;
   final List<KdsTicketView> tickets;
 }
