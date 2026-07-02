@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../format/money_format.dart';
 import '../state/payment_controller.dart';
 
 /// A slim, persistent shift / cash-drawer context bar at the top of the cart
-/// panel (RF-116). Shows the demo shift, the drawer state, the running cash in
-/// the drawer, and the last cash payment — updating after each cash payment.
-/// Clearly labelled demo (not synced). Reads [paymentControllerProvider].
+/// panel (RF-116). DEMO shows the demo shift, drawer state, running cash and
+/// last payment — clearly labelled demo. REAL mode shows the honest truth: a
+/// real shift was opened on the server at PIN sign-in (RF-055 auto-open), and
+/// cash totals live THERE — this bar never invents local drawer figures for a
+/// real shift (the reconciliation UI is a later ticket).
 class ShiftContextBar extends ConsumerWidget {
   const ShiftContextBar({super.key});
 
@@ -17,6 +21,38 @@ class ShiftContextBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+    if (!isDemo) {
+      return Container(
+        width: double.infinity,
+        color: theme.colorScheme.surfaceContainerHigh,
+        padding: const EdgeInsetsDirectional.fromSTEB(
+          RestoflowSpacing.lg,
+          RestoflowSpacing.sm,
+          RestoflowSpacing.lg,
+          RestoflowSpacing.sm,
+        ),
+        child: Wrap(
+          spacing: RestoflowSpacing.md,
+          runSpacing: RestoflowSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _ShiftItem(
+              icon: Icons.badge_outlined,
+              label: l10n.posShiftRealName,
+              strong: true,
+            ),
+            Text(
+              l10n.posShiftRealNote,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final shift = ref.watch(paymentControllerProvider.select((s) => s.shift));
     final currency = shift.currencyCode;
 

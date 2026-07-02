@@ -474,6 +474,29 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posShiftDemoNote => 'وردية تجريبية — غير متزامنة';
 
   @override
+  String get posShiftRealName => 'الوردية الحالية';
+
+  @override
+  String get posShiftRealNote =>
+      'فُتحت عند تسجيل الدخول — إجماليات النقد تُتابَع على الخادم';
+
+  @override
+  String get posSyncSendingReal => 'جارٍ الإرسال إلى الخادم…';
+
+  @override
+  String get posSyncSentReal => 'أُرسل — شاشة المطبخ تستقبله تلقائيًا.';
+
+  @override
+  String get posSyncFailedReal =>
+      'رفض الخادم هذا الطلب — لم يُرسَل إلى المطبخ.';
+
+  @override
+  String get posSyncSendNow => 'إرسال الآن';
+
+  @override
+  String get posReceiptNoPrinterNote => 'الطباعة غير متصلة على هذا الجهاز بعد';
+
+  @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
 
   @override

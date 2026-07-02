@@ -994,6 +994,48 @@ abstract class AppLocalizations {
   /// **'Demo shift — not synced'**
   String get posShiftDemoNote;
 
+  /// REAL-mode shift bar label: a real shift was opened on the server at PIN sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'Current shift'**
+  String get posShiftRealName;
+
+  /// REAL-mode shift bar note: the RF-055 auto-opened server shift holds the cash truth; local drawer figures are never invented.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened at sign-in — cash totals are tracked on the server'**
+  String get posShiftRealNote;
+
+  /// REAL-mode sync note while the order push is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending to the backend…'**
+  String get posSyncSendingReal;
+
+  /// REAL-mode sync note once the backend applied the order.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent — the kitchen display receives it automatically.'**
+  String get posSyncSentReal;
+
+  /// REAL-mode sync note when the backend rejected the order; honest, with Retry offered.
+  ///
+  /// In en, this message translates to:
+  /// **'The backend rejected this order — it was NOT sent to the kitchen.'**
+  String get posSyncFailedReal;
+
+  /// REAL-mode label of the manual send button for a pending (not yet pushed) order.
+  ///
+  /// In en, this message translates to:
+  /// **'Send now'**
+  String get posSyncSendNow;
+
+  /// REAL-mode receipt note: the receipt number is the true server number; only printing hardware is missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Printing is not connected on this device yet'**
+  String get posReceiptNoPrinterNote;
+
   /// Owner dashboard section heading above the daily KPI cards.
   ///
   /// In en, this message translates to:

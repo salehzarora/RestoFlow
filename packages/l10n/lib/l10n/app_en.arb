@@ -600,6 +600,34 @@
   "@posShiftDemoNote": {
     "description": "POS honest note that the shift/cash-drawer context is a local demo and not synced."
   },
+  "posShiftRealName": "Current shift",
+  "@posShiftRealName": {
+    "description": "REAL-mode shift bar label: a real shift was opened on the server at PIN sign-in."
+  },
+  "posShiftRealNote": "Opened at sign-in — cash totals are tracked on the server",
+  "@posShiftRealNote": {
+    "description": "REAL-mode shift bar note: the RF-055 auto-opened server shift holds the cash truth; local drawer figures are never invented."
+  },
+  "posSyncSendingReal": "Sending to the backend…",
+  "@posSyncSendingReal": {
+    "description": "REAL-mode sync note while the order push is in flight."
+  },
+  "posSyncSentReal": "Sent — the kitchen display receives it automatically.",
+  "@posSyncSentReal": {
+    "description": "REAL-mode sync note once the backend applied the order."
+  },
+  "posSyncFailedReal": "The backend rejected this order — it was NOT sent to the kitchen.",
+  "@posSyncFailedReal": {
+    "description": "REAL-mode sync note when the backend rejected the order; honest, with Retry offered."
+  },
+  "posSyncSendNow": "Send now",
+  "@posSyncSendNow": {
+    "description": "REAL-mode label of the manual send button for a pending (not yet pushed) order."
+  },
+  "posReceiptNoPrinterNote": "Printing is not connected on this device yet",
+  "@posReceiptNoPrinterNote": {
+    "description": "REAL-mode receipt note: the receipt number is the true server number; only printing hardware is missing."
+  },
   "dashboardOverviewHeading": "Today's overview",
   "@dashboardOverviewHeading": {
     "description": "Owner dashboard section heading above the daily KPI cards."

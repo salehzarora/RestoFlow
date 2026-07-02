@@ -71,7 +71,10 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     final orderId = isDemo ? 'demo-order-$n' : ids!.newId();
     final localOperationId = isDemo ? 'demo-op-$n' : ids!.newId();
     final entryId = isDemo ? 'demo-outbox-$n' : ids!.newId();
-    final orderNumber = 'DEMO-$n';
+    // Demo keeps the honest DEMO-nnnn label; a REAL order shows the shared
+    // display code derived from its uuid — the KDS derives the SAME code from
+    // the pulled order id, so cashier and kitchen talk about one number.
+    final orderNumber = isDemo ? 'DEMO-$n' : displayOrderCode(orderId);
     final createdAt = DateTime.now();
 
     final items = lines
@@ -127,6 +130,14 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 
     final stored = await _repo.enqueue(entry);
     state = await _repo.recentEntries();
+    if (!isDemo) {
+      // REAL mode sends immediately (no manual "sync now"): push the entry so
+      // the backend has the order — the KDS poll then picks it up on its own,
+      // and a cash payment can reference the order server-side. A failed push
+      // stays visible on the confirmation with an honest error + Retry; the
+      // order itself is never lost (it remains queued in the outbox).
+      await pushEntry(stored.id);
+    }
     return OrderSubmitResult(entry: stored, orderNumber: orderNumber);
   }
 

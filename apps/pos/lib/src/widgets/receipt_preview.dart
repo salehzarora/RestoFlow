@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/payment.dart';
@@ -8,20 +11,22 @@ import '../format/money_format.dart';
 import '../state/submitted_order_view.dart';
 import 'receipt_print_preview.dart';
 
-/// A receipt-style preview card (RF-116) for a paid order: provisional receipt
-/// number, Paid status, order meta, itemised lines, totals, cash received +
-/// change, payment method + time, and an honest demo / no-printer note with a
-/// disabled "Print receipt (demo)" action. Pure presentation over the
+/// A receipt-style preview card (RF-116) for a paid order: receipt number,
+/// Paid status, order meta, itemised lines, totals, cash received + change,
+/// payment method + time. MODE-HONEST notes: demo shows its provisional/demo
+/// disclaimers; a REAL paid order shows the true SERVER receipt number, so
+/// only the "printing not connected" note remains. Pure presentation over the
 /// [SubmittedOrderView] + [CashPayment]; nothing here prints.
-class ReceiptPreview extends StatelessWidget {
+class ReceiptPreview extends ConsumerWidget {
   const ReceiptPreview({required this.order, required this.payment, super.key});
 
   final SubmittedOrderView order;
   final CashPayment payment;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final theme = Theme.of(context);
     final currency = payment.currencyCode;
     final dineIn = order.orderType == OrderType.dineIn;
@@ -112,8 +117,13 @@ class ReceiptPreview extends StatelessWidget {
             ),
             _ReceiptLine(label: l10n.posPaidAtLabel, value: paidAt),
             const SizedBox(height: RestoflowSpacing.sm),
-            _Note(message: l10n.posReceiptProvisionalNote),
-            _Note(message: l10n.posReceiptDemoNote),
+            if (isDemo) ...[
+              _Note(message: l10n.posReceiptProvisionalNote),
+              _Note(message: l10n.posReceiptDemoNote),
+            ] else
+              // Real mode: the number above IS the server receipt; the only
+              // honest caveat left is that no hardware printer is connected.
+              _Note(message: l10n.posReceiptNoPrinterNote),
             const SizedBox(height: RestoflowSpacing.sm),
             OutlinedButton.icon(
               key: const Key('open-print-preview-button'),

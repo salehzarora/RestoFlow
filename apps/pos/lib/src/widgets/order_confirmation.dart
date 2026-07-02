@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/order_submission.dart';
@@ -12,12 +14,15 @@ import '../state/submitted_order_view.dart';
 import 'cash_payment_sheet.dart';
 import 'receipt_preview.dart';
 
-/// In-place confirmation shown inside the cart panel after a local demo submit
-/// (RF-101): success header, demo order number, a "Submitted" status chip, the
-/// submitted item summary, the subtotal, a demo notice, and a New order action.
+/// In-place confirmation shown inside the cart panel after a submit (RF-101):
+/// success header, the order number, a "Submitted" status chip, the submitted
+/// item summary, the subtotal, the sync status, and a New order action.
 ///
-/// Pure presentation over an immutable [SubmittedOrderView]; the reset action is
-/// delegated to [onNewOrder]. Nothing here calls a backend, kitchen, or printer.
+/// MODE-HONEST (demo-readiness sprint): demo shows its demo notices and the
+/// manual "Sync now (demo)" flow; REAL mode auto-pushed at submit, so this
+/// surface reports the true backend state ("Sent — the kitchen display
+/// receives it automatically" / an honest failure with Retry) and never a
+/// demo label. Pure presentation over an immutable [SubmittedOrderView].
 class OrderConfirmation extends ConsumerWidget {
   const OrderConfirmation({
     required this.order,
@@ -33,6 +38,7 @@ class OrderConfirmation extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final subtotalText = MoneyFormatter.format(order.subtotal);
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
 
     // RF-115: live outbox/sync status for this order (null on the RF-101 path).
     final entries = ref.watch(outboxControllerProvider);
@@ -110,6 +116,7 @@ class OrderConfirmation extends ConsumerWidget {
                 _SyncStatusCard(
                   entry: entry,
                   l10n: l10n,
+                  isDemo: isDemo,
                   onSync: entry != null && entry.syncState.isPending
                       ? () => outbox.pushEntry(entry.id)
                       : null,
@@ -140,10 +147,13 @@ class OrderConfirmation extends ConsumerWidget {
                   ),
                   const SizedBox(height: RestoflowSpacing.md),
                   // RF-141B: shared design-system notice (subtle info tone).
-                  RestoflowNoticeBanner(
-                    body: l10n.posDemoOrderNotice,
-                    tone: RestoflowTone.info,
-                  ),
+                  // Demo only — a REAL order was actually sent (or shows its
+                  // honest failure above), so the demo disclaimer would lie.
+                  if (isDemo)
+                    RestoflowNoticeBanner(
+                      body: l10n.posDemoOrderNotice,
+                      tone: RestoflowTone.info,
+                    ),
                 ] else
                   ReceiptPreview(order: order, payment: payment),
               ],
@@ -287,23 +297,25 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
 }
 
 /// Label + honest note + semantic [RestoflowTone] + icon for a sync state
-/// (RF-141B: tones map to the shared design-system status pill).
+/// (RF-141B: tones map to the shared design-system status pill). The note is
+/// MODE-HONEST: demo says "demo sync", real describes the true backend state.
 ({String label, String note, RestoflowTone tone, IconData icon}) _syncVisual(
   OutboxSyncState state,
-  AppLocalizations l10n,
-) {
+  AppLocalizations l10n, {
+  required bool isDemo,
+}) {
   switch (state) {
     case OutboxSyncState.inFlight:
       return (
         label: l10n.posSyncStateSending,
-        note: l10n.posSyncDemoNotice,
+        note: isDemo ? l10n.posSyncDemoNotice : l10n.posSyncSendingReal,
         tone: RestoflowTone.info,
         icon: Icons.sync,
       );
     case OutboxSyncState.applied:
       return (
         label: l10n.posSyncStateSynced,
-        note: l10n.posSyncDemoNotice,
+        note: isDemo ? l10n.posSyncDemoNotice : l10n.posSyncSentReal,
         tone: RestoflowTone.success,
         icon: Icons.cloud_done_outlined,
       );
@@ -311,7 +323,7 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
     case OutboxSyncState.dead:
       return (
         label: l10n.posSyncStateFailed,
-        note: l10n.posSyncDemoNotice,
+        note: isDemo ? l10n.posSyncDemoNotice : l10n.posSyncFailedReal,
         tone: RestoflowTone.danger,
         icon: Icons.error_outline,
       );
@@ -335,12 +347,14 @@ class _SyncStatusCard extends StatelessWidget {
   const _SyncStatusCard({
     required this.entry,
     required this.l10n,
+    required this.isDemo,
     required this.onSync,
     required this.onRetry,
   });
 
   final OutboxEntry? entry;
   final AppLocalizations l10n;
+  final bool isDemo;
   final VoidCallback? onSync;
   final VoidCallback? onRetry;
 
@@ -348,7 +362,7 @@ class _SyncStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = entry?.syncState ?? OutboxSyncState.pending;
-    final visual = _syncVisual(state, l10n);
+    final visual = _syncVisual(state, l10n, isDemo: isDemo);
     final opRef = entry?.localOperationId;
     final sending = state == OutboxSyncState.inFlight;
     final refLine = opRef == null ? null : '${l10n.posOutboxRefLabel}: $opRef';
@@ -443,7 +457,9 @@ class _SyncStatusCard extends StatelessWidget {
                   key: const Key('sync-now-button'),
                   onPressed: onSync,
                   icon: const Icon(Icons.sync, size: 18),
-                  label: Text(l10n.posSyncNow),
+                  // Demo keeps the honest "(demo)" label; a REAL pending entry
+                  // (auto-push interrupted) offers a plain "Send now".
+                  label: Text(isDemo ? l10n.posSyncNow : l10n.posSyncSendNow),
                 ),
               ),
             ] else if (onRetry != null) ...[

@@ -472,6 +472,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posShiftDemoNote => 'Demo shift — not synced';
 
   @override
+  String get posShiftRealName => 'Current shift';
+
+  @override
+  String get posShiftRealNote =>
+      'Opened at sign-in — cash totals are tracked on the server';
+
+  @override
+  String get posSyncSendingReal => 'Sending to the backend…';
+
+  @override
+  String get posSyncSentReal =>
+      'Sent — the kitchen display receives it automatically.';
+
+  @override
+  String get posSyncFailedReal =>
+      'The backend rejected this order — it was NOT sent to the kitchen.';
+
+  @override
+  String get posSyncSendNow => 'Send now';
+
+  @override
+  String get posReceiptNoPrinterNote =>
+      'Printing is not connected on this device yet';
+
+  @override
   String get dashboardOverviewHeading => 'Today\'s overview';
 
   @override

@@ -471,6 +471,27 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posShiftDemoNote => 'משמרת הדגמה — לא מסונכרנת';
 
   @override
+  String get posShiftRealName => 'המשמרת הנוכחית';
+
+  @override
+  String get posShiftRealNote => 'נפתחה בכניסה — סכומי המזומן מנוהלים בשרת';
+
+  @override
+  String get posSyncSendingReal => 'שולח לשרת…';
+
+  @override
+  String get posSyncSentReal => 'נשלח — מסך המטבח מקבל אותה אוטומטית.';
+
+  @override
+  String get posSyncFailedReal => 'השרת דחה את ההזמנה — היא לא נשלחה למטבח.';
+
+  @override
+  String get posSyncSendNow => 'שלח עכשיו';
+
+  @override
+  String get posReceiptNoPrinterNote => 'הדפסה עדיין אינה מחוברת במכשיר זה';
+
+  @override
   String get dashboardOverviewHeading => 'סקירת היום';
 
   @override

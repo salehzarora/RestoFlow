@@ -4,6 +4,9 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
+
 import '../data/payment.dart';
 import '../format/money_format.dart';
 import '../print/print_document.dart';
@@ -39,6 +42,9 @@ class ReceiptPrintPreview extends ConsumerWidget {
     final theme = Theme.of(context);
     final currency = payment.currencyCode;
     final dineIn = order.orderType == OrderType.dineIn;
+    // Mode-honest: the demo restaurant name / demo + provisional notes belong
+    // to demo mode only — a REAL receipt shows the true server receipt number.
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final typeLabel = dineIn
         ? l10n.posOrderTypeDineIn
         : l10n.posOrderTypeTakeaway;
@@ -73,7 +79,9 @@ class ReceiptPrintPreview extends ConsumerWidget {
                         children: [
                           Center(
                             child: Text(
-                              l10n.receiptDemoRestaurantName,
+                              isDemo
+                                  ? l10n.receiptDemoRestaurantName
+                                  : l10n.posReceiptTitle,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
@@ -146,24 +154,35 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             value: l10n.posPaymentMethodCash,
                           ),
                           const SizedBox(height: RestoflowSpacing.sm),
-                          Center(
-                            child: Text(
-                              l10n.posReceiptProvisionalNote,
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                          if (isDemo) ...[
+                            Center(
+                              child: Text(
+                                l10n.posReceiptProvisionalNote,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
-                          Center(
-                            child: Text(
-                              l10n.posReceiptDemoNote,
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            Center(
+                              child: Text(
+                                l10n.posReceiptDemoNote,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
+                          ] else
+                            Center(
+                              child: Text(
+                                l10n.posReceiptNoPrinterNote,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -176,7 +195,9 @@ class ReceiptPrintPreview extends ConsumerWidget {
               l10n: l10n,
               onPrint: () => ref
                   .read(printServiceProvider)
-                  .printDocument(buildReceiptDocument(l10n, order, payment)),
+                  .printDocument(
+                    buildReceiptDocument(l10n, order, payment, isDemo: isDemo),
+                  ),
             ),
           ],
         ),
@@ -190,8 +211,9 @@ class ReceiptPrintPreview extends ConsumerWidget {
 PrintDocument buildReceiptDocument(
   AppLocalizations l10n,
   SubmittedOrderView order,
-  CashPayment payment,
-) {
+  CashPayment payment, {
+  bool isDemo = true,
+}) {
   final currency = payment.currencyCode;
   final dineIn = order.orderType == OrderType.dineIn;
   // Built into a local (not an inline `title:` literal) so the RF-020
@@ -200,7 +222,9 @@ PrintDocument buildReceiptDocument(
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
-      PrintLine.title(l10n.receiptDemoRestaurantName),
+      PrintLine.title(
+        isDemo ? l10n.receiptDemoRestaurantName : l10n.posReceiptTitle,
+      ),
       PrintLine.center(l10n.posPaidChip),
       PrintLine.rule(),
       PrintLine.kv(l10n.posReceiptNumberLabel, payment.receiptNumber),
@@ -237,8 +261,11 @@ PrintDocument buildReceiptDocument(
       ),
       PrintLine.rule(),
       PrintLine.kv(l10n.posPaymentMethodLabel, l10n.posPaymentMethodCash),
-      PrintLine.note(l10n.posReceiptProvisionalNote),
-      PrintLine.note(l10n.posReceiptDemoNote),
+      if (isDemo) ...[
+        PrintLine.note(l10n.posReceiptProvisionalNote),
+        PrintLine.note(l10n.posReceiptDemoNote),
+      ] else
+        PrintLine.note(l10n.posReceiptNoPrinterNote),
     ],
   );
 }
