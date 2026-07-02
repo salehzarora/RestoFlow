@@ -497,6 +497,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posReceiptNoPrinterNote => 'الطباعة غير متصلة على هذا الجهاز بعد';
 
   @override
+  String get posModifierRequired => 'إلزامي';
+
+  @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
 
   @override
@@ -1340,6 +1343,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardNavStaff => 'الموظفون';
 
   @override
+  String get dashboardNavTables => 'الطاولات';
+
+  @override
   String get dashboardModeDemo => 'تجريبي';
 
   @override
@@ -1683,6 +1689,72 @@ class AppLocalizationsAr extends AppLocalizations {
   String get staffInactive => 'غير نشط';
 
   @override
+  String get tablesTitle => 'الطاولات';
+
+  @override
+  String get tablesSubtitle =>
+      'طاولات الطعام لهذا الفرع — منتقي الطاولات في نقطة البيع يبيع من هذه القائمة.';
+
+  @override
+  String get tablesAdd => 'إضافة طاولة';
+
+  @override
+  String get tablesEdit => 'تعديل';
+
+  @override
+  String get tablesDelete => 'إزالة الطاولة';
+
+  @override
+  String get tablesDeleteConfirm =>
+      'هل تريد إزالة هذه الطاولة؟ الطلبات الحالية تحتفظ بمرجع الطاولة الخاص بها.';
+
+  @override
+  String get tablesEmptyTitle => 'لا توجد طاولات بعد';
+
+  @override
+  String get tablesEmptyBody =>
+      'أضف أول طاولة — مسار تناول الطعام داخل المطعم في نقطة البيع يحتاج إلى طاولة واحدة على الأقل.';
+
+  @override
+  String get tablesFieldLabel => 'اسم / رقم الطاولة';
+
+  @override
+  String get tablesFieldSeats => 'المقاعد';
+
+  @override
+  String get tablesFieldArea => 'المنطقة / القسم';
+
+  @override
+  String get tablesActive => 'نشطة';
+
+  @override
+  String get tablesInactive => 'غير نشطة';
+
+  @override
+  String get tablesErrLabel => 'أدخل اسم الطاولة';
+
+  @override
+  String get tablesErrSeats => 'يجب أن يكون عدد المقاعد رقمًا موجبًا';
+
+  @override
+  String get tablesStatusAvailable => 'متاحة';
+
+  @override
+  String get tablesStatusOccupied => 'مشغولة';
+
+  @override
+  String get tablesStatusReserved => 'محجوزة';
+
+  @override
+  String get tablesStatusOutOfService => 'خارج الخدمة';
+
+  @override
+  String get tablesSetStatus => 'تعيين الحالة';
+
+  @override
+  String get tablesSaved => 'تم حفظ الطاولة';
+
+  @override
   String get adminRevokeConfirm =>
       'هل تريد إلغاء هذا الجهاز؟ سينتهي اقترانه وجلساته فورًا وسيعود الجهاز إلى شاشة الاقتران.';
 
@@ -1770,6 +1842,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posMenuEmptyBody => 'أضف عناصر القائمة في لوحة التحكم لبدء البيع.';
+
+  @override
+  String get posTablesEmptyReal =>
+      'لا توجد طاولات مُعدة — أضف الطاولات من لوحة التحكم ← الطاولات.';
 
   @override
   String get kdsSignInAgain => 'تسجيل الدخول مرة أخرى';

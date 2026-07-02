@@ -16,6 +16,8 @@ import 'setup/setup_center.dart';
 import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
 import 'state/dashboard_providers.dart';
+import 'tables/tables_repository.dart';
+import 'tables/tables_screen.dart';
 
 /// Derives the menu scope for the dashboard from the active RF-108 membership.
 ///
@@ -52,12 +54,12 @@ AdminScope dashboardAdminScopeFor(
 }
 
 /// The owner/manager dashboard shell: a branded navigation
-/// (Overview · Menu · Devices · Printers · Staff · Users · Settings) with a
-/// persistent context bar (active restaurant/branch + an honest Demo/Real mode
-/// pill + sign-out).
+/// (Overview · Menu · Devices · Printers · Staff · Tables · Users · Settings)
+/// with a persistent context bar (active restaurant/branch + an honest
+/// Demo/Real mode pill + sign-out).
 ///
-/// REAL vs DEMO per surface: Devices (RF-160), Printers, and Staff use REAL
-/// repositories when injected (authenticated real mode); every demo-backed
+/// REAL vs DEMO per surface: Devices (RF-160), Printers, Staff, and Tables use
+/// REAL repositories when injected (authenticated real mode); every demo-backed
 /// surface keeps its clear demo banner. The real-mode Overview opens with the
 /// setup center (live device/printer/staff-PIN readiness from the same real
 /// repositories).
@@ -70,6 +72,7 @@ class DashboardShell extends StatefulWidget {
     this.menuWriter,
     this.printersRepository,
     this.staffRepository,
+    this.tablesRepository,
     this.reportsTransport,
     this.onSignOut,
     super.key,
@@ -99,6 +102,9 @@ class DashboardShell extends StatefulWidget {
 
   /// The REAL staff repository (null => labelled demo store).
   final StaffRepository? staffRepository;
+
+  /// The REAL tables repository (null => labelled demo store).
+  final TablesAdminRepository? tablesRepository;
 
   /// The authenticated dashboard transport for the Overview's real
   /// sales-summary read (sprint). Null in demo mode / tests => the report
@@ -143,14 +149,18 @@ class _DashboardShellState extends State<DashboardShell> {
   late final AdminRepository? _realDeviceRepo = widget.deviceRepositoryFor
       ?.call(_adminScope);
 
-  /// Printers/Staff: real repository when injected, else the labelled demo store.
+  /// Printers/Staff/Tables: real repository when injected, else the labelled
+  /// demo store.
   late final PrintersRepository _printersRepo =
       widget.printersRepository ?? InMemoryPrintersStore();
   late final StaffRepository _staffRepo =
       widget.staffRepository ?? InMemoryStaffStore();
+  late final TablesAdminRepository _tablesRepo =
+      widget.tablesRepository ?? InMemoryTablesStore();
 
   bool get _printersDemo => widget.printersRepository == null;
   bool get _staffDemo => widget.staffRepository == null;
+  bool get _tablesDemo => widget.tablesRepository == null;
 
   void _select(int value) => setState(() => _index = value);
 
@@ -180,11 +190,15 @@ class _DashboardShellState extends State<DashboardShell> {
           StaffScreen(repository: _staffRepo),
           demo: _staffDemo,
         ),
+        5 => _demoBannerSurface(
+          TablesScreen(repository: _tablesRepo),
+          demo: _tablesDemo,
+        ),
         // Users/Settings (sprint): REAL mode never renders the demo store's
         // fabricated people/values — it shows the honest not-connected state
         // and the real workspace values instead. Demo mode keeps the labelled
         // demo surfaces.
-        5 =>
+        6 =>
           widget.membership == null
               ? _adminSurface(
                   const AdminUsersScreen(),
@@ -442,6 +456,11 @@ class _DashboardShellState extends State<DashboardShell> {
       label: l10n.dashboardNavStaff,
     ),
     _NavItem(
+      icon: Icons.table_restaurant_outlined,
+      selectedIcon: Icons.table_restaurant,
+      label: l10n.dashboardNavTables,
+    ),
+    _NavItem(
       icon: Icons.group_outlined,
       selectedIcon: Icons.group,
       label: l10n.dashboardNavUsers,
@@ -627,6 +646,11 @@ class _SideNav extends StatelessWidget {
           icon: const Icon(Icons.badge_outlined),
           selectedIcon: const Icon(Icons.badge),
           label: Text(l10n.dashboardNavStaff),
+        ),
+        NavigationRailDestination(
+          icon: const Icon(Icons.table_restaurant_outlined),
+          selectedIcon: const Icon(Icons.table_restaurant),
+          label: Text(l10n.dashboardNavTables),
         ),
         NavigationRailDestination(
           icon: const Icon(Icons.group_outlined),

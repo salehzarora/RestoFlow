@@ -14,6 +14,7 @@ import 'package:supabase/supabase.dart';
 import '../admin/supabase_admin_device_repository.dart';
 import '../printers/printers_repository.dart';
 import '../staff/staff_repository.dart';
+import '../tables/tables_repository.dart';
 import 'dashboard_auth_repository.dart';
 import 'onboarding_repository.dart';
 
@@ -29,9 +30,10 @@ import 'onboarding_repository.dart';
 /// always server-derived from `auth.uid()`. No token, password, or raw provider
 /// error is ever logged or surfaced.
 
-/// Default onboarding currency. The jurisdiction / default-currency decision is
-/// OPEN QUESTION Q-007; 'USD' is a safe ISO-4217 placeholder until it is frozen.
-const String kDefaultOnboardingCurrency = 'USD';
+/// Default onboarding currency. The pilot is Israel-only, so every new
+/// organization defaults to ILS (₪). The jurisdiction decision remains OPEN
+/// QUESTION Q-007 — when multi-region lands this becomes an onboarding choice.
+const String kDefaultOnboardingCurrency = 'ILS';
 
 /// Default onboarding timezone. A per-restaurant timezone picker is a follow-up
 /// (RF-152/RF-153); 'UTC' is always a valid IANA zone, so onboarding never fails
@@ -52,6 +54,7 @@ const String kDefaultOnboardingTimezone = 'UTC';
   MenuWriter menuWriter,
   PrintersRepository Function(AdminScope scope) printersRepositoryFor,
   StaffRepository Function(AdminScope scope) staffRepositoryFor,
+  TablesAdminRepository Function(AdminScope scope) tablesRepositoryFor,
   SyncRpcTransport transport,
 })
 buildDashboardRealAuth(SupabaseClient client) {
@@ -82,6 +85,12 @@ buildDashboardRealAuth(SupabaseClient client) {
       currentUserId: currentUserId,
     ),
     staffRepositoryFor: (scope) => SupabaseStaffRepository(
+      transport: transport,
+      scope: scope,
+      currentUserId: currentUserId,
+    ),
+    // Sprint: real dining tables (the POS table picker sells from this list).
+    tablesRepositoryFor: (scope) => SupabaseTablesRepository(
       transport: transport,
       scope: scope,
       currentUserId: currentUserId,

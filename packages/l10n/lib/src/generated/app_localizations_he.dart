@@ -492,6 +492,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posReceiptNoPrinterNote => 'הדפסה עדיין אינה מחוברת במכשיר זה';
 
   @override
+  String get posModifierRequired => 'חובה';
+
+  @override
   String get dashboardOverviewHeading => 'סקירת היום';
 
   @override
@@ -1331,6 +1334,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardNavStaff => 'צוות';
 
   @override
+  String get dashboardNavTables => 'שולחנות';
+
+  @override
   String get dashboardModeDemo => 'דמו';
 
   @override
@@ -1670,6 +1676,72 @@ class AppLocalizationsHe extends AppLocalizations {
   String get staffInactive => 'לא פעיל';
 
   @override
+  String get tablesTitle => 'שולחנות';
+
+  @override
+  String get tablesSubtitle =>
+      'שולחנות האוכל של סניף זה — בורר השולחנות בקופה מוכר מהרשימה הזו.';
+
+  @override
+  String get tablesAdd => 'הוספת שולחן';
+
+  @override
+  String get tablesEdit => 'עריכה';
+
+  @override
+  String get tablesDelete => 'הסרת שולחן';
+
+  @override
+  String get tablesDeleteConfirm =>
+      'להסיר את השולחן הזה? הזמנות קיימות שומרות את הפניית השולחן שלהן.';
+
+  @override
+  String get tablesEmptyTitle => 'אין שולחנות עדיין';
+
+  @override
+  String get tablesEmptyBody =>
+      'הוסיפו את השולחן הראשון — זרימת הישיבה במסעדה בקופה דורשת לפחות שולחן אחד.';
+
+  @override
+  String get tablesFieldLabel => 'שם / מספר שולחן';
+
+  @override
+  String get tablesFieldSeats => 'מקומות ישיבה';
+
+  @override
+  String get tablesFieldArea => 'אזור / מדור';
+
+  @override
+  String get tablesActive => 'פעיל';
+
+  @override
+  String get tablesInactive => 'לא פעיל';
+
+  @override
+  String get tablesErrLabel => 'הזינו שם שולחן';
+
+  @override
+  String get tablesErrSeats => 'מספר המקומות חייב להיות מספר חיובי';
+
+  @override
+  String get tablesStatusAvailable => 'פנוי';
+
+  @override
+  String get tablesStatusOccupied => 'תפוס';
+
+  @override
+  String get tablesStatusReserved => 'שמור';
+
+  @override
+  String get tablesStatusOutOfService => 'לא בשירות';
+
+  @override
+  String get tablesSetStatus => 'הגדרת סטטוס';
+
+  @override
+  String get tablesSaved => 'השולחן נשמר';
+
+  @override
   String get adminRevokeConfirm =>
       'לבטל את המכשיר הזה? הצימוד וההפעלות שלו יסתיימו מיד והמכשיר יחזור למסך הצימוד.';
 
@@ -1758,6 +1830,10 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posMenuEmptyBody =>
       'הוסיפו פריטי תפריט בלוח הבקרה כדי להתחיל למכור.';
+
+  @override
+  String get posTablesEmptyReal =>
+      'לא הוגדרו שולחנות — הוסיפו שולחנות בלוח הבקרה ← שולחנות.';
 
   @override
   String get kdsSignInAgain => 'כניסה מחדש';

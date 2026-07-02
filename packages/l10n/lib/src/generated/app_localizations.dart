@@ -1036,6 +1036,12 @@ abstract class AppLocalizations {
   /// **'Printing is not connected on this device yet'**
   String get posReceiptNoPrinterNote;
 
+  /// Pill on a modifier group the cashier MUST choose from (e.g. doneness) before adding the item.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get posModifierRequired;
+
   /// Owner dashboard section heading above the daily KPI cards.
   ///
   /// In en, this message translates to:
@@ -2656,6 +2662,12 @@ abstract class AppLocalizations {
   /// **'Staff'**
   String get dashboardNavStaff;
 
+  /// Dashboard navigation label for the dining-tables surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables'**
+  String get dashboardNavTables;
+
   /// Header mode pill when the app runs on in-memory demo data.
   ///
   /// In en, this message translates to:
@@ -3292,6 +3304,132 @@ abstract class AppLocalizations {
   /// **'Inactive'**
   String get staffInactive;
 
+  /// Tables page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables'**
+  String get tablesTitle;
+
+  /// Tables page subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dining tables for this branch — the POS table picker sells from this list.'**
+  String get tablesSubtitle;
+
+  /// Button that opens the add-table dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Add table'**
+  String get tablesAdd;
+
+  /// Edit-table action.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get tablesEdit;
+
+  /// Delete-table action + confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove table'**
+  String get tablesDelete;
+
+  /// Delete-table confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this table? Existing orders keep their table reference.'**
+  String get tablesDeleteConfirm;
+
+  /// Empty-state title on the tables page.
+  ///
+  /// In en, this message translates to:
+  /// **'No tables yet'**
+  String get tablesEmptyTitle;
+
+  /// Empty-state body on the tables page.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your first table — the POS dine-in flow needs at least one.'**
+  String get tablesEmptyBody;
+
+  /// Table form field: the table's label (name or number).
+  ///
+  /// In en, this message translates to:
+  /// **'Table name / number'**
+  String get tablesFieldLabel;
+
+  /// Table form field: seat count (optional).
+  ///
+  /// In en, this message translates to:
+  /// **'Seats'**
+  String get tablesFieldSeats;
+
+  /// Table form field: dining area or section (optional).
+  ///
+  /// In en, this message translates to:
+  /// **'Area / section'**
+  String get tablesFieldArea;
+
+  /// Table form switch: the table is active (offered by the POS table picker).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get tablesActive;
+
+  /// Pill for a deactivated table (hidden from the POS table picker).
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get tablesInactive;
+
+  /// Validation message for a missing table label.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a table name'**
+  String get tablesErrLabel;
+
+  /// Validation message for a non-positive/invalid seat count.
+  ///
+  /// In en, this message translates to:
+  /// **'Seats must be a positive number'**
+  String get tablesErrSeats;
+
+  /// Table status pill: available for new guests.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get tablesStatusAvailable;
+
+  /// Table status pill: guests are seated.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied'**
+  String get tablesStatusOccupied;
+
+  /// Table status pill: held for a reservation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserved'**
+  String get tablesStatusReserved;
+
+  /// Table status pill: not usable (broken/blocked).
+  ///
+  /// In en, this message translates to:
+  /// **'Out of service'**
+  String get tablesStatusOutOfService;
+
+  /// Per-table action that opens the status menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Set status'**
+  String get tablesSetStatus;
+
+  /// Snackbar after a successful table save/status change/removal.
+  ///
+  /// In en, this message translates to:
+  /// **'Table saved'**
+  String get tablesSaved;
+
   /// Device revoke confirmation body.
   ///
   /// In en, this message translates to:
@@ -3453,6 +3591,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add menu items in the dashboard to start selling.'**
   String get posMenuEmptyBody;
+
+  /// POS dine-in table-picker empty state in real mode: the branch has no configured tables yet.
+  ///
+  /// In en, this message translates to:
+  /// **'No tables configured — add tables in Dashboard → Tables.'**
+  String get posTablesEmptyReal;
 
   /// KDS action shown when the live session expired/was revoked; returns to the staff PIN screen.
   ///

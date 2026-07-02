@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_tables.dart';
@@ -29,6 +31,7 @@ class TablePickerSheet extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final tablesAsync = ref.watch(tablesProvider);
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final assignedId = ref.watch(
       orderSetupControllerProvider.select((s) => s.assignedTable?.tableId),
     );
@@ -58,10 +61,12 @@ class TablePickerSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: RestoflowSpacing.sm),
-            _FootnoteRow(
-              icon: Icons.info_outline,
-              message: l10n.posTablesDemoNotice,
-            ),
+            // Demo-only disclaimer — REAL mode loads the branch's real tables.
+            if (isDemo)
+              _FootnoteRow(
+                icon: Icons.info_outline,
+                message: l10n.posTablesDemoNotice,
+              ),
             const SizedBox(height: RestoflowSpacing.md),
             const _TableLegend(),
             Padding(
@@ -86,7 +91,11 @@ class TablePickerSheet extends ConsumerWidget {
                 data: (tables) => tables.isEmpty
                     ? _PickerMessage(
                         icon: Icons.table_restaurant_outlined,
-                        message: l10n.posTablesEmpty,
+                        // Real mode says WHERE tables come from (Dashboard →
+                        // Tables) instead of a bare "nothing to show".
+                        message: isDemo
+                            ? l10n.posTablesEmpty
+                            : l10n.posTablesEmptyReal,
                       )
                     : _FloorMap(
                         tables: tables,
@@ -101,10 +110,14 @@ class TablePickerSheet extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: RestoflowSpacing.md),
-            _FootnoteRow(
-              icon: Icons.info_outline,
-              message: l10n.posTablesLayoutEditorHint,
-            ),
+            // The illustrative-positions hint is demo-only; real tables come
+            // from the dashboard and have no floor coordinates yet either,
+            // but the wording ("demo-only") would be wrong in real mode.
+            if (isDemo)
+              _FootnoteRow(
+                icon: Icons.info_outline,
+                message: l10n.posTablesLayoutEditorHint,
+              ),
           ],
         ),
       ),

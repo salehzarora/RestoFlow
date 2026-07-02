@@ -21,6 +21,7 @@ import 'src/context/tenant_context_resolver.dart';
 import 'src/dashboard_shell.dart';
 import 'src/printers/printers_repository.dart';
 import 'src/staff/staff_repository.dart';
+import 'src/tables/tables_repository.dart';
 
 /// Composition root (RF-151 + RF-152). In DEMO mode (`RESTOFLOW_DEMO_MODE`
 /// default true) the app renders the existing in-memory demo shell. In REAL mode
@@ -84,6 +85,7 @@ Future<void> main() async {
         menuWriter: real.menuWriter,
         printersRepositoryFor: real.printersRepositoryFor,
         staffRepositoryFor: real.staffRepositoryFor,
+        tablesRepositoryFor: real.tablesRepositoryFor,
         reportsTransport: real.transport,
         selectedContextStore: SharedPreferencesSelectedContextStore(),
       ),
@@ -110,6 +112,7 @@ class DashboardApp extends StatelessWidget {
     this.menuWriter,
     this.printersRepositoryFor,
     this.staffRepositoryFor,
+    this.tablesRepositoryFor,
     this.reportsTransport,
     this.realModeUnconfigured = false,
     super.key,
@@ -148,6 +151,9 @@ class DashboardApp extends StatelessWidget {
 
   /// Builds the REAL staff/PIN repository per admin scope.
   final StaffRepository Function(AdminScope scope)? staffRepositoryFor;
+
+  /// Builds the REAL dining-tables repository per admin scope.
+  final TablesAdminRepository Function(AdminScope scope)? tablesRepositoryFor;
 
   /// The authenticated dashboard transport for the Overview's real
   /// sales-summary read (sprint). Null in demo mode / tests.
@@ -205,6 +211,7 @@ class DashboardApp extends StatelessWidget {
             menuWriter: menuWriter,
             printersRepository: printersRepositoryFor?.call(scope),
             staffRepository: staffRepositoryFor?.call(scope),
+            tablesRepository: tablesRepositoryFor?.call(scope),
             reportsTransport: reportsTransport,
             // Sign-out from the shell header; the auth flow's session stream
             // drives the transition + context clearing.

@@ -497,6 +497,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Printing is not connected on this device yet';
 
   @override
+  String get posModifierRequired => 'Required';
+
+  @override
   String get dashboardOverviewHeading => 'Today\'s overview';
 
   @override
@@ -1349,6 +1352,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardNavStaff => 'Staff';
 
   @override
+  String get dashboardNavTables => 'Tables';
+
+  @override
   String get dashboardModeDemo => 'Demo';
 
   @override
@@ -1692,6 +1698,72 @@ class AppLocalizationsEn extends AppLocalizations {
   String get staffInactive => 'Inactive';
 
   @override
+  String get tablesTitle => 'Tables';
+
+  @override
+  String get tablesSubtitle =>
+      'Dining tables for this branch — the POS table picker sells from this list.';
+
+  @override
+  String get tablesAdd => 'Add table';
+
+  @override
+  String get tablesEdit => 'Edit';
+
+  @override
+  String get tablesDelete => 'Remove table';
+
+  @override
+  String get tablesDeleteConfirm =>
+      'Remove this table? Existing orders keep their table reference.';
+
+  @override
+  String get tablesEmptyTitle => 'No tables yet';
+
+  @override
+  String get tablesEmptyBody =>
+      'Add your first table — the POS dine-in flow needs at least one.';
+
+  @override
+  String get tablesFieldLabel => 'Table name / number';
+
+  @override
+  String get tablesFieldSeats => 'Seats';
+
+  @override
+  String get tablesFieldArea => 'Area / section';
+
+  @override
+  String get tablesActive => 'Active';
+
+  @override
+  String get tablesInactive => 'Inactive';
+
+  @override
+  String get tablesErrLabel => 'Enter a table name';
+
+  @override
+  String get tablesErrSeats => 'Seats must be a positive number';
+
+  @override
+  String get tablesStatusAvailable => 'Available';
+
+  @override
+  String get tablesStatusOccupied => 'Occupied';
+
+  @override
+  String get tablesStatusReserved => 'Reserved';
+
+  @override
+  String get tablesStatusOutOfService => 'Out of service';
+
+  @override
+  String get tablesSetStatus => 'Set status';
+
+  @override
+  String get tablesSaved => 'Table saved';
+
+  @override
   String get adminRevokeConfirm =>
       'Revoke this device? Its pairing and sessions end immediately and the device returns to its pairing screen.';
 
@@ -1781,6 +1853,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posMenuEmptyBody =>
       'Add menu items in the dashboard to start selling.';
+
+  @override
+  String get posTablesEmptyReal =>
+      'No tables configured — add tables in Dashboard → Tables.';
 
   @override
   String get kdsSignInAgain => 'Sign in again';
