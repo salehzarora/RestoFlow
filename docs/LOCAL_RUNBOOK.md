@@ -104,28 +104,49 @@ cd apps/pos && flutter run -d chrome
 cd apps/kds && flutter run -d chrome
 ```
 
-### Real Local mode
+### Real Local mode — use the stable-port scripts (recommended)
 
-Pass the three defines (URL + anon key from `supabase status`):
+From the repo root, double-click or run:
+
+```bat
+_run_dashboard_real.bat   REM Dashboard on http://localhost:57026
+_run_pos_real.bat         REM POS       on http://localhost:52096
+_run_kds_real.bat         REM KDS       on http://localhost:49622
+```
+
+**Why fixed ports matter locally:** the browser scopes storage — the owner's
+signed-in session AND a device's pairing — per **origin** (scheme + host +
+**port**). Plain `flutter run` picks a *random* port each time, so the next
+run looks like a wiped sign-in / lost pairing and the POS/KDS would ask for a
+new code. The scripts pin one port per app so pairing survives restarts. A
+deployed build on a stable domain never has this problem. The scripts default
+to the local Supabase URL and the CLI's local **publishable** key (override
+with the `RESTOFLOW_SUPABASE_URL` / `RESTOFLOW_SUPABASE_ANON_KEY` env vars if
+yours differ — never a secret key).
+
+### Real Local mode — manual command
+
+Pass the three defines (URL + anon key from `supabase status`) and keep a
+STABLE `--web-port` (see above):
 
 ```sh
 # Dashboard — real local
 cd apps/dashboard
-flutter run -d chrome \
+flutter run -d chrome --web-port=57026 \
   --dart-define=RESTOFLOW_DEMO_MODE=false \
   --dart-define=RESTOFLOW_SUPABASE_URL=http://127.0.0.1:54321 \
   --dart-define=RESTOFLOW_SUPABASE_ANON_KEY=<anon key>
 
 # POS — real local (same three defines)
 cd apps/pos
-flutter run -d chrome \
+flutter run -d chrome --web-port=52096 \
   --dart-define=RESTOFLOW_DEMO_MODE=false \
   --dart-define=RESTOFLOW_SUPABASE_URL=http://127.0.0.1:54321 \
   --dart-define=RESTOFLOW_SUPABASE_ANON_KEY=<anon key>
 
 # KDS — real local (same three defines)
 cd apps/kds
-flutter run -d chrome \
+flutter run -d chrome --web-port=49622 \
   --dart-define=RESTOFLOW_DEMO_MODE=false \
   --dart-define=RESTOFLOW_SUPABASE_URL=http://127.0.0.1:54321 \
   --dart-define=RESTOFLOW_SUPABASE_ANON_KEY=<anon key>
