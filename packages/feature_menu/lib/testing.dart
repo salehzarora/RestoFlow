@@ -54,6 +54,12 @@ class ScriptedMenuWriter implements MenuWriter {
     int displayOrder = 0,
     bool isActive = true,
     String? imagePath,
+    String? itemType,
+    List<String> tags = const [],
+    int? prepMinutes,
+    String? sku,
+    String? kitchenNote,
+    Map<String, dynamic> attributes = const {},
   }) => _record('upsertItem');
 
   @override

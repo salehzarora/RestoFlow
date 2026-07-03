@@ -1009,6 +1009,76 @@ class AppLocalizationsHe extends AppLocalizations {
       'זו גישה ברמת הארגון ללא מסעדה נבחרת. פתח את ניהול התפריט ממסעדה או סניף ספציפיים.';
 
   @override
+  String get menuBasicInfoSection => 'מידע בסיסי';
+
+  @override
+  String get menuPricingSection => 'תמחור';
+
+  @override
+  String get menuPreparationSection => 'הכנה';
+
+  @override
+  String get menuAdvancedSection => 'מתקדם';
+
+  @override
+  String get menuAdvancedSectionHint =>
+      'פרטים אופציונליים — השתמשו במה שמתאים לפריט.';
+
+  @override
+  String get menuItemTypeLabel => 'סוג פריט';
+
+  @override
+  String get menuItemTypeUnspecified => 'לא צוין';
+
+  @override
+  String get menuItemTypeFood => 'אוכל';
+
+  @override
+  String get menuItemTypeDrink => 'משקה';
+
+  @override
+  String get menuItemTypeSide => 'תוספת';
+
+  @override
+  String get menuItemTypeCombo => 'קומבו';
+
+  @override
+  String get menuItemTypeOther => 'אחר';
+
+  @override
+  String get menuTagsLabel => 'תגיות';
+
+  @override
+  String get menuTagSpicy => 'חריף';
+
+  @override
+  String get menuTagVegetarian => 'צמחוני';
+
+  @override
+  String get menuTagPopular => 'פופולרי';
+
+  @override
+  String get menuTagNew => 'חדש';
+
+  @override
+  String get menuPrepMinutesLabel => 'זמן הכנה (דקות)';
+
+  @override
+  String get menuKitchenNoteLabel => 'הערה למטבח';
+
+  @override
+  String get menuSkuLabel => 'מק\"ט (קוד פנימי)';
+
+  @override
+  String get menuPortionFieldLabel => 'תווית מנה';
+
+  @override
+  String get menuPattyCountLabel => 'כמות (קציצות או יחידות)';
+
+  @override
+  String get menuPattyWeightLabel => 'משקל ליחידה (גרם)';
+
+  @override
   String get dashboardNavSettings => 'הגדרות';
 
   @override

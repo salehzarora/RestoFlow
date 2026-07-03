@@ -31,11 +31,15 @@ class MenuEditorTarget {
   bool get isExisting => item != null;
 }
 
-/// The in-place item editor (RF-111). Rendered inside the menu surface subtree
-/// (NOT a pushed route) so it stays under the feature ProviderScope overrides.
-/// Structured as sectioned cards: details, sizes, variants, modifiers (+ options),
-/// and the gated image panel. New items show the details only; existing items
-/// show every section.
+/// The in-place item editor (RF-111 + menu/media sprint). Rendered inside the
+/// menu surface subtree (NOT a pushed route) so it stays under the feature
+/// ProviderScope overrides. Structured as sectioned cards: 1 basic info
+/// (name/description/category/type/tags), 2 image, 3 pricing (base price +
+/// sizes/variants), 4 preparation (prep minutes + kitchen note), 5 modifiers
+/// (+ options), 6 a COLLAPSED advanced section (SKU/portion/count/weight —
+/// generic across cuisines; owners simply ignore what doesn't fit). New items
+/// show only the field sections; existing items show every section. Save and
+/// Cancel live in the always-visible top bar.
 class ItemEditorView extends ConsumerStatefulWidget {
   const ItemEditorView({
     required this.snapshot,
@@ -73,12 +77,35 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   late final TextEditingController _order = TextEditingController(
     text: (_item?.displayOrder ?? 0).toString(),
   );
+  late final TextEditingController _prepMinutes = TextEditingController(
+    text: _item?.prepMinutes?.toString() ?? '',
+  );
+  late final TextEditingController _kitchenNote = TextEditingController(
+    text: _item?.kitchenNote ?? '',
+  );
+  late final TextEditingController _sku = TextEditingController(
+    text: _item?.sku ?? '',
+  );
+  late final TextEditingController _portion = TextEditingController(
+    text: _item?.portionLabel ?? '',
+  );
+  late final TextEditingController _pattyCount = TextEditingController(
+    text: _item?.pattyCount?.toString() ?? '',
+  );
+  late final TextEditingController _pattyWeight = TextEditingController(
+    text: _item?.pattyWeightGrams?.toString() ?? '',
+  );
   late String? _categoryId = _item?.menuCategoryId ?? widget.target.categoryId;
+  late String? _itemType = _item?.itemType;
+  late final Set<String> _tags = {...?_item?.tags};
   late bool _active = _item?.isActive ?? true;
 
   MenuFieldError? _nameError;
   MenuFieldError? _priceError;
   MenuFieldError? _currencyError;
+  MenuFieldError? _prepError;
+  MenuFieldError? _pattyCountError;
+  MenuFieldError? _pattyWeightError;
   bool _submitting = false;
 
   @override
@@ -88,6 +115,12 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     _price.dispose();
     _currency.dispose();
     _order.dispose();
+    _prepMinutes.dispose();
+    _kitchenNote.dispose();
+    _sku.dispose();
+    _portion.dispose();
+    _pattyCount.dispose();
+    _pattyWeight.dispose();
     super.dispose();
   }
 
@@ -106,21 +139,78 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     return item;
   }
 
+  /// Parses an OPTIONAL non-negative integer field (prep minutes, counts,
+  /// weights): blank = unset (null, no error); a non-integer or negative value
+  /// is a field error — never silently coerced.
+  static (int?, MenuFieldError?) _parseOptionalNonNegativeInt(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return (null, null);
+    final value = int.tryParse(text);
+    if (value == null) return (null, MenuFieldError.notAnInteger);
+    if (value < 0) return (null, MenuFieldError.negativePrice);
+    return (value, null);
+  }
+
+  /// The tags to persist: the fixed vocabulary in canonical order, plus any
+  /// unknown (newer-backend) tags the item already carried — never dropped.
+  List<String> _selectedTags() => [
+    for (final tag in kMenuItemTags)
+      if (_tags.contains(tag)) tag,
+    for (final tag in _tags)
+      if (!kMenuItemTags.contains(tag)) tag,
+  ];
+
+  /// The attributes to persist: the three typed fields over any OTHER keys the
+  /// item already carried (full-state upsert must not clobber future keys).
+  /// NON-MONEY only (D-007) — count/weight-in-grams are not amounts.
+  Map<String, dynamic> _builtAttributes({
+    required int? pattyCount,
+    required int? pattyWeightGrams,
+  }) {
+    final attributes = <String, dynamic>{...?_freshItem?.attributes}
+      ..remove(kMenuAttrPortionLabel)
+      ..remove(kMenuAttrPattyCount)
+      ..remove(kMenuAttrPattyWeightGrams)
+      ..addAll(
+        MenuItem.buildAttributes(
+          portionLabel: _portion.text,
+          pattyCount: pattyCount,
+          pattyWeightGrams: pattyWeightGrams,
+        ),
+      );
+    return attributes;
+  }
+
   Future<void> _saveFields() async {
     final currencyText = _currency.text.trim().toUpperCase();
     final nameError = validateName(_name.text);
     final priceMinor = parseMajorToMinor(_price.text, currencyText);
     final priceError = validateBasePriceMinor(priceMinor);
     final currencyError = validateCurrencyCode(currencyText);
+    final (prepMinutes, prepError) = _parseOptionalNonNegativeInt(
+      _prepMinutes.text,
+    );
+    final (pattyCount, pattyCountError) = _parseOptionalNonNegativeInt(
+      _pattyCount.text,
+    );
+    final (pattyWeight, pattyWeightError) = _parseOptionalNonNegativeInt(
+      _pattyWeight.text,
+    );
     final categoryId = _categoryId;
     setState(() {
       _nameError = nameError;
       _priceError = priceError;
       _currencyError = currencyError;
+      _prepError = prepError;
+      _pattyCountError = pattyCountError;
+      _pattyWeightError = pattyWeightError;
     });
     if (nameError != null ||
         priceError != null ||
         currencyError != null ||
+        prepError != null ||
+        pattyCountError != null ||
+        pattyWeightError != null ||
         categoryId == null) {
       return;
     }
@@ -143,6 +233,17 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
           // Full-state upsert: null p_image_path CLEARS the image server-side,
           // so a details save must carry the item's current image through.
           imagePath: _freshItem?.imagePath,
+          itemType: _itemType,
+          tags: _selectedTags(),
+          prepMinutes: prepMinutes,
+          sku: _sku.text.trim().isEmpty ? null : _sku.text.trim(),
+          kitchenNote: _kitchenNote.text.trim().isEmpty
+              ? null
+              : _kitchenNote.text.trim(),
+          attributes: _builtAttributes(
+            pattyCount: pattyCount,
+            pattyWeightGrams: pattyWeight,
+          ),
         );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -168,9 +269,24 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Save/Cancel live HERE (always visible — the sectioned form below
+        // scrolls, and a save action must never sit below the fold).
         _EditorTopBar(
           title: _item?.name ?? l10n.menuAddItem,
           onClose: widget.onClose,
+          actions: [
+            TextButton(
+              onPressed: _submitting ? null : widget.onClose,
+              child: Text(l10n.menuCancelAction),
+            ),
+            const SizedBox(width: RestoflowSpacing.sm),
+            FilledButton.icon(
+              key: const ValueKey('menu-item-save'),
+              onPressed: _submitting ? null : _saveFields,
+              icon: const Icon(Icons.check, size: 18),
+              label: Text(l10n.menuSaveAction),
+            ),
+          ],
         ),
         const Divider(height: 1),
         Expanded(
@@ -182,7 +298,17 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _detailsCard(context, l10n, categories),
+                    // 1. Basic info.
+                    _basicInfoCard(context, l10n, categories),
+                    if (_item != null) ...[
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      // 2. Image — needs the FRESHEST row: imagePath changes
+                      // after uploads/removals reload the snapshot.
+                      MenuImagePanel(item: _freshItem ?? _item),
+                    ],
+                    const SizedBox(height: RestoflowSpacing.lg),
+                    // 3. Pricing (base price; sizes/variants right below).
+                    _pricingCard(context, l10n),
                     if (_item != null) ...[
                       const SizedBox(height: RestoflowSpacing.lg),
                       _PricedChildSection(
@@ -226,18 +352,23 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                             )
                             .toList(),
                       ),
+                    ],
+                    const SizedBox(height: RestoflowSpacing.lg),
+                    // 4. Preparation (prep minutes + the standing kitchen note).
+                    _preparationCard(context, l10n),
+                    if (_item != null) ...[
                       const SizedBox(height: RestoflowSpacing.lg),
+                      // 5. Options & modifiers.
                       _ModifiersSection(
                         item: _item,
                         modifiers: widget.snapshot.modifiersForItem(_item.id),
                         snapshot: widget.snapshot,
                         currencyCode: _currencyCode,
                       ),
-                      const SizedBox(height: RestoflowSpacing.lg),
-                      // The panel needs the FRESHEST row: imagePath changes
-                      // after uploads/removals reload the snapshot.
-                      MenuImagePanel(item: _freshItem ?? _item),
                     ],
+                    const SizedBox(height: RestoflowSpacing.lg),
+                    // 6. Advanced — collapsed so the default view stays simple.
+                    _advancedCard(context, l10n),
                   ],
                 ),
               ),
@@ -248,13 +379,16 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     );
   }
 
-  Widget _detailsCard(
+  /// 1. Basic info: identity + categorization (name, description, category,
+  /// item type, tags) and the listing controls (order, active).
+  Widget _basicInfoCard(
     BuildContext context,
     AppLocalizations l10n,
     List<MenuCategory> categories,
   ) {
+    final theme = Theme.of(context);
     return MenuSectionCard(
-      title: l10n.menuItemDetailsSection,
+      title: l10n.menuBasicInfoSection,
       icon: Icons.info_outline,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -284,53 +418,69 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                flex: 2,
-                child: TextField(
-                  key: const ValueKey('menu-item-price'),
-                  controller: _price,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+                child: DropdownButtonFormField<String>(
+                  initialValue: _categoryId,
                   decoration: InputDecoration(
-                    labelText: l10n.menuPriceLabel,
+                    labelText: l10n.menuCategoryFieldLabel,
                     border: const OutlineInputBorder(),
-                    errorText: _priceError == null
-                        ? null
-                        : l10n.menuFieldErrorText(_priceError!),
                   ),
+                  items: [
+                    for (final category in categories)
+                      DropdownMenuItem(
+                        value: category.id,
+                        child: Text(category.name),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _categoryId = value),
                 ),
               ),
               const SizedBox(width: RestoflowSpacing.md),
               Expanded(
-                child: TextField(
-                  controller: _currency,
-                  textCapitalization: TextCapitalization.characters,
+                child: DropdownButtonFormField<String?>(
+                  key: const ValueKey('menu-item-type'),
+                  initialValue: _itemType,
                   decoration: InputDecoration(
-                    labelText: l10n.menuCurrencyLabel,
+                    labelText: l10n.menuItemTypeLabel,
                     border: const OutlineInputBorder(),
-                    errorText: _currencyError == null
-                        ? null
-                        : l10n.menuFieldErrorText(_currencyError!),
                   ),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(l10n.menuItemTypeUnspecified),
+                    ),
+                    for (final type in kMenuItemTypes)
+                      DropdownMenuItem<String?>(
+                        value: type,
+                        child: Text(l10n.menuItemTypeText(type)),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _itemType = value),
                 ),
               ),
             ],
           ),
           const SizedBox(height: RestoflowSpacing.md),
-          DropdownButtonFormField<String>(
-            initialValue: _categoryId,
-            decoration: InputDecoration(
-              labelText: l10n.menuCategoryFieldLabel,
-              border: const OutlineInputBorder(),
+          Text(
+            l10n.menuTagsLabel,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            items: [
-              for (final category in categories)
-                DropdownMenuItem(
-                  value: category.id,
-                  child: Text(category.name),
+          ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          Wrap(
+            spacing: RestoflowSpacing.sm,
+            runSpacing: RestoflowSpacing.sm,
+            children: [
+              for (final tag in kMenuItemTags)
+                FilterChip(
+                  key: ValueKey('menu-item-tag-$tag'),
+                  label: Text(l10n.menuTagText(tag)),
+                  selected: _tags.contains(tag),
+                  onSelected: (selected) => setState(() {
+                    selected ? _tags.add(tag) : _tags.remove(tag);
+                  }),
                 ),
             ],
-            onChanged: (value) => setState(() => _categoryId = value),
           ),
           const SizedBox(height: RestoflowSpacing.md),
           Row(
@@ -356,20 +506,180 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               ),
             ],
           ),
-          const SizedBox(height: RestoflowSpacing.lg),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: _submitting ? null : widget.onClose,
-                child: Text(l10n.menuCancelAction),
+        ],
+      ),
+    );
+  }
+
+  /// 3. Pricing: the base price + currency (sizes/variants render as their own
+  /// sections right below this card). Money integer minor only (D-007).
+  Widget _pricingCard(BuildContext context, AppLocalizations l10n) {
+    return MenuSectionCard(
+      title: l10n.menuPricingSection,
+      icon: Icons.sell_outlined,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: TextField(
+              key: const ValueKey('menu-item-price'),
+              controller: _price,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
-              const SizedBox(width: RestoflowSpacing.sm),
-              FilledButton.icon(
-                key: const ValueKey('menu-item-save'),
-                onPressed: _submitting ? null : _saveFields,
-                icon: const Icon(Icons.check, size: 18),
-                label: Text(l10n.menuSaveAction),
+              decoration: InputDecoration(
+                labelText: l10n.menuPriceLabel,
+                border: const OutlineInputBorder(),
+                errorText: _priceError == null
+                    ? null
+                    : l10n.menuFieldErrorText(_priceError!),
+              ),
+            ),
+          ),
+          const SizedBox(width: RestoflowSpacing.md),
+          Expanded(
+            child: TextField(
+              controller: _currency,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: l10n.menuCurrencyLabel,
+                border: const OutlineInputBorder(),
+                errorText: _currencyError == null
+                    ? null
+                    : l10n.menuFieldErrorText(_currencyError!),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 4. Preparation: prep time + the standing kitchen note (both pass through
+  /// to kitchen sessions server-side — a KDS needs prep info).
+  Widget _preparationCard(BuildContext context, AppLocalizations l10n) {
+    return MenuSectionCard(
+      title: l10n.menuPreparationSection,
+      icon: Icons.timer_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('menu-item-prep-minutes'),
+            controller: _prepMinutes,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: l10n.menuPrepMinutesLabel,
+              border: const OutlineInputBorder(),
+              errorText: _prepError == null
+                  ? null
+                  : l10n.menuFieldErrorText(_prepError!),
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          TextField(
+            key: const ValueKey('menu-item-kitchen-note'),
+            controller: _kitchenNote,
+            maxLines: 2,
+            decoration: InputDecoration(
+              labelText: l10n.menuKitchenNoteLabel,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 6. Advanced: a COLLAPSED expansion tile (SKU, portion label, and the
+  /// generic per-piece count/weight). Generic across cuisines — a pizza or
+  /// cafe owner simply leaves the count/weight fields empty. Weight is GRAMS
+  /// (never money — D-007).
+  Widget _advancedCard(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: ExpansionTile(
+        key: const ValueKey('menu-item-advanced'),
+        leading: Icon(
+          Icons.discount_outlined,
+          size: 20,
+          color: theme.colorScheme.primary,
+        ),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        title: Text(
+          l10n.menuAdvancedSection,
+          style: theme.textTheme.titleMedium,
+        ),
+        subtitle: Text(
+          l10n.menuAdvancedSectionHint,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        childrenPadding: const EdgeInsetsDirectional.fromSTEB(
+          RestoflowSpacing.lg,
+          0,
+          RestoflowSpacing.lg,
+          RestoflowSpacing.lg,
+        ),
+        children: [
+          TextField(
+            key: const ValueKey('menu-item-sku'),
+            controller: _sku,
+            decoration: InputDecoration(
+              labelText: l10n.menuSkuLabel,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          TextField(
+            key: const ValueKey('menu-item-portion'),
+            controller: _portion,
+            decoration: InputDecoration(
+              labelText: l10n.menuPortionFieldLabel,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('menu-item-patty-count'),
+                  controller: _pattyCount,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: l10n.menuPattyCountLabel,
+                    border: const OutlineInputBorder(),
+                    errorText: _pattyCountError == null
+                        ? null
+                        : l10n.menuFieldErrorText(_pattyCountError!),
+                  ),
+                ),
+              ),
+              const SizedBox(width: RestoflowSpacing.md),
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('menu-item-patty-weight'),
+                  controller: _pattyWeight,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: l10n.menuPattyWeightLabel,
+                    border: const OutlineInputBorder(),
+                    errorText: _pattyWeightError == null
+                        ? null
+                        : l10n.menuFieldErrorText(_pattyWeightError!),
+                  ),
+                ),
               ),
             ],
           ),
@@ -380,10 +690,18 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
 }
 
 class _EditorTopBar extends StatelessWidget {
-  const _EditorTopBar({required this.title, required this.onClose});
+  const _EditorTopBar({
+    required this.title,
+    required this.onClose,
+    this.actions = const [],
+  });
 
   final String title;
   final VoidCallback onClose;
+
+  /// Trailing actions (Cancel/Save) — kept in the bar so the primary save
+  /// action stays visible while the sectioned form scrolls.
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -403,6 +721,7 @@ class _EditorTopBar extends StatelessWidget {
           ),
           const SizedBox(width: RestoflowSpacing.md),
           Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
+          ...actions,
         ],
       ),
     );

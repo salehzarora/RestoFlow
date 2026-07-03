@@ -1019,6 +1019,76 @@ class AppLocalizationsEn extends AppLocalizations {
       'This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.';
 
   @override
+  String get menuBasicInfoSection => 'Basic info';
+
+  @override
+  String get menuPricingSection => 'Pricing';
+
+  @override
+  String get menuPreparationSection => 'Preparation';
+
+  @override
+  String get menuAdvancedSection => 'Advanced';
+
+  @override
+  String get menuAdvancedSectionHint =>
+      'Optional details — use what fits this item.';
+
+  @override
+  String get menuItemTypeLabel => 'Item type';
+
+  @override
+  String get menuItemTypeUnspecified => 'Not specified';
+
+  @override
+  String get menuItemTypeFood => 'Food';
+
+  @override
+  String get menuItemTypeDrink => 'Drink';
+
+  @override
+  String get menuItemTypeSide => 'Side';
+
+  @override
+  String get menuItemTypeCombo => 'Combo';
+
+  @override
+  String get menuItemTypeOther => 'Other';
+
+  @override
+  String get menuTagsLabel => 'Tags';
+
+  @override
+  String get menuTagSpicy => 'Spicy';
+
+  @override
+  String get menuTagVegetarian => 'Vegetarian';
+
+  @override
+  String get menuTagPopular => 'Popular';
+
+  @override
+  String get menuTagNew => 'New';
+
+  @override
+  String get menuPrepMinutesLabel => 'Prep time (minutes)';
+
+  @override
+  String get menuKitchenNoteLabel => 'Kitchen note';
+
+  @override
+  String get menuSkuLabel => 'SKU (internal code)';
+
+  @override
+  String get menuPortionFieldLabel => 'Portion label';
+
+  @override
+  String get menuPattyCountLabel => 'Count (patties or pieces)';
+
+  @override
+  String get menuPattyWeightLabel => 'Weight per piece (g)';
+
+  @override
   String get dashboardNavSettings => 'Settings';
 
   @override

@@ -231,6 +231,15 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     if (price is! int) continue;
     final categoryId = (row['menu_category_id'] ?? '').toString();
     final imagePath = row['image_path'];
+    // Rich attributes (menu/media sprint) — STORAGE ONLY this part (display
+    // lands in later parts). Tolerant parse: a wrong-typed value degrades to
+    // unset rather than dropping the sellable item. All non-money (D-007);
+    // sku is never served to devices, so it is never parsed here.
+    final itemType = row['item_type'];
+    final rawTags = row['tags'];
+    final prepMinutes = row['prep_minutes'];
+    final kitchenNote = row['kitchen_note'];
+    final rawAttributes = row['attributes'];
     items.add(
       DemoMenuItem(
         id: (row['id'] ?? '').toString(),
@@ -241,6 +250,22 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         imagePath: imagePath is String && imagePath.isNotEmpty
             ? imagePath
             : null,
+        itemType: itemType is String && itemType.isNotEmpty ? itemType : null,
+        tags: rawTags is List
+            ? <String>[
+                for (final tag in rawTags)
+                  if (tag is String && tag.isNotEmpty) tag,
+              ]
+            : const <String>[],
+        prepMinutes: prepMinutes is int && prepMinutes >= 0
+            ? prepMinutes
+            : null,
+        kitchenNote: kitchenNote is String && kitchenNote.isNotEmpty
+            ? kitchenNote
+            : null,
+        attributes: rawAttributes is Map
+            ? Map<String, dynamic>.from(rawAttributes)
+            : const <String, dynamic>{},
       ),
     );
   }
@@ -274,6 +299,12 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
                   categoryName: item.categoryName,
                   imagePath: item.imagePath,
                   imageUrl: urls[item.imagePath],
+                  // Carry the rich attributes through the URL rebuild.
+                  itemType: item.itemType,
+                  tags: item.tags,
+                  prepMinutes: item.prepMinutes,
+                  kitchenNote: item.kitchenNote,
+                  attributes: item.attributes,
                 )
               : item,
       ];

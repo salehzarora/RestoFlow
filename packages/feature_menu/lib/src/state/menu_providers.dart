@@ -148,6 +148,12 @@ class MenuWriteController {
     int displayOrder = 0,
     bool isActive = true,
     String? imagePath,
+    String? itemType,
+    List<String> tags = const [],
+    int? prepMinutes,
+    String? sku,
+    String? kitchenNote,
+    Map<String, dynamic> attributes = const {},
   }) => _run(
     () => _repository.upsertItem(
       scope: _scope,
@@ -161,8 +167,16 @@ class MenuWriteController {
       isActive: isActive,
       // null = clear/unset — every caller sends the item's FULL state, so a
       // details-save must pass the item's current imagePath through or it
-      // would silently wipe a freshly uploaded image.
+      // would silently wipe a freshly uploaded image. The rich attributes
+      // (itemType/tags/prepMinutes/sku/kitchenNote/attributes) follow the
+      // same full-state rule.
       imagePath: imagePath,
+      itemType: itemType,
+      tags: tags,
+      prepMinutes: prepMinutes,
+      sku: sku,
+      kitchenNote: kitchenNote,
+      attributes: attributes,
     ),
   );
 

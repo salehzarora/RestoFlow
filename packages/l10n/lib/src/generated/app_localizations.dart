@@ -2026,6 +2026,144 @@ abstract class AppLocalizations {
   /// **'This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.'**
   String get menuScopeUnavailableBody;
 
+  /// Item editor section title: name, description, category, type, and tags.
+  ///
+  /// In en, this message translates to:
+  /// **'Basic info'**
+  String get menuBasicInfoSection;
+
+  /// Item editor section title: the base price (with sizes/variants below it).
+  ///
+  /// In en, this message translates to:
+  /// **'Pricing'**
+  String get menuPricingSection;
+
+  /// Item editor section title: prep time and the standing kitchen note.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparation'**
+  String get menuPreparationSection;
+
+  /// Item editor collapsed section title: SKU, portion label, and per-piece count/weight.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get menuAdvancedSection;
+
+  /// Subtitle under the Advanced section title explaining the fields are optional and generic across cuisines.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional details — use what fits this item.'**
+  String get menuAdvancedSectionHint;
+
+  /// Label for the item type dropdown (food/drink/side/combo/other).
+  ///
+  /// In en, this message translates to:
+  /// **'Item type'**
+  String get menuItemTypeLabel;
+
+  /// Item type dropdown entry for no type (stored as null).
+  ///
+  /// In en, this message translates to:
+  /// **'Not specified'**
+  String get menuItemTypeUnspecified;
+
+  /// Display label for the item type wire value 'food'.
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get menuItemTypeFood;
+
+  /// Display label for the item type wire value 'drink'.
+  ///
+  /// In en, this message translates to:
+  /// **'Drink'**
+  String get menuItemTypeDrink;
+
+  /// Display label for the item type wire value 'side'.
+  ///
+  /// In en, this message translates to:
+  /// **'Side'**
+  String get menuItemTypeSide;
+
+  /// Display label for the item type wire value 'combo'.
+  ///
+  /// In en, this message translates to:
+  /// **'Combo'**
+  String get menuItemTypeCombo;
+
+  /// Display label for the item type wire value 'other'.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get menuItemTypeOther;
+
+  /// Label above the fixed tag filter chips (spicy/vegetarian/popular/new).
+  ///
+  /// In en, this message translates to:
+  /// **'Tags'**
+  String get menuTagsLabel;
+
+  /// Display label for the tag wire value 'spicy' (data stays the wire string).
+  ///
+  /// In en, this message translates to:
+  /// **'Spicy'**
+  String get menuTagSpicy;
+
+  /// Display label for the tag wire value 'vegetarian'.
+  ///
+  /// In en, this message translates to:
+  /// **'Vegetarian'**
+  String get menuTagVegetarian;
+
+  /// Display label for the tag wire value 'popular'.
+  ///
+  /// In en, this message translates to:
+  /// **'Popular'**
+  String get menuTagPopular;
+
+  /// Display label for the tag wire value 'new'.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get menuTagNew;
+
+  /// Label for the expected preparation time field (whole minutes; time, never money).
+  ///
+  /// In en, this message translates to:
+  /// **'Prep time (minutes)'**
+  String get menuPrepMinutesLabel;
+
+  /// Label for the standing kitchen preparation note field (shown to the KDS).
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen note'**
+  String get menuKitchenNoteLabel;
+
+  /// Label for the internal stock/product code field (back-office only; never sent to devices).
+  ///
+  /// In en, this message translates to:
+  /// **'SKU (internal code)'**
+  String get menuSkuLabel;
+
+  /// Label for the free-text portion wording field (e.g. Single, Family) in Advanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Portion label'**
+  String get menuPortionFieldLabel;
+
+  /// Generic Advanced field: how many patties/pieces make the item — pizza/cafe owners simply leave it empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Count (patties or pieces)'**
+  String get menuPattyCountLabel;
+
+  /// Generic Advanced field: weight per patty/piece in grams (a weight, never money).
+  ///
+  /// In en, this message translates to:
+  /// **'Weight per piece (g)'**
+  String get menuPattyWeightLabel;
+
   /// No description provided for @dashboardNavSettings.
   ///
   /// In en, this message translates to:

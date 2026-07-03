@@ -131,6 +131,14 @@ class _MenuImagePanelState extends ConsumerState<MenuImagePanel> {
           displayOrder: item.displayOrder,
           isActive: item.isActive,
           imagePath: objectKey,
+          // Full-state upsert: carry the rich attributes through or an image
+          // save would silently clear them (same rule as imagePath itself).
+          itemType: item.itemType,
+          tags: item.tags,
+          prepMinutes: item.prepMinutes,
+          sku: item.sku,
+          kitchenNote: item.kitchenNote,
+          attributes: item.attributes,
         );
     if (!mounted) return;
     outcome.fold(
@@ -179,6 +187,13 @@ class _MenuImagePanelState extends ConsumerState<MenuImagePanel> {
           displayOrder: item.displayOrder,
           isActive: item.isActive,
           imagePath: null, // null = clear/unset on the server
+          // Full-state upsert: removing the image must not clear the rest.
+          itemType: item.itemType,
+          tags: item.tags,
+          prepMinutes: item.prepMinutes,
+          sku: item.sku,
+          kitchenNote: item.kitchenNote,
+          attributes: item.attributes,
         );
     if (!mounted) return;
     outcome.fold(

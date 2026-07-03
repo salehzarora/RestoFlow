@@ -66,6 +66,19 @@ void main() {
         // (the server treats null as clear/unset).
         expect(transport.lastParams!.containsKey('p_image_path'), isTrue);
         expect(transport.lastParams!['p_image_path'], isNull);
+        // Rich attributes (menu/media sprint): unset fields travel as null —
+        // one canonical "unset" wire shape (empty tags/attributes => null).
+        for (final key in [
+          'p_item_type',
+          'p_tags',
+          'p_prep_minutes',
+          'p_sku',
+          'p_kitchen_note',
+          'p_attributes',
+        ]) {
+          expect(transport.lastParams!.containsKey(key), isTrue);
+          expect(transport.lastParams![key], isNull);
+        }
 
         final result = _success(outcome);
         expect(result, isNotNull);
@@ -99,6 +112,47 @@ void main() {
         transport.lastParams!['p_image_path'],
         'org-1/rest-1/branch-1/menu_item/item-9/img-1.png',
       );
+    });
+
+    test('upsertItem passes the rich attribute p_* params when set', () async {
+      final transport = _FakeTransport()
+        ..returnValue = const {
+          'ok': true,
+          'entity': 'menu_item',
+          'id': 'item-9',
+          'action': 'updated',
+        };
+      final writer = RpcMenuWriter(transport);
+
+      await writer.upsertItem(
+        scope: _scope,
+        id: 'item-9',
+        menuCategoryId: 'cat-1',
+        name: 'Burger',
+        basePriceMinor: 4200,
+        currencyCode: 'ILS',
+        itemType: 'food',
+        tags: const ['spicy', 'popular'],
+        prepMinutes: 12,
+        sku: 'BRG-01',
+        kitchenNote: 'No onions.',
+        attributes: const {
+          'portion_label': 'Single',
+          'patty_count': 1,
+          'patty_weight_grams': 160,
+        },
+      );
+
+      expect(transport.lastParams!['p_item_type'], 'food');
+      expect(transport.lastParams!['p_tags'], ['spicy', 'popular']);
+      expect(transport.lastParams!['p_prep_minutes'], 12);
+      expect(transport.lastParams!['p_sku'], 'BRG-01');
+      expect(transport.lastParams!['p_kitchen_note'], 'No onions.');
+      expect(transport.lastParams!['p_attributes'], {
+        'portion_label': 'Single',
+        'patty_count': 1,
+        'patty_weight_grams': 160,
+      });
     });
 
     test('upsertCategory (update) passes the existing id', () async {

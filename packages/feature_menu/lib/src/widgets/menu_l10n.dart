@@ -28,4 +28,29 @@ extension MenuL10n on AppLocalizations {
     MenuServerFailure() => menuWriteProblem,
     MenuInvalidResponseFailure() => menuWriteProblem,
   };
+
+  /// The localized DISPLAY label for a fixed-vocabulary tag wire string
+  /// (menu/media sprint). Data stays the stable wire string ('spicy', ...);
+  /// only presentation is localized. Unknown values fall back verbatim so a
+  /// newer backend never crashes an older client.
+  String menuTagText(String tag) => switch (tag) {
+    'spicy' => menuTagSpicy,
+    'vegetarian' => menuTagVegetarian,
+    'popular' => menuTagPopular,
+    'new' => menuTagNew,
+    _ => tag,
+  };
+
+  /// The localized DISPLAY label for an `item_type` wire value; null renders
+  /// the "not specified" entry. Unknown values fall back verbatim. (Named
+  /// `...Text` — `menuItemTypeLabel` is the generated ARB field-label getter.)
+  String menuItemTypeText(String? itemType) => switch (itemType) {
+    null => menuItemTypeUnspecified,
+    'food' => menuItemTypeFood,
+    'drink' => menuItemTypeDrink,
+    'side' => menuItemTypeSide,
+    'combo' => menuItemTypeCombo,
+    'other' => menuItemTypeOther,
+    _ => itemType,
+  };
 }

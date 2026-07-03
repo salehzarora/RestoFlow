@@ -155,6 +155,12 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     int displayOrder = 0,
     bool isActive = true,
     String? imagePath,
+    String? itemType,
+    List<String> tags = const [],
+    int? prepMinutes,
+    String? sku,
+    String? kitchenNote,
+    Map<String, dynamic> attributes = const {},
   }) async {
     if (readOnly) return _denied(MenuEntityType.item);
     final created = id == null;
@@ -177,6 +183,15 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       imagePath: (imagePath == null || imagePath.trim().isEmpty)
           ? null
           : imagePath,
+      itemType: itemType,
+      tags: List.unmodifiable(tags),
+      prepMinutes: prepMinutes,
+      // Mirrors the server normalization: blank text = unset.
+      sku: (sku == null || sku.trim().isEmpty) ? null : sku.trim(),
+      kitchenNote: (kitchenNote == null || kitchenNote.trim().isEmpty)
+          ? null
+          : kitchenNote.trim(),
+      attributes: Map.unmodifiable(attributes),
       deletedAt: existing?.deletedAt,
     );
     _upsert(_items, row, (i) => i.id);

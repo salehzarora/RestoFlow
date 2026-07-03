@@ -1011,6 +1011,76 @@ class AppLocalizationsAr extends AppLocalizations {
       'هذا وصول على مستوى المؤسسة دون اختيار مطعم. افتح إدارة القائمة من مطعم أو فرع محدد.';
 
   @override
+  String get menuBasicInfoSection => 'معلومات أساسية';
+
+  @override
+  String get menuPricingSection => 'التسعير';
+
+  @override
+  String get menuPreparationSection => 'التحضير';
+
+  @override
+  String get menuAdvancedSection => 'متقدم';
+
+  @override
+  String get menuAdvancedSectionHint =>
+      'تفاصيل اختيارية — استخدم ما يناسب هذا الصنف.';
+
+  @override
+  String get menuItemTypeLabel => 'نوع الصنف';
+
+  @override
+  String get menuItemTypeUnspecified => 'غير محدد';
+
+  @override
+  String get menuItemTypeFood => 'طعام';
+
+  @override
+  String get menuItemTypeDrink => 'مشروب';
+
+  @override
+  String get menuItemTypeSide => 'طبق جانبي';
+
+  @override
+  String get menuItemTypeCombo => 'وجبة كومبو';
+
+  @override
+  String get menuItemTypeOther => 'أخرى';
+
+  @override
+  String get menuTagsLabel => 'وسوم';
+
+  @override
+  String get menuTagSpicy => 'حار';
+
+  @override
+  String get menuTagVegetarian => 'نباتي';
+
+  @override
+  String get menuTagPopular => 'رائج';
+
+  @override
+  String get menuTagNew => 'جديد';
+
+  @override
+  String get menuPrepMinutesLabel => 'وقت التحضير (بالدقائق)';
+
+  @override
+  String get menuKitchenNoteLabel => 'ملاحظة للمطبخ';
+
+  @override
+  String get menuSkuLabel => 'SKU (رمز داخلي)';
+
+  @override
+  String get menuPortionFieldLabel => 'تسمية الحصة';
+
+  @override
+  String get menuPattyCountLabel => 'العدد (قطع أو شرائح)';
+
+  @override
+  String get menuPattyWeightLabel => 'وزن القطعة (غرام)';
+
+  @override
   String get dashboardNavSettings => 'الإعدادات';
 
   @override

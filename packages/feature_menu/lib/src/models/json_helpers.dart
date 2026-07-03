@@ -51,6 +51,31 @@ int? optIntOrNull(Map<String, dynamic> json, String key) {
   throw FormatException('$key not an integer or null');
 }
 
+/// A nullable JSON array of strings (`tags`). Missing/null falls back to an
+/// empty list; a non-list value or a non-string element throws (fail-closed —
+/// the wire contract is a string array, mirroring the server CHECK).
+List<String> optStringList(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) return const [];
+  if (value is! List) throw FormatException('$key not a list or null');
+  return [
+    for (final element in value)
+      if (element is String)
+        element
+      else
+        throw FormatException('$key contains a non-string element'),
+  ];
+}
+
+/// A nullable JSON object (`attributes`). Missing/null falls back to an empty
+/// map; a non-object value throws (fail-closed — mirrors the server CHECK).
+Map<String, dynamic> optJsonMap(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) return const {};
+  if (value is Map) return Map<String, dynamic>.from(value);
+  throw FormatException('$key not an object or null');
+}
+
 bool optBool(Map<String, dynamic> json, String key, bool fallback) {
   final value = json[key];
   if (value == null) return fallback;

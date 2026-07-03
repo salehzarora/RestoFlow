@@ -52,6 +52,12 @@ class MenuManagementRepository implements MenuWriter {
     int displayOrder = 0,
     bool isActive = true,
     String? imagePath,
+    String? itemType,
+    List<String> tags = const [],
+    int? prepMinutes,
+    String? sku,
+    String? kitchenNote,
+    Map<String, dynamic> attributes = const {},
   }) => _writer.upsertItem(
     scope: scope,
     id: id,
@@ -64,6 +70,12 @@ class MenuManagementRepository implements MenuWriter {
     displayOrder: displayOrder,
     isActive: isActive,
     imagePath: imagePath,
+    itemType: itemType,
+    tags: tags,
+    prepMinutes: prepMinutes,
+    sku: sku,
+    kitchenNote: kitchenNote,
+    attributes: attributes,
   );
 
   @override

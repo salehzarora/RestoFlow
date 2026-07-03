@@ -104,12 +104,14 @@ select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'public' and p.proname = 'menu_upsert_item'), 1,
   'exactly ONE public.menu_upsert_item wrapper exists');
+-- (menu/media sprint Part C recreated the function at 19 args — the CURRENT
+-- exact signature; the 12/13-arg positional calls below still bind via defaults.)
 select ok(
-  has_function_privilege('authenticated', 'public.menu_upsert_item(uuid, uuid, uuid, uuid, uuid, text, text, bigint, text, uuid, integer, boolean, text)', 'execute'),
-  'authenticated MAY execute the 13-arg public.menu_upsert_item');
+  has_function_privilege('authenticated', 'public.menu_upsert_item(uuid, uuid, uuid, uuid, uuid, text, text, bigint, text, uuid, integer, boolean, text, text, jsonb, integer, text, text, jsonb)', 'execute'),
+  'authenticated MAY execute the current public.menu_upsert_item');
 select ok(
-  not has_function_privilege('anon', 'public.menu_upsert_item(uuid, uuid, uuid, uuid, uuid, text, text, bigint, text, uuid, integer, boolean, text)', 'execute'),
-  'anon may NOT execute the 13-arg public.menu_upsert_item');
+  not has_function_privilege('anon', 'public.menu_upsert_item(uuid, uuid, uuid, uuid, uuid, text, text, bigint, text, uuid, integer, boolean, text, text, jsonb, integer, text, text, jsonb)', 'execute'),
+  'anon may NOT execute the current public.menu_upsert_item');
 
 -- ===== (11-17) image_path roundtrip through menu_upsert_item =================
 set local role authenticated;
