@@ -42,10 +42,17 @@ class KdsStatusPusher {
   /// Pushes the advance for [ticket] (no-op for demo tickets without an
   /// [KdsTicketView.orderId] or unmapped statuses). Errors are swallowed —
   /// the next poll re-syncs the board to the authoritative server state.
-  Future<void> push(KdsTicketView ticket, KitchenTicketStatus to) async {
+  ///
+  /// Returns `true` when the `sync_push` call completed without throwing (the
+  /// status update reached the server), and `false` on a no-op (demo ticket /
+  /// unmapped status) or a transport failure. The board's visual advance is
+  /// unaffected either way (the poll self-corrects); the boolean lets the
+  /// acknowledge PRINT trigger fire ONLY on a real, successful status update
+  /// (device settings sprint Part F).
+  Future<bool> push(KdsTicketView ticket, KitchenTicketStatus to) async {
     final orderId = ticket.orderId;
     final newStatus = orderStatusFor(to);
-    if (orderId == null || newStatus == null) return;
+    if (orderId == null || newStatus == null) return false;
     try {
       await _transport.invoke('sync_push', <String, dynamic>{
         'p_pin_session_id': _session.pinSessionId,
@@ -64,8 +71,10 @@ class KdsStatusPusher {
           },
         ],
       });
+      return true;
     } catch (_) {
       // Swallowed on purpose (see class doc): the poll self-corrects the board.
+      return false;
     }
   }
 

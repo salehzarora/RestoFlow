@@ -59,7 +59,12 @@ void main() {
         session: session,
         generateOperationId: () => 'op-1',
       );
-      await pusher.push(_liveTicket(), KitchenTicketStatus.acknowledged);
+      final ok = await pusher.push(
+        _liveTicket(),
+        KitchenTicketStatus.acknowledged,
+      );
+      // Part F: a completed push reports success (gates the print trigger).
+      expect(ok, isTrue);
 
       final call = transport.calls.single;
       expect(call.$1, 'sync_push');
@@ -79,7 +84,7 @@ void main() {
   test('a DEMO ticket (no orderId) is never pushed', () async {
     final transport = _FakeTransport();
     final pusher = KdsStatusPusher(transport: transport, session: session);
-    await pusher.push(
+    final ok = await pusher.push(
       KdsTicketView(
         kitchenTicketId: 'demo-1',
         stationId: 's',
@@ -89,13 +94,16 @@ void main() {
       KitchenTicketStatus.acknowledged,
     );
     expect(transport.calls, isEmpty);
+    // A no-op reports NOT-success (no real update to print for).
+    expect(ok, isFalse);
   });
 
   test('a transport failure is swallowed (the next poll re-syncs)', () async {
     final transport = _FakeTransport(throwOnInvoke: true);
     final pusher = KdsStatusPusher(transport: transport, session: session);
-    // Must not throw.
-    await pusher.push(_liveTicket(), KitchenTicketStatus.ready);
+    // Must not throw; reports failure so the print trigger stays silent.
+    final ok = await pusher.push(_liveTicket(), KitchenTicketStatus.ready);
     expect(transport.calls, hasLength(1));
+    expect(ok, isFalse);
   });
 }

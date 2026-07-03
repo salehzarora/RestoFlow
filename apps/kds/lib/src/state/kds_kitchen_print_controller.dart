@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 
 import '../print/print_document.dart';
+import 'kds_auto_print_prefs.dart';
+import 'kds_printer_assignments.dart';
 
 /// The HONEST lifecycle of a prepared kitchen print job (device settings
 /// sprint, Part D). This build has NO physical print transport (a print
@@ -64,6 +67,40 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
         key: const KdsPrintJob(status: KdsPrintJobStatus.failed),
       };
     }
+  }
+
+  /// The acknowledge-trigger POLICY (device settings sprint, Part F): prepare
+  /// a kitchen print job for a just-ACKNOWLEDGED [ticket], honoring the
+  /// per-device toggle and the branch's kitchen-printer assignment.
+  ///
+  ///  * Toggle explicitly OFF => nothing at all.
+  ///  * Demo / unconfigured / failed assignment read => nothing (never a fake
+  ///    job when we cannot know the printer state).
+  ///  * Enabled kitchen printer => a PREPARED job (no bridge transport in this
+  ///    build, so never "printed").
+  ///  * No enabled printer => an honest notConfigured marker.
+  ///
+  /// Delegates to [prepareForTicket], so it is idempotent per order id (a
+  /// re-tap or the next poll never double-prepares). The caller passes
+  /// [buildDocument] (the widget owns l10n); the payload is money-free (T-003).
+  void prepareOnAcknowledge(
+    KdsTicketView ticket, {
+    required PrintDocument Function() buildDocument,
+  }) {
+    final stored = ref.read(kdsAutoPrintAcknowledgeProvider).valueOrNull;
+    if (stored == false) return; // the staff turned it off
+    final assignments = switch (ref
+        .read(kdsPrinterAssignmentsProvider)
+        .valueOrNull) {
+      Success(:final value) => value,
+      _ => null,
+    };
+    if (assignments == null) return; // demo / unconfigured / failed read
+    prepareForTicket(
+      ticket,
+      hasEnabledPrinter: assignments.hasEnabledPrinter,
+      buildDocument: buildDocument,
+    );
   }
 
   KdsPrintJob? jobFor(KdsTicketView ticket) => state[keyFor(ticket)];
