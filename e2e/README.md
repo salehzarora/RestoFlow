@@ -1,10 +1,9 @@
 # RestoFlow browser smoke tests (RF-112)
 
 Local-only [Playwright](https://playwright.dev/) smoke suite that protects the
-**visible MVP**. RF-112A is the **foundation**: it stands up the harness and
-covers app availability + basic real-mode UI safety. The full onboarding →
-order → ticket journey is deferred to RF-112B/RF-112C (see the bottom of this
-file).
+**visible MVP**. RF-112A is the **foundation** (harness + app availability +
+real-mode UI safety); RF-112B adds the **Dashboard setup** flow. The POS/KDS
+pairing + order → KDS-ticket journey is deferred to RF-112C (see the bottom).
 
 > **Hard boundaries.** This suite is **local-only** and uses **only the public
 > anon/publishable key** — never a service-role/secret key (DECISION D-011,
@@ -12,13 +11,27 @@ file).
 > service-role/secret-looking credential, and every navigation is fenced to
 > `localhost`. It does **not** reset or seed the database.
 
-## What it covers today (RF-112A)
+## What it covers today
 
 | Spec | Check |
 |---|---|
-| `tests/availability.spec.ts` | Dashboard (57026), POS (52096), KDS (49622) are each reachable and boot the Flutter engine without a fatal page error. Renderer-independent — the reliable backbone. |
-| `tests/realmode-safety.spec.ts` | Dashboard real mode shows **no demo banner/pill**; first launch is **Arabic/RTL** by default; the **KDS never exposes money** (₪/ILS — SECURITY T-003). |
-| `tests/guards.spec.ts` | Unit checks for the local-only fence and the service-role/secret scanner. **No browser** — always runnable. |
+| `tests/availability.spec.ts` (RF-112A) | Dashboard (57026), POS (52096), KDS (49622) are each reachable and boot the Flutter engine without a fatal page error. Renderer-independent — the reliable backbone. |
+| `tests/realmode-safety.spec.ts` (RF-112A) | Dashboard real mode shows **no demo banner/pill**; first launch is **Arabic/RTL** by default; the **KDS never exposes money** (₪/ILS — SECURITY T-003). |
+| `tests/dashboard-setup.spec.ts` (RF-112B) | Signs up a **unique** owner, onboards a restaurant/branch, and (in real mode) creates a **menu category + item (ILS price) + modifier template**, a **table**, a **POS + KDS device each with a one-time pairing code**, and a **cashier + kitchen-staff member each with a PIN** — then asserts the Overview **Setup Center** shows the matching progress. |
+| `tests/guards.spec.ts` (RF-112A) | Unit checks for the local-only fence and the service-role/secret scanner. **No browser** — always runnable. |
+
+### The Dashboard setup smoke (RF-112B)
+`dashboard-setup.spec.ts` drives the **real** Dashboard through the owner setup
+that prepares a branch for POS/KDS. It creates **unique, timestamped** data every
+run (no db reset, no deletion of existing data) and starts from a **fresh
+Playwright context** (isolated storage → always signed out). It targets elements
+by **ARIA role + accessible name** from the Arabic (default) l10n via `lib/dashboard.ts`
+— **no Flutter app changes**. Flutter fills need real keystrokes (focus → clear →
+type), tiles/options are matched by their accessible name, and the inline item
+editor / modal dialogs are closed so the side-nav stays reachable. Attaching the
+modifier template is **best-effort** (it re-opens the item editor); if it can't, the
+run logs `modifier: SKIPPED` and continues — the rest still asserts. Run just this
+spec with `npx playwright test dashboard-setup`.
 
 ### A note on how content is read
 The apps are Flutter web builds that paint to a **canvas** (CanvasKit), so there
@@ -76,9 +89,10 @@ npm run smoke               # all specs (apps must be running)
 Useful subsets:
 
 ```
-npm run smoke:guards         # guard unit checks — no browser, no apps needed
+npm run smoke:guards          # guard unit checks — no browser, no apps needed
 npm run smoke:availability    # just the reachability/boot checks
 npm run smoke:safety          # just the real-mode UI-safety checks
+npx playwright test dashboard-setup   # just the RF-112B setup flow (~1–2 min)
 npm run smoke:headed          # watch it drive a visible browser
 npm run list                  # enumerate tests without running them
 npm run report                # open the last HTML report
@@ -96,15 +110,13 @@ The suite does **not** fake success. `availability` fails with
 `No HTTP response … — is <app> running?`. Start the three launchers above, make
 sure `supabase start` is up, then re-run `npm run smoke`.
 
-## Deferred to RF-112B / RF-112C
+## Deferred to RF-112C
 
-- The full journey: Dashboard onboarding → menu item → modifiers → table →
-  devices → staff/PIN → POS pairing → KDS pairing → POS order → KDS receives
-  the ticket.
+- The device-side + order journey: **POS pairing** (enter the code), **KDS
+  pairing**, **POS staff PIN sign-in**, **POS order creation**, **KDS receives
+  the ticket**, and the **KDS money-redaction** check on a live ticket.
 - Asserting **modifiers / notes / table / order code survive** POS → KDS.
-- Stable **semantic anchors / test IDs** in the apps for low-brittleness deep
-  navigation (this step adds **no app changes** and leans on the accessibility
-  tree + narrow l10n-derived tokens).
-- First-live-run **calibration** of the semantics activation and the demo/money
-  token lists in `lib/tokens.ts`.
+- Optionally making the RF-112B modifier attach a **hard** assertion (it is
+  best-effort today) and adding stable **semantic anchors / test IDs** in the apps
+  to cut reliance on Arabic l10n labels (would be an app change, so its own ticket).
 - Optional **CI wiring** (headless, with the stack + apps provisioned).
