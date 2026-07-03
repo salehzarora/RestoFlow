@@ -631,13 +631,96 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posLastCashPayment => 'תשלום מזומן אחרון';
 
   @override
-  String get posShiftDemoNote => 'משמרת הדגמה — לא מסונכרנת';
+  String get posShiftDemoNote =>
+      'הדגמה — ההתאמה מחושבת מקומית ואינה נשמרת בשרת.';
 
   @override
   String get posShiftRealName => 'המשמרת הנוכחית';
 
   @override
   String get posShiftRealNote => 'נפתחה בכניסה — סכומי המזומן מנוהלים בשרת';
+
+  @override
+  String get posShiftCloseTitle => 'סגירת משמרת וספירת מזומן';
+
+  @override
+  String get posShiftCloseMenuItem => 'סגירת משמרת';
+
+  @override
+  String get posShiftCloseConfirmTitle => 'לסגור משמרת זו?';
+
+  @override
+  String get posShiftCloseConfirmBody =>
+      'המשמרת תיסגר עם הסכום שנספר ולא ניתן לפתוח מחדש.';
+
+  @override
+  String get posShiftCancelAction => 'ביטול';
+
+  @override
+  String get posShiftCloseAction => 'סגור משמרת';
+
+  @override
+  String get posShiftDoneAction => 'סיום';
+
+  @override
+  String get posShiftNoOpenShift => 'אין משמרת פתוחה במכשיר זה.';
+
+  @override
+  String get posShiftNoOpenShiftHint => 'משמרת נפתחת אוטומטית בכניסת קופאי.';
+
+  @override
+  String get posShiftOpenedAt => 'נפתחה בשעה';
+
+  @override
+  String get posShiftOpeningFloat => 'קופה פותחת';
+
+  @override
+  String get posShiftExpectedCash => 'מזומן צפוי';
+
+  @override
+  String get posShiftExpectedAtClose => 'המזומן הצפוי מחושב בשרת בעת הסגירה.';
+
+  @override
+  String get posShiftCountedLabel => 'מזומן שנספר';
+
+  @override
+  String get posShiftInvalidAmount => 'הזן סכום תקין.';
+
+  @override
+  String get posShiftReasonLabel => 'סיבה (חובה אם יש הפרש)';
+
+  @override
+  String get posShiftReasonRequired =>
+      'הזן סיבה כאשר המזומן שנספר שונה מהצפוי.';
+
+  @override
+  String get posShiftClosedTitle => 'המשמרת נסגרה';
+
+  @override
+  String get posShiftBalanced => 'מאוזן';
+
+  @override
+  String get posShiftOver => 'עודף';
+
+  @override
+  String get posShiftShort => 'חוסר';
+
+  @override
+  String get posShiftDifference => 'הפרש';
+
+  @override
+  String get posShiftCloseUnavailable =>
+      'הסגירה אינה זמינה — נדרשת התחברות עובד במכשיר מקושר.';
+
+  @override
+  String get posShiftClosePermissionDenied => 'אינך מורשה לסגור משמרת זו.';
+
+  @override
+  String get posShiftCloseServerRejected =>
+      'השרת דחה את הסגירה — ייתכן שנדרשת סיבה או שמצב המשמרת אינו תקין.';
+
+  @override
+  String get posShiftCloseFailed => 'לא ניתן לסגור את המשמרת.';
 
   @override
   String get posSyncSendingReal => 'שולח לשרת…';

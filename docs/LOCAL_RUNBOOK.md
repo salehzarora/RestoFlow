@@ -263,9 +263,11 @@ banner.
    (`order.submit`) with an idempotency key (device + local operation id,
    D-022). Cash payment uses `payment.create`; the server assigns the receipt
    number. `record_payment` REQUIRES an open shift (RF-055): the POS opens one
-   automatically (opening float 0) right after the staff PIN sign-in —
-   closing/reconciling shifts and a real opening-float entry are still
-   deferred with the RF-055 UI.
+   automatically (opening float 0) right after the staff PIN sign-in. To
+   **close/reconcile** it, open the POS **⋮ device menu → Close shift** (RF-113):
+   enter the counted cash and the panel shows the server-computed **expected vs
+   counted vs difference** (over/short) in ₪ before closing. A real opening-float
+   entry (non-zero) is still deferred.
 2. KDS (real, paired, PIN session as kitchen staff): the board polls
    `public.sync_pull` — financial entities (payments/shifts/cash drawer) are
    **never pulled** for kitchen staff, and the board renders no money (T-003).
@@ -402,8 +404,11 @@ owner login, no secrets):
 - **Modifiers/sizes/variants** are not in the real POS menu yet (base-price
   items only), although the Menu tab can already manage them.
 - **Shifts/cash drawer**: payments REQUIRE an open shift (RF-055); the POS
-  auto-opens one (float 0) at staff sign-in, but there is no UI to close or
-  reconcile a shift yet, and no real opening-float entry.
+  auto-opens one (float 0) at staff sign-in. A shift can now be **closed and
+  reconciled** from the POS ⋮ device menu → Close shift (RF-113) — counted cash
+  in, server-computed expected/counted/difference out. Still deferred: a real
+  **opening-float** entry, and the manager **reconcile** sign-off (`reconcile_shift`
+  is server-only, not a client op).
 - **On the web (Chrome)**, "secure storage" for the device-session token is
   browser-managed storage, not an OS keystore — fine for local development;
   a hardware pilot should run the POS/KDS as desktop/mobile builds.

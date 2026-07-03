@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'device_settings_sheet.dart';
+import 'shift_close_sheet.dart';
 
 /// The POS app-bar ⋮ device menu (device settings sprint): the operational
 /// entry for the STAFF working this station — never an owner/admin surface.
@@ -19,6 +20,7 @@ class DeviceSettingsMenu extends StatelessWidget {
       icon: const Icon(Icons.more_vert),
       onSelected: (action) => switch (action) {
         _DeviceMenuAction.settings => PosDeviceSettingsSheet.show(context),
+        _DeviceMenuAction.closeShift => PosShiftCloseSheet.show(context),
       },
       itemBuilder: (context) => [
         PopupMenuItem(
@@ -32,9 +34,22 @@ class DeviceSettingsMenu extends StatelessWidget {
             ],
           ),
         ),
+        // RF-113: the shift close / cash reconciliation entry for the staff on
+        // this station (still operational-only — never an owner/admin surface).
+        PopupMenuItem(
+          key: const Key('shift-close-item'),
+          value: _DeviceMenuAction.closeShift,
+          child: Row(
+            children: [
+              const Icon(Icons.point_of_sale_outlined, size: 20),
+              const SizedBox(width: 12),
+              Text(l10n.posShiftCloseMenuItem),
+            ],
+          ),
+        ),
       ],
     );
   }
 }
 
-enum _DeviceMenuAction { settings }
+enum _DeviceMenuAction { settings, closeShift }
