@@ -8,6 +8,7 @@ import 'kds_screen.dart';
 import 'state/kds_session.dart';
 import 'state/kds_status_pusher.dart';
 import 'widgets/kds_state_message.dart';
+import 'widgets/device_settings_menu.dart';
 import 'widgets/language_selector.dart';
 
 /// The provider-backed KDS home (RF-063): watches [kdsViewStateProvider] and
@@ -92,7 +93,7 @@ class KdsSyncedHome extends ConsumerWidget {
           allowRecall: false,
           // Sprint (I): the language switcher is visible on the LIVE data
           // board too; stale (last good pull) data is visibly flagged.
-          appBarActions: const [LanguageSelector()],
+          appBarActions: const [LanguageSelector(), DeviceSettingsMenu()],
           showStaleBanner: vs.isStale,
           onAdvanced: pusher == null
               ? null
@@ -125,7 +126,7 @@ class KdsSyncedHome extends ConsumerWidget {
             ],
           ),
           // Sprint (I): the language switcher is visible on the LIVE board too.
-          actions: const [LanguageSelector()],
+          actions: const [LanguageSelector(), DeviceSettingsMenu()],
         ),
         body: body,
       );

@@ -8,6 +8,7 @@ import 'state/menu_filter.dart';
 import 'state/pos_menu_provider.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/cart_panel.dart';
+import 'widgets/device_settings_menu.dart';
 import 'widgets/language_selector.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
@@ -39,7 +40,9 @@ class PosMenuScreen extends StatelessWidget {
             Text(l10n.posAppTitle),
           ],
         ),
-        actions: const [LanguageSelector()],
+        // Device settings sprint: the ⋮ device menu rides beside the language
+        // switcher — operational staff controls, never owner/admin actions.
+        actions: const [LanguageSelector(), DeviceSettingsMenu()],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {

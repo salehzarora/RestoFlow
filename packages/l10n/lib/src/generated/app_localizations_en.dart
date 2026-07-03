@@ -461,6 +461,133 @@ class AppLocalizationsEn extends AppLocalizations {
       'Use your browser\'s print (Ctrl+P) to print this preview';
 
   @override
+  String get deviceSettingsMenuTooltip => 'Device menu';
+
+  @override
+  String get deviceSettingsTitle => 'Device settings';
+
+  @override
+  String get deviceRefreshAction => 'Refresh connection';
+
+  @override
+  String get deviceUnpairAction => 'Unpair device';
+
+  @override
+  String get deviceUnpairWarning =>
+      'Only use this if this device should be paired again.';
+
+  @override
+  String get deviceUnpairConfirm => 'Unpair';
+
+  @override
+  String get deviceSettingsAppTypeLabel => 'App type';
+
+  @override
+  String get deviceSettingsAppTypePos => 'Cashier (POS)';
+
+  @override
+  String get deviceSettingsAppTypeKds => 'Kitchen display (KDS)';
+
+  @override
+  String get deviceSettingsRestaurantLabel => 'Restaurant';
+
+  @override
+  String get deviceSettingsBranchLabel => 'Branch';
+
+  @override
+  String get deviceSettingsDeviceLabel => 'Device';
+
+  @override
+  String get deviceSettingsPairingLabel => 'Pairing';
+
+  @override
+  String get deviceSettingsPairingActive => 'Paired';
+
+  @override
+  String get deviceSettingsPinSessionLabel => 'Staff session';
+
+  @override
+  String get deviceSettingsPinSessionActive => 'Signed in';
+
+  @override
+  String get deviceSettingsPinSessionNone => 'Not signed in';
+
+  @override
+  String get deviceSettingsDemoNote => 'Demo mode — no paired device.';
+
+  @override
+  String get deviceSettingsUnavailable => 'Device info unavailable.';
+
+  @override
+  String get deviceSettingsPrintersHeading => 'Printers';
+
+  @override
+  String get deviceSettingsNoPrinter =>
+      'No printer assigned. Ask a manager to configure it in Dashboard → Printers.';
+
+  @override
+  String get deviceSettingsBridgeRequired =>
+      'Configured only — print bridge required.';
+
+  @override
+  String get deviceSettingsCapabilityNote =>
+      'Printing requires a print bridge/native app. This build can save config and create/preview print jobs.';
+
+  @override
+  String deviceSettingsLastRefresh(String time) {
+    return 'Last refresh: $time';
+  }
+
+  @override
+  String get deviceSettingsLoadError => 'Could not load printer assignments.';
+
+  @override
+  String get deviceSettingsPrinterDisabled => 'Disabled in Dashboard';
+
+  @override
+  String deviceSettingsRouteStations(String names) {
+    return 'Stations: $names';
+  }
+
+  @override
+  String get deviceRefreshedSnack => 'Connection refreshed.';
+
+  @override
+  String get deviceUnpairedSnack => 'Device unpaired.';
+
+  @override
+  String get deviceSettingsAutoPrintHeading => 'Auto-print';
+
+  @override
+  String get posAutoPrintReceiptToggle => 'Auto-print receipt after payment';
+
+  @override
+  String get kdsAutoPrintAcknowledgeToggle =>
+      'Auto-print kitchen ticket on acknowledge';
+
+  @override
+  String get autoPrintNoPrinterNote => 'Disabled — no printer assigned.';
+
+  @override
+  String get printStatusNotConfigured => 'No printer configured';
+
+  @override
+  String get printStatusPrepared =>
+      'Print job prepared — physical printing requires print bridge.';
+
+  @override
+  String get printStatusPrinted => 'Printed';
+
+  @override
+  String get printStatusFailed => 'Print failed';
+
+  @override
+  String get posReceiptPrintLabel => 'Receipt print';
+
+  @override
+  String get kdsTicketPrintLabel => 'Kitchen print';
+
+  @override
   String get receiptPreviewTitle => 'Receipt preview';
 
   @override

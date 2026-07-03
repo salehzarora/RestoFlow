@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'state/kds_device_context.dart';
 import 'widgets/language_selector.dart';
 
 /// RF-153 KDS device-pairing gate. Money-FREE (a kitchen device never sees money
@@ -17,7 +19,7 @@ import 'widgets/language_selector.dart';
 /// fabricates a paired device. When the injected repository is also a
 /// [DeviceSessionManager] (the real RF-161 repo), the gate restores a
 /// previously-paired session on launch (fail-closed).
-class KdsPairingGate extends StatefulWidget {
+class KdsPairingGate extends ConsumerStatefulWidget {
   const KdsPairingGate({
     required this.repository,
     this.signedInChild,
@@ -44,10 +46,10 @@ class KdsPairingGate extends StatefulWidget {
   final DeviceContext? initialDevice;
 
   @override
-  State<KdsPairingGate> createState() => _KdsPairingGateState();
+  ConsumerState<KdsPairingGate> createState() => _KdsPairingGateState();
 }
 
-class _KdsPairingGateState extends State<KdsPairingGate> {
+class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
   /// The only device type this surface accepts (a restored POS session must
   /// NEVER unlock the KDS — fail closed to the pairing screen).
   static const String _expectedDeviceType = 'kds';
@@ -59,11 +61,23 @@ class _KdsPairingGateState extends State<KdsPairingGate> {
   void initState() {
     super.initState();
     _device = widget.initialDevice;
+    if (_device != null) _publish(_device);
     if (widget.repository case final DeviceSessionManager manager
         when _device == null) {
       _restoring = true;
       _restore(manager);
     }
+  }
+
+  /// Mirrors the gate's device into [kdsDeviceContextProvider] (device
+  /// settings sprint) so the ⋮ settings sheet — including the LIVE board that
+  /// renders without this gate in its tree — can read it. Deferred a frame:
+  /// provider writes are illegal while the tree is building.
+  void _publish(DeviceContext? device) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(kdsDeviceContextProvider.notifier).set(device);
+    });
   }
 
   Future<void> _restore(DeviceSessionManager manager) async {
@@ -75,6 +89,7 @@ class _KdsPairingGateState extends State<KdsPairingGate> {
       _device = restored;
       _restoring = false;
     });
+    _publish(restored);
   }
 
   @override
@@ -111,7 +126,10 @@ class _KdsPairingGateState extends State<KdsPairingGate> {
     return DevicePairingScreen(
       repository: widget.repository,
       deviceType: _expectedDeviceType,
-      onPaired: (context) => setState(() => _device = context),
+      onPaired: (context) {
+        setState(() => _device = context);
+        _publish(context);
+      },
       // Sprint (I): the language switcher is reachable before pairing too.
       appBarActions: const [LanguageSelector()],
     );

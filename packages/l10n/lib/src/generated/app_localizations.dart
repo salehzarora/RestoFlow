@@ -958,6 +958,240 @@ abstract class AppLocalizations {
   /// **'Use your browser\'s print (Ctrl+P) to print this preview'**
   String get printPreviewHint;
 
+  /// Tooltip of the POS/KDS app-bar overflow (three-dot) device menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Device menu'**
+  String get deviceSettingsMenuTooltip;
+
+  /// Title of the operational device-settings sheet on POS/KDS and its menu entry. NOT an owner/admin screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Device settings'**
+  String get deviceSettingsTitle;
+
+  /// Device-menu action: reload the device session/printer assignments.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh connection'**
+  String get deviceRefreshAction;
+
+  /// Device-menu action: clear this device's local pairing and return to the pairing screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpair device'**
+  String get deviceUnpairAction;
+
+  /// Warning shown before unpairing a device.
+  ///
+  /// In en, this message translates to:
+  /// **'Only use this if this device should be paired again.'**
+  String get deviceUnpairWarning;
+
+  /// Confirming button of the unpair dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpair'**
+  String get deviceUnpairConfirm;
+
+  /// Device-settings row label: which surface this device runs (POS or KDS).
+  ///
+  /// In en, this message translates to:
+  /// **'App type'**
+  String get deviceSettingsAppTypeLabel;
+
+  /// Device-settings app-type value for the POS surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashier (POS)'**
+  String get deviceSettingsAppTypePos;
+
+  /// Device-settings app-type value for the KDS surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen display (KDS)'**
+  String get deviceSettingsAppTypeKds;
+
+  /// Device-settings row label: the restaurant this device belongs to.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant'**
+  String get deviceSettingsRestaurantLabel;
+
+  /// Device-settings row label: the branch this device belongs to.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch'**
+  String get deviceSettingsBranchLabel;
+
+  /// Device-settings row label: this device's own label/name.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get deviceSettingsDeviceLabel;
+
+  /// Device-settings row label: the device pairing/session status.
+  ///
+  /// In en, this message translates to:
+  /// **'Pairing'**
+  String get deviceSettingsPairingLabel;
+
+  /// Device-settings pairing status: the device holds an active pairing.
+  ///
+  /// In en, this message translates to:
+  /// **'Paired'**
+  String get deviceSettingsPairingActive;
+
+  /// Device-settings row label: whether a staff PIN session is active on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff session'**
+  String get deviceSettingsPinSessionLabel;
+
+  /// Device-settings staff-session status: a PIN session is active.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get deviceSettingsPinSessionActive;
+
+  /// Device-settings staff-session status: no PIN session.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed in'**
+  String get deviceSettingsPinSessionNone;
+
+  /// Honest device-settings note in demo mode (no backend, no pairing).
+  ///
+  /// In en, this message translates to:
+  /// **'Demo mode — no paired device.'**
+  String get deviceSettingsDemoNote;
+
+  /// Device-settings fallback when no paired-device context is available.
+  ///
+  /// In en, this message translates to:
+  /// **'Device info unavailable.'**
+  String get deviceSettingsUnavailable;
+
+  /// Device-settings section heading: the printers assigned to this device's branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Printers'**
+  String get deviceSettingsPrintersHeading;
+
+  /// Device-settings empty state: no printer of this device's role is configured for its branch.
+  ///
+  /// In en, this message translates to:
+  /// **'No printer assigned. Ask a manager to configure it in Dashboard → Printers.'**
+  String get deviceSettingsNoPrinter;
+
+  /// Printer capability status: the printer is configured in the Dashboard but this build has no physical print transport.
+  ///
+  /// In en, this message translates to:
+  /// **'Configured only — print bridge required.'**
+  String get deviceSettingsBridgeRequired;
+
+  /// Honest capability note: physical printing is not possible from this web build; jobs are prepared/previewed only.
+  ///
+  /// In en, this message translates to:
+  /// **'Printing requires a print bridge/native app. This build can save config and create/preview print jobs.'**
+  String get deviceSettingsCapabilityNote;
+
+  /// Device-settings footer: when the printer assignments were last fetched.
+  ///
+  /// In en, this message translates to:
+  /// **'Last refresh: {time}'**
+  String deviceSettingsLastRefresh(String time);
+
+  /// Device-settings safe error when the assignments RPC fails (network/session).
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load printer assignments.'**
+  String get deviceSettingsLoadError;
+
+  /// Printer row status: the printer exists but is disabled by the owner in the Dashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled in Dashboard'**
+  String get deviceSettingsPrinterDisabled;
+
+  /// Printer row subtitle: the kitchen stations routed to this printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Stations: {names}'**
+  String deviceSettingsRouteStations(String names);
+
+  /// Snackbar after the device menu's Refresh connection reloaded the assignments.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection refreshed.'**
+  String get deviceRefreshedSnack;
+
+  /// Snackbar after the device was unpaired locally.
+  ///
+  /// In en, this message translates to:
+  /// **'Device unpaired.'**
+  String get deviceUnpairedSnack;
+
+  /// Device-settings section heading: per-device automatic print triggers.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-print'**
+  String get deviceSettingsAutoPrintHeading;
+
+  /// POS device-settings toggle: prepare a customer receipt print job automatically after a successful payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-print receipt after payment'**
+  String get posAutoPrintReceiptToggle;
+
+  /// KDS device-settings toggle: prepare a kitchen-ticket print job automatically when a ticket is acknowledged.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-print kitchen ticket on acknowledge'**
+  String get kdsAutoPrintAcknowledgeToggle;
+
+  /// Why an auto-print toggle is disabled: the branch has no printer of the needed role.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled — no printer assigned.'**
+  String get autoPrintNoPrinterNote;
+
+  /// Print-job status: nothing was prepared because no printer is assigned.
+  ///
+  /// In en, this message translates to:
+  /// **'No printer configured'**
+  String get printStatusNotConfigured;
+
+  /// Print-job status: the job payload is ready; no physical transport exists in this build, so it is NOT claimed as printed.
+  ///
+  /// In en, this message translates to:
+  /// **'Print job prepared — physical printing requires print bridge.'**
+  String get printStatusPrepared;
+
+  /// Print-job status: a transport CONFIRMED the physical print (unreachable until a print bridge exists).
+  ///
+  /// In en, this message translates to:
+  /// **'Printed'**
+  String get printStatusPrinted;
+
+  /// Print-job status: preparing/sending the job failed; the order/ticket itself is unaffected.
+  ///
+  /// In en, this message translates to:
+  /// **'Print failed'**
+  String get printStatusFailed;
+
+  /// Label of the receipt print-job status line on the POS order confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt print'**
+  String get posReceiptPrintLabel;
+
+  /// Label of the kitchen print-job status line on a KDS ticket.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen print'**
+  String get kdsTicketPrintLabel;
+
   /// Title of the POS receipt print-preview dialog.
   ///
   /// In en, this message translates to:

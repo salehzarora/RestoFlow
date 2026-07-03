@@ -460,6 +460,133 @@ class AppLocalizationsAr extends AppLocalizations {
       'استخدم طباعة المتصفح (Ctrl+P) لطباعة هذه المعاينة';
 
   @override
+  String get deviceSettingsMenuTooltip => 'قائمة الجهاز';
+
+  @override
+  String get deviceSettingsTitle => 'إعدادات الجهاز';
+
+  @override
+  String get deviceRefreshAction => 'تحديث الاتصال';
+
+  @override
+  String get deviceUnpairAction => 'إلغاء اقتران الجهاز';
+
+  @override
+  String get deviceUnpairWarning =>
+      'استخدم هذا فقط إذا كان يجب إقران هذا الجهاز من جديد.';
+
+  @override
+  String get deviceUnpairConfirm => 'إلغاء الاقتران';
+
+  @override
+  String get deviceSettingsAppTypeLabel => 'نوع التطبيق';
+
+  @override
+  String get deviceSettingsAppTypePos => 'الكاشير (POS)';
+
+  @override
+  String get deviceSettingsAppTypeKds => 'شاشة المطبخ (KDS)';
+
+  @override
+  String get deviceSettingsRestaurantLabel => 'المطعم';
+
+  @override
+  String get deviceSettingsBranchLabel => 'الفرع';
+
+  @override
+  String get deviceSettingsDeviceLabel => 'الجهاز';
+
+  @override
+  String get deviceSettingsPairingLabel => 'الاقتران';
+
+  @override
+  String get deviceSettingsPairingActive => 'مقترن';
+
+  @override
+  String get deviceSettingsPinSessionLabel => 'جلسة الموظف';
+
+  @override
+  String get deviceSettingsPinSessionActive => 'مسجّل الدخول';
+
+  @override
+  String get deviceSettingsPinSessionNone => 'غير مسجّل الدخول';
+
+  @override
+  String get deviceSettingsDemoNote => 'وضع تجريبي — لا يوجد جهاز مقترن.';
+
+  @override
+  String get deviceSettingsUnavailable => 'معلومات الجهاز غير متاحة.';
+
+  @override
+  String get deviceSettingsPrintersHeading => 'الطابعات';
+
+  @override
+  String get deviceSettingsNoPrinter =>
+      'لا توجد طابعة معيّنة. اطلب من المدير إعدادها في لوحة التحكم ← الطابعات.';
+
+  @override
+  String get deviceSettingsBridgeRequired =>
+      'مُعدّة فقط — تتطلب الطباعة جسر طباعة.';
+
+  @override
+  String get deviceSettingsCapabilityNote =>
+      'تتطلب الطباعة جسر طباعة أو تطبيقًا أصليًا. هذا الإصدار يحفظ الإعدادات وينشئ/يعاين مهام الطباعة.';
+
+  @override
+  String deviceSettingsLastRefresh(String time) {
+    return 'آخر تحديث: $time';
+  }
+
+  @override
+  String get deviceSettingsLoadError => 'تعذّر تحميل تعيينات الطابعات.';
+
+  @override
+  String get deviceSettingsPrinterDisabled => 'معطّلة في لوحة التحكم';
+
+  @override
+  String deviceSettingsRouteStations(String names) {
+    return 'المحطات: $names';
+  }
+
+  @override
+  String get deviceRefreshedSnack => 'تم تحديث الاتصال.';
+
+  @override
+  String get deviceUnpairedSnack => 'تم إلغاء اقتران الجهاز.';
+
+  @override
+  String get deviceSettingsAutoPrintHeading => 'طباعة تلقائية';
+
+  @override
+  String get posAutoPrintReceiptToggle => 'طباعة الإيصال تلقائيًا بعد الدفع';
+
+  @override
+  String get kdsAutoPrintAcknowledgeToggle =>
+      'طباعة تذكرة المطبخ تلقائيًا عند الاستلام';
+
+  @override
+  String get autoPrintNoPrinterNote => 'معطّل — لا توجد طابعة معيّنة.';
+
+  @override
+  String get printStatusNotConfigured => 'لا توجد طابعة مُعدّة';
+
+  @override
+  String get printStatusPrepared =>
+      'تم تجهيز مهمة الطباعة — الطباعة الفعلية تتطلب جسر طباعة.';
+
+  @override
+  String get printStatusPrinted => 'تمت الطباعة';
+
+  @override
+  String get printStatusFailed => 'فشلت الطباعة';
+
+  @override
+  String get posReceiptPrintLabel => 'طباعة الإيصال';
+
+  @override
+  String get kdsTicketPrintLabel => 'طباعة المطبخ';
+
+  @override
   String get receiptPreviewTitle => 'معاينة الإيصال';
 
   @override

@@ -7,6 +7,7 @@ import 'state/kitchen_orders_controller.dart';
 import 'widgets/kds_state_message.dart';
 import 'widgets/kitchen_board.dart';
 import 'widgets/kitchen_demo_banner.dart';
+import 'widgets/device_settings_menu.dart';
 import 'widgets/language_selector.dart';
 
 /// The RF-117 KDS home: a live (demo) kitchen order board with status columns
@@ -35,7 +36,9 @@ class KitchenOrdersHome extends ConsumerWidget {
             Text(l10n.kdsAppTitle),
           ],
         ),
-        actions: const [LanguageSelector()],
+        // Device settings sprint: the ⋮ device menu rides beside the
+        // language switcher (demo shows its honest no-device note).
+        actions: const [LanguageSelector(), DeviceSettingsMenu()],
       ),
       body: Column(
         children: [

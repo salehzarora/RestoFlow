@@ -457,6 +457,132 @@ class AppLocalizationsHe extends AppLocalizations {
       'השתמש בהדפסת הדפדפן (Ctrl+P) כדי להדפיס תצוגה זו';
 
   @override
+  String get deviceSettingsMenuTooltip => 'תפריט המכשיר';
+
+  @override
+  String get deviceSettingsTitle => 'הגדרות מכשיר';
+
+  @override
+  String get deviceRefreshAction => 'רענון החיבור';
+
+  @override
+  String get deviceUnpairAction => 'ביטול צימוד המכשיר';
+
+  @override
+  String get deviceUnpairWarning =>
+      'השתמשו בזה רק אם צריך לצמד את המכשיר הזה מחדש.';
+
+  @override
+  String get deviceUnpairConfirm => 'בטל צימוד';
+
+  @override
+  String get deviceSettingsAppTypeLabel => 'סוג היישום';
+
+  @override
+  String get deviceSettingsAppTypePos => 'קופה (POS)';
+
+  @override
+  String get deviceSettingsAppTypeKds => 'מסך מטבח (KDS)';
+
+  @override
+  String get deviceSettingsRestaurantLabel => 'מסעדה';
+
+  @override
+  String get deviceSettingsBranchLabel => 'סניף';
+
+  @override
+  String get deviceSettingsDeviceLabel => 'מכשיר';
+
+  @override
+  String get deviceSettingsPairingLabel => 'צימוד';
+
+  @override
+  String get deviceSettingsPairingActive => 'מצומד';
+
+  @override
+  String get deviceSettingsPinSessionLabel => 'משמרת עובד';
+
+  @override
+  String get deviceSettingsPinSessionActive => 'מחובר';
+
+  @override
+  String get deviceSettingsPinSessionNone => 'לא מחובר';
+
+  @override
+  String get deviceSettingsDemoNote => 'מצב הדגמה — אין מכשיר מצומד.';
+
+  @override
+  String get deviceSettingsUnavailable => 'פרטי המכשיר אינם זמינים.';
+
+  @override
+  String get deviceSettingsPrintersHeading => 'מדפסות';
+
+  @override
+  String get deviceSettingsNoPrinter =>
+      'לא הוקצתה מדפסת. בקשו ממנהל להגדיר אותה ב-Dashboard ← מדפסות.';
+
+  @override
+  String get deviceSettingsBridgeRequired => 'מוגדרת בלבד — נדרש גשר הדפסה.';
+
+  @override
+  String get deviceSettingsCapabilityNote =>
+      'הדפסה דורשת גשר הדפסה/אפליקציה מקורית. גרסה זו שומרת הגדרות ויוצרת/מציגה עבודות הדפסה.';
+
+  @override
+  String deviceSettingsLastRefresh(String time) {
+    return 'רענון אחרון: $time';
+  }
+
+  @override
+  String get deviceSettingsLoadError => 'לא ניתן לטעון את הקצאות המדפסות.';
+
+  @override
+  String get deviceSettingsPrinterDisabled => 'מושבתת ב-Dashboard';
+
+  @override
+  String deviceSettingsRouteStations(String names) {
+    return 'תחנות: $names';
+  }
+
+  @override
+  String get deviceRefreshedSnack => 'החיבור רוענן.';
+
+  @override
+  String get deviceUnpairedSnack => 'צימוד המכשיר בוטל.';
+
+  @override
+  String get deviceSettingsAutoPrintHeading => 'הדפסה אוטומטית';
+
+  @override
+  String get posAutoPrintReceiptToggle => 'הדפסת קבלה אוטומטית לאחר תשלום';
+
+  @override
+  String get kdsAutoPrintAcknowledgeToggle =>
+      'הדפסת כרטיס מטבח אוטומטית באישור קבלה';
+
+  @override
+  String get autoPrintNoPrinterNote => 'מושבת — לא הוקצתה מדפסת.';
+
+  @override
+  String get printStatusNotConfigured => 'לא הוגדרה מדפסת';
+
+  @override
+  String get printStatusPrepared =>
+      'עבודת ההדפסה הוכנה — הדפסה פיזית דורשת גשר הדפסה.';
+
+  @override
+  String get printStatusPrinted => 'הודפס';
+
+  @override
+  String get printStatusFailed => 'ההדפסה נכשלה';
+
+  @override
+  String get posReceiptPrintLabel => 'הדפסת קבלה';
+
+  @override
+  String get kdsTicketPrintLabel => 'הדפסת מטבח';
+
+  @override
   String get receiptPreviewTitle => 'תצוגת הדפסת קבלה';
 
   @override
