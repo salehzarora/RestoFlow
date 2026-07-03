@@ -3,15 +3,15 @@
 -- ============================================================================
 -- An expired PIN session, a device mismatch, and a revoked backing device session
 -- each reject the pull (42501). Role visibility is server-derived: kitchen_staff may
--- pull only non-financial entities (orders/order_items/order_item_modifiers) and is
--- rejected when requesting a financial entity; cashier+ pulls the full set. Fixtures
--- inserted as the BYPASSRLS connection role.
+-- pull only non-financial entities (orders/order_items/order_item_modifiers, plus the
+-- money-free MVP `tables` floor entity) and is rejected when requesting a financial
+-- entity; cashier+ pulls the full set. Fixtures inserted as the BYPASSRLS connection role.
 -- ============================================================================
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(7);
+select plan(9);
 
 insert into organizations (id, name, slug, default_currency) values
   ('00000000-0000-0000-0000-0000000000a0', 'Org A', 'rf057z-a', 'USD');
@@ -55,7 +55,11 @@ select throws_ok($$ select app.sync_pull('00000000-0000-0000-0000-0000000005c4',
 select ok(not ((app.sync_pull('00000000-0000-0000-0000-0000000005c4','00000000-0000-0000-0000-00000000da11',null,'{}'::jsonb,500) -> 'changes') ? 'payments'), 'kitchen_staff default pull does NOT include payments');
 select ok((app.sync_pull('00000000-0000-0000-0000-0000000005c4','00000000-0000-0000-0000-00000000da11',null,'{}'::jsonb,500) -> 'changes') ? 'orders', 'kitchen_staff default pull DOES include orders');
 
--- cashier default scope includes the financial set --------------------------- 7
+-- kitchen_staff MAY pull the money-free MVP `tables` floor entity ------------- 7-8
+select is((app.sync_pull('00000000-0000-0000-0000-0000000005c4','00000000-0000-0000-0000-00000000da11',array['tables'],'{}'::jsonb,500) ->> 'ok')::boolean, true, 'kitchen_staff CAN pull tables explicitly (money-free floor entity; KDS label mapping)');
+select ok((app.sync_pull('00000000-0000-0000-0000-0000000005c4','00000000-0000-0000-0000-00000000da11',null,'{}'::jsonb,500) -> 'changes') ? 'tables', 'kitchen_staff default pull includes tables');
+
+-- cashier default scope includes the financial set --------------------------- 9
 select ok((app.sync_pull('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000da11',null,'{}'::jsonb,500) -> 'changes') ? 'payments', 'cashier default pull includes payments');
 
 select * from finish();

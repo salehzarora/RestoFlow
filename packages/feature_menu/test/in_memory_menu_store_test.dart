@@ -68,6 +68,36 @@ void main() {
       expect(updated.basePriceMinor, 475);
     });
 
+    test('rich attributes roundtrip through upsertItem, mirroring the server '
+        'normalization (blank text = unset)', () async {
+      final store = buildDemoMenuStore();
+      await store.upsertItem(
+        scope: demoMenuScope,
+        id: 'item-cappuccino',
+        menuCategoryId: 'cat-hot',
+        name: 'Cappuccino',
+        basePriceMinor: 450,
+        currencyCode: 'ILS',
+        itemType: 'drink',
+        tags: const ['popular', 'new'],
+        prepMinutes: 4,
+        sku: '  CAP-1  ',
+        kitchenNote: '   ',
+        attributes: const {'portion_label': 'Regular'},
+      );
+
+      final snapshot = await store.load(demoMenuScope);
+      final updated = snapshot
+          .itemsForCategory('cat-hot')
+          .firstWhere((i) => i.id == 'item-cappuccino');
+      expect(updated.itemType, 'drink');
+      expect(updated.tags, ['popular', 'new']);
+      expect(updated.prepMinutes, 4);
+      expect(updated.sku, 'CAP-1'); // trimmed
+      expect(updated.kitchenNote, isNull); // blank normalizes to unset
+      expect(updated.portionLabel, 'Regular');
+    });
+
     test(
       'soft-delete tombstones the row (hidden by default, visible with includeDeleted)',
       () async {

@@ -114,6 +114,43 @@ void main() {
     expect(html, isNot(contains('Margherita Pizza'))); // a different ticket
   });
 
+  testWidgets('preview carries the ×N modifier quantity and the item note '
+      '(K-1003, product-rescue sprint)', (tester) async {
+    final l10n = await _en();
+    final fake = _FakePrintService();
+    await _pump(tester, printService: fake);
+
+    await tester.tap(find.byKey(const Key('preview-ticket-K-1003')));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byKey(const Key('kitchen-ticket-preview'));
+    expect(dialog, findsOneWidget);
+    // The '×N' modifier-quantity string passes through the joined line.
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.textContaining('Extra cheese ×2'),
+      ),
+      findsOneWidget,
+    );
+    // The item note renders with the shared KDS note label.
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text('${l10n.kdsNoteLabel}: Extra crispy'),
+      ),
+      findsOneWidget,
+    );
+
+    // The printable HTML carries both too (strings pass through untouched).
+    await tester.tap(find.byKey(const Key('ticket-preview-print-button')));
+    await tester.pump();
+    expect(fake.lastDocument, isNotNull);
+    final html = documentToHtml(fake.lastDocument!);
+    expect(html, contains('Extra cheese ×2'));
+    expect(html, contains('Extra crispy'));
+  });
+
   testWidgets('Close dismisses the kitchen-ticket preview', (tester) async {
     await _pump(tester);
     await _openPreview(tester);

@@ -3,6 +3,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'dashboard_auth_repository.dart';
+import '../widgets/language_selector.dart';
 
 /// The dashboard real-auth entry (RF-151): a Sign in / Create account form with
 /// basic validation and safe, localized loading / error / email-confirmation
@@ -112,134 +113,155 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
     final l10n = AppLocalizations.of(context);
     final isSignUp = _mode == _AuthMode.signUp;
     return Scaffold(
+      // Sprint (I): the language switcher is reachable BEFORE sign-in too.
+      appBar: AppBar(actions: const [LanguageSelector()]),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(RestoflowSpacing.lg),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: RestoflowSectionCard(
-                title: l10n.authWelcomeTitle,
+              constraints: const BoxConstraints(
+                maxWidth: RestoflowPanelWidths.dialog,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  SegmentedButton<_AuthMode>(
-                    segments: [
-                      ButtonSegment(
-                        value: _AuthMode.signIn,
-                        label: Text(l10n.authSignInTab),
-                        icon: const Icon(Icons.login),
-                      ),
-                      ButtonSegment(
-                        value: _AuthMode.signUp,
-                        label: Text(l10n.authCreateAccountTab),
-                        icon: const Icon(Icons.person_add_alt),
-                      ),
-                    ],
-                    selected: {_mode},
-                    onSelectionChanged: _busy
-                        ? null
-                        : (selection) => _setMode(selection.first),
+                  // Brand hero: the product identity above the form card.
+                  RestoflowBrandMark(
+                    title: l10n.dashboardAppTitle,
+                    tagline: l10n.authBrandTagline,
                   ),
-                  const SizedBox(height: RestoflowSpacing.lg),
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextFormField(
-                          key: const Key('auth-email'),
-                          controller: _email,
-                          enabled: !_busy,
-                          keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.email],
-                          decoration: InputDecoration(
-                            labelText: l10n.authEmailLabel,
-                            prefixIcon: const Icon(Icons.mail_outline),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? l10n.authEmailRequired
-                              : null,
-                        ),
-                        const SizedBox(height: RestoflowSpacing.md),
-                        TextFormField(
-                          key: const Key('auth-password'),
-                          controller: _password,
-                          enabled: !_busy,
-                          obscureText: true,
-                          decoration: InputDecoration(
-                            labelText: l10n.authPasswordLabel,
-                            prefixIcon: const Icon(Icons.lock_outline),
-                          ),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) {
-                              return l10n.authPasswordRequired;
-                            }
-                            if (isSignUp && v.length < 6) {
-                              return l10n.authPasswordTooShort;
-                            }
-                            return null;
-                          },
-                        ),
-                        if (isSignUp) ...[
-                          const SizedBox(height: RestoflowSpacing.md),
-                          TextFormField(
-                            key: const Key('auth-restaurant'),
-                            controller: _restaurant,
-                            enabled: !_busy,
-                            textCapitalization: TextCapitalization.words,
-                            decoration: InputDecoration(
-                              labelText: l10n.onboardingRestaurantNameLabel,
-                              prefixIcon: const Icon(Icons.storefront_outlined),
+                  const SizedBox(height: RestoflowSpacing.xl),
+                  RestoflowSectionCard(
+                    title: l10n.authWelcomeTitle,
+                    children: [
+                      SegmentedButton<_AuthMode>(
+                        segments: [
+                          ButtonSegment(
+                            value: _AuthMode.signIn,
+                            label: Text(l10n.authSignInTab),
+                            // Icons.login is NOT auto-mirrored; flip under RTL
+                            // so the arrow points into the door.
+                            icon: Transform.flip(
+                              flipX:
+                                  Directionality.of(context) ==
+                                  TextDirection.rtl,
+                              child: const Icon(Icons.login),
                             ),
-                            validator: (v) => (v == null || v.trim().isEmpty)
-                                ? l10n.onboardingRestaurantNameRequired
-                                : null,
                           ),
-                          const SizedBox(height: RestoflowSpacing.md),
-                          TextFormField(
-                            key: const Key('auth-branch'),
-                            controller: _branch,
-                            enabled: !_busy,
-                            textCapitalization: TextCapitalization.words,
-                            decoration: InputDecoration(
-                              labelText: l10n.onboardingBranchNameLabel,
-                              prefixIcon: const Icon(
-                                Icons.store_mall_directory_outlined,
-                              ),
-                            ),
+                          ButtonSegment(
+                            value: _AuthMode.signUp,
+                            label: Text(l10n.authCreateAccountTab),
+                            icon: const Icon(Icons.person_add_alt),
                           ),
                         ],
+                        selected: {_mode},
+                        onSelectionChanged: _busy
+                            ? null
+                            : (selection) => _setMode(selection.first),
+                      ),
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextFormField(
+                              key: const Key('auth-email'),
+                              controller: _email,
+                              enabled: !_busy,
+                              keyboardType: TextInputType.emailAddress,
+                              autofillHints: const [AutofillHints.email],
+                              decoration: InputDecoration(
+                                labelText: l10n.authEmailLabel,
+                                prefixIcon: const Icon(Icons.mail_outline),
+                              ),
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? l10n.authEmailRequired
+                                  : null,
+                            ),
+                            const SizedBox(height: RestoflowSpacing.md),
+                            TextFormField(
+                              key: const Key('auth-password'),
+                              controller: _password,
+                              enabled: !_busy,
+                              obscureText: true,
+                              decoration: InputDecoration(
+                                labelText: l10n.authPasswordLabel,
+                                prefixIcon: const Icon(Icons.lock_outline),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.isEmpty) {
+                                  return l10n.authPasswordRequired;
+                                }
+                                if (isSignUp && v.length < 6) {
+                                  return l10n.authPasswordTooShort;
+                                }
+                                return null;
+                              },
+                            ),
+                            if (isSignUp) ...[
+                              const SizedBox(height: RestoflowSpacing.md),
+                              TextFormField(
+                                key: const Key('auth-restaurant'),
+                                controller: _restaurant,
+                                enabled: !_busy,
+                                textCapitalization: TextCapitalization.words,
+                                decoration: InputDecoration(
+                                  labelText: l10n.onboardingRestaurantNameLabel,
+                                  prefixIcon: const Icon(
+                                    Icons.storefront_outlined,
+                                  ),
+                                ),
+                                validator: (v) =>
+                                    (v == null || v.trim().isEmpty)
+                                    ? l10n.onboardingRestaurantNameRequired
+                                    : null,
+                              ),
+                              const SizedBox(height: RestoflowSpacing.md),
+                              TextFormField(
+                                key: const Key('auth-branch'),
+                                controller: _branch,
+                                enabled: !_busy,
+                                textCapitalization: TextCapitalization.words,
+                                decoration: InputDecoration(
+                                  labelText: l10n.onboardingBranchNameLabel,
+                                  prefixIcon: const Icon(
+                                    Icons.store_mall_directory_outlined,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (_errorKind != null) ...[
+                        const SizedBox(height: RestoflowSpacing.md),
+                        RestoflowNoticeBanner(
+                          tone: RestoflowTone.danger,
+                          body: _errorMessage(l10n, _errorKind!),
+                        ),
                       ],
-                    ),
-                  ),
-                  if (_errorKind != null) ...[
-                    const SizedBox(height: RestoflowSpacing.md),
-                    RestoflowNoticeBanner(
-                      tone: RestoflowTone.danger,
-                      body: _errorMessage(l10n, _errorKind!),
-                    ),
-                  ],
-                  if (_confirmationSent) ...[
-                    const SizedBox(height: RestoflowSpacing.md),
-                    RestoflowNoticeBanner(
-                      tone: RestoflowTone.info,
-                      body: l10n.authEmailConfirmationSent,
-                    ),
-                  ],
-                  const SizedBox(height: RestoflowSpacing.lg),
-                  FilledButton(
-                    key: const Key('auth-submit'),
-                    onPressed: _busy ? null : _submit,
-                    child: _busy
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            isSignUp
-                                ? l10n.authCreateAccountTab
-                                : l10n.authSignInAction,
-                          ),
+                      if (_confirmationSent) ...[
+                        const SizedBox(height: RestoflowSpacing.md),
+                        RestoflowNoticeBanner(
+                          tone: RestoflowTone.info,
+                          body: l10n.authEmailConfirmationSent,
+                        ),
+                      ],
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      FilledButton(
+                        key: const Key('auth-submit'),
+                        onPressed: _busy ? null : _submit,
+                        child: _busy
+                            ? const RestoflowInlineSpinner(size: 20)
+                            : Text(
+                                isSignUp
+                                    ? l10n.authCreateAccountTab
+                                    : l10n.authSignInAction,
+                              ),
+                      ),
+                    ],
                   ),
                 ],
               ),

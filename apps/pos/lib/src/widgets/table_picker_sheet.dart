@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_tables.dart';
@@ -29,6 +31,7 @@ class TablePickerSheet extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final tablesAsync = ref.watch(tablesProvider);
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final assignedId = ref.watch(
       orderSetupControllerProvider.select((s) => s.assignedTable?.tableId),
     );
@@ -58,10 +61,12 @@ class TablePickerSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: RestoflowSpacing.sm),
-            _FootnoteRow(
-              icon: Icons.info_outline,
-              message: l10n.posTablesDemoNotice,
-            ),
+            // Demo-only disclaimer — REAL mode loads the branch's real tables.
+            if (isDemo)
+              _FootnoteRow(
+                icon: Icons.info_outline,
+                message: l10n.posTablesDemoNotice,
+              ),
             const SizedBox(height: RestoflowSpacing.md),
             const _TableLegend(),
             Padding(
@@ -86,7 +91,11 @@ class TablePickerSheet extends ConsumerWidget {
                 data: (tables) => tables.isEmpty
                     ? _PickerMessage(
                         icon: Icons.table_restaurant_outlined,
-                        message: l10n.posTablesEmpty,
+                        // Real mode says WHERE tables come from (Dashboard →
+                        // Tables) instead of a bare "nothing to show".
+                        message: isDemo
+                            ? l10n.posTablesEmpty
+                            : l10n.posTablesEmptyReal,
                       )
                     : _FloorMap(
                         tables: tables,
@@ -101,10 +110,14 @@ class TablePickerSheet extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: RestoflowSpacing.md),
-            _FootnoteRow(
-              icon: Icons.info_outline,
-              message: l10n.posTablesLayoutEditorHint,
-            ),
+            // The illustrative-positions hint is demo-only; real tables come
+            // from the dashboard and have no floor coordinates yet either,
+            // but the wording ("demo-only") would be wrong in real mode.
+            if (isDemo)
+              _FootnoteRow(
+                icon: Icons.info_outline,
+                message: l10n.posTablesLayoutEditorHint,
+              ),
           ],
         ),
       ),
@@ -353,10 +366,11 @@ class _TableLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    final available = _statusFill(TableStatusKind.available, scheme);
-    final occupied = _statusFill(TableStatusKind.occupied, scheme);
-    final blocked = _statusFill(TableStatusKind.blocked, scheme);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final available = _statusFill(TableStatusKind.available, theme);
+    final occupied = _statusFill(TableStatusKind.occupied, theme);
+    final blocked = _statusFill(TableStatusKind.blocked, theme);
     return Wrap(
       spacing: RestoflowSpacing.lg,
       runSpacing: RestoflowSpacing.sm,
@@ -436,12 +450,15 @@ class _LegendItem extends StatelessWidget {
 }
 
 /// Fill + on-colour + border for a status, shared by BOTH the legend swatches
-/// and the tile bodies so the two can never drift apart: available reads as a
-/// plain "empty" table, occupied as a tertiary tint, blocked as an error tint.
+/// and the tile bodies so the two can never drift apart. Design-polish: the
+/// fills come from the shared semantic tones — available reads as a plain
+/// "empty" table, occupied as a true-amber WARNING, blocked as a red DANGER —
+/// each with a matching accent border so the states survive a quick glance.
 ({Color fill, Color onFill, Color border}) _statusFill(
   TableStatusKind kind,
-  ColorScheme scheme,
+  ThemeData theme,
 ) {
+  final scheme = theme.colorScheme;
   switch (kind) {
     case TableStatusKind.available:
       return (
@@ -450,16 +467,18 @@ class _LegendItem extends StatelessWidget {
         border: scheme.outlineVariant,
       );
     case TableStatusKind.occupied:
+      final warning = RestoflowTone.warning.styleOf(theme);
       return (
-        fill: scheme.tertiaryContainer,
-        onFill: scheme.onTertiaryContainer,
-        border: scheme.outlineVariant,
+        fill: warning.container,
+        onFill: warning.onContainer,
+        border: warning.accent.withValues(alpha: 0.5),
       );
     case TableStatusKind.blocked:
+      final danger = RestoflowTone.danger.styleOf(theme);
       return (
-        fill: scheme.errorContainer,
-        onFill: scheme.onErrorContainer,
-        border: scheme.outlineVariant,
+        fill: danger.container,
+        onFill: danger.onContainer,
+        border: danger.accent.withValues(alpha: 0.5),
       );
   }
 }
@@ -496,7 +515,7 @@ class _TableTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final base = _statusFill(table.status, scheme);
+    final base = _statusFill(table.status, theme);
     final Color fill = selected ? scheme.primaryContainer : base.fill;
     final Color onFill = selected ? scheme.onPrimaryContainer : base.onFill;
     final Color borderColor = selected ? scheme.primary : base.border;
@@ -531,53 +550,59 @@ class _TableTile extends StatelessWidget {
       label: selected ? l10n.posTableSelectedSemantic(table.label) : null,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 132, maxWidth: 168),
-        child: Material(
-          color: fill,
-          shape: RoundedRectangleBorder(
+        // Subtle interaction polish: selection fill/border fades (finite
+        // implicit animation; ink rides a transparent Material on top).
+        child: AnimatedContainer(
+          duration: RestoflowDurations.fast,
+          decoration: BoxDecoration(
+            color: fill,
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            side: BorderSide(color: borderColor, width: borderWidth),
+            border: Border.all(color: borderColor, width: borderWidth),
           ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            child: Padding(
-              padding: const EdgeInsets.all(RestoflowSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.event_seat, size: 18, color: onFill),
-                      const SizedBox(width: RestoflowSpacing.xs),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              child: Padding(
+                padding: const EdgeInsets.all(RestoflowSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.event_seat, size: 18, color: onFill),
+                        const SizedBox(width: RestoflowSpacing.xs),
+                        Text(
+                          table.label,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: onFill,
+                          ),
+                        ),
+                        if (glyph != null) ...[const Spacer(), glyph],
+                      ],
+                    ),
+                    if (table.seats != null) ...[
+                      const SizedBox(height: RestoflowSpacing.xs),
                       Text(
-                        table.label,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: onFill,
+                        l10n.posTableSeats(table.seats!),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: onFill.withValues(alpha: 0.8),
                         ),
                       ),
-                      if (glyph != null) ...[const Spacer(), glyph],
                     ],
-                  ),
-                  if (table.seats != null) ...[
-                    const SizedBox(height: RestoflowSpacing.xs),
+                    const SizedBox(height: RestoflowSpacing.sm),
                     Text(
-                      l10n.posTableSeats(table.seats!),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: onFill.withValues(alpha: 0.8),
+                      statusLabel,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: onFill,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
-                  const SizedBox(height: RestoflowSpacing.sm),
-                  Text(
-                    statusLabel,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: onFill,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

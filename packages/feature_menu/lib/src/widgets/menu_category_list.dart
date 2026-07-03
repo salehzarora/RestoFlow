@@ -155,24 +155,34 @@ class _CategoryTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final radius = BorderRadius.circular(RestoflowRadii.md);
     return Material(
       color: selected ? scheme.primaryContainer : scheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      shape: RoundedRectangleBorder(
+        borderRadius: radius,
+        side: selected
+            ? BorderSide(color: scheme.primary, width: 1.5)
+            : BorderSide.none,
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        borderRadius: radius,
         child: Padding(
           padding: const EdgeInsets.all(RestoflowSpacing.sm),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: selected
-                    ? scheme.primary
-                    : scheme.surfaceContainerHighest,
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? scheme.primary
+                      : scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+                ),
                 child: Icon(
                   Icons.local_dining_outlined,
-                  size: 18,
+                  size: RestoflowIconSizes.md,
                   color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
                 ),
               ),
@@ -187,7 +197,7 @@ class _CategoryTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: RestoflowSpacing.xs / 2),
+                    const SizedBox(height: RestoflowSpacing.xxs),
                     Wrap(
                       spacing: RestoflowSpacing.sm,
                       runSpacing: RestoflowSpacing.xs,

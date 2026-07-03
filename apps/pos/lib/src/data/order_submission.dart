@@ -35,9 +35,42 @@ enum OutboxSyncState {
   bool get isFailed => this == rejected || this == dead;
 }
 
+/// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
+/// per-item `modifiers[]` array `app.submit_order` validates and snapshots
+/// into `order_item_modifiers` (RF-052, D-008). [priceMinorSnapshot] is a
+/// SIGNED integer minor-unit UNIT delta; the server counts it × [quantity]
+/// once per line in its total formula (`Σ delta × modifier_qty`).
+class OrderSubmissionModifier {
+  const OrderSubmissionModifier({
+    required this.modifierOptionId,
+    required this.optionNameSnapshot,
+    this.modifierNameSnapshot,
+    required this.priceMinorSnapshot,
+    this.quantity = 1,
+  });
+
+  final String modifierOptionId;
+  final String optionNameSnapshot;
+  final String? modifierNameSnapshot;
+  final int priceMinorSnapshot;
+
+  /// Units of this option (>= 1) — `order_item_modifiers.quantity`.
+  final int quantity;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'modifier_option_id': modifierOptionId,
+    'option_name_snapshot': optionNameSnapshot,
+    'modifier_name_snapshot': modifierNameSnapshot,
+    'price_minor_snapshot': priceMinorSnapshot,
+    'quantity': quantity,
+  };
+}
+
 /// A single line on an [OrderSubmissionPayload]. Money is integer minor units
 /// only (DECISION D-007); the name + unit price are snapshots captured at order
-/// time (DECISION D-008), never recomputed from a live menu.
+/// time (DECISION D-008), never recomputed from a live menu. [lineTotalMinor]
+/// follows the RF-052 server formula `qty × unit + Σmodifiers` (the server
+/// recomputes and rejects any mismatch).
 class OrderSubmissionItem {
   const OrderSubmissionItem({
     required this.menuItemId,
@@ -45,6 +78,8 @@ class OrderSubmissionItem {
     required this.quantity,
     required this.unitPriceMinorSnapshot,
     required this.lineTotalMinor,
+    this.modifiers = const <OrderSubmissionModifier>[],
+    this.notes,
   });
 
   final String menuItemId;
@@ -52,6 +87,11 @@ class OrderSubmissionItem {
   final int quantity;
   final int unitPriceMinorSnapshot;
   final int lineTotalMinor;
+  final List<OrderSubmissionModifier> modifiers;
+
+  /// Optional cashier note for this item — `order_items.notes` (non-money;
+  /// flows through to the kitchen display unredacted).
+  final String? notes;
 
   /// Mirrors an element of the `submit_order` RPC `order_items[]` (RF-052).
   Map<String, Object?> toJson() => <String, Object?>{
@@ -60,6 +100,9 @@ class OrderSubmissionItem {
     'quantity': quantity,
     'unit_price_minor_snapshot': unitPriceMinorSnapshot,
     'line_total_minor': lineTotalMinor,
+    if (notes != null && notes!.isNotEmpty) 'notes': notes,
+    if (modifiers.isNotEmpty)
+      'modifiers': modifiers.map((m) => m.toJson()).toList(growable: false),
   };
 }
 

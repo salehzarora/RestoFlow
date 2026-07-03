@@ -456,4 +456,24 @@ class DemoAdminStore implements AdminRepository {
     );
     // The plaintext token is NOT retained — only the (simulated) session_token_ref.
   }
+
+  @override
+  Future<AdminResult<AdminDevice>> revokeDevice(String deviceId) async {
+    final idx = _deviceIndex(deviceId);
+    final guard = _manageGuard(deviceId, idx);
+    if (guard != null) return guard;
+    if (_devices[idx].status == DeviceLifecycleStatus.revoked) {
+      return const Failure(AdminConflict('bad_state'));
+    }
+    final next = _devices[idx].copyWith(
+      status: DeviceLifecycleStatus.revoked,
+      hasOpenSession: false,
+    );
+    _devices[idx] = next;
+    return Success(next);
+  }
+
+  /// The demo store simulates the full manager-side RF-112 lifecycle.
+  @override
+  bool get supportsManualLifecycle => true;
 }

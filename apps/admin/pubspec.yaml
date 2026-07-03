@@ -12,6 +12,8 @@ dependencies:
   # RF-120: the platform-admin overview is built on Riverpod (repository seam +
   # FutureProvider), mirroring the RF-104/RF-119 owner dashboard pattern.
   flutter_riverpod: '>=2.5.0 <3.0.0'
+  # Persists the NON-SECRET selected UI language per device/browser (sprint).
+  shared_preferences: '>=2.0.0 <3.0.0'
   restoflow_l10n:
     path: ../../packages/l10n
   restoflow_design_system:
@@ -25,6 +27,10 @@ dependencies:
   # platform-admin repo calls the RF-125 public.platform_admin_* wrappers through.
   restoflow_data_remote:
     path: ../../packages/data_remote
+  # Sprint (admin gate): Result<MyContext, AuthFailure> for the app-level
+  # platform gate (already in the workspace graph via feature_auth).
+  restoflow_core:
+    path: ../../packages/core
 dev_dependencies:
   flutter_test:
     sdk: flutter

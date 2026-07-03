@@ -24,6 +24,15 @@ abstract class MenuWriter {
     bool isActive = true,
   });
 
+  /// [imagePath] is the RF-110 object key of the item's current image; null
+  /// CLEARS it (the editor always sends the item's full state — the server
+  /// treats a missing/blank `p_image_path` as unset).
+  ///
+  /// The rich attributes (menu/media sprint) follow the same full-state rule:
+  /// null/empty = clear. [itemType] is one of [kMenuItemTypes]; [tags] holds
+  /// [kMenuItemTags] wire strings; [attributes] is the generic NON-MONEY bag
+  /// (snake_case keys — see [MenuItem.buildAttributes]; money NEVER rides it,
+  /// D-007); [sku] never reaches devices (server-side).
   Future<MenuWriteOutcome> upsertItem({
     required MenuScope scope,
     String? id,
@@ -35,6 +44,13 @@ abstract class MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
+    String? itemType,
+    List<String> tags = const [],
+    int? prepMinutes,
+    String? sku,
+    String? kitchenNote,
+    Map<String, dynamic> attributes = const {},
   });
 
   Future<MenuWriteOutcome> upsertSize({
@@ -57,6 +73,10 @@ abstract class MenuWriter {
     bool isActive = true,
   });
 
+  /// [allowQuantity] lets the POS add the SAME option more than once (a
+  /// quantity stepper). Only meaningful for `multiple` selection — the server
+  /// rejects `single` + allow_quantity. [maxQuantity] caps the units of a
+  /// single option while quantity is allowed (null = no cap).
   Future<MenuWriteOutcome> upsertModifier({
     required MenuScope scope,
     String? id,
@@ -68,6 +88,8 @@ abstract class MenuWriter {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
+    bool allowQuantity = false,
+    int? maxQuantity,
   });
 
   Future<MenuWriteOutcome> upsertModifierOption({

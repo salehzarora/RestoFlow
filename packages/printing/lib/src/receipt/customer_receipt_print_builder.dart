@@ -72,12 +72,16 @@ class CustomerReceiptPrintBuilder {
       final label = '${item.quantity} x ${item.nameSnapshot}';
       _addRow(lines, label, _money(input, item.lineTotalMinor), width);
       for (final mod in item.modifiers) {
-        final modLabel = '  + ${mod.nameSnapshot}';
+        final modLabel = '  + ${_modName(mod)}';
         if (mod.amountMinor != null) {
           _addRow(lines, modLabel, _money(input, mod.amountMinor!), width);
         } else {
           lines.add(PrintTextLine(modLabel));
         }
+      }
+      // The item note prints indented after its modifiers (absent when null).
+      if (item.note case final note?) {
+        lines.add(PrintTextLine('  * $note'));
       }
     }
 
@@ -176,7 +180,11 @@ class CustomerReceiptPrintBuilder {
         final amount = mod.amountMinor != null
             ? '   ${_money(input, mod.amountMinor!)}'
             : '';
-        out.add('  + ${mod.nameSnapshot}$amount');
+        out.add('  + ${_modName(mod)}$amount');
+      }
+      // The item note, indented after its modifiers (absent when null).
+      if (item.note case final note?) {
+        out.add('  * $note');
       }
     }
 
@@ -199,6 +207,12 @@ class CustomerReceiptPrintBuilder {
   }
 
   // --- shared helpers -----------------------------------------------------
+
+  /// The modifier display name: an ` xN` multiplier when its quantity is above
+  /// 1 (product-rescue sprint); the historical bare name otherwise.
+  static String _modName(ReceiptModifierLine mod) => mod.quantity > 1
+      ? '${mod.nameSnapshot} x${mod.quantity}'
+      : mod.nameSnapshot;
 
   static String _money(ReceiptInput input, int minor) =>
       ReceiptMoneyFormat.format(

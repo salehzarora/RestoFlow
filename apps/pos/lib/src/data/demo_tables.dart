@@ -1,4 +1,4 @@
-import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
@@ -146,23 +146,76 @@ class DemoTablesStore implements TablesRepository {
   }
 }
 
-/// REAL tables repository skeleton (M7). Selected by `runtimeConfigProvider` in
-/// real mode. NOT YET WIRED: the production path is an RLS-scoped
-/// `SELECT ... FROM public.tables` for the active branch. The exact
-/// column -> [DemoTable] mapping and the branch-scope binding are not ratified
-/// yet, so rather than guess the row shape this throws [RealRepoNotWiredError].
-/// It can be upgraded to a thin authenticated read once the column contract and
-/// branch scope are confirmed; no backend is contacted today.
+/// REAL tables repository (demo-readiness sprint): `public.pos_tables` over the
+/// paired device's authenticated transport + PIN session — the device-side
+/// read the dashboard Tables page feeds. The backend derives the branch from
+/// the SESSION (never the payload) and returns ACTIVE, non-deleted tables:
+/// `{id, label, seats, area, status}` with status
+/// available|occupied|reserved|out_of_service. Fail-closed: no
+/// transport/session (or a rejected response) throws — the picker shows its
+/// honest error/empty state, never demo tables.
 class RealTablesRepository implements TablesRepository {
-  const RealTablesRepository(this.config);
+  const RealTablesRepository(this._transport, this._session);
 
-  /// The validated anon-key Supabase config (or null - fail-closed). Held for the
-  /// future RLS-scoped read; no client is constructed yet.
-  final SupabaseBootstrapConfig? config;
+  final SyncRpcTransport? _transport;
+  final SyncSession? _session;
+
+  /// Placeholder for [DiningTable]'s required tenant fields: `pos_tables`
+  /// rows deliberately carry NO tenant ids (scope lives server-side, derived
+  /// from the session). Only `tableId`/`label`/`seats`/`area` leave this view
+  /// model — the tenant fields are never transmitted anywhere.
+  static const String _serverScope = 'server-scoped';
 
   @override
-  Future<List<DemoTable>> loadTables() async =>
+  Future<List<DemoTable>> loadTables() async {
+    final transport = _transport;
+    final session = _session;
+    if (transport == null || session == null) {
       throw const RealRepoNotWiredError(
-        'tables: RLS-scoped public.tables read not wired yet',
+        'tables: no authenticated transport/PIN session',
       );
+    }
+    final raw = await transport.invoke('pos_tables', <String, dynamic>{
+      'p_pin_session_id': session.pinSessionId,
+      'p_device_id': session.deviceId,
+    });
+    if (raw is! Map || raw['ok'] != true) {
+      throw const RealRepoNotWiredError('tables: pos_tables rejected');
+    }
+    final rows = raw['tables'];
+    if (rows is! List) return const <DemoTable>[];
+    final tables = <DemoTable>[];
+    for (final row in rows.whereType<Map>()) {
+      final id = row['id'];
+      final label = row['label'];
+      if (id is! String || label is! String) continue;
+      final seats = row['seats'];
+      final area = row['area'];
+      tables.add(
+        DemoTable(
+          table: DiningTable(
+            tableId: id,
+            label: label,
+            organizationId: _serverScope,
+            restaurantId: _serverScope,
+            branchId: _serverScope,
+            seats: seats is int ? seats : int.tryParse('$seats'),
+            area: area is String && area.isNotEmpty ? area : null,
+          ),
+          status: _statusFor(row['status']),
+        ),
+      );
+    }
+    return tables;
+  }
+
+  /// Maps the backend status to the picker's assignability model: reserved
+  /// and occupied are both non-assignable ("occupied" visual); out_of_service
+  /// is blocked; anything unknown fails closed to blocked.
+  static TableStatusKind _statusFor(Object? status) => switch (status) {
+    'available' => TableStatusKind.available,
+    'occupied' || 'reserved' => TableStatusKind.occupied,
+    'out_of_service' => TableStatusKind.blocked,
+    _ => TableStatusKind.blocked,
+  };
 }

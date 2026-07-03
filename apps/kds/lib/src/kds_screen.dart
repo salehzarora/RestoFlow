@@ -13,13 +13,49 @@ import 'widgets/kds_state_message.dart';
 /// printing. All chrome text comes from `AppLocalizations`; item/station/ticket
 /// data is rendered as-is. No money appears anywhere (SECURITY T-003).
 class KdsScreen extends StatefulWidget {
-  const KdsScreen({required this.tickets, this.onRecall, super.key});
+  const KdsScreen({
+    required this.tickets,
+    this.onRecall,
+    this.onAdvanced,
+    this.allowRecall = true,
+    this.appBarActions = const <Widget>[],
+    this.showStaleBanner = false,
+    this.printStatusFor,
+    super.key,
+  });
 
   /// Local fixture/view models supplied by the caller (no repository).
   final List<KdsTicketView> tickets;
 
+  /// Extra AppBar actions (design-polish sprint): the LIVE board threads the
+  /// app's LanguageSelector through here. Injected rather than embedded so this
+  /// screen stays pumpable in bare (provider-less) test harnesses.
+  final List<Widget> appBarActions;
+
+  /// Renders the offline/stale warning banner above the board (design-polish
+  /// sprint): the LIVE board sets this from `KdsViewState.isStale` so a
+  /// last-good-pull board is visibly marked instead of silently ageing.
+  final bool showStaleBanner;
+
   /// Optional sink for the in-memory recall audit placeholder (test/observer).
   final void Function(RecallAuditEvent event)? onRecall;
+
+  /// Whether the bumped->recall action is offered. The LIVE board passes false
+  /// (the backend allows forward transitions only, so a local-only recall
+  /// would lie and revert on the next poll); the demo board keeps it.
+  final bool allowRecall;
+
+  /// Optional per-ticket kitchen print-job status label (device settings
+  /// sprint, Part D) — the LIVE board wires the print controller through
+  /// here; null (demo/tests) renders no status line.
+  final String? Function(KdsTicketView ticket)? printStatusFor;
+
+  /// Optional sink invoked AFTER a successful forward advance (sprint): the
+  /// LIVE board pushes the matching `order.status` through `public.sync_push`
+  /// so the kitchen's progress persists (the next poll re-syncs the board to
+  /// the server's state either way — the server always wins). Null in demo
+  /// mode (local-only board, nothing to persist).
+  final void Function(KdsTicketView ticket, KitchenTicketStatus to)? onAdvanced;
 
   @override
   State<KdsScreen> createState() => _KdsScreenState();
@@ -35,11 +71,14 @@ class _KdsScreenState extends State<KdsScreen> {
   RecallAuditEvent? lastRecallEvent;
 
   /// Advance [ticket] to [to] via the existing forward state-machine edges
-  /// (acknowledge / start / mark-ready / bump). Local in-memory only.
+  /// (acknowledge / start / mark-ready / bump). Mutates the local view first
+  /// (instant feedback), then notifies [KdsScreen.onAdvanced] so a LIVE board
+  /// can persist the transition (demo boards pass null — local only).
   void _advance(KdsTicketView ticket, KitchenTicketStatus to) {
     setState(() {
       ticket.status = KitchenTicketStateMachine.transition(ticket.status, to);
     });
+    widget.onAdvanced?.call(ticket, ticket.status);
   }
 
   void _recall(KdsTicketView ticket) {
@@ -60,6 +99,19 @@ class _KdsScreenState extends State<KdsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
+    final body = widget.tickets.isEmpty
+        ? KdsStateMessage(
+            icon: Icons.restaurant_outlined,
+            message: l10n.kdsEmptyState,
+          )
+        : KdsBoard(
+            tickets: widget.tickets,
+            l10n: l10n,
+            onAdvance: _advance,
+            onRecall: widget.allowRecall ? _recall : null,
+            printStatusFor: widget.printStatusFor,
+          );
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -73,18 +125,28 @@ class _KdsScreenState extends State<KdsScreen> {
             Text(l10n.kdsAppTitle),
           ],
         ),
+        actions: widget.appBarActions,
       ),
-      body: widget.tickets.isEmpty
-          ? KdsStateMessage(
-              icon: Icons.restaurant_outlined,
-              message: l10n.kdsEmptyState,
+      body: widget.showStaleBanner
+          ? Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(
+                    RestoflowSpacing.md,
+                    RestoflowSpacing.md,
+                    RestoflowSpacing.md,
+                    0,
+                  ),
+                  child: RestoflowNoticeBanner(
+                    tone: RestoflowTone.warning,
+                    icon: Icons.cloud_off_outlined,
+                    body: l10n.kdsStaleBanner,
+                  ),
+                ),
+                Expanded(child: body),
+              ],
             )
-          : KdsBoard(
-              tickets: widget.tickets,
-              l10n: l10n,
-              onAdvance: _advance,
-              onRecall: _recall,
-            ),
+          : body,
     );
   }
 }

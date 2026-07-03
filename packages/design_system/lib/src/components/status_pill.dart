@@ -33,7 +33,7 @@ class RestoflowStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final style = tone.style(theme.colorScheme);
+    final style = tone.styleOf(theme);
     final textStyle =
         (dense ? theme.textTheme.labelSmall : theme.textTheme.labelLarge)
             ?.copyWith(color: style.onContainer, fontWeight: FontWeight.w700);

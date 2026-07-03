@@ -154,6 +154,13 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
+    String? itemType,
+    List<String> tags = const [],
+    int? prepMinutes,
+    String? sku,
+    String? kitchenNote,
+    Map<String, dynamic> attributes = const {},
   }) async {
     if (readOnly) return _denied(MenuEntityType.item);
     final created = id == null;
@@ -172,6 +179,19 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       defaultStationId: defaultStationId,
       displayOrder: displayOrder,
       isActive: isActive,
+      // Mirrors the server: null/blank = clear (full-state upsert).
+      imagePath: (imagePath == null || imagePath.trim().isEmpty)
+          ? null
+          : imagePath,
+      itemType: itemType,
+      tags: List.unmodifiable(tags),
+      prepMinutes: prepMinutes,
+      // Mirrors the server normalization: blank text = unset.
+      sku: (sku == null || sku.trim().isEmpty) ? null : sku.trim(),
+      kitchenNote: (kitchenNote == null || kitchenNote.trim().isEmpty)
+          ? null
+          : kitchenNote.trim(),
+      attributes: Map.unmodifiable(attributes),
       deletedAt: existing?.deletedAt,
     );
     _upsert(_items, row, (i) => i.id);
@@ -250,8 +270,20 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
+    bool allowQuantity = false,
+    int? maxQuantity,
   }) async {
     if (readOnly) return _denied(MenuEntityType.modifier);
+    // Mirrors the server rule: allow_quantity is only meaningful for
+    // multi-select groups — a single-select group with allow_quantity is
+    // REJECTED (never silently normalized), same envelope as the RPC.
+    if (selectionType == 'single' && allowQuantity) {
+      return const Failure(
+        MenuValidationRejected(
+          'allow_quantity requires selection_type multiple',
+        ),
+      );
+    }
     final created = id == null;
     final rowId = id ?? _newId();
     final existing = _findById(_modifiers, rowId, (m) => m.id);
@@ -268,6 +300,8 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       isRequired: isRequired,
       displayOrder: displayOrder,
       isActive: isActive,
+      allowQuantity: allowQuantity,
+      maxQuantity: maxQuantity,
       deletedAt: existing?.deletedAt,
     );
     _upsert(_modifiers, row, (m) => m.id);

@@ -45,7 +45,7 @@ insert into app_users (id, email) values
 insert into memberships (id, app_user_id, organization_id, role) values
   ('00000000-0000-0000-0000-0000000ab0a1', '00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000000a0', 'cashier');  -- org-wide (covers any scope)
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id, pin_credential_ref) values
-  ('00000000-0000-0000-0000-0000000ef0a0', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000ab0a1', 'ref:A');
+  ('00000000-0000-0000-0000-0000000ef0a0', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000ab0a1', extensions.crypt('ref:A', extensions.gen_salt('bf')));
 
 -- ---- Org B: a distinct org + user/employee (for the cross-org 42501 case) ------
 insert into organizations (id, name, slug, default_currency) values
@@ -59,7 +59,7 @@ insert into app_users (id, email) values
 insert into memberships (id, app_user_id, organization_id, role) values
   ('00000000-0000-0000-0000-0000000ab0b1', '00000000-0000-0000-0000-0000000000bb', '00000000-0000-0000-0000-0000000000b0', 'cashier');
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id, pin_credential_ref) values
-  ('00000000-0000-0000-0000-0000000ef0b0', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000b1c1', '00000000-0000-0000-0000-0000000000bb', '00000000-0000-0000-0000-0000000ab0b1', 'ref:B');
+  ('00000000-0000-0000-0000-0000000ef0b0', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000b1c1', '00000000-0000-0000-0000-0000000000bb', '00000000-0000-0000-0000-0000000ab0b1', extensions.crypt('ref:B', extensions.gen_salt('bf')));
 
 -- ============================================================================
 -- (A) STRUCTURE / SIGNATURE  (1-4)

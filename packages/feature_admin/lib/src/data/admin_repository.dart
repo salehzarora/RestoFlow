@@ -82,4 +82,16 @@ abstract class AdminRepository {
   /// `public.start_device_session` — requires `active`; returns the plaintext
   /// session token ONCE.
   Future<AdminResult<SessionStarted>> startDeviceSession(String deviceId);
+
+  /// `public.revoke_device_management` — manager+ revokes a device: its pairing
+  /// and sessions are ended and the device falls back to the pairing screen.
+  Future<AdminResult<AdminDevice>> revokeDevice(String deviceId);
+
+  /// Whether the MANAGER-side lifecycle simulation (redeem/approve/activate/
+  /// start-session buttons) applies. The demo store simulates the full RF-112
+  /// lifecycle (true). The REAL backend pairs device-originated (RF-161): the
+  /// device redeems its code itself and `code_issued -> active` collapses, so
+  /// the real repository returns false and the UI hides those manual actions
+  /// (issue-code + revoke remain).
+  bool get supportsManualLifecycle => true;
 }

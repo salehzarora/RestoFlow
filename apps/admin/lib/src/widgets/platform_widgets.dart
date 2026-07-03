@@ -70,9 +70,10 @@ class PlatformSectionRow extends StatelessWidget {
   }
 }
 
-/// One recent-activity row: a shared status pill for the action (danger when it
-/// is a warning event, neutral otherwise) + the readable summary on the first
-/// line, with the timestamp muted beneath (RF-141C).
+/// One recent-activity row: the readable summary leads; the raw action key
+/// (a wire identifier, deliberately untranslated) is de-emphasized into a
+/// small muted pill on the meta line next to the timestamp — danger-toned
+/// when the event is a warning (RF-141C).
 class PlatformActivityTile extends StatelessWidget {
   const PlatformActivityTile({required this.event, super.key});
 
@@ -87,6 +88,13 @@ class PlatformActivityTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            event.summary,
+            style: theme.textTheme.titleSmall,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: RestoflowSpacing.xs),
           Row(
             children: [
               RestoflowStatusPill(
@@ -96,20 +104,15 @@ class PlatformActivityTile extends StatelessWidget {
               const SizedBox(width: RestoflowSpacing.sm),
               Expanded(
                 child: Text(
-                  event.summary,
-                  style: theme.textTheme.titleSmall,
+                  event.timestampLabel,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: RestoflowSpacing.xs),
-          Text(
-            event.timestampLabel,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
           ),
         ],
       ),

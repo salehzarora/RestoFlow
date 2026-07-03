@@ -6,7 +6,10 @@
 /// NEVER fabricates a paired device — [isPaired] is true only when a real
 /// [deviceId] is present. Pure-Dart (no Flutter), so it is reusable across apps
 /// and unit-testable. It carries NO device secret / session token — those are
-/// handled per backend policy and never stored or logged here.
+/// handled per backend policy and never stored or logged here. The
+/// [deviceSessionId] is a server-minted session HANDLE (not the token): it is
+/// held in memory only, re-derived on every launch via `restore_device_session`,
+/// and never persisted client-side (RF-161).
 class DeviceContext {
   const DeviceContext({
     required this.organizationId,
@@ -16,6 +19,7 @@ class DeviceContext {
     this.stationType,
     this.deviceId,
     this.deviceType,
+    this.deviceSessionId,
     this.displayName,
     this.pairedAt,
   });
@@ -38,6 +42,11 @@ class DeviceContext {
   /// The device kind: `pos` or `kds` (when known).
   final String? deviceType;
 
+  /// The ACTIVE device session id (`p_device_session_id` for
+  /// `start_pin_session`), or null. A capability HANDLE, not the token: held in
+  /// memory only, re-derived each launch via restore, never persisted (RF-161).
+  final String? deviceSessionId;
+
   /// A human display name for the device (non-secret), or null.
   final String? displayName;
 
@@ -59,6 +68,7 @@ class DeviceContext {
     String? stationType,
     String? deviceId,
     String? deviceType,
+    String? deviceSessionId,
     String? displayName,
     DateTime? pairedAt,
   }) => DeviceContext(
@@ -69,6 +79,7 @@ class DeviceContext {
     stationType: stationType ?? this.stationType,
     deviceId: deviceId ?? this.deviceId,
     deviceType: deviceType ?? this.deviceType,
+    deviceSessionId: deviceSessionId ?? this.deviceSessionId,
     displayName: displayName ?? this.displayName,
     pairedAt: pairedAt ?? this.pairedAt,
   );

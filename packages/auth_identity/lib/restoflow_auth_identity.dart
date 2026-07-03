@@ -14,9 +14,14 @@ export 'src/auth_context_repository.dart';
 // RF-153: shared device/station pairing context + repository seam (reused by
 // dashboard/POS/KDS).
 export 'src/device_context.dart';
+export 'src/device_image_url_resolver.dart';
 export 'src/device_pairing_repository.dart';
+// Device settings sprint: the safe per-device printer-assignments projection.
+export 'src/device_printer_assignments.dart';
 // RF-161: the device-session secret store abstraction (raw token -> secure storage).
 export 'src/device_session_secret_store.dart';
+// Sprint: the money-free device staff directory for the POS/KDS PIN pad.
+export 'src/device_staff.dart';
 export 'src/auth_gate_state.dart';
 export 'src/auth_failure.dart';
 export 'src/membership_context.dart';

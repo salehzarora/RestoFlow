@@ -94,6 +94,9 @@ void main() {
         'orders',
         'order_items',
         'order_item_modifiers',
+        // Money-free dining-table directory (demo-readiness sprint) — the KDS
+        // resolves orders.table_id to a human label; still no financial entity.
+        'tables',
       ]);
     },
   );

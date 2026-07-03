@@ -93,73 +93,84 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(RestoflowSpacing.lg),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: RestoflowSectionCard(
-                title: l10n.onboardingTitle,
-                subtitle: l10n.onboardingIntro,
+              constraints: const BoxConstraints(
+                maxWidth: RestoflowPanelWidths.dialog,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextFormField(
-                          key: const Key('onboarding-restaurant'),
-                          controller: _restaurant,
-                          enabled: !_busy,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: InputDecoration(
-                            labelText: l10n.onboardingRestaurantNameLabel,
-                            prefixIcon: const Icon(Icons.storefront_outlined),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? l10n.onboardingRestaurantNameRequired
-                              : null,
-                        ),
-                        const SizedBox(height: RestoflowSpacing.md),
-                        TextFormField(
-                          key: const Key('onboarding-branch'),
-                          controller: _branch,
-                          enabled: !_busy,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: InputDecoration(
-                            labelText: l10n.onboardingBranchNameLabel,
-                            prefixIcon: const Icon(
-                              Icons.store_mall_directory_outlined,
+                  // Brand hero: a welcoming identity above the setup card.
+                  RestoflowBrandMark(
+                    title: l10n.dashboardAppTitle,
+                    tagline: l10n.authBrandTagline,
+                  ),
+                  const SizedBox(height: RestoflowSpacing.xl),
+                  RestoflowSectionCard(
+                    title: l10n.onboardingTitle,
+                    subtitle: l10n.onboardingIntro,
+                    children: [
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextFormField(
+                              key: const Key('onboarding-restaurant'),
+                              controller: _restaurant,
+                              enabled: !_busy,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: InputDecoration(
+                                labelText: l10n.onboardingRestaurantNameLabel,
+                                prefixIcon: const Icon(
+                                  Icons.storefront_outlined,
+                                ),
+                              ),
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? l10n.onboardingRestaurantNameRequired
+                                  : null,
                             ),
-                          ),
+                            const SizedBox(height: RestoflowSpacing.md),
+                            TextFormField(
+                              key: const Key('onboarding-branch'),
+                              controller: _branch,
+                              enabled: !_busy,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: InputDecoration(
+                                labelText: l10n.onboardingBranchNameLabel,
+                                prefixIcon: const Icon(
+                                  Icons.store_mall_directory_outlined,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_errorKind != null) ...[
+                        const SizedBox(height: RestoflowSpacing.md),
+                        RestoflowNoticeBanner(
+                          tone: RestoflowTone.danger,
+                          body: _errorMessage(l10n, _errorKind!),
                         ),
                       ],
-                    ),
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      FilledButton.icon(
+                        key: const Key('onboarding-submit'),
+                        onPressed: _busy ? null : _submit,
+                        icon: _busy
+                            ? const RestoflowInlineSpinner()
+                            : const Icon(Icons.add_business_outlined),
+                        label: Text(l10n.onboardingCreateAction),
+                      ),
+                      if (widget.onSignOut != null) ...[
+                        const SizedBox(height: RestoflowSpacing.sm),
+                        TextButton(
+                          key: const Key('onboarding-signout'),
+                          onPressed: _busy ? null : widget.onSignOut,
+                          child: Text(l10n.authSignOut),
+                        ),
+                      ],
+                    ],
                   ),
-                  if (_errorKind != null) ...[
-                    const SizedBox(height: RestoflowSpacing.md),
-                    RestoflowNoticeBanner(
-                      tone: RestoflowTone.danger,
-                      body: _errorMessage(l10n, _errorKind!),
-                    ),
-                  ],
-                  const SizedBox(height: RestoflowSpacing.lg),
-                  FilledButton.icon(
-                    key: const Key('onboarding-submit'),
-                    onPressed: _busy ? null : _submit,
-                    icon: _busy
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add_business_outlined),
-                    label: Text(l10n.onboardingCreateAction),
-                  ),
-                  if (widget.onSignOut != null) ...[
-                    const SizedBox(height: RestoflowSpacing.sm),
-                    TextButton(
-                      key: const Key('onboarding-signout'),
-                      onPressed: _busy ? null : widget.onSignOut,
-                      child: Text(l10n.authSignOut),
-                    ),
-                  ],
                 ],
               ),
             ),

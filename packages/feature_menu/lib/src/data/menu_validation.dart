@@ -47,3 +47,13 @@ MenuFieldError? validateMaxSelect(int? maxSelect, int minSelect) {
   if (maxSelect < minSelect) return MenuFieldError.maxLessThanMin;
   return null;
 }
+
+/// `max_quantity` (per-option units cap while quantity is allowed) is either
+/// `null` (no cap) or an integer `> 0`. A non-positive cap reuses the
+/// integer-amount error code (no dedicated l10n key; the caller already maps
+/// a non-parsing input to the same code).
+MenuFieldError? validateMaxQuantity(int? maxQuantity) {
+  if (maxQuantity == null) return null;
+  if (maxQuantity <= 0) return MenuFieldError.notAnInteger;
+  return null;
+}

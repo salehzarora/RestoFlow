@@ -166,6 +166,12 @@ class AdminController {
 
   Future<AdminResult<SessionStarted>> startDeviceSession(String deviceId) =>
       _run(() => _repo.startDeviceSession(deviceId), adminDevicesProvider);
+
+  Future<AdminResult<AdminDevice>> revokeDevice(String deviceId) =>
+      _run(() => _repo.revokeDevice(deviceId), adminDevicesProvider);
+
+  /// See [AdminRepository.supportsManualLifecycle].
+  bool get supportsManualLifecycle => _repo.supportsManualLifecycle;
 }
 
 /// The admin write controller for the active scope.

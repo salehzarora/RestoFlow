@@ -3,6 +3,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/demo_tables.dart';
+import 'pos_session.dart';
 
 /// Immutable selection state for the active order's service mode (RF-114): the
 /// chosen [OrderType] and, for dine-in, the assigned [DemoTable].
@@ -68,13 +69,17 @@ final orderSetupControllerProvider =
     );
 
 /// The tables repository (RF-114). Selects by client runtime mode (M7): the
-/// in-memory [DemoTablesStore] in demo mode (the DEFAULT), or the
-/// [RealTablesRepository] skeleton in real mode. Tests can override either this
-/// provider or [runtimeConfigProvider] to force a mode.
+/// in-memory [DemoTablesStore] in demo mode (the DEFAULT), or the REAL
+/// `public.pos_tables` read over the paired device's authenticated transport +
+/// PIN session (demo-readiness sprint; fail-closed without either). Tests can
+/// override this provider or [runtimeConfigProvider] to force a mode.
 final tablesRepositoryProvider = Provider<TablesRepository>((ref) {
   final cfg = ref.watch(runtimeConfigProvider);
   if (cfg.isDemoMode) return DemoTablesStore();
-  return RealTablesRepository(cfg.supabase);
+  return RealTablesRepository(
+    ref.watch(posAuthTransportProvider),
+    ref.watch(posSyncSessionProvider),
+  );
 });
 
 /// Loads the branch's tables for the picker. Async to mirror the future backend

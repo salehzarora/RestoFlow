@@ -5,6 +5,8 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../data/ids.dart';
+
 /// Operator-supplied real-mode PIN/device context (RF-131), read from
 /// `--dart-define`.
 ///
@@ -21,10 +23,12 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 /// is blank, so an unconfigured or partially-configured device yields NO session
 /// and every real-mode write repository fails closed (no false "live" submit).
 ///
-/// SECURITY: [pinVerifier] is the RF-051 INTERIM verifier seam (the backend
-/// currently checks it by plaintext equality - NOT production crypto; a salted
-/// credential scheme is deferred). It is forwarded to the RPC, never logged, and
-/// must be passed at run time only (never committed to source).
+/// SECURITY: [pinVerifier] is the operator's PIN, verified SERVER-SIDE against a
+/// bcrypt hash (the sprint's production verifier replaced the RF-051 interim
+/// equality seam). It is forwarded to the RPC over TLS, never logged, and must be
+/// passed at run time only (never committed to source). The PREFERRED production
+/// path is the interactive PIN screen ([PosSessionController.signInWithPin]);
+/// this dart-define config remains an operator fallback.
 class PosRealSessionConfig {
   const PosRealSessionConfig._({
     required this.deviceId,
@@ -141,6 +145,15 @@ final posAuthTransportProvider = Provider<SyncRpcTransport?>((ref) {
   return SupabaseAuthBootstrap(config: supabase).createRpcTransport();
 });
 
+/// The device's read-only signed-URL resolver for menu images (menu/media
+/// sprint). Null in demo mode and whenever the real device bootstrap did not
+/// run — the POS then renders its imageless cards (fail-soft; images are an
+/// enhancement, never load-bearing). Overridden in `main.dart` with the
+/// resolver riding the SAME anonymously-authenticated client as the transport.
+final posImageUrlResolverProvider = Provider<DeviceImageUrlResolver?>(
+  (ref) => null,
+);
+
 /// Establishes and owns the POS [SyncSession] for real mode (RF-131).
 ///
 /// In demo mode (the DEFAULT), and whenever the Supabase transport or the
@@ -173,14 +186,101 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
       pinVerifier: config.pinVerifier,
     );
     return result.fold<SyncSession?>(
-      (started) => SyncSession(
-        pinSessionId: started.pinSessionId,
-        deviceId: config.deviceId,
-      ),
+      (started) {
+        final session = SyncSession(
+          pinSessionId: started.pinSessionId,
+          deviceId: config.deviceId,
+        );
+        unawaited(_openShiftBestEffort(transport, session));
+        return session;
+      },
       // Wrong PIN / locked-or-precondition (42501) / transient: fail closed.
       (failure) => null,
     );
   }
+
+  /// Best-effort shift bootstrap (review fix). RF-055 made `record_payment`
+  /// REQUIRE an open shift + active cash drawer, and this build has no shift UI
+  /// yet — so the POS opens a REAL shift (opening float 0, server rows, audited)
+  /// through the same `sync_push` pipeline right after a staff session starts.
+  /// A rejection (a shift is already open for the device, or the operator's
+  /// role may not open one) is accepted silently: payment surfaces its own
+  /// honest server error if no shift ends up open. Closing/reconciling shifts
+  /// (and a real opening-float entry) remain deferred with the RF-055 UI.
+  Future<void> _openShiftBestEffort(
+    SyncRpcTransport transport,
+    SyncSession session,
+  ) async {
+    final ids = RandomClientIdGenerator();
+    final shiftId = ids.newId();
+    try {
+      await transport.invoke('sync_push', <String, dynamic>{
+        'p_pin_session_id': session.pinSessionId,
+        'p_device_id': session.deviceId,
+        'p_operations': <dynamic>[
+          <String, dynamic>{
+            'local_operation_id': ids.newId(),
+            'operation_type': 'shift.open',
+            'target_entity': 'shift',
+            'target_id': shiftId,
+            'client_created_at': DateTime.now().toIso8601String(),
+            'payload': <String, dynamic>{
+              'shift_id': shiftId,
+              'cash_drawer_session_id': ids.newId(),
+              'opening_float_minor': 0,
+            },
+          },
+        ],
+      });
+    } catch (_) {
+      // Best-effort: the payment path reports its own error if no shift opened.
+    }
+  }
+
+  /// INTERACTIVE PIN sign-in (sprint): establishes the session from the RESTORED
+  /// device context (the paired device's id + in-memory device-session handle)
+  /// plus the staff member + typed PIN from the shared [PinLoginScreen]. The PIN
+  /// travels over the authenticated TLS transport to `start_pin_session` and is
+  /// verified server-side (bcrypt); it is never stored or logged. Returns null
+  /// on success (the session is exposed via [posSyncSessionProvider]) or a
+  /// typed, safe [PinLoginError] for the screen to show. Fail-closed: any
+  /// failure leaves the session null.
+  Future<PinLoginError?> signInWithPin({
+    required String deviceId,
+    required String deviceSessionId,
+    required String employeeProfileId,
+    required String pin,
+  }) async {
+    final transport = ref.read(posAuthTransportProvider);
+    if (transport == null) return PinLoginError.unavailable;
+    final result = await PinSessionService(transport).startPinSession(
+      deviceSessionId: deviceSessionId,
+      employeeProfileId: employeeProfileId,
+      pinVerifier: pin,
+    );
+    return result.fold<PinLoginError?>(
+      (started) {
+        final session = SyncSession(
+          pinSessionId: started.pinSessionId,
+          deviceId: deviceId,
+        );
+        state = AsyncData(session);
+        // A cashier needs an open shift before payments (RF-055); best-effort.
+        unawaited(_openShiftBestEffort(transport, session));
+        return null;
+      },
+      (failure) => switch (failure) {
+        AuthWrongPinFailure() => PinLoginError.wrongPin,
+        AuthLockedOrPreconditionFailure() => PinLoginError.locked,
+        AuthNetworkFailure() => PinLoginError.network,
+        _ => PinLoginError.unavailable,
+      },
+    );
+  }
+
+  /// Ends the current staff session locally (the server session expires on its
+  /// own window — Q-009). The POS falls back to the PIN screen.
+  void endSession() => state = const AsyncData(null);
 }
 
 /// Owns [PosSessionController].

@@ -99,6 +99,13 @@ class RpcMenuWriter implements MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
+    String? itemType,
+    List<String> tags = const [],
+    int? prepMinutes,
+    String? sku,
+    String? kitchenNote,
+    Map<String, dynamic> attributes = const {},
   }) {
     return _invoke(MenuRpcNames.upsertItem, {
       'p_organization_id': scope.organizationId,
@@ -113,6 +120,16 @@ class RpcMenuWriter implements MenuWriter {
       'p_default_station_id': defaultStationId,
       'p_display_order': displayOrder,
       'p_is_active': isActive,
+      // null = clear/unset (the editor sends the item's full state). Empty
+      // tags/attributes travel as null — one canonical "unset" wire shape
+      // (matching the server-side normalization).
+      'p_image_path': imagePath,
+      'p_item_type': itemType,
+      'p_tags': tags.isEmpty ? null : tags,
+      'p_prep_minutes': prepMinutes,
+      'p_sku': sku,
+      'p_kitchen_note': kitchenNote,
+      'p_attributes': attributes.isEmpty ? null : attributes,
     }, MenuEntityType.item);
   }
 
@@ -174,6 +191,8 @@ class RpcMenuWriter implements MenuWriter {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
+    bool allowQuantity = false,
+    int? maxQuantity,
   }) {
     return _invoke(MenuRpcNames.upsertModifier, {
       'p_organization_id': scope.organizationId,
@@ -188,6 +207,10 @@ class RpcMenuWriter implements MenuWriter {
       'p_is_required': isRequired,
       'p_display_order': displayOrder,
       'p_is_active': isActive,
+      // Quantity settings — APPENDED after p_is_active (the RPC's frozen
+      // positional tail; DROP+recreate rule on the backend side).
+      'p_allow_quantity': allowQuantity,
+      'p_max_quantity': maxQuantity,
     }, MenuEntityType.modifier);
   }
 

@@ -164,6 +164,9 @@ void main() {
     // Switch to the "Create account" tab (the segment is unique in sign-in mode).
     await tester.tap(find.text(l10n.authCreateAccountTab));
     await tester.pumpAndSettle();
+    // The sign-up card (brand hero + four fields) can extend past the default
+    // test viewport — scroll the submit into view before tapping.
+    await tester.ensureVisible(find.byKey(const Key('auth-submit')));
     await tester.tap(find.byKey(const Key('auth-submit')));
     await tester.pumpAndSettle();
 
@@ -303,13 +306,16 @@ void main() {
     'login + onboarding screens render in Arabic (RTL) without error',
     (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
-          locale: const Locale('ar'),
-          localizationsDelegates: restoflowLocalizationsDelegates,
-          supportedLocales: kSupportedLocales,
-          home: LoginSignupScreen(
-            authRepository: FakeAuthRepository(),
-            onSignedUpWithSession: (_, _) {},
+        // ProviderScope: the login app bar hosts the language selector (I).
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: LoginSignupScreen(
+              authRepository: FakeAuthRepository(),
+              onSignedUpWithSession: (_, _) {},
+            ),
           ),
         ),
       );

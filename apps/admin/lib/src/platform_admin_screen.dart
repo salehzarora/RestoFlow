@@ -8,6 +8,7 @@ import 'data/platform_admin_repository.dart';
 import 'data/platform_overview.dart';
 import 'state/platform_admin_providers.dart';
 import 'widgets/platform_widgets.dart';
+import 'widgets/language_selector.dart';
 
 /// The RF-120 / RF-128 / RF-134 platform-admin overview: a data-source notice
 /// banner, the platform "as of" context, platform KPI cards, an organizations
@@ -56,6 +57,8 @@ class PlatformAdminScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          // Sprint (I): the language switcher is visible on the admin surface.
+          const LanguageSelector(),
           IconButton(
             key: const Key('platform-refresh-button'),
             onPressed: refresh,
@@ -85,7 +88,7 @@ class _OverviewContent extends StatelessWidget {
   /// are shown — see [PlatformAdminScreen] (RF-134).
   final bool isDemo;
 
-  static const double _twoColBreakpoint = 900;
+  static const double _twoColBreakpoint = RestoflowBreakpoints.wide;
 
   @override
   Widget build(BuildContext context) {
@@ -183,10 +186,11 @@ class _OverviewContent extends StatelessWidget {
                 '${org.branchCount} ${l10n.adminKpiBranches} · '
                 '${l10n.adminCreatedLabel} ${org.createdAtLabel}',
             trailingValue: org.plan,
+            // Tone only — the label stays the raw wire status string.
             trailing: RestoflowStatusPill(
               label: org.status,
               tone: org.status == 'active'
-                  ? RestoflowTone.neutral
+                  ? RestoflowTone.success
                   : RestoflowTone.danger,
             ),
           ),
@@ -332,9 +336,9 @@ class _KpiGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
+        final columns = constraints.maxWidth >= RestoflowBreakpoints.wide
             ? 4
-            : (constraints.maxWidth >= 560 ? 2 : 1);
+            : (constraints.maxWidth >= RestoflowBreakpoints.compact ? 2 : 1);
         const gap = RestoflowSpacing.md;
         final gutters = gap * (columns - 1);
         final cardWidth = (constraints.maxWidth - gutters) / columns;
@@ -351,28 +355,17 @@ class _KpiGrid extends StatelessWidget {
 }
 
 /// The loading state while the overview is fetched through the repository.
+/// Exactly ONE CircularProgressIndicator (loading-state test contract).
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return Center(
+    return RestoflowStateView(
       key: const Key('platform-loading'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: RestoflowSpacing.lg),
-          Text(
-            l10n.adminLoading,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+      showSpinner: true,
+      message: l10n.adminLoading,
     );
   }
 }
@@ -397,7 +390,6 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     final kind = error is PlatformAdminException
         ? (error as PlatformAdminException).kind
         : PlatformAdminErrorKind.unexpected;
@@ -407,7 +399,7 @@ class _ErrorState extends StatelessWidget {
         return _SafeState(
           stateKey: const Key('platform-not-configured'),
           icon: Icons.cloud_off_outlined,
-          iconColor: theme.colorScheme.onSurfaceVariant,
+          tone: RestoflowTone.neutral,
           title: l10n.adminNotConfiguredTitle,
           body: l10n.adminNotConfiguredBody,
         );
@@ -415,7 +407,7 @@ class _ErrorState extends StatelessWidget {
         return _SafeState(
           stateKey: const Key('platform-access-denied'),
           icon: Icons.lock_outline,
-          iconColor: theme.colorScheme.error,
+          tone: RestoflowTone.danger,
           title: l10n.adminAccessDeniedTitle,
           body: l10n.adminAccessDeniedBody,
         );
@@ -423,7 +415,7 @@ class _ErrorState extends StatelessWidget {
         return _SafeState(
           stateKey: const Key('platform-error'),
           icon: Icons.error_outline,
-          iconColor: theme.colorScheme.error,
+          tone: RestoflowTone.danger,
           title: l10n.adminError,
           action: FilledButton.icon(
             key: const Key('platform-retry-button'),
@@ -436,15 +428,16 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-/// A centered icon + title + optional body + optional action, shared by the
-/// failure safe states (RF-134). [stateKey] keys the outer widget so each state
-/// is individually findable in tests.
+/// A tone-aware safe state shared by the failure states (RF-134), rendered
+/// through the shared [RestoflowStateView] so failures look like failures.
+/// [stateKey] keys the state view so each state is individually findable in
+/// tests.
 class _SafeState extends StatelessWidget {
   const _SafeState({
     required this.stateKey,
     required this.icon,
     required this.title,
-    this.iconColor,
+    this.tone,
     this.body,
     this.action,
   });
@@ -452,44 +445,20 @@ class _SafeState extends StatelessWidget {
   final Key stateKey;
   final IconData icon;
   final String title;
-  final Color? iconColor;
+  final RestoflowTone? tone;
   final String? body;
   final Widget? action;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
+    final actionWidget = action;
+    return RestoflowStateView(
       key: stateKey,
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: iconColor),
-            const SizedBox(height: RestoflowSpacing.md),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium,
-            ),
-            if (body != null) ...[
-              const SizedBox(height: RestoflowSpacing.sm),
-              Text(
-                body!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-            if (action != null) ...[
-              const SizedBox(height: RestoflowSpacing.lg),
-              action!,
-            ],
-          ],
-        ),
-      ),
+      icon: icon,
+      tone: tone,
+      title: title,
+      message: body,
+      actions: [if (actionWidget != null) actionWidget],
     );
   }
 }
@@ -501,27 +470,10 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return Center(
+    return RestoflowStateView(
       key: const Key('platform-empty'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 48,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: RestoflowSpacing.md),
-          Text(
-            l10n.adminEmpty,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.inbox_outlined,
+      title: l10n.adminEmpty,
     );
   }
 }

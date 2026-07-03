@@ -65,7 +65,8 @@ class AdminScope {
     restaurantName: 'Olive & Thyme — Downtown',
     branchId: 'demo-branch',
     branchName: 'Main Street',
-    currencyCode: 'USD',
+    // ILS-only for the pilot (demo mirrors the real default; Q-007 interim).
+    currencyCode: 'ILS',
     actingRole: MembershipRole.orgOwner,
   );
 }

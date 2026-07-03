@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart'
+    show SyncRpcTransport;
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminRepository, AdminScope;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
+    show MenuImageStorage, MenuReadSource, MenuWriter;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,7 +17,12 @@ import 'src/auth/onboarding_repository.dart';
 import 'src/auth/supabase_dashboard_auth.dart';
 import 'src/context/device_context.dart';
 import 'src/context/selected_context_store.dart';
+import 'src/context/tenant_context_resolver.dart';
 import 'src/dashboard_shell.dart';
+import 'src/printers/printers_repository.dart';
+import 'src/staff/staff_repository.dart';
+import 'src/state/locale_controller.dart';
+import 'src/tables/tables_repository.dart';
 
 /// Composition root (RF-151 + RF-152). In DEMO mode (`RESTOFLOW_DEMO_MODE`
 /// default true) the app renders the existing in-memory demo shell. In REAL mode
@@ -24,9 +33,19 @@ import 'src/dashboard_shell.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final config = RuntimeConfig.fromEnvironment();
+  // Language before first frame: the persisted per-device choice wins; the
+  // FIRST-LAUNCH default is ARABIC (the official language — sprint).
+  final localeOverride = initialLocaleProvider.overrideWithValue(
+    await readPersistedLocale() ?? const Locale('ar'),
+  );
 
   if (config.isDemoMode) {
-    runApp(const ProviderScope(child: DashboardApp(demoMode: true)));
+    runApp(
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const DashboardApp(demoMode: true),
+      ),
+    );
     return;
   }
 
@@ -35,8 +54,9 @@ Future<void> main() async {
     // Real mode but the anon-key config is missing/invalid/service-role: an honest
     // unconfigured state. Real* repos never contact a backend without valid config.
     runApp(
-      const ProviderScope(
-        child: DashboardApp(demoMode: false, realModeUnconfigured: true),
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const DashboardApp(demoMode: false, realModeUnconfigured: true),
       ),
     );
     return;
@@ -48,19 +68,40 @@ Future<void> main() async {
   // public.* RPC calls (identity server-derived from auth.uid()).
   // `publishableKey` is the current name for the PUBLIC anon key (the config
   // already rejects any service-role/secret key — DECISION D-011).
-  await Supabase.initialize(
-    url: supabase.url,
-    publishableKey: supabase.anonKey,
-  );
+  try {
+    await Supabase.initialize(
+      url: supabase.url,
+      publishableKey: supabase.anonKey,
+    );
+  } catch (_) {
+    // Fail-closed: a backend bootstrap failure (malformed URL, storage error)
+    // must never crash or blank the dashboard — show the honest config help
+    // page instead. Never echo the offending value.
+    runApp(
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const DashboardApp(demoMode: false, realModeUnconfigured: true),
+      ),
+    );
+    return;
+  }
   final real = buildDashboardRealAuth(Supabase.instance.client);
   runApp(
     ProviderScope(
+      overrides: [localeOverride],
       child: DashboardApp(
         demoMode: false,
         authRepository: real.auth,
         onboardingRepository: real.onboarding,
         fetchContext: real.fetchContext,
         deviceRepositoryFor: real.deviceRepositoryFor,
+        menuReadSource: real.menuReadSource,
+        menuWriter: real.menuWriter,
+        menuImageStorage: real.menuImageStorage,
+        printersRepositoryFor: real.printersRepositoryFor,
+        staffRepositoryFor: real.staffRepositoryFor,
+        tablesRepositoryFor: real.tablesRepositoryFor,
+        reportsTransport: real.transport,
         selectedContextStore: SharedPreferencesSelectedContextStore(),
       ),
     ),
@@ -73,7 +114,7 @@ Future<void> main() async {
 /// through [DashboardAuthFlow]: sign in / sign up -> restaurant onboarding ->
 /// (validated) org/branch selection -> the role-gated real dashboard. Money is
 /// integer minor units (DECISION D-007).
-class DashboardApp extends StatelessWidget {
+class DashboardApp extends ConsumerWidget {
   const DashboardApp({
     this.demoMode,
     this.fetchContext,
@@ -82,6 +123,13 @@ class DashboardApp extends StatelessWidget {
     this.selectedContextStore,
     this.deviceContext,
     this.deviceRepositoryFor,
+    this.menuReadSource,
+    this.menuWriter,
+    this.menuImageStorage,
+    this.printersRepositoryFor,
+    this.staffRepositoryFor,
+    this.tablesRepositoryFor,
+    this.reportsTransport,
     this.realModeUnconfigured = false,
     super.key,
   });
@@ -109,16 +157,41 @@ class DashboardApp extends StatelessWidget {
   /// falls back to the demo store otherwise (demo default preserved).
   final AdminRepository Function(AdminScope scope)? deviceRepositoryFor;
 
+  /// The REAL menu seams (sprint): `list_menu` read + `menu_upsert_*` writer.
+  /// Null in demo mode / tests => the Menu tab keeps its labelled demo store.
+  final MenuReadSource? menuReadSource;
+  final MenuWriter? menuWriter;
+
+  /// The REAL item image storage (menu/media sprint — RF-110 bucket over the
+  /// authenticated client). Null in demo mode / tests => the image panel shows
+  /// its honest demo/unavailable state.
+  final MenuImageStorage? menuImageStorage;
+
+  /// Builds the REAL printers repository (RF-150 backend) per admin scope.
+  final PrintersRepository Function(AdminScope scope)? printersRepositoryFor;
+
+  /// Builds the REAL staff/PIN repository per admin scope.
+  final StaffRepository Function(AdminScope scope)? staffRepositoryFor;
+
+  /// Builds the REAL dining-tables repository per admin scope.
+  final TablesAdminRepository Function(AdminScope scope)? tablesRepositoryFor;
+
+  /// The authenticated dashboard transport for the Overview's real
+  /// sales-summary read (sprint). Null in demo mode / tests.
+  final SyncRpcTransport? reportsTransport;
+
   /// True in real mode when the Supabase anon-key config was missing/invalid.
   final bool realModeUnconfigured;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       onGenerateTitle: (context) =>
           AppLocalizations.of(context).dashboardAppTitle,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
+      // Sprint (I): the persisted user-selected language drives the app.
+      locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
       theme: restoflowBaseTheme(),
@@ -130,9 +203,10 @@ class DashboardApp extends StatelessWidget {
     final demo = demoMode ?? authDemoModeEnabled();
     if (demo) return const DashboardShell();
     if (realModeUnconfigured || fetchContext == null) {
-      // Real mode without a usable context fetcher: honest generic error state
-      // (mirrors the prior real-mode-unconfigured behaviour).
-      return const Scaffold(body: AuthErrorView());
+      // Real mode without a usable backend: an honest help page that explains
+      // exactly which --dart-define values real mode needs (never a crash, never
+      // a silent demo fallback).
+      return const RealModeUnconfiguredView();
     }
     return DashboardAuthFlow(
       authRepository: authRepository,
@@ -140,9 +214,34 @@ class DashboardApp extends StatelessWidget {
       fetchContext: fetchContext!,
       selectedContextStore: selectedContextStore,
       deviceContext: deviceContext,
-      onReady: (context, membership) => DashboardShell(
+      // Resolve the EFFECTIVE tenant context first (sprint): an org-wide
+      // owner membership gets a concrete restaurant/branch + the real
+      // currency from `list_org_structure`, so the menu/printers/staff
+      // surfaces work instead of showing scope-blocked states.
+      onReady: (context, membership) => TenantContextLoader(
         membership: membership,
-        deviceRepositoryFor: deviceRepositoryFor,
+        transport: reportsTransport,
+        builder: (context, resolved) {
+          final scope = dashboardAdminScopeFor(
+            resolved.membership,
+            currencyCode: resolved.currencyCode,
+          );
+          return DashboardShell(
+            membership: resolved.membership,
+            currencyCode: resolved.currencyCode,
+            deviceRepositoryFor: deviceRepositoryFor,
+            menuReadSource: menuReadSource,
+            menuWriter: menuWriter,
+            menuImageStorage: menuImageStorage,
+            printersRepository: printersRepositoryFor?.call(scope),
+            staffRepository: staffRepositoryFor?.call(scope),
+            tablesRepository: tablesRepositoryFor?.call(scope),
+            reportsTransport: reportsTransport,
+            // Sign-out from the shell header; the auth flow's session stream
+            // drives the transition + context clearing.
+            onSignOut: authRepository == null ? null : authRepository!.signOut,
+          );
+        },
       ),
     );
   }

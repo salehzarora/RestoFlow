@@ -2,22 +2,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+
+import 'package:restoflow_core/restoflow_core.dart';
 
 import '../data/order_submission.dart';
 import '../format/money_format.dart';
 import '../state/outbox_controller.dart';
 import '../state/payment_controller.dart';
+import '../state/pos_auto_print_prefs.dart';
+import '../state/pos_printer_assignments.dart';
+import '../state/receipt_print_controller.dart';
 import '../state/submitted_order_view.dart';
 import 'cash_payment_sheet.dart';
 import 'receipt_preview.dart';
+import 'receipt_print_preview.dart';
 
-/// In-place confirmation shown inside the cart panel after a local demo submit
-/// (RF-101): success header, demo order number, a "Submitted" status chip, the
-/// submitted item summary, the subtotal, a demo notice, and a New order action.
+/// In-place confirmation shown inside the cart panel after a submit (RF-101):
+/// success header, the order number, a "Submitted" status chip, the submitted
+/// item summary, the subtotal, the sync status, and a New order action.
 ///
-/// Pure presentation over an immutable [SubmittedOrderView]; the reset action is
-/// delegated to [onNewOrder]. Nothing here calls a backend, kitchen, or printer.
+/// MODE-HONEST (demo-readiness sprint): demo shows its demo notices and the
+/// manual "Sync now (demo)" flow; REAL mode auto-pushed at submit, so this
+/// surface reports the true backend state ("Sent — the kitchen display
+/// receives it automatically" / an honest failure with Retry) and never a
+/// demo label. Pure presentation over an immutable [SubmittedOrderView].
 class OrderConfirmation extends ConsumerWidget {
   const OrderConfirmation({
     required this.order,
@@ -33,6 +44,7 @@ class OrderConfirmation extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final subtotalText = MoneyFormatter.format(order.subtotal);
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
 
     // RF-115: live outbox/sync status for this order (null on the RF-101 path).
     final entries = ref.watch(outboxControllerProvider);
@@ -44,6 +56,37 @@ class OrderConfirmation extends ConsumerWidget {
         .watch(paymentControllerProvider)
         .paymentFor(order.orderNumber);
 
+    // Part E: the receipt auto-print trigger. Fires ONLY on THIS order's
+    // payment SUCCESS transition (a failed submit/payment never reaches a
+    // non-null payment, and the controller is idempotent per order besides).
+    // Cashier turned the toggle off => nothing at all; toggle would be on
+    // but no printer => an honest notConfigured marker; otherwise the job is
+    // PREPARED (this build has no bridge transport, so never "printed").
+    ref.listen(paymentControllerProvider, (previous, next) {
+      final paid = next.paymentFor(order.orderNumber);
+      if (paid == null) return;
+      if (previous?.paymentFor(order.orderNumber) != null) return;
+      final assignments = switch (ref
+          .read(posPrinterAssignmentsProvider)
+          .valueOrNull) {
+        Success(:final value) => value,
+        _ => null,
+      };
+      // Demo / unconfigured / failed reads: no assignments, no auto-print.
+      if (assignments == null) return;
+      final stored = ref.read(posAutoPrintReceiptProvider).valueOrNull;
+      if (stored == false) return; // explicitly off — show nothing
+      final printer = assignments.hasEnabledPrinter;
+      ref
+          .read(receiptPrintControllerProvider.notifier)
+          .prepare(
+            orderNumber: order.orderNumber,
+            hasEnabledPrinter: printer,
+            buildDocument: () =>
+                buildReceiptDocument(l10n, order, paid, isDemo: isDemo),
+          );
+    });
+
     return Material(
       color: theme.colorScheme.surfaceContainerLow,
       child: Column(
@@ -53,7 +96,7 @@ class OrderConfirmation extends ConsumerWidget {
               padding: const EdgeInsets.all(RestoflowSpacing.lg),
               children: [
                 _SuccessHeader(title: l10n.posOrderSubmittedTitle),
-                const SizedBox(height: RestoflowSpacing.lg),
+                const SizedBox(height: RestoflowSpacing.md),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(RestoflowSpacing.md),
@@ -61,7 +104,7 @@ class OrderConfirmation extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
                               l10n.posOrderNumberLabel,
@@ -69,11 +112,24 @@ class OrderConfirmation extends ConsumerWidget {
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
-                            Text(
-                              order.orderNumber,
-                              key: const Key('order-number'),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
+                            const SizedBox(width: RestoflowSpacing.sm),
+                            // Design-polish: the number the cashier calls out
+                            // gets the card's largest type; long provisional
+                            // codes scale down instead of overflowing (the
+                            // Text keeps its full data for the key finder).
+                            Expanded(
+                              child: Align(
+                                alignment: AlignmentDirectional.centerEnd,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    order.orderNumber,
+                                    key: const Key('order-number'),
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -110,6 +166,7 @@ class OrderConfirmation extends ConsumerWidget {
                 _SyncStatusCard(
                   entry: entry,
                   l10n: l10n,
+                  isDemo: isDemo,
                   onSync: entry != null && entry.syncState.isPending
                       ? () => outbox.pushEntry(entry.id)
                       : null,
@@ -140,12 +197,22 @@ class OrderConfirmation extends ConsumerWidget {
                   ),
                   const SizedBox(height: RestoflowSpacing.md),
                   // RF-141B: shared design-system notice (subtle info tone).
-                  RestoflowNoticeBanner(
-                    body: l10n.posDemoOrderNotice,
-                    tone: RestoflowTone.info,
-                  ),
-                ] else
+                  // Demo only — a REAL order was actually sent (or shows its
+                  // honest failure above), so the demo disclaimer would lie.
+                  if (isDemo)
+                    RestoflowNoticeBanner(
+                      body: l10n.posDemoOrderNotice,
+                      tone: RestoflowTone.info,
+                    ),
+                ] else ...[
                   ReceiptPreview(order: order, payment: payment),
+                  // Part D: the HONEST receipt print-job status (prepared /
+                  // not configured / failed — never a fake "printed").
+                  _ReceiptPrintStatusLine(
+                    orderNumber: order.orderNumber,
+                    l10n: l10n,
+                  ),
+                ],
               ],
             ),
           ),
@@ -171,9 +238,7 @@ class OrderConfirmation extends ConsumerWidget {
                             ),
                             icon: const Icon(Icons.payments_outlined),
                             label: Text(l10n.posPayCash),
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(52),
-                            ),
+                            style: RestoflowButtonStyles.big(context),
                           ),
                         ),
                         const SizedBox(height: RestoflowSpacing.sm),
@@ -193,9 +258,7 @@ class OrderConfirmation extends ConsumerWidget {
                         onPressed: onNewOrder,
                         icon: const Icon(Icons.add),
                         label: Text(l10n.posNewOrder),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                        ),
+                        style: RestoflowButtonStyles.big(context),
                       ),
                     ),
             ),
@@ -206,6 +269,9 @@ class OrderConfirmation extends ConsumerWidget {
   }
 }
 
+/// Design-polish: a compact HORIZONTAL success header (true-green tone) —
+/// the confirmation is a ~10-second interaction, so the old 72px hero circle
+/// gave way to content the cashier actually needs on-screen.
 class _SuccessHeader extends StatelessWidget {
   const _SuccessHeader({required this.title});
 
@@ -214,27 +280,31 @@ class _SuccessHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
+    final success = RestoflowTone.success.styleOf(theme);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
-          width: 72,
-          height: 72,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer,
+            color: success.container,
             shape: BoxShape.circle,
           ),
           child: Icon(
             Icons.check_circle,
-            size: 44,
-            color: theme.colorScheme.primary,
+            size: RestoflowIconSizes.lg,
+            color: success.accent,
           ),
         ),
-        const SizedBox(height: RestoflowSpacing.md),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
+        const SizedBox(width: RestoflowSpacing.md),
+        Flexible(
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],
@@ -277,6 +347,69 @@ class _ServiceModeRow extends StatelessWidget {
   }
 }
 
+/// The receipt print-job status under the receipt card (Part D): renders
+/// nothing while no job exists (auto-print off / not yet triggered), and the
+/// honest status otherwise. "Printed" is only reachable once a real print
+/// bridge confirms — never in this build.
+class _ReceiptPrintStatusLine extends ConsumerWidget {
+  const _ReceiptPrintStatusLine({
+    required this.orderNumber,
+    required this.l10n,
+  });
+
+  final String orderNumber;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final job = ref.watch(
+      receiptPrintControllerProvider.select((jobs) => jobs[orderNumber]),
+    );
+    if (job == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final (label, tone, icon) = switch (job.status) {
+      PrintJobStatus.prepared => (
+        l10n.printStatusPrepared,
+        RestoflowTone.info,
+        Icons.print_outlined,
+      ),
+      PrintJobStatus.printed => (
+        l10n.printStatusPrinted,
+        RestoflowTone.success,
+        Icons.print,
+      ),
+      PrintJobStatus.failed => (
+        l10n.printStatusFailed,
+        RestoflowTone.danger,
+        Icons.print_disabled,
+      ),
+      PrintJobStatus.notConfigured => (
+        l10n.printStatusNotConfigured,
+        RestoflowTone.neutral,
+        Icons.print_disabled,
+      ),
+    };
+    final style = tone.styleOf(theme);
+    return Padding(
+      key: const Key('receipt-print-status'),
+      padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: RestoflowIconSizes.sm, color: style.accent),
+          const SizedBox(width: RestoflowSpacing.xs),
+          Expanded(
+            child: Text(
+              '${l10n.posReceiptPrintLabel}: $label',
+              style: theme.textTheme.bodySmall?.copyWith(color: style.accent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The live outbox entry whose id is [id], or null.
 OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
   if (id == null) return null;
@@ -287,23 +420,25 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
 }
 
 /// Label + honest note + semantic [RestoflowTone] + icon for a sync state
-/// (RF-141B: tones map to the shared design-system status pill).
+/// (RF-141B: tones map to the shared design-system status pill). The note is
+/// MODE-HONEST: demo says "demo sync", real describes the true backend state.
 ({String label, String note, RestoflowTone tone, IconData icon}) _syncVisual(
   OutboxSyncState state,
-  AppLocalizations l10n,
-) {
+  AppLocalizations l10n, {
+  required bool isDemo,
+}) {
   switch (state) {
     case OutboxSyncState.inFlight:
       return (
         label: l10n.posSyncStateSending,
-        note: l10n.posSyncDemoNotice,
+        note: isDemo ? l10n.posSyncDemoNotice : l10n.posSyncSendingReal,
         tone: RestoflowTone.info,
         icon: Icons.sync,
       );
     case OutboxSyncState.applied:
       return (
         label: l10n.posSyncStateSynced,
-        note: l10n.posSyncDemoNotice,
+        note: isDemo ? l10n.posSyncDemoNotice : l10n.posSyncSentReal,
         tone: RestoflowTone.success,
         icon: Icons.cloud_done_outlined,
       );
@@ -311,7 +446,7 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
     case OutboxSyncState.dead:
       return (
         label: l10n.posSyncStateFailed,
-        note: l10n.posSyncDemoNotice,
+        note: isDemo ? l10n.posSyncDemoNotice : l10n.posSyncFailedReal,
         tone: RestoflowTone.danger,
         icon: Icons.error_outline,
       );
@@ -335,12 +470,14 @@ class _SyncStatusCard extends StatelessWidget {
   const _SyncStatusCard({
     required this.entry,
     required this.l10n,
+    required this.isDemo,
     required this.onSync,
     required this.onRetry,
   });
 
   final OutboxEntry? entry;
   final AppLocalizations l10n;
+  final bool isDemo;
   final VoidCallback? onSync;
   final VoidCallback? onRetry;
 
@@ -348,7 +485,7 @@ class _SyncStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = entry?.syncState ?? OutboxSyncState.pending;
-    final visual = _syncVisual(state, l10n);
+    final visual = _syncVisual(state, l10n, isDemo: isDemo);
     final opRef = entry?.localOperationId;
     final sending = state == OutboxSyncState.inFlight;
     final refLine = opRef == null ? null : '${l10n.posOutboxRefLabel}: $opRef';
@@ -421,11 +558,7 @@ class _SyncStatusCard extends StatelessWidget {
               const SizedBox(height: RestoflowSpacing.md),
               Row(
                 children: [
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  const RestoflowInlineSpinner(size: 16),
                   const SizedBox(width: RestoflowSpacing.sm),
                   Text(
                     l10n.posSyncStateSending,
@@ -443,7 +576,9 @@ class _SyncStatusCard extends StatelessWidget {
                   key: const Key('sync-now-button'),
                   onPressed: onSync,
                   icon: const Icon(Icons.sync, size: 18),
-                  label: Text(l10n.posSyncNow),
+                  // Demo keeps the honest "(demo)" label; a REAL pending entry
+                  // (auto-push interrupted) offers a plain "Send now".
+                  label: Text(isDemo ? l10n.posSyncNow : l10n.posSyncSendNow),
                 ),
               ),
             ] else if (onRetry != null) ...[
@@ -472,28 +607,62 @@ class _ConfirmationLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final label = '${line.quantity}× ${line.name}';
     final lineTotalText = MoneyFormatter.format(line.lineTotal);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.bodyLarge,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyLarge,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                lineTotalText,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-          Text(
-            lineTotalText,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
+          // Selected modifiers (snapshots, pre-formatted 'name ×N' for
+          // quantities) — the deltas are in the total.
+          for (final modifier in line.modifiers)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                '+ $modifier',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
-          ),
+          // The cashier's per-item note, mirroring the cart line.
+          if (line.note != null)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                '${l10n.posItemNoteLabel}: ${line.note}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -270,6 +270,91 @@ void main() {
     });
   });
 
+  // --- Modifier quantities + item notes (product-rescue sprint) -----------
+
+  group('modifier quantities and item notes (additive)', () {
+    ReceiptInput noteInput(ReceiptLocale locale) => ReceiptInput(
+      organizationId: 'org-1',
+      branchId: 'branch-1',
+      deviceId: 'dev-1',
+      paymentId: 'pay-3',
+      receiptNumber: 'R-3',
+      orderRef: 'o3',
+      serviceType: ReceiptServiceType.dineIn,
+      currencyCode: 'ILS',
+      locale: locale,
+      issuedAt: issuedAt,
+      items: [
+        ReceiptItemLine(
+          nameSnapshot: 'Burger',
+          quantity: 1,
+          lineTotalMinor: 5000,
+          modifiers: const [
+            ReceiptModifierLine(
+              nameSnapshot: 'Extra Cheese',
+              amountMinor: 500,
+              quantity: 2,
+            ),
+            ReceiptModifierLine(nameSnapshot: 'No Onion'),
+          ],
+          note: 'well done',
+        ),
+        ReceiptItemLine(
+          nameSnapshot: 'Cola',
+          quantity: 1,
+          lineTotalMinor: 1000,
+        ),
+      ],
+      subtotalMinor: 6000,
+      totalMinor: 6000,
+      tender: const ReceiptTenderLine(
+        method: 'Cash',
+        paidMinor: 6000,
+        changeMinor: 0,
+      ),
+    );
+
+    test('text path: quantity > 1 renders " xN", quantity 1 keeps the bare '
+        'name, and the note prints indented after the modifiers', () async {
+      final doc = await CustomerReceiptPrintBuilder.build(
+        input: noteInput(ReceiptLocale.en),
+        paper: ReceiptPaperSpec.mm80,
+      );
+      final texts = doc.lines
+          .whereType<PrintTextLine>()
+          .map((l) => l.text)
+          .toList();
+      final modIdx = texts.indexWhere(
+        (t) => t.startsWith('  + Extra Cheese x2'),
+      );
+      expect(modIdx, isNonNegative);
+      // Quantity-1 modifier keeps the historical bare-name format.
+      expect(texts.any((t) => t.startsWith('  + No Onion')), isTrue);
+      expect(texts.any((t) => t.contains('No Onion x')), isFalse);
+      // The note follows the modifiers and precedes the next item.
+      final noteIdx = texts.indexOf('  * well done');
+      expect(noteIdx, greaterThan(modIdx));
+      final colaIdx = texts.indexWhere((t) => t.contains('1 x Cola'));
+      expect(noteIdx, lessThan(colaIdx));
+      // The note-less Cola contributes no note line.
+      expect(texts.where((t) => t.startsWith('  * ')).length, 1);
+    });
+
+    test('raster path: the logical source lines carry the xN multiplier and '
+        'the note', () async {
+      final raster = FakeReceiptRasterizer();
+      await CustomerReceiptPrintBuilder.build(
+        input: noteInput(ReceiptLocale.ar),
+        paper: ReceiptPaperSpec.mm80,
+        rasterizer: raster,
+      );
+      final lines = raster.requests.single.lines;
+      expect(lines.any((l) => l.contains('+ Extra Cheese x2')), isTrue);
+      expect(lines, contains('  * well done'));
+      expect(lines.any((l) => l.contains('No Onion x')), isFalse);
+    });
+  });
+
   // --- Immutability / defensive copy (RF073-B1) --------------------------
 
   group('DTOs are immutable against caller-owned list mutation (RF073-B1)', () {

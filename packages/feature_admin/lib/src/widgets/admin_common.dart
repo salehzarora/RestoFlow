@@ -17,56 +17,38 @@ String adminRoleLabel(AppLocalizations l10n, MembershipRole role) =>
       MembershipRole.accountant => l10n.authRoleAccountant,
     };
 
-/// A page header: a title, an optional subtitle, and trailing actions.
+/// A page header: an optional icon badge, a title, an optional subtitle, and
+/// trailing actions. Delegates to the shared [RestoflowPageHeader] so every
+/// admin/dashboard page opens with the same visual language.
 class AdminPageHeader extends StatelessWidget {
   const AdminPageHeader({
     required this.title,
     this.subtitle,
+    this.icon,
     this.actions = const [],
     super.key,
   });
 
   final String title;
   final String? subtitle;
+
+  /// Optional leading icon rendered in a soft rounded badge.
+  final IconData? icon;
+
   final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
+    return RestoflowPageHeader(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      actions: actions,
+      padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.lg,
         RestoflowSpacing.lg,
         RestoflowSpacing.lg,
         RestoflowSpacing.sm,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: RestoflowSpacing.xs / 2),
-                  Text(
-                    subtitle!,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          ...actions,
-        ],
       ),
     );
   }
@@ -129,44 +111,58 @@ class AdminSectionCard extends StatelessWidget {
   }
 }
 
-/// A compact status pill with a tonal colour.
+/// A compact status pill. Prefer the tone-based constructor ([AdminPill.tone])
+/// so statuses resolve to the TRUE semantic palette (success green / warning
+/// amber / danger red); the colour-based constructor remains for identity
+/// chips (roles, scopes) that are not statuses.
 class AdminPill extends StatelessWidget {
   const AdminPill({
     required this.label,
-    required this.color,
+    required Color this.color,
     this.icon,
     super.key,
-  });
+  }) : tone = null;
+
+  /// A pill filled with the tone's semantic container colours.
+  const AdminPill.tone({
+    required this.label,
+    required RestoflowTone this.tone,
+    this.icon,
+    super.key,
+  }) : color = null;
 
   final String label;
-  final Color color;
+  final Color? color;
+  final RestoflowTone? tone;
   final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final style = tone?.styleOf(theme);
+    final background = style?.container ?? color!.withValues(alpha: 0.14);
+    final foreground = style?.onContainer ?? color!;
     return Container(
-      padding: const EdgeInsets.symmetric(
+      padding: const EdgeInsetsDirectional.symmetric(
         horizontal: RestoflowSpacing.sm,
-        vertical: RestoflowSpacing.xs / 1.5,
+        vertical: RestoflowSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
+        color: background,
         borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: color),
+            Icon(icon, size: RestoflowIconSizes.xs, color: foreground),
             const SizedBox(width: RestoflowSpacing.xs),
           ],
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
+              color: foreground,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -197,68 +193,72 @@ class AdminRoleChip extends StatelessWidget {
   }
 }
 
-/// The colour + localized label for a device lifecycle status.
-({String label, Color color, IconData icon}) deviceStatusVisual(
+/// The semantic tone + localized label for a device lifecycle status:
+/// active = TRUE success green, code-issued/pending = warning amber,
+/// paired = info (mid-provisioning), revoked/suspended/expired = danger red.
+({String label, RestoflowTone tone, IconData icon}) deviceStatusVisual(
   BuildContext context,
   DeviceLifecycleStatus status,
 ) {
   final l10n = AppLocalizations.of(context);
-  final scheme = Theme.of(context).colorScheme;
   return switch (status) {
     DeviceLifecycleStatus.none => (
       label: l10n.adminDevStatusNone,
-      color: scheme.onSurfaceVariant,
+      tone: RestoflowTone.neutral,
       icon: Icons.smartphone_outlined,
     ),
     DeviceLifecycleStatus.codeIssued => (
       label: l10n.adminDevStatusCodeIssued,
-      color: scheme.tertiary,
+      tone: RestoflowTone.warning,
       icon: Icons.qr_code_2,
     ),
     DeviceLifecycleStatus.pending => (
       label: l10n.adminDevStatusPending,
-      color: scheme.secondary,
+      tone: RestoflowTone.warning,
       icon: Icons.hourglass_top,
     ),
     DeviceLifecycleStatus.paired => (
       label: l10n.adminDevStatusPaired,
-      color: scheme.tertiary,
+      tone: RestoflowTone.info,
       icon: Icons.link,
     ),
     DeviceLifecycleStatus.active => (
       label: l10n.adminDevStatusActive,
-      color: scheme.primary,
+      tone: RestoflowTone.success,
       icon: Icons.check_circle,
     ),
     DeviceLifecycleStatus.suspended => (
       label: l10n.adminDevStatusSuspended,
-      color: scheme.error,
+      tone: RestoflowTone.danger,
       icon: Icons.pause_circle_outline,
     ),
     DeviceLifecycleStatus.revoked => (
       label: l10n.adminDevStatusRevoked,
-      color: scheme.error,
+      tone: RestoflowTone.danger,
       icon: Icons.block,
     ),
     DeviceLifecycleStatus.codeExpired => (
       label: l10n.adminDevStatusCodeExpired,
-      color: scheme.error,
+      tone: RestoflowTone.danger,
       icon: Icons.timer_off_outlined,
     ),
     DeviceLifecycleStatus.rejected => (
       label: l10n.adminDevStatusRejected,
-      color: scheme.error,
+      tone: RestoflowTone.danger,
       icon: Icons.cancel_outlined,
     ),
   };
 }
 
 /// A centred state panel (loading / empty / error / permission-denied).
+/// Delegates to the shared [RestoflowStateView] (deliberately not Card-based —
+/// some empty-state tests assert `find.byType(Card)` findsNothing).
 class AdminStateView extends StatelessWidget {
   const AdminStateView({
     required this.icon,
     required this.title,
     required this.body,
+    this.tone,
     this.action,
     super.key,
   });
@@ -266,60 +266,24 @@ class AdminStateView extends StatelessWidget {
   final IconData icon;
   final String title;
   final String body;
+
+  /// Semantic accent for the icon circle (danger for failures, warning for
+  /// permission-denied). Null keeps the quiet neutral empty-state look.
+  final RestoflowTone? tone;
+
   final Widget? action;
 
-  /// The loading variant.
-  static Widget loading() => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(RestoflowSpacing.xl),
-      child: CircularProgressIndicator(),
-    ),
-  );
+  /// The loading variant (exactly ONE CircularProgressIndicator).
+  static Widget loading() => const RestoflowStateView(showSpinner: true);
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 30, color: theme.colorScheme.primary),
-            ),
-            const SizedBox(height: RestoflowSpacing.lg),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: RestoflowSpacing.xs),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Text(
-                body,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            if (action != null) ...[
-              const SizedBox(height: RestoflowSpacing.lg),
-              action!,
-            ],
-          ],
-        ),
-      ),
+    return RestoflowStateView(
+      icon: icon,
+      title: title,
+      message: body,
+      tone: tone,
+      actions: [if (action case final action?) action],
     );
   }
 
@@ -335,12 +299,14 @@ class AdminStateView extends StatelessWidget {
         icon: Icons.lock_outline,
         title: l10n.adminPermissionDeniedTitle,
         body: l10n.adminPermissionDeniedBody,
+        tone: RestoflowTone.warning,
       );
     }
     return AdminStateView(
       icon: Icons.error_outline,
       title: l10n.adminStateErrorTitle,
       body: l10n.adminStateErrorBody,
+      tone: RestoflowTone.danger,
       action: onRetry == null
           ? null
           : FilledButton.tonalIcon(
@@ -353,45 +319,15 @@ class AdminStateView extends StatelessWidget {
 }
 
 /// The "demo data / backend-ready" banner shown atop every admin surface.
+/// Rides the shared info-tone notice banner (demo = informational).
 class AdminDemoBanner extends StatelessWidget {
   const AdminDemoBanner({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        border: BorderDirectional(
-          start: BorderSide(color: scheme.tertiary, width: 4),
-        ),
-      ),
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.md,
-        RestoflowSpacing.sm,
-        RestoflowSpacing.md,
-        RestoflowSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.science_outlined,
-            size: 20,
-            color: scheme.onTertiaryContainer,
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            child: Text(
-              AppLocalizations.of(context).adminDemoBanner,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onTertiaryContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return RestoflowNoticeBanner(
+      icon: Icons.science_outlined,
+      body: AppLocalizations.of(context).adminDemoBanner,
     );
   }
 }

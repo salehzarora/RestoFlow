@@ -40,6 +40,15 @@ class MoneyFormatter {
     return '$sign$symbol$number';
   }
 
+  /// Renders a SIGNED minor-unit price delta with an explicit sign, e.g.
+  /// `formatSignedDeltaMinor(300, 'ILS')` -> `"+₪3.00"` and `-300` ->
+  /// `"−₪3.00"` (typographic minus). Used for modifier price deltas in the
+  /// option sheet and on cart sub-lines. Zero renders as `"+₪0.00"` — callers
+  /// showing "free" for zero deltas must branch before calling.
+  static String formatSignedDeltaMinor(int deltaMinor, String currencyCode) =>
+      (deltaMinor < 0 ? '−' : '+') +
+      formatMinor(deltaMinor.abs(), currencyCode);
+
   static int _pow10(int exponent) {
     var result = 1;
     for (var i = 0; i < exponent; i++) {

@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_kds/main.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 
 /// A controllable fake sync source — drives the provider-backed KDS home with
@@ -85,8 +87,11 @@ void main() {
     await tester.pump(); // deliver the data state
 
     expect(find.text('Burger ×2'), findsOneWidget);
-    // The mapped ticket id is order:station (no money anywhere on screen).
-    expect(find.textContaining('o1:grill'), findsOneWidget);
+    // Demo-readiness sprint: the card title is the HUMAN display code derived
+    // from the order id — the same code the POS shows — never the raw
+    // order:station key (and no money anywhere on screen).
+    expect(find.text(displayOrderCode('o1')), findsOneWidget);
+    expect(find.textContaining('o1:grill'), findsNothing);
   });
 
   testWidgets(
@@ -141,6 +146,47 @@ void main() {
       ),
     );
     await tester.pump();
+    expect(find.text('Burger ×2'), findsOneWidget);
+  });
+
+  testWidgets('offlineStale renders a visible stale banner over the board', (
+    tester,
+  ) async {
+    final source = _FakeKdsSyncSource();
+    addTearDown(source.dispose);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    await tester.pumpWidget(KdsApp(source: source));
+    await tester.pump();
+
+    // Live data: no stale banner.
+    source.emit(_data());
+    await tester.pump();
+    expect(find.text(l10n.kdsStaleBanner), findsNothing);
+
+    // Stale (last good pull): the board stays AND is visibly flagged.
+    source.emit(
+      const KdsSyncState(
+        status: KdsSyncStatus.offlineStale,
+        entities: {
+          'orders': [
+            {'id': 'o1', 'status': 'preparing'},
+          ],
+          'order_items': [
+            {
+              'id': 'i1',
+              'order_id': 'o1',
+              'station_id': 'grill',
+              'status': 'preparing',
+              'quantity': 2,
+              'menu_item_name_snapshot': 'Burger',
+            },
+          ],
+        },
+      ),
+    );
+    await tester.pump();
+    expect(find.text(l10n.kdsStaleBanner), findsOneWidget);
     expect(find.text('Burger ×2'), findsOneWidget);
   });
 }

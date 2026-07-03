@@ -1,41 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../state/locale_controller.dart';
 
 /// A compact EN / AR / HE language selector for the app bar (RF-118 fix B).
-/// Selecting a language updates [localeControllerProvider] immediately, which
-/// the app's MaterialApp watches — switching the whole app (and to RTL for
-/// Arabic/Hebrew). Endonym labels (English / العربية / עברית) come from l10n.
+/// Thin app wrapper over the shared [RestoflowLanguageSelector] (consistency
+/// cleanup — this file was byte-identical in all four apps): it wires the
+/// app-local [localeControllerProvider], which the app's MaterialApp watches —
+/// switching the whole app (and to RTL for Arabic/Hebrew). Endonym labels
+/// (English / العربية / עברית) come from l10n.
 class LanguageSelector extends ConsumerWidget {
   const LanguageSelector({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final current = ref.watch(localeControllerProvider);
-    return PopupMenuButton<Locale>(
-      key: const Key('language-selector'),
-      icon: const Icon(Icons.translate),
+    return RestoflowLanguageSelector(
       tooltip: l10n.languageSelectorTooltip,
-      initialValue: current,
+      current: ref.watch(localeControllerProvider),
+      entries: [
+        (const Locale('en'), l10n.languageEnglish),
+        (const Locale('ar'), l10n.languageArabic),
+        (const Locale('he'), l10n.languageHebrew),
+      ],
       onSelected: (locale) =>
           ref.read(localeControllerProvider.notifier).setLocale(locale),
-      itemBuilder: (context) => <PopupMenuEntry<Locale>>[
-        PopupMenuItem<Locale>(
-          value: const Locale('en'),
-          child: Text(l10n.languageEnglish),
-        ),
-        PopupMenuItem<Locale>(
-          value: const Locale('ar'),
-          child: Text(l10n.languageArabic),
-        ),
-        PopupMenuItem<Locale>(
-          value: const Locale('he'),
-          child: Text(l10n.languageHebrew),
-        ),
-      ],
     );
   }
 }

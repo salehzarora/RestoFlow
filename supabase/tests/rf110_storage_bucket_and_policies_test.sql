@@ -26,11 +26,14 @@ select is((select allowed_mime_types from storage.buckets where id = 'menu-image
 select is((select count(*) from storage.buckets where id = 'menu-images' and public)::int, 0,
   'menu-images is never a public bucket');
 
--- ===== four per-command policies on storage.objects (5) =====
+-- ===== per-command policies on storage.objects (5) =====
+-- (5 policies since the MVP menu/media sprint: the four RF-110 membership
+-- policies + the narrowly-scoped menu_images_device_select device read path,
+-- which has its own suite — mvp_menu_item_images_test.sql.)
 select is((select count(*) from pg_policies
            where schemaname = 'storage' and tablename = 'objects'
-             and policyname like 'menu_images_%')::int, 4,
-  'exactly four menu_images_* policies exist on storage.objects');
+             and policyname like 'menu_images_%')::int, 5,
+  'exactly five menu_images_* policies exist on storage.objects (4 RF-110 + the MVP device read)');
 select is((select cmd from pg_policies where schemaname='storage' and tablename='objects' and policyname='menu_images_select'),
   'SELECT', 'menu_images_select is a SELECT policy');
 select is((select cmd from pg_policies where schemaname='storage' and tablename='objects' and policyname='menu_images_insert'),
@@ -44,8 +47,8 @@ select is((select cmd from pg_policies where schemaname='storage' and tablename=
 select is((select count(*) from pg_policies
            where schemaname='storage' and tablename='objects'
              and policyname like 'menu_images_%'
-             and roles::text[] = array['authenticated'])::int, 4,
-  'all four menu_images policies target authenticated ONLY');
+             and roles::text[] = array['authenticated'])::int, 5,
+  'all five menu_images policies target authenticated ONLY');
 select is((select count(*) from pg_policies
            where schemaname='storage' and tablename='objects'
              and policyname like 'menu_images_%'
@@ -54,7 +57,7 @@ select is((select count(*) from pg_policies
 select is((select count(*) from pg_policies
            where schemaname='storage' and tablename='objects'
              and policyname like 'menu_images_%'
-             and (coalesce(qual, '') || coalesce(with_check, '')) like '%menu-images%')::int, 4,
+             and (coalesce(qual, '') || coalesce(with_check, '')) like '%menu-images%')::int, 5,
   'every menu_images policy is pinned to bucket_id = menu-images');
 
 -- ===== policies wire to the path-derived helpers (3) =====

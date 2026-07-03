@@ -101,6 +101,9 @@ jobs:
       - name: Tests — money (RF-036, integer money engine)
         run: dart test packages/money
 
+      - name: Tests — auth_identity (device auth + PIN session models)
+        run: dart test packages/auth_identity
+
       # RF-020 (RF020-B1): Flutter-FREE structural check of the committed l10n
       # setup (ARB completeness + generated output present/consistent). Runs even
       # if the Flutter tool is unavailable, so l10n structural regressions are
@@ -123,6 +126,32 @@ jobs:
       # `flutter test` (not `dart test`).
       - name: Tests — KDS (RF-034, Flutter widget)
         run: flutter test apps/kds
+
+      # Sprint (product rescue): the remaining app + feature-package suites.
+      # These carry the security regression tests for the device-auth bridge
+      # (RF-161 type-checked restore), the PIN gates, and the real dashboard
+      # surfaces — previously only apps/kds was CI-gated (the RF-161 review
+      # flagged that gap).
+      - name: Tests — POS (Flutter widget)
+        run: flutter test apps/pos
+
+      - name: Tests — Dashboard (Flutter widget)
+        run: flutter test apps/dashboard
+
+      - name: Tests — Admin (Flutter widget)
+        run: flutter test apps/admin
+
+      - name: Tests — feature_auth (pairing + PIN login)
+        run: flutter test packages/feature_auth
+
+      - name: Tests — feature_admin (owner admin surfaces)
+        run: flutter test packages/feature_admin
+
+      - name: Tests — feature_kitchen (KDS sync + ticket models)
+        run: flutter test packages/feature_kitchen
+
+      - name: Tests — design_system (RF-141 shared components)
+        run: flutter test packages/design_system
 
       - name: Guardrail — no floating-point money (DECISION D-007)
         run: bash tools/check_no_float_money.sh

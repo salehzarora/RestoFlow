@@ -77,9 +77,13 @@ class DemoKitchenOrdersStore implements KitchenOrdersRepository {
         submittedAt: ago(9),
         status: KitchenTicketStatus.inPreparation,
         items: const [
+          // Product-rescue sprint: a '×N' modifier-quantity string on a ticket
+          // OTHER than K-1001 (kitchen_board_test pins exactly one '×2' text
+          // inside the K-1001 card) so the demo board shows Part D.
           KitchenOrderItem(
             name: 'French Fries',
             quantity: 2,
+            modifiers: ['Extra cheese ×2'],
             note: 'Extra crispy',
           ),
           KitchenOrderItem(name: 'Onion Rings', quantity: 1),

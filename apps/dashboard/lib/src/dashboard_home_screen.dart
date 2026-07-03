@@ -26,8 +26,6 @@ class DashboardHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     // RF-140: the same demo/real switch the repository seam reads, so the
     // banner/header are honest about the data source (never claim demo data in
     // real mode, nor vice versa). Demo is the DEFAULT.
@@ -36,27 +34,13 @@ class DashboardHomeScreen extends ConsumerWidget {
 
     void refresh() => ref.invalidate(dashboardReportProvider);
 
+    // The former nested AppBar is flattened into the page header (the shell
+    // already provides the persistent chrome); the refresh action rides the
+    // report header so it stays on the page.
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.insights_outlined, color: theme.colorScheme.primary),
-            const SizedBox(width: RestoflowSpacing.sm),
-            Text(l10n.dashboardAppTitle),
-          ],
-        ),
-        actions: [
-          IconButton(
-            key: const Key('reports-refresh-button'),
-            onPressed: refresh,
-            icon: const Icon(Icons.refresh),
-            tooltip: l10n.dashboardRefresh,
-          ),
-        ],
-      ),
       body: reportAsync.when(
-        data: (report) => _ReportContent(report: report, isDemo: isDemo),
+        data: (report) =>
+            _ReportContent(report: report, isDemo: isDemo, onRefresh: refresh),
         loading: () => const _LoadingState(),
         error: (_, _) => _ErrorState(onRetry: refresh),
       ),
@@ -66,7 +50,11 @@ class DashboardHomeScreen extends ConsumerWidget {
 
 /// The loaded report: a scrollable, responsive layout of all report sections.
 class _ReportContent extends StatelessWidget {
-  const _ReportContent({required this.report, required this.isDemo});
+  const _ReportContent({
+    required this.report,
+    required this.isDemo,
+    required this.onRefresh,
+  });
 
   final DashboardReport report;
 
@@ -74,7 +62,9 @@ class _ReportContent extends StatelessWidget {
   /// banner + header pill so the data source is labelled honestly (RF-140).
   final bool isDemo;
 
-  static const double _twoColBreakpoint = 900;
+  final VoidCallback onRefresh;
+
+  static const double _twoColBreakpoint = RestoflowBreakpoints.wide;
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +73,11 @@ class _ReportContent extends StatelessWidget {
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
 
-    final header = _ReportHeader(report: report, isDemo: isDemo);
+    final header = _ReportHeader(
+      report: report,
+      isDemo: isDemo,
+      onRefresh: onRefresh,
+    );
     // RF-140: demo mode shows the demo-data notice; real mode shows a slim
     // "live · limited" caution notice — never a demo/deferred banner over real
     // data. (Real mode currently fails closed before reaching this content; the
@@ -332,46 +326,82 @@ class _ReportContent extends StatelessWidget {
       method == 'cash' ? l10n.dashboardPaymentMethodCash : method;
 }
 
-/// The reports title + the report day context (day + a demo/live pill).
+/// The reports page header: an icon badge, the heading, the report day context
+/// (day + a demo/live pill), and the refresh action (flattened from the former
+/// nested AppBar).
 class _ReportHeader extends StatelessWidget {
-  const _ReportHeader({required this.report, required this.isDemo});
+  const _ReportHeader({
+    required this.report,
+    required this.isDemo,
+    required this.onRefresh,
+  });
 
   final DashboardReport report;
   final bool isDemo;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final dayText =
         '${l10n.dashboardReportDayLabel}: ${report.businessDateLabel}';
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          l10n.dashboardReportsHeading,
-          key: const Key('reports-heading'),
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer,
+            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          ),
+          child: Icon(
+            Icons.insights_outlined,
+            size: RestoflowIconSizes.lg,
+            color: scheme.onPrimaryContainer,
           ),
         ),
-        const SizedBox(height: RestoflowSpacing.xs),
-        Wrap(
-          spacing: RestoflowSpacing.sm,
-          runSpacing: RestoflowSpacing.xs,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              dayText,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+        const SizedBox(width: RestoflowSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.dashboardReportsHeading,
+                key: const Key('reports-heading'),
+                style: theme.textTheme.headlineSmall,
               ),
-            ),
-            RestoflowStatusPill(
-              label: isDemo ? l10n.dashboardDemoDay : l10n.dashboardLiveDataTag,
-              tone: RestoflowTone.info,
-            ),
-          ],
+              const SizedBox(height: RestoflowSpacing.xs),
+              Wrap(
+                spacing: RestoflowSpacing.sm,
+                runSpacing: RestoflowSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    dayText,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  RestoflowStatusPill(
+                    label: isDemo
+                        ? l10n.dashboardDemoDay
+                        : l10n.dashboardLiveDataTag,
+                    tone: RestoflowTone.info,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: RestoflowSpacing.sm),
+        IconButton(
+          key: const Key('reports-refresh-button'),
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh),
+          tooltip: l10n.dashboardRefresh,
         ),
       ],
     );
@@ -388,9 +418,9 @@ class _KpiGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
+        final columns = constraints.maxWidth >= RestoflowBreakpoints.wide
             ? 4
-            : (constraints.maxWidth >= 560 ? 2 : 1);
+            : (constraints.maxWidth >= RestoflowBreakpoints.compact ? 2 : 1);
         const gap = RestoflowSpacing.md;
         final gutters = gap * (columns - 1);
         final cardWidth = (constraints.maxWidth - gutters) / columns;
@@ -406,29 +436,18 @@ class _KpiGrid extends StatelessWidget {
   }
 }
 
-/// The loading state while the report is fetched through the repository.
+/// The loading state while the report is fetched through the repository
+/// (exactly ONE CircularProgressIndicator — pinned by dashboard_states_test).
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return Center(
+    return RestoflowStateView(
       key: const Key('reports-loading'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: RestoflowSpacing.lg),
-          Text(
-            l10n.dashboardLoadingReports,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+      showSpinner: true,
+      message: l10n.dashboardLoadingReports,
     );
   }
 }
@@ -442,30 +461,19 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return Center(
+    return RestoflowStateView(
       key: const Key('reports-error'),
-      child: Padding(
-        padding: const EdgeInsets.all(RestoflowSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
-            const SizedBox(height: RestoflowSpacing.md),
-            Text(
-              l10n.dashboardReportsError,
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: RestoflowSpacing.lg),
-            FilledButton.icon(
-              key: const Key('reports-retry-button'),
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.dashboardRetry),
-            ),
-          ],
+      icon: Icons.error_outline,
+      tone: RestoflowTone.danger,
+      title: l10n.dashboardReportsError,
+      actions: [
+        FilledButton.icon(
+          key: const Key('reports-retry-button'),
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.dashboardRetry),
         ),
-      ),
+      ],
     );
   }
 }
@@ -477,27 +485,10 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return Center(
+    return RestoflowStateView(
       key: const Key('reports-empty'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 48,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: RestoflowSpacing.md),
-          Text(
-            l10n.dashboardNoReportData,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.inbox_outlined,
+      message: l10n.dashboardNoReportData,
     );
   }
 }

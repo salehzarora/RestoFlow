@@ -8,10 +8,12 @@ import 'station_printer_routing.dart';
 ///
 /// Print layout lives here, NOT in the KDS UI. The document carries ONLY
 /// operational fields — station header, order reference, service type,
-/// timestamp, and per-item name/quantity/modifier-option-names. It NEVER reads
-/// money (`*_minor`/price/total), receipt, payment, cash, tax, table number, or
-/// item notes (D-007/D-008; approved A2/A3/A4). All text is ASCII so it renders
-/// deterministically through the RF-070 ESC/POS adapter (no raster needed).
+/// timestamp, and per-item name/quantity/modifier-option-names/kitchen note
+/// (product-rescue sprint: notes are operational kitchen data). It NEVER reads
+/// money (`*_minor`/price/total), receipt, payment, cash, tax, or table number
+/// (D-007/D-008; approved A2/A3/A4). All CHROME text is ASCII so it renders
+/// deterministically through the RF-070 ESC/POS adapter; item/note text is
+/// tenant DATA and may be any script.
 class KitchenTicketPrintBuilder {
   const KitchenTicketPrintBuilder._();
 
@@ -32,6 +34,13 @@ class KitchenTicketPrintBuilder {
                 ? '${m.optionNameSnapshot} x${m.quantity}'
                 : m.optionNameSnapshot,
         ],
+    };
+
+    // Per-item kitchen notes (join by orderItemId). Note text is tenant data
+    // (may be Arabic/Hebrew) — data, not chrome.
+    final noteByItem = <String, String>{
+      for (final item in order.items)
+        if (item.note case final note?) item.orderItemId: note,
     };
 
     final lines = <PrintLine>[
@@ -55,6 +64,10 @@ class KitchenTicketPrintBuilder {
       );
       for (final modName in modsByItem[stationItem.orderItemId] ?? const []) {
         lines.add(PrintTextLine('  + $modName'));
+      }
+      // The item's kitchen note, after its modifier lines (absent when null).
+      if (noteByItem[stationItem.orderItemId] case final note?) {
+        lines.add(PrintTextLine('  * $note'));
       }
     }
 

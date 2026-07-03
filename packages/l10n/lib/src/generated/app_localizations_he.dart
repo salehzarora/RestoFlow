@@ -111,6 +111,26 @@ class AppLocalizationsHe extends AppLocalizations {
       'מצב אמיתי נבחר אך חיבור ה-Supabase אינו מוגדר, ולכן לא ניתן לטעון נתוני פלטפורמה. הגדירו את כתובת ה-Supabase ומפתח ה-anon, או הפעילו במצב הדגמה.';
 
   @override
+  String get adminGateTitle => 'לוח ניהול הפלטפורמה';
+
+  @override
+  String get adminGateNotOwner =>
+      'זהו לוח ניהול הפלטפורמה — לא הלוח של בעל המסעדה.';
+
+  @override
+  String get adminGateUseDashboard => 'השתמשו ב-Dashboard לניהול המסעדה.';
+
+  @override
+  String get adminGateNotAdminAccount => 'החשבון המחובר אינו מנהל פלטפורמה.';
+
+  @override
+  String get adminGateProvisionHint =>
+      'גישת מנהל פלטפורמה ניתנת ידנית על ידי מפעיל הפלטפורמה — ראו docs/LOCAL_RUNBOOK.md.';
+
+  @override
+  String get adminGateOpenDashboard => 'פתיחת לוח המסעדה';
+
+  @override
   String get adminAccessDeniedTitle => 'הגישה לניהול הפלטפורמה נדחתה';
 
   @override
@@ -128,6 +148,12 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kdsEmptyState => 'אין כרטיסים פעילים';
+
+  @override
+  String get kdsColumnEmpty => 'אין כרטיסים';
+
+  @override
+  String get kdsStaleBanner => 'לא מחובר — מוצגים הכרטיסים האחרונים שסונכרנו';
 
   @override
   String get kdsBumpAction => 'סיום';
@@ -201,6 +227,11 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posAddToCart => 'הוספה';
 
   @override
+  String posAddToCartWithTotal(String total) {
+    return 'הוספה · $total';
+  }
+
+  @override
   String get posClearCart => 'ניקוי';
 
   @override
@@ -217,6 +248,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posSendOrder => 'שליחת הזמנה';
+
+  @override
+  String get posSendNeedsTableHint => 'שייכו שולחן כדי לשלוח הזמנת ישיבה במקום';
 
   @override
   String get posDemoOrderNotice =>
@@ -423,6 +457,135 @@ class AppLocalizationsHe extends AppLocalizations {
       'השתמש בהדפסת הדפדפן (Ctrl+P) כדי להדפיס תצוגה זו';
 
   @override
+  String get deviceSettingsMenuTooltip => 'תפריט המכשיר';
+
+  @override
+  String get deviceSettingsTitle => 'הגדרות מכשיר';
+
+  @override
+  String get deviceRefreshAction => 'רענון החיבור';
+
+  @override
+  String get deviceUnpairAction => 'ביטול צימוד המכשיר';
+
+  @override
+  String get deviceUnpairWarning =>
+      'השתמשו בזה רק אם צריך לצמד את המכשיר הזה מחדש.';
+
+  @override
+  String get deviceUnpairConfirm => 'בטל צימוד';
+
+  @override
+  String get deviceUnpairCancel => 'ביטול';
+
+  @override
+  String get deviceSettingsAppTypeLabel => 'סוג היישום';
+
+  @override
+  String get deviceSettingsAppTypePos => 'קופה (POS)';
+
+  @override
+  String get deviceSettingsAppTypeKds => 'מסך מטבח (KDS)';
+
+  @override
+  String get deviceSettingsRestaurantLabel => 'מסעדה';
+
+  @override
+  String get deviceSettingsBranchLabel => 'סניף';
+
+  @override
+  String get deviceSettingsDeviceLabel => 'מכשיר';
+
+  @override
+  String get deviceSettingsPairingLabel => 'צימוד';
+
+  @override
+  String get deviceSettingsPairingActive => 'מצומד';
+
+  @override
+  String get deviceSettingsPinSessionLabel => 'משמרת עובד';
+
+  @override
+  String get deviceSettingsPinSessionActive => 'מחובר';
+
+  @override
+  String get deviceSettingsPinSessionNone => 'לא מחובר';
+
+  @override
+  String get deviceSettingsDemoNote => 'מצב הדגמה — אין מכשיר מצומד.';
+
+  @override
+  String get deviceSettingsUnavailable => 'פרטי המכשיר אינם זמינים.';
+
+  @override
+  String get deviceSettingsPrintersHeading => 'מדפסות';
+
+  @override
+  String get deviceSettingsNoPrinter =>
+      'לא הוקצתה מדפסת. בקשו ממנהל להגדיר אותה ב-Dashboard ← מדפסות.';
+
+  @override
+  String get deviceSettingsBridgeRequired => 'מוגדרת בלבד — נדרש גשר הדפסה.';
+
+  @override
+  String get deviceSettingsCapabilityNote =>
+      'הדפסה דורשת גשר הדפסה/אפליקציה מקורית. גרסה זו שומרת הגדרות ויוצרת/מציגה עבודות הדפסה.';
+
+  @override
+  String deviceSettingsLastRefresh(String time) {
+    return 'רענון אחרון: $time';
+  }
+
+  @override
+  String get deviceSettingsLoadError => 'לא ניתן לטעון את הקצאות המדפסות.';
+
+  @override
+  String get deviceSettingsPrinterDisabled => 'מושבתת ב-Dashboard';
+
+  @override
+  String deviceSettingsRouteStations(String names) {
+    return 'תחנות: $names';
+  }
+
+  @override
+  String get deviceRefreshedSnack => 'החיבור רוענן.';
+
+  @override
+  String get deviceUnpairedSnack => 'צימוד המכשיר בוטל.';
+
+  @override
+  String get deviceSettingsAutoPrintHeading => 'הדפסה אוטומטית';
+
+  @override
+  String get posAutoPrintReceiptToggle => 'הדפסת קבלה אוטומטית לאחר תשלום';
+
+  @override
+  String get kdsAutoPrintAcknowledgeToggle =>
+      'הדפסת כרטיס מטבח אוטומטית באישור קבלה';
+
+  @override
+  String get autoPrintNoPrinterNote => 'מושבת — לא הוקצתה מדפסת.';
+
+  @override
+  String get printStatusNotConfigured => 'לא הוגדרה מדפסת';
+
+  @override
+  String get printStatusPrepared =>
+      'עבודת ההדפסה הוכנה — הדפסה פיזית דורשת גשר הדפסה.';
+
+  @override
+  String get printStatusPrinted => 'הודפס';
+
+  @override
+  String get printStatusFailed => 'ההדפסה נכשלה';
+
+  @override
+  String get posReceiptPrintLabel => 'הדפסת קבלה';
+
+  @override
+  String get kdsTicketPrintLabel => 'הדפסת מטבח';
+
+  @override
   String get receiptPreviewTitle => 'תצוגת הדפסת קבלה';
 
   @override
@@ -469,6 +632,60 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posShiftDemoNote => 'משמרת הדגמה — לא מסונכרנת';
+
+  @override
+  String get posShiftRealName => 'המשמרת הנוכחית';
+
+  @override
+  String get posShiftRealNote => 'נפתחה בכניסה — סכומי המזומן מנוהלים בשרת';
+
+  @override
+  String get posSyncSendingReal => 'שולח לשרת…';
+
+  @override
+  String get posSyncSentReal => 'נשלח — מסך המטבח מקבל אותה אוטומטית.';
+
+  @override
+  String get posSyncFailedReal => 'השרת דחה את ההזמנה — היא לא נשלחה למטבח.';
+
+  @override
+  String get posSyncSendNow => 'שלח עכשיו';
+
+  @override
+  String get posReceiptNoPrinterNote => 'הדפסה עדיין אינה מחוברת במכשיר זה';
+
+  @override
+  String get posModifierRequired => 'חובה';
+
+  @override
+  String get posModifierOptional => 'אופציונלי';
+
+  @override
+  String posModifierSelectedCount(int selected, int max) {
+    return '$selected/$max';
+  }
+
+  @override
+  String posModifierSelectedCountOpen(int selected) {
+    return '$selected';
+  }
+
+  @override
+  String get posModifierFree => 'חינם';
+
+  @override
+  String posModifierBasePrice(String price) {
+    return 'מחיר בסיס · $price';
+  }
+
+  @override
+  String get posModifierItemNoteLabel => 'הערה לפריט';
+
+  @override
+  String get posModifierItemNoteHint => 'לדוגמה: בלי בצל, תוספת רוטב';
+
+  @override
+  String get posItemNoteLabel => 'הערה';
 
   @override
   String get dashboardOverviewHeading => 'סקירת היום';
@@ -615,6 +832,35 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get authError => 'משהו השתבש';
+
+  @override
+  String get authRealModeUnconfiguredTitle => 'מצב אמת אינו מוגדר';
+
+  @override
+  String get authRealModeUnconfiguredBody =>
+      'האפליקציה הופעלה במצב אמת, אך הגדרות החיבור לשרת חסרות או שגויות. RestoFlow לעולם אינו מזייף שרת, ולכן מצב האמת נשאר נעול עד שיסופקו הגדרות תקינות.';
+
+  @override
+  String get authRealModeUnconfiguredHowTo =>
+      'הפעל את האפליקציה עם הערכים הבאים';
+
+  @override
+  String get authRealModeUnconfiguredDemoHint =>
+      'כדי לנסות את הדמו במקום זאת, הפעל את האפליקציה ללא כל הגדרה — מצב הדמו הוא ברירת המחדל.';
+
+  @override
+  String get authDeviceSignInUnavailableTitle => 'כניסת המכשיר אינה זמינה';
+
+  @override
+  String get authDeviceSignInUnavailableBody =>
+      'כניסת מכשירים אנונימית מושבתת או שאימות Supabase אינו מוגדר.';
+
+  @override
+  String get authDeviceSignInUnavailableHowTo => 'איך לתקן';
+
+  @override
+  String get authDeviceSignInUnavailableFix =>
+      'אפשרו כניסה אנונימית בהגדרות האימות של Supabase, הפעילו מחדש את השרת ואז את האפליקציה. אין צורך בחשבון אישי במכשיר זה — הצימוד מחבר את המכשיר בעצמו.';
 
   @override
   String get authTryAgain => 'נסה שוב';
@@ -773,6 +1019,16 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuRequiredLabel => 'חובה';
 
   @override
+  String get menuAllowQuantityLabel => 'אפשר כמות';
+
+  @override
+  String get menuAllowQuantityHelp =>
+      'הקופאי יכול להוסיף את אותה האפשרות יותר מפעם אחת (לדוגמה: תוספת גבינה ×2).';
+
+  @override
+  String get menuMaxQuantityLabel => 'מקסימום לכל אפשרות';
+
+  @override
   String get menuSizesHeading => 'גדלים';
 
   @override
@@ -807,11 +1063,43 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuImageHeading => 'תמונת פריט';
 
   @override
-  String get menuImageDeferredTitle => 'העלאת תמונות בקרוב';
+  String get menuImageDeferredTitle => 'העלאת תמונות אינה מחוברת';
 
   @override
   String get menuImageDeferredBody =>
-      'הצגה והעלאה של תמונות פריטים דורשות רשומת תמונה בצד השרת (המשך מתוכנן). נתיב ההעלאה והאימות כבר מוכנים.';
+      'לממשק הזה לא מחובר אחסון תמונות, ולכן אי אפשר להעלות או להציג כאן תמונות פריטים.';
+
+  @override
+  String get menuImagePickAction => 'בחירת תמונה';
+
+  @override
+  String get menuImageReplaceAction => 'החלפת תמונה';
+
+  @override
+  String get menuImageRemoveAction => 'הסרת תמונה';
+
+  @override
+  String get menuImageSaveAction => 'שמירת תמונה';
+
+  @override
+  String get menuImageInvalidType =>
+      'אפשר להעלות רק תמונות PNG,‏ JPEG או WebP.';
+
+  @override
+  String get menuImageTooLarge => 'התמונה גדולה מדי — המגבלה היא 5MB.';
+
+  @override
+  String get menuImageUploadFailed => 'ההעלאה נכשלה — התמונה לא נשמרה.';
+
+  @override
+  String get menuImageUnsupportedPlatform =>
+      'בחירת תמונה עדיין אינה זמינה בפלטפורמה הזו — יש להשתמש בלוח הבקרה באינטרנט.';
+
+  @override
+  String get menuImageDemoNote => 'דמו — התמונה לא מועלית לשרת.';
+
+  @override
+  String get menuImageLoadError => 'לא ניתן לטעון את תצוגת התמונה.';
 
   @override
   String get menuErrorRequired => 'חובה';
@@ -823,7 +1111,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuErrorNegativePrice => 'לא יכול להיות שלילי';
 
   @override
-  String get menuErrorCurrency => 'השתמש בקוד בן 3 אותיות (למשל USD)';
+  String get menuErrorCurrency => 'השתמש בקוד בן 3 אותיות (למשל ILS)';
 
   @override
   String get menuErrorSelectionType => 'בחר יחיד או מרובה';
@@ -893,6 +1181,186 @@ class AppLocalizationsHe extends AppLocalizations {
       'זו גישה ברמת הארגון ללא מסעדה נבחרת. פתח את ניהול התפריט ממסעדה או סניף ספציפיים.';
 
   @override
+  String get menuBasicInfoSection => 'מידע בסיסי';
+
+  @override
+  String get menuPricingSection => 'תמחור';
+
+  @override
+  String get menuPreparationSection => 'הכנה';
+
+  @override
+  String get menuAdvancedSection => 'מתקדם';
+
+  @override
+  String get menuAdvancedSectionHint =>
+      'פרטים אופציונליים — השתמשו במה שמתאים לפריט.';
+
+  @override
+  String get menuItemTypeLabel => 'סוג פריט';
+
+  @override
+  String get menuItemTypeUnspecified => 'לא צוין';
+
+  @override
+  String get menuItemTypeFood => 'אוכל';
+
+  @override
+  String get menuItemTypeDrink => 'משקה';
+
+  @override
+  String get menuItemTypeSide => 'תוספת';
+
+  @override
+  String get menuItemTypeCombo => 'קומבו';
+
+  @override
+  String get menuItemTypeOther => 'אחר';
+
+  @override
+  String get menuTagsLabel => 'תגיות';
+
+  @override
+  String get menuTagSpicy => 'חריף';
+
+  @override
+  String get menuTagVegetarian => 'צמחוני';
+
+  @override
+  String get menuTagPopular => 'פופולרי';
+
+  @override
+  String get menuTagNew => 'חדש';
+
+  @override
+  String menuModifierGroupCount(int count) {
+    return '$count קבוצות אפשרויות';
+  }
+
+  @override
+  String get menuPrepMinutesLabel => 'זמן הכנה (דקות)';
+
+  @override
+  String get menuKitchenNoteLabel => 'הערה למטבח';
+
+  @override
+  String get menuSkuLabel => 'מק\"ט (קוד פנימי)';
+
+  @override
+  String get menuPortionFieldLabel => 'תווית מנה';
+
+  @override
+  String get menuPattyCountLabel => 'כמות (קציצות או יחידות)';
+
+  @override
+  String get menuPattyWeightLabel => 'משקל ליחידה (גרם)';
+
+  @override
+  String get menuTemplateAddAction => 'הוספת תבנית';
+
+  @override
+  String get menuTemplatePickerTitle => 'הוספה מתבנית';
+
+  @override
+  String get menuTemplateRequiredSingle => 'חובה · בחירה אחת';
+
+  @override
+  String get menuTemplateOptionalMulti => 'רשות · בחירה מרובה';
+
+  @override
+  String get menuTemplateOptionalSingle => 'רשות · עד בחירה אחת';
+
+  @override
+  String menuTemplateOptionCount(int count) {
+    return '$count אפשרויות';
+  }
+
+  @override
+  String get menuTemplateApplyPartial =>
+      'ההוספה נעצרה — השורות שכבר נוצרו נשארות ברשימה; אפשר לערוך או למחוק אותן למטה.';
+
+  @override
+  String get menuTemplateBurgerToppings => 'תוספות להמבורגר';
+
+  @override
+  String get menuTemplateOptLettuce => 'חסה';
+
+  @override
+  String get menuTemplateOptTomato => 'עגבנייה';
+
+  @override
+  String get menuTemplateOptOnion => 'בצל';
+
+  @override
+  String get menuTemplateOptPickles => 'מלפפון חמוץ';
+
+  @override
+  String get menuTemplateOptCheese => 'גבינה';
+
+  @override
+  String get menuTemplateDoneness => 'דרגת עשייה';
+
+  @override
+  String get menuTemplateOptRare => 'נא';
+
+  @override
+  String get menuTemplateOptMediumDoneness => 'מדיום';
+
+  @override
+  String get menuTemplateOptWellDone => 'עשוי היטב';
+
+  @override
+  String get menuTemplatePattyCount => 'מספר קציצות';
+
+  @override
+  String get menuTemplateOptSinglePatty => 'קציצה אחת';
+
+  @override
+  String get menuTemplateOptDoublePatty => 'שתי קציצות';
+
+  @override
+  String get menuTemplateOptTriplePatty => 'שלוש קציצות';
+
+  @override
+  String get menuTemplateExtras => 'תוספות';
+
+  @override
+  String get menuTemplateOptExtraCheese => 'תוספת גבינה';
+
+  @override
+  String get menuTemplateOptExtraPatty => 'קציצה נוספת';
+
+  @override
+  String get menuTemplateOptFries => 'צ\'יפס';
+
+  @override
+  String get menuTemplateOptDrink => 'משקה';
+
+  @override
+  String get menuTemplateDrinkSize => 'גודל משקה';
+
+  @override
+  String get menuTemplateOptSmall => 'קטן';
+
+  @override
+  String get menuTemplateOptMediumSize => 'בינוני';
+
+  @override
+  String get menuTemplateOptLarge => 'גדול';
+
+  @override
+  String get menuTemplateSpiciness => 'רמת חריפות';
+
+  @override
+  String get menuTemplateOptMild => 'עדין';
+
+  @override
+  String get menuTemplateOptMediumSpicy => 'בינוני';
+
+  @override
+  String get menuTemplateOptHot => 'חריף';
+
+  @override
   String get dashboardNavSettings => 'הגדרות';
 
   @override
@@ -928,7 +1396,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminActionProblem => 'לא ניתן היה להשלים את הפעולה — נסה שוב.';
 
   @override
-  String get adminErrCurrency => 'השתמש בקוד בן 3 אותיות (למשל USD)';
+  String get adminErrCurrency => 'השתמש בקוד בן 3 אותיות (למשל ILS)';
 
   @override
   String get adminErrCountry => 'השתמש בקוד בן 2 אותיות (למשל US)';
@@ -1189,6 +1657,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get authWelcomeTitle => 'ברוכים הבאים ל-RestoFlow';
 
   @override
+  String get authBrandTagline => 'מערכת הפעלה למסעדות';
+
+  @override
   String get authSignInTab => 'התחברות';
 
   @override
@@ -1254,6 +1725,9 @@ class AppLocalizationsHe extends AppLocalizations {
       'הזינו את קוד הצימוד שנוצר בלוח הבקרה של המסעדה כדי לחבר את המכשיר.';
 
   @override
+  String get pairingWhereCode => 'קבלו קוד צימוד מלוח הבקרה ← לשונית מכשירים.';
+
+  @override
   String get pairingCodeLabel => 'קוד צימוד';
 
   @override
@@ -1273,4 +1747,515 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get pairingFailed => 'לא ניתן לצמד את המכשיר. נסו שוב.';
+
+  @override
+  String get dashboardNavPrinters => 'מדפסות';
+
+  @override
+  String get dashboardNavStaff => 'צוות';
+
+  @override
+  String get dashboardNavTables => 'שולחנות';
+
+  @override
+  String get dashboardModeDemo => 'דמו';
+
+  @override
+  String get dashboardModeReal => 'אמת';
+
+  @override
+  String get dashboardUsersNotConnectedTitle => 'ניהול המשתמשים עדיין לא מחובר';
+
+  @override
+  String get dashboardUsersNotConnectedBody =>
+      'גרסה זו עדיין אינה יכולה להציג או להזמין חברים אמיתיים — אין ממשק לקריאת חברים. במקום להציג אנשים לדוגמה, העמוד נשאר ריק. מצב הדמו מדגים כיצד המסך יעבוד.';
+
+  @override
+  String get dashboardSettingsWorkspace => 'סביבת העבודה';
+
+  @override
+  String get dashboardSettingsRealNotice =>
+      'אלה הערכים האמיתיים של סביבת העבודה. עריכת ההגדרות עדיין אינה מחוברת בגרסה זו, ולכן אין כאן מה לשמור.';
+
+  @override
+  String get setupTitle => 'הגדרה';
+
+  @override
+  String get setupSubtitle => 'הכינו את הסניף הזה לשירות';
+
+  @override
+  String get setupDevices => 'מכשירים';
+
+  @override
+  String get setupDevicesCaption => 'פעילים / סה״כ';
+
+  @override
+  String get setupPrinters => 'מדפסות';
+
+  @override
+  String get setupPrintersCaption => 'מופעלות / סה״כ';
+
+  @override
+  String get setupStaffPin => 'קודי PIN לצוות';
+
+  @override
+  String get setupStaffCaption => 'עם PIN / סה״כ';
+
+  @override
+  String get setupMetricUnavailable => 'לא זמין';
+
+  @override
+  String get setupNoDevices =>
+      'אין מכשירים עדיין — צרו מכשיר קופה או מסך מטבח והנפיקו קוד צימוד.';
+
+  @override
+  String get setupNoActiveDevice =>
+      'אף מכשיר אינו מצומד עדיין — הנפיקו קוד בעמוד המכשירים והזינו אותו במסך הצימוד של המכשיר.';
+
+  @override
+  String get setupNoPrinters =>
+      'אין מדפסות מוגדרות עדיין — הוסיפו מדפסת קבלות או מדפסת מטבח.';
+
+  @override
+  String get setupNoStaffPin =>
+      'לאף איש צוות אין PIN עדיין — כניסה לקופה/מסך המטבח (ומחזור ההזמנות החי) דורשת לפחות אחד.';
+
+  @override
+  String get setupReady => 'הסניף מוכן: מכשיר מצומד וקוד PIN לצוות קיימים.';
+
+  @override
+  String get setupMenu => 'פריטי תפריט';
+
+  @override
+  String get setupMenuCaption => 'פעילים / סה״כ';
+
+  @override
+  String get setupNoMenu => 'אין עדיין פריטי תפריט — לקופה אין מה למכור.';
+
+  @override
+  String get setupAddMenuItem => 'הוסיפו את פריט התפריט הראשון';
+
+  @override
+  String get setupNoPosDevice =>
+      'אין עדיין מכשיר קופה — הדלפק זקוק לאחד כדי לקבל הזמנות.';
+
+  @override
+  String get setupCreatePos => 'יצירת מכשיר קופה';
+
+  @override
+  String get setupNoKdsDevice =>
+      'אין עדיין צג מטבח — המטבח לא יראה הזמנות נכנסות.';
+
+  @override
+  String get setupCreateKds => 'יצירת צג מטבח';
+
+  @override
+  String get setupPairingHint =>
+      'פתחו את אפליקציית הקופה או צג המטבח במכשיר והזינו את קוד הצימוד מלשונית המכשירים.';
+
+  @override
+  String get setupAddPrinter => 'הוספת מדפסת';
+
+  @override
+  String get setupCreatePin => 'יצירת קוד PIN לעובד';
+
+  @override
+  String get printersTitle => 'מדפסות';
+
+  @override
+  String get printersSubtitle => 'מדפסות קבלות ומטבח לסניף זה';
+
+  @override
+  String get printersAdd => 'הוספת מדפסת';
+
+  @override
+  String get printersEmptyTitle => 'אין מדפסות עדיין';
+
+  @override
+  String get printersEmptyBody =>
+      'הוסיפו מדפסת קבלות או מדפסת מטבח כדי להכין את הסניף להדפסה.';
+
+  @override
+  String get printersTransportNoticeTitle =>
+      'תצורה בלבד — אין עדיין ערוץ הדפסה';
+
+  @override
+  String get printersTransportNotice =>
+      'הגדרות המדפסת נשמרות ומאומתות בשרת, אך גרסה זו אינה שולחת דבר למדפסות פיזיות. מנוע ההדפסה בנוי רשת-תחילה; ערוצי Bluetooth ו-USB עדיין לא מותקנים. לעולם לא מוצגת הצלחת הדפסה מזויפת.';
+
+  @override
+  String get printersRoleReceipt => 'קבלות';
+
+  @override
+  String get printersRoleKitchen => 'מטבח';
+
+  @override
+  String get printersConnNetwork => 'רשת (Wi-Fi/LAN)';
+
+  @override
+  String get printersConnBluetooth => 'Bluetooth';
+
+  @override
+  String get printersConnUsb => 'USB';
+
+  @override
+  String get printersConnConfigOnly => 'תצורה בלבד — ערוץ זה עדיין לא מותקן.';
+
+  @override
+  String get printersAdvanced => 'מתקדם';
+
+  @override
+  String get printersDialogSavesConfigOnly =>
+      'גרסה זו שומרת את הגדרות המדפסת בלבד — עדיין לא מתבצעת הדפסה.';
+
+  @override
+  String get printersConnBluetoothWeb =>
+      'גילוי Bluetooth עדיין אינו זמין באפליקציית האינטרנט. תישמר תצורה בלבד.';
+
+  @override
+  String get printersConnUsbAdapter =>
+      'הדפסת USB דורשת את מתאם המדפסת של גרסת שולחן העבודה. תישמר תצורה בלבד.';
+
+  @override
+  String get printersFieldName => 'שם תצוגה';
+
+  @override
+  String get printersFieldRole => 'תפקיד המדפסת';
+
+  @override
+  String get printersFieldConnection => 'סוג חיבור';
+
+  @override
+  String get printersFieldPaper => 'רוחב נייר';
+
+  @override
+  String get printersFieldHost => 'מארח / כתובת IP';
+
+  @override
+  String get printersFieldPort => 'פורט';
+
+  @override
+  String get printersFieldBluetoothId => 'מזהה / שם התקן Bluetooth';
+
+  @override
+  String get printersFieldUsbPath => 'נתיב / מזהה USB';
+
+  @override
+  String get printersEnabled => 'מופעלת';
+
+  @override
+  String get printersDisabled => 'מושבתת';
+
+  @override
+  String get printersEdit => 'עריכה';
+
+  @override
+  String get printersRoute => 'ניתוב לתחנה';
+
+  @override
+  String get printersRouteTitle => 'ניתוב המדפסת לתחנה';
+
+  @override
+  String get printersRouteStation => 'תחנה';
+
+  @override
+  String get printersRouteActive => 'הניתוב מופעל';
+
+  @override
+  String get printersRoutedTo => 'מנתבת אל';
+
+  @override
+  String get printersDelete => 'הסרת מדפסת';
+
+  @override
+  String get printersDeleteConfirm =>
+      'להסיר את המדפסת הזו? גם ניתובי התחנות שלה יוסרו.';
+
+  @override
+  String get printersSaved => 'נשמר';
+
+  @override
+  String get printersNoStations => 'אין תחנות לסניף זה עדיין.';
+
+  @override
+  String get printersErrHost => 'הזינו מארח / כתובת IP של המדפסת';
+
+  @override
+  String get printersErrPort => 'הזינו פורט תקין (1–65535)';
+
+  @override
+  String get printersSave => 'שמירה';
+
+  @override
+  String get printersWizardStepPurpose => 'מה תרצו להדפיס?';
+
+  @override
+  String get printersPurposeReceiptsHint => 'חשבונות ללקוחות בדלפק.';
+
+  @override
+  String get printersPurposeKitchenHint => 'כרטיסים לצוות המטבח.';
+
+  @override
+  String get printersWizardStepConnection => 'איך המדפסת מחוברת?';
+
+  @override
+  String get printersConnNetworkHint =>
+      'המדפסת חייבת להיות באותה רשת Wi-Fi/רשת כמו מכשיר זה.';
+
+  @override
+  String get printersWizardStepDetails => 'פרטי המדפסת';
+
+  @override
+  String get printersNext => 'הבא';
+
+  @override
+  String get printersBack => 'חזרה';
+
+  @override
+  String get printersStatusDisabled => 'מושבתת';
+
+  @override
+  String get printersStatusNeedsBridge => 'דורשת גשר הדפסה';
+
+  @override
+  String get printersStatusConfigOnly => 'מוגדרת בלבד';
+
+  @override
+  String get printersStatusReadyNetwork => 'מוכנה דרך מתאם רשת';
+
+  @override
+  String get printersTestPrint => 'הדפסת ניסיון';
+
+  @override
+  String get printersTestPrintUnavailable =>
+      'הדפסת ניסיון דורשת את מתאם ההדפסה או הגשר — לא זמינה בגרסת אינטרנט זו.';
+
+  @override
+  String get staffTitle => 'צוות';
+
+  @override
+  String get staffSubtitle => 'עובדים וכניסת PIN לסניף זה';
+
+  @override
+  String get staffAdd => 'הוספת איש צוות';
+
+  @override
+  String get staffEmptyTitle => 'אין צוות עדיין';
+
+  @override
+  String get staffEmptyBody =>
+      'צרו קופאים, אנשי מטבח ומנהלים, ואז הגדירו לכל אחד PIN לכניסה לקופה/מסך המטבח.';
+
+  @override
+  String get staffFieldName => 'שם תצוגה';
+
+  @override
+  String get staffFieldRole => 'תפקיד';
+
+  @override
+  String get staffPinSet => 'PIN הוגדר';
+
+  @override
+  String get staffNoPin => 'אין PIN';
+
+  @override
+  String get staffSetPin => 'הגדרת PIN';
+
+  @override
+  String get staffResetPin => 'איפוס PIN';
+
+  @override
+  String get staffPinDialogTitle => 'הגדרת PIN לכניסה';
+
+  @override
+  String get staffPinDialogBody =>
+      '4–8 ספרות. נשמר כגיבוב מאובטח — לא ניתן לקרוא אותו לעולם; הגדרת PIN חדש מחליפה את הישן.';
+
+  @override
+  String get staffFieldPin => 'PIN (4–8 ספרות)';
+
+  @override
+  String get staffFieldPinConfirm => 'אישור PIN';
+
+  @override
+  String get staffPinMismatch => 'קודי ה-PIN אינם תואמים';
+
+  @override
+  String get staffPinInvalid => 'הזינו 4–8 ספרות';
+
+  @override
+  String get staffPinSaved => 'ה-PIN נשמר';
+
+  @override
+  String get staffCreated => 'איש הצוות נוצר';
+
+  @override
+  String get staffNoPinWarning =>
+      'איש צוות ללא PIN אינו יכול להיכנס לקופה/מסך המטבח.';
+
+  @override
+  String get staffInactive => 'לא פעיל';
+
+  @override
+  String get tablesTitle => 'שולחנות';
+
+  @override
+  String get tablesSubtitle =>
+      'שולחנות האוכל של סניף זה — בורר השולחנות בקופה מוכר מהרשימה הזו.';
+
+  @override
+  String get tablesAdd => 'הוספת שולחן';
+
+  @override
+  String get tablesEdit => 'עריכה';
+
+  @override
+  String get tablesDelete => 'הסרת שולחן';
+
+  @override
+  String get tablesDeleteConfirm =>
+      'להסיר את השולחן הזה? הזמנות קיימות שומרות את הפניית השולחן שלהן.';
+
+  @override
+  String get tablesEmptyTitle => 'אין שולחנות עדיין';
+
+  @override
+  String get tablesEmptyBody =>
+      'הוסיפו את השולחן הראשון — זרימת הישיבה במסעדה בקופה דורשת לפחות שולחן אחד.';
+
+  @override
+  String get tablesFieldLabel => 'שם / מספר שולחן';
+
+  @override
+  String get tablesFieldSeats => 'מקומות ישיבה';
+
+  @override
+  String get tablesFieldArea => 'אזור / מדור';
+
+  @override
+  String get tablesActive => 'פעיל';
+
+  @override
+  String get tablesInactive => 'לא פעיל';
+
+  @override
+  String get tablesErrLabel => 'הזינו שם שולחן';
+
+  @override
+  String get tablesErrSeats => 'מספר המקומות חייב להיות מספר חיובי';
+
+  @override
+  String get tablesStatusAvailable => 'פנוי';
+
+  @override
+  String get tablesStatusOccupied => 'תפוס';
+
+  @override
+  String get tablesStatusReserved => 'שמור';
+
+  @override
+  String get tablesStatusOutOfService => 'לא בשירות';
+
+  @override
+  String get tablesSetStatus => 'הגדרת סטטוס';
+
+  @override
+  String get tablesSaved => 'השולחן נשמר';
+
+  @override
+  String get adminRevokeConfirm =>
+      'לבטל את המכשיר הזה? הצימוד וההפעלות שלו יסתיימו מיד והמכשיר יחזור למסך הצימוד.';
+
+  @override
+  String get adminPairOnDevice =>
+      'הזינו את הקוד החד-פעמי במסך הצימוד של המכשיר כדי לצמד אותו.';
+
+  @override
+  String get pinLoginTitle => 'כניסת צוות';
+
+  @override
+  String get pinLoginPickName => 'הקישו על השם שלכם';
+
+  @override
+  String get pinLoginEmptyTitle => 'אין עדיין קודי PIN לצוות';
+
+  @override
+  String get pinLoginEmptyBody =>
+      'בקשו ממנהל להוסיף אנשי צוות ולהגדיר להם PIN בלוח הבקרה.';
+
+  @override
+  String get pinLoginEmptyBodyPos =>
+      'פתחו את לוח הבקרה ← צוות, הוסיפו קופאי או מנהל והגדירו קוד PIN, ואז חזרו והקישו \"נסה שוב\".';
+
+  @override
+  String get pinLoginEmptyBodyKds =>
+      'פתחו את לוח הבקרה ← צוות, הוסיפו איש צוות מטבח או מנהל והגדירו קוד PIN, ואז חזרו והקישו \"נסה שוב\".';
+
+  @override
+  String get pinLoginStepsTitle => 'שלבי הגדרה';
+
+  @override
+  String get pinLoginStep1 => '1. פתחו את לוח הבקרה';
+
+  @override
+  String get pinLoginStep2 => '2. עברו אל צוות';
+
+  @override
+  String get pinLoginStep3 => '3. הוסיפו איש צוות';
+
+  @override
+  String get pinLoginStep4 => '4. הגדירו קוד PIN';
+
+  @override
+  String get pinLoginStep5 => '5. חזרו לכאן והקישו \"נסה שוב\"';
+
+  @override
+  String get pinLoginLoadError =>
+      'לא ניתן לטעון את רשימת הצוות. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get pinLoginSessionInvalid =>
+      'הפעלת המכשיר אינה תקפה עוד. צמדו את המכשיר מחדש.';
+
+  @override
+  String get pinLoginWrongPin => 'PIN שגוי — נסו שוב.';
+
+  @override
+  String get pinLoginLocked => 'יותר מדי ניסיונות. הכניסה נעולה זמנית.';
+
+  @override
+  String get pinLoginNetworkError => 'בעיית חיבור — נסו שוב.';
+
+  @override
+  String get pinLoginUnavailable => 'הכניסה אינה זמינה כעת.';
+
+  @override
+  String get pinLoginSubmit => 'כניסה';
+
+  @override
+  String get pinLoginBack => 'חזרה';
+
+  @override
+  String get pinFieldLabel => 'PIN';
+
+  @override
+  String get posSignOutStaff => 'סיום הפעלת צוות';
+
+  @override
+  String get posMenuLoadError =>
+      'לא ניתן לטעון את התפריט. בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get posMenuEmptyTitle => 'אין פריטי תפריט עדיין';
+
+  @override
+  String get posMenuEmptyBody =>
+      'הוסיפו פריטי תפריט בלוח הבקרה כדי להתחיל למכור.';
+
+  @override
+  String get posTablesEmptyReal =>
+      'לא הוגדרו שולחנות — הוסיפו שולחנות בלוח הבקרה ← שולחנות.';
+
+  @override
+  String get kdsSignInAgain => 'כניסה מחדש';
 }

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_admin/main.dart';
+import 'package:restoflow_admin/src/admin_platform_gate.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show RealModeUnconfiguredView;
 import 'package:restoflow_feature_auth/testing.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -68,7 +71,8 @@ void main() {
   });
 
   testWidgets(
-    'auth mode: a tenant role without the platform flag is denied (even org_owner)',
+    'auth mode: a tenant role without the platform flag gets the HONEST '
+    'platform-panel explainer (even org_owner) — never the overview',
     (tester) async {
       await _pump(
         tester,
@@ -81,9 +85,82 @@ void main() {
       );
       final l10n = await en();
       expect(find.text(l10n.adminOverviewTitle), findsNothing);
-      expect(find.text(l10n.authWrongRole), findsOneWidget);
+      // Sprint (admin access clarification): the explainer replaces the
+      // dead-end wrong-role state — what this app is, where owners go, and
+      // that this signed-in account is not a platform admin.
+      expect(find.text(l10n.adminGateTitle), findsOneWidget);
+      expect(find.text(l10n.adminGateNotOwner), findsOneWidget);
+      expect(find.text(l10n.adminGateUseDashboard), findsOneWidget);
+      expect(find.text(l10n.adminGateNotAdminAccount), findsOneWidget);
+      expect(
+        find.byKey(const Key('admin-gate-open-dashboard')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('admin-gate-retry')), findsOneWidget);
+      // No scary generic denial.
+      expect(find.text(l10n.authWrongRole), findsNothing);
+      expect(find.text(l10n.authAccessDenied), findsNothing);
     },
   );
+
+  testWidgets(
+    'auth mode: an unauthenticated visitor gets the explainer (this app has '
+    'no sign-in by design), not "Account access denied"',
+    (tester) async {
+      await _pump(
+        tester,
+        AdminApp(
+          demoMode: false,
+          fetchContext: fetcherForFailure(const AuthDeniedFailure()),
+        ),
+      );
+      final l10n = await en();
+      expect(find.text(l10n.adminGateTitle), findsOneWidget);
+      expect(find.text(l10n.adminGateNotOwner), findsOneWidget);
+      // Unauthenticated: the "signed-in account" note must NOT appear.
+      expect(find.text(l10n.adminGateNotAdminAccount), findsNothing);
+      expect(find.text(l10n.authAccessDenied), findsNothing);
+      expect(find.text(l10n.adminOverviewTitle), findsNothing);
+    },
+  );
+
+  testWidgets('real mode without Supabase config fails closed to the honest '
+      'unconfigured help page (mirrors the dashboard)', (tester) async {
+    // No fetchContext injected and no dart-defines in tests => config null.
+    await _pump(tester, const AdminApp(demoMode: false));
+    expect(find.byType(RealModeUnconfiguredView), findsOneWidget);
+  });
+
+  testWidgets('the explainer renders in Arabic (RTL) with the exact copy', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: AdminGateExplainer(signedIn: false, onRetry: () {}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      Directionality.of(tester.element(find.byType(AdminGateExplainer))),
+      TextDirection.rtl,
+    );
+    // The Arabic-first copy the sprint prescribed, verbatim.
+    expect(
+      find.text('هذه لوحة إدارة المنصة، وليست لوحة صاحب المطعم.'),
+      findsOneWidget,
+    );
+    expect(find.text('استخدم Dashboard لإدارة المطعم.'), findsOneWidget);
+  });
 
   testWidgets(
     'auth mode: a platform admin with zero memberships still reaches the overview',

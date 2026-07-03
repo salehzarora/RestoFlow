@@ -111,6 +111,26 @@ class AppLocalizationsAr extends AppLocalizations {
       'الوضع الحقيقي مُحدَّد لكن اتصال Supabase غير مُهيأ، لذا تعذّر تحميل أي بيانات للمنصة. اضبط عنوان Supabase ومفتاح anon، أو شغّل الوضع التجريبي.';
 
   @override
+  String get adminGateTitle => 'لوحة إدارة المنصة';
+
+  @override
+  String get adminGateNotOwner =>
+      'هذه لوحة إدارة المنصة، وليست لوحة صاحب المطعم.';
+
+  @override
+  String get adminGateUseDashboard => 'استخدم Dashboard لإدارة المطعم.';
+
+  @override
+  String get adminGateNotAdminAccount => 'هذا الحساب ليس مشرف منصة.';
+
+  @override
+  String get adminGateProvisionHint =>
+      'يُمنح وصول مشرف المنصة يدويًا من مشغّل المنصة — راجع docs/LOCAL_RUNBOOK.md.';
+
+  @override
+  String get adminGateOpenDashboard => 'فتح لوحة المطعم';
+
+  @override
   String get adminAccessDeniedTitle => 'تم رفض الوصول إلى إدارة المنصة';
 
   @override
@@ -128,6 +148,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kdsEmptyState => 'لا توجد تذاكر نشطة';
+
+  @override
+  String get kdsColumnEmpty => 'لا توجد تذاكر';
+
+  @override
+  String get kdsStaleBanner => 'غير متصل — تُعرض آخر التذاكر المتزامنة';
 
   @override
   String get kdsBumpAction => 'إنهاء';
@@ -201,6 +227,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posAddToCart => 'إضافة';
 
   @override
+  String posAddToCartWithTotal(String total) {
+    return 'إضافة · $total';
+  }
+
+  @override
   String get posClearCart => 'مسح';
 
   @override
@@ -217,6 +248,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posSendOrder => 'إرسال الطلب';
+
+  @override
+  String get posSendNeedsTableHint => 'عيّن طاولة لإرسال طلب التناول في المطعم';
 
   @override
   String get posDemoOrderNotice =>
@@ -426,6 +460,136 @@ class AppLocalizationsAr extends AppLocalizations {
       'استخدم طباعة المتصفح (Ctrl+P) لطباعة هذه المعاينة';
 
   @override
+  String get deviceSettingsMenuTooltip => 'قائمة الجهاز';
+
+  @override
+  String get deviceSettingsTitle => 'إعدادات الجهاز';
+
+  @override
+  String get deviceRefreshAction => 'تحديث الاتصال';
+
+  @override
+  String get deviceUnpairAction => 'إلغاء اقتران الجهاز';
+
+  @override
+  String get deviceUnpairWarning =>
+      'استخدم هذا فقط إذا كان يجب إقران هذا الجهاز من جديد.';
+
+  @override
+  String get deviceUnpairConfirm => 'إلغاء الاقتران';
+
+  @override
+  String get deviceUnpairCancel => 'إلغاء';
+
+  @override
+  String get deviceSettingsAppTypeLabel => 'نوع التطبيق';
+
+  @override
+  String get deviceSettingsAppTypePos => 'الكاشير (POS)';
+
+  @override
+  String get deviceSettingsAppTypeKds => 'شاشة المطبخ (KDS)';
+
+  @override
+  String get deviceSettingsRestaurantLabel => 'المطعم';
+
+  @override
+  String get deviceSettingsBranchLabel => 'الفرع';
+
+  @override
+  String get deviceSettingsDeviceLabel => 'الجهاز';
+
+  @override
+  String get deviceSettingsPairingLabel => 'الاقتران';
+
+  @override
+  String get deviceSettingsPairingActive => 'مقترن';
+
+  @override
+  String get deviceSettingsPinSessionLabel => 'جلسة الموظف';
+
+  @override
+  String get deviceSettingsPinSessionActive => 'مسجّل الدخول';
+
+  @override
+  String get deviceSettingsPinSessionNone => 'غير مسجّل الدخول';
+
+  @override
+  String get deviceSettingsDemoNote => 'وضع تجريبي — لا يوجد جهاز مقترن.';
+
+  @override
+  String get deviceSettingsUnavailable => 'معلومات الجهاز غير متاحة.';
+
+  @override
+  String get deviceSettingsPrintersHeading => 'الطابعات';
+
+  @override
+  String get deviceSettingsNoPrinter =>
+      'لا توجد طابعة معيّنة. اطلب من المدير إعدادها في لوحة التحكم ← الطابعات.';
+
+  @override
+  String get deviceSettingsBridgeRequired =>
+      'مُعدّة فقط — تتطلب الطباعة جسر طباعة.';
+
+  @override
+  String get deviceSettingsCapabilityNote =>
+      'تتطلب الطباعة جسر طباعة أو تطبيقًا أصليًا. هذا الإصدار يحفظ الإعدادات وينشئ/يعاين مهام الطباعة.';
+
+  @override
+  String deviceSettingsLastRefresh(String time) {
+    return 'آخر تحديث: $time';
+  }
+
+  @override
+  String get deviceSettingsLoadError => 'تعذّر تحميل تعيينات الطابعات.';
+
+  @override
+  String get deviceSettingsPrinterDisabled => 'معطّلة في لوحة التحكم';
+
+  @override
+  String deviceSettingsRouteStations(String names) {
+    return 'المحطات: $names';
+  }
+
+  @override
+  String get deviceRefreshedSnack => 'تم تحديث الاتصال.';
+
+  @override
+  String get deviceUnpairedSnack => 'تم إلغاء اقتران الجهاز.';
+
+  @override
+  String get deviceSettingsAutoPrintHeading => 'طباعة تلقائية';
+
+  @override
+  String get posAutoPrintReceiptToggle => 'طباعة الإيصال تلقائيًا بعد الدفع';
+
+  @override
+  String get kdsAutoPrintAcknowledgeToggle =>
+      'طباعة تذكرة المطبخ تلقائيًا عند الاستلام';
+
+  @override
+  String get autoPrintNoPrinterNote => 'معطّل — لا توجد طابعة معيّنة.';
+
+  @override
+  String get printStatusNotConfigured => 'لا توجد طابعة مُعدّة';
+
+  @override
+  String get printStatusPrepared =>
+      'تم تجهيز مهمة الطباعة — الطباعة الفعلية تتطلب جسر طباعة.';
+
+  @override
+  String get printStatusPrinted => 'تمت الطباعة';
+
+  @override
+  String get printStatusFailed => 'فشلت الطباعة';
+
+  @override
+  String get posReceiptPrintLabel => 'طباعة الإيصال';
+
+  @override
+  String get kdsTicketPrintLabel => 'طباعة المطبخ';
+
+  @override
   String get receiptPreviewTitle => 'معاينة الإيصال';
 
   @override
@@ -472,6 +636,62 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posShiftDemoNote => 'وردية تجريبية — غير متزامنة';
+
+  @override
+  String get posShiftRealName => 'الوردية الحالية';
+
+  @override
+  String get posShiftRealNote =>
+      'فُتحت عند تسجيل الدخول — إجماليات النقد تُتابَع على الخادم';
+
+  @override
+  String get posSyncSendingReal => 'جارٍ الإرسال إلى الخادم…';
+
+  @override
+  String get posSyncSentReal => 'أُرسل — شاشة المطبخ تستقبله تلقائيًا.';
+
+  @override
+  String get posSyncFailedReal =>
+      'رفض الخادم هذا الطلب — لم يُرسَل إلى المطبخ.';
+
+  @override
+  String get posSyncSendNow => 'إرسال الآن';
+
+  @override
+  String get posReceiptNoPrinterNote => 'الطباعة غير متصلة على هذا الجهاز بعد';
+
+  @override
+  String get posModifierRequired => 'إلزامي';
+
+  @override
+  String get posModifierOptional => 'اختياري';
+
+  @override
+  String posModifierSelectedCount(int selected, int max) {
+    return '$selected/$max';
+  }
+
+  @override
+  String posModifierSelectedCountOpen(int selected) {
+    return '$selected';
+  }
+
+  @override
+  String get posModifierFree => 'مجاني';
+
+  @override
+  String posModifierBasePrice(String price) {
+    return 'السعر الأساسي · $price';
+  }
+
+  @override
+  String get posModifierItemNoteLabel => 'ملاحظة للمنتج';
+
+  @override
+  String get posModifierItemNoteHint => 'مثال: بدون بصل، زيادة صوص';
+
+  @override
+  String get posItemNoteLabel => 'ملاحظة';
 
   @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
@@ -618,6 +838,34 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get authError => 'حدث خطأ ما';
+
+  @override
+  String get authRealModeUnconfiguredTitle => 'الوضع الحقيقي غير مُهيَّأ';
+
+  @override
+  String get authRealModeUnconfiguredBody =>
+      'تم تشغيل التطبيق في الوضع الحقيقي، لكن إعدادات الاتصال بالخادم مفقودة أو غير صالحة. RestoFlow لا يزيّف الخادم أبدًا، لذا يبقى الوضع الحقيقي مقفلاً حتى يتم توفير إعدادات صالحة.';
+
+  @override
+  String get authRealModeUnconfiguredHowTo => 'شغّل التطبيق بهذه القيم';
+
+  @override
+  String get authRealModeUnconfiguredDemoHint =>
+      'لاستكشاف النسخة التجريبية بدلاً من ذلك، شغّل التطبيق دون أي إعدادات — الوضع التجريبي هو الافتراضي.';
+
+  @override
+  String get authDeviceSignInUnavailableTitle => 'تسجيل دخول الجهاز غير متاح';
+
+  @override
+  String get authDeviceSignInUnavailableBody =>
+      'تسجيل الدخول المجهول للأجهزة معطَّل أو أن مصادقة Supabase غير مهيأة.';
+
+  @override
+  String get authDeviceSignInUnavailableHowTo => 'كيفية الإصلاح';
+
+  @override
+  String get authDeviceSignInUnavailableFix =>
+      'فعِّل تسجيل الدخول المجهول في إعدادات مصادقة Supabase، ثم أعد تشغيل الخادم وهذا التطبيق. لا يحتاج هذا الجهاز إلى حساب شخصي — الاقتران يسجّل دخول الجهاز بنفسه.';
 
   @override
   String get authTryAgain => 'حاول مرة أخرى';
@@ -776,6 +1024,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuRequiredLabel => 'مطلوب';
 
   @override
+  String get menuAllowQuantityLabel => 'السماح بالكمية';
+
+  @override
+  String get menuAllowQuantityHelp =>
+      'يمكن للكاشير إضافة نفس الخيار أكثر من مرة (مثال: جبنة إضافية ×2).';
+
+  @override
+  String get menuMaxQuantityLabel => 'الحد الأقصى لكل خيار';
+
+  @override
   String get menuSizesHeading => 'الأحجام';
 
   @override
@@ -810,11 +1068,42 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuImageHeading => 'صورة العنصر';
 
   @override
-  String get menuImageDeferredTitle => 'رفع الصور قريبًا';
+  String get menuImageDeferredTitle => 'رفع الصور غير متصل';
 
   @override
   String get menuImageDeferredBody =>
-      'عرض ورفع صور العناصر يتطلب سجلًا خلفيًا للصور (متابعة مخطط لها). مسار الرفع والتحقق جاهزان بالفعل.';
+      'لا يوجد تخزين صور متصل بهذه الواجهة، لذا لا يمكن رفع صور العناصر أو عرضها هنا.';
+
+  @override
+  String get menuImagePickAction => 'اختيار صورة';
+
+  @override
+  String get menuImageReplaceAction => 'استبدال الصورة';
+
+  @override
+  String get menuImageRemoveAction => 'إزالة الصورة';
+
+  @override
+  String get menuImageSaveAction => 'حفظ الصورة';
+
+  @override
+  String get menuImageInvalidType => 'يمكن رفع صور PNG أو JPEG أو WebP فقط.';
+
+  @override
+  String get menuImageTooLarge => 'الصورة كبيرة جدًا — الحد الأقصى 5 ميغابايت.';
+
+  @override
+  String get menuImageUploadFailed => 'فشل الرفع — لم يتم حفظ الصورة.';
+
+  @override
+  String get menuImageUnsupportedPlatform =>
+      'اختيار صورة غير متاح على هذه المنصة بعد — استخدم لوحة التحكم عبر الويب.';
+
+  @override
+  String get menuImageDemoNote => 'تجريبي — لا يتم رفع الصورة إلى خادم.';
+
+  @override
+  String get menuImageLoadError => 'تعذر تحميل معاينة الصورة.';
 
   @override
   String get menuErrorRequired => 'مطلوب';
@@ -826,7 +1115,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuErrorNegativePrice => 'لا يمكن أن يكون سالبًا';
 
   @override
-  String get menuErrorCurrency => 'استخدم رمزًا من 3 أحرف (مثل USD)';
+  String get menuErrorCurrency => 'استخدم رمزًا من 3 أحرف (مثل ILS)';
 
   @override
   String get menuErrorSelectionType => 'اختر مفرد أو متعدد';
@@ -895,6 +1184,186 @@ class AppLocalizationsAr extends AppLocalizations {
       'هذا وصول على مستوى المؤسسة دون اختيار مطعم. افتح إدارة القائمة من مطعم أو فرع محدد.';
 
   @override
+  String get menuBasicInfoSection => 'معلومات أساسية';
+
+  @override
+  String get menuPricingSection => 'التسعير';
+
+  @override
+  String get menuPreparationSection => 'التحضير';
+
+  @override
+  String get menuAdvancedSection => 'متقدم';
+
+  @override
+  String get menuAdvancedSectionHint =>
+      'تفاصيل اختيارية — استخدم ما يناسب هذا الصنف.';
+
+  @override
+  String get menuItemTypeLabel => 'نوع الصنف';
+
+  @override
+  String get menuItemTypeUnspecified => 'غير محدد';
+
+  @override
+  String get menuItemTypeFood => 'طعام';
+
+  @override
+  String get menuItemTypeDrink => 'مشروب';
+
+  @override
+  String get menuItemTypeSide => 'طبق جانبي';
+
+  @override
+  String get menuItemTypeCombo => 'وجبة كومبو';
+
+  @override
+  String get menuItemTypeOther => 'أخرى';
+
+  @override
+  String get menuTagsLabel => 'وسوم';
+
+  @override
+  String get menuTagSpicy => 'حار';
+
+  @override
+  String get menuTagVegetarian => 'نباتي';
+
+  @override
+  String get menuTagPopular => 'رائج';
+
+  @override
+  String get menuTagNew => 'جديد';
+
+  @override
+  String menuModifierGroupCount(int count) {
+    return '$count مجموعات خيارات';
+  }
+
+  @override
+  String get menuPrepMinutesLabel => 'وقت التحضير (بالدقائق)';
+
+  @override
+  String get menuKitchenNoteLabel => 'ملاحظة للمطبخ';
+
+  @override
+  String get menuSkuLabel => 'SKU (رمز داخلي)';
+
+  @override
+  String get menuPortionFieldLabel => 'تسمية الحصة';
+
+  @override
+  String get menuPattyCountLabel => 'العدد (قطع أو شرائح)';
+
+  @override
+  String get menuPattyWeightLabel => 'وزن القطعة (غرام)';
+
+  @override
+  String get menuTemplateAddAction => 'إضافة قالب';
+
+  @override
+  String get menuTemplatePickerTitle => 'إضافة من قالب';
+
+  @override
+  String get menuTemplateRequiredSingle => 'إلزامي · اختيار واحد';
+
+  @override
+  String get menuTemplateOptionalMulti => 'اختياري · اختيار متعدد';
+
+  @override
+  String get menuTemplateOptionalSingle => 'اختياري · خيار واحد كحد أقصى';
+
+  @override
+  String menuTemplateOptionCount(int count) {
+    return '$count خيارات';
+  }
+
+  @override
+  String get menuTemplateApplyPartial =>
+      'توقفت الإضافة — الصفوف التي أُنشئت تبقى في القائمة؛ يمكن تعديلها أو حذفها أدناه.';
+
+  @override
+  String get menuTemplateBurgerToppings => 'إضافات البرغر';
+
+  @override
+  String get menuTemplateOptLettuce => 'خس';
+
+  @override
+  String get menuTemplateOptTomato => 'بندورة';
+
+  @override
+  String get menuTemplateOptOnion => 'بصل';
+
+  @override
+  String get menuTemplateOptPickles => 'مخلل';
+
+  @override
+  String get menuTemplateOptCheese => 'جبنة';
+
+  @override
+  String get menuTemplateDoneness => 'درجة الاستواء';
+
+  @override
+  String get menuTemplateOptRare => 'نادرة';
+
+  @override
+  String get menuTemplateOptMediumDoneness => 'وسط';
+
+  @override
+  String get menuTemplateOptWellDone => 'ناضجة جيدًا';
+
+  @override
+  String get menuTemplatePattyCount => 'عدد قطع اللحم';
+
+  @override
+  String get menuTemplateOptSinglePatty => 'قطعة واحدة';
+
+  @override
+  String get menuTemplateOptDoublePatty => 'قطعتان';
+
+  @override
+  String get menuTemplateOptTriplePatty => 'ثلاث قطع';
+
+  @override
+  String get menuTemplateExtras => 'إضافات';
+
+  @override
+  String get menuTemplateOptExtraCheese => 'جبنة إضافية';
+
+  @override
+  String get menuTemplateOptExtraPatty => 'قطعة لحم إضافية';
+
+  @override
+  String get menuTemplateOptFries => 'بطاطا مقلية';
+
+  @override
+  String get menuTemplateOptDrink => 'مشروب';
+
+  @override
+  String get menuTemplateDrinkSize => 'حجم المشروب';
+
+  @override
+  String get menuTemplateOptSmall => 'صغير';
+
+  @override
+  String get menuTemplateOptMediumSize => 'وسط';
+
+  @override
+  String get menuTemplateOptLarge => 'كبير';
+
+  @override
+  String get menuTemplateSpiciness => 'مستوى الحار';
+
+  @override
+  String get menuTemplateOptMild => 'خفيف';
+
+  @override
+  String get menuTemplateOptMediumSpicy => 'وسط';
+
+  @override
+  String get menuTemplateOptHot => 'حار';
+
+  @override
   String get dashboardNavSettings => 'الإعدادات';
 
   @override
@@ -931,7 +1400,7 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذّر إتمام الإجراء — يرجى المحاولة مرة أخرى.';
 
   @override
-  String get adminErrCurrency => 'استخدم رمزًا من 3 أحرف (مثل USD)';
+  String get adminErrCurrency => 'استخدم رمزًا من 3 أحرف (مثل ILS)';
 
   @override
   String get adminErrCountry => 'استخدم رمزًا من حرفين (مثل US)';
@@ -1195,6 +1664,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get authWelcomeTitle => 'مرحبًا بك في RestoFlow';
 
   @override
+  String get authBrandTagline => 'نظام تشغيل المطاعم';
+
+  @override
   String get authSignInTab => 'تسجيل الدخول';
 
   @override
@@ -1261,6 +1733,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'أدخل رمز الاقتران الذي أُنشئ في لوحة تحكم المطعم لربط هذا الجهاز.';
 
   @override
+  String get pairingWhereCode =>
+      'احصل على رمز الاقتران من لوحة التحكم ← تبويب الأجهزة.';
+
+  @override
   String get pairingCodeLabel => 'رمز الاقتران';
 
   @override
@@ -1281,4 +1757,518 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pairingFailed => 'تعذّر اقتران هذا الجهاز. حاول مرة أخرى.';
+
+  @override
+  String get dashboardNavPrinters => 'الطابعات';
+
+  @override
+  String get dashboardNavStaff => 'الموظفون';
+
+  @override
+  String get dashboardNavTables => 'الطاولات';
+
+  @override
+  String get dashboardModeDemo => 'تجريبي';
+
+  @override
+  String get dashboardModeReal => 'حقيقي';
+
+  @override
+  String get dashboardUsersNotConnectedTitle =>
+      'إدارة المستخدمين غير متصلة بعد';
+
+  @override
+  String get dashboardUsersNotConnectedBody =>
+      'لا يمكن لهذا الإصدار عرض الأعضاء الحقيقيين أو دعوتهم بعد — لا توجد واجهة لقراءة الأعضاء. بدلاً من عرض أشخاص تجريبيين تبقى هذه الصفحة فارغة. الوضع التجريبي يعرض كيف سيعمل هذا المسار.';
+
+  @override
+  String get dashboardSettingsWorkspace => 'مساحة العمل';
+
+  @override
+  String get dashboardSettingsRealNotice =>
+      'هذه هي القيم الحقيقية لمساحة العمل. تعديل الإعدادات غير متصل في هذا الإصدار بعد، لذا لا يوجد شيء للحفظ هنا.';
+
+  @override
+  String get setupTitle => 'الإعداد';
+
+  @override
+  String get setupSubtitle => 'جهّز هذا الفرع للعمل';
+
+  @override
+  String get setupDevices => 'الأجهزة';
+
+  @override
+  String get setupDevicesCaption => 'نشِط / الإجمالي';
+
+  @override
+  String get setupPrinters => 'الطابعات';
+
+  @override
+  String get setupPrintersCaption => 'مفعّل / الإجمالي';
+
+  @override
+  String get setupStaffPin => 'أرقام PIN للموظفين';
+
+  @override
+  String get setupStaffCaption => 'لديه PIN / الإجمالي';
+
+  @override
+  String get setupMetricUnavailable => 'غير متاح';
+
+  @override
+  String get setupNoDevices =>
+      'لا توجد أجهزة بعد — أنشئ جهاز نقطة بيع أو شاشة مطبخ وأصدر رمز اقتران.';
+
+  @override
+  String get setupNoActiveDevice =>
+      'لا يوجد جهاز مقترن بعد — أصدر رمزًا من صفحة الأجهزة واستخدمه على شاشة اقتران الجهاز.';
+
+  @override
+  String get setupNoPrinters =>
+      'لا توجد طابعات مُهيأة بعد — أضف طابعة إيصالات أو طابعة مطبخ.';
+
+  @override
+  String get setupNoStaffPin =>
+      'لا يملك أي موظف رقم PIN بعد — تسجيل الدخول إلى نقطة البيع/شاشة المطبخ (ودورة الطلبات الحية) يتطلب واحدًا على الأقل.';
+
+  @override
+  String get setupReady =>
+      'هذا الفرع جاهز: جهاز مقترن ورقم PIN للموظفين متوفران.';
+
+  @override
+  String get setupMenu => 'أصناف القائمة';
+
+  @override
+  String get setupMenuCaption => 'نشِط / الإجمالي';
+
+  @override
+  String get setupNoMenu =>
+      'لا توجد أصناف في القائمة بعد — لا يوجد ما تبيعه نقطة البيع.';
+
+  @override
+  String get setupAddMenuItem => 'أضف أول صنف في القائمة';
+
+  @override
+  String get setupNoPosDevice =>
+      'لا يوجد جهاز نقطة بيع بعد — يحتاج الكاشير إلى جهاز لاستقبال الطلبات.';
+
+  @override
+  String get setupCreatePos => 'إنشاء جهاز نقطة بيع';
+
+  @override
+  String get setupNoKdsDevice =>
+      'لا توجد شاشة مطبخ بعد — لن يرى المطبخ الطلبات الواردة.';
+
+  @override
+  String get setupCreateKds => 'إنشاء شاشة مطبخ';
+
+  @override
+  String get setupPairingHint =>
+      'افتح تطبيق نقطة البيع أو شاشة المطبخ على ذلك الجهاز وأدخل رمز الاقتران من تبويب الأجهزة.';
+
+  @override
+  String get setupAddPrinter => 'إضافة طابعة';
+
+  @override
+  String get setupCreatePin => 'إنشاء رمز PIN للموظف';
+
+  @override
+  String get printersTitle => 'الطابعات';
+
+  @override
+  String get printersSubtitle => 'طابعات الإيصالات والمطبخ لهذا الفرع';
+
+  @override
+  String get printersAdd => 'إضافة طابعة';
+
+  @override
+  String get printersEmptyTitle => 'لا توجد طابعات بعد';
+
+  @override
+  String get printersEmptyBody =>
+      'أضف طابعة إيصالات أو طابعة مطبخ لتجهيز هذا الفرع للطباعة.';
+
+  @override
+  String get printersTransportNoticeTitle =>
+      'إعدادات فقط — لا يوجد نقل طباعة بعد';
+
+  @override
+  String get printersTransportNotice =>
+      'تُحفظ إعدادات الطابعة وتُتحقق في الخادم، لكن هذا الإصدار لا يرسل شيئًا إلى الطابعات الفعلية. محرك الطباعة يعمل عبر الشبكة أولاً؛ ولم تُركَّب وسائط البلوتوث وUSB بعد. لا يُعرض أبدًا نجاح طباعة زائف.';
+
+  @override
+  String get printersRoleReceipt => 'إيصالات';
+
+  @override
+  String get printersRoleKitchen => 'مطبخ';
+
+  @override
+  String get printersConnNetwork => 'شبكة (Wi-Fi/LAN)';
+
+  @override
+  String get printersConnBluetooth => 'بلوتوث';
+
+  @override
+  String get printersConnUsb => 'USB';
+
+  @override
+  String get printersConnConfigOnly =>
+      'إعدادات فقط — وسيلة النقل هذه غير مُركّبة بعد.';
+
+  @override
+  String get printersAdvanced => 'خيارات متقدمة';
+
+  @override
+  String get printersDialogSavesConfigOnly =>
+      'هذا الإصدار يحفظ إعدادات الطابعة فقط — لا تتم أي طباعة بعد.';
+
+  @override
+  String get printersConnBluetoothWeb =>
+      'اكتشاف البلوتوث غير متاح في تطبيق الويب بعد. سيتم حفظ الإعدادات فقط.';
+
+  @override
+  String get printersConnUsbAdapter =>
+      'الطباعة عبر USB تتطلب محوّل الطابعة لسطح المكتب/الأصلي. سيتم حفظ الإعدادات فقط.';
+
+  @override
+  String get printersFieldName => 'الاسم المعروض';
+
+  @override
+  String get printersFieldRole => 'دور الطابعة';
+
+  @override
+  String get printersFieldConnection => 'نوع الاتصال';
+
+  @override
+  String get printersFieldPaper => 'عرض الورق';
+
+  @override
+  String get printersFieldHost => 'المضيف / عنوان IP';
+
+  @override
+  String get printersFieldPort => 'المنفذ';
+
+  @override
+  String get printersFieldBluetoothId => 'معرّف / اسم جهاز البلوتوث';
+
+  @override
+  String get printersFieldUsbPath => 'مسار / معرّف USB';
+
+  @override
+  String get printersEnabled => 'مفعّلة';
+
+  @override
+  String get printersDisabled => 'معطّلة';
+
+  @override
+  String get printersEdit => 'تعديل';
+
+  @override
+  String get printersRoute => 'توجيه إلى محطة';
+
+  @override
+  String get printersRouteTitle => 'توجيه الطابعة إلى محطة';
+
+  @override
+  String get printersRouteStation => 'المحطة';
+
+  @override
+  String get printersRouteActive => 'التوجيه مفعّل';
+
+  @override
+  String get printersRoutedTo => 'تُوجّه إلى';
+
+  @override
+  String get printersDelete => 'إزالة الطابعة';
+
+  @override
+  String get printersDeleteConfirm =>
+      'هل تريد إزالة هذه الطابعة؟ ستُزال أيضًا توجيهات المحطات الخاصة بها.';
+
+  @override
+  String get printersSaved => 'تم الحفظ';
+
+  @override
+  String get printersNoStations => 'لا توجد محطات لهذا الفرع بعد.';
+
+  @override
+  String get printersErrHost => 'أدخل مضيف / عنوان IP للطابعة';
+
+  @override
+  String get printersErrPort => 'أدخل منفذًا صالحًا (1–65535)';
+
+  @override
+  String get printersSave => 'حفظ';
+
+  @override
+  String get printersWizardStepPurpose => 'ماذا تريد أن تطبع؟';
+
+  @override
+  String get printersPurposeReceiptsHint => 'فواتير للعملاء عند الكاشير.';
+
+  @override
+  String get printersPurposeKitchenHint => 'تذاكر لطاقم المطبخ.';
+
+  @override
+  String get printersWizardStepConnection => 'كيف تتصل الطابعة؟';
+
+  @override
+  String get printersConnNetworkHint =>
+      'يجب أن تكون الطابعة على نفس شبكة Wi-Fi/الشبكة التي يستخدمها هذا الجهاز.';
+
+  @override
+  String get printersWizardStepDetails => 'تفاصيل الطابعة';
+
+  @override
+  String get printersNext => 'التالي';
+
+  @override
+  String get printersBack => 'رجوع';
+
+  @override
+  String get printersStatusDisabled => 'معطّلة';
+
+  @override
+  String get printersStatusNeedsBridge => 'تتطلب جسر الطباعة';
+
+  @override
+  String get printersStatusConfigOnly => 'مُهيأة فقط';
+
+  @override
+  String get printersStatusReadyNetwork => 'جاهزة عبر محوّل الشبكة';
+
+  @override
+  String get printersTestPrint => 'طباعة تجريبية';
+
+  @override
+  String get printersTestPrintUnavailable =>
+      'الطباعة التجريبية تتطلب محوّل الطباعة أو الجسر — غير متاحة في إصدار الويب هذا.';
+
+  @override
+  String get staffTitle => 'الموظفون';
+
+  @override
+  String get staffSubtitle => 'الموظفون وتسجيل الدخول برقم PIN لهذا الفرع';
+
+  @override
+  String get staffAdd => 'إضافة موظف';
+
+  @override
+  String get staffEmptyTitle => 'لا يوجد موظفون بعد';
+
+  @override
+  String get staffEmptyBody =>
+      'أنشئ الكاشيرين وطاقم المطبخ والمديرين، ثم عيّن لكل منهم رقم PIN لتسجيل الدخول إلى نقطة البيع/شاشة المطبخ.';
+
+  @override
+  String get staffFieldName => 'الاسم المعروض';
+
+  @override
+  String get staffFieldRole => 'الدور';
+
+  @override
+  String get staffPinSet => 'تم تعيين PIN';
+
+  @override
+  String get staffNoPin => 'بدون PIN';
+
+  @override
+  String get staffSetPin => 'تعيين PIN';
+
+  @override
+  String get staffResetPin => 'إعادة تعيين PIN';
+
+  @override
+  String get staffPinDialogTitle => 'تعيين رقم PIN لتسجيل الدخول';
+
+  @override
+  String get staffPinDialogBody =>
+      'من 4 إلى 8 أرقام. يُخزَّن كتجزئة آمنة — لا يمكن قراءته أبدًا؛ تعيين رقم جديد يستبدل القديم.';
+
+  @override
+  String get staffFieldPin => 'رقم PIN (4–8 أرقام)';
+
+  @override
+  String get staffFieldPinConfirm => 'تأكيد رقم PIN';
+
+  @override
+  String get staffPinMismatch => 'رقما PIN غير متطابقين';
+
+  @override
+  String get staffPinInvalid => 'أدخل من 4 إلى 8 أرقام';
+
+  @override
+  String get staffPinSaved => 'تم حفظ رقم PIN';
+
+  @override
+  String get staffCreated => 'تم إنشاء الموظف';
+
+  @override
+  String get staffNoPinWarning =>
+      'الموظف بدون رقم PIN لا يمكنه تسجيل الدخول إلى نقطة البيع/شاشة المطبخ.';
+
+  @override
+  String get staffInactive => 'غير نشط';
+
+  @override
+  String get tablesTitle => 'الطاولات';
+
+  @override
+  String get tablesSubtitle =>
+      'طاولات الطعام لهذا الفرع — منتقي الطاولات في نقطة البيع يبيع من هذه القائمة.';
+
+  @override
+  String get tablesAdd => 'إضافة طاولة';
+
+  @override
+  String get tablesEdit => 'تعديل';
+
+  @override
+  String get tablesDelete => 'إزالة الطاولة';
+
+  @override
+  String get tablesDeleteConfirm =>
+      'هل تريد إزالة هذه الطاولة؟ الطلبات الحالية تحتفظ بمرجع الطاولة الخاص بها.';
+
+  @override
+  String get tablesEmptyTitle => 'لا توجد طاولات بعد';
+
+  @override
+  String get tablesEmptyBody =>
+      'أضف أول طاولة — مسار تناول الطعام داخل المطعم في نقطة البيع يحتاج إلى طاولة واحدة على الأقل.';
+
+  @override
+  String get tablesFieldLabel => 'اسم / رقم الطاولة';
+
+  @override
+  String get tablesFieldSeats => 'المقاعد';
+
+  @override
+  String get tablesFieldArea => 'المنطقة / القسم';
+
+  @override
+  String get tablesActive => 'نشطة';
+
+  @override
+  String get tablesInactive => 'غير نشطة';
+
+  @override
+  String get tablesErrLabel => 'أدخل اسم الطاولة';
+
+  @override
+  String get tablesErrSeats => 'يجب أن يكون عدد المقاعد رقمًا موجبًا';
+
+  @override
+  String get tablesStatusAvailable => 'متاحة';
+
+  @override
+  String get tablesStatusOccupied => 'مشغولة';
+
+  @override
+  String get tablesStatusReserved => 'محجوزة';
+
+  @override
+  String get tablesStatusOutOfService => 'خارج الخدمة';
+
+  @override
+  String get tablesSetStatus => 'تعيين الحالة';
+
+  @override
+  String get tablesSaved => 'تم حفظ الطاولة';
+
+  @override
+  String get adminRevokeConfirm =>
+      'هل تريد إلغاء هذا الجهاز؟ سينتهي اقترانه وجلساته فورًا وسيعود الجهاز إلى شاشة الاقتران.';
+
+  @override
+  String get adminPairOnDevice =>
+      'أدخل الرمز لمرة واحدة على شاشة اقتران هذا الجهاز لإتمام الاقتران.';
+
+  @override
+  String get pinLoginTitle => 'تسجيل دخول الموظفين';
+
+  @override
+  String get pinLoginPickName => 'اختر اسمك';
+
+  @override
+  String get pinLoginEmptyTitle => 'لا توجد رموز PIN للموظفين بعد';
+
+  @override
+  String get pinLoginEmptyBody =>
+      'اطلب من المدير إضافة الموظفين وتعيين أرقام PIN في لوحة التحكم.';
+
+  @override
+  String get pinLoginEmptyBodyPos =>
+      'افتح لوحة التحكم ← الموظفون، أضف كاشيرًا أو مديرًا وعيّن له رمز PIN، ثم ارجع واضغط \"حاول مرة أخرى\".';
+
+  @override
+  String get pinLoginEmptyBodyKds =>
+      'افتح لوحة التحكم ← الموظفون، أضف موظف مطبخ أو مديرًا وعيّن له رمز PIN، ثم ارجع واضغط \"حاول مرة أخرى\".';
+
+  @override
+  String get pinLoginStepsTitle => 'خطوات الإعداد';
+
+  @override
+  String get pinLoginStep1 => '1. افتح لوحة التحكم';
+
+  @override
+  String get pinLoginStep2 => '2. انتقل إلى الموظفين';
+
+  @override
+  String get pinLoginStep3 => '3. أضف موظفًا';
+
+  @override
+  String get pinLoginStep4 => '4. عيّن رمز PIN';
+
+  @override
+  String get pinLoginStep5 => '5. ارجع إلى هنا واضغط \"حاول مرة أخرى\"';
+
+  @override
+  String get pinLoginLoadError =>
+      'تعذّر تحميل قائمة الموظفين. تحقّق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get pinLoginSessionInvalid =>
+      'جلسة هذا الجهاز لم تعد صالحة. أعد اقتران الجهاز.';
+
+  @override
+  String get pinLoginWrongPin => 'رقم PIN خاطئ — حاول مرة أخرى.';
+
+  @override
+  String get pinLoginLocked => 'محاولات كثيرة جدًا. تسجيل الدخول مقفل مؤقتًا.';
+
+  @override
+  String get pinLoginNetworkError => 'مشكلة في الاتصال — حاول مرة أخرى.';
+
+  @override
+  String get pinLoginUnavailable => 'تسجيل الدخول غير متاح الآن.';
+
+  @override
+  String get pinLoginSubmit => 'تسجيل الدخول';
+
+  @override
+  String get pinLoginBack => 'رجوع';
+
+  @override
+  String get pinFieldLabel => 'PIN';
+
+  @override
+  String get posSignOutStaff => 'إنهاء جلسة الموظف';
+
+  @override
+  String get posMenuLoadError =>
+      'تعذّر تحميل القائمة. تحقّق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get posMenuEmptyTitle => 'لا توجد عناصر في القائمة بعد';
+
+  @override
+  String get posMenuEmptyBody => 'أضف عناصر القائمة في لوحة التحكم لبدء البيع.';
+
+  @override
+  String get posTablesEmptyReal =>
+      'لا توجد طاولات مُعدة — أضف الطاولات من لوحة التحكم ← الطاولات.';
+
+  @override
+  String get kdsSignInAgain => 'تسجيل الدخول مرة أخرى';
 }

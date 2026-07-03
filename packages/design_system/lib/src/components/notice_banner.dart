@@ -17,6 +17,7 @@ class RestoflowNoticeBanner extends StatelessWidget {
     this.title,
     this.tone = RestoflowTone.info,
     this.icon,
+    this.action,
     super.key,
   });
 
@@ -31,10 +32,14 @@ class RestoflowNoticeBanner extends StatelessWidget {
   /// Overrides the tone's default leading icon when set.
   final IconData? icon;
 
+  /// Optional trailing action (e.g. a compact button that resolves the
+  /// notice). Rendered after the text column; mirrors under RTL.
+  final Widget? action;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final style = tone.style(theme.colorScheme);
+    final style = tone.styleOf(theme);
     final titleText = title;
     return Container(
       width: double.infinity,
@@ -71,6 +76,10 @@ class RestoflowNoticeBanner extends StatelessWidget {
               ],
             ),
           ),
+          if (action case final action?) ...[
+            const SizedBox(width: RestoflowSpacing.sm),
+            action,
+          ],
         ],
       ),
     );

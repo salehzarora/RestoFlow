@@ -17,6 +17,7 @@ class DevicePairingScreen extends StatefulWidget {
     required this.repository,
     required this.deviceType,
     required this.onPaired,
+    this.appBarActions = const <Widget>[],
     super.key,
   });
 
@@ -27,6 +28,10 @@ class DevicePairingScreen extends StatefulWidget {
 
   /// Called with the backend-verified context on a successful pair.
   final void Function(DeviceContext context) onPaired;
+
+  /// Host-provided app-bar actions (sprint I: the language switcher must be
+  /// reachable on EVERY page, including pre-pairing).
+  final List<Widget> appBarActions;
 
   @override
   State<DevicePairingScreen> createState() => _DevicePairingScreenState();
@@ -80,52 +85,80 @@ class _DevicePairingScreenState extends State<DevicePairingScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return Scaffold(
+      appBar: widget.appBarActions.isEmpty
+          ? null
+          : AppBar(actions: widget.appBarActions),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(RestoflowSpacing.lg),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: RestoflowSectionCard(
-                title: l10n.pairingTitle,
-                subtitle: l10n.pairingIntro,
+              constraints: const BoxConstraints(
+                maxWidth: RestoflowPanelWidths.dialog,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Form(
-                    key: _formKey,
-                    child: TextFormField(
-                      key: const Key('pairing-code'),
-                      controller: _code,
-                      enabled: !_busy,
-                      autofillHints: const [AutofillHints.oneTimeCode],
-                      decoration: InputDecoration(
-                        labelText: l10n.pairingCodeLabel,
-                        prefixIcon: const Icon(Icons.qr_code_2_outlined),
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? l10n.pairingCodeRequired
-                          : null,
-                    ),
+                  // Brand hero: this is the device's first impression of the
+                  // product, so it should feel like real device setup.
+                  RestoflowBrandMark(
+                    title: l10n.appName,
+                    tagline: l10n.authBrandTagline,
                   ),
-                  if (_errorKind != null) ...[
-                    const SizedBox(height: RestoflowSpacing.md),
-                    RestoflowNoticeBanner(
-                      tone: RestoflowTone.danger,
-                      body: _errorMessage(l10n, _errorKind!),
-                    ),
-                  ],
-                  const SizedBox(height: RestoflowSpacing.lg),
-                  FilledButton.icon(
-                    key: const Key('pairing-submit'),
-                    onPressed: _busy ? null : _submit,
-                    icon: _busy
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.link),
-                    label: Text(l10n.pairingPairAction),
+                  const SizedBox(height: RestoflowSpacing.xl),
+                  RestoflowSectionCard(
+                    title: l10n.pairingTitle,
+                    subtitle: l10n.pairingIntro,
+                    children: [
+                      const SizedBox(height: RestoflowSpacing.sm),
+                      Form(
+                        key: _formKey,
+                        child: TextFormField(
+                          key: const Key('pairing-code'),
+                          controller: _code,
+                          enabled: !_busy,
+                          autofillHints: const [AutofillHints.oneTimeCode],
+                          textAlign: TextAlign.center,
+                          // Bigger, code-like type. Deliberately NO
+                          // letterSpacing (Arabic-safe) and NO case/character
+                          // transformation of the entered value.
+                          style: theme.textTheme.headlineSmall,
+                          decoration: InputDecoration(
+                            labelText: l10n.pairingCodeLabel,
+                          ),
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? l10n.pairingCodeRequired
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: RestoflowSpacing.sm),
+                      Text(
+                        l10n.pairingWhereCode,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (_errorKind != null) ...[
+                        const SizedBox(height: RestoflowSpacing.md),
+                        RestoflowNoticeBanner(
+                          tone: RestoflowTone.danger,
+                          body: _errorMessage(l10n, _errorKind!),
+                        ),
+                      ],
+                      const SizedBox(height: RestoflowSpacing.lg),
+                      FilledButton.icon(
+                        key: const Key('pairing-submit'),
+                        onPressed: _busy ? null : _submit,
+                        style: RestoflowButtonStyles.big(context),
+                        icon: _busy
+                            ? const RestoflowInlineSpinner()
+                            : const Icon(Icons.link),
+                        label: Text(l10n.pairingPairAction),
+                      ),
+                    ],
                   ),
                 ],
               ),

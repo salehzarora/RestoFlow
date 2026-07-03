@@ -92,6 +92,9 @@ class CartPanel extends ConsumerWidget {
               subtotalText: MoneyFormatter.format(cart.subtotal),
               orderType: setup.orderType,
               tableLabel: setup.assignedTable?.label,
+              // Part G polish: when items are ready but dine-in still lacks
+              // a table, SAY so instead of leaving Send silently disabled.
+              showNeedsTableHint: cart.isNotEmpty && setup.needsTableWarning,
               onSend: canSend
                   ? () => _submitOrder(
                       ref: ref,
@@ -188,11 +191,13 @@ class _CartHeader extends StatelessWidget {
     final countText = itemCount.toString();
 
     return Padding(
+      // Design-polish: slightly tighter vertical padding — the saved pixels
+      // fund the larger line-tile touch targets within the same panel height.
       padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.lg,
-        RestoflowSpacing.md,
         RestoflowSpacing.sm,
-        RestoflowSpacing.md,
+        RestoflowSpacing.sm,
+        RestoflowSpacing.sm,
       ),
       child: Row(
         children: [
@@ -213,7 +218,7 @@ class _CartHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: RestoflowSpacing.sm,
-                vertical: 2,
+                vertical: RestoflowSpacing.xxs,
               ),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primary,
@@ -251,6 +256,8 @@ class _CartHeader extends StatelessWidget {
 /// A compact pending-sync indicator in the cart header (RF-115): a cloud icon +
 /// the queued count, with the full "N pending sync" wording as a tooltip. A
 /// persistent, honest reminder that locally-queued orders await (demo) sync.
+/// Design-polish: rides the shared WARNING tone (true amber) instead of the
+/// raw tertiary container so "awaiting sync" reads as needs-attention.
 class _PendingSyncChip extends StatelessWidget {
   const _PendingSyncChip({required this.count, required this.tooltip});
 
@@ -259,36 +266,12 @@ class _PendingSyncChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Tooltip(
       message: tooltip,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: RestoflowSpacing.sm,
-          vertical: 2,
-        ),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.tertiaryContainer,
-          borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_queue,
-              size: 14,
-              color: theme.colorScheme.onTertiaryContainer,
-            ),
-            const SizedBox(width: RestoflowSpacing.xs),
-            Text(
-              count.toString(),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onTertiaryContainer,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
+      child: RestoflowStatusPill(
+        label: count.toString(),
+        tone: RestoflowTone.warning,
+        icon: Icons.cloud_queue,
       ),
     );
   }
@@ -301,34 +284,11 @@ class _EmptyCart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.remove_shopping_cart_outlined,
-              size: 40,
-              color: theme.colorScheme.outline,
-            ),
-          ),
-          const SizedBox(height: RestoflowSpacing.lg),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    // Design-polish: the shared state view (l10n message rendered verbatim —
+    // tests find it by text).
+    return RestoflowStateView(
+      icon: Icons.remove_shopping_cart_outlined,
+      title: message,
     );
   }
 }
@@ -358,7 +318,7 @@ class _CartLineTile extends StatelessWidget {
       padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.lg,
         RestoflowSpacing.sm,
-        RestoflowSpacing.sm,
+        RestoflowSpacing.xs,
         RestoflowSpacing.sm,
       ),
       child: Row(
@@ -375,7 +335,54 @@ class _CartLineTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                // Selected modifiers (order-time snapshots) as compact
+                // sub-lines; their deltas are already in the line total. A
+                // PAID option additionally shows its signed delta (Part E) —
+                // in a SEPARATE Text so the '+ name' string stays exact-match
+                // findable (test contract) and both mirror in RTL via the Row.
+                // A quantity-enabled option renders as '+ name ×N' with its
+                // TOTAL delta (unit × units — modifier-quantity sprint).
+                for (final modifier in line.modifiers)
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '+ ${modifier.displayName}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (modifier.totalDeltaMinor != 0) ...[
+                        const SizedBox(width: RestoflowSpacing.xs),
+                        Text(
+                          MoneyFormatter.formatSignedDeltaMinor(
+                            modifier.totalDeltaMinor,
+                            line.currencyCode,
+                          ),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                // The cashier's note ("بدون بصل") under the option lines —
+                // italic like the KDS note line; data, never chrome.
+                if (line.note != null)
+                  Text(
+                    '${l10n.posItemNoteLabel}: ${line.note}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                const SizedBox(height: RestoflowSpacing.xxs),
                 Text(
                   unitPriceText,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -402,12 +409,14 @@ class _CartLineTile extends StatelessWidget {
               ),
             ),
           ),
+          // >=44dp destructive target (was a compact 32dp icon button).
           IconButton(
             onPressed: onRemove,
-            icon: const Icon(Icons.delete_outline, size: 20),
+            icon: const Icon(Icons.delete_outline, size: RestoflowIconSizes.md),
             tooltip: l10n.posRemoveItem,
-            color: theme.colorScheme.error,
-            visualDensity: VisualDensity.compact,
+            color: RestoflowTone.danger.styleOf(theme).accent,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            padding: EdgeInsets.zero,
           ),
         ],
       ),
@@ -480,14 +489,13 @@ class _StepButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Design-polish: >=44dp stepper targets (fast, gloved cashier fingers).
     return IconButton(
       onPressed: onPressed,
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon, size: RestoflowIconSizes.md),
       tooltip: tooltip,
-      iconSize: 18,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
     );
   }
 }
@@ -546,6 +554,7 @@ class _CartFooter extends StatelessWidget {
     required this.orderType,
     required this.tableLabel,
     required this.onSend,
+    this.showNeedsTableHint = false,
   });
 
   final AppLocalizations l10n;
@@ -554,10 +563,18 @@ class _CartFooter extends StatelessWidget {
   final String? tableLabel;
   final VoidCallback? onSend;
 
+  /// True when Send is disabled ONLY because the dine-in order has no table
+  /// yet — the footer then explains the block instead of staying mute
+  /// (Part G cashier polish).
+  final bool showNeedsTableHint;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Design-polish: the subtotal is the figure the cashier reads aloud, so it
+    // gets the largest type in the panel; the gap below shrinks to keep the
+    // footer height inside the 1000px-viewport test budget.
     return Container(
       color: theme.colorScheme.surfaceContainerHigh,
       padding: const EdgeInsets.all(RestoflowSpacing.lg),
@@ -574,28 +591,55 @@ class _CartFooter extends StatelessWidget {
             const SizedBox(height: RestoflowSpacing.sm),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(l10n.posCartSubtotal, style: theme.textTheme.titleMedium),
                 Text(
                   subtotalText,
                   key: const Key('cart-subtotal'),
-                  style: theme.textTheme.headlineSmall?.copyWith(
+                  style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: theme.colorScheme.primary,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: RestoflowSpacing.md),
+            const SizedBox(height: RestoflowSpacing.sm),
+            // Part G polish: the one actionable reason Send can be disabled
+            // with a filled cart — dine-in without a table — is spelled out
+            // right above the button (warning tone, compact single line).
+            if (showNeedsTableHint) ...[
+              Row(
+                key: const Key('send-needs-table-hint'),
+                children: [
+                  Icon(
+                    Icons.event_seat,
+                    size: RestoflowIconSizes.sm,
+                    color: RestoflowTone.warning.styleOf(theme).accent,
+                  ),
+                  const SizedBox(width: RestoflowSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      l10n.posSendNeedsTableHint,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: RestoflowTone.warning.styleOf(theme).accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: RestoflowSpacing.xs),
+            ],
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: onSend,
                 icon: const Icon(Icons.send),
                 label: Text(l10n.posSendOrder),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                ),
+                style: RestoflowButtonStyles.big(context),
               ),
             ),
           ],

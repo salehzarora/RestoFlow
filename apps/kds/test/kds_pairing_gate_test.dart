@@ -6,6 +6,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_auth/testing.dart';
 import 'package:restoflow_kds/main.dart';
 import 'package:restoflow_kds/src/kitchen_orders_home.dart';
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 class _FakePairing implements DevicePairingRepository {
   _FakePairing(this.result);
@@ -16,6 +17,19 @@ class _FakePairing implements DevicePairingRepository {
     required String code,
     required String deviceType,
   }) async => result;
+}
+
+/// A minimal PIN-pad staff directory (the PIN gate needs one to render).
+class _FakeStaffDirectory implements DeviceStaffRepository {
+  @override
+  Future<Result<List<DeviceStaffMember>, DeviceStaffFailure>>
+  listStaff() async => const Success([
+    DeviceStaffMember(
+      employeeProfileId: 'emp-9',
+      displayName: 'Yosef L.',
+      role: 'kitchen_staff',
+    ),
+  ]);
 }
 
 /// A real-style repo that also restores a session on launch (RF-161). It
@@ -103,7 +117,8 @@ void main() {
     expect(find.textContaining(r'$'), findsNothing);
   });
 
-  testWidgets('a successful pairing enters the kitchen board', (tester) async {
+  testWidgets('a successful pairing advances to the money-free staff PIN gate '
+      '(D-006 — never straight onto the board)', (tester) async {
     await _pump(
       tester,
       KdsApp(
@@ -115,9 +130,11 @@ void main() {
               branchId: 'b',
               deviceId: 'd',
               deviceType: 'kds',
+              deviceSessionId: 'ds-9',
             ),
           ),
         ),
+        deviceStaffRepository: _FakeStaffDirectory(),
         fetchContext: fetcherForContext(_kitchenCtx()),
       ),
     );
@@ -127,8 +144,13 @@ void main() {
     await tester.tap(find.byKey(const Key('pairing-submit')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(KitchenOrdersHome), findsOneWidget);
+    // Paired -> the staff PIN sign-in, NOT the board (no session yet). Still
+    // money-free (SECURITY T-003).
+    expect(find.byType(PinLoginScreen), findsOneWidget);
+    expect(find.byType(KitchenOrdersHome), findsNothing);
     expect(find.byType(DevicePairingScreen), findsNothing);
+    expect(find.textContaining('₪'), findsNothing);
+    expect(find.textContaining(r'$'), findsNothing);
   });
 
   testWidgets('with NO pairing repo the gate is dormant (existing behaviour)', (
@@ -142,9 +164,8 @@ void main() {
     expect(find.byType(DevicePairingScreen), findsNothing);
   });
 
-  testWidgets('a restored device session enters the kitchen board on launch', (
-    tester,
-  ) async {
+  testWidgets('a restored device session advances to the staff PIN gate on '
+      'launch (D-006 — never straight onto the board)', (tester) async {
     await _pump(
       tester,
       KdsApp(
@@ -155,12 +176,15 @@ void main() {
             branchId: 'b',
             deviceId: 'd',
             deviceType: 'kds',
+            deviceSessionId: 'ds-9',
           ),
         ),
+        deviceStaffRepository: _FakeStaffDirectory(),
         fetchContext: fetcherForContext(_kitchenCtx()),
       ),
     );
-    expect(find.byType(KitchenOrdersHome), findsOneWidget);
+    expect(find.byType(PinLoginScreen), findsOneWidget);
+    expect(find.byType(KitchenOrdersHome), findsNothing);
     expect(find.byType(DevicePairingScreen), findsNothing);
   });
 
@@ -226,5 +250,57 @@ void main() {
     );
     expect(find.byType(DevicePairingScreen), findsOneWidget);
     expect(find.byType(KitchenOrdersHome), findsNothing);
+  });
+
+  // Sprint fix: a KDS device never has an owner account, so when the real
+  // device bootstrap fails the app must say WHY — never the legacy account
+  // gate's misleading "Account access denied".
+  group('real mode without seams shows the honest bootstrap problem', () {
+    testWidgets('anonymous sign-in unavailable -> the actionable help page, '
+        'never "Account access denied"', (tester) async {
+      await _pump(
+        tester,
+        const KdsApp(
+          demoMode: false,
+          realAuthProblem: RealDeviceAuthProblem.signInUnavailable,
+        ),
+      );
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.byType(DeviceSignInUnavailableView), findsOneWidget);
+      expect(find.text(l10n.authDeviceSignInUnavailableBody), findsOneWidget);
+      expect(find.text(l10n.authAccessDenied), findsNothing);
+      expect(find.byType(KitchenOrdersHome), findsNothing);
+      expect(find.byType(DevicePairingScreen), findsNothing);
+    });
+
+    testWidgets('missing Supabase config -> the unconfigured help page, '
+        'never "Account access denied"', (tester) async {
+      await _pump(
+        tester,
+        const KdsApp(
+          demoMode: false,
+          realAuthProblem: RealDeviceAuthProblem.unconfigured,
+        ),
+      );
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.byType(RealModeUnconfiguredView), findsOneWidget);
+      expect(find.text(l10n.authAccessDenied), findsNothing);
+      expect(find.byType(KitchenOrdersHome), findsNothing);
+    });
+
+    testWidgets('the pairing repo wins over a problem flag (paired flow is '
+        'unaffected)', (tester) async {
+      await _pump(
+        tester,
+        KdsApp(
+          demoMode: false,
+          devicePairingRepository: _FakeRestorable(null),
+          realAuthProblem: RealDeviceAuthProblem.signInUnavailable,
+          fetchContext: fetcherForContext(_kitchenCtx()),
+        ),
+      );
+      expect(find.byType(DevicePairingScreen), findsOneWidget);
+      expect(find.byType(DeviceSignInUnavailableView), findsNothing);
+    });
   });
 }

@@ -111,6 +111,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'Real mode is selected but the Supabase connection isn\'t configured, so no platform data can be loaded. Set the Supabase URL and anon key, or run in demo mode.';
 
   @override
+  String get adminGateTitle => 'Platform admin panel';
+
+  @override
+  String get adminGateNotOwner =>
+      'This is the platform administration panel — not the restaurant owner\'s panel.';
+
+  @override
+  String get adminGateUseDashboard =>
+      'Use the Dashboard to manage your restaurant.';
+
+  @override
+  String get adminGateNotAdminAccount =>
+      'This signed-in account is not a platform admin.';
+
+  @override
+  String get adminGateProvisionHint =>
+      'Platform-admin access is granted manually by the platform operator — see docs/LOCAL_RUNBOOK.md.';
+
+  @override
+  String get adminGateOpenDashboard => 'Open Dashboard';
+
+  @override
   String get adminAccessDeniedTitle => 'Platform admin access denied';
 
   @override
@@ -128,6 +150,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kdsEmptyState => 'No active tickets';
+
+  @override
+  String get kdsColumnEmpty => 'No tickets';
+
+  @override
+  String get kdsStaleBanner => 'Offline — showing last synced tickets';
 
   @override
   String get kdsBumpAction => 'Bump';
@@ -201,6 +229,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posAddToCart => 'Add';
 
   @override
+  String posAddToCartWithTotal(String total) {
+    return 'Add · $total';
+  }
+
+  @override
   String get posClearCart => 'Clear';
 
   @override
@@ -217,6 +250,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posSendOrder => 'Send Order';
+
+  @override
+  String get posSendNeedsTableHint =>
+      'Assign a table to send this dine-in order';
 
   @override
   String get posDemoOrderNotice =>
@@ -424,6 +461,136 @@ class AppLocalizationsEn extends AppLocalizations {
       'Use your browser\'s print (Ctrl+P) to print this preview';
 
   @override
+  String get deviceSettingsMenuTooltip => 'Device menu';
+
+  @override
+  String get deviceSettingsTitle => 'Device settings';
+
+  @override
+  String get deviceRefreshAction => 'Refresh connection';
+
+  @override
+  String get deviceUnpairAction => 'Unpair device';
+
+  @override
+  String get deviceUnpairWarning =>
+      'Only use this if this device should be paired again.';
+
+  @override
+  String get deviceUnpairConfirm => 'Unpair';
+
+  @override
+  String get deviceUnpairCancel => 'Cancel';
+
+  @override
+  String get deviceSettingsAppTypeLabel => 'App type';
+
+  @override
+  String get deviceSettingsAppTypePos => 'Cashier (POS)';
+
+  @override
+  String get deviceSettingsAppTypeKds => 'Kitchen display (KDS)';
+
+  @override
+  String get deviceSettingsRestaurantLabel => 'Restaurant';
+
+  @override
+  String get deviceSettingsBranchLabel => 'Branch';
+
+  @override
+  String get deviceSettingsDeviceLabel => 'Device';
+
+  @override
+  String get deviceSettingsPairingLabel => 'Pairing';
+
+  @override
+  String get deviceSettingsPairingActive => 'Paired';
+
+  @override
+  String get deviceSettingsPinSessionLabel => 'Staff session';
+
+  @override
+  String get deviceSettingsPinSessionActive => 'Signed in';
+
+  @override
+  String get deviceSettingsPinSessionNone => 'Not signed in';
+
+  @override
+  String get deviceSettingsDemoNote => 'Demo mode — no paired device.';
+
+  @override
+  String get deviceSettingsUnavailable => 'Device info unavailable.';
+
+  @override
+  String get deviceSettingsPrintersHeading => 'Printers';
+
+  @override
+  String get deviceSettingsNoPrinter =>
+      'No printer assigned. Ask a manager to configure it in Dashboard → Printers.';
+
+  @override
+  String get deviceSettingsBridgeRequired =>
+      'Configured only — print bridge required.';
+
+  @override
+  String get deviceSettingsCapabilityNote =>
+      'Printing requires a print bridge/native app. This build can save config and create/preview print jobs.';
+
+  @override
+  String deviceSettingsLastRefresh(String time) {
+    return 'Last refresh: $time';
+  }
+
+  @override
+  String get deviceSettingsLoadError => 'Could not load printer assignments.';
+
+  @override
+  String get deviceSettingsPrinterDisabled => 'Disabled in Dashboard';
+
+  @override
+  String deviceSettingsRouteStations(String names) {
+    return 'Stations: $names';
+  }
+
+  @override
+  String get deviceRefreshedSnack => 'Connection refreshed.';
+
+  @override
+  String get deviceUnpairedSnack => 'Device unpaired.';
+
+  @override
+  String get deviceSettingsAutoPrintHeading => 'Auto-print';
+
+  @override
+  String get posAutoPrintReceiptToggle => 'Auto-print receipt after payment';
+
+  @override
+  String get kdsAutoPrintAcknowledgeToggle =>
+      'Auto-print kitchen ticket on acknowledge';
+
+  @override
+  String get autoPrintNoPrinterNote => 'Disabled — no printer assigned.';
+
+  @override
+  String get printStatusNotConfigured => 'No printer configured';
+
+  @override
+  String get printStatusPrepared =>
+      'Print job prepared — physical printing requires print bridge.';
+
+  @override
+  String get printStatusPrinted => 'Printed';
+
+  @override
+  String get printStatusFailed => 'Print failed';
+
+  @override
+  String get posReceiptPrintLabel => 'Receipt print';
+
+  @override
+  String get kdsTicketPrintLabel => 'Kitchen print';
+
+  @override
   String get receiptPreviewTitle => 'Receipt preview';
 
   @override
@@ -470,6 +637,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posShiftDemoNote => 'Demo shift — not synced';
+
+  @override
+  String get posShiftRealName => 'Current shift';
+
+  @override
+  String get posShiftRealNote =>
+      'Opened at sign-in — cash totals are tracked on the server';
+
+  @override
+  String get posSyncSendingReal => 'Sending to the backend…';
+
+  @override
+  String get posSyncSentReal =>
+      'Sent — the kitchen display receives it automatically.';
+
+  @override
+  String get posSyncFailedReal =>
+      'The backend rejected this order — it was NOT sent to the kitchen.';
+
+  @override
+  String get posSyncSendNow => 'Send now';
+
+  @override
+  String get posReceiptNoPrinterNote =>
+      'Printing is not connected on this device yet';
+
+  @override
+  String get posModifierRequired => 'Required';
+
+  @override
+  String get posModifierOptional => 'Optional';
+
+  @override
+  String posModifierSelectedCount(int selected, int max) {
+    return '$selected/$max';
+  }
+
+  @override
+  String posModifierSelectedCountOpen(int selected) {
+    return '$selected';
+  }
+
+  @override
+  String get posModifierFree => 'Free';
+
+  @override
+  String posModifierBasePrice(String price) {
+    return 'Base price · $price';
+  }
+
+  @override
+  String get posModifierItemNoteLabel => 'Item note';
+
+  @override
+  String get posModifierItemNoteHint => 'Example: no onions, extra sauce';
+
+  @override
+  String get posItemNoteLabel => 'Note';
 
   @override
   String get dashboardOverviewHeading => 'Today\'s overview';
@@ -616,6 +841,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authError => 'Something went wrong';
+
+  @override
+  String get authRealModeUnconfiguredTitle => 'Real mode is not configured';
+
+  @override
+  String get authRealModeUnconfiguredBody =>
+      'The app was started in real mode, but the backend connection settings are missing or invalid. RestoFlow never fakes a backend, so real mode stays locked until valid settings are provided.';
+
+  @override
+  String get authRealModeUnconfiguredHowTo => 'Start the app with these values';
+
+  @override
+  String get authRealModeUnconfiguredDemoHint =>
+      'To explore the demo instead, run the app without any configuration — demo mode is the default.';
+
+  @override
+  String get authDeviceSignInUnavailableTitle => 'Device sign-in unavailable';
+
+  @override
+  String get authDeviceSignInUnavailableBody =>
+      'Anonymous device sign-in is disabled or Supabase auth is not configured.';
+
+  @override
+  String get authDeviceSignInUnavailableHowTo => 'How to fix it';
+
+  @override
+  String get authDeviceSignInUnavailableFix =>
+      'Allow anonymous sign-ins in the Supabase Auth settings, restart the backend, then restart this app. No personal account is needed on this device — pairing signs the device in by itself.';
 
   @override
   String get authTryAgain => 'Try again';
@@ -774,6 +1027,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuRequiredLabel => 'Required';
 
   @override
+  String get menuAllowQuantityLabel => 'Allow quantity';
+
+  @override
+  String get menuAllowQuantityHelp =>
+      'The cashier can add the same option more than once (e.g. extra cheese ×2).';
+
+  @override
+  String get menuMaxQuantityLabel => 'Max per option';
+
+  @override
   String get menuSizesHeading => 'Sizes';
 
   @override
@@ -808,11 +1071,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuImageHeading => 'Item image';
 
   @override
-  String get menuImageDeferredTitle => 'Image upload coming soon';
+  String get menuImageDeferredTitle => 'Image upload isn\'t connected';
 
   @override
   String get menuImageDeferredBody =>
-      'Showing and uploading item photos needs a backend image record (a planned follow-up). The upload path and validation are already built.';
+      'This surface has no image storage connected, so item photos can\'t be uploaded or shown here.';
+
+  @override
+  String get menuImagePickAction => 'Choose image';
+
+  @override
+  String get menuImageReplaceAction => 'Replace image';
+
+  @override
+  String get menuImageRemoveAction => 'Remove image';
+
+  @override
+  String get menuImageSaveAction => 'Save image';
+
+  @override
+  String get menuImageInvalidType =>
+      'Only PNG, JPEG, or WebP images can be uploaded.';
+
+  @override
+  String get menuImageTooLarge => 'The image is too large — the limit is 5 MB.';
+
+  @override
+  String get menuImageUploadFailed =>
+      'Upload failed — the image was not saved.';
+
+  @override
+  String get menuImageUnsupportedPlatform =>
+      'Choosing an image isn\'t available on this platform yet — use the web dashboard.';
+
+  @override
+  String get menuImageDemoNote =>
+      'Demo — the image is not uploaded to a server.';
+
+  @override
+  String get menuImageLoadError => 'Couldn\'t load the image preview.';
 
   @override
   String get menuErrorRequired => 'Required';
@@ -824,7 +1121,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuErrorNegativePrice => 'Cannot be negative';
 
   @override
-  String get menuErrorCurrency => 'Use a 3-letter code (e.g. USD)';
+  String get menuErrorCurrency => 'Use a 3-letter code (e.g. ILS)';
 
   @override
   String get menuErrorSelectionType => 'Choose single or multiple';
@@ -896,6 +1193,186 @@ class AppLocalizationsEn extends AppLocalizations {
       'This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.';
 
   @override
+  String get menuBasicInfoSection => 'Basic info';
+
+  @override
+  String get menuPricingSection => 'Pricing';
+
+  @override
+  String get menuPreparationSection => 'Preparation';
+
+  @override
+  String get menuAdvancedSection => 'Advanced';
+
+  @override
+  String get menuAdvancedSectionHint =>
+      'Optional details — use what fits this item.';
+
+  @override
+  String get menuItemTypeLabel => 'Item type';
+
+  @override
+  String get menuItemTypeUnspecified => 'Not specified';
+
+  @override
+  String get menuItemTypeFood => 'Food';
+
+  @override
+  String get menuItemTypeDrink => 'Drink';
+
+  @override
+  String get menuItemTypeSide => 'Side';
+
+  @override
+  String get menuItemTypeCombo => 'Combo';
+
+  @override
+  String get menuItemTypeOther => 'Other';
+
+  @override
+  String get menuTagsLabel => 'Tags';
+
+  @override
+  String get menuTagSpicy => 'Spicy';
+
+  @override
+  String get menuTagVegetarian => 'Vegetarian';
+
+  @override
+  String get menuTagPopular => 'Popular';
+
+  @override
+  String get menuTagNew => 'New';
+
+  @override
+  String menuModifierGroupCount(int count) {
+    return '$count option groups';
+  }
+
+  @override
+  String get menuPrepMinutesLabel => 'Prep time (minutes)';
+
+  @override
+  String get menuKitchenNoteLabel => 'Kitchen note';
+
+  @override
+  String get menuSkuLabel => 'SKU (internal code)';
+
+  @override
+  String get menuPortionFieldLabel => 'Portion label';
+
+  @override
+  String get menuPattyCountLabel => 'Count (patties or pieces)';
+
+  @override
+  String get menuPattyWeightLabel => 'Weight per piece (g)';
+
+  @override
+  String get menuTemplateAddAction => 'Add template';
+
+  @override
+  String get menuTemplatePickerTitle => 'Add from template';
+
+  @override
+  String get menuTemplateRequiredSingle => 'Required · choose 1';
+
+  @override
+  String get menuTemplateOptionalMulti => 'Optional · multi-select';
+
+  @override
+  String get menuTemplateOptionalSingle => 'Optional · choose up to 1';
+
+  @override
+  String menuTemplateOptionCount(int count) {
+    return '$count options';
+  }
+
+  @override
+  String get menuTemplateApplyPartial =>
+      'Stopped — the rows already added stay in the list; edit or delete them below.';
+
+  @override
+  String get menuTemplateBurgerToppings => 'Burger toppings';
+
+  @override
+  String get menuTemplateOptLettuce => 'Lettuce';
+
+  @override
+  String get menuTemplateOptTomato => 'Tomato';
+
+  @override
+  String get menuTemplateOptOnion => 'Onion';
+
+  @override
+  String get menuTemplateOptPickles => 'Pickles';
+
+  @override
+  String get menuTemplateOptCheese => 'Cheese';
+
+  @override
+  String get menuTemplateDoneness => 'Doneness';
+
+  @override
+  String get menuTemplateOptRare => 'Rare';
+
+  @override
+  String get menuTemplateOptMediumDoneness => 'Medium';
+
+  @override
+  String get menuTemplateOptWellDone => 'Well done';
+
+  @override
+  String get menuTemplatePattyCount => 'Patty count';
+
+  @override
+  String get menuTemplateOptSinglePatty => 'Single patty';
+
+  @override
+  String get menuTemplateOptDoublePatty => 'Double patty';
+
+  @override
+  String get menuTemplateOptTriplePatty => 'Triple patty';
+
+  @override
+  String get menuTemplateExtras => 'Extras';
+
+  @override
+  String get menuTemplateOptExtraCheese => 'Extra cheese';
+
+  @override
+  String get menuTemplateOptExtraPatty => 'Extra patty';
+
+  @override
+  String get menuTemplateOptFries => 'Fries';
+
+  @override
+  String get menuTemplateOptDrink => 'Drink';
+
+  @override
+  String get menuTemplateDrinkSize => 'Drink size';
+
+  @override
+  String get menuTemplateOptSmall => 'Small';
+
+  @override
+  String get menuTemplateOptMediumSize => 'Medium';
+
+  @override
+  String get menuTemplateOptLarge => 'Large';
+
+  @override
+  String get menuTemplateSpiciness => 'Spiciness';
+
+  @override
+  String get menuTemplateOptMild => 'Mild';
+
+  @override
+  String get menuTemplateOptMediumSpicy => 'Medium';
+
+  @override
+  String get menuTemplateOptHot => 'Hot';
+
+  @override
   String get dashboardNavSettings => 'Settings';
 
   @override
@@ -933,7 +1410,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn’t complete the action — please try again.';
 
   @override
-  String get adminErrCurrency => 'Use a 3-letter code (e.g. USD)';
+  String get adminErrCurrency => 'Use a 3-letter code (e.g. ILS)';
 
   @override
   String get adminErrCountry => 'Use a 2-letter code (e.g. US)';
@@ -1197,6 +1674,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authWelcomeTitle => 'Welcome to RestoFlow';
 
   @override
+  String get authBrandTagline => 'Restaurant operating system';
+
+  @override
   String get authSignInTab => 'Sign in';
 
   @override
@@ -1266,6 +1746,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter the pairing code created in the restaurant dashboard to connect this device.';
 
   @override
+  String get pairingWhereCode =>
+      'Get a pairing code from the Dashboard → Devices tab.';
+
+  @override
   String get pairingCodeLabel => 'Pairing code';
 
   @override
@@ -1288,4 +1772,520 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pairingFailed => 'Couldn\'t pair this device. Please try again.';
+
+  @override
+  String get dashboardNavPrinters => 'Printers';
+
+  @override
+  String get dashboardNavStaff => 'Staff';
+
+  @override
+  String get dashboardNavTables => 'Tables';
+
+  @override
+  String get dashboardModeDemo => 'Demo';
+
+  @override
+  String get dashboardModeReal => 'Real';
+
+  @override
+  String get dashboardUsersNotConnectedTitle =>
+      'User management not connected yet';
+
+  @override
+  String get dashboardUsersNotConnectedBody =>
+      'This build cannot list or invite real members yet — there is no member directory API. Instead of showing sample people, this page stays empty. Demo mode previews how the flow will work.';
+
+  @override
+  String get dashboardSettingsWorkspace => 'Workspace';
+
+  @override
+  String get dashboardSettingsRealNotice =>
+      'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.';
+
+  @override
+  String get setupTitle => 'Setup';
+
+  @override
+  String get setupSubtitle => 'Get this branch ready for service';
+
+  @override
+  String get setupDevices => 'Devices';
+
+  @override
+  String get setupDevicesCaption => 'active / total';
+
+  @override
+  String get setupPrinters => 'Printers';
+
+  @override
+  String get setupPrintersCaption => 'enabled / total';
+
+  @override
+  String get setupStaffPin => 'Staff PINs';
+
+  @override
+  String get setupStaffCaption => 'with PIN / total';
+
+  @override
+  String get setupMetricUnavailable => 'n/a';
+
+  @override
+  String get setupNoDevices =>
+      'No devices yet — create a POS or KDS device and issue a pairing code.';
+
+  @override
+  String get setupNoActiveDevice =>
+      'No device is paired yet — issue a code in Devices and redeem it on the device\'s pairing screen.';
+
+  @override
+  String get setupNoPrinters =>
+      'No printers configured yet — add a receipt or kitchen printer.';
+
+  @override
+  String get setupNoStaffPin =>
+      'No staff member has a PIN yet — POS/KDS sign-in (and the live order flow) needs at least one.';
+
+  @override
+  String get setupReady =>
+      'This branch is ready: paired device and staff PIN in place.';
+
+  @override
+  String get setupMenu => 'Menu items';
+
+  @override
+  String get setupMenuCaption => 'active / total';
+
+  @override
+  String get setupNoMenu => 'No menu items yet — the POS has nothing to sell.';
+
+  @override
+  String get setupAddMenuItem => 'Add your first menu item';
+
+  @override
+  String get setupNoPosDevice =>
+      'No POS device yet — the counter needs one to take orders.';
+
+  @override
+  String get setupCreatePos => 'Create POS device';
+
+  @override
+  String get setupNoKdsDevice =>
+      'No kitchen display yet — the kitchen won\'t see incoming orders.';
+
+  @override
+  String get setupCreateKds => 'Create kitchen display';
+
+  @override
+  String get setupPairingHint =>
+      'Open the POS or KDS app on that device and enter the pairing code from the Devices tab.';
+
+  @override
+  String get setupAddPrinter => 'Add printer';
+
+  @override
+  String get setupCreatePin => 'Create staff PIN';
+
+  @override
+  String get printersTitle => 'Printers';
+
+  @override
+  String get printersSubtitle => 'Receipt and kitchen printers for this branch';
+
+  @override
+  String get printersAdd => 'Add printer';
+
+  @override
+  String get printersEmptyTitle => 'No printers yet';
+
+  @override
+  String get printersEmptyBody =>
+      'Add a receipt or kitchen printer to prepare this branch for printing.';
+
+  @override
+  String get printersTransportNoticeTitle =>
+      'Configuration only — no print transport yet';
+
+  @override
+  String get printersTransportNotice =>
+      'Printer settings are saved and validated on the backend, but this build does not send anything to physical printers. The print engine ships network-first; Bluetooth and USB transports are not installed yet. No fake print success is ever shown.';
+
+  @override
+  String get printersRoleReceipt => 'Receipt';
+
+  @override
+  String get printersRoleKitchen => 'Kitchen';
+
+  @override
+  String get printersConnNetwork => 'Network (Wi-Fi/LAN)';
+
+  @override
+  String get printersConnBluetooth => 'Bluetooth';
+
+  @override
+  String get printersConnUsb => 'USB';
+
+  @override
+  String get printersConnConfigOnly =>
+      'Configuration only — this transport is not installed yet.';
+
+  @override
+  String get printersAdvanced => 'Advanced';
+
+  @override
+  String get printersDialogSavesConfigOnly =>
+      'This build saves the printer configuration only — nothing is printed yet.';
+
+  @override
+  String get printersConnBluetoothWeb =>
+      'Bluetooth discovery is not available in the web app yet. Save configuration only.';
+
+  @override
+  String get printersConnUsbAdapter =>
+      'USB printing requires the desktop/native printer adapter. Save configuration only.';
+
+  @override
+  String get printersFieldName => 'Display name';
+
+  @override
+  String get printersFieldRole => 'Printer role';
+
+  @override
+  String get printersFieldConnection => 'Connection type';
+
+  @override
+  String get printersFieldPaper => 'Paper width';
+
+  @override
+  String get printersFieldHost => 'Host / IP address';
+
+  @override
+  String get printersFieldPort => 'Port';
+
+  @override
+  String get printersFieldBluetoothId => 'Bluetooth device id / name';
+
+  @override
+  String get printersFieldUsbPath => 'USB path / identifier';
+
+  @override
+  String get printersEnabled => 'Enabled';
+
+  @override
+  String get printersDisabled => 'Disabled';
+
+  @override
+  String get printersEdit => 'Edit';
+
+  @override
+  String get printersRoute => 'Route to station';
+
+  @override
+  String get printersRouteTitle => 'Route printer to a station';
+
+  @override
+  String get printersRouteStation => 'Station';
+
+  @override
+  String get printersRouteActive => 'Route enabled';
+
+  @override
+  String get printersRoutedTo => 'Routes to';
+
+  @override
+  String get printersDelete => 'Remove printer';
+
+  @override
+  String get printersDeleteConfirm =>
+      'Remove this printer? Its station routes are removed too.';
+
+  @override
+  String get printersSaved => 'Saved';
+
+  @override
+  String get printersNoStations => 'No stations found for this branch yet.';
+
+  @override
+  String get printersErrHost => 'Enter the printer host / IP';
+
+  @override
+  String get printersErrPort => 'Enter a valid port (1–65535)';
+
+  @override
+  String get printersSave => 'Save';
+
+  @override
+  String get printersWizardStepPurpose => 'What do you want to print?';
+
+  @override
+  String get printersPurposeReceiptsHint =>
+      'Bills for customers at the counter.';
+
+  @override
+  String get printersPurposeKitchenHint => 'Tickets for the kitchen staff.';
+
+  @override
+  String get printersWizardStepConnection => 'How is the printer connected?';
+
+  @override
+  String get printersConnNetworkHint =>
+      'The printer must be on the same Wi-Fi/network as this device.';
+
+  @override
+  String get printersWizardStepDetails => 'Printer details';
+
+  @override
+  String get printersNext => 'Next';
+
+  @override
+  String get printersBack => 'Back';
+
+  @override
+  String get printersStatusDisabled => 'Disabled';
+
+  @override
+  String get printersStatusNeedsBridge => 'Requires print bridge';
+
+  @override
+  String get printersStatusConfigOnly => 'Configured only';
+
+  @override
+  String get printersStatusReadyNetwork => 'Ready via network adapter';
+
+  @override
+  String get printersTestPrint => 'Test print';
+
+  @override
+  String get printersTestPrintUnavailable =>
+      'Test print needs the print adapter or bridge — not available in this web build.';
+
+  @override
+  String get staffTitle => 'Staff';
+
+  @override
+  String get staffSubtitle => 'Employees and PIN sign-in for this branch';
+
+  @override
+  String get staffAdd => 'Add staff member';
+
+  @override
+  String get staffEmptyTitle => 'No staff yet';
+
+  @override
+  String get staffEmptyBody =>
+      'Create your cashiers, kitchen staff, and managers, then set each one a PIN for POS/KDS sign-in.';
+
+  @override
+  String get staffFieldName => 'Display name';
+
+  @override
+  String get staffFieldRole => 'Role';
+
+  @override
+  String get staffPinSet => 'PIN set';
+
+  @override
+  String get staffNoPin => 'No PIN';
+
+  @override
+  String get staffSetPin => 'Set PIN';
+
+  @override
+  String get staffResetPin => 'Reset PIN';
+
+  @override
+  String get staffPinDialogTitle => 'Set sign-in PIN';
+
+  @override
+  String get staffPinDialogBody =>
+      '4–8 digits. Stored as a secure hash — it can never be read back; setting a new PIN replaces the old one.';
+
+  @override
+  String get staffFieldPin => 'PIN (4–8 digits)';
+
+  @override
+  String get staffFieldPinConfirm => 'Confirm PIN';
+
+  @override
+  String get staffPinMismatch => 'PINs don\'t match';
+
+  @override
+  String get staffPinInvalid => 'Enter 4–8 digits';
+
+  @override
+  String get staffPinSaved => 'PIN saved';
+
+  @override
+  String get staffCreated => 'Staff member created';
+
+  @override
+  String get staffNoPinWarning =>
+      'Staff without a PIN can\'t sign in on POS/KDS.';
+
+  @override
+  String get staffInactive => 'Inactive';
+
+  @override
+  String get tablesTitle => 'Tables';
+
+  @override
+  String get tablesSubtitle =>
+      'Dining tables for this branch — the POS table picker sells from this list.';
+
+  @override
+  String get tablesAdd => 'Add table';
+
+  @override
+  String get tablesEdit => 'Edit';
+
+  @override
+  String get tablesDelete => 'Remove table';
+
+  @override
+  String get tablesDeleteConfirm =>
+      'Remove this table? Existing orders keep their table reference.';
+
+  @override
+  String get tablesEmptyTitle => 'No tables yet';
+
+  @override
+  String get tablesEmptyBody =>
+      'Add your first table — the POS dine-in flow needs at least one.';
+
+  @override
+  String get tablesFieldLabel => 'Table name / number';
+
+  @override
+  String get tablesFieldSeats => 'Seats';
+
+  @override
+  String get tablesFieldArea => 'Area / section';
+
+  @override
+  String get tablesActive => 'Active';
+
+  @override
+  String get tablesInactive => 'Inactive';
+
+  @override
+  String get tablesErrLabel => 'Enter a table name';
+
+  @override
+  String get tablesErrSeats => 'Seats must be a positive number';
+
+  @override
+  String get tablesStatusAvailable => 'Available';
+
+  @override
+  String get tablesStatusOccupied => 'Occupied';
+
+  @override
+  String get tablesStatusReserved => 'Reserved';
+
+  @override
+  String get tablesStatusOutOfService => 'Out of service';
+
+  @override
+  String get tablesSetStatus => 'Set status';
+
+  @override
+  String get tablesSaved => 'Table saved';
+
+  @override
+  String get adminRevokeConfirm =>
+      'Revoke this device? Its pairing and sessions end immediately and the device returns to its pairing screen.';
+
+  @override
+  String get adminPairOnDevice =>
+      'Enter the one-time code on this device\'s pairing screen to pair it.';
+
+  @override
+  String get pinLoginTitle => 'Staff sign-in';
+
+  @override
+  String get pinLoginPickName => 'Tap your name';
+
+  @override
+  String get pinLoginEmptyTitle => 'No staff PINs yet';
+
+  @override
+  String get pinLoginEmptyBody =>
+      'Ask a manager to add staff members and set their PINs in the dashboard.';
+
+  @override
+  String get pinLoginEmptyBodyPos =>
+      'Open Dashboard → Staff, add a cashier or manager, set their PIN, then come back and tap Try again.';
+
+  @override
+  String get pinLoginEmptyBodyKds =>
+      'Open Dashboard → Staff, add a kitchen staff member or manager, set their PIN, then come back and tap Try again.';
+
+  @override
+  String get pinLoginStepsTitle => 'Setup steps';
+
+  @override
+  String get pinLoginStep1 => '1. Open the Dashboard';
+
+  @override
+  String get pinLoginStep2 => '2. Go to Staff';
+
+  @override
+  String get pinLoginStep3 => '3. Add a staff member';
+
+  @override
+  String get pinLoginStep4 => '4. Set a PIN';
+
+  @override
+  String get pinLoginStep5 => '5. Return here and tap Try again';
+
+  @override
+  String get pinLoginLoadError =>
+      'Couldn\'t load the staff list. Check the connection and try again.';
+
+  @override
+  String get pinLoginSessionInvalid =>
+      'This device\'s session is no longer valid. Pair the device again.';
+
+  @override
+  String get pinLoginWrongPin => 'Wrong PIN — try again.';
+
+  @override
+  String get pinLoginLocked =>
+      'Too many attempts. This sign-in is temporarily locked.';
+
+  @override
+  String get pinLoginNetworkError => 'Connection problem — try again.';
+
+  @override
+  String get pinLoginUnavailable => 'Sign-in isn\'t available right now.';
+
+  @override
+  String get pinLoginSubmit => 'Sign in';
+
+  @override
+  String get pinLoginBack => 'Back';
+
+  @override
+  String get pinFieldLabel => 'PIN';
+
+  @override
+  String get posSignOutStaff => 'End staff session';
+
+  @override
+  String get posMenuLoadError =>
+      'Couldn\'t load the menu. Check the connection and try again.';
+
+  @override
+  String get posMenuEmptyTitle => 'No menu items yet';
+
+  @override
+  String get posMenuEmptyBody =>
+      'Add menu items in the dashboard to start selling.';
+
+  @override
+  String get posTablesEmptyReal =>
+      'No tables configured — add tables in Dashboard → Tables.';
+
+  @override
+  String get kdsSignInAgain => 'Sign in again';
 }

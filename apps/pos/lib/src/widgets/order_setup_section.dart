@@ -20,12 +20,14 @@ class OrderSetupSection extends ConsumerWidget {
     final setup = ref.watch(orderSetupControllerProvider);
     final controller = ref.read(orderSetupControllerProvider.notifier);
 
+    // Design-polish: a denser idle footprint (tighter paddings) with a
+    // full-width, >=44dp-tall segmented control.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         RestoflowSpacing.lg,
-        RestoflowSpacing.md,
+        RestoflowSpacing.sm,
         RestoflowSpacing.lg,
-        RestoflowSpacing.md,
+        RestoflowSpacing.sm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,10 +39,13 @@ class OrderSetupSection extends ConsumerWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: RestoflowSpacing.sm),
+          const SizedBox(height: RestoflowSpacing.xs),
           SizedBox(
             width: double.infinity,
             child: SegmentedButton<OrderType>(
+              style: SegmentedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+              ),
               segments: [
                 ButtonSegment<OrderType>(
                   value: OrderType.dineIn,
@@ -58,7 +63,7 @@ class OrderSetupSection extends ConsumerWidget {
                   controller.setOrderType(selection.first),
             ),
           ),
-          const SizedBox(height: RestoflowSpacing.md),
+          const SizedBox(height: RestoflowSpacing.sm),
           if (setup.orderType == OrderType.dineIn)
             _TableRow(setup: setup, controller: controller)
           else
@@ -97,17 +102,25 @@ class _TableRow extends StatelessWidget {
       );
     }
 
+    // Design-polish: the confirmed assignment reads as a SUCCESS state (true
+    // green tone) rather than a generic primary tint.
+    final success = RestoflowTone.success.styleOf(theme);
     return Container(
       key: const Key('assigned-table-card'),
-      padding: const EdgeInsets.all(RestoflowSpacing.md),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        RestoflowSpacing.md,
+        RestoflowSpacing.sm,
+        RestoflowSpacing.sm,
+        RestoflowSpacing.sm,
+      ),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
+        color: success.container,
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
-        border: Border.all(color: theme.colorScheme.primary),
+        border: Border.all(color: success.accent),
       ),
       child: Row(
         children: [
-          Icon(Icons.event_seat, color: theme.colorScheme.onPrimaryContainer),
+          Icon(Icons.event_seat, color: success.onContainer),
           const SizedBox(width: RestoflowSpacing.sm),
           Expanded(
             child: Column(
@@ -116,13 +129,13 @@ class _TableRow extends StatelessWidget {
                 Text(
                   l10n.posTableLabel,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
+                    color: success.onContainer,
                   ),
                 ),
                 Text(
                   table.label,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
+                    color: success.onContainer,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -130,7 +143,7 @@ class _TableRow extends StatelessWidget {
                   Text(
                     l10n.posTableSeats(table.seats!),
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
+                      color: success.onContainer,
                     ),
                   ),
               ],
@@ -144,7 +157,7 @@ class _TableRow extends StatelessWidget {
             onPressed: controller.clearTable,
             icon: const Icon(Icons.close),
             tooltip: l10n.posClearTableAssignment,
-            color: theme.colorScheme.onPrimaryContainer,
+            color: success.onContainer,
           ),
         ],
       ),
@@ -160,22 +173,37 @@ class _WarningRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(
+    // Design-polish: a compact DANGER note (tinted container) so the blocking
+    // condition is visually distinct from ordinary hints.
+    final danger = RestoflowTone.danger.styleOf(theme);
+    return Container(
       key: const Key('table-required-warning'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.error_outline, size: 18, color: theme.colorScheme.error),
-        const SizedBox(width: RestoflowSpacing.sm),
-        Expanded(
-          child: Text(
-            message,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.error,
-              fontWeight: FontWeight.w600,
+      width: double.infinity,
+      padding: const EdgeInsets.all(RestoflowSpacing.sm),
+      decoration: BoxDecoration(
+        color: danger.container,
+        borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: RestoflowIconSizes.sm,
+            color: danger.onContainer,
+          ),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: danger.onContainer,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -193,7 +221,7 @@ class _TakeawayHint extends StatelessWidget {
       children: [
         Icon(
           Icons.info_outline,
-          size: 18,
+          size: RestoflowIconSizes.sm,
           color: theme.colorScheme.onSurfaceVariant,
         ),
         const SizedBox(width: RestoflowSpacing.sm),

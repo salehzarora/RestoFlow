@@ -9,11 +9,14 @@ import 'sync_cursor_store.dart';
 
 /// The non-financial kitchen entity set RF-063 ever requests (approved decision
 /// A5 — a financial entity is never requested, so the kitchen money-redaction
-/// posture holds even before the server role check).
+/// posture holds even before the server role check). `tables` (demo-readiness
+/// sprint) is the money-free dining-table directory the KDS uses to show a
+/// human table label for orders.table_id.
 const List<String> kKdsPullEntities = [
   'orders',
   'order_items',
   'order_item_modifiers',
+  'tables',
 ];
 
 /// A pull-only KDS sync coordinator (RF-063).

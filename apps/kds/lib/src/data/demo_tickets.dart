@@ -30,7 +30,15 @@ List<KdsTicketView> demoKdsTickets() => [
     kitchenTicketId: 'order-103:fryer',
     stationId: 'fryer',
     items: const [
-      KdsItemView(name: 'French Fries', quantity: 2),
+      // Product-rescue sprint: showcases per-modifier QUANTITY ('×N' baked
+      // into the display string, same as the real mapper) + an item note —
+      // quantities and notes only, never money.
+      KdsItemView(
+        name: 'French Fries',
+        quantity: 2,
+        modifiers: ['Extra cheese ×2', 'No salt'],
+        note: 'Extra crispy',
+      ),
       KdsItemView(name: 'Onion Rings', quantity: 1),
     ],
     status: KitchenTicketStatus.inPreparation,

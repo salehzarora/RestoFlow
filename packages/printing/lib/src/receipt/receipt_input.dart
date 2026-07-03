@@ -136,12 +136,21 @@ class ReceiptLabelBundle {
 
 /// One modifier line under an item (option name + optional price delta).
 class ReceiptModifierLine {
-  const ReceiptModifierLine({required this.nameSnapshot, this.amountMinor});
+  const ReceiptModifierLine({
+    required this.nameSnapshot,
+    this.amountMinor,
+    this.quantity = 1,
+  });
 
   final String nameSnapshot;
 
   /// Integer minor-unit price delta, or null to print the name only.
   final int? amountMinor;
+
+  /// Integer modifier quantity (>= 1, default 1 — additive, product-rescue
+  /// sprint). When above 1 the printed line carries an ` xN` multiplier;
+  /// quantity 1 keeps the historical name-only format.
+  final int quantity;
 }
 
 /// One ordered item line: name + quantity + authoritative line total + mods.
@@ -153,6 +162,7 @@ class ReceiptItemLine {
     required this.quantity,
     required this.lineTotalMinor,
     List<ReceiptModifierLine> modifiers = const <ReceiptModifierLine>[],
+    this.note,
   }) : modifiers = List.unmodifiable(modifiers);
 
   final String nameSnapshot;
@@ -163,6 +173,11 @@ class ReceiptItemLine {
 
   /// Unmodifiable copy of the supplied modifiers (defensively copied).
   final List<ReceiptModifierLine> modifiers;
+
+  /// Optional per-item note (free text, e.g. a kitchen instruction), printed
+  /// as an indented line after the modifiers (additive, product-rescue
+  /// sprint — null for every existing caller).
+  final String? note;
 }
 
 /// A discount line. [amountMinor] is the value to DISPLAY exactly as supplied

@@ -4,6 +4,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/kitchen_order.dart';
+import 'kds_board_column.dart';
 import 'kitchen_order_card.dart';
 
 /// The KDS kitchen board (RF-117): order tickets grouped into status COLUMNS —
@@ -28,8 +29,8 @@ class KitchenBoard extends StatelessWidget {
   final void Function(String ticketId) onComplete;
   final void Function(String ticketId) onRecall;
 
-  static const double _wideBreakpoint = 900;
-  static const double _columnWidth = 340;
+  static const double _wideBreakpoint = RestoflowBreakpoints.wide;
+  static const double _columnWidth = RestoflowPanelWidths.kdsColumn;
 
   List<KitchenOrderTicket> _bucket(Set<KitchenTicketStatus> statuses) => [
     for (final t in tickets)
@@ -97,12 +98,23 @@ class KitchenBoard extends StatelessWidget {
                         key: Key('kds-col-${col.key}'),
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _ColumnHeader(col: col),
+                          KdsColumnHeader(
+                            columnKey: col.key,
+                            label: col.label,
+                            count: col.tickets.length,
+                          ),
                           const SizedBox(height: RestoflowSpacing.sm),
                           Expanded(
-                            child: ListView(
-                              children: [for (final t in col.tickets) _card(t)],
-                            ),
+                            child: col.tickets.isEmpty
+                                ? const Align(
+                                    alignment: AlignmentDirectional.topCenter,
+                                    child: KdsEmptyColumnPlaceholder(),
+                                  )
+                                : ListView(
+                                    children: [
+                                      for (final t in col.tickets) _card(t),
+                                    ],
+                                  ),
                           ),
                         ],
                       ),
@@ -120,9 +132,16 @@ class KitchenBoard extends StatelessWidget {
                 key: Key('kds-col-${col.key}'),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _ColumnHeader(col: col),
+                  KdsColumnHeader(
+                    columnKey: col.key,
+                    label: col.label,
+                    count: col.tickets.length,
+                  ),
                   const SizedBox(height: RestoflowSpacing.sm),
-                  for (final t in col.tickets) _card(t),
+                  if (col.tickets.isEmpty)
+                    const KdsEmptyColumnPlaceholder()
+                  else
+                    for (final t in col.tickets) _card(t),
                   const SizedBox(height: RestoflowSpacing.md),
                 ],
               ),
@@ -142,59 +161,4 @@ class _BoardColumn {
   final String key;
   final String label;
   final List<KitchenOrderTicket> tickets;
-}
-
-class _ColumnHeader extends StatelessWidget {
-  const _ColumnHeader({required this.col});
-
-  final _BoardColumn col;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.md,
-        vertical: RestoflowSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(RestoflowRadii.md),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              col.label,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w800,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: RestoflowSpacing.sm,
-              vertical: 2,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.onPrimaryContainer.withValues(
-                alpha: 0.15,
-              ),
-              borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-            ),
-            child: Text(
-              col.tickets.length.toString(),
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

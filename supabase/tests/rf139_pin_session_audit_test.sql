@@ -39,7 +39,7 @@ insert into app_users (id, email) values
 insert into memberships (id, app_user_id, organization_id, role) values
   ('00000000-0000-0000-0000-00000013ab01', '00000000-0000-0000-0000-0000000139e0', '00000000-0000-0000-0000-000000013900', 'cashier');
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id, pin_credential_ref) values
-  ('00000000-0000-0000-0000-0000000139ef', '00000000-0000-0000-0000-000000013900', '00000000-0000-0000-0000-000000013901', '00000000-0000-0000-0000-000000013902', '00000000-0000-0000-0000-0000000139e0', '00000000-0000-0000-0000-00000013ab01', 'ref:test-correct');
+  ('00000000-0000-0000-0000-0000000139ef', '00000000-0000-0000-0000-000000013900', '00000000-0000-0000-0000-000000013901', '00000000-0000-0000-0000-000000013902', '00000000-0000-0000-0000-0000000139e0', '00000000-0000-0000-0000-00000013ab01', extensions.crypt('ref:test-correct', extensions.gen_salt('bf')));
 
 -- Capture returned session ids for cross-checks.
 create temporary table rf139_run (label text primary key, sid uuid);

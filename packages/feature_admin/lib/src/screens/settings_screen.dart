@@ -38,10 +38,11 @@ class AdminSettingsScreen extends ConsumerWidget {
           AdminPageHeader(
             title: l10n.adminSettingsTitle,
             subtitle: l10n.adminSettingsSubtitle,
+            icon: Icons.tune_outlined,
           ),
           if (!canEdit)
             const Padding(
-              padding: EdgeInsets.fromLTRB(
+              padding: EdgeInsetsDirectional.fromSTEB(
                 RestoflowSpacing.lg,
                 0,
                 RestoflowSpacing.lg,
@@ -237,11 +238,7 @@ class _SaveBar extends StatelessWidget {
         FilledButton.icon(
           onPressed: dirty && !saving ? onSave : null,
           icon: saving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const RestoflowInlineSpinner(size: 16)
               : const Icon(Icons.save_outlined, size: 18),
           label: Text(l10n.adminSave),
         ),

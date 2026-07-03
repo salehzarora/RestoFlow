@@ -4,6 +4,9 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
+
 import '../data/payment.dart';
 import '../format/money_format.dart';
 import '../print/print_document.dart';
@@ -39,6 +42,9 @@ class ReceiptPrintPreview extends ConsumerWidget {
     final theme = Theme.of(context);
     final currency = payment.currencyCode;
     final dineIn = order.orderType == OrderType.dineIn;
+    // Mode-honest: the demo restaurant name / demo + provisional notes belong
+    // to demo mode only — a REAL receipt shows the true server receipt number.
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final typeLabel = dineIn
         ? l10n.posOrderTypeDineIn
         : l10n.posOrderTypeTakeaway;
@@ -71,18 +77,27 @@ class ReceiptPrintPreview extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // No letterSpacing: tracking breaks Arabic glyph
+                          // joining under the ar default locale (D-014).
                           Center(
                             child: Text(
-                              l10n.receiptDemoRestaurantName,
+                              isDemo
+                                  ? l10n.receiptDemoRestaurantName
+                                  : l10n.posReceiptTitle,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: 1.0,
                               ),
                             ),
                           ),
                           const SizedBox(height: RestoflowSpacing.xs),
-                          Center(child: _PaidChip(label: l10n.posPaidChip)),
+                          Center(
+                            child: RestoflowStatusPill(
+                              label: l10n.posPaidChip,
+                              tone: RestoflowTone.success,
+                              icon: Icons.check_circle,
+                            ),
+                          ),
                           const SizedBox(height: RestoflowSpacing.md),
                           _Line(
                             label: l10n.posReceiptNumberLabel,
@@ -106,7 +121,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             value: _formatReceiptTimestamp(payment.paidAt),
                           ),
                           const _Rule(),
-                          for (final line in order.lines)
+                          for (final line in order.lines) ...[
                             _ItemLine(
                               label: '${line.quantity}× ${line.name}',
                               value: MoneyFormatter.formatMinor(
@@ -114,6 +129,16 @@ class ReceiptPrintPreview extends ConsumerWidget {
                                 line.currencyCode,
                               ),
                             ),
+                            // Snapshots arrive pre-formatted ('name ×N').
+                            for (final modifier in line.modifiers)
+                              _ItemLine(label: '  + $modifier', value: ''),
+                            if (line.note != null)
+                              _ItemLine(
+                                label:
+                                    '  ${l10n.posItemNoteLabel}: ${line.note}',
+                                value: '',
+                              ),
+                          ],
                           const _Rule(),
                           _Line(
                             label: l10n.posReceiptTotal,
@@ -146,24 +171,35 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             value: l10n.posPaymentMethodCash,
                           ),
                           const SizedBox(height: RestoflowSpacing.sm),
-                          Center(
-                            child: Text(
-                              l10n.posReceiptProvisionalNote,
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                          if (isDemo) ...[
+                            Center(
+                              child: Text(
+                                l10n.posReceiptProvisionalNote,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
-                          Center(
-                            child: Text(
-                              l10n.posReceiptDemoNote,
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            Center(
+                              child: Text(
+                                l10n.posReceiptDemoNote,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
+                          ] else
+                            Center(
+                              child: Text(
+                                l10n.posReceiptNoPrinterNote,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -176,7 +212,9 @@ class ReceiptPrintPreview extends ConsumerWidget {
               l10n: l10n,
               onPrint: () => ref
                   .read(printServiceProvider)
-                  .printDocument(buildReceiptDocument(l10n, order, payment)),
+                  .printDocument(
+                    buildReceiptDocument(l10n, order, payment, isDemo: isDemo),
+                  ),
             ),
           ],
         ),
@@ -190,8 +228,9 @@ class ReceiptPrintPreview extends ConsumerWidget {
 PrintDocument buildReceiptDocument(
   AppLocalizations l10n,
   SubmittedOrderView order,
-  CashPayment payment,
-) {
+  CashPayment payment, {
+  bool isDemo = true,
+}) {
   final currency = payment.currencyCode;
   final dineIn = order.orderType == OrderType.dineIn;
   // Built into a local (not an inline `title:` literal) so the RF-020
@@ -200,7 +239,9 @@ PrintDocument buildReceiptDocument(
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
-      PrintLine.title(l10n.receiptDemoRestaurantName),
+      PrintLine.title(
+        isDemo ? l10n.receiptDemoRestaurantName : l10n.posReceiptTitle,
+      ),
       PrintLine.center(l10n.posPaidChip),
       PrintLine.rule(),
       PrintLine.kv(l10n.posReceiptNumberLabel, payment.receiptNumber),
@@ -216,11 +257,17 @@ PrintDocument buildReceiptDocument(
         _formatReceiptTimestamp(payment.paidAt),
       ),
       PrintLine.rule(),
-      for (final line in order.lines)
+      for (final line in order.lines) ...[
         PrintLine.item(
           '${line.quantity}× ${line.name}',
           MoneyFormatter.formatMinor(line.lineTotalMinor, line.currencyCode),
         ),
+        // Modifier snapshots arrive pre-formatted ('name ×N' for quantities).
+        for (final modifier in line.modifiers)
+          PrintLine.item('  + $modifier', ''),
+        if (line.note != null)
+          PrintLine.sub('${l10n.posItemNoteLabel}: ${line.note}'),
+      ],
       PrintLine.rule(),
       PrintLine.kv(
         l10n.posReceiptTotal,
@@ -237,8 +284,11 @@ PrintDocument buildReceiptDocument(
       ),
       PrintLine.rule(),
       PrintLine.kv(l10n.posPaymentMethodLabel, l10n.posPaymentMethodCash),
-      PrintLine.note(l10n.posReceiptProvisionalNote),
-      PrintLine.note(l10n.posReceiptDemoNote),
+      if (isDemo) ...[
+        PrintLine.note(l10n.posReceiptProvisionalNote),
+        PrintLine.note(l10n.posReceiptDemoNote),
+      ] else
+        PrintLine.note(l10n.posReceiptNoPrinterNote),
     ],
   );
 }
@@ -325,45 +375,6 @@ class _PreviewActions extends StatelessWidget {
             onPressed: onPrint,
             icon: const Icon(Icons.print, size: 18),
             label: Text(l10n.printPreviewPrint),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaidChip extends StatelessWidget {
-  const _PaidChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.md,
-        vertical: RestoflowSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.check_circle,
-            size: 14,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: RestoflowSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.w800,
-            ),
           ),
         ],
       ),

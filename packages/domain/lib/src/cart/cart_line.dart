@@ -20,6 +20,7 @@ class CartLine {
     this.variant,
     List<ModifierOptionSnapshot> modifiers = const [],
     this.quantity = 1,
+    this.note,
   }) : modifiers = List.unmodifiable(modifiers) {
     if (quantity < 1) {
       throw InvalidQuantityException(quantity);
@@ -48,6 +49,7 @@ class CartLine {
     List<ModifierOptionSnapshot> modifiers = const [],
     List<ModifierRule> modifierRules = const [],
     int quantity = 1,
+    String? note,
   }) {
     final SizeSnapshot? size = sizeId == null
         ? null
@@ -80,6 +82,7 @@ class CartLine {
       variant: variant,
       modifiers: modifiers,
       quantity: quantity,
+      note: note,
     );
   }
 
@@ -100,6 +103,11 @@ class CartLine {
 
   /// Positive integer count of this line.
   final int quantity;
+
+  /// Optional per-line kitchen note (free text captured at add time, e.g.
+  /// "no salt"). Display data only — never money (additive, product-rescue
+  /// sprint; null for every existing caller).
+  final String? note;
 
   // Snapshot convenience accessors (mirror the required RF-031 field names).
   String get menuItemId => item.menuItemId;
@@ -131,6 +139,7 @@ class CartLine {
     variant: variant,
     modifiers: modifiers,
     quantity: newQuantity,
+    note: note,
   );
 
   /// Validates [selected] modifier options against [rules]: a required group

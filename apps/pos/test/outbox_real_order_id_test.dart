@@ -94,12 +94,19 @@ void main() {
         currencyCode: 'ILS',
         orderType: OrderType.takeaway,
       );
-      await controller.pushEntry(result.entry.id);
 
+      // Demo-readiness sprint: a REAL submit pushes AUTOMATICALLY — no manual
+      // "sync now" — so the transport already carries exactly one push, and
+      // the returned display number is the shared code (never DEMO-*).
       final op =
           (transport.params.single['p_operations'] as List).first
               as Map<String, dynamic>;
       final payload = op['payload'] as Map<String, dynamic>;
+      expect(
+        result.orderNumber,
+        displayOrderCode(payload['order_id'] as String),
+      );
+      expect(result.orderNumber, isNot(startsWith('DEMO-')));
 
       // The real order_id is a client-generated UUID, never a demo label, and it
       // equals the op target_id.
@@ -137,7 +144,7 @@ void main() {
         orderType: OrderType.takeaway,
       );
 
-      await controller.pushEntry(result.entry.id);
+      // Submit auto-pushed once (sprint); a manual re-push re-sends the SAME op.
       await controller.pushEntry(result.entry.id);
 
       String localOpOf(Map<String, dynamic> params) =>

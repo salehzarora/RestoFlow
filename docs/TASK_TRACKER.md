@@ -8,15 +8,15 @@
 | Field | Value |
 | --- | --- |
 | Jira project key | RF |
-| Current milestone | M0A — COMPLETE (architecture baseline FROZEN at RF-004) |
-| Active ticket | RF-004 — Human Architecture Freeze Approval — **DONE (approved by Saleh)**. RF-001/RF-002/RF-003 all complete. |
-| Status | M0A frozen; no active ticket — awaiting M0B kickoff |
-| Branch | `main` (M0A baseline committed at RF-004; no remote push) |
+| Current milestone | M7 real-wiring → **product-rescue sprint** (visible local MVP) |
+| Active ticket | Product-rescue sprint (owner-directed, unticketed by owner instruction): visible dashboard/POS/KDS MVP over the RF-150..161 foundation |
+| Status | Sprint implemented on `feature/product-rescue-visible-mvp` — launch fix (supabase_flutter passkeys crash), setup center + Printers/Staff surfaces, staff/PIN provisioning (bcrypt production verifier), device-originated PIN sign-in, real POS menu/order/payment loop, KDS order.status persistence, sales_summary Overview, CI coverage expansion |
+| Branch | `feature/product-rescue-visible-mvp` (off main @ RF-161 merge; NOT pushed) |
 | Primary agent | Claude Code |
 | Reviewer | Codex |
-| Next step | Prepare **M0B** (technical foundation): begin with **RF-010** (Melos monorepo) and **RF-013** (Supabase bootstrap) **only after Jira/project tracking is ready**. Do not start M0B before that. |
-| Current blockers | none (RF-001/002/003 done; RF-004 freeze approved by Saleh; final Codex verification passed) |
-| Last verification | RF-004 freeze applied: all doc status banners set to FROZEN (M0A baseline, approved at RF-004); RF-004 changelog entry recorded in [DECISIONS.md](DECISIONS.md); Q-001..Q-024 remain **Accepted Open** (none resolved/guessed); D-001..D-028 frozen; `.claude/` ignored; no app code/migrations/manifests/CI/dependencies created; one commit `docs: freeze M0A architecture baseline [RF-004]`, no push. |
+| Next step | Human review of the sprint branch; mandatory RLS/security sign-off (AGENTS.md) before real tenant data; then PR per owner decision |
+| Current blockers | Human RLS/security sign-off outstanding (hard gate); hardware print transports human-gated (Q-006/Q-015) |
+| Last verification | pgTAP 164 files / 2508 assertions PASS (includes the 6 sprint suites + bcrypt fixture conversions); `dart analyze apps packages` clean; full Flutter suites + guards run in the sprint's final validation (see LOCAL_RUNBOOK.md §11) |
 
 ## Authoritative references
 

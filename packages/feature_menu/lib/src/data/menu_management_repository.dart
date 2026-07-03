@@ -51,6 +51,13 @@ class MenuManagementRepository implements MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
+    String? itemType,
+    List<String> tags = const [],
+    int? prepMinutes,
+    String? sku,
+    String? kitchenNote,
+    Map<String, dynamic> attributes = const {},
   }) => _writer.upsertItem(
     scope: scope,
     id: id,
@@ -62,6 +69,13 @@ class MenuManagementRepository implements MenuWriter {
     defaultStationId: defaultStationId,
     displayOrder: displayOrder,
     isActive: isActive,
+    imagePath: imagePath,
+    itemType: itemType,
+    tags: tags,
+    prepMinutes: prepMinutes,
+    sku: sku,
+    kitchenNote: kitchenNote,
+    attributes: attributes,
   );
 
   @override
@@ -114,6 +128,8 @@ class MenuManagementRepository implements MenuWriter {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
+    bool allowQuantity = false,
+    int? maxQuantity,
   }) => _writer.upsertModifier(
     scope: scope,
     id: id,
@@ -125,6 +141,8 @@ class MenuManagementRepository implements MenuWriter {
     isRequired: isRequired,
     displayOrder: displayOrder,
     isActive: isActive,
+    allowQuantity: allowQuantity,
+    maxQuantity: maxQuantity,
   );
 
   @override

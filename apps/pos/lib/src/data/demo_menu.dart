@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 
 /// In-memory demo menu data for the RF-100 POS demo screen.
 ///
@@ -34,6 +35,10 @@ class DemoCategory {
 }
 
 /// A single demo menu item rendered as a card on the POS menu grid.
+///
+/// Also the POS view model for the REAL backend menu (`pos_menu` rows are
+/// parsed into it), so real-only fields ([imagePath], [imageUrl]) and the
+/// rich attributes (menu/media sprint) are OPTIONAL.
 class DemoMenuItem {
   const DemoMenuItem({
     required this.id,
@@ -41,6 +46,13 @@ class DemoMenuItem {
     required this.priceMinor,
     required this.categoryId,
     required this.categoryName,
+    this.imagePath,
+    this.imageUrl,
+    this.itemType,
+    this.tags = const <String>[],
+    this.prepMinutes,
+    this.kitchenNote,
+    this.attributes = const <String, dynamic>{},
   });
 
   /// Stable demo identifier; also used as the cart line's menu item id.
@@ -55,6 +67,27 @@ class DemoMenuItem {
   /// Owning category id/name (data).
   final String categoryId;
   final String categoryName;
+
+  /// The RF-110 storage object key of the item's image (real menu only; the
+  /// backend `pos_menu` serves it as `image_path`). Null = no image.
+  final String? imagePath;
+
+  /// The resolved short-lived signed URL for [imagePath] (real menu only,
+  /// batch-resolved once per menu load; fail-soft — resolution failures leave
+  /// it null and the card renders its tinted icon band).
+  final String? imageUrl;
+
+  /// Rich attributes (menu/media sprint) — STORAGE ONLY for now; card/sheet
+  /// display lands in later parts. All NON-MONEY (D-007): [itemType] is the
+  /// coarse kind wire value (food/drink/side/combo/other), [tags] are fixed-
+  /// vocabulary wire strings (never localized in data), [prepMinutes] is time,
+  /// [kitchenNote] is the standing prep note, and [attributes] is the generic
+  /// bag (portion_label / patty_count / patty_weight_grams — weight is grams).
+  final String? itemType;
+  final List<String> tags;
+  final int? prepMinutes;
+  final String? kitchenNote;
+  final Map<String, dynamic> attributes;
 }
 
 /// The demo categories (order drives the filter-chip order).
@@ -63,31 +96,31 @@ const List<DemoCategory> kDemoCategories = <DemoCategory>[
     id: 'burgers',
     name: 'Burgers',
     icon: Icons.lunch_dining,
-    color: Color(0xFFE8590C),
+    color: RestoflowCategoryPalette.terracotta,
   ),
   DemoCategory(
     id: 'mains',
     name: 'Mains',
     icon: Icons.dinner_dining,
-    color: Color(0xFF0F766E),
+    color: RestoflowCategoryPalette.teal,
   ),
   DemoCategory(
     id: 'sides',
     name: 'Sides',
     icon: Icons.fastfood,
-    color: Color(0xFFB45309),
+    color: RestoflowCategoryPalette.amber,
   ),
   DemoCategory(
     id: 'drinks',
     name: 'Drinks',
     icon: Icons.local_bar,
-    color: Color(0xFF1D4ED8),
+    color: RestoflowCategoryPalette.blue,
   ),
   DemoCategory(
     id: 'coffee',
     name: 'Coffee',
     icon: Icons.local_cafe,
-    color: Color(0xFF6F4E37),
+    color: RestoflowCategoryPalette.coffee,
   ),
 ];
 
@@ -109,12 +142,24 @@ const List<DemoMenuItem> kDemoMenu = <DemoMenuItem>[
     categoryId: 'burgers',
     categoryName: 'Burgers',
   ),
+  // The rich-attribute showcase item (menu/media sprint): sensible demo
+  // values so later parts can demo type/tags/prep/kitchen-note/attributes.
+  // Names/notes are demo DATA, not chrome; weight is grams, never money.
   DemoMenuItem(
     id: 'cheeseburger',
     name: 'Cheeseburger',
     priceMinor: 4800,
     categoryId: 'burgers',
     categoryName: 'Burgers',
+    itemType: 'food',
+    tags: <String>['popular'],
+    prepMinutes: 12,
+    kitchenNote: 'Toast the bun; cheese on the patty.',
+    attributes: <String, dynamic>{
+      'portion_label': 'Single',
+      'patty_count': 1,
+      'patty_weight_grams': 160,
+    },
   ),
   DemoMenuItem(
     id: 'double-bacon-burger',

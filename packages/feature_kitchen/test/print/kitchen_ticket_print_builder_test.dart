@@ -26,6 +26,7 @@ void main() {
               name: 'Burger',
               qty: 2,
               modifiers: [_mod('Extra Cheese')],
+              note: 'no salt',
             ),
             _Line(lineId: 'b', menuItemId: 'fries', name: 'Fries', qty: 1),
           ],
@@ -51,6 +52,9 @@ void main() {
           'FEED 1',
           'T[left,normal] "Burger x2"',
           'T[left,normal] "  + Extra Cheese"',
+          // The item note follows its modifiers (product-rescue sprint) and is
+          // ABSENT for the note-less Fries line below.
+          'T[left,normal] "  * no salt"',
           'T[left,normal] "Fries x1"',
           'FEED 2',
           'CUT',
@@ -121,6 +125,42 @@ void main() {
           '  + Extra Shot x2',
         ]),
       );
+    });
+  });
+
+  group('item notes (kitchen data, no money)', () {
+    test('a note prints as an indented "  * " line after the modifiers; '
+        'note-less items emit no note line', () {
+      final order = _order(
+        items: [
+          _Line(
+            lineId: 'a',
+            menuItemId: 'shawarma',
+            name: 'Shawarma',
+            qty: 1,
+            modifiers: [_mod('Extra Tahini', quantity: 2)],
+            // Tenant DATA may be Arabic — carried verbatim (not chrome).
+            note: 'بدون بصل',
+          ),
+          _Line(lineId: 'b', menuItemId: 'fries', name: 'Fries', qty: 1),
+        ],
+      );
+      final doc = KitchenTicketPrintBuilder.build(
+        _ticketFor(order, 'grill'),
+        order,
+        at: at,
+      );
+      expect(
+        _texts(doc),
+        containsAllInOrder(<String>[
+          'Shawarma x1',
+          '  + Extra Tahini x2',
+          '  * بدون بصل',
+          'Fries x1',
+        ]),
+      );
+      // Exactly one note line — the note-less item contributes none.
+      expect(_texts(doc).where((t) => t.startsWith('  * ')).length, 1);
     });
   });
 
@@ -217,6 +257,7 @@ class _Line {
     this.qty = 1,
     this.basePriceMinor = 1000,
     this.modifiers = const [],
+    this.note,
   });
 
   final String lineId;
@@ -225,6 +266,7 @@ class _Line {
   final int qty;
   final int basePriceMinor;
   final List<ModifierOptionSnapshot> modifiers;
+  final String? note;
 }
 
 ModifierOptionSnapshot _mod(
@@ -263,6 +305,7 @@ LocalOrder _order({
         currencyCodeSnapshot: 'ILS',
         quantity: it.qty,
         modifiers: it.modifiers,
+        note: it.note,
       ),
     );
   }

@@ -62,6 +62,23 @@ void main() {
         expect(transport.lastParams!['p_branch_id'], 'branch-1');
         expect(transport.lastParams!['p_base_price_minor'], 350);
         expect(transport.lastParams!['p_currency_code'], 'USD');
+        // Full-state contract: an omitted image sends p_image_path null
+        // (the server treats null as clear/unset).
+        expect(transport.lastParams!.containsKey('p_image_path'), isTrue);
+        expect(transport.lastParams!['p_image_path'], isNull);
+        // Rich attributes (menu/media sprint): unset fields travel as null —
+        // one canonical "unset" wire shape (empty tags/attributes => null).
+        for (final key in [
+          'p_item_type',
+          'p_tags',
+          'p_prep_minutes',
+          'p_sku',
+          'p_kitchen_note',
+          'p_attributes',
+        ]) {
+          expect(transport.lastParams!.containsKey(key), isTrue);
+          expect(transport.lastParams![key], isNull);
+        }
 
         final result = _success(outcome);
         expect(result, isNotNull);
@@ -70,6 +87,73 @@ void main() {
         expect(result.action, MenuWriteAction.created);
       },
     );
+
+    test('upsertItem passes p_image_path when an image is set', () async {
+      final transport = _FakeTransport()
+        ..returnValue = const {
+          'ok': true,
+          'entity': 'menu_item',
+          'id': 'item-9',
+          'action': 'updated',
+        };
+      final writer = RpcMenuWriter(transport);
+
+      await writer.upsertItem(
+        scope: _scope,
+        id: 'item-9',
+        menuCategoryId: 'cat-1',
+        name: 'Espresso',
+        basePriceMinor: 350,
+        currencyCode: 'USD',
+        imagePath: 'org-1/rest-1/branch-1/menu_item/item-9/img-1.png',
+      );
+
+      expect(
+        transport.lastParams!['p_image_path'],
+        'org-1/rest-1/branch-1/menu_item/item-9/img-1.png',
+      );
+    });
+
+    test('upsertItem passes the rich attribute p_* params when set', () async {
+      final transport = _FakeTransport()
+        ..returnValue = const {
+          'ok': true,
+          'entity': 'menu_item',
+          'id': 'item-9',
+          'action': 'updated',
+        };
+      final writer = RpcMenuWriter(transport);
+
+      await writer.upsertItem(
+        scope: _scope,
+        id: 'item-9',
+        menuCategoryId: 'cat-1',
+        name: 'Burger',
+        basePriceMinor: 4200,
+        currencyCode: 'ILS',
+        itemType: 'food',
+        tags: const ['spicy', 'popular'],
+        prepMinutes: 12,
+        sku: 'BRG-01',
+        kitchenNote: 'No onions.',
+        attributes: const {
+          'portion_label': 'Single',
+          'patty_count': 1,
+          'patty_weight_grams': 160,
+        },
+      );
+
+      expect(transport.lastParams!['p_item_type'], 'food');
+      expect(transport.lastParams!['p_tags'], ['spicy', 'popular']);
+      expect(transport.lastParams!['p_prep_minutes'], 12);
+      expect(transport.lastParams!['p_sku'], 'BRG-01');
+      expect(transport.lastParams!['p_kitchen_note'], 'No onions.');
+      expect(transport.lastParams!['p_attributes'], {
+        'portion_label': 'Single',
+        'patty_count': 1,
+        'patty_weight_grams': 160,
+      });
+    });
 
     test('upsertCategory (update) passes the existing id', () async {
       final transport = _FakeTransport()
@@ -151,6 +235,43 @@ void main() {
       );
       expect(transport.lastFunction, 'menu_upsert_modifier_option');
       expect(transport.lastParams!['p_modifier_id'], 'mod-1');
+    });
+
+    test('upsertModifier sends the appended p_allow_quantity/p_max_quantity '
+        '(false/null by default)', () async {
+      final transport = _FakeTransport()
+        ..returnValue = const {
+          'ok': true,
+          'entity': 'modifier',
+          'id': 'mod-1',
+          'action': 'created',
+        };
+      final writer = RpcMenuWriter(transport);
+
+      // Default call: quantity settings still travel (appended args), as
+      // false/null.
+      await writer.upsertModifier(
+        scope: _scope,
+        menuItemId: 'item-1',
+        name: 'Doneness',
+      );
+      expect(transport.lastFunction, 'menu_upsert_modifier');
+      expect(transport.lastParams!.containsKey('p_allow_quantity'), isTrue);
+      expect(transport.lastParams!['p_allow_quantity'], false);
+      expect(transport.lastParams!.containsKey('p_max_quantity'), isTrue);
+      expect(transport.lastParams!['p_max_quantity'], isNull);
+
+      // Quantity-enabled call: the values travel verbatim.
+      await writer.upsertModifier(
+        scope: _scope,
+        menuItemId: 'item-1',
+        name: 'Extras',
+        selectionType: 'multiple',
+        allowQuantity: true,
+        maxQuantity: 5,
+      );
+      expect(transport.lastParams!['p_allow_quantity'], true);
+      expect(transport.lastParams!['p_max_quantity'], 5);
     });
   });
 

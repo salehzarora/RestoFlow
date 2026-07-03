@@ -18,7 +18,8 @@ import 'in_memory_menu_store.dart';
 const String demoOrganizationId = 'demo-org';
 const String demoRestaurantId = 'demo-restaurant';
 const String demoBranchId = 'demo-branch';
-const String demoCurrencyCode = 'USD';
+// ILS-only for the pilot (demo mirrors the real default; Q-007 interim).
+const String demoCurrencyCode = 'ILS';
 
 /// The default demo scope (a single branch of a single restaurant).
 const MenuScope demoMenuScope = MenuScope(

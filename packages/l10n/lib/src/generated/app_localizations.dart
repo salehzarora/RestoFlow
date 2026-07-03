@@ -298,6 +298,42 @@ abstract class AppLocalizations {
   /// **'Real mode is selected but the Supabase connection isn\'t configured, so no platform data can be loaded. Set the Supabase URL and anon key, or run in demo mode.'**
   String get adminNotConfiguredBody;
 
+  /// Heading of the admin app's access explainer (shown to non-platform-admin visitors).
+  ///
+  /// In en, this message translates to:
+  /// **'Platform admin panel'**
+  String get adminGateTitle;
+
+  /// Admin gate explainer line 1: what this app is.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the platform administration panel — not the restaurant owner\'s panel.'**
+  String get adminGateNotOwner;
+
+  /// Admin gate explainer line 2: where restaurant owners should go.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the Dashboard to manage your restaurant.'**
+  String get adminGateUseDashboard;
+
+  /// Admin gate note when a signed-in tenant account (e.g. an owner) opens the admin app.
+  ///
+  /// In en, this message translates to:
+  /// **'This signed-in account is not a platform admin.'**
+  String get adminGateNotAdminAccount;
+
+  /// Admin gate note about how platform access is provisioned (no self-service).
+  ///
+  /// In en, this message translates to:
+  /// **'Platform-admin access is granted manually by the platform operator — see docs/LOCAL_RUNBOOK.md.'**
+  String get adminGateProvisionHint;
+
+  /// Admin gate action that opens the restaurant Dashboard app.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Dashboard'**
+  String get adminGateOpenDashboard;
+
   /// Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up).
   ///
   /// In en, this message translates to:
@@ -333,6 +369,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No active tickets'**
   String get kdsEmptyState;
+
+  /// Placeholder inside an empty KDS board column.
+  ///
+  /// In en, this message translates to:
+  /// **'No tickets'**
+  String get kdsColumnEmpty;
+
+  /// KDS warning pill when polling fails and the board shows cached (possibly stale) tickets.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing last synced tickets'**
+  String get kdsStaleBanner;
 
   /// KDS action that marks a ready ticket as bumped (done).
   ///
@@ -472,6 +520,12 @@ abstract class AppLocalizations {
   /// **'Add'**
   String get posAddToCart;
 
+  /// POS modifier-sheet confirm button: add the configured item, showing the running line total (already currency-formatted).
+  ///
+  /// In en, this message translates to:
+  /// **'Add · {total}'**
+  String posAddToCartWithTotal(String total);
+
   /// POS action that removes all items from the cart.
   ///
   /// In en, this message translates to:
@@ -507,6 +561,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send Order'**
   String get posSendOrder;
+
+  /// Hint above the DISABLED Send button explaining WHY it is disabled: the cart has items but the dine-in order has no table yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign a table to send this dine-in order'**
+  String get posSendNeedsTableHint;
 
   /// POS notice on the local order confirmation clarifying nothing was sent to a backend/kitchen/printer.
   ///
@@ -898,6 +958,246 @@ abstract class AppLocalizations {
   /// **'Use your browser\'s print (Ctrl+P) to print this preview'**
   String get printPreviewHint;
 
+  /// Tooltip of the POS/KDS app-bar overflow (three-dot) device menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Device menu'**
+  String get deviceSettingsMenuTooltip;
+
+  /// Title of the operational device-settings sheet on POS/KDS and its menu entry. NOT an owner/admin screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Device settings'**
+  String get deviceSettingsTitle;
+
+  /// Device-menu action: reload the device session/printer assignments.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh connection'**
+  String get deviceRefreshAction;
+
+  /// Device-menu action: clear this device's local pairing and return to the pairing screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpair device'**
+  String get deviceUnpairAction;
+
+  /// Warning shown before unpairing a device.
+  ///
+  /// In en, this message translates to:
+  /// **'Only use this if this device should be paired again.'**
+  String get deviceUnpairWarning;
+
+  /// Confirming button of the unpair dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpair'**
+  String get deviceUnpairConfirm;
+
+  /// Cancel button of the unpair confirmation dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get deviceUnpairCancel;
+
+  /// Device-settings row label: which surface this device runs (POS or KDS).
+  ///
+  /// In en, this message translates to:
+  /// **'App type'**
+  String get deviceSettingsAppTypeLabel;
+
+  /// Device-settings app-type value for the POS surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Cashier (POS)'**
+  String get deviceSettingsAppTypePos;
+
+  /// Device-settings app-type value for the KDS surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen display (KDS)'**
+  String get deviceSettingsAppTypeKds;
+
+  /// Device-settings row label: the restaurant this device belongs to.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant'**
+  String get deviceSettingsRestaurantLabel;
+
+  /// Device-settings row label: the branch this device belongs to.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch'**
+  String get deviceSettingsBranchLabel;
+
+  /// Device-settings row label: this device's own label/name.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get deviceSettingsDeviceLabel;
+
+  /// Device-settings row label: the device pairing/session status.
+  ///
+  /// In en, this message translates to:
+  /// **'Pairing'**
+  String get deviceSettingsPairingLabel;
+
+  /// Device-settings pairing status: the device holds an active pairing.
+  ///
+  /// In en, this message translates to:
+  /// **'Paired'**
+  String get deviceSettingsPairingActive;
+
+  /// Device-settings row label: whether a staff PIN session is active on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff session'**
+  String get deviceSettingsPinSessionLabel;
+
+  /// Device-settings staff-session status: a PIN session is active.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get deviceSettingsPinSessionActive;
+
+  /// Device-settings staff-session status: no PIN session.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed in'**
+  String get deviceSettingsPinSessionNone;
+
+  /// Honest device-settings note in demo mode (no backend, no pairing).
+  ///
+  /// In en, this message translates to:
+  /// **'Demo mode — no paired device.'**
+  String get deviceSettingsDemoNote;
+
+  /// Device-settings fallback when no paired-device context is available.
+  ///
+  /// In en, this message translates to:
+  /// **'Device info unavailable.'**
+  String get deviceSettingsUnavailable;
+
+  /// Device-settings section heading: the printers assigned to this device's branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Printers'**
+  String get deviceSettingsPrintersHeading;
+
+  /// Device-settings empty state: no printer of this device's role is configured for its branch.
+  ///
+  /// In en, this message translates to:
+  /// **'No printer assigned. Ask a manager to configure it in Dashboard → Printers.'**
+  String get deviceSettingsNoPrinter;
+
+  /// Printer capability status: the printer is configured in the Dashboard but this build has no physical print transport.
+  ///
+  /// In en, this message translates to:
+  /// **'Configured only — print bridge required.'**
+  String get deviceSettingsBridgeRequired;
+
+  /// Honest capability note: physical printing is not possible from this web build; jobs are prepared/previewed only.
+  ///
+  /// In en, this message translates to:
+  /// **'Printing requires a print bridge/native app. This build can save config and create/preview print jobs.'**
+  String get deviceSettingsCapabilityNote;
+
+  /// Device-settings footer: when the printer assignments were last fetched.
+  ///
+  /// In en, this message translates to:
+  /// **'Last refresh: {time}'**
+  String deviceSettingsLastRefresh(String time);
+
+  /// Device-settings safe error when the assignments RPC fails (network/session).
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load printer assignments.'**
+  String get deviceSettingsLoadError;
+
+  /// Printer row status: the printer exists but is disabled by the owner in the Dashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled in Dashboard'**
+  String get deviceSettingsPrinterDisabled;
+
+  /// Printer row subtitle: the kitchen stations routed to this printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Stations: {names}'**
+  String deviceSettingsRouteStations(String names);
+
+  /// Snackbar after the device menu's Refresh connection reloaded the assignments.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection refreshed.'**
+  String get deviceRefreshedSnack;
+
+  /// Snackbar after the device was unpaired locally.
+  ///
+  /// In en, this message translates to:
+  /// **'Device unpaired.'**
+  String get deviceUnpairedSnack;
+
+  /// Device-settings section heading: per-device automatic print triggers.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-print'**
+  String get deviceSettingsAutoPrintHeading;
+
+  /// POS device-settings toggle: prepare a customer receipt print job automatically after a successful payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-print receipt after payment'**
+  String get posAutoPrintReceiptToggle;
+
+  /// KDS device-settings toggle: prepare a kitchen-ticket print job automatically when a ticket is acknowledged.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-print kitchen ticket on acknowledge'**
+  String get kdsAutoPrintAcknowledgeToggle;
+
+  /// Why an auto-print toggle is disabled: the branch has no printer of the needed role.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled — no printer assigned.'**
+  String get autoPrintNoPrinterNote;
+
+  /// Print-job status: nothing was prepared because no printer is assigned.
+  ///
+  /// In en, this message translates to:
+  /// **'No printer configured'**
+  String get printStatusNotConfigured;
+
+  /// Print-job status: the job payload is ready; no physical transport exists in this build, so it is NOT claimed as printed.
+  ///
+  /// In en, this message translates to:
+  /// **'Print job prepared — physical printing requires print bridge.'**
+  String get printStatusPrepared;
+
+  /// Print-job status: a transport CONFIRMED the physical print (unreachable until a print bridge exists).
+  ///
+  /// In en, this message translates to:
+  /// **'Printed'**
+  String get printStatusPrinted;
+
+  /// Print-job status: preparing/sending the job failed; the order/ticket itself is unaffected.
+  ///
+  /// In en, this message translates to:
+  /// **'Print failed'**
+  String get printStatusFailed;
+
+  /// Label of the receipt print-job status line on the POS order confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt print'**
+  String get posReceiptPrintLabel;
+
+  /// Label of the kitchen print-job status line on a KDS ticket.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen print'**
+  String get kdsTicketPrintLabel;
+
   /// Title of the POS receipt print-preview dialog.
   ///
   /// In en, this message translates to:
@@ -993,6 +1293,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Demo shift — not synced'**
   String get posShiftDemoNote;
+
+  /// REAL-mode shift bar label: a real shift was opened on the server at PIN sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'Current shift'**
+  String get posShiftRealName;
+
+  /// REAL-mode shift bar note: the RF-055 auto-opened server shift holds the cash truth; local drawer figures are never invented.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened at sign-in — cash totals are tracked on the server'**
+  String get posShiftRealNote;
+
+  /// REAL-mode sync note while the order push is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending to the backend…'**
+  String get posSyncSendingReal;
+
+  /// REAL-mode sync note once the backend applied the order.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent — the kitchen display receives it automatically.'**
+  String get posSyncSentReal;
+
+  /// REAL-mode sync note when the backend rejected the order; honest, with Retry offered.
+  ///
+  /// In en, this message translates to:
+  /// **'The backend rejected this order — it was NOT sent to the kitchen.'**
+  String get posSyncFailedReal;
+
+  /// REAL-mode label of the manual send button for a pending (not yet pushed) order.
+  ///
+  /// In en, this message translates to:
+  /// **'Send now'**
+  String get posSyncSendNow;
+
+  /// REAL-mode receipt note: the receipt number is the true server number; only printing hardware is missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Printing is not connected on this device yet'**
+  String get posReceiptNoPrinterNote;
+
+  /// Pill on a modifier group the cashier MUST choose from (e.g. doneness) before adding the item.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get posModifierRequired;
+
+  /// Quiet pill on a modifier group the cashier MAY skip (no minimum selection).
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get posModifierOptional;
+
+  /// Live selected-count indicator on a modifier group with a maximum, e.g. 1/2 (selected of max).
+  ///
+  /// In en, this message translates to:
+  /// **'{selected}/{max}'**
+  String posModifierSelectedCount(int selected, int max);
+
+  /// Live selected-count indicator on a modifier group WITHOUT a maximum: just the number selected.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected}'**
+  String posModifierSelectedCountOpen(int selected);
+
+  /// Quiet label on a modifier option whose price delta is zero (included at no charge).
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get posModifierFree;
+
+  /// Modifier-sheet header subtitle: the item's base price BEFORE option deltas (already currency-formatted), shown so the cashier can compare base vs the running total.
+  ///
+  /// In en, this message translates to:
+  /// **'Base price · {price}'**
+  String posModifierBasePrice(String price);
+
+  /// Label of the optional per-item special-instructions field on the POS modifier sheet (e.g. no onions).
+  ///
+  /// In en, this message translates to:
+  /// **'Item note'**
+  String get posModifierItemNoteLabel;
+
+  /// Placeholder/hint of the per-item note field on the POS modifier sheet, suggesting typical kitchen instructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Example: no onions, extra sauce'**
+  String get posModifierItemNoteHint;
+
+  /// Short prefix label before a cart line's / receipt line's per-item note, e.g. 'Note: no onions'.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get posItemNoteLabel;
 
   /// Owner dashboard section heading above the daily KPI cards.
   ///
@@ -1281,6 +1677,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Something went wrong'**
   String get authError;
+
+  /// Title of the help page shown when the app starts in real mode without valid Supabase connection settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Real mode is not configured'**
+  String get authRealModeUnconfiguredTitle;
+
+  /// Body of the real-mode-unconfigured help page explaining why the app is locked.
+  ///
+  /// In en, this message translates to:
+  /// **'The app was started in real mode, but the backend connection settings are missing or invalid. RestoFlow never fakes a backend, so real mode stays locked until valid settings are provided.'**
+  String get authRealModeUnconfiguredBody;
+
+  /// Heading above the code block listing the required --dart-define values for real mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Start the app with these values'**
+  String get authRealModeUnconfiguredHowTo;
+
+  /// Hint on the real-mode-unconfigured help page explaining how to run the demo.
+  ///
+  /// In en, this message translates to:
+  /// **'To explore the demo instead, run the app without any configuration — demo mode is the default.'**
+  String get authRealModeUnconfiguredDemoHint;
+
+  /// Title of the help page shown when POS/KDS device bootstrap fails because anonymous sign-in is rejected by the backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Device sign-in unavailable'**
+  String get authDeviceSignInUnavailableTitle;
+
+  /// Body of the device-sign-in-unavailable help page: the exact reason pairing cannot start.
+  ///
+  /// In en, this message translates to:
+  /// **'Anonymous device sign-in is disabled or Supabase auth is not configured.'**
+  String get authDeviceSignInUnavailableBody;
+
+  /// Heading above the code block showing the Supabase auth setting that enables anonymous device sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'How to fix it'**
+  String get authDeviceSignInUnavailableHowTo;
+
+  /// Hint on the device-sign-in-unavailable help page explaining the fix and that no owner account is required on a POS/KDS device.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow anonymous sign-ins in the Supabase Auth settings, restart the backend, then restart this app. No personal account is needed on this device — pairing signs the device in by itself.'**
+  String get authDeviceSignInUnavailableFix;
 
   /// Auth gate action that retries loading the account context.
   ///
@@ -1588,6 +2032,24 @@ abstract class AppLocalizations {
   /// **'Required'**
   String get menuRequiredLabel;
 
+  /// Modifier-group toggle: the cashier may add the same option more than once (quantity stepper on the POS).
+  ///
+  /// In en, this message translates to:
+  /// **'Allow quantity'**
+  String get menuAllowQuantityLabel;
+
+  /// Helper text under the allow-quantity toggle explaining what it enables on the POS.
+  ///
+  /// In en, this message translates to:
+  /// **'The cashier can add the same option more than once (e.g. extra cheese ×2).'**
+  String get menuAllowQuantityHelp;
+
+  /// Modifier-group field label: maximum quantity of a single option (only when quantity is allowed).
+  ///
+  /// In en, this message translates to:
+  /// **'Max per option'**
+  String get menuMaxQuantityLabel;
+
   /// Heading for an item's sizes.
   ///
   /// In en, this message translates to:
@@ -1654,17 +2116,77 @@ abstract class AppLocalizations {
   /// **'Item image'**
   String get menuImageHeading;
 
-  /// Title of the deferred/gated image management panel.
+  /// Title of the image panel's honest state when no image storage is wired for this surface.
   ///
   /// In en, this message translates to:
-  /// **'Image upload coming soon'**
+  /// **'Image upload isn\'t connected'**
   String get menuImageDeferredTitle;
 
-  /// Body explaining why image upload is deferred.
+  /// Body explaining that no image storage backend is wired for this surface.
   ///
   /// In en, this message translates to:
-  /// **'Showing and uploading item photos needs a backend image record (a planned follow-up). The upload path and validation are already built.'**
+  /// **'This surface has no image storage connected, so item photos can\'t be uploaded or shown here.'**
   String get menuImageDeferredBody;
+
+  /// Button that opens the image file picker for an item without an image.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose image'**
+  String get menuImagePickAction;
+
+  /// Button that opens the image file picker to replace an item's existing image.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace image'**
+  String get menuImageReplaceAction;
+
+  /// Button that removes the item's current image.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove image'**
+  String get menuImageRemoveAction;
+
+  /// Button that uploads the picked image and saves it on the item.
+  ///
+  /// In en, this message translates to:
+  /// **'Save image'**
+  String get menuImageSaveAction;
+
+  /// Error when the picked file's type is not an allowed image MIME type.
+  ///
+  /// In en, this message translates to:
+  /// **'Only PNG, JPEG, or WebP images can be uploaded.'**
+  String get menuImageInvalidType;
+
+  /// Error when the picked image exceeds the bucket size limit.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is too large — the limit is 5 MB.'**
+  String get menuImageTooLarge;
+
+  /// Error when the storage upload fails; nothing was persisted.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed — the image was not saved.'**
+  String get menuImageUploadFailed;
+
+  /// Note shown on platforms without an image file picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choosing an image isn\'t available on this platform yet — use the web dashboard.'**
+  String get menuImageUnsupportedPlatform;
+
+  /// Honest note on the demo surface: picked images are kept in memory only.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo — the image is not uploaded to a server.'**
+  String get menuImageDemoNote;
+
+  /// Caption when the stored image preview fails to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the image preview.'**
+  String get menuImageLoadError;
 
   /// Validation error: a required field is blank.
   ///
@@ -1687,7 +2209,7 @@ abstract class AppLocalizations {
   /// Validation error: invalid currency code.
   ///
   /// In en, this message translates to:
-  /// **'Use a 3-letter code (e.g. USD)'**
+  /// **'Use a 3-letter code (e.g. ILS)'**
   String get menuErrorCurrency;
 
   /// Validation error: invalid selection type.
@@ -1816,6 +2338,354 @@ abstract class AppLocalizations {
   /// **'This is organization-wide access with no restaurant selected. Open menu management from a specific restaurant or branch.'**
   String get menuScopeUnavailableBody;
 
+  /// Item editor section title: name, description, category, type, and tags.
+  ///
+  /// In en, this message translates to:
+  /// **'Basic info'**
+  String get menuBasicInfoSection;
+
+  /// Item editor section title: the base price (with sizes/variants below it).
+  ///
+  /// In en, this message translates to:
+  /// **'Pricing'**
+  String get menuPricingSection;
+
+  /// Item editor section title: prep time and the standing kitchen note.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparation'**
+  String get menuPreparationSection;
+
+  /// Item editor collapsed section title: SKU, portion label, and per-piece count/weight.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get menuAdvancedSection;
+
+  /// Subtitle under the Advanced section title explaining the fields are optional and generic across cuisines.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional details — use what fits this item.'**
+  String get menuAdvancedSectionHint;
+
+  /// Label for the item type dropdown (food/drink/side/combo/other).
+  ///
+  /// In en, this message translates to:
+  /// **'Item type'**
+  String get menuItemTypeLabel;
+
+  /// Item type dropdown entry for no type (stored as null).
+  ///
+  /// In en, this message translates to:
+  /// **'Not specified'**
+  String get menuItemTypeUnspecified;
+
+  /// Display label for the item type wire value 'food'.
+  ///
+  /// In en, this message translates to:
+  /// **'Food'**
+  String get menuItemTypeFood;
+
+  /// Display label for the item type wire value 'drink'.
+  ///
+  /// In en, this message translates to:
+  /// **'Drink'**
+  String get menuItemTypeDrink;
+
+  /// Display label for the item type wire value 'side'.
+  ///
+  /// In en, this message translates to:
+  /// **'Side'**
+  String get menuItemTypeSide;
+
+  /// Display label for the item type wire value 'combo'.
+  ///
+  /// In en, this message translates to:
+  /// **'Combo'**
+  String get menuItemTypeCombo;
+
+  /// Display label for the item type wire value 'other'.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get menuItemTypeOther;
+
+  /// Label above the fixed tag filter chips (spicy/vegetarian/popular/new).
+  ///
+  /// In en, this message translates to:
+  /// **'Tags'**
+  String get menuTagsLabel;
+
+  /// Display label for the tag wire value 'spicy' (data stays the wire string).
+  ///
+  /// In en, this message translates to:
+  /// **'Spicy'**
+  String get menuTagSpicy;
+
+  /// Display label for the tag wire value 'vegetarian'.
+  ///
+  /// In en, this message translates to:
+  /// **'Vegetarian'**
+  String get menuTagVegetarian;
+
+  /// Display label for the tag wire value 'popular'.
+  ///
+  /// In en, this message translates to:
+  /// **'Popular'**
+  String get menuTagPopular;
+
+  /// Display label for the tag wire value 'new'.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get menuTagNew;
+
+  /// Compact indicator label/tooltip: how many modifier (option) groups an item carries — dashboard item rows and POS cards.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} option groups'**
+  String menuModifierGroupCount(int count);
+
+  /// Label for the expected preparation time field (whole minutes; time, never money).
+  ///
+  /// In en, this message translates to:
+  /// **'Prep time (minutes)'**
+  String get menuPrepMinutesLabel;
+
+  /// Label for the standing kitchen preparation note field (shown to the KDS).
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen note'**
+  String get menuKitchenNoteLabel;
+
+  /// Label for the internal stock/product code field (back-office only; never sent to devices).
+  ///
+  /// In en, this message translates to:
+  /// **'SKU (internal code)'**
+  String get menuSkuLabel;
+
+  /// Label for the free-text portion wording field (e.g. Single, Family) in Advanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Portion label'**
+  String get menuPortionFieldLabel;
+
+  /// Generic Advanced field: how many patties/pieces make the item — pizza/cafe owners simply leave it empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Count (patties or pieces)'**
+  String get menuPattyCountLabel;
+
+  /// Generic Advanced field: weight per patty/piece in grams (a weight, never money).
+  ///
+  /// In en, this message translates to:
+  /// **'Weight per piece (g)'**
+  String get menuPattyWeightLabel;
+
+  /// Modifiers section action opening the modifier template picker (copy-on-attach; creates ordinary per-item rows).
+  ///
+  /// In en, this message translates to:
+  /// **'Add template'**
+  String get menuTemplateAddAction;
+
+  /// Title of the modifier template picker dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Add from template'**
+  String get menuTemplatePickerTitle;
+
+  /// Template summary fragment: a required single-choice group (min 1, max 1).
+  ///
+  /// In en, this message translates to:
+  /// **'Required · choose 1'**
+  String get menuTemplateRequiredSingle;
+
+  /// Template summary fragment: an optional multi-select group.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional · multi-select'**
+  String get menuTemplateOptionalMulti;
+
+  /// Template summary fragment: an optional single-choice group (min 0, max 1).
+  ///
+  /// In en, this message translates to:
+  /// **'Optional · choose up to 1'**
+  String get menuTemplateOptionalSingle;
+
+  /// Template summary fragment: how many options applying the template creates.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} options'**
+  String menuTemplateOptionCount(int count);
+
+  /// Honest note appended to the failure message when a template apply fails midway: earlier writes are NOT rolled back and remain visible for manual cleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped — the rows already added stay in the list; edit or delete them below.'**
+  String get menuTemplateApplyPartial;
+
+  /// Template group name: optional multi-select burger toppings. Inserted as tenant DATA in the active locale at apply time.
+  ///
+  /// In en, this message translates to:
+  /// **'Burger toppings'**
+  String get menuTemplateBurgerToppings;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Lettuce'**
+  String get menuTemplateOptLettuce;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Tomato'**
+  String get menuTemplateOptTomato;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Onion'**
+  String get menuTemplateOptOnion;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickles'**
+  String get menuTemplateOptPickles;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Cheese'**
+  String get menuTemplateOptCheese;
+
+  /// Template group name: required single-choice meat doneness. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Doneness'**
+  String get menuTemplateDoneness;
+
+  /// Doneness template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Rare'**
+  String get menuTemplateOptRare;
+
+  /// Doneness template option (free): medium doneness. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get menuTemplateOptMediumDoneness;
+
+  /// Doneness template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Well done'**
+  String get menuTemplateOptWellDone;
+
+  /// Template group name: required single-choice number of patties. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Patty count'**
+  String get menuTemplatePattyCount;
+
+  /// Patty count template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Single patty'**
+  String get menuTemplateOptSinglePatty;
+
+  /// Patty count template option (+900 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Double patty'**
+  String get menuTemplateOptDoublePatty;
+
+  /// Patty count template option (+1800 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Triple patty'**
+  String get menuTemplateOptTriplePatty;
+
+  /// Template group name: optional multi-select paid extras. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Extras'**
+  String get menuTemplateExtras;
+
+  /// Extras template option (+300 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra cheese'**
+  String get menuTemplateOptExtraCheese;
+
+  /// Extras template option (+900 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra patty'**
+  String get menuTemplateOptExtraPatty;
+
+  /// Extras template option (+700 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Fries'**
+  String get menuTemplateOptFries;
+
+  /// Extras template option (+500 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Drink'**
+  String get menuTemplateOptDrink;
+
+  /// Template group name: required single-choice drink size. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Drink size'**
+  String get menuTemplateDrinkSize;
+
+  /// Drink size template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Small'**
+  String get menuTemplateOptSmall;
+
+  /// Drink size template option (+200 minor units): medium size. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get menuTemplateOptMediumSize;
+
+  /// Drink size template option (+400 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Large'**
+  String get menuTemplateOptLarge;
+
+  /// Template group name: optional single-choice spiciness level. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Spiciness'**
+  String get menuTemplateSpiciness;
+
+  /// Spiciness template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Mild'**
+  String get menuTemplateOptMild;
+
+  /// Spiciness template option (free): medium heat. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get menuTemplateOptMediumSpicy;
+
+  /// Spiciness template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Hot'**
+  String get menuTemplateOptHot;
+
   /// No description provided for @dashboardNavSettings.
   ///
   /// In en, this message translates to:
@@ -1885,7 +2755,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminErrCurrency.
   ///
   /// In en, this message translates to:
-  /// **'Use a 3-letter code (e.g. USD)'**
+  /// **'Use a 3-letter code (e.g. ILS)'**
   String get adminErrCurrency;
 
   /// No description provided for @adminErrCountry.
@@ -2386,6 +3256,12 @@ abstract class AppLocalizations {
   /// **'Welcome to RestoFlow'**
   String get authWelcomeTitle;
 
+  /// Muted tagline under the brand mark on login/pairing screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant operating system'**
+  String get authBrandTagline;
+
   /// Segmented control option / action for signing in (RF-151).
   ///
   /// In en, this message translates to:
@@ -2512,6 +3388,12 @@ abstract class AppLocalizations {
   /// **'Enter the pairing code created in the restaurant dashboard to connect this device.'**
   String get pairingIntro;
 
+  /// Helper line on the pairing screen pointing to where codes are issued.
+  ///
+  /// In en, this message translates to:
+  /// **'Get a pairing code from the Dashboard → Devices tab.'**
+  String get pairingWhereCode;
+
   /// Pairing-code text-field label.
   ///
   /// In en, this message translates to:
@@ -2553,6 +3435,960 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t pair this device. Please try again.'**
   String get pairingFailed;
+
+  /// Dashboard navigation label for the printers surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Printers'**
+  String get dashboardNavPrinters;
+
+  /// Dashboard navigation label for the staff/PIN surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff'**
+  String get dashboardNavStaff;
+
+  /// Dashboard navigation label for the dining-tables surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables'**
+  String get dashboardNavTables;
+
+  /// Header mode pill when the app runs on in-memory demo data.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo'**
+  String get dashboardModeDemo;
+
+  /// Header mode pill when the app runs against the real backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Real'**
+  String get dashboardModeReal;
+
+  /// Honest real-mode Users tab state: no member read API exists yet, so no list is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'User management not connected yet'**
+  String get dashboardUsersNotConnectedTitle;
+
+  /// Body of the honest real-mode Users tab state.
+  ///
+  /// In en, this message translates to:
+  /// **'This build cannot list or invite real members yet — there is no member directory API. Instead of showing sample people, this page stays empty. Demo mode previews how the flow will work.'**
+  String get dashboardUsersNotConnectedBody;
+
+  /// Title of the real-mode settings card showing the signed-in workspace values.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace'**
+  String get dashboardSettingsWorkspace;
+
+  /// Honest notice on the real-mode Settings tab: values are real, saving is not wired.
+  ///
+  /// In en, this message translates to:
+  /// **'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.'**
+  String get dashboardSettingsRealNotice;
+
+  /// Title of the real-mode setup center on the dashboard overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup'**
+  String get setupTitle;
+
+  /// Subtitle of the setup center.
+  ///
+  /// In en, this message translates to:
+  /// **'Get this branch ready for service'**
+  String get setupSubtitle;
+
+  /// Setup metric label: paired devices.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get setupDevices;
+
+  /// Caption under the devices setup metric.
+  ///
+  /// In en, this message translates to:
+  /// **'active / total'**
+  String get setupDevicesCaption;
+
+  /// Setup metric label: configured printers.
+  ///
+  /// In en, this message translates to:
+  /// **'Printers'**
+  String get setupPrinters;
+
+  /// Caption under the printers setup metric.
+  ///
+  /// In en, this message translates to:
+  /// **'enabled / total'**
+  String get setupPrintersCaption;
+
+  /// Setup metric label: staff with a sign-in PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff PINs'**
+  String get setupStaffPin;
+
+  /// Caption under the staff setup metric.
+  ///
+  /// In en, this message translates to:
+  /// **'with PIN / total'**
+  String get setupStaffCaption;
+
+  /// Shown when a setup metric could not be loaded (never a fake zero).
+  ///
+  /// In en, this message translates to:
+  /// **'n/a'**
+  String get setupMetricUnavailable;
+
+  /// Setup next-step when the branch has no devices.
+  ///
+  /// In en, this message translates to:
+  /// **'No devices yet — create a POS or KDS device and issue a pairing code.'**
+  String get setupNoDevices;
+
+  /// Setup next-step when devices exist but none is actively paired.
+  ///
+  /// In en, this message translates to:
+  /// **'No device is paired yet — issue a code in Devices and redeem it on the device\'s pairing screen.'**
+  String get setupNoActiveDevice;
+
+  /// Setup next-step when no printers are configured.
+  ///
+  /// In en, this message translates to:
+  /// **'No printers configured yet — add a receipt or kitchen printer.'**
+  String get setupNoPrinters;
+
+  /// Setup warning when no active staff member has a PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'No staff member has a PIN yet — POS/KDS sign-in (and the live order flow) needs at least one.'**
+  String get setupNoStaffPin;
+
+  /// Setup success banner when the readiness checks pass.
+  ///
+  /// In en, this message translates to:
+  /// **'This branch is ready: paired device and staff PIN in place.'**
+  String get setupReady;
+
+  /// Setup-center metric label for the menu-items count.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu items'**
+  String get setupMenu;
+
+  /// Caption under the menu-items metric (active items vs all items).
+  ///
+  /// In en, this message translates to:
+  /// **'active / total'**
+  String get setupMenuCaption;
+
+  /// Setup checklist warning when the branch has no active menu items.
+  ///
+  /// In en, this message translates to:
+  /// **'No menu items yet — the POS has nothing to sell.'**
+  String get setupNoMenu;
+
+  /// Checklist action that jumps to the Menu tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your first menu item'**
+  String get setupAddMenuItem;
+
+  /// Setup checklist step when no POS-type device exists.
+  ///
+  /// In en, this message translates to:
+  /// **'No POS device yet — the counter needs one to take orders.'**
+  String get setupNoPosDevice;
+
+  /// Checklist action that jumps to the Devices tab to create a POS device.
+  ///
+  /// In en, this message translates to:
+  /// **'Create POS device'**
+  String get setupCreatePos;
+
+  /// Setup checklist step when no KDS-type device exists.
+  ///
+  /// In en, this message translates to:
+  /// **'No kitchen display yet — the kitchen won\'t see incoming orders.'**
+  String get setupNoKdsDevice;
+
+  /// Checklist action that jumps to the Devices tab to create a KDS device.
+  ///
+  /// In en, this message translates to:
+  /// **'Create kitchen display'**
+  String get setupCreateKds;
+
+  /// Explains HOW to pair: shown under the no-device-paired warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the POS or KDS app on that device and enter the pairing code from the Devices tab.'**
+  String get setupPairingHint;
+
+  /// Checklist action that jumps to the Printers tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Add printer'**
+  String get setupAddPrinter;
+
+  /// Checklist action that jumps to the Staff tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Create staff PIN'**
+  String get setupCreatePin;
+
+  /// Printers page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Printers'**
+  String get printersTitle;
+
+  /// Printers page subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt and kitchen printers for this branch'**
+  String get printersSubtitle;
+
+  /// Button that opens the add-printer dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Add printer'**
+  String get printersAdd;
+
+  /// Empty-state title on the printers page.
+  ///
+  /// In en, this message translates to:
+  /// **'No printers yet'**
+  String get printersEmptyTitle;
+
+  /// Empty-state body on the printers page.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a receipt or kitchen printer to prepare this branch for printing.'**
+  String get printersEmptyBody;
+
+  /// Title of the honest transport-status notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration only — no print transport yet'**
+  String get printersTransportNoticeTitle;
+
+  /// Body of the honest transport-status notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer settings are saved and validated on the backend, but this build does not send anything to physical printers. The print engine ships network-first; Bluetooth and USB transports are not installed yet. No fake print success is ever shown.'**
+  String get printersTransportNotice;
+
+  /// Printer role: customer receipts.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get printersRoleReceipt;
+
+  /// Printer role: kitchen tickets.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen'**
+  String get printersRoleKitchen;
+
+  /// Connection type label: network.
+  ///
+  /// In en, this message translates to:
+  /// **'Network (Wi-Fi/LAN)'**
+  String get printersConnNetwork;
+
+  /// Connection type label: Bluetooth.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get printersConnBluetooth;
+
+  /// Connection type label: USB.
+  ///
+  /// In en, this message translates to:
+  /// **'USB'**
+  String get printersConnUsb;
+
+  /// Honest note on Bluetooth/USB printers: config is saved, transport missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration only — this transport is not installed yet.'**
+  String get printersConnConfigOnly;
+
+  /// Collapsed section in the printer dialog holding technical fields (port, device identifiers).
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get printersAdvanced;
+
+  /// Honest note shown in the printer dialog for EVERY connection type: saving config never prints.
+  ///
+  /// In en, this message translates to:
+  /// **'This build saves the printer configuration only — nothing is printed yet.'**
+  String get printersDialogSavesConfigOnly;
+
+  /// Honest note when Bluetooth is selected in the printer dialog on web: no scan, config only.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth discovery is not available in the web app yet. Save configuration only.'**
+  String get printersConnBluetoothWeb;
+
+  /// Honest note when USB is selected in the printer dialog: needs the native adapter, config only.
+  ///
+  /// In en, this message translates to:
+  /// **'USB printing requires the desktop/native printer adapter. Save configuration only.'**
+  String get printersConnUsbAdapter;
+
+  /// Printer form field: display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get printersFieldName;
+
+  /// Printer form field: role.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer role'**
+  String get printersFieldRole;
+
+  /// Printer form field: connection type.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection type'**
+  String get printersFieldConnection;
+
+  /// Printer form field: paper width.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper width'**
+  String get printersFieldPaper;
+
+  /// Printer form field: network host.
+  ///
+  /// In en, this message translates to:
+  /// **'Host / IP address'**
+  String get printersFieldHost;
+
+  /// Printer form field: network port.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get printersFieldPort;
+
+  /// Printer form field: Bluetooth identifier (configuration only).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth device id / name'**
+  String get printersFieldBluetoothId;
+
+  /// Printer form field: USB identifier (configuration only).
+  ///
+  /// In en, this message translates to:
+  /// **'USB path / identifier'**
+  String get printersFieldUsbPath;
+
+  /// Printer state pill/switch: enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get printersEnabled;
+
+  /// Printer state pill: disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get printersDisabled;
+
+  /// Edit-printer action.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get printersEdit;
+
+  /// Action that opens the route-to-station dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Route to station'**
+  String get printersRoute;
+
+  /// Route dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Route printer to a station'**
+  String get printersRouteTitle;
+
+  /// Route dialog station dropdown label.
+  ///
+  /// In en, this message translates to:
+  /// **'Station'**
+  String get printersRouteStation;
+
+  /// Route dialog enabled switch label.
+  ///
+  /// In en, this message translates to:
+  /// **'Route enabled'**
+  String get printersRouteActive;
+
+  /// Prefix before the list of stations a printer routes to.
+  ///
+  /// In en, this message translates to:
+  /// **'Routes to'**
+  String get printersRoutedTo;
+
+  /// Delete-printer action + confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove printer'**
+  String get printersDelete;
+
+  /// Delete-printer confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this printer? Its station routes are removed too.'**
+  String get printersDeleteConfirm;
+
+  /// Snackbar after a successful printer save/route/removal.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get printersSaved;
+
+  /// Shown when routing is attempted with no stations.
+  ///
+  /// In en, this message translates to:
+  /// **'No stations found for this branch yet.'**
+  String get printersNoStations;
+
+  /// Validation message for a missing network host.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the printer host / IP'**
+  String get printersErrHost;
+
+  /// Validation message for an invalid network port.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid port (1–65535)'**
+  String get printersErrPort;
+
+  /// Printer dialog save button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get printersSave;
+
+  /// Printer wizard step 1 title: choose the printer's purpose (receipts vs kitchen tickets).
+  ///
+  /// In en, this message translates to:
+  /// **'What do you want to print?'**
+  String get printersWizardStepPurpose;
+
+  /// Hint under the receipt-purpose choice tile in the printer wizard.
+  ///
+  /// In en, this message translates to:
+  /// **'Bills for customers at the counter.'**
+  String get printersPurposeReceiptsHint;
+
+  /// Hint under the kitchen-purpose choice tile in the printer wizard.
+  ///
+  /// In en, this message translates to:
+  /// **'Tickets for the kitchen staff.'**
+  String get printersPurposeKitchenHint;
+
+  /// Printer wizard step 2 title: choose the connection type.
+  ///
+  /// In en, this message translates to:
+  /// **'How is the printer connected?'**
+  String get printersWizardStepConnection;
+
+  /// Honest hint under the selected network tile in the printer wizard.
+  ///
+  /// In en, this message translates to:
+  /// **'The printer must be on the same Wi-Fi/network as this device.'**
+  String get printersConnNetworkHint;
+
+  /// Printer wizard step 3 title: name, address, and options.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer details'**
+  String get printersWizardStepDetails;
+
+  /// Printer wizard forward button (steps 1-2).
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get printersNext;
+
+  /// Printer wizard back button (steps 2-3).
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get printersBack;
+
+  /// Printer status pill: the printer is switched off in configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get printersStatusDisabled;
+
+  /// Printer status pill for Bluetooth/USB printers: printing needs the native print bridge, which this build does not include.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires print bridge'**
+  String get printersStatusNeedsBridge;
+
+  /// Printer status pill for network printers in this build: the configuration is saved but no print adapter is registered, so nothing can be dispatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Configured only'**
+  String get printersStatusConfigOnly;
+
+  /// Printer status pill RESERVED for builds that register a real network print adapter. In this web build no adapter exists (hasPrintAdapter is const false in code), so this status is intentionally unreachable — it must never be shown without a real adapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready via network adapter'**
+  String get printersStatusReadyNetwork;
+
+  /// Per-printer test-print button label. In this build the button is ALWAYS disabled (no print transport); it must never fake a success.
+  ///
+  /// In en, this message translates to:
+  /// **'Test print'**
+  String get printersTestPrint;
+
+  /// Explanation next to the permanently disabled test-print button in this build.
+  ///
+  /// In en, this message translates to:
+  /// **'Test print needs the print adapter or bridge — not available in this web build.'**
+  String get printersTestPrintUnavailable;
+
+  /// Staff page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff'**
+  String get staffTitle;
+
+  /// Staff page subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Employees and PIN sign-in for this branch'**
+  String get staffSubtitle;
+
+  /// Button that opens the add-staff dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Add staff member'**
+  String get staffAdd;
+
+  /// Empty-state title on the staff page.
+  ///
+  /// In en, this message translates to:
+  /// **'No staff yet'**
+  String get staffEmptyTitle;
+
+  /// Empty-state body on the staff page.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your cashiers, kitchen staff, and managers, then set each one a PIN for POS/KDS sign-in.'**
+  String get staffEmptyBody;
+
+  /// Staff form field: display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get staffFieldName;
+
+  /// Staff form field: role.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get staffFieldRole;
+
+  /// Pill: this staff member has a PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN set'**
+  String get staffPinSet;
+
+  /// Pill: this staff member has no PIN yet.
+  ///
+  /// In en, this message translates to:
+  /// **'No PIN'**
+  String get staffNoPin;
+
+  /// Action that opens the set-PIN dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Set PIN'**
+  String get staffSetPin;
+
+  /// Action label when a PIN already exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset PIN'**
+  String get staffResetPin;
+
+  /// Set-PIN dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Set sign-in PIN'**
+  String get staffPinDialogTitle;
+
+  /// Set-PIN dialog explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'4–8 digits. Stored as a secure hash — it can never be read back; setting a new PIN replaces the old one.'**
+  String get staffPinDialogBody;
+
+  /// Set-PIN dialog PIN field label.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN (4–8 digits)'**
+  String get staffFieldPin;
+
+  /// Set-PIN dialog confirm field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm PIN'**
+  String get staffFieldPinConfirm;
+
+  /// Validation message when PIN and confirmation differ.
+  ///
+  /// In en, this message translates to:
+  /// **'PINs don\'t match'**
+  String get staffPinMismatch;
+
+  /// Validation message for a malformed PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 4–8 digits'**
+  String get staffPinInvalid;
+
+  /// Snackbar after a successful PIN save.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN saved'**
+  String get staffPinSaved;
+
+  /// Snackbar after creating a staff member.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff member created'**
+  String get staffCreated;
+
+  /// Warning banner when active staff lack PINs.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff without a PIN can\'t sign in on POS/KDS.'**
+  String get staffNoPinWarning;
+
+  /// Pill for a suspended/terminated staff member.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get staffInactive;
+
+  /// Tables page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables'**
+  String get tablesTitle;
+
+  /// Tables page subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dining tables for this branch — the POS table picker sells from this list.'**
+  String get tablesSubtitle;
+
+  /// Button that opens the add-table dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Add table'**
+  String get tablesAdd;
+
+  /// Edit-table action.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get tablesEdit;
+
+  /// Delete-table action + confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove table'**
+  String get tablesDelete;
+
+  /// Delete-table confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this table? Existing orders keep their table reference.'**
+  String get tablesDeleteConfirm;
+
+  /// Empty-state title on the tables page.
+  ///
+  /// In en, this message translates to:
+  /// **'No tables yet'**
+  String get tablesEmptyTitle;
+
+  /// Empty-state body on the tables page.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your first table — the POS dine-in flow needs at least one.'**
+  String get tablesEmptyBody;
+
+  /// Table form field: the table's label (name or number).
+  ///
+  /// In en, this message translates to:
+  /// **'Table name / number'**
+  String get tablesFieldLabel;
+
+  /// Table form field: seat count (optional).
+  ///
+  /// In en, this message translates to:
+  /// **'Seats'**
+  String get tablesFieldSeats;
+
+  /// Table form field: dining area or section (optional).
+  ///
+  /// In en, this message translates to:
+  /// **'Area / section'**
+  String get tablesFieldArea;
+
+  /// Table form switch: the table is active (offered by the POS table picker).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get tablesActive;
+
+  /// Pill for a deactivated table (hidden from the POS table picker).
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get tablesInactive;
+
+  /// Validation message for a missing table label.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a table name'**
+  String get tablesErrLabel;
+
+  /// Validation message for a non-positive/invalid seat count.
+  ///
+  /// In en, this message translates to:
+  /// **'Seats must be a positive number'**
+  String get tablesErrSeats;
+
+  /// Table status pill: available for new guests.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get tablesStatusAvailable;
+
+  /// Table status pill: guests are seated.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied'**
+  String get tablesStatusOccupied;
+
+  /// Table status pill: held for a reservation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserved'**
+  String get tablesStatusReserved;
+
+  /// Table status pill: not usable (broken/blocked).
+  ///
+  /// In en, this message translates to:
+  /// **'Out of service'**
+  String get tablesStatusOutOfService;
+
+  /// Per-table action that opens the status menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Set status'**
+  String get tablesSetStatus;
+
+  /// Snackbar after a successful table save/status change/removal.
+  ///
+  /// In en, this message translates to:
+  /// **'Table saved'**
+  String get tablesSaved;
+
+  /// Device revoke confirmation body.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke this device? Its pairing and sessions end immediately and the device returns to its pairing screen.'**
+  String get adminRevokeConfirm;
+
+  /// Hint shown for a code_issued device in real mode (device-originated pairing).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the one-time code on this device\'s pairing screen to pair it.'**
+  String get adminPairOnDevice;
+
+  /// PIN sign-in screen title (POS/KDS).
+  ///
+  /// In en, this message translates to:
+  /// **'Staff sign-in'**
+  String get pinLoginTitle;
+
+  /// Heading above the staff list on the PIN sign-in screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap your name'**
+  String get pinLoginPickName;
+
+  /// PIN sign-in empty-state title when the branch has no active staff with PINs.
+  ///
+  /// In en, this message translates to:
+  /// **'No staff PINs yet'**
+  String get pinLoginEmptyTitle;
+
+  /// PIN sign-in empty-state body (generic fallback when no surface is given).
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a manager to add staff members and set their PINs in the dashboard.'**
+  String get pinLoginEmptyBody;
+
+  /// PIN sign-in empty-state body on the POS: which roles can sign in and what to do.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Dashboard → Staff, add a cashier or manager, set their PIN, then come back and tap Try again.'**
+  String get pinLoginEmptyBodyPos;
+
+  /// PIN sign-in empty-state body on the KDS: which roles can sign in and what to do.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Dashboard → Staff, add a kitchen staff member or manager, set their PIN, then come back and tap Try again.'**
+  String get pinLoginEmptyBodyKds;
+
+  /// Heading of the numbered setup-steps list on the no-staff PIN screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup steps'**
+  String get pinLoginStepsTitle;
+
+  /// No-staff setup step 1.
+  ///
+  /// In en, this message translates to:
+  /// **'1. Open the Dashboard'**
+  String get pinLoginStep1;
+
+  /// No-staff setup step 2.
+  ///
+  /// In en, this message translates to:
+  /// **'2. Go to Staff'**
+  String get pinLoginStep2;
+
+  /// No-staff setup step 3.
+  ///
+  /// In en, this message translates to:
+  /// **'3. Add a staff member'**
+  String get pinLoginStep3;
+
+  /// No-staff setup step 4.
+  ///
+  /// In en, this message translates to:
+  /// **'4. Set a PIN'**
+  String get pinLoginStep4;
+
+  /// No-staff setup step 5.
+  ///
+  /// In en, this message translates to:
+  /// **'5. Return here and tap Try again'**
+  String get pinLoginStep5;
+
+  /// PIN sign-in staff-list load failure message.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the staff list. Check the connection and try again.'**
+  String get pinLoginLoadError;
+
+  /// PIN sign-in message when the stored device session was rejected.
+  ///
+  /// In en, this message translates to:
+  /// **'This device\'s session is no longer valid. Pair the device again.'**
+  String get pinLoginSessionInvalid;
+
+  /// PIN sign-in wrong-PIN message.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong PIN — try again.'**
+  String get pinLoginWrongPin;
+
+  /// PIN sign-in lockout message.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. This sign-in is temporarily locked.'**
+  String get pinLoginLocked;
+
+  /// PIN sign-in transient network message.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection problem — try again.'**
+  String get pinLoginNetworkError;
+
+  /// PIN sign-in generic unavailable message.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in isn\'t available right now.'**
+  String get pinLoginUnavailable;
+
+  /// PIN sign-in submit button.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get pinLoginSubmit;
+
+  /// PIN sign-in back-to-staff-list button.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get pinLoginBack;
+
+  /// PIN input field label.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN'**
+  String get pinFieldLabel;
+
+  /// POS/KDS action that ends the current staff PIN session.
+  ///
+  /// In en, this message translates to:
+  /// **'End staff session'**
+  String get posSignOutStaff;
+
+  /// POS real-menu load failure message.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the menu. Check the connection and try again.'**
+  String get posMenuLoadError;
+
+  /// POS real-menu empty-state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No menu items yet'**
+  String get posMenuEmptyTitle;
+
+  /// POS real-menu empty-state body.
+  ///
+  /// In en, this message translates to:
+  /// **'Add menu items in the dashboard to start selling.'**
+  String get posMenuEmptyBody;
+
+  /// POS dine-in table-picker empty state in real mode: the branch has no configured tables yet.
+  ///
+  /// In en, this message translates to:
+  /// **'No tables configured — add tables in Dashboard → Tables.'**
+  String get posTablesEmptyReal;
+
+  /// KDS action shown when the live session expired/was revoked; returns to the staff PIN screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again'**
+  String get kdsSignInAgain;
 }
 
 class _AppLocalizationsDelegate
