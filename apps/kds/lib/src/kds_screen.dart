@@ -20,6 +20,7 @@ class KdsScreen extends StatefulWidget {
     this.allowRecall = true,
     this.appBarActions = const <Widget>[],
     this.showStaleBanner = false,
+    this.printStatusFor,
     super.key,
   });
 
@@ -43,6 +44,11 @@ class KdsScreen extends StatefulWidget {
   /// (the backend allows forward transitions only, so a local-only recall
   /// would lie and revert on the next poll); the demo board keeps it.
   final bool allowRecall;
+
+  /// Optional per-ticket kitchen print-job status label (device settings
+  /// sprint, Part D) — the LIVE board wires the print controller through
+  /// here; null (demo/tests) renders no status line.
+  final String? Function(KdsTicketView ticket)? printStatusFor;
 
   /// Optional sink invoked AFTER a successful forward advance (sprint): the
   /// LIVE board pushes the matching `order.status` through `public.sync_push`
@@ -103,6 +109,7 @@ class _KdsScreenState extends State<KdsScreen> {
             l10n: l10n,
             onAdvance: _advance,
             onRecall: widget.allowRecall ? _recall : null,
+            printStatusFor: widget.printStatusFor,
           );
 
     return Scaffold(

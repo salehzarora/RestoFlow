@@ -10,6 +10,7 @@ import '../data/order_submission.dart';
 import '../format/money_format.dart';
 import '../state/outbox_controller.dart';
 import '../state/payment_controller.dart';
+import '../state/receipt_print_controller.dart';
 import '../state/submitted_order_view.dart';
 import 'cash_payment_sheet.dart';
 import 'receipt_preview.dart';
@@ -167,8 +168,15 @@ class OrderConfirmation extends ConsumerWidget {
                       body: l10n.posDemoOrderNotice,
                       tone: RestoflowTone.info,
                     ),
-                ] else
+                ] else ...[
                   ReceiptPreview(order: order, payment: payment),
+                  // Part D: the HONEST receipt print-job status (prepared /
+                  // not configured / failed — never a fake "printed").
+                  _ReceiptPrintStatusLine(
+                    orderNumber: order.orderNumber,
+                    l10n: l10n,
+                  ),
+                ],
               ],
             ),
           ),
@@ -299,6 +307,69 @@ class _ServiceModeRow extends StatelessWidget {
         if (tableChipLabel != null)
           RestoflowStatusPill(icon: Icons.event_seat, label: tableChipLabel),
       ],
+    );
+  }
+}
+
+/// The receipt print-job status under the receipt card (Part D): renders
+/// nothing while no job exists (auto-print off / not yet triggered), and the
+/// honest status otherwise. "Printed" is only reachable once a real print
+/// bridge confirms — never in this build.
+class _ReceiptPrintStatusLine extends ConsumerWidget {
+  const _ReceiptPrintStatusLine({
+    required this.orderNumber,
+    required this.l10n,
+  });
+
+  final String orderNumber;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final job = ref.watch(
+      receiptPrintControllerProvider.select((jobs) => jobs[orderNumber]),
+    );
+    if (job == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final (label, tone, icon) = switch (job.status) {
+      PrintJobStatus.prepared => (
+        l10n.printStatusPrepared,
+        RestoflowTone.info,
+        Icons.print_outlined,
+      ),
+      PrintJobStatus.printed => (
+        l10n.printStatusPrinted,
+        RestoflowTone.success,
+        Icons.print,
+      ),
+      PrintJobStatus.failed => (
+        l10n.printStatusFailed,
+        RestoflowTone.danger,
+        Icons.print_disabled,
+      ),
+      PrintJobStatus.notConfigured => (
+        l10n.printStatusNotConfigured,
+        RestoflowTone.neutral,
+        Icons.print_disabled,
+      ),
+    };
+    final style = tone.styleOf(theme);
+    return Padding(
+      key: const Key('receipt-print-status'),
+      padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: RestoflowIconSizes.sm, color: style.accent),
+          const SizedBox(width: RestoflowSpacing.xs),
+          Expanded(
+            child: Text(
+              '${l10n.posReceiptPrintLabel}: $label',
+              style: theme.textTheme.bodySmall?.copyWith(color: style.accent),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

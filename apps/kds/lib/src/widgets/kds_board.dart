@@ -24,6 +24,7 @@ class KdsBoard extends StatelessWidget {
     required this.l10n,
     required this.onAdvance,
     required this.onRecall,
+    this.printStatusFor,
     super.key,
   });
 
@@ -36,6 +37,9 @@ class KdsBoard extends StatelessWidget {
 
   /// Null hides the recall action (the LIVE board — forward-only backend).
   final void Function(KdsTicketView ticket)? onRecall;
+
+  /// Optional per-ticket kitchen print-status label (Part D); null = none.
+  final String? Function(KdsTicketView ticket)? printStatusFor;
 
   /// Buckets a status into its workflow column key.
   static String _bucket(KitchenTicketStatus status) => switch (status) {
@@ -94,6 +98,7 @@ class KdsBoard extends StatelessWidget {
                         l10n: l10n,
                         onAdvance: onAdvance,
                         onRecall: onRecall,
+                        printStatusFor: printStatusFor,
                       ),
                     ),
                   ),
@@ -125,6 +130,7 @@ class KdsBoard extends StatelessWidget {
                       KdsTicketCard(
                         ticket: ticket,
                         l10n: l10n,
+                        printStatus: printStatusFor?.call(ticket),
                         onAdvance: (to) => onAdvance(ticket, to),
                         onRecall: onRecall == null
                             ? null
@@ -146,12 +152,14 @@ class _StatusColumn extends StatelessWidget {
     required this.l10n,
     required this.onAdvance,
     required this.onRecall,
+    this.printStatusFor,
   });
 
   final _BoardColumn column;
   final AppLocalizations l10n;
   final void Function(KdsTicketView ticket, KitchenTicketStatus to) onAdvance;
   final void Function(KdsTicketView ticket)? onRecall;
+  final String? Function(KdsTicketView ticket)? printStatusFor;
 
   @override
   Widget build(BuildContext context) {
@@ -177,6 +185,7 @@ class _StatusColumn extends StatelessWidget {
                       KdsTicketCard(
                         ticket: ticket,
                         l10n: l10n,
+                        printStatus: printStatusFor?.call(ticket),
                         onAdvance: (to) => onAdvance(ticket, to),
                         onRecall: onRecall == null
                             ? null

@@ -25,6 +25,7 @@ class KdsTicketCard extends StatelessWidget {
     required this.l10n,
     required this.onAdvance,
     required this.onRecall,
+    this.printStatus,
     super.key,
   });
 
@@ -37,6 +38,12 @@ class KdsTicketCard extends StatelessWidget {
   /// Recall a bumped ticket (existing audited `bumped -> in_preparation`).
   /// Null hides the action (the LIVE board — forward-only backend).
   final VoidCallback? onRecall;
+
+  /// Optional kitchen print-job status label (device settings sprint,
+  /// Part D): a small honest line ("prepared — bridge required" etc.) after
+  /// the acknowledge trigger. Null renders nothing (demo boards). Never
+  /// money — it is a chrome label from l10n.
+  final String? printStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +136,30 @@ class KdsTicketCard extends StatelessWidget {
                     fontStyle: FontStyle.italic,
                     color: noteColor,
                   ),
+                ),
+              ],
+              if (printStatus case final status?) ...[
+                const SizedBox(height: RestoflowSpacing.xs),
+                Row(
+                  key: const Key('ticket-print-status'),
+                  children: [
+                    Icon(
+                      Icons.print_outlined,
+                      size: RestoflowIconSizes.sm,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: RestoflowSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        '${l10n.kdsTicketPrintLabel}: $status',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
               _TicketAction(
