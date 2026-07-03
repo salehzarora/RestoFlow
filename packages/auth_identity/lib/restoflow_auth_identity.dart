@@ -16,6 +16,8 @@ export 'src/auth_context_repository.dart';
 export 'src/device_context.dart';
 export 'src/device_image_url_resolver.dart';
 export 'src/device_pairing_repository.dart';
+// Device settings sprint: the safe per-device printer-assignments projection.
+export 'src/device_printer_assignments.dart';
 // RF-161: the device-session secret store abstraction (raw token -> secure storage).
 export 'src/device_session_secret_store.dart';
 // Sprint: the money-free device staff directory for the POS/KDS PIN pad.

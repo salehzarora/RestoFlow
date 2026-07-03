@@ -12,6 +12,10 @@ export 'src/device_pairing_screen.dart';
 export 'src/device_sign_in_unavailable_view.dart';
 export 'src/flutter_secure_device_session_store.dart';
 export 'src/supabase_device_pairing_repository.dart';
+// Device settings sprint: the token-proven per-device printer read + the
+// shared settings-sheet printers section (honest capability statuses).
+export 'src/device_printer_assignments_section.dart';
+export 'src/supabase_device_printer_assignments_repository.dart';
 export 'src/auth_gate_view.dart';
 export 'src/auth_gated_home.dart';
 export 'src/auth_state_views.dart';

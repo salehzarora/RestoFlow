@@ -2,11 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
+import 'package:restoflow_pos/src/state/pos_printer_assignments.dart';
 import 'package:restoflow_pos/src/widgets/device_settings_sheet.dart';
+
+/// A reader returning a canned assignments snapshot (Part B).
+class _FakeAssignmentsReader implements DevicePrinterAssignmentsReader {
+  _FakeAssignmentsReader(this.assignments);
+
+  final DevicePrinterAssignments assignments;
+
+  @override
+  Future<Result<DevicePrinterAssignments, DevicePrinterAssignmentsFailure>>
+  load() async => Success(assignments);
+}
+
+DevicePrinterAssignments _assignments({List<AssignedPrinter>? printers}) =>
+    DevicePrinterAssignments(
+      fetchedAt: DateTime(2026, 7, 3, 12, 30),
+      deviceLabel: 'Front POS',
+      deviceType: 'pos',
+      restaurantName: 'Falafel House',
+      branchName: 'Main branch',
+      printers:
+          printers ??
+          const [
+            AssignedPrinter(
+              id: 'prn-1',
+              displayName: 'Counter receipt',
+              role: 'receipt',
+              connectionType: 'network',
+              paperWidth: '80mm',
+              isEnabled: true,
+            ),
+          ],
+    );
 
 /// Device settings sprint (Part A): the POS app bar carries the ⋮ device
 /// menu; the settings sheet shows THIS paired station's operational info —
@@ -93,5 +127,66 @@ void main() {
     expect(find.text('org-1'), findsNothing);
     expect(find.text(l10n.deviceSettingsDemoNote), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  Future<void> pumpSheetWith(
+    WidgetTester tester,
+    DevicePrinterAssignmentsReader reader,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posDeviceContextProvider.overrideWith(_SeededPosContext.new),
+          posPrinterAssignmentsReaderProvider.overrideWithValue(reader),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: const Scaffold(body: PosDeviceSettingsSheet()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('Part B: the sheet shows THIS station\'s assigned receipt '
+      'printer with an HONEST bridge-required status (never "Ready")', (
+    tester,
+  ) async {
+    final l10n = await _en();
+    await pumpSheetWith(tester, _FakeAssignmentsReader(_assignments()));
+
+    // Names from the token-proven read fill the identity rows.
+    expect(find.text('Falafel House'), findsOneWidget);
+    expect(find.text('Main branch'), findsOneWidget);
+    // The assigned printer renders with safe metadata + honest status.
+    expect(find.byKey(const Key('printer-prn-1')), findsOneWidget);
+    expect(find.text('Counter receipt'), findsOneWidget);
+    expect(find.text(l10n.deviceSettingsBridgeRequired), findsOneWidget);
+    expect(find.text(l10n.deviceSettingsCapabilityNote), findsOneWidget);
+    expect(find.text(l10n.deviceSettingsLastRefresh('12:30')), findsOneWidget);
+    expect(find.text(l10n.printStatusPrinted), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Part B: no assigned printer -> the ask-a-manager empty state', (
+    tester,
+  ) async {
+    final l10n = await _en();
+    await pumpSheetWith(
+      tester,
+      _FakeAssignmentsReader(_assignments(printers: const [])),
+    );
+
+    expect(find.byKey(const Key('no-printer-banner')), findsOneWidget);
+    expect(find.text(l10n.deviceSettingsNoPrinter), findsOneWidget);
   });
 }

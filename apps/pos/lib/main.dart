@@ -10,6 +10,7 @@ import 'src/pos_menu_screen.dart';
 import 'src/pos_pairing_gate.dart';
 import 'src/pos_pin_gate.dart';
 import 'src/state/locale_controller.dart';
+import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_session.dart';
 
 Future<void> main() async {
@@ -35,6 +36,12 @@ Future<void> main() async {
         // resolver just renders imageless cards).
         if (seams != null)
           posImageUrlResolverProvider.overrideWithValue(seams.imageResolver),
+        // Device settings sprint: the token-proven per-device printer read
+        // (receipt printers of this station's branch; no secrets).
+        if (seams != null)
+          posPrinterAssignmentsReaderProvider.overrideWithValue(
+            seams.printerAssignments,
+          ),
       ],
       child: PosApp(
         devicePairingRepository: seams?.pairing,
@@ -50,6 +57,7 @@ typedef _RealDeviceSeams = ({
   DeviceStaffRepository staff,
   SyncRpcTransport transport,
   DeviceImageUrlResolver imageResolver,
+  DevicePrinterAssignmentsReader printerAssignments,
 });
 
 /// RF-161 + sprint: the REAL device-auth seams for production POS. In real mode
@@ -89,6 +97,10 @@ _realDeviceAuth() async {
         // Read-only menu-image signed URLs on the same anonymous session
         // (server-gated by the POS device storage policy — T-014 keeps KDS out).
         imageResolver: session.imageUrlResolver,
+        printerAssignments: SupabaseDevicePrinterAssignmentsRepository(
+          transport: transport,
+          secretStore: store,
+        ),
       ),
       problem: null,
     );

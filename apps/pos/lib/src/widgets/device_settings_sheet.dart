@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show runtimeConfigProvider;
+    show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../state/pos_device_context.dart';
+import '../state/pos_printer_assignments.dart';
 import '../state/pos_session.dart';
 
 /// The POS operational device-settings sheet (device settings sprint).
@@ -33,6 +35,11 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final device = ref.watch(posDeviceContextProvider);
     final hasStaffSession = ref.watch(posSyncSessionProvider) != null;
+    final assignmentsAsync = ref.watch(posPrinterAssignmentsProvider);
+    final assignments = switch (assignmentsAsync.valueOrNull) {
+      Success(:final value) => value,
+      _ => null,
+    };
 
     return SafeArea(
       child: Padding(
@@ -82,13 +89,24 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                         body: l10n.deviceSettingsUnavailable,
                         tone: RestoflowTone.warning,
                       )
-                    else
+                    else ...[
                       DeviceInfoSection(
                         l10n: l10n,
                         appTypeValue: l10n.deviceSettingsAppTypePos,
-                        deviceLabel: device.displayName,
+                        deviceLabel:
+                            assignments?.deviceLabel ?? device.displayName,
+                        restaurantName: assignments?.restaurantName,
+                        branchName: assignments?.branchName,
                         hasStaffSession: hasStaffSession,
                       ),
+                      const SizedBox(height: RestoflowSpacing.md),
+                      // Part B: the receipt printers the Dashboard assigned
+                      // to this station's branch (safe metadata only).
+                      PrinterAssignmentsSection(
+                        l10n: l10n,
+                        assignmentsAsync: assignmentsAsync,
+                      ),
+                    ],
                   ],
                 ),
               ),

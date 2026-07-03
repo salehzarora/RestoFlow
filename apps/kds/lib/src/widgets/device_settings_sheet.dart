@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show runtimeConfigProvider;
+    show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../state/kds_device_context.dart';
+import '../state/kds_printer_assignments.dart';
 import '../state/kds_session.dart';
 
 /// The KDS operational device-settings sheet (device settings sprint).
@@ -34,6 +36,11 @@ class KdsDeviceSettingsSheet extends ConsumerWidget {
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
     final device = ref.watch(kdsDeviceContextProvider);
     final hasStaffSession = ref.watch(kdsSyncSessionProvider) != null;
+    final assignmentsAsync = ref.watch(kdsPrinterAssignmentsProvider);
+    final assignments = switch (assignmentsAsync.valueOrNull) {
+      Success(:final value) => value,
+      _ => null,
+    };
 
     return SafeArea(
       child: Padding(
@@ -83,12 +90,25 @@ class KdsDeviceSettingsSheet extends ConsumerWidget {
                         body: l10n.deviceSettingsUnavailable,
                         tone: RestoflowTone.warning,
                       )
-                    else
+                    else ...[
                       _DeviceInfoSection(
                         l10n: l10n,
-                        deviceLabel: device.displayName,
+                        deviceLabel:
+                            assignments?.deviceLabel ?? device.displayName,
+                        restaurantName: assignments?.restaurantName,
+                        branchName: assignments?.branchName,
                         hasStaffSession: hasStaffSession,
                       ),
+                      const SizedBox(height: RestoflowSpacing.md),
+                      // Part B: the KITCHEN printers the Dashboard assigned
+                      // to this display's branch (safe metadata only; the
+                      // station routes say where each printer serves).
+                      PrinterAssignmentsSection(
+                        l10n: l10n,
+                        assignmentsAsync: assignmentsAsync,
+                        stationNames: true,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -107,14 +127,15 @@ class _DeviceInfoSection extends StatelessWidget {
     required this.l10n,
     required this.hasStaffSession,
     this.deviceLabel,
+    this.restaurantName,
+    this.branchName,
   });
 
   final AppLocalizations l10n;
   final bool hasStaffSession;
   final String? deviceLabel;
-
-  String? get restaurantName => null; // Part B fills these from the RPC.
-  String? get branchName => null;
+  final String? restaurantName;
+  final String? branchName;
 
   @override
   Widget build(BuildContext context) {

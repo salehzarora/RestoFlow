@@ -12,6 +12,7 @@ import 'src/kds_pairing_gate.dart';
 import 'src/kds_pin_gate.dart';
 import 'src/kds_synced_home.dart';
 import 'src/kitchen_orders_home.dart';
+import 'src/state/kds_printer_assignments.dart';
 import 'src/state/kds_session.dart';
 import 'src/state/locale_controller.dart';
 
@@ -27,6 +28,7 @@ Future<void> main() async {
       devicePairingRepository: seams?.pairing,
       deviceStaffRepository: seams?.staff,
       authTransport: seams?.transport,
+      printerAssignmentsReader: seams?.printerAssignments,
       realAuthProblem: real.problem,
       initialLocale: persistedLocale ?? const Locale('ar'),
     ),
@@ -37,6 +39,7 @@ typedef _RealDeviceSeams = ({
   DevicePairingRepository pairing,
   DeviceStaffRepository staff,
   SyncRpcTransport transport,
+  DevicePrinterAssignmentsReader printerAssignments,
 });
 
 /// RF-161 + sprint: the REAL device-auth seams for production KDS. In real mode
@@ -73,6 +76,12 @@ _realDeviceAuth() async {
           secretStore: store,
         ),
         transport: transport,
+        // Device settings sprint: kitchen printers of this display's branch
+        // (token-proven, no secrets, no money — T-003/T-014).
+        printerAssignments: SupabaseDevicePrinterAssignmentsRepository(
+          transport: transport,
+          secretStore: store,
+        ),
       ),
       problem: null,
     );
@@ -108,6 +117,7 @@ class KdsApp extends StatelessWidget {
     this.devicePairingRepository,
     this.deviceStaffRepository,
     this.authTransport,
+    this.printerAssignmentsReader,
     this.realAuthProblem,
     this.initialDevice,
     this.initialLocale,
@@ -128,6 +138,11 @@ class KdsApp extends StatelessWidget {
   /// The authenticated (anonymous) transport shared by pairing + PIN + sync
   /// (sprint). Null => [kdsAuthTransportProvider] keeps its default.
   final SyncRpcTransport? authTransport;
+
+  /// The token-proven per-device printer read (device settings sprint).
+  /// Null => [kdsPrinterAssignmentsReaderProvider] keeps its null default
+  /// (the settings sheet shows no printer data — never a fake list).
+  final DevicePrinterAssignmentsReader? printerAssignmentsReader;
 
   /// Why the real device-auth bootstrap produced no seams (real mode only).
   /// Non-null with no pairing repo => the matching honest help page renders
@@ -164,6 +179,8 @@ class KdsApp extends StatelessWidget {
         // (anonymous) transport as the pairing repo (D-011/RF-161).
         if (authTransport case final transport?)
           kdsAuthTransportProvider.overrideWithValue(transport),
+        if (printerAssignmentsReader case final reader?)
+          kdsPrinterAssignmentsReaderProvider.overrideWithValue(reader),
         if (injected != null)
           kdsSyncSourceProvider.overrideWithValue(injected)
         else
