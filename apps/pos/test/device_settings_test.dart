@@ -9,6 +9,7 @@ import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/state/pos_printer_assignments.dart';
 import 'package:restoflow_pos/src/widgets/device_settings_sheet.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// A reader returning a canned assignments snapshot (Part B).
 class _FakeAssignmentsReader implements DevicePrinterAssignmentsReader {
@@ -188,5 +189,45 @@ void main() {
 
     expect(find.byKey(const Key('no-printer-banner')), findsOneWidget);
     expect(find.text(l10n.deviceSettingsNoPrinter), findsOneWidget);
+  });
+
+  testWidgets('Part C: the auto-print toggle defaults ON with a printer, '
+      'persists a flip PER DEVICE, and stores only a plain bool', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      // Another station's stored OFF must NOT leak into dev-1.
+      'restoflow.autoprint.pos.receiptOnPaid.other-dev': false,
+    });
+    await pumpSheetWith(tester, _FakeAssignmentsReader(_assignments()));
+
+    final toggle = find.byKey(const Key('auto-print-receipt-toggle'));
+    expect(toggle, findsOneWidget);
+    // dev-1 never chose -> default ON (printer configured).
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+
+    // Persisted under THIS device's key; no token/secret-looking values.
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('restoflow.autoprint.pos.receiptOnPaid.dev-1'), false);
+    expect(prefs.getKeys().where((k) => k.contains('token')).toList(), isEmpty);
+  });
+
+  testWidgets('Part C: no printer -> the toggle is DISABLED with the why '
+      '(a toggle that could never print would be a lie)', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final l10n = await _en();
+    await pumpSheetWith(
+      tester,
+      _FakeAssignmentsReader(_assignments(printers: const [])),
+    );
+
+    final toggle = find.byKey(const Key('auto-print-receipt-toggle'));
+    expect(tester.widget<SwitchListTile>(toggle).onChanged, isNull);
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    expect(find.text(l10n.autoPrintNoPrinterNote), findsOneWidget);
   });
 }

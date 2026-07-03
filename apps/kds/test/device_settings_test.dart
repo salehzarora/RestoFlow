@@ -9,6 +9,7 @@ import 'package:restoflow_kds/src/state/kds_device_context.dart';
 import 'package:restoflow_kds/src/state/kds_printer_assignments.dart';
 import 'package:restoflow_kds/src/widgets/device_settings_sheet.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// A reader returning a canned assignments snapshot (Part B).
 class _FakeAssignmentsReader implements DevicePrinterAssignmentsReader {
@@ -161,5 +162,42 @@ void main() {
     expect(find.textContaining('₪'), findsNothing);
     expect(find.textContaining(r'$'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Part C: the acknowledge auto-print toggle defaults ON with a '
+      'kitchen printer, and a flip persists PER DEVICE', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'restoflow.autoprint.kds.onAcknowledge.other-dev': false,
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          kdsDeviceContextProvider.overrideWith(_SeededKdsContext.new),
+          kdsPrinterAssignmentsReaderProvider.overrideWithValue(
+            _FakeAssignmentsReader(_kitchenAssignments()),
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: const Scaffold(body: KdsDeviceSettingsSheet()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final toggle = find.byKey(const Key('auto-print-acknowledge-toggle'));
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('restoflow.autoprint.kds.onAcknowledge.dev-2'), false);
+    expect(prefs.getKeys().where((k) => k.contains('token')).toList(), isEmpty);
   });
 }

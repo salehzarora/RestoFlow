@@ -6,6 +6,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_session.dart';
@@ -100,6 +101,14 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                         hasStaffSession: hasStaffSession,
                       ),
                       const SizedBox(height: RestoflowSpacing.md),
+                      // Part C: the per-device auto-print choice (local,
+                      // per browser/device, no owner login involved).
+                      _AutoPrintSection(
+                        l10n: l10n,
+                        hasEnabledPrinter:
+                            assignments?.hasEnabledPrinter ?? false,
+                      ),
+                      const SizedBox(height: RestoflowSpacing.md),
                       // Part B: the receipt printers the Dashboard assigned
                       // to this station's branch (safe metadata only).
                       PrinterAssignmentsSection(
@@ -114,6 +123,55 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The per-device auto-print toggle (Part C): default ON when an enabled
+/// receipt printer is assigned; DISABLED (with the why) when none is - a
+/// toggle that could never print would be a lie. The choice persists per
+/// device via shared_preferences.
+class _AutoPrintSection extends ConsumerWidget {
+  const _AutoPrintSection({
+    required this.l10n,
+    required this.hasEnabledPrinter,
+  });
+
+  final AppLocalizations l10n;
+  final bool hasEnabledPrinter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final stored = ref.watch(posAutoPrintReceiptProvider).valueOrNull;
+    final effective = posAutoPrintReceiptEnabled(
+      stored: stored,
+      hasEnabledPrinter: hasEnabledPrinter,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.deviceSettingsAutoPrintHeading,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        SwitchListTile(
+          key: const Key('auto-print-receipt-toggle'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.posAutoPrintReceiptToggle),
+          subtitle: hasEnabledPrinter
+              ? null
+              : Text(l10n.autoPrintNoPrinterNote),
+          value: effective,
+          onChanged: hasEnabledPrinter
+              ? (value) => ref
+                    .read(posAutoPrintReceiptProvider.notifier)
+                    .setEnabled(value)
+              : null,
+        ),
+      ],
     );
   }
 }

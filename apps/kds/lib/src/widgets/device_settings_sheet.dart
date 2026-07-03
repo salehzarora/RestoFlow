@@ -6,6 +6,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../state/kds_auto_print_prefs.dart';
 import '../state/kds_device_context.dart';
 import '../state/kds_printer_assignments.dart';
 import '../state/kds_session.dart';
@@ -100,6 +101,14 @@ class KdsDeviceSettingsSheet extends ConsumerWidget {
                         hasStaffSession: hasStaffSession,
                       ),
                       const SizedBox(height: RestoflowSpacing.md),
+                      // Part C: the per-device auto-print choice (local,
+                      // per browser/device, no owner login involved).
+                      _AutoPrintSection(
+                        l10n: l10n,
+                        hasEnabledPrinter:
+                            assignments?.hasEnabledPrinter ?? false,
+                      ),
+                      const SizedBox(height: RestoflowSpacing.md),
                       // Part B: the KITCHEN printers the Dashboard assigned
                       // to this display's branch (safe metadata only; the
                       // station routes say where each printer serves).
@@ -116,6 +125,55 @@ class KdsDeviceSettingsSheet extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The per-device auto-print toggle (Part C): default ON when an enabled
+/// kitchen printer is assigned; DISABLED (with the why) when none is. The
+/// choice persists per device via shared_preferences. Print-on-first-seen is
+/// deliberately not offered (reload print storms).
+class _AutoPrintSection extends ConsumerWidget {
+  const _AutoPrintSection({
+    required this.l10n,
+    required this.hasEnabledPrinter,
+  });
+
+  final AppLocalizations l10n;
+  final bool hasEnabledPrinter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final stored = ref.watch(kdsAutoPrintAcknowledgeProvider).valueOrNull;
+    final effective = kdsAutoPrintAcknowledgeEnabled(
+      stored: stored,
+      hasEnabledPrinter: hasEnabledPrinter,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.deviceSettingsAutoPrintHeading,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        SwitchListTile(
+          key: const Key('auto-print-acknowledge-toggle'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.kdsAutoPrintAcknowledgeToggle),
+          subtitle: hasEnabledPrinter
+              ? null
+              : Text(l10n.autoPrintNoPrinterNote),
+          value: effective,
+          onChanged: hasEnabledPrinter
+              ? (value) => ref
+                    .read(kdsAutoPrintAcknowledgeProvider.notifier)
+                    .setEnabled(value)
+              : null,
+        ),
+      ],
     );
   }
 }
