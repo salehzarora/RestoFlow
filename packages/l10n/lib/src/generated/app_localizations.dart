@@ -994,6 +994,12 @@ abstract class AppLocalizations {
   /// **'Unpair'**
   String get deviceUnpairConfirm;
 
+  /// Cancel button of the unpair confirmation dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get deviceUnpairCancel;
+
   /// Device-settings row label: which surface this device runs (POS or KDS).
   ///
   /// In en, this message translates to:

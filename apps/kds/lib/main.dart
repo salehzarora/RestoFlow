@@ -12,6 +12,7 @@ import 'src/kds_pairing_gate.dart';
 import 'src/kds_pin_gate.dart';
 import 'src/kds_synced_home.dart';
 import 'src/kitchen_orders_home.dart';
+import 'src/state/kds_device_context.dart';
 import 'src/state/kds_printer_assignments.dart';
 import 'src/state/kds_session.dart';
 import 'src/state/locale_controller.dart';
@@ -181,6 +182,11 @@ class KdsApp extends StatelessWidget {
           kdsAuthTransportProvider.overrideWithValue(transport),
         if (printerAssignmentsReader case final reader?)
           kdsPrinterAssignmentsReaderProvider.overrideWithValue(reader),
+        // Device settings sprint (Part G): the pairing repo IS the device
+        // session manager (unpair = best-effort server self-revoke + local
+        // clear) — exposed to the settings sheet's Unpair control.
+        if (devicePairingRepository case final DeviceSessionManager manager)
+          kdsDeviceSessionManagerProvider.overrideWithValue(manager),
         if (injected != null)
           kdsSyncSourceProvider.overrideWithValue(injected)
         else

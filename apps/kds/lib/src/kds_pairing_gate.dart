@@ -94,6 +94,17 @@ class _KdsPairingGateState extends ConsumerState<KdsPairingGate> {
 
   @override
   Widget build(BuildContext context) {
+    // Device settings sprint (Part G): when the settings sheet UNPAIRS this
+    // device it clears the published context; the gate returns to the pairing
+    // screen. Guarded on `_device != null` so the gate's own publishes can't
+    // loop. (On the LIVE board the gate is unmounted; unpair there also ends
+    // the session, so the app falls back to this gate which then restores to
+    // a cleared secret store => pairing screen.)
+    ref.listen<DeviceContext?>(kdsDeviceContextProvider, (previous, next) {
+      if (next == null && _device != null) {
+        setState(() => _device = null);
+      }
+    });
     if (_restoring) {
       // Branded session-restore state (design-polish sprint): the first thing
       // a real kitchen device shows on every boot is the product, not a bare

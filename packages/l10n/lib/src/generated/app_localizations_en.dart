@@ -480,6 +480,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceUnpairConfirm => 'Unpair';
 
   @override
+  String get deviceUnpairCancel => 'Cancel';
+
+  @override
   String get deviceSettingsAppTypeLabel => 'App type';
 
   @override

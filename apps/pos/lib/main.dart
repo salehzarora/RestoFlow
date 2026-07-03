@@ -10,6 +10,7 @@ import 'src/pos_menu_screen.dart';
 import 'src/pos_pairing_gate.dart';
 import 'src/pos_pin_gate.dart';
 import 'src/state/locale_controller.dart';
+import 'src/state/pos_device_context.dart';
 import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_session.dart';
 
@@ -42,6 +43,11 @@ Future<void> main() async {
           posPrinterAssignmentsReaderProvider.overrideWithValue(
             seams.printerAssignments,
           ),
+        // Device settings sprint (Part G): the pairing repo IS the device
+        // session manager (unpair = best-effort server self-revoke + local
+        // clear) — exposed to the settings sheet's Unpair control.
+        if (seams?.pairing case final DeviceSessionManager manager)
+          posDeviceSessionManagerProvider.overrideWithValue(manager),
       ],
       child: PosApp(
         devicePairingRepository: seams?.pairing,

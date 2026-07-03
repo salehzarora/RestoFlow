@@ -23,3 +23,13 @@ class KdsDeviceContextController extends Notifier<DeviceContext?> {
   /// Publishes the gate's current device (null when unpaired/cleared).
   void set(DeviceContext? device) => state = device;
 }
+
+/// The device-session manager for THIS KDS (device settings sprint, Part G),
+/// used ONLY for the staff-safe "Unpair this device" control: it clears the
+/// local device session (and best-effort server self-revoke — the existing,
+/// intended [DeviceSessionManager.unpair]). Null in demo / unconfigured real
+/// mode (the Unpair control is then hidden — no owner/admin capability is
+/// ever exposed). Overridden in `main.dart` with the paired-device repo.
+final kdsDeviceSessionManagerProvider = Provider<DeviceSessionManager?>(
+  (ref) => null,
+);

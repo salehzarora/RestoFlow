@@ -11,15 +11,32 @@ import 'package:restoflow_pos/src/state/pos_printer_assignments.dart';
 import 'package:restoflow_pos/src/widgets/device_settings_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// A reader returning a canned assignments snapshot (Part B).
+/// A reader returning a canned assignments snapshot (Part B), counting loads
+/// so the Part G Refresh control can be proven to re-read.
 class _FakeAssignmentsReader implements DevicePrinterAssignmentsReader {
   _FakeAssignmentsReader(this.assignments);
 
   final DevicePrinterAssignments assignments;
+  int loadCount = 0;
 
   @override
   Future<Result<DevicePrinterAssignments, DevicePrinterAssignmentsFailure>>
-  load() async => Success(assignments);
+  load() async {
+    loadCount++;
+    return Success(assignments);
+  }
+}
+
+/// A fake device-session manager (Part G): records the local unpair. Restore
+/// is never exercised here (the sheet only calls unpair).
+class _FakeManager implements DeviceSessionManager {
+  bool unpaired = false;
+
+  @override
+  Future<void> unpair() async => unpaired = true;
+
+  @override
+  Future<DeviceContext?> restore({String? expectedDeviceType}) async => null;
 }
 
 DevicePrinterAssignments _assignments({List<AssignedPrinter>? printers}) =>
@@ -229,5 +246,92 @@ void main() {
     expect(tester.widget<SwitchListTile>(toggle).onChanged, isNull);
     expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
     expect(find.text(l10n.autoPrintNoPrinterNote), findsOneWidget);
+  });
+
+  Future<ProviderContainer> pumpWithManager(
+    WidgetTester tester, {
+    required DevicePrinterAssignmentsReader reader,
+    DeviceSessionManager? manager,
+  }) async {
+    SharedPreferences.setMockInitialValues(const {});
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(
+          RuntimeConfig.test(isDemoMode: false),
+        ),
+        posDeviceContextProvider.overrideWith(_SeededPosContext.new),
+        posPrinterAssignmentsReaderProvider.overrideWithValue(reader),
+        if (manager != null)
+          posDeviceSessionManagerProvider.overrideWithValue(manager),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: const Scaffold(body: PosDeviceSettingsSheet()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return container;
+  }
+
+  testWidgets('Part G: Refresh reloads the printer assignments', (
+    tester,
+  ) async {
+    final reader = _FakeAssignmentsReader(_assignments());
+    await pumpWithManager(tester, reader: reader);
+    expect(reader.loadCount, 1); // initial
+
+    await tester.tap(find.byKey(const Key('device-refresh-button')));
+    await tester.pumpAndSettle();
+
+    expect(reader.loadCount, 2); // Refresh re-ran the token-proven read
+  });
+
+  testWidgets('Part G: Unpair confirms, clears the local session via the '
+      'manager, and clears the published device context (-> pairing)', (
+    tester,
+  ) async {
+    final l10n = await _en();
+    final manager = _FakeManager();
+    final container = await pumpWithManager(
+      tester,
+      reader: _FakeAssignmentsReader(_assignments()),
+      manager: manager,
+    );
+
+    await tester.tap(find.byKey(const Key('device-unpair-button')));
+    await tester.pumpAndSettle();
+    // The confirm dialog warns before doing anything.
+    expect(find.text(l10n.deviceUnpairWarning), findsOneWidget);
+    expect(manager.unpaired, isFalse);
+
+    await tester.tap(find.byKey(const Key('device-unpair-confirm')));
+    await tester.pumpAndSettle();
+
+    // Local session cleared (best-effort server self-revoke) + gate reset.
+    expect(manager.unpaired, isTrue);
+    expect(container.read(posDeviceContextProvider), isNull);
+  });
+
+  testWidgets('Part G: with no session manager (demo/unconfigured) there is '
+      'NO unpair control — Refresh only', (tester) async {
+    await pumpWithManager(
+      tester,
+      reader: _FakeAssignmentsReader(_assignments()),
+    );
+
+    expect(find.byKey(const Key('device-refresh-button')), findsOneWidget);
+    expect(find.byKey(const Key('device-unpair-button')), findsNothing);
   });
 }

@@ -577,6 +577,8 @@
   "@deviceUnpairWarning": { "description": "Warning shown before unpairing a device." },
   "deviceUnpairConfirm": "Unpair",
   "@deviceUnpairConfirm": { "description": "Confirming button of the unpair dialog." },
+  "deviceUnpairCancel": "Cancel",
+  "@deviceUnpairCancel": { "description": "Cancel button of the unpair confirmation dialog." },
   "deviceSettingsAppTypeLabel": "App type",
   "@deviceSettingsAppTypeLabel": { "description": "Device-settings row label: which surface this device runs (POS or KDS)." },
   "deviceSettingsAppTypePos": "Cashier (POS)",

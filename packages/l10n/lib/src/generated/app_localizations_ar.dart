@@ -479,6 +479,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get deviceUnpairConfirm => 'إلغاء الاقتران';
 
   @override
+  String get deviceUnpairCancel => 'إلغاء';
+
+  @override
   String get deviceSettingsAppTypeLabel => 'نوع التطبيق';
 
   @override

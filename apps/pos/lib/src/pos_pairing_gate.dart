@@ -96,6 +96,15 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
 
   @override
   Widget build(BuildContext context) {
+    // Device settings sprint (Part G): when the settings sheet UNPAIRS this
+    // device it clears the published context; the gate returns to the pairing
+    // screen. Guarded on `_device != null` so the gate's own publishes (which
+    // never null once paired) can't loop.
+    ref.listen<DeviceContext?>(posDeviceContextProvider, (previous, next) {
+      if (next == null && _device != null) {
+        setState(() => _device = null);
+      }
+    });
     if (_restoring) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

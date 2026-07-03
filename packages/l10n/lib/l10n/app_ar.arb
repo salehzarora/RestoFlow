@@ -149,6 +149,7 @@
   "deviceUnpairAction": "إلغاء اقتران الجهاز",
   "deviceUnpairWarning": "استخدم هذا فقط إذا كان يجب إقران هذا الجهاز من جديد.",
   "deviceUnpairConfirm": "إلغاء الاقتران",
+  "deviceUnpairCancel": "إلغاء",
   "deviceSettingsAppTypeLabel": "نوع التطبيق",
   "deviceSettingsAppTypePos": "الكاشير (POS)",
   "deviceSettingsAppTypeKds": "شاشة المطبخ (KDS)",

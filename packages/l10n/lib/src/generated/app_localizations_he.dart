@@ -476,6 +476,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get deviceUnpairConfirm => 'בטל צימוד';
 
   @override
+  String get deviceUnpairCancel => 'ביטול';
+
+  @override
   String get deviceSettingsAppTypeLabel => 'סוג היישום';
 
   @override

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
+    show DeviceSessionManager;
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
@@ -115,6 +117,10 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                         l10n: l10n,
                         assignmentsAsync: assignmentsAsync,
                       ),
+                      const SizedBox(height: RestoflowSpacing.md),
+                      // Part G: staff-safe connection maintenance (refresh /
+                      // local unpair) — no owner login, no owner/admin scope.
+                      _ConnectionControls(l10n: l10n),
                     ],
                   ],
                 ),
@@ -124,6 +130,85 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// Staff-safe connection maintenance (device settings sprint, Part G):
+/// Refresh reloads the printer assignments; Unpair clears THIS device's local
+/// session (best-effort server self-revoke — the existing intended
+/// [DeviceSessionManager.unpair]) and returns the app to the pairing screen.
+/// The Unpair control appears ONLY when a device session manager is wired
+/// (real, paired mode) — never in demo, and never any owner/admin action.
+class _ConnectionControls extends ConsumerWidget {
+  const _ConnectionControls({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final manager = ref.watch(posDeviceSessionManagerProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          key: const Key('device-refresh-button'),
+          onPressed: () {
+            // Re-run the token-proven assignments read.
+            ref.invalidate(posPrinterAssignmentsProvider);
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.deviceRefreshedSnack)));
+          },
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.deviceRefreshAction),
+        ),
+        if (manager != null) ...[
+          const SizedBox(height: RestoflowSpacing.sm),
+          OutlinedButton.icon(
+            key: const Key('device-unpair-button'),
+            style: RestoflowButtonStyles.dangerGhost(context),
+            onPressed: () => _confirmUnpair(context, ref, manager),
+            icon: const Icon(Icons.link_off),
+            label: Text(l10n.deviceUnpairAction),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _confirmUnpair(
+    BuildContext context,
+    WidgetRef ref,
+    DeviceSessionManager manager,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final sheetNavigator = Navigator.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.deviceUnpairAction),
+        content: Text(l10n.deviceUnpairWarning),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.deviceUnpairCancel),
+          ),
+          FilledButton(
+            key: const Key('device-unpair-confirm'),
+            style: RestoflowButtonStyles.danger(context),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.deviceUnpairConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    // Clear the local device session (best-effort server self-revoke).
+    await manager.unpair();
+    // Return the pairing gate to the pairing screen (it watches this).
+    ref.read(posDeviceContextProvider.notifier).set(null);
+    if (sheetNavigator.canPop()) sheetNavigator.pop();
+    messenger.showSnackBar(SnackBar(content: Text(l10n.deviceUnpairedSnack)));
   }
 }
 

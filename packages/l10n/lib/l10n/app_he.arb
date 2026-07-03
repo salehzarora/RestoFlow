@@ -149,6 +149,7 @@
   "deviceUnpairAction": "ביטול צימוד המכשיר",
   "deviceUnpairWarning": "השתמשו בזה רק אם צריך לצמד את המכשיר הזה מחדש.",
   "deviceUnpairConfirm": "בטל צימוד",
+  "deviceUnpairCancel": "ביטול",
   "deviceSettingsAppTypeLabel": "סוג היישום",
   "deviceSettingsAppTypePos": "קופה (POS)",
   "deviceSettingsAppTypeKds": "מסך מטבח (KDS)",
