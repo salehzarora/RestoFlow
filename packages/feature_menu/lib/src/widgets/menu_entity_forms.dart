@@ -112,6 +112,8 @@ Future<bool> showModifierFormDialog(
   bool initialRequired = false,
   int initialDisplayOrder = 0,
   bool initialActive = true,
+  bool initialAllowQuantity = false,
+  int? initialMaxQuantity,
 }) async {
   final controller = _controllerOf(context);
   final saved = await showDialog<bool>(
@@ -127,6 +129,8 @@ Future<bool> showModifierFormDialog(
       initialRequired: initialRequired,
       initialDisplayOrder: initialDisplayOrder,
       initialActive: initialActive,
+      initialAllowQuantity: initialAllowQuantity,
+      initialMaxQuantity: initialMaxQuantity,
     ),
   );
   return saved ?? false;
@@ -466,6 +470,8 @@ class _ModifierFormDialog extends StatefulWidget {
     required this.initialRequired,
     required this.initialDisplayOrder,
     required this.initialActive,
+    required this.initialAllowQuantity,
+    required this.initialMaxQuantity,
   });
 
   /// The CALLER's scoped write controller (see [_controllerOf]).
@@ -479,6 +485,8 @@ class _ModifierFormDialog extends StatefulWidget {
   final bool initialRequired;
   final int initialDisplayOrder;
   final bool initialActive;
+  final bool initialAllowQuantity;
+  final int? initialMaxQuantity;
 
   @override
   State<_ModifierFormDialog> createState() => _ModifierFormDialogState();
@@ -497,12 +505,19 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
   late final TextEditingController _order = TextEditingController(
     text: widget.initialDisplayOrder.toString(),
   );
+  // Pre-fill a friendly cap of 5 for a new group (or when no cap is stored) —
+  // the owner clears the field for "no cap" (blank => null).
+  late final TextEditingController _maxQuantity = TextEditingController(
+    text: (widget.initialMaxQuantity ?? 5).toString(),
+  );
   late String _selectionType = widget.initialSelectionType;
   late bool _required = widget.initialRequired;
   late bool _active = widget.initialActive;
+  late bool _allowQuantity = widget.initialAllowQuantity;
   MenuFieldError? _nameError;
   MenuFieldError? _minError;
   MenuFieldError? _maxError;
+  MenuFieldError? _maxQuantityError;
   MenuWriteFailure? _writeError;
   bool _submitting = false;
 
@@ -512,6 +527,7 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
     _min.dispose();
     _max.dispose();
     _order.dispose();
+    _maxQuantity.dispose();
     super.dispose();
   }
 
@@ -535,13 +551,38 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
         ? MenuFieldError.notAnInteger
         : validateMaxSelect(maxSelect, minSelect ?? 0);
 
+    // allow_quantity is only meaningful for multi-select groups: flipping the
+    // dropdown back to 'single' hides the toggle and saves false (the server
+    // rejects single + allow_quantity).
+    final bool allowQuantity = _selectionType == 'multiple' && _allowQuantity;
+
+    // max_quantity (per-option units cap): blank => null (no cap); non-empty
+    // must parse to an integer > 0. Only validated while quantity is allowed
+    // (the field is hidden otherwise) and never sent without it.
+    final maxQuantityText = _maxQuantity.text.trim();
+    final bool maxQuantityProvided = maxQuantityText.isNotEmpty;
+    final int? maxQuantity = maxQuantityProvided
+        ? int.tryParse(maxQuantityText)
+        : null;
+    final MenuFieldError? maxQuantityError = !allowQuantity
+        ? null
+        : (maxQuantityProvided && maxQuantity == null)
+        ? MenuFieldError.notAnInteger
+        : validateMaxQuantity(maxQuantity);
+
     setState(() {
       _nameError = nameError;
       _minError = minError;
       _maxError = maxError;
+      _maxQuantityError = maxQuantityError;
       _writeError = null;
     });
-    if (nameError != null || minError != null || maxError != null) return;
+    if (nameError != null ||
+        minError != null ||
+        maxError != null ||
+        maxQuantityError != null) {
+      return;
+    }
 
     setState(() => _submitting = true);
     final outcome = await widget.controller.upsertModifier(
@@ -554,6 +595,8 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
       isRequired: _required,
       displayOrder: int.tryParse(_order.text.trim()) ?? 0,
       isActive: _active,
+      allowQuantity: allowQuantity,
+      maxQuantity: allowQuantity ? maxQuantity : null,
     );
     if (!mounted) return;
     outcome.fold(
@@ -632,6 +675,30 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
             ),
           ],
         ),
+        // Quantity settings — multi-select only (a single-select group can
+        // never repeat an option; the server rejects it). Flipping the
+        // dropdown to 'single' hides both and saves allow_quantity=false.
+        if (_selectionType == 'multiple')
+          SwitchListTile(
+            key: const ValueKey('menu-modifier-allow-quantity'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.menuAllowQuantityLabel),
+            subtitle: Text(l10n.menuAllowQuantityHelp),
+            value: _allowQuantity,
+            onChanged: (value) => setState(() => _allowQuantity = value),
+          ),
+        if (_selectionType == 'multiple' && _allowQuantity)
+          TextField(
+            key: const ValueKey('menu-modifier-max-quantity'),
+            controller: _maxQuantity,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: l10n.menuMaxQuantityLabel,
+              errorText: _maxQuantityError == null
+                  ? null
+                  : l10n.menuFieldErrorText(_maxQuantityError!),
+            ),
+          ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.menuRequiredLabel),

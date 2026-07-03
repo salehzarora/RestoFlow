@@ -236,6 +236,43 @@ void main() {
       expect(transport.lastFunction, 'menu_upsert_modifier_option');
       expect(transport.lastParams!['p_modifier_id'], 'mod-1');
     });
+
+    test('upsertModifier sends the appended p_allow_quantity/p_max_quantity '
+        '(false/null by default)', () async {
+      final transport = _FakeTransport()
+        ..returnValue = const {
+          'ok': true,
+          'entity': 'modifier',
+          'id': 'mod-1',
+          'action': 'created',
+        };
+      final writer = RpcMenuWriter(transport);
+
+      // Default call: quantity settings still travel (appended args), as
+      // false/null.
+      await writer.upsertModifier(
+        scope: _scope,
+        menuItemId: 'item-1',
+        name: 'Doneness',
+      );
+      expect(transport.lastFunction, 'menu_upsert_modifier');
+      expect(transport.lastParams!.containsKey('p_allow_quantity'), isTrue);
+      expect(transport.lastParams!['p_allow_quantity'], false);
+      expect(transport.lastParams!.containsKey('p_max_quantity'), isTrue);
+      expect(transport.lastParams!['p_max_quantity'], isNull);
+
+      // Quantity-enabled call: the values travel verbatim.
+      await writer.upsertModifier(
+        scope: _scope,
+        menuItemId: 'item-1',
+        name: 'Extras',
+        selectionType: 'multiple',
+        allowQuantity: true,
+        maxQuantity: 5,
+      );
+      expect(transport.lastParams!['p_allow_quantity'], true);
+      expect(transport.lastParams!['p_max_quantity'], 5);
+    });
   });
 
   group('RpcMenuWriter — error mapping (the load-bearing part)', () {

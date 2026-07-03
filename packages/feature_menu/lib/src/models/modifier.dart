@@ -16,6 +16,8 @@ class Modifier {
     required this.isRequired,
     required this.displayOrder,
     required this.isActive,
+    this.allowQuantity = false,
+    this.maxQuantity,
     this.deletedAt,
   });
 
@@ -33,6 +35,14 @@ class Modifier {
   final bool isRequired;
   final int displayOrder;
   final bool isActive;
+
+  /// Whether the POS may add the SAME option more than once (quantity
+  /// stepper). Only meaningful for `multiple` selection — the server rejects
+  /// `single` + allow_quantity (product-rescue quantity settings).
+  final bool allowQuantity;
+
+  /// Per-option units cap while [allowQuantity] is on; null = no cap.
+  final int? maxQuantity;
   final DateTime? deletedAt;
 
   bool get isDeleted => deletedAt != null;
@@ -50,6 +60,8 @@ class Modifier {
     isRequired: optBool(json, 'is_required', false),
     displayOrder: optInt(json, 'display_order', 0),
     isActive: optBool(json, 'is_active', true),
+    allowQuantity: optBool(json, 'allow_quantity', false),
+    maxQuantity: optIntOrNull(json, 'max_quantity'),
     deletedAt: parseTimestamp(json['deleted_at']),
   );
 
@@ -66,6 +78,8 @@ class Modifier {
     isRequired: isRequired,
     displayOrder: displayOrder,
     isActive: isActive,
+    allowQuantity: allowQuantity,
+    maxQuantity: maxQuantity,
     deletedAt: deletedAt ?? this.deletedAt,
   );
 }

@@ -103,6 +103,8 @@ Map<String, Object?> _okEnvelope() => {
       'is_required': false,
       'display_order': 0,
       'is_active': true,
+      'allow_quantity': true,
+      'max_quantity': 5,
     },
   ],
   'modifier_options': [
@@ -148,7 +150,11 @@ void main() {
       expect(disabled.isActive, isFalse);
       expect(disabled.basePriceMinor, 990);
       expect(snapshot.sizesForItem('item-1').single.priceDeltaMinor, 600);
-      expect(snapshot.modifiersForItem('item-1').single.maxSelect, 3);
+      final modifier = snapshot.modifiersForItem('item-1').single;
+      expect(modifier.maxSelect, 3);
+      // Quantity settings (product-rescue sprint) parse from the wire row.
+      expect(modifier.allowQuantity, isTrue);
+      expect(modifier.maxQuantity, 5);
       expect(snapshot.optionsForModifier('mod-1').single.name, 'Feta');
       expect(snapshot.variants, isEmpty);
     },

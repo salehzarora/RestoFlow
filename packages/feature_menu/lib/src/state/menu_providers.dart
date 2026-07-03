@@ -228,6 +228,8 @@ class MenuWriteController {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
+    bool allowQuantity = false,
+    int? maxQuantity,
   }) => _run(
     () => _repository.upsertModifier(
       scope: _scope,
@@ -240,6 +242,8 @@ class MenuWriteController {
       isRequired: isRequired,
       displayOrder: displayOrder,
       isActive: isActive,
+      allowQuantity: allowQuantity,
+      maxQuantity: maxQuantity,
     ),
   );
 

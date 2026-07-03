@@ -191,6 +191,8 @@ class RpcMenuWriter implements MenuWriter {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
+    bool allowQuantity = false,
+    int? maxQuantity,
   }) {
     return _invoke(MenuRpcNames.upsertModifier, {
       'p_organization_id': scope.organizationId,
@@ -205,6 +207,10 @@ class RpcMenuWriter implements MenuWriter {
       'p_is_required': isRequired,
       'p_display_order': displayOrder,
       'p_is_active': isActive,
+      // Quantity settings — APPENDED after p_is_active (the RPC's frozen
+      // positional tail; DROP+recreate rule on the backend side).
+      'p_allow_quantity': allowQuantity,
+      'p_max_quantity': maxQuantity,
     }, MenuEntityType.modifier);
   }
 

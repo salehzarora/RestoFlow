@@ -683,6 +683,18 @@
     "description": "Modifier-sheet header subtitle: the item's base price BEFORE option deltas (already currency-formatted), shown so the cashier can compare base vs the running total.",
     "placeholders": { "price": { "type": "String" } }
   },
+  "posModifierItemNoteLabel": "Item note",
+  "@posModifierItemNoteLabel": {
+    "description": "Label of the optional per-item special-instructions field on the POS modifier sheet (e.g. no onions)."
+  },
+  "posModifierItemNoteHint": "Example: no onions, extra sauce",
+  "@posModifierItemNoteHint": {
+    "description": "Placeholder/hint of the per-item note field on the POS modifier sheet, suggesting typical kitchen instructions."
+  },
+  "posItemNoteLabel": "Note",
+  "@posItemNoteLabel": {
+    "description": "Short prefix label before a cart line's / receipt line's per-item note, e.g. 'Note: no onions'."
+  },
   "dashboardOverviewHeading": "Today's overview",
   "@dashboardOverviewHeading": {
     "description": "Owner dashboard section heading above the daily KPI cards."
@@ -1037,6 +1049,12 @@
   "@menuMaxSelectLabel": { "description": "Modifier maximum-selection field label." },
   "menuRequiredLabel": "Required",
   "@menuRequiredLabel": { "description": "Modifier required toggle label." },
+  "menuAllowQuantityLabel": "Allow quantity",
+  "@menuAllowQuantityLabel": { "description": "Modifier-group toggle: the cashier may add the same option more than once (quantity stepper on the POS)." },
+  "menuAllowQuantityHelp": "The cashier can add the same option more than once (e.g. extra cheese ×2).",
+  "@menuAllowQuantityHelp": { "description": "Helper text under the allow-quantity toggle explaining what it enables on the POS." },
+  "menuMaxQuantityLabel": "Max per option",
+  "@menuMaxQuantityLabel": { "description": "Modifier-group field label: maximum quantity of a single option (only when quantity is allowed)." },
   "menuSizesHeading": "Sizes",
   "@menuSizesHeading": { "description": "Heading for an item's sizes." },
   "menuVariantsHeading": "Variants",

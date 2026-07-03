@@ -1197,6 +1197,8 @@ class _ModifierCard extends StatelessWidget {
                       initialRequired: modifier.isRequired,
                       initialDisplayOrder: modifier.displayOrder,
                       initialActive: modifier.isActive,
+                      initialAllowQuantity: modifier.allowQuantity,
+                      initialMaxQuantity: modifier.maxQuantity,
                     );
                   }
                   if (value == 'delete') onDelete();

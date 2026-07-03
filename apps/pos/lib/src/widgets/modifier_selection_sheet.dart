@@ -21,6 +21,13 @@ import '../state/pos_menu_provider.dart';
 /// live selected-count pill (danger while a required minimum is unmet, warning
 /// when a multi group is at capacity); zero-delta options say "free" instead of
 /// showing nothing.
+///
+/// Modifier-quantity sprint: options in a quantity-enabled group carry a
+/// −/+ stepper (0 = unselected; up to the group's per-option max); the delta
+/// counts × quantity in the running total. An optional per-item note field
+/// ("بدون بصل") rides the bottom of the sheet and is returned alongside the
+/// selections — min/max selection rules and single-select behaviour are
+/// unchanged.
 class ModifierSelectionSheet extends StatefulWidget {
   const ModifierSelectionSheet({
     required this.item,
@@ -34,7 +41,11 @@ class ModifierSelectionSheet extends StatefulWidget {
   final DemoMenuItem item;
   final List<PosModifierGroup> groups;
   final String currencyCode;
-  final void Function(List<SelectedModifier> selections) onConfirm;
+
+  /// Called with the selected modifier snapshots and the cashier's optional
+  /// per-item note (null when left blank).
+  final void Function(List<SelectedModifier> selections, String? note)
+  onConfirm;
 
   /// The owning category of the ACTIVE menu — the header thumbnail's icon
   /// fallback (real categories carry their own palette entry); null falls back
@@ -46,7 +57,8 @@ class ModifierSelectionSheet extends StatefulWidget {
     required DemoMenuItem item,
     required List<PosModifierGroup> groups,
     required String currencyCode,
-    required void Function(List<SelectedModifier> selections) onConfirm,
+    required void Function(List<SelectedModifier> selections, String? note)
+    onConfirm,
     DemoCategory? category,
   }) => showModalBottomSheet<void>(
     context: context,
@@ -66,11 +78,24 @@ class ModifierSelectionSheet extends StatefulWidget {
 }
 
 class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
-  /// Selected option ids per group id.
-  final Map<String, Set<String>> _selected = {};
+  /// Selected quantity per option id, per group id (>= 1; an absent option is
+  /// unselected). Non-quantity selections are simply quantity 1.
+  final Map<String, Map<String, int>> _selected = {};
 
-  Set<String> _groupSelection(String groupId) => _selected[groupId] ?? const {};
+  /// The optional per-item cashier note ("بدون بصل").
+  final TextEditingController _noteController = TextEditingController();
 
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  Map<String, int> _groupSelection(String groupId) =>
+      _selected[groupId] ?? const {};
+
+  /// Min/max selection rules keep counting DISTINCT options — a quantity on
+  /// one option never changes how many options are considered chosen.
   bool get _satisfied => widget.groups.every(
     (g) => _groupSelection(g.id).length >= g.effectiveMin,
   );
@@ -80,7 +105,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     for (final group in widget.groups) {
       final picked = _groupSelection(group.id);
       for (final option in group.options) {
-        if (picked.contains(option.id)) total += option.priceDeltaMinor;
+        total += option.priceDeltaMinor * (picked[option.id] ?? 0);
       }
     }
     return total;
@@ -88,34 +113,73 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
 
   void _toggle(PosModifierGroup group, PosModifierOption option) {
     setState(() {
-      final picked = _selected.putIfAbsent(group.id, () => <String>{});
+      final picked = _selected.putIfAbsent(group.id, () => <String, int>{});
       if (group.singleSelect) {
         picked
           ..clear()
-          ..add(option.id);
+          ..[option.id] = 1;
         return;
       }
-      if (picked.contains(option.id)) {
+      if (picked.containsKey(option.id)) {
         picked.remove(option.id);
         return;
       }
       final max = group.effectiveMax;
       if (max != null && picked.length >= max) return; // at capacity
-      picked.add(option.id);
+      picked[option.id] = 1;
+    });
+  }
+
+  /// + on a quantity-enabled option: selects it at 1, then counts up to the
+  /// group's per-option [PosModifierGroup.maxQuantity] (null = no cap).
+  /// Selecting a NEW option still respects the distinct-options capacity.
+  void _increment(PosModifierGroup group, PosModifierOption option) {
+    setState(() {
+      final picked = _selected.putIfAbsent(group.id, () => <String, int>{});
+      final current = picked[option.id] ?? 0;
+      if (current == 0) {
+        final max = group.effectiveMax;
+        if (max != null && picked.length >= max) return; // at capacity
+        picked[option.id] = 1;
+        return;
+      }
+      final maxQuantity = group.maxQuantity;
+      if (maxQuantity != null && current >= maxQuantity) return; // at cap
+      picked[option.id] = current + 1;
+    });
+  }
+
+  /// − on a quantity-enabled option: counts down; 0 unselects it.
+  void _decrement(PosModifierGroup group, PosModifierOption option) {
+    setState(() {
+      final picked = _selected.putIfAbsent(group.id, () => <String, int>{});
+      final current = picked[option.id] ?? 0;
+      if (current <= 1) {
+        picked.remove(option.id);
+      } else {
+        picked[option.id] = current - 1;
+      }
     });
   }
 
   List<SelectedModifier> _selections() => [
     for (final group in widget.groups)
       for (final option in group.options)
-        if (_groupSelection(group.id).contains(option.id))
+        if (_groupSelection(group.id).containsKey(option.id))
           SelectedModifier(
             optionId: option.id,
             groupName: group.name,
             optionName: option.name,
             priceDeltaMinor: option.priceDeltaMinor,
+            quantity: _groupSelection(group.id)[option.id] ?? 1,
           ),
   ];
+
+  /// The trimmed note, or null when the field was left blank.
+  String? get _note {
+    final text = _noteController.text.trim();
+    return text.isEmpty ? null : text;
+  }
 
   /// The live "n/m" (or open-ended "n") selected-count label for a group.
   String _countLabel(AppLocalizations l10n, PosModifierGroup group, int count) {
@@ -155,12 +219,14 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     );
 
     return SafeArea(
+      // The on-screen keyboard (note field) pushes the sheet content up
+      // instead of covering it (isScrollControlled sheets don't auto-inset).
       child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(
+        padding: EdgeInsetsDirectional.fromSTEB(
           RestoflowSpacing.lg,
           0,
           RestoflowSpacing.lg,
-          RestoflowSpacing.lg,
+          RestoflowSpacing.lg + MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -265,10 +331,35 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                           currencyCode: widget.currencyCode,
                           selected: _groupSelection(
                             group.id,
-                          ).contains(option.id),
+                          ).containsKey(option.id),
+                          quantity: _groupSelection(group.id)[option.id] ?? 0,
                           onToggle: () => _toggle(group, option),
+                          onIncrement: group.hasQuantitySteppers
+                              ? () => _increment(group, option)
+                              : null,
+                          onDecrement: group.hasQuantitySteppers
+                              ? () => _decrement(group, option)
+                              : null,
                         ),
                     ],
+                    // Part F: the optional per-item note ("بدون بصل") — sent
+                    // with the order, shown under the cart line, on the KDS
+                    // ticket, and on the receipt/print. Data, never money.
+                    Padding(
+                      padding: const EdgeInsets.only(top: RestoflowSpacing.md),
+                      child: TextField(
+                        key: const Key('modifier-item-note'),
+                        controller: _noteController,
+                        maxLength: 140,
+                        textInputAction: TextInputAction.done,
+                        decoration: InputDecoration(
+                          labelText: l10n.posModifierItemNoteLabel,
+                          hintText: l10n.posModifierItemNoteHint,
+                          counterText: '',
+                          prefixIcon: const Icon(Icons.sticky_note_2_outlined),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -300,7 +391,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                   // Disabled until every required group meets its minimum.
                   onPressed: _satisfied
                       ? () {
-                          widget.onConfirm(_selections());
+                          widget.onConfirm(_selections(), _note);
                           Navigator.of(context).pop();
                         }
                       : null,
@@ -367,6 +458,9 @@ class _OptionTile extends StatelessWidget {
     required this.currencyCode,
     required this.selected,
     required this.onToggle,
+    this.quantity = 0,
+    this.onIncrement,
+    this.onDecrement,
     super.key,
   });
 
@@ -375,6 +469,14 @@ class _OptionTile extends StatelessWidget {
   final String currencyCode;
   final bool selected;
   final VoidCallback onToggle;
+
+  /// Selected units of this option (0 = unselected; only ever > 1 on a
+  /// quantity-enabled group).
+  final int quantity;
+
+  /// Non-null only on quantity-enabled groups — renders the −/+ stepper.
+  final VoidCallback? onIncrement;
+  final VoidCallback? onDecrement;
 
   @override
   Widget build(BuildContext context) {
@@ -468,11 +570,99 @@ class _OptionTile extends StatelessWidget {
                               : scheme.onSurfaceVariant,
                         ),
                       ),
+                    if (onIncrement != null && onDecrement != null) ...[
+                      const SizedBox(width: RestoflowSpacing.sm),
+                      _OptionQuantityStepper(
+                        l10n: l10n,
+                        optionId: option.id,
+                        quantity: quantity,
+                        // At the per-option cap the + is disabled (honest
+                        // no-op); − at 0 is disabled too.
+                        canIncrement:
+                            group.maxQuantity == null ||
+                            quantity < group.maxQuantity!,
+                        onIncrement: onIncrement!,
+                        onDecrement: onDecrement!,
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The −/+ per-option quantity stepper (modifier-quantity sprint): a compact
+/// bordered pill mirroring the cart's line stepper. 0 = unselected; + selects
+/// at 1 and counts up to the group's per-option cap; − counts down to 0.
+class _OptionQuantityStepper extends StatelessWidget {
+  const _OptionQuantityStepper({
+    required this.l10n,
+    required this.optionId,
+    required this.quantity,
+    required this.canIncrement,
+    required this.onIncrement,
+    required this.onDecrement,
+  });
+
+  final AppLocalizations l10n;
+  final String optionId;
+  final int quantity;
+  final bool canIncrement;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final quantityText = quantity.toString();
+
+    // The pill swallows every tap it receives (including on a DISABLED −/+
+    // at a bound): otherwise the tap falls through to the tile's InkWell and
+    // silently toggles the whole option off — losing the counted quantity.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              key: ValueKey('modifier-qty-dec-$optionId'),
+              onPressed: quantity > 0 ? onDecrement : null,
+              icon: const Icon(Icons.remove, size: RestoflowIconSizes.sm),
+              tooltip: l10n.posDecreaseQuantity,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            ),
+            SizedBox(
+              width: 24,
+              child: Text(
+                quantityText,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            IconButton(
+              key: ValueKey('modifier-qty-inc-$optionId'),
+              onPressed: canIncrement ? onIncrement : null,
+              icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
+              tooltip: l10n.posIncreaseQuantity,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            ),
+          ],
         ),
       ),
     );

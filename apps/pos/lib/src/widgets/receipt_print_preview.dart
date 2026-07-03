@@ -129,8 +129,15 @@ class ReceiptPrintPreview extends ConsumerWidget {
                                 line.currencyCode,
                               ),
                             ),
+                            // Snapshots arrive pre-formatted ('name ×N').
                             for (final modifier in line.modifiers)
                               _ItemLine(label: '  + $modifier', value: ''),
+                            if (line.note != null)
+                              _ItemLine(
+                                label:
+                                    '  ${l10n.posItemNoteLabel}: ${line.note}',
+                                value: '',
+                              ),
                           ],
                           const _Rule(),
                           _Line(
@@ -255,8 +262,11 @@ PrintDocument buildReceiptDocument(
           '${line.quantity}× ${line.name}',
           MoneyFormatter.formatMinor(line.lineTotalMinor, line.currencyCode),
         ),
+        // Modifier snapshots arrive pre-formatted ('name ×N' for quantities).
         for (final modifier in line.modifiers)
           PrintLine.item('  + $modifier', ''),
+        if (line.note != null)
+          PrintLine.sub('${l10n.posItemNoteLabel}: ${line.note}'),
       ],
       PrintLine.rule(),
       PrintLine.kv(

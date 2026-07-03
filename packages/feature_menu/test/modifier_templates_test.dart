@@ -206,6 +206,9 @@ void main() {
     expect(group.minSelect, 1);
     expect(group.maxSelect, 1);
     expect(group.isActive, isTrue);
+    // Single-select templates stay quantity-free (server rejects otherwise).
+    expect(group.allowQuantity, isFalse);
+    expect(group.maxQuantity, isNull);
 
     final options = snapshot.optionsForModifier(group.id);
     expect(options.map((o) => o.name).toList(), [
@@ -237,6 +240,10 @@ void main() {
     expect(group.isRequired, isFalse);
     expect(group.minSelect, 0);
     expect(group.maxSelect, isNull);
+    // Quantity settings reach the writer: extras is quantity-capable (the
+    // cashier can add extra cheese ×2 etc.), capped at 5 units per option.
+    expect(group.allowQuantity, isTrue);
+    expect(group.maxQuantity, 5);
 
     final options = snapshot.optionsForModifier(group.id);
     expect(

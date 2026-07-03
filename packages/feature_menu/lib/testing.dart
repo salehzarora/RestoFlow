@@ -27,6 +27,11 @@ class ScriptedMenuWriter implements MenuWriter {
   /// The name of the most recent operation invoked (for assertions).
   String? lastOperation;
 
+  /// The quantity settings of the most recent [upsertModifier] call (for
+  /// assertions; product-rescue quantity settings). Null until it runs.
+  bool? lastAllowQuantity;
+  int? lastMaxQuantity;
+
   Future<MenuWriteOutcome> _record(String operation) async {
     lastOperation = operation;
     return outcome;
@@ -96,7 +101,13 @@ class ScriptedMenuWriter implements MenuWriter {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
-  }) => _record('upsertModifier');
+    bool allowQuantity = false,
+    int? maxQuantity,
+  }) {
+    lastAllowQuantity = allowQuantity;
+    lastMaxQuantity = maxQuantity;
+    return _record('upsertModifier');
+  }
 
   @override
   Future<MenuWriteOutcome> upsertModifierOption({

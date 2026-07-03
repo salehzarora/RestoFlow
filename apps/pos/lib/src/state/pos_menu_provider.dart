@@ -71,6 +71,8 @@ class PosModifierGroup {
     this.minSelect = 0,
     this.maxSelect,
     this.isRequired = false,
+    this.allowQuantity = false,
+    this.maxQuantity,
   });
 
   final String id;
@@ -84,12 +86,24 @@ class PosModifierGroup {
   final int? maxSelect;
   final bool isRequired;
 
+  /// `allow_quantity` (modifier-quantity sprint): the cashier may take the
+  /// SAME option more than once (extra cheese ×2) via a stepper. Only ever
+  /// true on multi-select groups — the backend rejects it for 'single'.
+  final bool allowQuantity;
+
+  /// `max_quantity`: units cap for ONE option when [allowQuantity] (null =
+  /// no cap). [minSelect]/[maxSelect] keep counting DISTINCT options.
+  final int? maxQuantity;
+
   /// The minimum selections the cashier must make before adding the item.
   int get effectiveMin =>
       singleSelect ? 1 : (isRequired && minSelect == 0 ? 1 : minSelect);
 
   /// The maximum selections allowed (single => 1; null => unlimited).
   int? get effectiveMax => singleSelect ? 1 : maxSelect;
+
+  /// Whether option tiles in this group carry a quantity stepper.
+  bool get hasQuantitySteppers => allowQuantity && !singleSelect;
 }
 
 /// Real mode without a transport/session (or a rejected response) — the POS
@@ -155,6 +169,10 @@ const List<PosModifierGroup> kDemoModifierGroups = <PosModifierGroup>[
     menuItemId: 'cheeseburger',
     name: 'Extras',
     maxSelect: 2,
+    // Quantity-enabled (modifier-quantity sprint): the demo shows the same
+    // stepper flow the real Extras template configures (extra cheese ×2).
+    allowQuantity: true,
+    maxQuantity: 5,
     options: [
       PosModifierOption(
         id: 'demo-opt-extra-cheese',
@@ -334,6 +352,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     final id = (row['id'] ?? '').toString();
     final minSelect = row['min_select'];
     final maxSelect = row['max_select'];
+    final maxQuantity = row['max_quantity'];
     groups.add(
       PosModifierGroup(
         id: id,
@@ -344,6 +363,10 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         minSelect: minSelect is int ? minSelect : 0,
         maxSelect: maxSelect is int ? maxSelect : null,
         isRequired: row['is_required'] == true,
+        // Quantity settings (modifier-quantity sprint). Tolerant parse: a
+        // missing/wrong-typed value degrades to the no-stepper behaviour.
+        allowQuantity: row['allow_quantity'] == true,
+        maxQuantity: maxQuantity is int && maxQuantity > 0 ? maxQuantity : null,
       ),
     );
   }

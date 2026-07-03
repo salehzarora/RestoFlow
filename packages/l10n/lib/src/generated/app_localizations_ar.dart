@@ -552,6 +552,15 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get posModifierItemNoteLabel => 'ملاحظة للمنتج';
+
+  @override
+  String get posModifierItemNoteHint => 'مثال: بدون بصل، زيادة صوص';
+
+  @override
+  String get posItemNoteLabel => 'ملاحظة';
+
+  @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
 
   @override
@@ -880,6 +889,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get menuRequiredLabel => 'مطلوب';
+
+  @override
+  String get menuAllowQuantityLabel => 'السماح بالكمية';
+
+  @override
+  String get menuAllowQuantityHelp =>
+      'يمكن للكاشير إضافة نفس الخيار أكثر من مرة (مثال: جبنة إضافية ×2).';
+
+  @override
+  String get menuMaxQuantityLabel => 'الحد الأقصى لكل خيار';
 
   @override
   String get menuSizesHeading => 'الأحجام';

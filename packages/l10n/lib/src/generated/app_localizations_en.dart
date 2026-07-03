@@ -554,6 +554,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get posModifierItemNoteLabel => 'Item note';
+
+  @override
+  String get posModifierItemNoteHint => 'Example: no onions, extra sauce';
+
+  @override
+  String get posItemNoteLabel => 'Note';
+
+  @override
   String get dashboardOverviewHeading => 'Today\'s overview';
 
   @override
@@ -882,6 +891,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuRequiredLabel => 'Required';
+
+  @override
+  String get menuAllowQuantityLabel => 'Allow quantity';
+
+  @override
+  String get menuAllowQuantityHelp =>
+      'The cashier can add the same option more than once (e.g. extra cheese ×2).';
+
+  @override
+  String get menuMaxQuantityLabel => 'Max per option';
 
   @override
   String get menuSizesHeading => 'Sizes';

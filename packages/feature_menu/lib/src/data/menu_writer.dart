@@ -73,6 +73,10 @@ abstract class MenuWriter {
     bool isActive = true,
   });
 
+  /// [allowQuantity] lets the POS add the SAME option more than once (a
+  /// quantity stepper). Only meaningful for `multiple` selection — the server
+  /// rejects `single` + allow_quantity. [maxQuantity] caps the units of a
+  /// single option while quantity is allowed (null = no cap).
   Future<MenuWriteOutcome> upsertModifier({
     required MenuScope scope,
     String? id,
@@ -84,6 +88,8 @@ abstract class MenuWriter {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
+    bool allowQuantity = false,
+    int? maxQuantity,
   });
 
   Future<MenuWriteOutcome> upsertModifierOption({

@@ -128,6 +128,8 @@ class MenuManagementRepository implements MenuWriter {
     bool isRequired = false,
     int displayOrder = 0,
     bool isActive = true,
+    bool allowQuantity = false,
+    int? maxQuantity,
   }) => _writer.upsertModifier(
     scope: scope,
     id: id,
@@ -139,6 +141,8 @@ class MenuManagementRepository implements MenuWriter {
     isRequired: isRequired,
     displayOrder: displayOrder,
     isActive: isActive,
+    allowQuantity: allowQuantity,
+    maxQuantity: maxQuantity,
   );
 
   @override

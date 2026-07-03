@@ -68,6 +68,8 @@ Future<void> showModifierTemplatePicker(
     minSelect: template.minSelect,
     maxSelect: template.maxSelect,
     isRequired: template.isRequired,
+    allowQuantity: template.allowQuantity,
+    maxQuantity: template.maxQuantity,
   );
   String? groupId;
   MenuWriteFailure? groupFailure;

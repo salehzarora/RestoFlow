@@ -500,6 +500,7 @@ class _ConfirmationLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final label = '${line.quantity}× ${line.name}';
     final lineTotalText = MoneyFormatter.format(line.lineTotal);
@@ -527,7 +528,8 @@ class _ConfirmationLine extends StatelessWidget {
               ),
             ],
           ),
-          // Selected modifiers (snapshots) — the deltas are in the total.
+          // Selected modifiers (snapshots, pre-formatted 'name ×N' for
+          // quantities) — the deltas are in the total.
           for (final modifier in line.modifiers)
             Padding(
               padding: const EdgeInsetsDirectional.only(
@@ -537,6 +539,20 @@ class _ConfirmationLine extends StatelessWidget {
                 '+ $modifier',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          // The cashier's per-item note, mirroring the cart line.
+          if (line.note != null)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: RestoflowSpacing.md,
+              ),
+              child: Text(
+                '${l10n.posItemNoteLabel}: ${line.note}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ),

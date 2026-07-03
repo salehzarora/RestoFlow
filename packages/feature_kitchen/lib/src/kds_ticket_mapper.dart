@@ -72,13 +72,20 @@ class KdsTicketMapper {
     }
 
     // Modifier option names per order_item_id (skip tombstoned modifiers).
+    // A modifier row carries an integer `quantity` (>=1, default 1); when it is
+    // above 1 the display string gets a '×N' suffix (name first, U+00D7 — the
+    // same convention as the KDS item line). Never money.
     final modsByItem = <String, List<String>>{};
     for (final m in modifiers) {
       if (m['deleted_at'] != null) continue;
       final itemId = m['order_item_id'];
       final option = m['option_name_snapshot'];
       if (itemId is! String || option is! String) continue;
-      (modsByItem[itemId] ??= <String>[]).add(option);
+      final qtyRaw = m['quantity'];
+      final qty = qtyRaw is int ? qtyRaw : int.tryParse('$qtyRaw') ?? 1;
+      (modsByItem[itemId] ??= <String>[]).add(
+        qty > 1 ? '$option ×$qty' : option,
+      );
     }
 
     // Group active items into (order, station) tickets.

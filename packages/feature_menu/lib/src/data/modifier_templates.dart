@@ -26,6 +26,8 @@ class ModifierTemplate {
     required this.minSelect,
     this.maxSelect,
     required this.isRequired,
+    this.allowQuantity = false,
+    this.maxQuantity,
     required this.options,
   });
 
@@ -41,6 +43,14 @@ class ModifierTemplate {
   final int minSelect;
   final int? maxSelect;
   final bool isRequired;
+
+  /// Whether the POS may add the SAME option more than once (quantity
+  /// stepper). Only meaningful for 'multiple' selection — the server rejects
+  /// 'single' + allow_quantity (product-rescue quantity settings).
+  final bool allowQuantity;
+
+  /// Per-option units cap while [allowQuantity] is on; null = no cap.
+  final int? maxQuantity;
   final List<ModifierTemplateOption> options;
 }
 
@@ -137,7 +147,8 @@ const List<ModifierTemplate> kMenuModifierTemplates = [
       ModifierTemplateOption(name: _triplePatty, priceDeltaMinor: 1800),
     ],
   ),
-  // 4. Extras — optional multi-select, all paid.
+  // 4. Extras — optional multi-select, all paid, quantity-capable (the
+  // cashier can add extra cheese ×2 etc., up to 5 units per option).
   ModifierTemplate(
     id: 'extras',
     name: _extras,
@@ -145,6 +156,8 @@ const List<ModifierTemplate> kMenuModifierTemplates = [
     minSelect: 0,
     maxSelect: null,
     isRequired: false,
+    allowQuantity: true,
+    maxQuantity: 5,
     options: [
       ModifierTemplateOption(name: _extraCheese, priceDeltaMinor: 300),
       ModifierTemplateOption(name: _extraPatty, priceDeltaMinor: 900),

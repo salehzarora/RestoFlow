@@ -547,6 +547,15 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get posModifierItemNoteLabel => 'הערה לפריט';
+
+  @override
+  String get posModifierItemNoteHint => 'לדוגמה: בלי בצל, תוספת רוטב';
+
+  @override
+  String get posItemNoteLabel => 'הערה';
+
+  @override
   String get dashboardOverviewHeading => 'סקירת היום';
 
   @override
@@ -876,6 +885,16 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get menuRequiredLabel => 'חובה';
+
+  @override
+  String get menuAllowQuantityLabel => 'אפשר כמות';
+
+  @override
+  String get menuAllowQuantityHelp =>
+      'הקופאי יכול להוסיף את אותה האפשרות יותר מפעם אחת (לדוגמה: תוספת גבינה ×2).';
+
+  @override
+  String get menuMaxQuantityLabel => 'מקסימום לכל אפשרות';
 
   @override
   String get menuSizesHeading => 'גדלים';

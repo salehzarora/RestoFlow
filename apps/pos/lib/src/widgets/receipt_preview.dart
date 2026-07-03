@@ -94,8 +94,14 @@ class ReceiptPreview extends ConsumerWidget {
                   line.currencyCode,
                 ),
               ),
+              // Modifier snapshots arrive pre-formatted ('name ×N').
               for (final modifier in line.modifiers)
                 _ReceiptItemLine(label: '  + $modifier', value: ''),
+              if (line.note != null)
+                _ReceiptItemLine(
+                  label: '  ${l10n.posItemNoteLabel}: ${line.note}',
+                  value: '',
+                ),
             ],
             const _DashedRule(),
             _ReceiptLine(

@@ -337,12 +337,14 @@ class _CartLineTile extends StatelessWidget {
                 // PAID option additionally shows its signed delta (Part E) —
                 // in a SEPARATE Text so the '+ name' string stays exact-match
                 // findable (test contract) and both mirror in RTL via the Row.
+                // A quantity-enabled option renders as '+ name ×N' with its
+                // TOTAL delta (unit × units — modifier-quantity sprint).
                 for (final modifier in line.modifiers)
                   Row(
                     children: [
                       Flexible(
                         child: Text(
-                          '+ ${modifier.optionName}',
+                          '+ ${modifier.displayName}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -350,11 +352,11 @@ class _CartLineTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (modifier.priceDeltaMinor != 0) ...[
+                      if (modifier.totalDeltaMinor != 0) ...[
                         const SizedBox(width: RestoflowSpacing.xs),
                         Text(
                           MoneyFormatter.formatSignedDeltaMinor(
-                            modifier.priceDeltaMinor,
+                            modifier.totalDeltaMinor,
                             line.currencyCode,
                           ),
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -364,6 +366,18 @@ class _CartLineTile extends StatelessWidget {
                         ),
                       ],
                     ],
+                  ),
+                // The cashier's note ("بدون بصل") under the option lines —
+                // italic like the KDS note line; data, never chrome.
+                if (line.note != null)
+                  Text(
+                    '${l10n.posItemNoteLabel}: ${line.note}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 const SizedBox(height: RestoflowSpacing.xxs),
                 Text(

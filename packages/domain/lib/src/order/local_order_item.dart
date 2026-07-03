@@ -23,6 +23,7 @@ class LocalOrderItem {
     required this.lineTotalMinorPreview,
     this.size,
     this.variant,
+    this.note,
     List<ModifierOptionSnapshot> modifiers = const [],
     OrderItemStatus status = OrderItemStatus.pending,
   }) : modifiers = List.unmodifiable(modifiers),
@@ -41,6 +42,7 @@ class LocalOrderItem {
     lineTotalMinorPreview: line.lineTotalMinor,
     size: line.size,
     variant: line.variant,
+    note: line.note,
     modifiers: line.modifiers,
   );
 
@@ -56,6 +58,11 @@ class LocalOrderItem {
   final VariantSnapshot? variant;
   final List<ModifierOptionSnapshot> modifiers;
   final int quantity;
+
+  /// Optional per-item kitchen note (carried from the cart line; additive,
+  /// product-rescue sprint — null for every existing caller). Display data,
+  /// never money.
+  final String? note;
 
   /// Non-authoritative integer line-total preview (RF-031; no money engine).
   final int lineTotalMinorPreview;

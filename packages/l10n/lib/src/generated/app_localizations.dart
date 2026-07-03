@@ -1126,6 +1126,24 @@ abstract class AppLocalizations {
   /// **'Base price · {price}'**
   String posModifierBasePrice(String price);
 
+  /// Label of the optional per-item special-instructions field on the POS modifier sheet (e.g. no onions).
+  ///
+  /// In en, this message translates to:
+  /// **'Item note'**
+  String get posModifierItemNoteLabel;
+
+  /// Placeholder/hint of the per-item note field on the POS modifier sheet, suggesting typical kitchen instructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Example: no onions, extra sauce'**
+  String get posModifierItemNoteHint;
+
+  /// Short prefix label before a cart line's / receipt line's per-item note, e.g. 'Note: no onions'.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get posItemNoteLabel;
+
   /// Owner dashboard section heading above the daily KPI cards.
   ///
   /// In en, this message translates to:
@@ -1767,6 +1785,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Required'**
   String get menuRequiredLabel;
+
+  /// Modifier-group toggle: the cashier may add the same option more than once (quantity stepper on the POS).
+  ///
+  /// In en, this message translates to:
+  /// **'Allow quantity'**
+  String get menuAllowQuantityLabel;
+
+  /// Helper text under the allow-quantity toggle explaining what it enables on the POS.
+  ///
+  /// In en, this message translates to:
+  /// **'The cashier can add the same option more than once (e.g. extra cheese ×2).'**
+  String get menuAllowQuantityHelp;
+
+  /// Modifier-group field label: maximum quantity of a single option (only when quantity is allowed).
+  ///
+  /// In en, this message translates to:
+  /// **'Max per option'**
+  String get menuMaxQuantityLabel;
 
   /// Heading for an item's sizes.
   ///

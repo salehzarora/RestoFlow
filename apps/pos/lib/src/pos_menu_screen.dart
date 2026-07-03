@@ -243,8 +243,8 @@ class _MenuGrid extends ConsumerWidget {
                         // thumbnail icon fallback (real ids never resolve via
                         // the demo lookup).
                         category: menu.categoryOf(item.categoryId),
-                        onConfirm: (selections) =>
-                            controller.addItemWithModifiers(item, selections),
+                        onConfirm: (selections, note) => controller
+                            .addItemWithModifiers(item, selections, note: note),
                       ),
               );
             },
