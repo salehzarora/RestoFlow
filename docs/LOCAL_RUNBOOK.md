@@ -329,6 +329,68 @@ Note the admin app has no sign-in screen of its own in this build; it reads
 the session state via `get_my_context`. Missing Supabase config shows the
 same "Real mode is not configured" help page as the other apps.
 
+## 7c. POS/KDS device settings + auto-print (for the staff on the device)
+
+The POS and KDS app bars carry a **⋮ device menu** → **Device settings**. This
+is an **operational device panel for the STAFF on the already-paired device**
+— NOT an owner/admin screen. It never exposes owner data, never touches other
+devices/branches, and the KDS panel is money-free (T-003). It shows:
+
+- **App type** (Cashier POS / Kitchen display KDS), **restaurant / branch**,
+  **device label**, **pairing** status, and **staff session** status.
+- **Printers** assigned to *this device's branch*, read through a token-proven
+  RPC (`get_device_printer_assignments`) — the device proves itself with its
+  own session token; the server returns only safe metadata (name, role,
+  connection type, paper width, enabled/disabled) and **derives the branch
+  from the session**. A POS sees only **receipt** printers; a KDS sees only
+  **kitchen** printers. No secrets (LAN host/port) are ever sent to the device.
+- **Auto-print** toggles (see below).
+- **Refresh connection** and **Unpair this device** (see below).
+
+**Printer configuration lives in the Dashboard.** The owner/manager configures
+printers and station routes in **Dashboard → Printers**; the device panel only
+*reads* the assignment for its branch. If the device shows **"No printer
+assigned. Ask a manager to configure it in Dashboard → Printers."**, add one in
+the Dashboard.
+
+**Physical printing requires a print bridge / native transport.** This web
+build has **no ESC/POS hardware transport**. So every printer shows
+**"Configured only — print bridge required."** and the panel states plainly:
+*"Printing requires a print bridge/native app. This build can save config and
+create/preview print jobs."* Print jobs are **prepared/previewed**, never
+reported as physically printed. A job status is one of: **No printer
+configured**, **Print job prepared — physical printing requires print bridge**,
+**Printed** (only ever shown when a real transport confirms — unreachable in
+this build), or **Print failed** (which never affects the order/ticket).
+
+**Auto-print triggers** (per-device, stored locally per browser/device — no
+owner login, no secrets):
+
+- **POS — auto-print receipt after payment**: after a payment SUCCEEDS, the POS
+  prepares a customer-receipt print job (order number, table, items, modifier
+  quantities, item notes, totals/payment/change). A failed submit/payment never
+  prints. Default ON when an enabled receipt printer is assigned; disabled with
+  the reason when none is.
+- **KDS — auto-print kitchen ticket on acknowledge**: when kitchen staff tap
+  **Acknowledge / استلام** and the status update SUCCEEDS, the KDS prepares a
+  kitchen-ticket print job (order code, table, station, items ×N, modifier
+  quantities, item/order notes — **no money**). It fires on the tap only (never
+  on a poll refresh) and is idempotent per order (no double-print on re-tap or
+  reload). Default ON when an enabled kitchen printer is assigned. Print-on-
+  first-seen is deliberately not offered (it could storm the printer on reload).
+
+**Refresh + Unpair (staff can reconnect without an owner login):**
+
+- **Refresh connection** re-reads the device's printer assignments (use it
+  after a manager changes the Dashboard config).
+- **Unpair this device** shows a warning, then clears **this device's** local
+  session (best-effort server self-revoke via the existing
+  `revoke_device_session`, then the secure-store secret is cleared) and returns
+  the app to the **pairing screen**. It only appears on a real paired device,
+  and is a device-local action — it never revokes other devices or touches
+  owner/admin state. To use the device again, pair it with a fresh enrollment
+  code from **Dashboard → Devices**.
+
 ## 8. Known limitations (honest list)
 
 - **Printing hardware**: config only; no transport dispatch; no test print.
