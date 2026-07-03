@@ -19,6 +19,7 @@ import '../widgets/menu_components.dart';
 import '../widgets/menu_entity_forms.dart';
 import '../widgets/menu_image_panel.dart';
 import '../widgets/menu_l10n.dart';
+import '../widgets/modifier_template_picker.dart';
 
 /// What the item editor is editing: an existing [item], or a new item in
 /// [categoryId].
@@ -991,10 +992,27 @@ class _ModifiersSection extends ConsumerWidget {
       title: l10n.menuModifiersHeading,
       icon: Icons.layers_outlined,
       contentPadding: EdgeInsets.zero,
-      trailing: TextButton.icon(
-        onPressed: () => showModifierFormDialog(context, menuItemId: item.id),
-        icon: const Icon(Icons.add, size: 18),
-        label: Text(l10n.menuAddModifier),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Copy-on-attach templates: applying one creates ONE ordinary
+          // modifier group + options via the same write path as the manual
+          // form below (D-031 stays per-item; nothing is auto-applied).
+          TextButton.icon(
+            key: const ValueKey('menu-template-add'),
+            onPressed: () =>
+                showModifierTemplatePicker(context, menuItemId: item.id),
+            icon: const Icon(Icons.library_add_outlined, size: 18),
+            label: Text(l10n.menuTemplateAddAction),
+          ),
+          const SizedBox(width: RestoflowSpacing.xs),
+          TextButton.icon(
+            onPressed: () =>
+                showModifierFormDialog(context, menuItemId: item.id),
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(l10n.menuAddModifier),
+          ),
+        ],
       ),
       child: modifiers.isEmpty
           ? Padding(

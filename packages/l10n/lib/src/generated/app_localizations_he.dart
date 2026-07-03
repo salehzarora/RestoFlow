@@ -1079,6 +1079,111 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuPattyWeightLabel => 'משקל ליחידה (גרם)';
 
   @override
+  String get menuTemplateAddAction => 'הוספת תבנית';
+
+  @override
+  String get menuTemplatePickerTitle => 'הוספה מתבנית';
+
+  @override
+  String get menuTemplateRequiredSingle => 'חובה · בחירה אחת';
+
+  @override
+  String get menuTemplateOptionalMulti => 'רשות · בחירה מרובה';
+
+  @override
+  String get menuTemplateOptionalSingle => 'רשות · עד בחירה אחת';
+
+  @override
+  String menuTemplateOptionCount(int count) {
+    return '$count אפשרויות';
+  }
+
+  @override
+  String get menuTemplateApplyPartial =>
+      'ההוספה נעצרה — השורות שכבר נוצרו נשארות ברשימה; אפשר לערוך או למחוק אותן למטה.';
+
+  @override
+  String get menuTemplateBurgerToppings => 'תוספות להמבורגר';
+
+  @override
+  String get menuTemplateOptLettuce => 'חסה';
+
+  @override
+  String get menuTemplateOptTomato => 'עגבנייה';
+
+  @override
+  String get menuTemplateOptOnion => 'בצל';
+
+  @override
+  String get menuTemplateOptPickles => 'מלפפון חמוץ';
+
+  @override
+  String get menuTemplateOptCheese => 'גבינה';
+
+  @override
+  String get menuTemplateDoneness => 'דרגת עשייה';
+
+  @override
+  String get menuTemplateOptRare => 'נא';
+
+  @override
+  String get menuTemplateOptMediumDoneness => 'מדיום';
+
+  @override
+  String get menuTemplateOptWellDone => 'עשוי היטב';
+
+  @override
+  String get menuTemplatePattyCount => 'מספר קציצות';
+
+  @override
+  String get menuTemplateOptSinglePatty => 'קציצה אחת';
+
+  @override
+  String get menuTemplateOptDoublePatty => 'שתי קציצות';
+
+  @override
+  String get menuTemplateOptTriplePatty => 'שלוש קציצות';
+
+  @override
+  String get menuTemplateExtras => 'תוספות';
+
+  @override
+  String get menuTemplateOptExtraCheese => 'תוספת גבינה';
+
+  @override
+  String get menuTemplateOptExtraPatty => 'קציצה נוספת';
+
+  @override
+  String get menuTemplateOptFries => 'צ\'יפס';
+
+  @override
+  String get menuTemplateOptDrink => 'משקה';
+
+  @override
+  String get menuTemplateDrinkSize => 'גודל משקה';
+
+  @override
+  String get menuTemplateOptSmall => 'קטן';
+
+  @override
+  String get menuTemplateOptMediumSize => 'בינוני';
+
+  @override
+  String get menuTemplateOptLarge => 'גדול';
+
+  @override
+  String get menuTemplateSpiciness => 'רמת חריפות';
+
+  @override
+  String get menuTemplateOptMild => 'עדין';
+
+  @override
+  String get menuTemplateOptMediumSpicy => 'בינוני';
+
+  @override
+  String get menuTemplateOptHot => 'חריף';
+
+  @override
   String get dashboardNavSettings => 'הגדרות';
 
   @override

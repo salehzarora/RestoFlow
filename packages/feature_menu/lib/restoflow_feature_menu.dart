@@ -34,6 +34,7 @@ export 'src/data/menu_read_source.dart';
 export 'src/data/menu_validation.dart';
 export 'src/data/menu_writer.dart';
 export 'src/data/minor_money.dart';
+export 'src/data/modifier_templates.dart';
 export 'src/data/rpc_menu_read_source.dart';
 export 'src/data/rpc_menu_writer.dart';
 

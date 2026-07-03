@@ -2164,6 +2164,210 @@ abstract class AppLocalizations {
   /// **'Weight per piece (g)'**
   String get menuPattyWeightLabel;
 
+  /// Modifiers section action opening the modifier template picker (copy-on-attach; creates ordinary per-item rows).
+  ///
+  /// In en, this message translates to:
+  /// **'Add template'**
+  String get menuTemplateAddAction;
+
+  /// Title of the modifier template picker dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Add from template'**
+  String get menuTemplatePickerTitle;
+
+  /// Template summary fragment: a required single-choice group (min 1, max 1).
+  ///
+  /// In en, this message translates to:
+  /// **'Required · choose 1'**
+  String get menuTemplateRequiredSingle;
+
+  /// Template summary fragment: an optional multi-select group.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional · multi-select'**
+  String get menuTemplateOptionalMulti;
+
+  /// Template summary fragment: an optional single-choice group (min 0, max 1).
+  ///
+  /// In en, this message translates to:
+  /// **'Optional · choose up to 1'**
+  String get menuTemplateOptionalSingle;
+
+  /// Template summary fragment: how many options applying the template creates.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} options'**
+  String menuTemplateOptionCount(int count);
+
+  /// Honest note appended to the failure message when a template apply fails midway: earlier writes are NOT rolled back and remain visible for manual cleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped — the rows already added stay in the list; edit or delete them below.'**
+  String get menuTemplateApplyPartial;
+
+  /// Template group name: optional multi-select burger toppings. Inserted as tenant DATA in the active locale at apply time.
+  ///
+  /// In en, this message translates to:
+  /// **'Burger toppings'**
+  String get menuTemplateBurgerToppings;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Lettuce'**
+  String get menuTemplateOptLettuce;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Tomato'**
+  String get menuTemplateOptTomato;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Onion'**
+  String get menuTemplateOptOnion;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickles'**
+  String get menuTemplateOptPickles;
+
+  /// Burger toppings template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Cheese'**
+  String get menuTemplateOptCheese;
+
+  /// Template group name: required single-choice meat doneness. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Doneness'**
+  String get menuTemplateDoneness;
+
+  /// Doneness template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Rare'**
+  String get menuTemplateOptRare;
+
+  /// Doneness template option (free): medium doneness. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get menuTemplateOptMediumDoneness;
+
+  /// Doneness template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Well done'**
+  String get menuTemplateOptWellDone;
+
+  /// Template group name: required single-choice number of patties. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Patty count'**
+  String get menuTemplatePattyCount;
+
+  /// Patty count template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Single patty'**
+  String get menuTemplateOptSinglePatty;
+
+  /// Patty count template option (+900 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Double patty'**
+  String get menuTemplateOptDoublePatty;
+
+  /// Patty count template option (+1800 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Triple patty'**
+  String get menuTemplateOptTriplePatty;
+
+  /// Template group name: optional multi-select paid extras. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Extras'**
+  String get menuTemplateExtras;
+
+  /// Extras template option (+300 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra cheese'**
+  String get menuTemplateOptExtraCheese;
+
+  /// Extras template option (+900 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra patty'**
+  String get menuTemplateOptExtraPatty;
+
+  /// Extras template option (+700 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Fries'**
+  String get menuTemplateOptFries;
+
+  /// Extras template option (+500 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Drink'**
+  String get menuTemplateOptDrink;
+
+  /// Template group name: required single-choice drink size. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Drink size'**
+  String get menuTemplateDrinkSize;
+
+  /// Drink size template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Small'**
+  String get menuTemplateOptSmall;
+
+  /// Drink size template option (+200 minor units): medium size. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get menuTemplateOptMediumSize;
+
+  /// Drink size template option (+400 minor units). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Large'**
+  String get menuTemplateOptLarge;
+
+  /// Template group name: optional single-choice spiciness level. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Spiciness'**
+  String get menuTemplateSpiciness;
+
+  /// Spiciness template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Mild'**
+  String get menuTemplateOptMild;
+
+  /// Spiciness template option (free): medium heat. Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get menuTemplateOptMediumSpicy;
+
+  /// Spiciness template option (free). Inserted as tenant data in the active locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Hot'**
+  String get menuTemplateOptHot;
+
   /// No description provided for @dashboardNavSettings.
   ///
   /// In en, this message translates to:

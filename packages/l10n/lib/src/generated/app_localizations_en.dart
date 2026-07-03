@@ -1089,6 +1089,111 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuPattyWeightLabel => 'Weight per piece (g)';
 
   @override
+  String get menuTemplateAddAction => 'Add template';
+
+  @override
+  String get menuTemplatePickerTitle => 'Add from template';
+
+  @override
+  String get menuTemplateRequiredSingle => 'Required · choose 1';
+
+  @override
+  String get menuTemplateOptionalMulti => 'Optional · multi-select';
+
+  @override
+  String get menuTemplateOptionalSingle => 'Optional · choose up to 1';
+
+  @override
+  String menuTemplateOptionCount(int count) {
+    return '$count options';
+  }
+
+  @override
+  String get menuTemplateApplyPartial =>
+      'Stopped — the rows already added stay in the list; edit or delete them below.';
+
+  @override
+  String get menuTemplateBurgerToppings => 'Burger toppings';
+
+  @override
+  String get menuTemplateOptLettuce => 'Lettuce';
+
+  @override
+  String get menuTemplateOptTomato => 'Tomato';
+
+  @override
+  String get menuTemplateOptOnion => 'Onion';
+
+  @override
+  String get menuTemplateOptPickles => 'Pickles';
+
+  @override
+  String get menuTemplateOptCheese => 'Cheese';
+
+  @override
+  String get menuTemplateDoneness => 'Doneness';
+
+  @override
+  String get menuTemplateOptRare => 'Rare';
+
+  @override
+  String get menuTemplateOptMediumDoneness => 'Medium';
+
+  @override
+  String get menuTemplateOptWellDone => 'Well done';
+
+  @override
+  String get menuTemplatePattyCount => 'Patty count';
+
+  @override
+  String get menuTemplateOptSinglePatty => 'Single patty';
+
+  @override
+  String get menuTemplateOptDoublePatty => 'Double patty';
+
+  @override
+  String get menuTemplateOptTriplePatty => 'Triple patty';
+
+  @override
+  String get menuTemplateExtras => 'Extras';
+
+  @override
+  String get menuTemplateOptExtraCheese => 'Extra cheese';
+
+  @override
+  String get menuTemplateOptExtraPatty => 'Extra patty';
+
+  @override
+  String get menuTemplateOptFries => 'Fries';
+
+  @override
+  String get menuTemplateOptDrink => 'Drink';
+
+  @override
+  String get menuTemplateDrinkSize => 'Drink size';
+
+  @override
+  String get menuTemplateOptSmall => 'Small';
+
+  @override
+  String get menuTemplateOptMediumSize => 'Medium';
+
+  @override
+  String get menuTemplateOptLarge => 'Large';
+
+  @override
+  String get menuTemplateSpiciness => 'Spiciness';
+
+  @override
+  String get menuTemplateOptMild => 'Mild';
+
+  @override
+  String get menuTemplateOptMediumSpicy => 'Medium';
+
+  @override
+  String get menuTemplateOptHot => 'Hot';
+
+  @override
   String get dashboardNavSettings => 'Settings';
 
   @override

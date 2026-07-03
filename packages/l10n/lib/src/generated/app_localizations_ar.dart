@@ -1081,6 +1081,111 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuPattyWeightLabel => 'وزن القطعة (غرام)';
 
   @override
+  String get menuTemplateAddAction => 'إضافة قالب';
+
+  @override
+  String get menuTemplatePickerTitle => 'إضافة من قالب';
+
+  @override
+  String get menuTemplateRequiredSingle => 'إلزامي · اختيار واحد';
+
+  @override
+  String get menuTemplateOptionalMulti => 'اختياري · اختيار متعدد';
+
+  @override
+  String get menuTemplateOptionalSingle => 'اختياري · خيار واحد كحد أقصى';
+
+  @override
+  String menuTemplateOptionCount(int count) {
+    return '$count خيارات';
+  }
+
+  @override
+  String get menuTemplateApplyPartial =>
+      'توقفت الإضافة — الصفوف التي أُنشئت تبقى في القائمة؛ يمكن تعديلها أو حذفها أدناه.';
+
+  @override
+  String get menuTemplateBurgerToppings => 'إضافات البرغر';
+
+  @override
+  String get menuTemplateOptLettuce => 'خس';
+
+  @override
+  String get menuTemplateOptTomato => 'بندورة';
+
+  @override
+  String get menuTemplateOptOnion => 'بصل';
+
+  @override
+  String get menuTemplateOptPickles => 'مخلل';
+
+  @override
+  String get menuTemplateOptCheese => 'جبنة';
+
+  @override
+  String get menuTemplateDoneness => 'درجة الاستواء';
+
+  @override
+  String get menuTemplateOptRare => 'نادرة';
+
+  @override
+  String get menuTemplateOptMediumDoneness => 'وسط';
+
+  @override
+  String get menuTemplateOptWellDone => 'ناضجة جيدًا';
+
+  @override
+  String get menuTemplatePattyCount => 'عدد قطع اللحم';
+
+  @override
+  String get menuTemplateOptSinglePatty => 'قطعة واحدة';
+
+  @override
+  String get menuTemplateOptDoublePatty => 'قطعتان';
+
+  @override
+  String get menuTemplateOptTriplePatty => 'ثلاث قطع';
+
+  @override
+  String get menuTemplateExtras => 'إضافات';
+
+  @override
+  String get menuTemplateOptExtraCheese => 'جبنة إضافية';
+
+  @override
+  String get menuTemplateOptExtraPatty => 'قطعة لحم إضافية';
+
+  @override
+  String get menuTemplateOptFries => 'بطاطا مقلية';
+
+  @override
+  String get menuTemplateOptDrink => 'مشروب';
+
+  @override
+  String get menuTemplateDrinkSize => 'حجم المشروب';
+
+  @override
+  String get menuTemplateOptSmall => 'صغير';
+
+  @override
+  String get menuTemplateOptMediumSize => 'وسط';
+
+  @override
+  String get menuTemplateOptLarge => 'كبير';
+
+  @override
+  String get menuTemplateSpiciness => 'مستوى الحار';
+
+  @override
+  String get menuTemplateOptMild => 'خفيف';
+
+  @override
+  String get menuTemplateOptMediumSpicy => 'وسط';
+
+  @override
+  String get menuTemplateOptHot => 'حار';
+
+  @override
   String get dashboardNavSettings => 'الإعدادات';
 
   @override
