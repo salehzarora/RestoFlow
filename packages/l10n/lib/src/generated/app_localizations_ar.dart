@@ -1882,6 +1882,36 @@ class AppLocalizationsAr extends AppLocalizations {
       'هذه هي القيم الحقيقية لمساحة العمل. تعديل الإعدادات غير متصل في هذا الإصدار بعد، لذا لا يوجد شيء للحفظ هنا.';
 
   @override
+  String get dashboardShiftCloseSectionTitle => 'تسوية الوردية (نقطة البيع)';
+
+  @override
+  String get dashboardShiftCloseToggleLabel =>
+      'إظهار «إغلاق الوردية وعدّ النقد» على نقطة البيع';
+
+  @override
+  String get dashboardShiftCloseToggleHelp =>
+      'عند التفعيل، يمكن للكاشير إغلاق ورديته وعدّ درج النقد على نقطة البيع لهذا الفرع. إيقافه يُخفي هذا الإجراء؛ ولا يؤثر على المدفوعات.';
+
+  @override
+  String get dashboardShiftCloseOwnerOnly =>
+      'يمكن للمالك فقط تغيير هذا الإعداد.';
+
+  @override
+  String get dashboardShiftCloseUnavailable =>
+      'تعذّر تحميل هذا الإعداد الآن. حاول مرة أخرى لاحقًا.';
+
+  @override
+  String get dashboardShiftCloseSaved => 'تم حفظ الإعداد.';
+
+  @override
+  String get dashboardShiftCloseDenied =>
+      'ليست لديك صلاحية لتغيير هذا الإعداد.';
+
+  @override
+  String get dashboardShiftCloseSaveFailed =>
+      'تعذّر حفظ الإعداد. حاول مرة أخرى.';
+
+  @override
   String get setupTitle => 'الإعداد';
 
   @override

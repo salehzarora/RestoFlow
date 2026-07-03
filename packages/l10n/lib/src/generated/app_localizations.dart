@@ -3658,6 +3658,54 @@ abstract class AppLocalizations {
   /// **'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.'**
   String get dashboardSettingsRealNotice;
 
+  /// RF-113: Settings section for the per-branch POS shift-close policy.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift reconciliation (POS)'**
+  String get dashboardShiftCloseSectionTitle;
+
+  /// RF-113: label for the toggle that shows/hides the POS shift-close workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show “Close shift & count cash” on the POS'**
+  String get dashboardShiftCloseToggleLabel;
+
+  /// RF-113: help text under the shift-close toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, cashiers can close their shift and count the cash drawer on the POS for this branch. Turning it off hides that workflow; payments are unaffected.'**
+  String get dashboardShiftCloseToggleHelp;
+
+  /// RF-113: note shown to non-owners; the toggle is read-only for them.
+  ///
+  /// In en, this message translates to:
+  /// **'Only an owner can change this setting.'**
+  String get dashboardShiftCloseOwnerOnly;
+
+  /// RF-113: shown when the policy read fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load this setting right now. Try again later.'**
+  String get dashboardShiftCloseUnavailable;
+
+  /// RF-113: confirmation snackbar after a successful policy save.
+  ///
+  /// In en, this message translates to:
+  /// **'Setting saved.'**
+  String get dashboardShiftCloseSaved;
+
+  /// RF-113: snackbar when the server denies the policy write.
+  ///
+  /// In en, this message translates to:
+  /// **'You don’t have permission to change this setting.'**
+  String get dashboardShiftCloseDenied;
+
+  /// RF-113: snackbar when the policy write fails for a transient reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t save the setting. Please try again.'**
+  String get dashboardShiftCloseSaveFailed;
+
   /// Title of the real-mode setup center on the dashboard overview.
   ///
   /// In en, this message translates to:

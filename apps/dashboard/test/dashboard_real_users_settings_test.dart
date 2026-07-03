@@ -38,6 +38,15 @@ MyContext _ctx() => const MyContext(
 class _StructureTransport implements SyncRpcTransport {
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    if (function == 'get_branch_pos_shift_close_enabled') {
+      // RF-113: the Settings tab reads the branch policy (enabled here).
+      return {
+        'ok': true,
+        'entity': 'branch',
+        'branch_id': 'branch-1',
+        'pos_shift_close_enabled': true,
+      };
+    }
     if (function == 'list_org_structure') {
       return {
         'ok': true,
@@ -120,16 +129,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.adminDemoBanner), findsNothing);
-    expect(find.text(l10n.dashboardSettingsRealNotice), findsOneWidget);
     // The REAL resolved values (org + first restaurant/branch + currency).
     expect(find.text('Olive Group'), findsWidgets);
     expect(find.text('Olive North'), findsOneWidget);
     expect(find.text('Main hall'), findsWidgets);
     expect(find.text('ILS'), findsOneWidget);
-    // Read-only: no Save button, and none of the demo settings values.
+    // The identity fields remain read-only: no Save button, no demo values.
     expect(find.text(l10n.adminSave), findsNothing);
     expect(find.text('America/New_York'), findsNothing);
     expect(find.text('128 Main Street, Suite 4'), findsNothing);
+    // RF-113: with the real branch policy in scope, the (honest, editable)
+    // shift-close toggle replaces the blanket "nothing to save" notice.
+    expect(find.text(l10n.dashboardSettingsRealNotice), findsNothing);
+    expect(find.text(l10n.dashboardShiftCloseSectionTitle), findsOneWidget);
+    expect(find.byKey(const Key('shift-close-policy-toggle')), findsOneWidget);
   });
 
   testWidgets('demo mode keeps the labelled demo Users surface (unchanged)', (

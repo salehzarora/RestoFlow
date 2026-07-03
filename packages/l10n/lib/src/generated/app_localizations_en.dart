@@ -1898,6 +1898,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.';
 
   @override
+  String get dashboardShiftCloseSectionTitle => 'Shift reconciliation (POS)';
+
+  @override
+  String get dashboardShiftCloseToggleLabel =>
+      'Show “Close shift & count cash” on the POS';
+
+  @override
+  String get dashboardShiftCloseToggleHelp =>
+      'When on, cashiers can close their shift and count the cash drawer on the POS for this branch. Turning it off hides that workflow; payments are unaffected.';
+
+  @override
+  String get dashboardShiftCloseOwnerOnly =>
+      'Only an owner can change this setting.';
+
+  @override
+  String get dashboardShiftCloseUnavailable =>
+      'Couldn’t load this setting right now. Try again later.';
+
+  @override
+  String get dashboardShiftCloseSaved => 'Setting saved.';
+
+  @override
+  String get dashboardShiftCloseDenied =>
+      'You don’t have permission to change this setting.';
+
+  @override
+  String get dashboardShiftCloseSaveFailed =>
+      'Couldn’t save the setting. Please try again.';
+
+  @override
   String get setupTitle => 'Setup';
 
   @override

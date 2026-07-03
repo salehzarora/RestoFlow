@@ -16,6 +16,7 @@ export 'src/supabase_device_pairing_repository.dart';
 // shared settings-sheet printers section (honest capability statuses).
 export 'src/device_printer_assignments_section.dart';
 export 'src/supabase_device_printer_assignments_repository.dart';
+export 'src/supabase_device_shift_close_policy_repository.dart';
 export 'src/auth_gate_view.dart';
 export 'src/auth_gated_home.dart';
 export 'src/auth_state_views.dart';

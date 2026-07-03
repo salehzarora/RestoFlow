@@ -1868,6 +1868,34 @@ class AppLocalizationsHe extends AppLocalizations {
       'אלה הערכים האמיתיים של סביבת העבודה. עריכת ההגדרות עדיין אינה מחוברת בגרסה זו, ולכן אין כאן מה לשמור.';
 
   @override
+  String get dashboardShiftCloseSectionTitle => 'התאמת משמרת (קופה)';
+
+  @override
+  String get dashboardShiftCloseToggleLabel =>
+      'הצג «סגירת משמרת וספירת מזומן» בקופה';
+
+  @override
+  String get dashboardShiftCloseToggleHelp =>
+      'כשמופעל, קופאים יכולים לסגור את המשמרת ולספור את מגירת המזומן בקופה עבור סניף זה. כיבוי מסתיר את התהליך; התשלומים אינם מושפעים.';
+
+  @override
+  String get dashboardShiftCloseOwnerOnly => 'רק בעלים יכול לשנות הגדרה זו.';
+
+  @override
+  String get dashboardShiftCloseUnavailable =>
+      'לא ניתן לטעון הגדרה זו כעת. נסה שוב מאוחר יותר.';
+
+  @override
+  String get dashboardShiftCloseSaved => 'ההגדרה נשמרה.';
+
+  @override
+  String get dashboardShiftCloseDenied => 'אין לך הרשאה לשנות הגדרה זו.';
+
+  @override
+  String get dashboardShiftCloseSaveFailed =>
+      'לא ניתן לשמור את ההגדרה. נסה שוב.';
+
+  @override
   String get setupTitle => 'הגדרה';
 
   @override
