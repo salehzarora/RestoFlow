@@ -132,6 +132,18 @@
   "@adminNotConfiguredBody": {
     "description": "Platform-admin safe-state body explaining that real mode needs Supabase configuration, or to run in demo mode."
   },
+  "adminGateTitle": "Platform admin panel",
+  "@adminGateTitle": {"description": "Heading of the admin app's access explainer (shown to non-platform-admin visitors)."},
+  "adminGateNotOwner": "This is the platform administration panel — not the restaurant owner's panel.",
+  "@adminGateNotOwner": {"description": "Admin gate explainer line 1: what this app is."},
+  "adminGateUseDashboard": "Use the Dashboard to manage your restaurant.",
+  "@adminGateUseDashboard": {"description": "Admin gate explainer line 2: where restaurant owners should go."},
+  "adminGateNotAdminAccount": "This signed-in account is not a platform admin.",
+  "@adminGateNotAdminAccount": {"description": "Admin gate note when a signed-in tenant account (e.g. an owner) opens the admin app."},
+  "adminGateProvisionHint": "Platform-admin access is granted manually by the platform operator — see docs/LOCAL_RUNBOOK.md.",
+  "@adminGateProvisionHint": {"description": "Admin gate note about how platform access is provisioned (no self-service)."},
+  "adminGateOpenDashboard": "Open Dashboard",
+  "@adminGateOpenDashboard": {"description": "Admin gate action that opens the restaurant Dashboard app."},
   "adminAccessDeniedTitle": "Platform admin access denied",
   "@adminAccessDeniedTitle": {
     "description": "Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up)."

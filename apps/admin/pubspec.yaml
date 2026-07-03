@@ -27,6 +27,10 @@ dependencies:
   # platform-admin repo calls the RF-125 public.platform_admin_* wrappers through.
   restoflow_data_remote:
     path: ../../packages/data_remote
+  # Sprint (admin gate): Result<MyContext, AuthFailure> for the app-level
+  # platform gate (already in the workspace graph via feature_auth).
+  restoflow_core:
+    path: ../../packages/core
 dev_dependencies:
   flutter_test:
     sdk: flutter

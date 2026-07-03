@@ -111,6 +111,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'Real mode is selected but the Supabase connection isn\'t configured, so no platform data can be loaded. Set the Supabase URL and anon key, or run in demo mode.';
 
   @override
+  String get adminGateTitle => 'Platform admin panel';
+
+  @override
+  String get adminGateNotOwner =>
+      'This is the platform administration panel — not the restaurant owner\'s panel.';
+
+  @override
+  String get adminGateUseDashboard =>
+      'Use the Dashboard to manage your restaurant.';
+
+  @override
+  String get adminGateNotAdminAccount =>
+      'This signed-in account is not a platform admin.';
+
+  @override
+  String get adminGateProvisionHint =>
+      'Platform-admin access is granted manually by the platform operator — see docs/LOCAL_RUNBOOK.md.';
+
+  @override
+  String get adminGateOpenDashboard => 'Open Dashboard';
+
+  @override
   String get adminAccessDeniedTitle => 'Platform admin access denied';
 
   @override

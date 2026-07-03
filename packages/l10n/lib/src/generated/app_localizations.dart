@@ -298,6 +298,42 @@ abstract class AppLocalizations {
   /// **'Real mode is selected but the Supabase connection isn\'t configured, so no platform data can be loaded. Set the Supabase URL and anon key, or run in demo mode.'**
   String get adminNotConfiguredBody;
 
+  /// Heading of the admin app's access explainer (shown to non-platform-admin visitors).
+  ///
+  /// In en, this message translates to:
+  /// **'Platform admin panel'**
+  String get adminGateTitle;
+
+  /// Admin gate explainer line 1: what this app is.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the platform administration panel — not the restaurant owner\'s panel.'**
+  String get adminGateNotOwner;
+
+  /// Admin gate explainer line 2: where restaurant owners should go.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the Dashboard to manage your restaurant.'**
+  String get adminGateUseDashboard;
+
+  /// Admin gate note when a signed-in tenant account (e.g. an owner) opens the admin app.
+  ///
+  /// In en, this message translates to:
+  /// **'This signed-in account is not a platform admin.'**
+  String get adminGateNotAdminAccount;
+
+  /// Admin gate note about how platform access is provisioned (no self-service).
+  ///
+  /// In en, this message translates to:
+  /// **'Platform-admin access is granted manually by the platform operator — see docs/LOCAL_RUNBOOK.md.'**
+  String get adminGateProvisionHint;
+
+  /// Admin gate action that opens the restaurant Dashboard app.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Dashboard'**
+  String get adminGateOpenDashboard;
+
   /// Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up).
   ///
   /// In en, this message translates to:

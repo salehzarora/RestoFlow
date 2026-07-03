@@ -278,6 +278,57 @@ banner.
 3. Dashboard → Overview shows the real sales summary with a manual
    **Refresh**.
 
+## 7b. Platform admin app (what it is, who it is for)
+
+RestoFlow has FOUR apps with different audiences:
+
+| App | Who | Port (local real mode) |
+|---|---|---|
+| Dashboard | restaurant owner / manager | 57026 (`_run_dashboard_real.bat`) |
+| POS | cashier (paired device + staff PIN) | 52096 (`_run_pos_real.bat`) |
+| KDS | kitchen (paired device + staff PIN) | 49622 (`_run_kds_real.bat`) |
+| **Admin** | **RestoFlow platform operator only** | 57126 (`_run_admin_real.bat`) |
+
+The Admin app is the **platform** administration panel (all organizations,
+platform health, audit) — it is NOT the restaurant owner's panel, and normal
+restaurant accounts can never use it:
+
+- Entry requires `is_platform_admin == true` on the signed-in account
+  (DECISION D-026 — platform admin is a separate, audited grant, never a
+  tenant role; owners/managers are NOT platform admins and must not be made
+  platform admins to "fix" access).
+- Live platform data additionally requires, server-side (RF-091): an ACTIVE
+  `platform_admin_grants` row **and** an MFA (aal2) session **and** a
+  non-empty audited reason on every read. There is deliberately NO
+  grant/revoke RPC and no self-service path.
+- A visitor without that access now sees an explainer screen (Arabic-first):
+  "هذه لوحة إدارة المنصة، وليست لوحة صاحب المطعم." /
+  "استخدم Dashboard لإدارة المطعم." — with an Open-Dashboard action and the
+  local Dashboard URL. This replaces the old dead-end "Account access denied".
+
+**Local, dev-only platform-admin provisioning** (safe flow — no bypass, no
+service-role key; production grants are an operator/DBA action):
+
+1. Sign up once in the Dashboard real mode (this creates the linked
+   `app_users` row via `create_organization`).
+2. In Supabase Studio (http://127.0.0.1:54323 → SQL editor) grant yourself:
+
+   ```sql
+   insert into platform_admin_grants (app_user_id, granted_by)
+   select id, id from app_users where email = 'you@example.test';
+   ```
+
+3. The gate now admits you (`is_platform_admin = true`), but live reads still
+   need **MFA aal2**: local TOTP is enabled in `supabase/config.toml`
+   (`[auth.mfa.totp]`), and the admin app has no MFA enrolment UI yet — so
+   without an aal2 session you will see the honest "Platform admin access
+   denied" data state (grant + MFA required). That state is correct, not a
+   bug.
+
+Note the admin app has no sign-in screen of its own in this build; it reads
+the session state via `get_my_context`. Missing Supabase config shows the
+same "Real mode is not configured" help page as the other apps.
+
 ## 8. Known limitations (honest list)
 
 - **Printing hardware**: config only; no transport dispatch; no test print.

@@ -111,6 +111,26 @@ class AppLocalizationsAr extends AppLocalizations {
       'الوضع الحقيقي مُحدَّد لكن اتصال Supabase غير مُهيأ، لذا تعذّر تحميل أي بيانات للمنصة. اضبط عنوان Supabase ومفتاح anon، أو شغّل الوضع التجريبي.';
 
   @override
+  String get adminGateTitle => 'لوحة إدارة المنصة';
+
+  @override
+  String get adminGateNotOwner =>
+      'هذه لوحة إدارة المنصة، وليست لوحة صاحب المطعم.';
+
+  @override
+  String get adminGateUseDashboard => 'استخدم Dashboard لإدارة المطعم.';
+
+  @override
+  String get adminGateNotAdminAccount => 'هذا الحساب ليس مشرف منصة.';
+
+  @override
+  String get adminGateProvisionHint =>
+      'يُمنح وصول مشرف المنصة يدويًا من مشغّل المنصة — راجع docs/LOCAL_RUNBOOK.md.';
+
+  @override
+  String get adminGateOpenDashboard => 'فتح لوحة المطعم';
+
+  @override
   String get adminAccessDeniedTitle => 'تم رفض الوصول إلى إدارة المنصة';
 
   @override

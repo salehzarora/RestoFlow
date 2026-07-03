@@ -111,6 +111,26 @@ class AppLocalizationsHe extends AppLocalizations {
       'מצב אמיתי נבחר אך חיבור ה-Supabase אינו מוגדר, ולכן לא ניתן לטעון נתוני פלטפורמה. הגדירו את כתובת ה-Supabase ומפתח ה-anon, או הפעילו במצב הדגמה.';
 
   @override
+  String get adminGateTitle => 'לוח ניהול הפלטפורמה';
+
+  @override
+  String get adminGateNotOwner =>
+      'זהו לוח ניהול הפלטפורמה — לא הלוח של בעל המסעדה.';
+
+  @override
+  String get adminGateUseDashboard => 'השתמשו ב-Dashboard לניהול המסעדה.';
+
+  @override
+  String get adminGateNotAdminAccount => 'החשבון המחובר אינו מנהל פלטפורמה.';
+
+  @override
+  String get adminGateProvisionHint =>
+      'גישת מנהל פלטפורמה ניתנת ידנית על ידי מפעיל הפלטפורמה — ראו docs/LOCAL_RUNBOOK.md.';
+
+  @override
+  String get adminGateOpenDashboard => 'פתיחת לוח המסעדה';
+
+  @override
   String get adminAccessDeniedTitle => 'הגישה לניהול הפלטפורמה נדחתה';
 
   @override
