@@ -6,14 +6,19 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'package:restoflow_core/restoflow_core.dart';
+
 import '../data/order_submission.dart';
 import '../format/money_format.dart';
 import '../state/outbox_controller.dart';
 import '../state/payment_controller.dart';
+import '../state/pos_auto_print_prefs.dart';
+import '../state/pos_printer_assignments.dart';
 import '../state/receipt_print_controller.dart';
 import '../state/submitted_order_view.dart';
 import 'cash_payment_sheet.dart';
 import 'receipt_preview.dart';
+import 'receipt_print_preview.dart';
 
 /// In-place confirmation shown inside the cart panel after a submit (RF-101):
 /// success header, the order number, a "Submitted" status chip, the submitted
@@ -50,6 +55,37 @@ class OrderConfirmation extends ConsumerWidget {
     final payment = ref
         .watch(paymentControllerProvider)
         .paymentFor(order.orderNumber);
+
+    // Part E: the receipt auto-print trigger. Fires ONLY on THIS order's
+    // payment SUCCESS transition (a failed submit/payment never reaches a
+    // non-null payment, and the controller is idempotent per order besides).
+    // Cashier turned the toggle off => nothing at all; toggle would be on
+    // but no printer => an honest notConfigured marker; otherwise the job is
+    // PREPARED (this build has no bridge transport, so never "printed").
+    ref.listen(paymentControllerProvider, (previous, next) {
+      final paid = next.paymentFor(order.orderNumber);
+      if (paid == null) return;
+      if (previous?.paymentFor(order.orderNumber) != null) return;
+      final assignments = switch (ref
+          .read(posPrinterAssignmentsProvider)
+          .valueOrNull) {
+        Success(:final value) => value,
+        _ => null,
+      };
+      // Demo / unconfigured / failed reads: no assignments, no auto-print.
+      if (assignments == null) return;
+      final stored = ref.read(posAutoPrintReceiptProvider).valueOrNull;
+      if (stored == false) return; // explicitly off — show nothing
+      final printer = assignments.hasEnabledPrinter;
+      ref
+          .read(receiptPrintControllerProvider.notifier)
+          .prepare(
+            orderNumber: order.orderNumber,
+            hasEnabledPrinter: printer,
+            buildDocument: () =>
+                buildReceiptDocument(l10n, order, paid, isDemo: isDemo),
+          );
+    });
 
     return Material(
       color: theme.colorScheme.surfaceContainerLow,
