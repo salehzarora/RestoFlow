@@ -2,6 +2,24 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 import 'ids.dart';
 
+/// The current open shift as read back from the server (RF-113 recovery). Lets
+/// the close/reconcile UI recover its handle after a browser refresh / re-sign-in
+/// where the in-memory handle was lost but a server shift is still open. Money is
+/// integer minor units (DECISION D-007).
+class OpenShiftInfo {
+  const OpenShiftInfo({
+    required this.shiftId,
+    required this.cashDrawerSessionId,
+    required this.openingFloatMinor,
+    required this.openedAt,
+  });
+
+  final String shiftId;
+  final String cashDrawerSessionId;
+  final int openingFloatMinor;
+  final DateTime openedAt;
+}
+
 /// The result of closing a shift: the server-authoritative cash reconciliation.
 /// All money is integer minor units (DECISION D-007). `varianceMinor` is signed —
 /// `counted - expected` (negative = shortage/short, positive = overage/over).
@@ -50,6 +68,11 @@ abstract class ShiftRepository {
     String? reason,
     required String currencyCode,
   });
+
+  /// Read the current OPEN shift for this device via `sync_pull` (secure,
+  /// role/tenant-scoped read), or null when none is open / it can't be read.
+  /// Used to recover the shift handle after a refresh or re-sign-in.
+  Future<OpenShiftInfo?> readOpenShift();
 }
 
 /// REAL shift-close repository (RF-113). Posts a `shift.close` op to the RF-126
@@ -114,6 +137,54 @@ class RealShiftRepository implements ShiftRepository {
     }
 
     return _applyResult(raw, localOperationId, currencyCode);
+  }
+
+  @override
+  Future<OpenShiftInfo?> readOpenShift() async {
+    final transport = _transport;
+    final session = _session;
+    if (transport == null || session == null) return null;
+    final result = await SyncPullApi(transport).pull(
+      session,
+      const SyncPullRequest(entities: ['shifts', 'cash_drawer_sessions']),
+    );
+    return result.fold<OpenShiftInfo?>((response) {
+      final shiftRows = response.changes['shifts']?.rows ?? const [];
+      Map<String, dynamic>? open;
+      for (final row in shiftRows) {
+        if (row['status'] == 'open' &&
+            row['device_id'] == session.deviceId &&
+            row['deleted_at'] == null) {
+          open = row;
+          break;
+        }
+      }
+      if (open == null) return null;
+      final shiftId = open['id']?.toString();
+      if (shiftId == null || shiftId.isEmpty) return null;
+      Map<String, dynamic>? drawer;
+      for (final row
+          in response.changes['cash_drawer_sessions']?.rows ??
+              const <Map<String, dynamic>>[]) {
+        if (row['shift_id'] == shiftId) {
+          drawer = row;
+          break;
+        }
+      }
+      final rawFloat = drawer?['opening_float_minor'];
+      final openingFloatMinor = rawFloat is int
+          ? rawFloat
+          : int.tryParse('$rawFloat') ?? 0;
+      final openedAt =
+          DateTime.tryParse('${open['opened_at']}')?.toLocal() ??
+          DateTime.now();
+      return OpenShiftInfo(
+        shiftId: shiftId,
+        cashDrawerSessionId: drawer?['id']?.toString() ?? '',
+        openingFloatMinor: openingFloatMinor,
+        openedAt: openedAt,
+      );
+    }, (failure) => null); // fail-closed: no recovery -> honest "no open shift"
   }
 
   /// Maps a `public.sync_push` envelope to a [ShiftCloseOutcome], FAIL-CLOSED.

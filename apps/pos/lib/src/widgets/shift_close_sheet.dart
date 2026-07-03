@@ -6,6 +6,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/shift_repository.dart';
 import '../format/cash_input.dart';
 import '../format/money_format.dart';
+import '../state/pos_session.dart';
 import '../state/shift_close_controller.dart';
 
 /// The POS shift close / cash reconciliation panel (RF-113).
@@ -87,6 +88,10 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
     final l10n = AppLocalizations.of(context);
     final view = ref.watch(currentShiftViewProvider);
     final closeState = ref.watch(shiftCloseControllerProvider);
+    // A real (non-demo) staff session with no shift handle means the in-memory
+    // handle was lost (refresh) AND could not be recovered -> honest recovery
+    // state instead of a misleading "no open shift".
+    final sessionActive = ref.watch(posSyncSessionProvider) != null;
 
     return SafeArea(
       child: Padding(
@@ -111,7 +116,9 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
               if (closeState.value != null)
                 _result(context, l10n, closeState.value!)
               else if (!view.isOpen)
-                _noOpenShift(context, l10n)
+                (sessionActive && !view.isDemo)
+                    ? _couldNotRestore(context, l10n)
+                    : _noOpenShift(context, l10n)
               else
                 _closeForm(context, l10n, view, closeState),
             ],
@@ -140,6 +147,33 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
         FilledButton(
           onPressed: () => Navigator.of(context).maybePop(),
           child: Text(l10n.posShiftDoneAction),
+        ),
+      ],
+    );
+  }
+
+  /// Authenticated but no shift handle (refresh lost it and it couldn't be
+  /// recovered): an honest, actionable recovery state — sign out and back in to
+  /// continue on a fresh shift. Never a fake shift, never a fake close.
+  Widget _couldNotRestore(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      key: const Key('shift-close-recover'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowNoticeBanner(
+          tone: RestoflowTone.warning,
+          icon: Icons.warning_amber_rounded,
+          body: l10n.posShiftCouldNotRestore,
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        FilledButton.icon(
+          key: const Key('shift-close-signout'),
+          onPressed: () {
+            ref.read(posSessionControllerProvider.notifier).endSession();
+            Navigator.of(context).maybePop();
+          },
+          icon: const Icon(Icons.logout),
+          label: Text(l10n.posShiftReturnToPin),
         ),
       ],
     );

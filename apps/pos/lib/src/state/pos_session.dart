@@ -6,6 +6,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/ids.dart';
+import '../data/shift_repository.dart';
 import 'pos_shift.dart';
 
 /// Operator-supplied real-mode PIN/device context (RF-131), read from
@@ -250,9 +251,45 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
                 openedAt: DateTime.now(),
               ),
             );
+      } else {
+        // The open did NOT apply — almost always because a shift is ALREADY
+        // open for this (org, branch, device) from before a refresh/re-sign-in.
+        // RECOVER that shift's handle via a secure sync_pull read so the
+        // close/reconcile UI works instead of falsely reporting "no open shift".
+        await _recoverOpenShift(transport, session);
       }
     } catch (_) {
       // Best-effort: the payment path reports its own error if no shift opened.
+    }
+  }
+
+  /// Recover the current server-open shift's handle for this device (RF-113).
+  /// Fail-soft: on any read failure the handle stays null and the panel shows an
+  /// honest "couldn't restore — sign in again" state (never a fake shift).
+  Future<void> _recoverOpenShift(
+    SyncRpcTransport transport,
+    SyncSession session,
+  ) async {
+    try {
+      final info = await RealShiftRepository(
+        transport,
+        session,
+        RandomClientIdGenerator(),
+      ).readOpenShift();
+      if (info != null) {
+        ref
+            .read(posOpenShiftProvider.notifier)
+            .set(
+              PosOpenShift(
+                shiftId: info.shiftId,
+                cashDrawerSessionId: info.cashDrawerSessionId,
+                openingFloatMinor: info.openingFloatMinor,
+                openedAt: info.openedAt,
+              ),
+            );
+      }
+    } catch (_) {
+      // Fail-soft: leave the handle null.
     }
   }
 

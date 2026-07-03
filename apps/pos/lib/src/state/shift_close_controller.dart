@@ -147,8 +147,12 @@ class ShiftCloseController extends AsyncNotifier<ShiftCloseOutcome?> {
             reason: reason,
             currencyCode: view.currencyCode,
           );
-      // Shift is closed on the server; drop the handle so the panel reflects it.
-      ref.read(posOpenShiftProvider.notifier).clear();
+      // Shift closed on the server. Return the POS to PIN sign-in (RF-113
+      // post-close UX): the cashier can't sell without an open shift, and the
+      // next sign-in opens a fresh one. endSession() also clears the handle, so
+      // the POS is never left as an active cashier with no shift. The result
+      // stays shown in this controller's own state (below).
+      ref.read(posSessionControllerProvider.notifier).endSession();
       state = AsyncData(outcome);
     } on ShiftException catch (e) {
       state = AsyncError(e, StackTrace.current);

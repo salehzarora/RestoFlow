@@ -228,6 +228,8 @@
   "posShiftClosePermissionDenied": "אינך מורשה לסגור משמרת זו.",
   "posShiftCloseServerRejected": "השרת דחה את הסגירה — ייתכן שנדרשת סיבה או שמצב המשמרת אינו תקין.",
   "posShiftCloseFailed": "לא ניתן לסגור את המשמרת.",
+  "posShiftCouldNotRestore": "לא ניתן לשחזר את מצב המשמרת. היכנס שוב כדי לפתוח משמרת.",
+  "posShiftReturnToPin": "התנתקות",
   "posSyncSendingReal": "שולח לשרת…",
   "posSyncSentReal": "נשלח — מסך המטבח מקבל אותה אוטומטית.",
   "posSyncFailedReal": "השרת דחה את ההזמנה — היא לא נשלחה למטבח.",

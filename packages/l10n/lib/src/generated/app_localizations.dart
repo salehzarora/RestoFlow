@@ -1462,6 +1462,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t close the shift.'**
   String get posShiftCloseFailed;
 
+  /// No description provided for @posShiftCouldNotRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t restore the shift state. Sign in again to open a shift.'**
+  String get posShiftCouldNotRestore;
+
+  /// No description provided for @posShiftReturnToPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get posShiftReturnToPin;
+
   /// REAL-mode sync note while the order push is in flight.
   ///
   /// In en, this message translates to:

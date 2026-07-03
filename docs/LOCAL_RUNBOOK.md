@@ -266,8 +266,12 @@ banner.
    automatically (opening float 0) right after the staff PIN sign-in. To
    **close/reconcile** it, open the POS **⋮ device menu → Close shift** (RF-113):
    enter the counted cash and the panel shows the server-computed **expected vs
-   counted vs difference** (over/short) in ₪ before closing. A real opening-float
-   entry (non-zero) is still deferred.
+   counted vs difference** (over/short) in ₪. After a close the POS **returns to
+   PIN sign-in** (a cashier can't sell without a shift; the next sign-in opens a
+   fresh one). On a **browser refresh** the POS re-reads the still-open shift via
+   `sync_pull` and Close shift keeps working; if it genuinely can't be restored it
+   shows an honest "sign in again" state rather than a misleading "no open shift".
+   A real opening-float entry (non-zero) is still deferred.
 2. KDS (real, paired, PIN session as kitchen staff): the board polls
    `public.sync_pull` — financial entities (payments/shifts/cash drawer) are
    **never pulled** for kitchen staff, and the board renders no money (T-003).

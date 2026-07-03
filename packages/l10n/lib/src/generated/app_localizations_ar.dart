@@ -731,6 +731,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posShiftCloseFailed => 'تعذّر إغلاق الوردية.';
 
   @override
+  String get posShiftCouldNotRestore =>
+      'تعذّر استرجاع حالة الوردية. سجّل الدخول مجددًا لفتح وردية.';
+
+  @override
+  String get posShiftReturnToPin => 'تسجيل الخروج';
+
+  @override
   String get posSyncSendingReal => 'جارٍ الإرسال إلى الخادم…';
 
   @override

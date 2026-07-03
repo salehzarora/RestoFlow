@@ -723,6 +723,13 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posShiftCloseFailed => 'לא ניתן לסגור את המשמרת.';
 
   @override
+  String get posShiftCouldNotRestore =>
+      'לא ניתן לשחזר את מצב המשמרת. היכנס שוב כדי לפתוח משמרת.';
+
+  @override
+  String get posShiftReturnToPin => 'התנתקות';
+
+  @override
   String get posSyncSendingReal => 'שולח לשרת…';
 
   @override

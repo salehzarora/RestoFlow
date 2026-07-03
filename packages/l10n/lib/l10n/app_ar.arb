@@ -228,6 +228,8 @@
   "posShiftClosePermissionDenied": "غير مصرّح لك بإغلاق هذه الوردية.",
   "posShiftCloseServerRejected": "رفض الخادم الإغلاق — قد يلزم إدخال سبب أو أن حالة الوردية غير صالحة.",
   "posShiftCloseFailed": "تعذّر إغلاق الوردية.",
+  "posShiftCouldNotRestore": "تعذّر استرجاع حالة الوردية. سجّل الدخول مجددًا لفتح وردية.",
+  "posShiftReturnToPin": "تسجيل الخروج",
   "posSyncSendingReal": "جارٍ الإرسال إلى الخادم…",
   "posSyncSentReal": "أُرسل — شاشة المطبخ تستقبله تلقائيًا.",
   "posSyncFailedReal": "رفض الخادم هذا الطلب — لم يُرسَل إلى المطبخ.",

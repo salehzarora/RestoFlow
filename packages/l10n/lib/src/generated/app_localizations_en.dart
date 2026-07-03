@@ -733,6 +733,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posShiftCloseFailed => 'Couldn\'t close the shift.';
 
   @override
+  String get posShiftCouldNotRestore =>
+      'Couldn\'t restore the shift state. Sign in again to open a shift.';
+
+  @override
+  String get posShiftReturnToPin => 'Sign out';
+
+  @override
   String get posSyncSendingReal => 'Sending to the backend…';
 
   @override

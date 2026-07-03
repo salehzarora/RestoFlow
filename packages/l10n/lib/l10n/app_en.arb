@@ -747,6 +747,8 @@
   "posShiftClosePermissionDenied": "You aren't allowed to close this shift.",
   "posShiftCloseServerRejected": "The server rejected the close — a reason may be required or the shift state is invalid.",
   "posShiftCloseFailed": "Couldn't close the shift.",
+  "posShiftCouldNotRestore": "Couldn't restore the shift state. Sign in again to open a shift.",
+  "posShiftReturnToPin": "Sign out",
   "@posShiftRealNote": {
     "description": "REAL-mode shift bar note: the RF-055 auto-opened server shift holds the cash truth; local drawer figures are never invented."
   },
