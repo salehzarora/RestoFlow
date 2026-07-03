@@ -31,6 +31,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
+    // The dashboard setup reads a one-time pairing code via the Copy button +
+    // clipboard (the code paints to canvas and is not in the DOM). Local-only.
+    permissions: ['clipboard-read', 'clipboard-write'],
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

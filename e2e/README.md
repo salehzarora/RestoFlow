@@ -2,8 +2,8 @@
 
 Local-only [Playwright](https://playwright.dev/) smoke suite that protects the
 **visible MVP**. RF-112A is the **foundation** (harness + app availability +
-real-mode UI safety); RF-112B adds the **Dashboard setup** flow. The POS/KDS
-pairing + order → KDS-ticket journey is deferred to RF-112C (see the bottom).
+real-mode UI safety); RF-112B adds the **Dashboard setup** flow; RF-112C adds the
+**POS → KDS** real order flow. Together they cover the end-to-end local MVP path.
 
 > **Hard boundaries.** This suite is **local-only** and uses **only the public
 > anon/publishable key** — never a service-role/secret key (DECISION D-011,
@@ -18,7 +18,21 @@ pairing + order → KDS-ticket journey is deferred to RF-112C (see the bottom).
 | `tests/availability.spec.ts` (RF-112A) | Dashboard (57026), POS (52096), KDS (49622) are each reachable and boot the Flutter engine without a fatal page error. Renderer-independent — the reliable backbone. |
 | `tests/realmode-safety.spec.ts` (RF-112A) | Dashboard real mode shows **no demo banner/pill**; first launch is **Arabic/RTL** by default; the **KDS never exposes money** (₪/ILS — SECURITY T-003). |
 | `tests/dashboard-setup.spec.ts` (RF-112B) | Signs up a **unique** owner, onboards a restaurant/branch, and (in real mode) creates a **menu category + item (ILS price) + modifier template**, a **table**, a **POS + KDS device each with a one-time pairing code**, and a **cashier + kitchen-staff member each with a PIN** — then asserts the Overview **Setup Center** shows the matching progress. |
+| `tests/pos-kds-flow.spec.ts` (RF-112C) | Runs the RF-112B setup, **captures the two real pairing codes**, then in **isolated contexts** pairs the **POS** + signs in the cashier PIN + places a **dine-in order** (table + item + required modifier + item note) and pairs the **KDS** + signs in the kitchen PIN, and asserts the **same `#XXXXXX` order code, table, item, modifier and note** appear on the KDS ticket — and that the **KDS stays money-free** on a live ticket (T-003). |
 | `tests/guards.spec.ts` (RF-112A) | Unit checks for the local-only fence and the service-role/secret scanner. **No browser** — always runnable. |
+
+### The POS → KDS flow smoke (RF-112C)
+`pos-kds-flow.spec.ts` is the end-to-end path. It reuses the shared `lib/setup_flow.ts`
+to create a fresh branch and **read each device's one-time enrollment code** from
+the Dashboard issue-code dialog — the code paints to canvas (not in the DOM), so it
+is captured by hooking `navigator.clipboard.writeText` and tapping **Copy** (the
+run grants clipboard permission; local-only). It then drives POS and KDS in **three
+separate browser contexts** (Dashboard / POS / KDS) so a prior manual session never
+interferes and each device starts **unpaired**. Devices are created **one at a time**
+(each code captured while its device is the only one present) so the POS code is a
+POS code and the KDS code is a KDS code (a mismatch is rejected `wrong_type`). No
+Flutter app changes. The single KDS forward step (Acknowledge) is best-effort. Run
+just this spec with `npx playwright test pos-kds-flow`.
 
 ### The Dashboard setup smoke (RF-112B)
 `dashboard-setup.spec.ts` drives the **real** Dashboard through the owner setup
@@ -93,6 +107,7 @@ npm run smoke:guards          # guard unit checks — no browser, no apps needed
 npm run smoke:availability    # just the reachability/boot checks
 npm run smoke:safety          # just the real-mode UI-safety checks
 npx playwright test dashboard-setup   # just the RF-112B setup flow (~1–2 min)
+npx playwright test pos-kds-flow      # just the RF-112C POS→KDS flow (~2 min)
 npm run smoke:headed          # watch it drive a visible browser
 npm run list                  # enumerate tests without running them
 npm run report                # open the last HTML report
@@ -110,13 +125,19 @@ The suite does **not** fake success. `availability` fails with
 `No HTTP response … — is <app> running?`. Start the three launchers above, make
 sure `supabase start` is up, then re-run `npm run smoke`.
 
-## Deferred to RF-112C
+## Out of scope after RF-112C
 
-- The device-side + order journey: **POS pairing** (enter the code), **KDS
-  pairing**, **POS staff PIN sign-in**, **POS order creation**, **KDS receives
-  the ticket**, and the **KDS money-redaction** check on a live ticket.
-- Asserting **modifiers / notes / table / order code survive** POS → KDS.
-- Optionally making the RF-112B modifier attach a **hard** assertion (it is
-  best-effort today) and adding stable **semantic anchors / test IDs** in the apps
-  to cut reliance on Arabic l10n labels (would be an app change, so its own ticket).
-- Optional **CI wiring** (headless, with the stack + apps provisioned).
+RF-112 (A + B + C) now covers the end-to-end local MVP path. Remaining ideas, each
+its own future ticket:
+
+- **KDS workflow transitions** beyond the single best-effort Acknowledge (Start →
+  Mark ready → Bump) and asserting the re-bucketing across columns.
+- **Payment / receipt** on POS (cash payment sheet, change, the "Paid" pill) and
+  **honest print** assertions (prepared-not-printed — no physical printer here).
+- Promoting the **modifier** attach + **item note** from best-effort to hard
+  assertions, and adding stable **semantic anchors / test IDs** in the apps to cut
+  reliance on Arabic l10n labels (an app change → its own ticket).
+- **CI wiring** (headless, with the Supabase stack + the three apps provisioned and
+  booted before the run).
+- Multi-item carts, takeaway orders, table-status changes, and offline/outbox retry
+  paths.

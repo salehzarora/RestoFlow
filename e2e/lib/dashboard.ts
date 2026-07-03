@@ -8,7 +8,7 @@
 // value property Flutter may ignore).
 
 import { expect, type Page } from '@playwright/test';
-import { DASHBOARD } from './constants';
+import { DASHBOARD, type SurfaceTarget } from './constants';
 import { assertLocalOnly } from './guards';
 import {
   bootOrDiagnose,
@@ -17,24 +17,36 @@ import {
   readAccessibleText,
 } from './flutter';
 
-/** Open the Dashboard fresh, wait for boot, and turn on the semantics tree. */
-export async function openDashboard(page: Page): Promise<void> {
-  assertLocalOnly(DASHBOARD.url);
+// This module holds the SHARED Flutter-web interaction helpers used to drive any
+// RestoFlow surface (Dashboard/POS/KDS) once its semantics tree is on: taps by
+// ARIA role + accessible name, real-keystroke fills, dropdowns, self-healing nav.
+
+/** Open a surface fresh, wait for boot, and turn on the semantics tree. */
+export async function openSurface(
+  page: Page,
+  target: SurfaceTarget,
+): Promise<void> {
+  assertLocalOnly(target.url);
   const collectors = collectPageErrors(page);
-  const response = await page.goto(DASHBOARD.url, {
+  const response = await page.goto(target.url, {
     waitUntil: 'domcontentloaded',
   });
-  await bootOrDiagnose(page, 'Dashboard', {
+  await bootOrDiagnose(page, target.name, {
     responseStatus: response ? response.status() : null,
     ...collectors,
   });
   const ready = await enableFlutterSemantics(page);
   if (!ready) {
     throw new Error(
-      'Dashboard semantics tree did not come up — cannot drive the UI. ' +
+      `${target.name} semantics tree did not come up — cannot drive the UI. ` +
         'See e2e/README.md (semantics).',
     );
   }
+}
+
+/** Open the Dashboard fresh, wait for boot, and turn on the semantics tree. */
+export async function openDashboard(page: Page): Promise<void> {
+  await openSurface(page, DASHBOARD);
 }
 
 /** Read the accessible text, polling until it is non-empty. */
@@ -92,15 +104,14 @@ export async function tapText(
   which: 'first' | 'last' = 'first',
   timeout = 15_000,
 ): Promise<void> {
-  // Prefer the interactive (button-role) node so we hit the tile/option, not a
-  // plain label child that happens to share the text.
+  // Match EITHER an interactive button-role node (name from text content, e.g.
+  // side-nav / list tiles) OR any node whose aria-label carries the text — and
+  // WAIT for whichever appears (tiles/options may render after a sheet animates
+  // open). `.or()` avoids a one-shot count() that misses a late-rendering tile.
   const byRole = page.getByRole('button', { name: text });
-  if (await byRole.count()) {
-    await (which === 'last' ? byRole.last() : byRole.first()).click();
-    return;
-  }
   const byLabel = page.locator(`[aria-label*=${JSON.stringify(text)}]`);
-  const target = which === 'last' ? byLabel.last() : byLabel.first();
+  const combined = byRole.or(byLabel);
+  const target = which === 'last' ? combined.last() : combined.first();
   await target.waitFor({ state: 'attached', timeout });
   await target.click();
 }
