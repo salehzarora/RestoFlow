@@ -1,0 +1,25 @@
+{
+  "name": "restoflow-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "RestoFlow RF-112 local browser smoke tests (Playwright). Local-only; anon/publishable key only; never a service-role key (DECISION D-011).",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "install:browsers": "playwright install chromium",
+    "smoke": "playwright test",
+    "smoke:availability": "playwright test availability",
+    "smoke:safety": "playwright test realmode-safety",
+    "smoke:guards": "playwright test guards",
+    "smoke:headed": "playwright test --headed",
+    "list": "playwright test --list",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0"
+  }
+}

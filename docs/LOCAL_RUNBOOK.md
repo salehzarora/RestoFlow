@@ -431,3 +431,24 @@ bash tools/check_no_hardcoded_strings.sh
 bash tools/check_secrets.sh
 supabase db reset && supabase test db   # backend changes only
 ```
+
+## 10. Browser smoke tests (RF-112)
+
+A separate, **local-only** Playwright suite (`e2e/`) protects the visible MVP by
+driving the real apps in a browser. RF-112A (the foundation) covers app
+availability + basic real-mode UI safety (no demo banner in real mode,
+Arabic/RTL first launch, KDS stays money-free). It **assumes the three apps are
+already running in real mode** on their fixed ports (start them with the
+`_run_*_real.bat` launchers above) and uses **only the public anon key** — never
+a service-role key.
+
+```sh
+cd e2e
+npm install                 # first time
+npm run install:browsers    # first time — downloads Chromium
+npm run smoke               # all specs (apps must be running)
+npm run smoke:guards        # guard unit checks — no browser needed
+```
+
+The full onboarding → order → KDS-ticket journey is deferred to RF-112B/RF-112C.
+See [e2e/README.md](../e2e/README.md).
