@@ -327,6 +327,41 @@ void main() {
     expect(store.upsertItemCalls, 0);
   });
 
+  testWidgets('an existing item shows the product summary strip (name, '
+      'price, active pill, tag preview); a new item does not', (tester) async {
+    final store = _seededStore();
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'House Burger');
+
+    final strip = find.byKey(const ValueKey('menu-item-summary'));
+    expect(strip, findsOneWidget);
+    expect(
+      find.descendant(of: strip, matching: find.text('House Burger')),
+      findsOneWidget,
+    );
+    // Integer-minor money rendered through formatMinorUnits (D-007).
+    expect(
+      find.descendant(of: strip, matching: find.text('48.00')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: strip, matching: find.text(l10n.menuFilterActive)),
+      findsOneWidget,
+    );
+    // The stored tag previews as its LOCALIZED pill label.
+    expect(
+      find.descendant(of: strip, matching: find.text(l10n.menuTagPopular)),
+      findsOneWidget,
+    );
+
+    // A NEW item has no persisted state to summarize — no strip.
+    await tester.tap(find.byType(BackButtonIcon));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.menuAddItem));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-item-summary')), findsNothing);
+  });
+
   testWidgets('the editor initializes its fields from the stored rich '
       'attributes', (tester) async {
     final store = _seededStore();

@@ -18,6 +18,7 @@ import '../widgets/menu_badges.dart';
 import '../widgets/menu_components.dart';
 import '../widgets/menu_entity_forms.dart';
 import '../widgets/menu_image_panel.dart';
+import '../widgets/menu_item_thumbnail.dart';
 import '../widgets/menu_l10n.dart';
 import '../widgets/modifier_template_picker.dart';
 
@@ -299,6 +300,13 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (_item != null) ...[
+                      // Part F: a compact product banner for EXISTING items —
+                      // the PERSISTED state from the freshest snapshot row
+                      // (visual only; never claims unsaved edits).
+                      _ProductSummaryStrip(item: _freshItem ?? _item),
+                      const SizedBox(height: RestoflowSpacing.lg),
+                    ],
                     // 1. Basic info.
                     _basicInfoCard(context, l10n, categories),
                     if (_item != null) ...[
@@ -723,6 +731,86 @@ class _EditorTopBar extends StatelessWidget {
           const SizedBox(width: RestoflowSpacing.md),
           Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
           ...actions,
+        ],
+      ),
+    );
+  }
+}
+
+/// A compact product summary banner at the top of the editor (menu/media
+/// sprint, Part F): thumbnail + name + price + active pill + tag preview in
+/// one strip, so an existing item reads like a product page. VISUAL ONLY — it
+/// renders the item's PERSISTED snapshot state (not the in-edit fields) via
+/// data the editor already holds; there is no new plumbing.
+class _ProductSummaryStrip extends StatelessWidget {
+  const _ProductSummaryStrip({required this.item});
+
+  final MenuItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final stateTone = item.isActive
+        ? RestoflowTone.success
+        : RestoflowTone.neutral;
+    final stateStyle = stateTone.styleOf(theme);
+    return Container(
+      key: const ValueKey('menu-item-summary'),
+      padding: const EdgeInsets.all(RestoflowSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+      ),
+      child: Row(
+        children: [
+          MenuItemThumbnail(item: item, size: 56),
+          const SizedBox(width: RestoflowSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: RestoflowSpacing.xxs),
+                Text(
+                  formatMinorUnits(item.basePriceMinor, item.currencyCode),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: RestoflowSpacing.md),
+          // State + tag preview; wraps instead of overflowing when narrow.
+          Flexible(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: RestoflowSpacing.xs,
+              runSpacing: RestoflowSpacing.xs,
+              children: [
+                MenuPill(
+                  label: item.isActive
+                      ? l10n.menuFilterActive
+                      : l10n.menuInactiveBadge,
+                  icon: item.isActive
+                      ? Icons.check_circle_outline
+                      : Icons.visibility_off_outlined,
+                  background: stateStyle.container,
+                  foreground: stateStyle.onContainer,
+                ),
+                ...buildMenuTagPills(context, item.tags),
+              ],
+            ),
+          ),
         ],
       ),
     );

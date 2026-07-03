@@ -229,6 +229,9 @@ class _MenuGrid extends ConsumerWidget {
                 item: item,
                 category: menu.categoryOf(item.categoryId),
                 currencyCode: menu.currencyCode,
+                // Part F: the card marks configurable items (tune icon +
+                // count) so the cashier knows this add opens the sheet.
+                optionGroupCount: groups.length,
                 onAdd: groups.isEmpty
                     ? () => controller.addItem(item)
                     : () => ModifierSelectionSheet.show(

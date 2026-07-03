@@ -2,6 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../models/menu_item.dart';
+import 'menu_l10n.dart';
+
+/// The semantic tone for a fixed-vocabulary item tag pill (menu/media sprint,
+/// Part F): spicy reads "hot" (danger), vegetarian reads healthy (success),
+/// popular/new are accents (info). Unknown wire values stay quiet neutral.
+RestoflowTone menuTagTone(String tag) => switch (tag) {
+  'spicy' => RestoflowTone.danger,
+  'vegetarian' => RestoflowTone.success,
+  'popular' => RestoflowTone.info,
+  'new' => RestoflowTone.info,
+  _ => RestoflowTone.neutral,
+};
+
+/// Builds compact tone pills for the KNOWN fixed-vocabulary tags in [tags]
+/// (canonical [kMenuItemTags] order, localized display labels — data stays the
+/// wire string). Unknown (newer-backend) tags are SKIPPED here rather than
+/// rendered raw (the editor still round-trips them on save). Returns loose
+/// widgets so callers compose their own [Wrap] with neighbouring badges.
+List<Widget> buildMenuTagPills(BuildContext context, List<String> tags) {
+  final l10n = AppLocalizations.of(context);
+  final theme = Theme.of(context);
+  return [
+    for (final tag in kMenuItemTags)
+      if (tags.contains(tag))
+        MenuPill(
+          label: l10n.menuTagText(tag),
+          background: menuTagTone(tag).styleOf(theme).container,
+          foreground: menuTagTone(tag).styleOf(theme).onContainer,
+        ),
+  ];
+}
+
 /// A small rounded pill label used for menu status badges (RF-111).
 class MenuPill extends StatelessWidget {
   const MenuPill({

@@ -2158,6 +2158,12 @@ abstract class AppLocalizations {
   /// **'New'**
   String get menuTagNew;
 
+  /// Compact indicator label/tooltip: how many modifier (option) groups an item carries — dashboard item rows and POS cards.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} option groups'**
+  String menuModifierGroupCount(int count);
+
   /// Label for the expected preparation time field (whole minutes; time, never money).
   ///
   /// In en, this message translates to:

@@ -1167,6 +1167,8 @@
   "@menuTagPopular": { "description": "Display label for the tag wire value 'popular'." },
   "menuTagNew": "New",
   "@menuTagNew": { "description": "Display label for the tag wire value 'new'." },
+  "menuModifierGroupCount": "{count} option groups",
+  "@menuModifierGroupCount": { "description": "Compact indicator label/tooltip: how many modifier (option) groups an item carries — dashboard item rows and POS cards.", "placeholders": { "count": { "type": "int" } } },
   "menuPrepMinutesLabel": "Prep time (minutes)",
   "@menuPrepMinutesLabel": { "description": "Label for the expected preparation time field (whole minutes; time, never money)." },
   "menuKitchenNoteLabel": "Kitchen note",

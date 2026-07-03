@@ -343,6 +343,7 @@
   "menuTagVegetarian": "نباتي",
   "menuTagPopular": "رائج",
   "menuTagNew": "جديد",
+  "menuModifierGroupCount": "{count} مجموعات خيارات",
   "menuPrepMinutesLabel": "وقت التحضير (بالدقائق)",
   "menuKitchenNoteLabel": "ملاحظة للمطبخ",
   "menuSkuLabel": "SKU (رمز داخلي)",

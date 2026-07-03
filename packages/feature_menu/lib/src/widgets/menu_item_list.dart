@@ -13,11 +13,15 @@ import '../state/menu_providers.dart';
 import 'menu_badges.dart';
 import 'menu_components.dart';
 import 'menu_entity_forms.dart';
+import 'menu_item_thumbnail.dart';
 import 'menu_panel_header.dart';
 
-/// The items detail panel for the selected category (RF-111): polished item rows
-/// with a thumbnail placeholder, a prominent price, badges, and overflow actions.
-/// Opening an item raises [onOpenEditor] (the in-place editor), never a route.
+/// The items detail panel for the selected category (RF-111 + menu/media
+/// sprint Part F — a product-catalog read): rows carry a real image thumbnail
+/// (signed-URL via the surface's storage seam, placeholder fallback), the
+/// name, a prominent price, active/scope badges, localized tag tone pills,
+/// and a compact modifier-group count. Opening an item raises [onOpenEditor]
+/// (the in-place editor), never a route.
 class MenuItemList extends ConsumerWidget {
   const MenuItemList({
     required this.snapshot,
@@ -100,6 +104,9 @@ class MenuItemList extends ConsumerWidget {
           final item = items[index];
           return _ItemTile(
             item: item,
+            // Live (non-deleted) modifier groups from the snapshot the screen
+            // already holds — no extra read.
+            modifierGroupCount: snapshot.modifiersForItem(item.id).length,
             onTap: () => onOpenEditor(MenuEditorTarget(item: item)),
             onEdit: () => onOpenEditor(MenuEditorTarget(item: item)),
             onDelete: () => _delete(context, ref, item),
@@ -127,12 +134,16 @@ class MenuItemList extends ConsumerWidget {
 class _ItemTile extends StatelessWidget {
   const _ItemTile({
     required this.item,
+    required this.modifierGroupCount,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
   });
 
   final MenuItem item;
+
+  /// Live modifier groups on this item (0 = no indicator).
+  final int modifierGroupCount;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -152,19 +163,9 @@ class _ItemTile extends StatelessWidget {
           padding: const EdgeInsets.all(RestoflowSpacing.sm),
           child: Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-                ),
-                child: Icon(
-                  Icons.image_outlined,
-                  size: 22,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
+              // Real thumbnail when this surface has image storage wired and
+              // the item carries an image; the familiar placeholder otherwise.
+              MenuItemThumbnail(item: item),
               const SizedBox(width: RestoflowSpacing.md),
               Expanded(
                 child: Column(
@@ -189,9 +190,32 @@ class _ItemTile extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: RestoflowSpacing.xs),
-                    MenuEntityBadges(
-                      isActive: item.isActive,
-                      branchId: item.branchId,
+                    // One wrapping strip: status/scope badges, tag tone pills,
+                    // and the compact modifier-group count — pills WRAP so the
+                    // row never overflows at narrow detail-pane widths.
+                    Wrap(
+                      spacing: RestoflowSpacing.xs,
+                      runSpacing: RestoflowSpacing.xs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        MenuEntityBadges(
+                          isActive: item.isActive,
+                          branchId: item.branchId,
+                        ),
+                        ...buildMenuTagPills(context, item.tags),
+                        if (modifierGroupCount > 0)
+                          Tooltip(
+                            message: l10n.menuModifierGroupCount(
+                              modifierGroupCount,
+                            ),
+                            child: MenuPill(
+                              label: modifierGroupCount.toString(),
+                              icon: Icons.tune,
+                              background: scheme.surfaceContainerHighest,
+                              foreground: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),

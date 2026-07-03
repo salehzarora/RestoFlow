@@ -1084,6 +1084,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuTagNew => 'جديد';
 
   @override
+  String menuModifierGroupCount(int count) {
+    return '$count مجموعات خيارات';
+  }
+
+  @override
   String get menuPrepMinutesLabel => 'وقت التحضير (بالدقائق)';
 
   @override

@@ -343,6 +343,7 @@
   "menuTagVegetarian": "צמחוני",
   "menuTagPopular": "פופולרי",
   "menuTagNew": "חדש",
+  "menuModifierGroupCount": "{count} קבוצות אפשרויות",
   "menuPrepMinutesLabel": "זמן הכנה (דקות)",
   "menuKitchenNoteLabel": "הערה למטבח",
   "menuSkuLabel": "מק\"ט (קוד פנימי)",
