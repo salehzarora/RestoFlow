@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +13,7 @@ import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
+import 'package:restoflow_pos/src/widgets/modifier_selection_sheet.dart';
 
 /// Menu/media sprint: the REAL pos_menu parse consumes items[].image_path and
 /// batch-resolves signed URLs ONCE per load through the device resolver —
@@ -59,6 +64,92 @@ class _MenuTransport implements SyncRpcTransport {
       'server_ts': '2026-07-03T09:00:00Z',
     };
   }
+}
+
+/// A 1×1 transparent PNG — the smallest valid image payload.
+final Uint8List _kTinyPng = Uint8List.fromList(const <int>[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, //
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+  0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+  0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+]);
+
+/// An HTTP client serving [_kTinyPng] for EVERY request — installed via
+/// [debugNetworkImageHttpClientProvider] so widget tests exercise the
+/// SUCCESSFUL image-load path (the default test client rejects all HTTP,
+/// which only ever exercises the errorBuilder fallback).
+class _TinyPngHttpClient implements HttpClient {
+  @override
+  bool autoUncompress = true;
+
+  @override
+  Duration? connectionTimeout;
+
+  @override
+  Duration idleTimeout = const Duration(seconds: 15);
+
+  @override
+  int? maxConnectionsPerHost;
+
+  @override
+  String? userAgent;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async => _TinyPngRequest();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('only getUrl is used by NetworkImage');
+}
+
+class _TinyPngRequest implements HttpClientRequest {
+  @override
+  Future<HttpClientResponse> close() async => _TinyPngResponse();
+
+  @override
+  final HttpHeaders headers = _NoopHeaders();
+
+  @override
+  Future<HttpClientResponse> get done => close();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('only close/headers are used by NetworkImage');
+}
+
+class _NoopHeaders implements HttpHeaders {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _TinyPngResponse extends Stream<List<int>> implements HttpClientResponse {
+  @override
+  int get statusCode => HttpStatus.ok;
+
+  @override
+  int get contentLength => _kTinyPng.length;
+
+  @override
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.notCompressed;
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) => Stream<List<int>>.fromIterable(<List<int>>[_kTinyPng]).listen(
+    onData,
+    onError: onError,
+    onDone: onDone,
+    cancelOnError: cancelOnError,
+  );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
 ProviderContainer _container({DeviceImageUrlResolver? resolver}) {
@@ -165,6 +256,94 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.add_shopping_cart));
     expect(added, 1);
+  });
+
+  testWidgets('the card RENDERS the uploaded image when its signed URL loads '
+      '(POS image fix) — no fallback icon, no overflow', (tester) async {
+    const item = DemoMenuItem(
+      id: 'item-1',
+      name: 'Burger',
+      priceMinor: 5000,
+      categoryId: 'burgers',
+      categoryName: 'Burgers',
+      imagePath: _imagedPath,
+      imageUrl: 'https://storage.example/signed/img-1.png',
+    );
+    // The binding verifies painting debug variables are restored BEFORE the
+    // test body ends — reset in a finally, not a tearDown.
+    debugNetworkImageHttpClientProvider = () => _TinyPngHttpClient();
+    try {
+      await tester.runAsync(() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Scaffold(
+              body: SizedBox(
+                width: 220,
+                height: 188,
+                child: MenuItemCard(item: item, onAdd: () {}),
+              ),
+            ),
+          ),
+        );
+        // Real-async window for the tiny PNG to fetch + decode.
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pump();
+    } finally {
+      debugNetworkImageHttpClientProvider = null;
+    }
+
+    // The photo painted (a RawImage frame exists) and the category-icon
+    // fallback did NOT render; the 220x188 cell lays out without overflow.
+    expect(find.byType(RawImage), findsOneWidget);
+    expect(find.byIcon(Icons.lunch_dining), findsNothing);
+    expect(find.text('Burger'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the modifier sheet header RENDERS the uploaded image when its '
+      'signed URL loads — no fallback icon, no overflow', (tester) async {
+    const item = DemoMenuItem(
+      id: 'item-1',
+      name: 'Burger',
+      priceMinor: 5000,
+      categoryId: 'burgers',
+      categoryName: 'Burgers',
+      imagePath: _imagedPath,
+      imageUrl: 'https://storage.example/signed/img-1.png',
+    );
+    debugNetworkImageHttpClientProvider = () => _TinyPngHttpClient();
+    try {
+      await tester.runAsync(() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Scaffold(
+              body: ModifierSelectionSheet(
+                item: item,
+                groups: const [],
+                currencyCode: 'ILS',
+                onConfirm: (selections, note) {},
+              ),
+            ),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pump();
+    } finally {
+      debugNetworkImageHttpClientProvider = null;
+    }
+
+    expect(find.byType(RawImage), findsOneWidget);
+    expect(find.byIcon(Icons.lunch_dining), findsNothing);
+    expect(find.text('Burger'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
