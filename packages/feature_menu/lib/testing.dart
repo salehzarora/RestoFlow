@@ -53,6 +53,7 @@ class ScriptedMenuWriter implements MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
   }) => _record('upsertItem');
 
   @override

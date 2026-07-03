@@ -51,6 +51,7 @@ class MenuManagementRepository implements MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
   }) => _writer.upsertItem(
     scope: scope,
     id: id,
@@ -62,6 +63,7 @@ class MenuManagementRepository implements MenuWriter {
     defaultStationId: defaultStationId,
     displayOrder: displayOrder,
     isActive: isActive,
+    imagePath: imagePath,
   );
 
   @override

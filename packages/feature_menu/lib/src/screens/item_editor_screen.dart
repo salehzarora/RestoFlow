@@ -93,6 +93,19 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
 
   String get _currencyCode => _item?.currencyCode ?? widget.scope.currencyCode;
 
+  /// The FRESHEST snapshot row for the edited item (the editor target is
+  /// captured when the editor opens, but the snapshot reloads after every
+  /// write — e.g. an image upload — and the save below must send the item's
+  /// full CURRENT state, or it would silently clear a just-saved image).
+  MenuItem? get _freshItem {
+    final item = _item;
+    if (item == null) return null;
+    for (final row in widget.snapshot.items) {
+      if (row.id == item.id) return row;
+    }
+    return item;
+  }
+
   Future<void> _saveFields() async {
     final currencyText = _currency.text.trim().toUpperCase();
     final nameError = validateName(_name.text);
@@ -127,6 +140,9 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
           currencyCode: currencyText,
           displayOrder: int.tryParse(_order.text.trim()) ?? 0,
           isActive: _active,
+          // Full-state upsert: null p_image_path CLEARS the image server-side,
+          // so a details save must carry the item's current image through.
+          imagePath: _freshItem?.imagePath,
         );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -218,7 +234,9 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                         currencyCode: _currencyCode,
                       ),
                       const SizedBox(height: RestoflowSpacing.lg),
-                      MenuImagePanel(item: _item),
+                      // The panel needs the FRESHEST row: imagePath changes
+                      // after uploads/removals reload the snapshot.
+                      MenuImagePanel(item: _freshItem ?? _item),
                     ],
                   ],
                 ),

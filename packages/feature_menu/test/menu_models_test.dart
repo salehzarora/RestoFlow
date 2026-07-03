@@ -27,6 +27,37 @@ void main() {
       expect(item.isDeleted, isFalse);
     });
 
+    test('image_path parses when present and stays null when absent '
+        '(old envelopes still parse)', () {
+      final withImage = MenuItem.fromJson(const {
+        'id': 'item-1',
+        'organization_id': 'org-1',
+        'restaurant_id': 'rest-1',
+        'branch_id': 'branch-1',
+        'menu_category_id': 'cat-1',
+        'name': 'Espresso',
+        'base_price_minor': 350,
+        'currency_code': 'USD',
+        'image_path': 'org-1/rest-1/branch-1/menu_item/item-1/img-1.png',
+      });
+      expect(
+        withImage.imagePath,
+        'org-1/rest-1/branch-1/menu_item/item-1/img-1.png',
+      );
+
+      final withoutImage = MenuItem.fromJson(const {
+        'id': 'item-1',
+        'organization_id': 'org-1',
+        'restaurant_id': 'rest-1',
+        'branch_id': 'branch-1',
+        'menu_category_id': 'cat-1',
+        'name': 'Espresso',
+        'base_price_minor': 350,
+        'currency_code': 'USD',
+      });
+      expect(withoutImage.imagePath, isNull);
+    });
+
     test('null branch_id stays null (restaurant-scoped); tombstone parsed', () {
       final item = MenuItem.fromJson(const {
         'id': 'item-2',

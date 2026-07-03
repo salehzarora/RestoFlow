@@ -71,6 +71,7 @@ class DashboardShell extends StatefulWidget {
     this.deviceRepositoryFor,
     this.menuReadSource,
     this.menuWriter,
+    this.menuImageStorage,
     this.printersRepository,
     this.staffRepository,
     this.tablesRepository,
@@ -97,6 +98,12 @@ class DashboardShell extends StatefulWidget {
 
   /// The REAL menu writer (`public.menu_upsert_*` / `menu_soft_delete`).
   final MenuWriter? menuWriter;
+
+  /// The REAL item image storage (menu/media sprint — the RF-110 bucket over
+  /// the authenticated client). Null in demo mode / tests: the demo surface
+  /// gets a labelled in-memory fake; a real surface without it shows the image
+  /// panel's honest "not connected" state.
+  final MenuImageStorage? menuImageStorage;
 
   /// The REAL printers repository (null => labelled demo store).
   final PrintersRepository? printersRepository;
@@ -136,6 +143,12 @@ class _DashboardShellState extends State<DashboardShell> {
   late final InMemoryMenuStore? _menuStore = _menuScope == null
       ? null
       : buildDemoMenuStore(scope: _menuScope);
+
+  /// The demo image storage (menu/media sprint): picking + preview work, the
+  /// upload is recorded in memory only, and the panel says so ("demo — not
+  /// uploaded to a server"). One instance so it survives tab switches.
+  late final FakeMenuImageStorage _demoMenuImageStorage =
+      FakeMenuImageStorage();
 
   /// The active administration scope + its demo store (shared by the demo admin
   /// surfaces, so edits persist across tab switches within a session).
@@ -390,11 +403,17 @@ class _DashboardShellState extends State<DashboardShell> {
     final writer = widget.menuWriter;
     final real = readSource != null && writer != null && scope != null;
     if (real) {
+      final imageStorage = widget.menuImageStorage;
       return ProviderScope(
         overrides: menuFeatureOverrides(
           scope: scope,
           readSource: readSource,
           writer: writer,
+          // Real image storage when wired; omitted => the image panel shows
+          // its honest "not connected" state (never a fake uploader).
+          imageStorage: imageStorage == null
+              ? null
+              : MenuImageStorageConfig(storage: imageStorage),
         ),
         child: const MenuManagementScreen(),
       );
@@ -421,6 +440,12 @@ class _DashboardShellState extends State<DashboardShell> {
               scope: scope,
               readSource: store,
               writer: store,
+              // Demo: picking/preview work; the panel labels itself honestly
+              // ("demo — not uploaded to a server").
+              imageStorage: MenuImageStorageConfig(
+                storage: _demoMenuImageStorage,
+                isDemo: true,
+              ),
             ),
             child: const MenuManagementScreen(),
           ),

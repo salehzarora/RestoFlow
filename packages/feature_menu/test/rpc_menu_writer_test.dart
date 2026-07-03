@@ -62,6 +62,10 @@ void main() {
         expect(transport.lastParams!['p_branch_id'], 'branch-1');
         expect(transport.lastParams!['p_base_price_minor'], 350);
         expect(transport.lastParams!['p_currency_code'], 'USD');
+        // Full-state contract: an omitted image sends p_image_path null
+        // (the server treats null as clear/unset).
+        expect(transport.lastParams!.containsKey('p_image_path'), isTrue);
+        expect(transport.lastParams!['p_image_path'], isNull);
 
         final result = _success(outcome);
         expect(result, isNotNull);
@@ -70,6 +74,32 @@ void main() {
         expect(result.action, MenuWriteAction.created);
       },
     );
+
+    test('upsertItem passes p_image_path when an image is set', () async {
+      final transport = _FakeTransport()
+        ..returnValue = const {
+          'ok': true,
+          'entity': 'menu_item',
+          'id': 'item-9',
+          'action': 'updated',
+        };
+      final writer = RpcMenuWriter(transport);
+
+      await writer.upsertItem(
+        scope: _scope,
+        id: 'item-9',
+        menuCategoryId: 'cat-1',
+        name: 'Espresso',
+        basePriceMinor: 350,
+        currencyCode: 'USD',
+        imagePath: 'org-1/rest-1/branch-1/menu_item/item-9/img-1.png',
+      );
+
+      expect(
+        transport.lastParams!['p_image_path'],
+        'org-1/rest-1/branch-1/menu_item/item-9/img-1.png',
+      );
+    });
 
     test('upsertCategory (update) passes the existing id', () async {
       final transport = _FakeTransport()

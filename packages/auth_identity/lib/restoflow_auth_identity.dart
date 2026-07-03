@@ -14,6 +14,7 @@ export 'src/auth_context_repository.dart';
 // RF-153: shared device/station pairing context + repository seam (reused by
 // dashboard/POS/KDS).
 export 'src/device_context.dart';
+export 'src/device_image_url_resolver.dart';
 export 'src/device_pairing_repository.dart';
 // RF-161: the device-session secret store abstraction (raw token -> secure storage).
 export 'src/device_session_secret_store.dart';

@@ -7,7 +7,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminRepository, AdminScope;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
-    show MenuReadSource, MenuWriter;
+    show MenuImageStorage, MenuReadSource, MenuWriter;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -97,6 +97,7 @@ Future<void> main() async {
         deviceRepositoryFor: real.deviceRepositoryFor,
         menuReadSource: real.menuReadSource,
         menuWriter: real.menuWriter,
+        menuImageStorage: real.menuImageStorage,
         printersRepositoryFor: real.printersRepositoryFor,
         staffRepositoryFor: real.staffRepositoryFor,
         tablesRepositoryFor: real.tablesRepositoryFor,
@@ -124,6 +125,7 @@ class DashboardApp extends ConsumerWidget {
     this.deviceRepositoryFor,
     this.menuReadSource,
     this.menuWriter,
+    this.menuImageStorage,
     this.printersRepositoryFor,
     this.staffRepositoryFor,
     this.tablesRepositoryFor,
@@ -159,6 +161,11 @@ class DashboardApp extends ConsumerWidget {
   /// Null in demo mode / tests => the Menu tab keeps its labelled demo store.
   final MenuReadSource? menuReadSource;
   final MenuWriter? menuWriter;
+
+  /// The REAL item image storage (menu/media sprint — RF-110 bucket over the
+  /// authenticated client). Null in demo mode / tests => the image panel shows
+  /// its honest demo/unavailable state.
+  final MenuImageStorage? menuImageStorage;
 
   /// Builds the REAL printers repository (RF-150 backend) per admin scope.
   final PrintersRepository Function(AdminScope scope)? printersRepositoryFor;
@@ -225,6 +232,7 @@ class DashboardApp extends ConsumerWidget {
             deviceRepositoryFor: deviceRepositoryFor,
             menuReadSource: menuReadSource,
             menuWriter: menuWriter,
+            menuImageStorage: menuImageStorage,
             printersRepository: printersRepositoryFor?.call(scope),
             staffRepository: staffRepositoryFor?.call(scope),
             tablesRepository: tablesRepositoryFor?.call(scope),

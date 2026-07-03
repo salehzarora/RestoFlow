@@ -35,6 +35,10 @@ class DemoCategory {
 }
 
 /// A single demo menu item rendered as a card on the POS menu grid.
+///
+/// Also the POS view model for the REAL backend menu (`pos_menu` rows are
+/// parsed into it), so real-only fields ([imagePath], [imageUrl]) are OPTIONAL
+/// — demo items never carry them.
 class DemoMenuItem {
   const DemoMenuItem({
     required this.id,
@@ -42,6 +46,8 @@ class DemoMenuItem {
     required this.priceMinor,
     required this.categoryId,
     required this.categoryName,
+    this.imagePath,
+    this.imageUrl,
   });
 
   /// Stable demo identifier; also used as the cart line's menu item id.
@@ -56,6 +62,15 @@ class DemoMenuItem {
   /// Owning category id/name (data).
   final String categoryId;
   final String categoryName;
+
+  /// The RF-110 storage object key of the item's image (real menu only; the
+  /// backend `pos_menu` serves it as `image_path`). Null = no image.
+  final String? imagePath;
+
+  /// The resolved short-lived signed URL for [imagePath] (real menu only,
+  /// batch-resolved once per menu load; fail-soft — resolution failures leave
+  /// it null and the card renders its tinted icon band).
+  final String? imageUrl;
 }
 
 /// The demo categories (order drives the filter-chip order).

@@ -30,6 +30,11 @@ Future<void> main() async {
         // cannot reach the authenticated-only RPC grants (D-011/RF-161).
         if (seams != null)
           posAuthTransportProvider.overrideWithValue(seams.transport),
+        // Menu/media sprint: the device's read-only menu-image signed-URL
+        // resolver rides the SAME anonymous session (fail-soft — a missing
+        // resolver just renders imageless cards).
+        if (seams != null)
+          posImageUrlResolverProvider.overrideWithValue(seams.imageResolver),
       ],
       child: PosApp(
         devicePairingRepository: seams?.pairing,
@@ -44,6 +49,7 @@ typedef _RealDeviceSeams = ({
   DevicePairingRepository pairing,
   DeviceStaffRepository staff,
   SyncRpcTransport transport,
+  DeviceImageUrlResolver imageResolver,
 });
 
 /// RF-161 + sprint: the REAL device-auth seams for production POS. In real mode
@@ -64,9 +70,10 @@ _realDeviceAuth() async {
     return (seams: null, problem: RealDeviceAuthProblem.unconfigured);
   }
   try {
-    final transport = await SupabaseAuthBootstrap(
+    final session = await SupabaseAuthBootstrap(
       config: config,
-    ).createAnonymousDeviceTransport();
+    ).createAnonymousDeviceSession();
+    final transport = session.transport;
     final store = FlutterSecureDeviceSessionStore();
     return (
       seams: (
@@ -79,6 +86,9 @@ _realDeviceAuth() async {
           secretStore: store,
         ),
         transport: transport,
+        // Read-only menu-image signed URLs on the same anonymous session
+        // (server-gated by the POS device storage policy — T-014 keeps KDS out).
+        imageResolver: session.imageUrlResolver,
       ),
       problem: null,
     );

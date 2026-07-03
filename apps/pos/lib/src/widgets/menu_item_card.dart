@@ -44,20 +44,20 @@ class MenuItemCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              // RF-141D: Ink (not Container) so the InkWell tap/hover ripple
-              // renders OVER the tinted band, not hidden behind an opaque layer.
-              // Design-polish: a subtler tint + smaller glyph so the band reads
-              // as category colour-coding, not the tile's main content.
-              child: Ink(
-                color: category.color.withValues(alpha: 0.08),
-                child: Center(
-                  child: Icon(
-                    category.icon,
-                    size: RestoflowIconSizes.xl,
-                    color: category.color.withValues(alpha: 0.85),
-                  ),
-                ),
-              ),
+              // Menu/media sprint: when the real menu resolved a signed image
+              // URL, the band renders the product photo (cover-fit, layout
+              // neutral — same Expanded slot); ANY load failure falls back to
+              // the tinted category-icon band below. Demo items carry no URL,
+              // so demo rendering is unchanged.
+              child: item.imageUrl == null
+                  ? _CategoryBand(category: category)
+                  : Image.network(
+                      item.imageUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      errorBuilder: (context, error, stackTrace) =>
+                          _CategoryBand(category: category),
+                    ),
             ),
             Padding(
               padding: const EdgeInsets.all(RestoflowSpacing.md),
@@ -109,6 +109,33 @@ class MenuItemCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The category-tinted icon band — the imageless default AND the fallback for
+/// a failed image load.
+///
+/// RF-141D: Ink (not Container) so the InkWell tap/hover ripple renders OVER
+/// the tinted band, not hidden behind an opaque layer. Design-polish: a subtler
+/// tint + smaller glyph so the band reads as category colour-coding, not the
+/// tile's main content.
+class _CategoryBand extends StatelessWidget {
+  const _CategoryBand({required this.category});
+
+  final DemoCategory category;
+
+  @override
+  Widget build(BuildContext context) {
+    return Ink(
+      color: category.color.withValues(alpha: 0.08),
+      child: Center(
+        child: Icon(
+          category.icon,
+          size: RestoflowIconSizes.xl,
+          color: category.color.withValues(alpha: 0.85),
         ),
       ),
     );

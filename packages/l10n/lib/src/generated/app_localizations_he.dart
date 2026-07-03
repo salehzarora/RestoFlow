@@ -891,11 +891,43 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuImageHeading => 'תמונת פריט';
 
   @override
-  String get menuImageDeferredTitle => 'העלאת תמונות בקרוב';
+  String get menuImageDeferredTitle => 'העלאת תמונות אינה מחוברת';
 
   @override
   String get menuImageDeferredBody =>
-      'הצגה והעלאה של תמונות פריטים דורשות רשומת תמונה בצד השרת (המשך מתוכנן). נתיב ההעלאה והאימות כבר מוכנים.';
+      'לממשק הזה לא מחובר אחסון תמונות, ולכן אי אפשר להעלות או להציג כאן תמונות פריטים.';
+
+  @override
+  String get menuImagePickAction => 'בחירת תמונה';
+
+  @override
+  String get menuImageReplaceAction => 'החלפת תמונה';
+
+  @override
+  String get menuImageRemoveAction => 'הסרת תמונה';
+
+  @override
+  String get menuImageSaveAction => 'שמירת תמונה';
+
+  @override
+  String get menuImageInvalidType =>
+      'אפשר להעלות רק תמונות PNG,‏ JPEG או WebP.';
+
+  @override
+  String get menuImageTooLarge => 'התמונה גדולה מדי — המגבלה היא 5MB.';
+
+  @override
+  String get menuImageUploadFailed => 'ההעלאה נכשלה — התמונה לא נשמרה.';
+
+  @override
+  String get menuImageUnsupportedPlatform =>
+      'בחירת תמונה עדיין אינה זמינה בפלטפורמה הזו — יש להשתמש בלוח הבקרה באינטרנט.';
+
+  @override
+  String get menuImageDemoNote => 'דמו — התמונה לא מועלית לשרת.';
+
+  @override
+  String get menuImageLoadError => 'לא ניתן לטעון את תצוגת התמונה.';
 
   @override
   String get menuErrorRequired => 'חובה';

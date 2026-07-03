@@ -895,11 +895,42 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuImageHeading => 'صورة العنصر';
 
   @override
-  String get menuImageDeferredTitle => 'رفع الصور قريبًا';
+  String get menuImageDeferredTitle => 'رفع الصور غير متصل';
 
   @override
   String get menuImageDeferredBody =>
-      'عرض ورفع صور العناصر يتطلب سجلًا خلفيًا للصور (متابعة مخطط لها). مسار الرفع والتحقق جاهزان بالفعل.';
+      'لا يوجد تخزين صور متصل بهذه الواجهة، لذا لا يمكن رفع صور العناصر أو عرضها هنا.';
+
+  @override
+  String get menuImagePickAction => 'اختيار صورة';
+
+  @override
+  String get menuImageReplaceAction => 'استبدال الصورة';
+
+  @override
+  String get menuImageRemoveAction => 'إزالة الصورة';
+
+  @override
+  String get menuImageSaveAction => 'حفظ الصورة';
+
+  @override
+  String get menuImageInvalidType => 'يمكن رفع صور PNG أو JPEG أو WebP فقط.';
+
+  @override
+  String get menuImageTooLarge => 'الصورة كبيرة جدًا — الحد الأقصى 5 ميغابايت.';
+
+  @override
+  String get menuImageUploadFailed => 'فشل الرفع — لم يتم حفظ الصورة.';
+
+  @override
+  String get menuImageUnsupportedPlatform =>
+      'اختيار صورة غير متاح على هذه المنصة بعد — استخدم لوحة التحكم عبر الويب.';
+
+  @override
+  String get menuImageDemoNote => 'تجريبي — لا يتم رفع الصورة إلى خادم.';
+
+  @override
+  String get menuImageLoadError => 'تعذر تحميل معاينة الصورة.';
 
   @override
   String get menuErrorRequired => 'مطلوب';

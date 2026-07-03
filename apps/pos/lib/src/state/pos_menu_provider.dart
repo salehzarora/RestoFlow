@@ -221,7 +221,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     categories.add(DemoCategory(id: id, name: name, icon: icon, color: color));
   }
 
-  final items = <DemoMenuItem>[];
+  var items = <DemoMenuItem>[];
   for (final row in (raw['items'] as List?) ?? const []) {
     if (row is! Map) continue;
     // base_price_minor is present for cashier/manager sessions (a POS is never
@@ -230,6 +230,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     final price = row['base_price_minor'];
     if (price is! int) continue;
     final categoryId = (row['menu_category_id'] ?? '').toString();
+    final imagePath = row['image_path'];
     items.add(
       DemoMenuItem(
         id: (row['id'] ?? '').toString(),
@@ -237,8 +238,46 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         priceMinor: price,
         categoryId: categoryId,
         categoryName: names[categoryId] ?? '',
+        imagePath: imagePath is String && imagePath.isNotEmpty
+            ? imagePath
+            : null,
       ),
     );
+  }
+
+  // Menu/media sprint: batch-resolve signed URLs for the item images ONCE per
+  // menu load (the device's read-only storage capability). FAIL-SOFT: any
+  // resolution failure (no resolver, transport error, per-key policy denial)
+  // leaves items imageless and the cards fall back to the tinted icon band —
+  // no error spam, images are never load-bearing.
+  final resolver = ref.watch(posImageUrlResolverProvider);
+  final imagePaths = <String>[
+    for (final item in items)
+      if (item.imagePath != null) item.imagePath!,
+  ];
+  if (resolver != null && imagePaths.isNotEmpty) {
+    Map<String, String> urls;
+    try {
+      urls = await resolver.signedUrlsFor(imagePaths);
+    } catch (_) {
+      urls = const {};
+    }
+    if (urls.isNotEmpty) {
+      items = [
+        for (final item in items)
+          item.imagePath != null && urls.containsKey(item.imagePath)
+              ? DemoMenuItem(
+                  id: item.id,
+                  name: item.name,
+                  priceMinor: item.priceMinor,
+                  categoryId: item.categoryId,
+                  categoryName: item.categoryName,
+                  imagePath: item.imagePath,
+                  imageUrl: urls[item.imagePath],
+                )
+              : item,
+      ];
+    }
   }
 
   // Modifier groups + their options (pos_menu v2, demo-readiness sprint).

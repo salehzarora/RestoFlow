@@ -16,6 +16,7 @@ class MenuItem {
     required this.defaultStationId,
     required this.displayOrder,
     required this.isActive,
+    this.imagePath,
     this.deletedAt,
   });
 
@@ -35,6 +36,12 @@ class MenuItem {
   final String? defaultStationId;
   final int displayOrder;
   final bool isActive;
+
+  /// The RF-110 `menu-images` object key of the item's current image
+  /// (`{org}/{rest}/{branch|global}/menu_item/{item}/{image}.{ext}`), or null
+  /// for no image. Bytes are always fetched via a short-lived signed URL
+  /// (private bucket — DECISION D-032); this is a pointer, never a URL.
+  final String? imagePath;
   final DateTime? deletedAt;
 
   bool get isDeleted => deletedAt != null;
@@ -52,6 +59,7 @@ class MenuItem {
     defaultStationId: optString(json, 'default_station_id'),
     displayOrder: optInt(json, 'display_order', 0),
     isActive: optBool(json, 'is_active', true),
+    imagePath: optString(json, 'image_path'),
     deletedAt: parseTimestamp(json['deleted_at']),
   );
 
@@ -68,6 +76,7 @@ class MenuItem {
     defaultStationId: defaultStationId,
     displayOrder: displayOrder,
     isActive: isActive,
+    imagePath: imagePath,
     deletedAt: deletedAt ?? this.deletedAt,
   );
 }

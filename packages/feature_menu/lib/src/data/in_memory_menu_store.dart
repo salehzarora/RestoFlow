@@ -154,6 +154,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
   }) async {
     if (readOnly) return _denied(MenuEntityType.item);
     final created = id == null;
@@ -172,6 +173,10 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       defaultStationId: defaultStationId,
       displayOrder: displayOrder,
       isActive: isActive,
+      // Mirrors the server: null/blank = clear (full-state upsert).
+      imagePath: (imagePath == null || imagePath.trim().isEmpty)
+          ? null
+          : imagePath,
       deletedAt: existing?.deletedAt,
     );
     _upsert(_items, row, (i) => i.id);

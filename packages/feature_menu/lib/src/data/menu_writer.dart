@@ -24,6 +24,9 @@ abstract class MenuWriter {
     bool isActive = true,
   });
 
+  /// [imagePath] is the RF-110 object key of the item's current image; null
+  /// CLEARS it (the editor always sends the item's full state — the server
+  /// treats a missing/blank `p_image_path` as unset).
   Future<MenuWriteOutcome> upsertItem({
     required MenuScope scope,
     String? id,
@@ -35,6 +38,7 @@ abstract class MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
   });
 
   Future<MenuWriteOutcome> upsertSize({

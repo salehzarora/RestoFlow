@@ -99,6 +99,7 @@ class RpcMenuWriter implements MenuWriter {
     String? defaultStationId,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
   }) {
     return _invoke(MenuRpcNames.upsertItem, {
       'p_organization_id': scope.organizationId,
@@ -113,6 +114,8 @@ class RpcMenuWriter implements MenuWriter {
       'p_default_station_id': defaultStationId,
       'p_display_order': displayOrder,
       'p_is_active': isActive,
+      // null = clear/unset (the editor sends the item's full state).
+      'p_image_path': imagePath,
     }, MenuEntityType.item);
   }
 

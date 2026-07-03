@@ -1,6 +1,7 @@
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:supabase/supabase.dart';
 
+import 'device_image_url_resolver.dart';
 import 'supabase_bootstrap_config.dart';
 
 /// Bootstraps the Supabase-backed RPC transport for the auth services
@@ -39,10 +40,56 @@ class SupabaseAuthBootstrap {
   /// one-time pairing code / device-session token, verified server-side. Runtime
   /// only (constructs a real client); throws if anonymous sign-in is unavailable,
   /// so the composition root can fall back to a dormant (no-pairing) state.
-  Future<SyncRpcTransport> createAnonymousDeviceTransport() async {
+  Future<SyncRpcTransport> createAnonymousDeviceTransport() async =>
+      (await createAnonymousDeviceSession()).transport;
+
+  /// Menu/media sprint: like [createAnonymousDeviceTransport] but ALSO exposes
+  /// the device's ONLY storage capability — a read-only signed-URL resolver for
+  /// the private RF-110 `menu-images` bucket. Server-side, the resolver is
+  /// gated by the `menu_images_device_select` storage policy (an ACTIVE POS
+  /// device session bound to this anonymous principal at redeem time; KDS is
+  /// excluded — T-014). Anon-key-only, money-free (D-011/T-003).
+  Future<
+    ({SyncRpcTransport transport, DeviceImageUrlResolver imageUrlResolver})
+  >
+  createAnonymousDeviceSession() async {
     final client = SupabaseClient(_config.url, _config.anonKey);
     await client.auth.signInAnonymously();
-    return SupabaseSyncRpcTransport(client);
+    return (
+      transport: SupabaseSyncRpcTransport(client),
+      imageUrlResolver: SupabaseDeviceImageUrlResolver(client),
+    );
+  }
+}
+
+/// The real [DeviceImageUrlResolver] over the SAME anonymously-authenticated
+/// client as the device transport. Batch-signs via the storage API; keys the
+/// device's SELECT policy denies come back as per-key failures and are simply
+/// omitted (fail-soft — callers render imageless).
+class SupabaseDeviceImageUrlResolver implements DeviceImageUrlResolver {
+  SupabaseDeviceImageUrlResolver(this._client);
+
+  /// The RF-110 private bucket id (kept local so this package adds no
+  /// feature_menu dependency).
+  static const String _bucketId = 'menu-images';
+
+  final SupabaseClient _client;
+
+  @override
+  Future<Map<String, String>> signedUrlsFor(
+    List<String> objectKeys, {
+    Duration expiresIn = const Duration(minutes: 30),
+  }) async {
+    if (objectKeys.isEmpty) return const {};
+    final results = await _client.storage
+        .from(_bucketId)
+        .createSignedUrlsResult(objectKeys, expiresIn.inSeconds);
+    return {
+      // Per-key failures (policy-denied / missing objects) are dropped —
+      // callers fall back to imageless rendering.
+      for (final result in results)
+        if (result is SignedUrlSuccess) result.path: result.signedUrl,
+    };
   }
 }
 

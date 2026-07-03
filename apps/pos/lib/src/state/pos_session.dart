@@ -145,6 +145,15 @@ final posAuthTransportProvider = Provider<SyncRpcTransport?>((ref) {
   return SupabaseAuthBootstrap(config: supabase).createRpcTransport();
 });
 
+/// The device's read-only signed-URL resolver for menu images (menu/media
+/// sprint). Null in demo mode and whenever the real device bootstrap did not
+/// run — the POS then renders its imageless cards (fail-soft; images are an
+/// enhancement, never load-bearing). Overridden in `main.dart` with the
+/// resolver riding the SAME anonymously-authenticated client as the transport.
+final posImageUrlResolverProvider = Provider<DeviceImageUrlResolver?>(
+  (ref) => null,
+);
+
 /// Establishes and owns the POS [SyncSession] for real mode (RF-131).
 ///
 /// In demo mode (the DEFAULT), and whenever the Supabase transport or the

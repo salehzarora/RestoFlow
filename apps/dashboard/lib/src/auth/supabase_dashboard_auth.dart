@@ -8,10 +8,16 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show AuthContextFetcher;
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
-    show MenuReadSource, MenuWriter, RpcMenuReadSource, RpcMenuWriter;
+    show
+        MenuImageStorage,
+        MenuReadSource,
+        MenuWriter,
+        RpcMenuReadSource,
+        RpcMenuWriter;
 import 'package:supabase/supabase.dart';
 
 import '../admin/supabase_admin_device_repository.dart';
+import '../menu/supabase_menu_image_storage.dart';
 import '../printers/printers_repository.dart';
 import '../staff/staff_repository.dart';
 import '../tables/tables_repository.dart';
@@ -52,6 +58,7 @@ const String kDefaultOnboardingTimezone = 'UTC';
   AdminRepository Function(AdminScope scope) deviceRepositoryFor,
   MenuReadSource menuReadSource,
   MenuWriter menuWriter,
+  MenuImageStorage menuImageStorage,
   PrintersRepository Function(AdminScope scope) printersRepositoryFor,
   StaffRepository Function(AdminScope scope) staffRepositoryFor,
   TablesAdminRepository Function(AdminScope scope) tablesRepositoryFor,
@@ -78,6 +85,9 @@ buildDashboardRealAuth(SupabaseClient client) {
     // manages the backend menu the POS sells from.
     menuReadSource: RpcMenuReadSource(transport),
     menuWriter: RpcMenuWriter(transport),
+    // Menu/media sprint: REAL item image storage over the same authenticated
+    // client (RF-110 bucket + policies; signed URLs only — D-032).
+    menuImageStorage: SupabaseMenuImageStorage(client),
     // Sprint: real printers (RF-150 backend) + staff/PIN provisioning surfaces.
     printersRepositoryFor: (scope) => SupabasePrintersRepository(
       transport: transport,

@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_core/restoflow_core.dart' show Failure;
 
+import '../data/image_file_picker.dart' as picker;
+import '../data/menu_image_storage.dart';
 import '../data/menu_management_repository.dart';
 import '../data/menu_read_source.dart';
 import '../data/menu_writer.dart';
+import '../data/picked_menu_image.dart';
 import '../models/menu_entity_type.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
@@ -28,6 +31,29 @@ final menuReadSourceProvider = Provider<MenuReadSource>((ref) {
 final menuWriterProvider = Provider<MenuWriter>((ref) {
   throw UnimplementedError('menuWriterProvider must be overridden.');
 });
+
+/// The image storage wiring for the item editor's image panel (menu/media
+/// sprint). Defaults to `null` (no storage on this surface) — the panel shows
+/// its honest "upload not available" state instead of a fake uploader. The
+/// dashboard overrides it: real mode with a Supabase-backed [MenuImageStorage],
+/// demo mode with a [FakeMenuImageStorage] + `isDemo: true` label.
+final menuImageStorageProvider = Provider<MenuImageStorageConfig?>(
+  (ref) => null,
+);
+
+/// Whether THIS build target can pick an image file at all (web: yes; other
+/// targets: no — the panel shows an honest note). Provider-wrapped so widget
+/// tests (which run on the VM) can exercise the picking flow.
+final menuImagePickerSupportedProvider = Provider<bool>(
+  (ref) => picker.menuImagePickerSupported,
+);
+
+/// Opens the platform image picker. Provider-wrapped so tests can inject a
+/// canned [PickedMenuImage] without a browser.
+final menuImageFilePickerProvider =
+    Provider<Future<PickedMenuImage?> Function()>(
+      (ref) => picker.pickMenuImageFile,
+    );
 
 /// The repository, composed from the injected read source + writer.
 final menuRepositoryProvider = Provider<MenuManagementRepository>((ref) {
@@ -121,6 +147,7 @@ class MenuWriteController {
     required String currencyCode,
     int displayOrder = 0,
     bool isActive = true,
+    String? imagePath,
   }) => _run(
     () => _repository.upsertItem(
       scope: _scope,
@@ -132,6 +159,10 @@ class MenuWriteController {
       currencyCode: currencyCode,
       displayOrder: displayOrder,
       isActive: isActive,
+      // null = clear/unset — every caller sends the item's FULL state, so a
+      // details-save must pass the item's current imagePath through or it
+      // would silently wipe a freshly uploaded image.
+      imagePath: imagePath,
     ),
   );
 
@@ -242,16 +273,20 @@ final menuWriteControllerProvider = Provider<MenuWriteController>(
 );
 
 /// Builds the [ProviderScope] overrides that wire the menu feature to a concrete
-/// scope + read source + writer. The dashboard uses this for the demo store; a
-/// real wiring (authenticated transport + online read source) is deferred.
+/// scope + read source + writer (+ optionally the image storage for the item
+/// editor's image panel — omit it and the panel shows its honest "upload not
+/// available" state).
 List<Override> menuFeatureOverrides({
   required MenuScope scope,
   required MenuReadSource readSource,
   required MenuWriter writer,
+  MenuImageStorageConfig? imageStorage,
 }) {
   return [
     menuScopeProvider.overrideWithValue(scope),
     menuReadSourceProvider.overrideWithValue(readSource),
     menuWriterProvider.overrideWithValue(writer),
+    if (imageStorage != null)
+      menuImageStorageProvider.overrideWithValue(imageStorage),
   ];
 }

@@ -1804,17 +1804,77 @@ abstract class AppLocalizations {
   /// **'Item image'**
   String get menuImageHeading;
 
-  /// Title of the deferred/gated image management panel.
+  /// Title of the image panel's honest state when no image storage is wired for this surface.
   ///
   /// In en, this message translates to:
-  /// **'Image upload coming soon'**
+  /// **'Image upload isn\'t connected'**
   String get menuImageDeferredTitle;
 
-  /// Body explaining why image upload is deferred.
+  /// Body explaining that no image storage backend is wired for this surface.
   ///
   /// In en, this message translates to:
-  /// **'Showing and uploading item photos needs a backend image record (a planned follow-up). The upload path and validation are already built.'**
+  /// **'This surface has no image storage connected, so item photos can\'t be uploaded or shown here.'**
   String get menuImageDeferredBody;
+
+  /// Button that opens the image file picker for an item without an image.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose image'**
+  String get menuImagePickAction;
+
+  /// Button that opens the image file picker to replace an item's existing image.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace image'**
+  String get menuImageReplaceAction;
+
+  /// Button that removes the item's current image.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove image'**
+  String get menuImageRemoveAction;
+
+  /// Button that uploads the picked image and saves it on the item.
+  ///
+  /// In en, this message translates to:
+  /// **'Save image'**
+  String get menuImageSaveAction;
+
+  /// Error when the picked file's type is not an allowed image MIME type.
+  ///
+  /// In en, this message translates to:
+  /// **'Only PNG, JPEG, or WebP images can be uploaded.'**
+  String get menuImageInvalidType;
+
+  /// Error when the picked image exceeds the bucket size limit.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is too large — the limit is 5 MB.'**
+  String get menuImageTooLarge;
+
+  /// Error when the storage upload fails; nothing was persisted.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed — the image was not saved.'**
+  String get menuImageUploadFailed;
+
+  /// Note shown on platforms without an image file picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choosing an image isn\'t available on this platform yet — use the web dashboard.'**
+  String get menuImageUnsupportedPlatform;
+
+  /// Honest note on the demo surface: picked images are kept in memory only.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo — the image is not uploaded to a server.'**
+  String get menuImageDemoNote;
+
+  /// Caption when the stored image preview fails to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the image preview.'**
+  String get menuImageLoadError;
 
   /// Validation error: a required field is blank.
   ///

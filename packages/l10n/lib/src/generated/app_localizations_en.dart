@@ -897,11 +897,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuImageHeading => 'Item image';
 
   @override
-  String get menuImageDeferredTitle => 'Image upload coming soon';
+  String get menuImageDeferredTitle => 'Image upload isn\'t connected';
 
   @override
   String get menuImageDeferredBody =>
-      'Showing and uploading item photos needs a backend image record (a planned follow-up). The upload path and validation are already built.';
+      'This surface has no image storage connected, so item photos can\'t be uploaded or shown here.';
+
+  @override
+  String get menuImagePickAction => 'Choose image';
+
+  @override
+  String get menuImageReplaceAction => 'Replace image';
+
+  @override
+  String get menuImageRemoveAction => 'Remove image';
+
+  @override
+  String get menuImageSaveAction => 'Save image';
+
+  @override
+  String get menuImageInvalidType =>
+      'Only PNG, JPEG, or WebP images can be uploaded.';
+
+  @override
+  String get menuImageTooLarge => 'The image is too large — the limit is 5 MB.';
+
+  @override
+  String get menuImageUploadFailed =>
+      'Upload failed — the image was not saved.';
+
+  @override
+  String get menuImageUnsupportedPlatform =>
+      'Choosing an image isn\'t available on this platform yet — use the web dashboard.';
+
+  @override
+  String get menuImageDemoNote =>
+      'Demo — the image is not uploaded to a server.';
+
+  @override
+  String get menuImageLoadError => 'Couldn\'t load the image preview.';
 
   @override
   String get menuErrorRequired => 'Required';

@@ -1,14 +1,12 @@
-/// The (deferred) storage seam for menu images (RF-110 `menu-images` bucket).
+/// The storage seam for menu images (RF-110 `menu-images` bucket).
 ///
-/// RF-111 defines this interface and a fake, plus the path/validation helpers,
-/// but does NOT wire production upload/signed-URL behaviour, because:
-///   * D1 — there is no authenticated Supabase session yet, so the RF-110
-///     storage policies (`auth.uid()` -> membership) cannot pass; and
-///   * D2 / D-032 — there is no backend pointer for the "current image of an
-///     item", so a real upload could not be durably associated with the item.
-/// The UI therefore shows a clearly-labelled deferred image panel rather than a
-/// fake "image saved" experience. The real implementation (needing an
-/// authenticated `SupabaseClient.storage`) lands once those prerequisites exist.
+/// RF-111 defined this interface (with a fake) while both prerequisites were
+/// missing; the menu/media sprint closed them — the dashboard has a real
+/// authenticated session (RF-151/152) and `menu_items.image_path` is the
+/// durable "current image of an item" pointer — so the dashboard now injects a
+/// real implementation over `SupabaseClient.storage` and the item editor
+/// uploads for real. The demo surface injects [FakeMenuImageStorage] with an
+/// explicit demo label (never a fake "uploaded to a server" claim).
 library;
 
 /// The outcome of a (future) menu image upload.
@@ -36,12 +34,19 @@ abstract class MenuImageStorage {
     String objectKey, {
     Duration expiresIn = const Duration(minutes: 30),
   });
+
+  /// Deletes the object at [objectKey]. Best-effort at the call sites: a
+  /// remove after the pointer was already cleared may fail without harming
+  /// correctness (an orphaned blob is unreachable through the app).
+  Future<void> remove(String objectKey);
 }
 
-/// An in-memory fake for tests: records uploads and returns a synthetic signed
-/// URL. It performs NO real I/O and makes no production persistence claim.
+/// An in-memory fake for tests AND the labelled demo surface: records uploads
+/// and removals and returns a synthetic signed URL. It performs NO real I/O and
+/// makes no production persistence claim (the demo panel says so explicitly).
 class FakeMenuImageStorage implements MenuImageStorage {
   final List<MenuImageUpload> uploads = [];
+  final List<String> removals = [];
 
   @override
   Future<MenuImageUpload> upload({
@@ -61,4 +66,23 @@ class FakeMenuImageStorage implements MenuImageStorage {
   }) async {
     return Uri.parse('fake-signed://menu-images/$objectKey');
   }
+
+  @override
+  Future<void> remove(String objectKey) async {
+    removals.add(objectKey);
+  }
+}
+
+/// How the image panel talks to storage: the backend + an honest demo flag.
+///
+/// * `null` (the provider default) — no storage is wired for this surface;
+///   the panel shows the honest "upload not available" state.
+/// * [isDemo] true — the demo surface: picking/preview work, the (fake) upload
+///   is recorded in memory, and the panel shows a clear "demo — not uploaded
+///   to a server" note. Never a false persistence claim.
+class MenuImageStorageConfig {
+  const MenuImageStorageConfig({required this.storage, this.isDemo = false});
+
+  final MenuImageStorage storage;
+  final bool isDemo;
 }
