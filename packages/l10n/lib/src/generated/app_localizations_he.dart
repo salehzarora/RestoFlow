@@ -526,6 +526,27 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posModifierRequired => 'חובה';
 
   @override
+  String get posModifierOptional => 'אופציונלי';
+
+  @override
+  String posModifierSelectedCount(int selected, int max) {
+    return '$selected/$max';
+  }
+
+  @override
+  String posModifierSelectedCountOpen(int selected) {
+    return '$selected';
+  }
+
+  @override
+  String get posModifierFree => 'חינם';
+
+  @override
+  String posModifierBasePrice(String price) {
+    return 'מחיר בסיס · $price';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'סקירת היום';
 
   @override

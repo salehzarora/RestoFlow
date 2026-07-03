@@ -333,15 +333,37 @@ class _CartLineTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 // Selected modifiers (order-time snapshots) as compact
-                // sub-lines; their deltas are already in the line total.
+                // sub-lines; their deltas are already in the line total. A
+                // PAID option additionally shows its signed delta (Part E) —
+                // in a SEPARATE Text so the '+ name' string stays exact-match
+                // findable (test contract) and both mirror in RTL via the Row.
                 for (final modifier in line.modifiers)
-                  Text(
-                    '+ ${modifier.optionName}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '+ ${modifier.optionName}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (modifier.priceDeltaMinor != 0) ...[
+                        const SizedBox(width: RestoflowSpacing.xs),
+                        Text(
+                          MoneyFormatter.formatSignedDeltaMinor(
+                            modifier.priceDeltaMinor,
+                            line.currencyCode,
+                          ),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 const SizedBox(height: RestoflowSpacing.xxs),
                 Text(

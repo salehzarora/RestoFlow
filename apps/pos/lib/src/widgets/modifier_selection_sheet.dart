@@ -14,12 +14,20 @@ import '../state/pos_menu_provider.dart';
 /// required group meets its minimum; nothing is ever auto-selected for paid
 /// options. Returns the selected modifiers via [onConfirm]; money is integer
 /// minor units throughout (D-007).
+///
+/// Menu/media sprint (Part E, cashier flow polish): the header carries the item
+/// image thumbnail (category-icon fallback) + the BASE price so base vs running
+/// total is readable; every group header shows a Required/Optional pill AND a
+/// live selected-count pill (danger while a required minimum is unmet, warning
+/// when a multi group is at capacity); zero-delta options say "free" instead of
+/// showing nothing.
 class ModifierSelectionSheet extends StatefulWidget {
   const ModifierSelectionSheet({
     required this.item,
     required this.groups,
     required this.currencyCode,
     required this.onConfirm,
+    this.category,
     super.key,
   });
 
@@ -28,12 +36,18 @@ class ModifierSelectionSheet extends StatefulWidget {
   final String currencyCode;
   final void Function(List<SelectedModifier> selections) onConfirm;
 
+  /// The owning category of the ACTIVE menu — the header thumbnail's icon
+  /// fallback (real categories carry their own palette entry); null falls back
+  /// to the demo lookup, mirroring [MenuItemCard].
+  final DemoCategory? category;
+
   static Future<void> show(
     BuildContext context, {
     required DemoMenuItem item,
     required List<PosModifierGroup> groups,
     required String currencyCode,
     required void Function(List<SelectedModifier> selections) onConfirm,
+    DemoCategory? category,
   }) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -43,6 +57,7 @@ class ModifierSelectionSheet extends StatefulWidget {
       groups: groups,
       currencyCode: currencyCode,
       onConfirm: onConfirm,
+      category: category,
     ),
   );
 
@@ -102,10 +117,37 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
           ),
   ];
 
+  /// The live "n/m" (or open-ended "n") selected-count label for a group.
+  String _countLabel(AppLocalizations l10n, PosModifierGroup group, int count) {
+    final max = group.effectiveMax;
+    return max == null
+        ? l10n.posModifierSelectedCountOpen(count)
+        : l10n.posModifierSelectedCount(count, max);
+  }
+
+  /// The count pill's tone: DANGER while a required minimum is unmet (the
+  /// blocked-Add culprit is marked before the cashier hunts for it), WARNING
+  /// when a multi-select group is at capacity (further taps are no-ops), and
+  /// quiet neutral otherwise. A satisfied single-select stays neutral — taps
+  /// there swap the choice rather than being blocked.
+  RestoflowTone _countTone(PosModifierGroup group, int count) {
+    if (count < group.effectiveMin) return RestoflowTone.danger;
+    final max = group.effectiveMax;
+    if (!group.singleSelect && max != null && count >= max) {
+      return RestoflowTone.warning;
+    }
+    return RestoflowTone.neutral;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final category = widget.category ?? categoryById(widget.item.categoryId);
+    final basePriceText = MoneyFormatter.formatMinor(
+      widget.item.priceMinor,
+      widget.currencyCode,
+    );
     final totalMinor = widget.item.priceMinor + _deltaTotal;
     final totalText = MoneyFormatter.formatMinor(
       totalMinor,
@@ -128,11 +170,40 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                widget.item.name,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+              // Part E header: thumbnail + name + BASE price, so the cashier
+              // reads base vs the running total at the bottom. NOTE: the base
+              // price is a DIFFERENT money string than the running total once
+              // any paid option is picked — tests pin the total's render count.
+              Row(
+                children: [
+                  _ItemThumbnail(item: widget.item, category: category),
+                  const SizedBox(width: RestoflowSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: RestoflowSpacing.xxs),
+                        Text(
+                          l10n.posModifierBasePrice(basePriceText),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: RestoflowSpacing.sm),
               Flexible(
@@ -150,16 +221,38 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                             Expanded(
                               child: Text(
                                 group.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
+                            const SizedBox(width: RestoflowSpacing.sm),
+                            // Live selected-count pill: n/m (or open-ended n).
+                            RestoflowStatusPill(
+                              label: _countLabel(
+                                l10n,
+                                group,
+                                _groupSelection(group.id).length,
+                              ),
+                              tone: _countTone(
+                                group,
+                                _groupSelection(group.id).length,
+                              ),
+                            ),
+                            const SizedBox(width: RestoflowSpacing.xs),
                             if (group.effectiveMin > 0)
                               RestoflowStatusPill(
                                 label: l10n.posModifierRequired,
                                 tone: RestoflowTone.warning,
                                 icon: Icons.priority_high,
+                              )
+                            else
+                              // Quiet counterpart so "no pill" never has to be
+                              // interpreted: this group may be skipped.
+                              RestoflowStatusPill(
+                                label: l10n.posModifierOptional,
                               ),
                           ],
                         ),
@@ -224,6 +317,49 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   }
 }
 
+/// The sheet header's item thumbnail (Part E): the product photo when the menu
+/// resolved a signed [DemoMenuItem.imageUrl] (real menus only), otherwise —
+/// and on ANY load failure — the category-tinted icon, mirroring the menu
+/// card's fallback. Images are never load-bearing.
+class _ItemThumbnail extends StatelessWidget {
+  const _ItemThumbnail({required this.item, required this.category});
+
+  /// Thumbnail edge (56–72dp band; square, rounded).
+  static const double _size = 64;
+
+  final DemoMenuItem item;
+  final DemoCategory category;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = ColoredBox(
+      color: category.color.withValues(alpha: 0.08),
+      child: Center(
+        child: Icon(
+          category.icon,
+          size: RestoflowIconSizes.lg,
+          color: category.color.withValues(alpha: 0.85),
+        ),
+      ),
+    );
+    final url = item.imageUrl;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      child: SizedBox(
+        width: _size,
+        height: _size,
+        child: url == null
+            ? fallback
+            : Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => fallback,
+              ),
+      ),
+    );
+  }
+}
+
 class _OptionTile extends StatelessWidget {
   const _OptionTile({
     required this.group,
@@ -242,14 +378,15 @@ class _OptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    // A SIGNED delta renders as +/− money; a free option shows no price.
+    // A SIGNED delta renders as +/− money; a zero delta says "free" (Part E)
+    // instead of showing nothing, so included-at-no-charge is explicit.
     final delta = option.priceDeltaMinor;
     final deltaText = delta == 0
         ? null
-        : (delta > 0 ? '+' : '−') +
-              MoneyFormatter.formatMinor(delta.abs(), currencyCode);
+        : MoneyFormatter.formatSignedDeltaMinor(delta, currencyCode);
 
     final control = group.singleSelect
         ? Icon(
@@ -310,8 +447,8 @@ class _OptionTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (deltaText != null) ...[
-                      const SizedBox(width: RestoflowSpacing.sm),
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    if (deltaText != null)
                       Text(
                         deltaText,
                         style: theme.textTheme.bodyMedium?.copyWith(
@@ -320,8 +457,17 @@ class _OptionTile extends StatelessWidget {
                               ? scheme.onPrimaryContainer
                               : scheme.onSurfaceVariant,
                         ),
+                      )
+                    else
+                      // Quiet "free" label — lighter weight than a paid delta.
+                      Text(
+                        l10n.posModifierFree,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: selected
+                              ? scheme.onPrimaryContainer
+                              : scheme.onSurfaceVariant,
+                        ),
                       ),
-                    ],
                   ],
                 ),
               ),

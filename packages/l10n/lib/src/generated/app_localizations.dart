@@ -1096,6 +1096,36 @@ abstract class AppLocalizations {
   /// **'Required'**
   String get posModifierRequired;
 
+  /// Quiet pill on a modifier group the cashier MAY skip (no minimum selection).
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get posModifierOptional;
+
+  /// Live selected-count indicator on a modifier group with a maximum, e.g. 1/2 (selected of max).
+  ///
+  /// In en, this message translates to:
+  /// **'{selected}/{max}'**
+  String posModifierSelectedCount(int selected, int max);
+
+  /// Live selected-count indicator on a modifier group WITHOUT a maximum: just the number selected.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected}'**
+  String posModifierSelectedCountOpen(int selected);
+
+  /// Quiet label on a modifier option whose price delta is zero (included at no charge).
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get posModifierFree;
+
+  /// Modifier-sheet header subtitle: the item's base price BEFORE option deltas (already currency-formatted), shown so the cashier can compare base vs the running total.
+  ///
+  /// In en, this message translates to:
+  /// **'Base price · {price}'**
+  String posModifierBasePrice(String price);
+
   /// Owner dashboard section heading above the daily KPI cards.
   ///
   /// In en, this message translates to:

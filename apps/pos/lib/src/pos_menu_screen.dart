@@ -236,6 +236,10 @@ class _MenuGrid extends ConsumerWidget {
                         item: item,
                         groups: groups,
                         currencyCode: menu.currencyCode,
+                        // The ACTIVE menu's category — the sheet header's
+                        // thumbnail icon fallback (real ids never resolve via
+                        // the demo lookup).
+                        category: menu.categoryOf(item.categoryId),
                         onConfirm: (selections) =>
                             controller.addItemWithModifiers(item, selections),
                       ),

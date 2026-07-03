@@ -531,6 +531,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posModifierRequired => 'إلزامي';
 
   @override
+  String get posModifierOptional => 'اختياري';
+
+  @override
+  String posModifierSelectedCount(int selected, int max) {
+    return '$selected/$max';
+  }
+
+  @override
+  String posModifierSelectedCountOpen(int selected) {
+    return '$selected';
+  }
+
+  @override
+  String get posModifierFree => 'مجاني';
+
+  @override
+  String posModifierBasePrice(String price) {
+    return 'السعر الأساسي · $price';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'نظرة عامة لليوم';
 
   @override

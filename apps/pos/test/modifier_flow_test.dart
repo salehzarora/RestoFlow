@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
@@ -13,11 +14,20 @@ import 'package:restoflow_pos/src/widgets/modifier_selection_sheet.dart';
 /// picker; required groups gate the Add button; paid modifiers change the
 /// price; the order payload carries the selected modifiers (RF-052 shape);
 /// money stays integer minor units.
+///
+/// Menu/media sprint (Part E): the sheet header shows the BASE price; group
+/// headers carry Required/Optional pills + live selected-count pills (danger
+/// while a required minimum is unmet, warning at multi-select capacity); free
+/// options are labelled; cart sub-lines show paid deltas; RTL renders cleanly.
 
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
 
-Future<void> _pump(WidgetTester tester, {OutboxRepository? repo}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  OutboxRepository? repo,
+  Locale locale = const Locale('en'),
+}) async {
   tester.view.physicalSize = const Size(1400, 1800);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -28,7 +38,7 @@ Future<void> _pump(WidgetTester tester, {OutboxRepository? repo}) async {
         if (repo != null) outboxRepositoryProvider.overrideWithValue(repo),
       ],
       child: MaterialApp(
-        locale: const Locale('en'),
+        locale: locale,
         localizationsDelegates: restoflowLocalizationsDelegates,
         supportedLocales: kSupportedLocales,
         home: const PosMenuScreen(),
@@ -37,6 +47,12 @@ Future<void> _pump(WidgetTester tester, {OutboxRepository? repo}) async {
   );
   await tester.pumpAndSettle();
 }
+
+/// The status pill (uniquely) labelled [label] — for tone assertions.
+RestoflowStatusPill _pill(WidgetTester tester, String label) =>
+    tester.widget<RestoflowStatusPill>(
+      find.widgetWithText(RestoflowStatusPill, label),
+    );
 
 /// Taps the add affordance on the Cheeseburger card (has modifier groups).
 Future<void> _openBurgerSheet(WidgetTester tester) async {
@@ -170,5 +186,149 @@ void main() {
       (m) => m['option_name_snapshot'] == 'Medium',
     );
     expect(medium['price_minor_snapshot'], 0);
+  });
+
+  // ---- Menu/media sprint, Part E: cashier-facing option-flow polish. ----
+
+  testWidgets('the sheet header shows the BASE price, which stays put while '
+      'the running total moves', (tester) async {
+    final l10n = await _en();
+    await _pump(tester);
+    await _openBurgerSheet(tester);
+
+    // Base ₪48.00 as a header subtitle (distinct string from the total pins).
+    expect(find.text(l10n.posModifierBasePrice('₪48.00')), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-cheese')),
+    );
+    await tester.pump();
+    // The total moved to ₪51.00 (summary row + Add label, the frozen 2-render
+    // contract) but the base subtitle still reads ₪48.00.
+    expect(find.textContaining('₪51.00'), findsNWidgets(2));
+    expect(find.text(l10n.posModifierBasePrice('₪48.00')), findsOneWidget);
+  });
+
+  testWidgets('group headers carry Required/Optional pills and live '
+      'selected-count pills; an unmet REQUIRED count is marked danger and '
+      'clears once satisfied', (tester) async {
+    final l10n = await _en();
+    await _pump(tester);
+    await _openBurgerSheet(tester);
+
+    // One required group (Doneness), two optional (Toppings, Extras).
+    expect(find.text(l10n.posModifierRequired), findsOneWidget);
+    expect(find.text(l10n.posModifierOptional), findsNWidgets(2));
+
+    // Counts: single-select 0/1, capped multi 0/2, open multi just 0.
+    expect(find.text(l10n.posModifierSelectedCount(0, 1)), findsOneWidget);
+    expect(find.text(l10n.posModifierSelectedCount(0, 2)), findsOneWidget);
+    expect(find.text(l10n.posModifierSelectedCountOpen(0)), findsOneWidget);
+
+    // The unmet REQUIRED group's count is the danger marker; the optional
+    // groups stay quiet even at zero.
+    expect(_pill(tester, '0/1').tone, RestoflowTone.danger);
+    expect(_pill(tester, '0/2').tone, RestoflowTone.neutral);
+    expect(_pill(tester, '0').tone, RestoflowTone.neutral);
+
+    // Selecting updates the counts live and clears the danger accent.
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-medium')),
+    );
+    await tester.pump();
+    expect(find.text(l10n.posModifierSelectedCount(1, 1)), findsOneWidget);
+    expect(_pill(tester, '1/1').tone, RestoflowTone.neutral);
+
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-cheese')),
+    );
+    await tester.pump();
+    expect(find.text(l10n.posModifierSelectedCountOpen(1)), findsOneWidget);
+  });
+
+  testWidgets('zero-delta options are labelled free; paid options keep the '
+      'signed delta', (tester) async {
+    final l10n = await _en();
+    await _pump(tester);
+    await _openBurgerSheet(tester);
+
+    // Free: Onion/Lettuce/Tomato (Toppings) + Rare/Medium/Well done
+    // (Doneness) = 6. Paid options show +₪ deltas instead.
+    expect(find.text(l10n.posModifierFree), findsNWidgets(6));
+    expect(find.text('+₪3.00'), findsNWidgets(2)); // Cheese + Extra cheese
+    expect(find.text('+₪9.00'), findsOneWidget); // Extra patty
+  });
+
+  testWidgets('a multi-select group at capacity shows its count pill in '
+      'warning tone (further taps are no-ops)', (tester) async {
+    final l10n = await _en();
+    await _pump(tester);
+    await _openBurgerSheet(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-extra-cheese')),
+    );
+    await tester.pump();
+    expect(_pill(tester, '1/2').tone, RestoflowTone.neutral);
+
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-extra-patty')),
+    );
+    await tester.pump();
+    expect(find.text(l10n.posModifierSelectedCount(2, 2)), findsOneWidget);
+    expect(_pill(tester, '2/2').tone, RestoflowTone.warning);
+
+    // Deselecting drops back below capacity — the warning clears.
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-extra-patty')),
+    );
+    await tester.pump();
+    expect(_pill(tester, '1/2').tone, RestoflowTone.neutral);
+  });
+
+  testWidgets('the cart sub-line shows a PAID option delta in a separate '
+      'text; free options stay delta-free', (tester) async {
+    await _pump(tester);
+    await _openBurgerSheet(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-medium')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-cheese')),
+    );
+    await tester.pump();
+    await tester.tap(_addButton());
+    await tester.pumpAndSettle();
+
+    // The exact '+ name' strings stay findable (frozen contract) — the delta
+    // rides a separate Text on the same row.
+    expect(find.text('+ Cheese'), findsOneWidget);
+    expect(find.text('+₪3.00'), findsOneWidget);
+    expect(find.text('+ Medium'), findsOneWidget);
+    expect(find.text('+₪0.00'), findsNothing);
+  });
+
+  testWidgets('the sheet renders under Arabic RTL without overflow, with '
+      'localized pills', (tester) async {
+    final ar = await AppLocalizations.delegate.load(const Locale('ar'));
+    await _pump(tester, locale: const Locale('ar'));
+    await _openBurgerSheet(tester);
+
+    expect(
+      Directionality.of(tester.element(find.byType(ModifierSelectionSheet))),
+      TextDirection.rtl,
+    );
+    expect(find.text(ar.posModifierRequired), findsOneWidget);
+    expect(find.text(ar.posModifierOptional), findsNWidgets(2));
+    expect(find.text(ar.posModifierFree), findsNWidgets(6));
+    expect(find.text(ar.posModifierBasePrice('₪48.00')), findsOneWidget);
+
+    // Selecting still works mirrored; no layout exceptions surfaced.
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-medium')),
+    );
+    await tester.pump();
+    expect(find.text(ar.posModifierSelectedCount(1, 1)), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

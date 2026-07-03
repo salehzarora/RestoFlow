@@ -533,6 +533,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posModifierRequired => 'Required';
 
   @override
+  String get posModifierOptional => 'Optional';
+
+  @override
+  String posModifierSelectedCount(int selected, int max) {
+    return '$selected/$max';
+  }
+
+  @override
+  String posModifierSelectedCountOpen(int selected) {
+    return '$selected';
+  }
+
+  @override
+  String get posModifierFree => 'Free';
+
+  @override
+  String posModifierBasePrice(String price) {
+    return 'Base price · $price';
+  }
+
+  @override
   String get dashboardOverviewHeading => 'Today\'s overview';
 
   @override
