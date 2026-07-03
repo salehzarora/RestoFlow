@@ -562,6 +562,12 @@ abstract class AppLocalizations {
   /// **'Send Order'**
   String get posSendOrder;
 
+  /// Hint above the DISABLED Send button explaining WHY it is disabled: the cart has items but the dine-in order has no table yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign a table to send this dine-in order'**
+  String get posSendNeedsTableHint;
+
   /// POS notice on the local order confirmation clarifying nothing was sent to a backend/kitchen/printer.
   ///
   /// In en, this message translates to:

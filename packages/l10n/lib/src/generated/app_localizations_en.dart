@@ -252,6 +252,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posSendOrder => 'Send Order';
 
   @override
+  String get posSendNeedsTableHint =>
+      'Assign a table to send this dine-in order';
+
+  @override
   String get posDemoOrderNotice =>
       'Demo order — not sent to a backend, kitchen, or printer.';
 

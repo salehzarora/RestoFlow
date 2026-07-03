@@ -126,6 +126,34 @@ void main() {
     },
   );
 
+  testWidgets('the DISABLED Send button explains itself: a needs-table hint '
+      'sits above it for dine-in-without-table, and only then (Part G '
+      'cashier polish)', (tester) async {
+    final l10n = await _en();
+    await _pump(tester);
+
+    // Empty cart, takeaway: no hint (the empty state explains that case).
+    expect(find.byKey(const Key('send-needs-table-hint')), findsNothing);
+
+    // Items + takeaway: still no hint — Send is enabled.
+    await _addAnItem(tester);
+    expect(find.byKey(const Key('send-needs-table-hint')), findsNothing);
+
+    // Items + dine-in without a table: the hint appears right above Send.
+    await tester.tap(find.text(l10n.posOrderTypeDineIn));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('send-needs-table-hint')), findsOneWidget);
+    expect(find.text(l10n.posSendNeedsTableHint), findsOneWidget);
+
+    // Assigning a table resolves the block — the hint leaves with it.
+    await tester.tap(find.byKey(const Key('assign-table-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('T1'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('send-needs-table-hint')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('an occupied table cannot be assigned', (tester) async {
     final l10n = await _en();
     await _pump(tester);

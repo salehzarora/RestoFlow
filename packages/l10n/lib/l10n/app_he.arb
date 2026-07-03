@@ -77,6 +77,7 @@
   "posDecreaseQuantity": "הקטנת כמות",
   "posCategoryAll": "הכול",
   "posSendOrder": "שליחת הזמנה",
+  "posSendNeedsTableHint": "שייכו שולחן כדי לשלוח הזמנת ישיבה במקום",
   "posDemoOrderNotice": "הזמנת הדגמה — לא נשלחה לשרת, למטבח או למדפסת.",
   "posOrderSubmittedTitle": "ההזמנה נשלחה",
   "posOrderNumberLabel": "מספר הזמנה",

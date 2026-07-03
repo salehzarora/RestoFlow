@@ -298,6 +298,10 @@
   "@posSendOrder": {
     "description": "POS primary action button to send the current order (demo placeholder)."
   },
+  "posSendNeedsTableHint": "Assign a table to send this dine-in order",
+  "@posSendNeedsTableHint": {
+    "description": "Hint above the DISABLED Send button explaining WHY it is disabled: the cart has items but the dine-in order has no table yet."
+  },
   "posDemoOrderNotice": "Demo order — not sent to a backend, kitchen, or printer.",
   "@posDemoOrderNotice": {
     "description": "POS notice on the local order confirmation clarifying nothing was sent to a backend/kitchen/printer."

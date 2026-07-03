@@ -92,6 +92,9 @@ class CartPanel extends ConsumerWidget {
               subtotalText: MoneyFormatter.format(cart.subtotal),
               orderType: setup.orderType,
               tableLabel: setup.assignedTable?.label,
+              // Part G polish: when items are ready but dine-in still lacks
+              // a table, SAY so instead of leaving Send silently disabled.
+              showNeedsTableHint: cart.isNotEmpty && setup.needsTableWarning,
               onSend: canSend
                   ? () => _submitOrder(
                       ref: ref,
@@ -551,6 +554,7 @@ class _CartFooter extends StatelessWidget {
     required this.orderType,
     required this.tableLabel,
     required this.onSend,
+    this.showNeedsTableHint = false,
   });
 
   final AppLocalizations l10n;
@@ -558,6 +562,11 @@ class _CartFooter extends StatelessWidget {
   final OrderType orderType;
   final String? tableLabel;
   final VoidCallback? onSend;
+
+  /// True when Send is disabled ONLY because the dine-in order has no table
+  /// yet — the footer then explains the block instead of staying mute
+  /// (Part G cashier polish).
+  final bool showNeedsTableHint;
 
   @override
   Widget build(BuildContext context) {
@@ -596,6 +605,34 @@ class _CartFooter extends StatelessWidget {
               ],
             ),
             const SizedBox(height: RestoflowSpacing.sm),
+            // Part G polish: the one actionable reason Send can be disabled
+            // with a filled cart — dine-in without a table — is spelled out
+            // right above the button (warning tone, compact single line).
+            if (showNeedsTableHint) ...[
+              Row(
+                key: const Key('send-needs-table-hint'),
+                children: [
+                  Icon(
+                    Icons.event_seat,
+                    size: RestoflowIconSizes.sm,
+                    color: RestoflowTone.warning.styleOf(theme).accent,
+                  ),
+                  const SizedBox(width: RestoflowSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      l10n.posSendNeedsTableHint,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: RestoflowTone.warning.styleOf(theme).accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: RestoflowSpacing.xs),
+            ],
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(

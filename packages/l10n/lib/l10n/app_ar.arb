@@ -77,6 +77,7 @@
   "posDecreaseQuantity": "إنقاص الكمية",
   "posCategoryAll": "الكل",
   "posSendOrder": "إرسال الطلب",
+  "posSendNeedsTableHint": "عيّن طاولة لإرسال طلب التناول في المطعم",
   "posDemoOrderNotice": "طلب تجريبي — لم يُرسَل إلى خادم أو مطبخ أو طابعة.",
   "posOrderSubmittedTitle": "تم إرسال الطلب",
   "posOrderNumberLabel": "رقم الطلب",

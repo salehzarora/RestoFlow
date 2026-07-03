@@ -250,6 +250,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posSendOrder => 'إرسال الطلب';
 
   @override
+  String get posSendNeedsTableHint => 'عيّن طاولة لإرسال طلب التناول في المطعم';
+
+  @override
   String get posDemoOrderNotice =>
       'طلب تجريبي — لم يُرسَل إلى خادم أو مطبخ أو طابعة.';
 

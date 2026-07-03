@@ -250,6 +250,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posSendOrder => 'שליחת הזמנה';
 
   @override
+  String get posSendNeedsTableHint => 'שייכו שולחן כדי לשלוח הזמנת ישיבה במקום';
+
+  @override
   String get posDemoOrderNotice =>
       'הזמנת הדגמה — לא נשלחה לשרת, למטבח או למדפסת.';
 
