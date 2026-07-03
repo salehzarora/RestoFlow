@@ -28,6 +28,23 @@ be brought up, those specs **fail loudly** ("could not read content") rather tha
 passing on an empty DOM — the demo/money token lists in `lib/tokens.ts` are then
 calibrated against the first live run (RF-112B).
 
+### Why the suite runs serially (and can be slow on first boot)
+Locally the apps run under `flutter run` in **debug** mode, which boots via the
+Dart Development Compiler (DDC): the page loads ~1000 module scripts before the
+Flutter view attaches. Booting several apps at once starves the CPU and the
+heaviest surfaces (Dashboard/KDS) miss their boot window, so the config runs
+**one page at a time** (`workers: 1`). The per-test timeout (180s) sits above the
+boot wait (default 90s). If your machine is slow or the first compile is heavy,
+raise the boot budget:
+
+```
+RF_E2E_BOOT_TIMEOUT_MS=150000 npm run smoke
+```
+
+A boot failure prints diagnostics (final URL, HTTP status, title, a safe body
+snippet, console + page errors) so a still-loading build or a config/help page is
+obvious rather than a bare timeout.
+
 ## Prerequisites
 
 1. **Node** ≥ 18 (repo is validated on Node 22).

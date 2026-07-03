@@ -3,12 +3,19 @@
 // The renderer-INDEPENDENT backbone of the suite: each of the three surfaces is
 // reachable on its fixed local port and boots the Flutter engine without a fatal
 // error. These checks do not depend on the semantics tree, so they are robust and
-// are the first thing to trust when triaging a failure.
+// are the first thing to trust when triaging a failure. On a boot failure they
+// report rich diagnostics (final URL, status, title, a safe body snippet, console
+// + page errors) instead of a bare selector timeout — so a slow debug build or a
+// config/help page is obvious at a glance.
 
 import { test, expect } from '@playwright/test';
 import { SURFACES } from '../lib/constants';
 import { assertLocalOnly } from '../lib/guards';
-import { waitForFlutterBoot, FLUTTER_HOST_SELECTORS } from '../lib/flutter';
+import {
+  bootOrDiagnose,
+  collectPageErrors,
+  FLUTTER_HOST_SELECTORS,
+} from '../lib/flutter';
 
 for (const surface of SURFACES) {
   test(`${surface.name} is reachable and boots without crashing (${surface.url})`, async ({
@@ -16,8 +23,7 @@ for (const surface of SURFACES) {
   }) => {
     assertLocalOnly(surface.url);
 
-    const pageErrors: string[] = [];
-    page.on('pageerror', (error) => pageErrors.push(String(error)));
+    const collectors = collectPageErrors(page);
 
     let response;
     try {
@@ -41,13 +47,17 @@ for (const surface of SURFACES) {
     ).toBeLessThan(400);
 
     // The engine attaching a view host proves the app booted (no white-screen).
-    await waitForFlutterBoot(page);
+    // On failure this throws a rich diagnostic while the page is still open.
+    await bootOrDiagnose(page, surface.name, {
+      responseStatus: response!.status(),
+      ...collectors,
+    });
     await expect(page.locator(FLUTTER_HOST_SELECTORS).first()).toBeAttached();
 
     // No uncaught Dart/JS exception surfaced to the page during boot.
     expect(
-      pageErrors,
-      `Uncaught page error(s) on ${surface.name}: ${pageErrors.join(' | ')}`,
+      collectors.pageErrors,
+      `Uncaught page error(s) on ${surface.name}: ${collectors.pageErrors.join(' | ')}`,
     ).toEqual([]);
   });
 }
