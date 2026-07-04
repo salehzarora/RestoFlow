@@ -6,8 +6,15 @@ version: 0.0.1
 # Standalone (NOT a workspace member): its own resolution, no Flutter, only the
 # Dart SDK (dart:io / dart:convert). The printer LAN target lives ONLY here, in
 # local flags/config — never in the app or the server (RF-115 security model).
+#
+# SDK floor matches the repo (^3.12.0) so `dart format` picks the SAME language
+# version — and therefore the SAME style — for this package as for the rest of
+# the workspace, INCLUDING on CI, which does not resolve this standalone package
+# (no package config here). A lower floor made `dart format` choose the old
+# "short" style locally (package resolved) but the tall/workspace style on CI
+# (unresolved) — exactly the mismatch that broke the format check.
 environment:
-  sdk: ^3.4.0
+  sdk: ^3.12.0
 
 dev_dependencies:
   test: ^1.24.0

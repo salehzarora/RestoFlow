@@ -31,10 +31,10 @@ class BridgeHandler {
 
   /// `GET /health`.
   BridgeResponse health() => BridgeResponse(200, {
-        'ok': true,
-        'mode': config.sinkMode ? 'sink' : 'tcp',
-        'printers': config.printerNames,
-      });
+    'ok': true,
+    'mode': config.sinkMode ? 'sink' : 'tcp',
+    'printers': config.printerNames,
+  });
 
   /// `POST /print` with `{format:'escpos', payloadBase64, role?/printer?}`.
   ///
@@ -77,8 +77,11 @@ class BridgeHandler {
     }
     try {
       await socket.send(target.host, target.port, bytes, timeout: timeout);
-      return const BridgeResponse(
-          200, {'ok': true, 'status': 'sent', 'mode': 'tcp'});
+      return const BridgeResponse(200, {
+        'ok': true,
+        'status': 'sent',
+        'mode': 'tcp',
+      });
     } on PrinterSocketException catch (e) {
       return _error(502, 'transport failure: ${e.message}', 'unreachable');
     } catch (e) {
@@ -95,6 +98,9 @@ class BridgeHandler {
   }
 
   BridgeResponse _error(int status, String error, String category) =>
-      BridgeResponse(
-          status, {'ok': false, 'error': error, 'category': category});
+      BridgeResponse(status, {
+        'ok': false,
+        'error': error,
+        'category': category,
+      });
 }

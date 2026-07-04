@@ -52,19 +52,21 @@ void main() {
   });
 
   group('print() — sink', () {
-    test('accepts into the sink and HONESTLY reports it did not reach hardware',
-        () async {
-      final handler = BridgeHandler(config: BridgeConfig());
-      final res = await handler.print({
-        'format': 'escpos',
-        'payloadBase64': _escposB64(),
-      });
-      expect(res.status, 200);
-      expect(res.json['ok'], true);
-      expect(res.json['status'], 'accepted_sink');
-      expect(res.json['status'], isNot('sent'));
-      expect(handler.sinkCount, 1);
-    });
+    test(
+      'accepts into the sink and HONESTLY reports it did not reach hardware',
+      () async {
+        final handler = BridgeHandler(config: BridgeConfig());
+        final res = await handler.print({
+          'format': 'escpos',
+          'payloadBase64': _escposB64(),
+        });
+        expect(res.status, 200);
+        expect(res.json['ok'], true);
+        expect(res.json['status'], 'accepted_sink');
+        expect(res.json['status'], isNot('sent'));
+        expect(handler.sinkCount, 1);
+      },
+    );
   });
 
   group('print() — tcp forward', () {
@@ -86,22 +88,24 @@ void main() {
       expect(socket.writes.single.port, 9100);
     });
 
-    test('an unreachable target returns ok:false, category unreachable',
-        () async {
-      final handler = BridgeHandler(
-        config: BridgeConfig(
-          targets: {'receipt': PrinterTarget.parse('192.0.2.10:9100')},
-        ),
-        socket: _FakeSocket(fail: true),
-      );
-      final res = await handler.print({
-        'format': 'escpos',
-        'role': 'receipt',
-        'payloadBase64': _escposB64(),
-      });
-      expect(res.json['ok'], false);
-      expect(res.json['category'], 'unreachable');
-    });
+    test(
+      'an unreachable target returns ok:false, category unreachable',
+      () async {
+        final handler = BridgeHandler(
+          config: BridgeConfig(
+            targets: {'receipt': PrinterTarget.parse('192.0.2.10:9100')},
+          ),
+          socket: _FakeSocket(fail: true),
+        );
+        final res = await handler.print({
+          'format': 'escpos',
+          'role': 'receipt',
+          'payloadBase64': _escposB64(),
+        });
+        expect(res.json['ok'], false);
+        expect(res.json['category'], 'unreachable');
+      },
+    );
 
     test('an unknown role with no matching target is rejected', () async {
       final handler = BridgeHandler(
@@ -133,8 +137,10 @@ void main() {
     });
 
     test('a missing/empty payload is rejected', () async {
-      final res =
-          await handler.print({'format': 'escpos', 'payloadBase64': ''});
+      final res = await handler.print({
+        'format': 'escpos',
+        'payloadBase64': '',
+      });
       expect(res.json['ok'], false);
     });
 
@@ -236,7 +242,8 @@ void main() {
       );
       req.headers.contentType = ContentType.json;
       req.write(
-          jsonEncode({'format': 'escpos', 'payloadBase64': _escposB64()}));
+        jsonEncode({'format': 'escpos', 'payloadBase64': _escposB64()}),
+      );
       final res = await req.close();
       final body = await res.transform(utf8.decoder).join();
       client.close();

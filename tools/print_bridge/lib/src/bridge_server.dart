@@ -85,8 +85,11 @@ class BridgeServer {
     } catch (e) {
       await _writeJson(
         res,
-        BridgeResponse(
-            500, {'ok': false, 'error': '$e', 'category': 'unknown'}),
+        BridgeResponse(500, {
+          'ok': false,
+          'error': '$e',
+          'category': 'unknown',
+        }),
       );
     }
   }

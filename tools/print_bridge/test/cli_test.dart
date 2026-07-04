@@ -47,17 +47,25 @@ void main() {
     });
 
     test('--host accepts loopback and --port is applied', () {
-      final c =
-          BridgeConfig.fromArgs(['--host', 'localhost', '--port', '9000']);
+      final c = BridgeConfig.fromArgs([
+        '--host',
+        'localhost',
+        '--port',
+        '9000',
+      ]);
       expect(c.host, 'localhost');
       expect(c.port, 9000);
     });
 
     test('--host rejects a non-loopback address (LOCAL-ONLY)', () {
-      expect(() => BridgeConfig.fromArgs(['--host', '0.0.0.0']),
-          throwsA(isA<FormatException>()));
-      expect(() => BridgeConfig.fromArgs(['--host', '8.8.8.8']),
-          throwsA(isA<FormatException>()));
+      expect(
+        () => BridgeConfig.fromArgs(['--host', '0.0.0.0']),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => BridgeConfig.fromArgs(['--host', '8.8.8.8']),
+        throwsA(isA<FormatException>()),
+      );
     });
 
     test('--target host:port uses --printer-name (default "default")', () {
@@ -66,8 +74,12 @@ void main() {
       expect(c.targets['default']!.host, '192.0.2.10');
       expect(c.targets['default']!.port, 9100);
 
-      final named = BridgeConfig.fromArgs(
-          ['--printer-name', 'grill', '--target', '192.0.2.11:9100']);
+      final named = BridgeConfig.fromArgs([
+        '--printer-name',
+        'grill',
+        '--target',
+        '192.0.2.11:9100',
+      ]);
       expect(named.targets['grill']!.port, 9100);
     });
 
@@ -79,10 +91,14 @@ void main() {
     });
 
     test('an unknown option fails loudly (does not silently start)', () {
-      expect(() => BridgeConfig.fromArgs(['--bogus']),
-          throwsA(isA<FormatException>()));
-      expect(() => BridgeConfig.fromArgs(['--port']),
-          throwsA(isA<FormatException>())); // missing value
+      expect(
+        () => BridgeConfig.fromArgs(['--bogus']),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => BridgeConfig.fromArgs(['--port']),
+        throwsA(isA<FormatException>()),
+      ); // missing value
     });
 
     test('honest mode summary: label + description + printer lines', () {
@@ -92,49 +108,60 @@ void main() {
       expect(sink.printerLines, isEmpty);
       expect(sink.urlForPort(8787), 'http://127.0.0.1:8787');
 
-      final tcp =
-          BridgeConfig.fromArgs(['--target', 'receipt=192.0.2.10:9100']);
+      final tcp = BridgeConfig.fromArgs([
+        '--target',
+        'receipt=192.0.2.10:9100',
+      ]);
       expect(tcp.modeLabel, 'TCP (RAW 9100)');
       expect(tcp.printerLines, ['receipt -> 192.0.2.10:9100']);
     });
   });
 
   group('shutdown (no hang)', () {
-    test('stop() closes the server, frees the port, and is idempotent',
-        () async {
-      final server = BridgeServer(BridgeHandler(config: BridgeConfig()));
-      await server.start(port: 0); // ephemeral loopback port
-      final boundPort = server.port;
-      expect(boundPort, greaterThan(0));
+    test(
+      'stop() closes the server, frees the port, and is idempotent',
+      () async {
+        final server = BridgeServer(BridgeHandler(config: BridgeConfig()));
+        await server.start(port: 0); // ephemeral loopback port
+        final boundPort = server.port;
+        expect(boundPort, greaterThan(0));
 
-      await server.stop();
-      expect(server.port, 0);
+        await server.stop();
+        expect(server.port, 0);
 
-      // The port is genuinely released — a fresh bind on it succeeds.
-      final rebind =
-          await HttpServer.bind(InternetAddress.loopbackIPv4, boundPort);
-      await rebind.close();
+        // The port is genuinely released — a fresh bind on it succeeds.
+        final rebind = await HttpServer.bind(
+          InternetAddress.loopbackIPv4,
+          boundPort,
+        );
+        await rebind.close();
 
-      // A second stop() after already stopped must not throw/hang.
-      await server.stop();
-    });
+        // A second stop() after already stopped must not throw/hang.
+        await server.stop();
+      },
+    );
 
-    test('runBridge returns when the interrupt fires + stops the server',
-        () async {
-      final server = BridgeServer(BridgeHandler(config: BridgeConfig()));
-      await server.start(port: 0);
-      final interrupts = StreamController<void>();
-      final logs = <String>[];
-      final ran =
-          runBridge(server, interrupts: interrupts.stream, onLog: logs.add);
+    test(
+      'runBridge returns when the interrupt fires + stops the server',
+      () async {
+        final server = BridgeServer(BridgeHandler(config: BridgeConfig()));
+        await server.start(port: 0);
+        final interrupts = StreamController<void>();
+        final logs = <String>[];
+        final ran = runBridge(
+          server,
+          interrupts: interrupts.stream,
+          onLog: logs.add,
+        );
 
-      interrupts.add(null); // simulate Ctrl+C
+        interrupts.add(null); // simulate Ctrl+C
 
-      // Must COMPLETE (not hang) and leave the server closed.
-      await ran.timeout(const Duration(seconds: 5));
-      expect(server.port, 0);
-      expect(logs, contains('print_bridge: shutting down...'));
-      await interrupts.close();
-    });
+        // Must COMPLETE (not hang) and leave the server closed.
+        await ran.timeout(const Duration(seconds: 5));
+        expect(server.port, 0);
+        expect(logs, contains('print_bridge: shutting down...'));
+        await interrupts.close();
+      },
+    );
   });
 }

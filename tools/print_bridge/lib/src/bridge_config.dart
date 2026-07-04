@@ -46,8 +46,9 @@ class BridgeConfig {
       : 'forwards ESC/POS bytes to the configured printer(s)';
 
   /// `name -> host:port` lines for the banner (empty in sink mode).
-  List<String> get printerLines =>
-      [for (final e in targets.entries) '${e.key} -> ${e.value}'];
+  List<String> get printerLines => [
+    for (final e in targets.entries) '${e.key} -> ${e.value}',
+  ];
 
   static const Set<String> _loopbackHosts = {
     '127.0.0.1',
@@ -97,8 +98,9 @@ class BridgeConfig {
           final value = next('--target');
           final eq = value.indexOf('=');
           if (eq > 0) {
-            targets[value.substring(0, eq)] =
-                PrinterTarget.parse(value.substring(eq + 1));
+            targets[value.substring(0, eq)] = PrinterTarget.parse(
+              value.substring(eq + 1),
+            );
           } else if (eq == 0) {
             throw FormatException('expected name=host:port', value);
           } else {
