@@ -501,6 +501,49 @@ value unchanged.
   it (enforced server-side; `close_shift` counts cash tenders only). The receipt shows the
   tender type. Void/refund of a completed payment remains out of scope (D-023).
 
+## 7e. Rate limits + session expiry (RF-118)
+
+RestoFlow throttles credential guessing and bounds how long a device/PIN session
+stays valid. **The server enforcement is authoritative; the client pieces are a
+visible UX mirror** (they cannot be bypassed *there* by clearing browser storage).
+
+**Configured thresholds/durations** (all centralized — change in one place):
+
+| What | Threshold | Cooldown / lifetime | Scope | Where |
+|---|---|---|---|---|
+| Staff PIN attempts | 5 wrong PINs | 15-min lockout | per (employee, device) | server `start_pin_session` (RF-051) |
+| Device pairing attempts | 10 invalid codes | 15-min lockout | per calling principal (`auth.uid()`) | server `redeem_device_pairing` (RF-118) |
+| Enrollment code | — | 15-min TTL, consume-once | per code | server (RF-112) |
+| PIN session | — | 8 h absolute max age | per session | server `pin_sessions.expires_at` (RF-051) |
+| Device session | — | 7-day max age | per session | server `device_sessions.expires_at` (RF-118) |
+| Client PIN cooldown | 5 wrong PINs | 15 min, **survives refresh** | per (device, employee) | client `PinAttemptLimiter` (shared_preferences) |
+| Client PIN-session staleness | — | 30-min idle / 8-h max | per session | client `PinSessionExpiryPolicy`, checked on app resume |
+
+**What you'll see:**
+- Enter a wrong PIN 5× on the POS/KDS PIN screen → a **"Too many attempts…"**
+  banner, the keypad + Sign-in disable, and further tries are blocked locally
+  until the cooldown lapses (and the server refuses too). A correct PIN before
+  the cap resets the counter.
+- Type wrong pairing codes repeatedly → after 10, the pairing screen shows a safe
+  generic **"Too many attempts. Please wait a few minutes…"** (it never reveals
+  whether a code exists / belongs elsewhere / expired).
+- Leave a signed-in POS idle/backgrounded past 30 min (or 8 h total) → on the next
+  resume the session ends and the PIN screen shows **"Session expired. Please
+  enter your PIN again."** It never fires mid-order (only on resume) and voids no
+  money/order.
+
+**Demo/pilot safe · what is still production-hardening (honest):**
+- The pairing lockout keys on the caller's auth principal, which an attacker can
+  refresh via `signInAnonymously()` — so it stops a naive single-session loop and
+  is defence-in-depth, **not** production-grade brute-force protection. Real
+  protection needs **IP/edge/gateway rate-limiting** and/or **disabling anonymous
+  sign-in** in production (it is only needed to bootstrap pairing). Enrollment
+  codes stay consume-once + 15-min TTL + high-entropy regardless.
+- All durations are **interim (Q-009), not frozen.**
+- Client PIN-session expiry is **resume-time** (not a live idle timer) and does
+  not yet gate individual sensitive actions with step-up re-auth (RF-118-b).
+- Device-session expiry bites at **restore/launch**, not mid-session.
+
 ## 8. Known limitations (honest list)
 
 - **Printing hardware**: a real **local bridge** now exists (RF-115, §7d) — network

@@ -14,7 +14,8 @@
 > Last updated after: **RF-112** (browser e2e smoke), **RF-113** (shift
 > close/reconcile), **RF-114** (durable offline outbox), **RF-115** (print
 > bridge), **RF-116** (real users/settings), **RF-117** (taxes/discounts/non-cash
-> tenders).
+> tenders), **RF-118** (rate limits + session expiry: pairing brute-force lockout,
+> device-session max age, visible client PIN cooldown + session-inactivity policy).
 
 ---
 
@@ -133,8 +134,17 @@ error), and the protected RF-112 browser smoke exercises the core path.
    model end-to-end (receipt + kitchen), Arabic/Hebrew raster correctness (R-006),
    station→printer routing UI, per-destination health/failure surfacing, drawer
    kick, reprint-with-audit. Decide LAN vs USB vs Bluetooth for the pilot (Q-015).
-5. **Rate limiting + session expiry (RF-118).** Pairing/restore/PIN endpoints have
-   no rate limits; PIN session window is an interim 8h assumption.
+5. **Rate limiting + session expiry (RF-118) — PARTIALLY DONE.** ✅ Delivered:
+   server-side device-pairing brute-force lockout (per calling principal, 10
+   attempts → 15-min cooldown), device-session **max age** (7d, activating the
+   RF-016-deferred `device_sessions.expires_at`; enforced on restore), a visible
+   client PIN cooldown mirroring the server RF-051 lockout, and a client staff
+   PIN-session inactivity/max-age policy (30 min idle / 8 h). ⚠️ **Remaining
+   production-hardening:** the per-principal pairing lockout is bypassable by
+   re-anonymizing (`signInAnonymously`) → real brute-force protection needs
+   IP/edge/gateway rate-limiting and/or disabling anonymous sign-in in production;
+   the durations are still interim (Q-009, not frozen); step-up re-auth for
+   individual sensitive actions is not wired (client expiry is resume-time).
 6. **Backups + recovery drill (OPERATIONS_AND_RECOVERY).** Even a pilot needs a
    tested DB backup/restore and a "device lost/stolen" runbook.
 7. **User invite flow.** An owner must be able to add a new staff account safely
@@ -172,10 +182,20 @@ error), and the protected RF-112 browser smoke exercises the core path.
 
 ## 6. Security gaps (explicit)
 
-- **RF-118 — rate limits + session expiry.** No rate limiting on
-  `redeem_device_pairing` / `restore_device_session` / `start_pin_session`; PIN
-  session TTL is an interim 8h; device sessions are revocation-bounded only
-  (Q-009). *Do this before an unsupervised pilot.*
+- **RF-118 — rate limits + session expiry — PARTIALLY DONE (server + client).**
+  ✅ `start_pin_session` already had per-(employee, device) attempt lockout
+  (RF-051: 5 attempts → 15 min). RF-118 added: `redeem_device_pairing`
+  brute-force lockout (per `auth.uid()` principal, 10 attempts → 15 min, checked
+  before the code lookup, safe generic `locked` error, reset on success);
+  `device_sessions.expires_at` now SET at redeem (7-day max age) and ENFORCED on
+  `restore_device_session` (activating the RF-016-deferred column); a visible
+  client PIN cooldown (durable via shared_preferences, mirrors the server); and a
+  client staff PIN-session inactivity/max-age policy surfaced at app resume
+  ("session expired — enter PIN again"). ⚠️ **Still production-hardening:** the
+  per-principal pairing lockout is bypassable by re-anonymizing → needs IP/edge
+  rate-limiting and/or anonymous-sign-in disabled in prod; PIN-session TTL and all
+  durations remain interim (Q-009, unfrozen); no anomaly detection; sensitive-action
+  step-up re-auth not wired. *Close these before an unsupervised pilot.*
 - **RF-119 — platform-admin MFA.** The platform-admin plane has no enforced MFA /
   AAL2 step-up. *Do this before any platform-admin acts on production tenants.*
 - **R-007 offline authorization staleness.** A device revoked while offline can
@@ -186,8 +206,10 @@ error), and the protected RF-112 browser smoke exercises the core path.
   (acceptable for local dev only).
 - **Audit coverage** exists for money/membership/settings mutations (append-only,
   D-013) but there is **no in-app audit viewer** and no tamper-evidence/export.
-- **No brute-force/lockout hardening** beyond the basic PIN attempt limits;
-  no anomaly detection.
+- **Brute-force/lockout hardening (RF-118) is DB-layer + client only** — PIN
+  attempts (RF-051) and pairing attempts (RF-118) lock out per identity/principal,
+  but there is no IP/edge rate-limiting, no anomaly detection, and the pairing
+  lockout is bypassable by minting a fresh anonymous principal per attempt.
 - **Secrets discipline is good** (guardrail-enforced, anon-key-only) — keep it.
 
 ---
@@ -260,7 +282,11 @@ Prioritized for **pilot-readiness first**, then production hardening:
    test-print-through-bridge, reprint+audit. Settle Q-015 transport.
 3. **RF-055+ — real shift cash management**: opening-float count-in, manager
    `reconcile` sign-off, cash in/out, Z-report.
-4. **RF-118 — rate limits + session expiry** (pairing/restore/PIN).
+4. **RF-118 — rate limits + session expiry** (pairing/restore/PIN) — ✅ **DONE
+   (DB + client)** for the supervised demo/pilot. Follow-up **RF-118-b**
+   (production-hardening): edge/gateway IP rate-limiting for pairing (the
+   per-principal DB lockout is re-anonymization-bypassable), freeze the Q-009
+   durations, and sensitive-action step-up re-auth.
 5. **Backups + recovery drill** (implement OPERATIONS_AND_RECOVERY basics) +
    the R-003 human RLS/security sign-off.
 6. **Reports + exports** (date ranges, tender/tax/discount breakdown, CSV).
