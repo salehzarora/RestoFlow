@@ -419,8 +419,12 @@ The web app cannot open a raw ESC/POS socket, so physical printing goes through 
 
 ```sh
 cd tools/print_bridge && dart pub get
-dart run print_bridge                                   # DEMO SINK — accepts jobs, prints nothing
-dart run print_bridge --target receipt=192.0.2.10:9100  # real RAW/TCP 9100 printer
+dart run print_bridge --help              # all options (does not start the server)
+dart run print_bridge --demo              # DEMO SINK — accepts jobs, prints nothing
+dart run print_bridge --target 192.0.2.10:9100          # real RAW/TCP 9100 printer
+dart run print_bridge --target receipt=192.0.2.10:9100 --target kitchen=192.0.2.20:9100
+# Stop it with Ctrl+C (clean shutdown + exit). An unknown flag or a non-loopback
+# --host fails with exit 64 and does NOT start a mis-configured server.
 ```
 
 Then launch the POS/KDS pointed at the **loopback** bridge only:

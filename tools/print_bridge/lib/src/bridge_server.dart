@@ -17,11 +17,24 @@ class BridgeServer {
   /// The bound port (0 before [start]).
   int get port => _server?.port ?? 0;
 
-  /// Binds loopback IPv4 on [port] and starts serving.
-  Future<void> start({int port = 8787}) async {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+  /// Binds a LOOPBACK address on [port] and starts serving. [host] selects the
+  /// loopback family (`::1` -> IPv6, anything else -> 127.0.0.1); a non-loopback
+  /// host is IGNORED and still binds loopback, so the bridge can NEVER be reached
+  /// off the machine (never 0.0.0.0). Config validation rejects a non-loopback
+  /// --host earlier with a clear error.
+  Future<void> start({String host = '127.0.0.1', int port = 8787}) async {
+    final address = _loopbackAddress(host);
+    final server = await HttpServer.bind(address, port);
     _server = server;
     server.listen(_onRequest);
+  }
+
+  static InternetAddress _loopbackAddress(String host) {
+    final low = host.toLowerCase();
+    if (low == '::1' || low == '0:0:0:0:0:0:0:1') {
+      return InternetAddress.loopbackIPv6;
+    }
+    return InternetAddress.loopbackIPv4;
   }
 
   Future<void> stop() async {

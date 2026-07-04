@@ -12,7 +12,9 @@
 library;
 
 export 'src/bridge_config.dart';
+export 'src/cli.dart';
 export 'src/bridge_handler.dart';
 export 'src/bridge_server.dart';
 export 'src/printer_socket.dart';
 export 'src/printer_target.dart';
+export 'src/runner.dart';

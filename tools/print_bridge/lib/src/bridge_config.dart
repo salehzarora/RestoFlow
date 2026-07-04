@@ -12,6 +12,7 @@ class BridgeConfig {
   BridgeConfig({
     Map<String, PrinterTarget>? targets,
     this.maxPayloadBytes = 1024 * 1024,
+    this.host = '127.0.0.1',
     this.port = 8787,
   }) : targets = Map.unmodifiable(targets ?? const {});
 
@@ -21,6 +22,11 @@ class BridgeConfig {
   /// Reject payloads larger than this (guards against pathological jobs).
   final int maxPayloadBytes;
 
+  /// The LOOPBACK host to bind (default 127.0.0.1). Only loopback is permitted
+  /// (validated in [fromArgs]); the server binds loopback regardless (never
+  /// 0.0.0.0), so the bridge can never be reached off the machine.
+  final String host;
+
   /// The loopback port to bind.
   final int port;
 
@@ -28,39 +34,101 @@ class BridgeConfig {
 
   List<String> get printerNames => targets.keys.toList(growable: false);
 
-  /// Parses CLI args:
-  ///   --target name=host:port   (repeatable)
-  ///   --config path.json
-  ///   --port 8787
-  ///   --max-bytes 1048576
+  /// The base URL a local caller (the POS/KDS) uses to reach the bridge.
+  String urlForPort(int boundPort) => 'http://$host:$boundPort';
+
+  /// A short, honest mode label for the startup banner + health.
+  String get modeLabel => sinkMode ? 'DEMO SINK' : 'TCP (RAW 9100)';
+
+  /// A one-line honest description of what jobs actually do in this mode.
+  String get modeDescription => sinkMode
+      ? 'jobs are accepted but NOT sent to any printer (nothing prints)'
+      : 'forwards ESC/POS bytes to the configured printer(s)';
+
+  /// `name -> host:port` lines for the banner (empty in sink mode).
+  List<String> get printerLines =>
+      [for (final e in targets.entries) '${e.key} -> ${e.value}'];
+
+  static const Set<String> _loopbackHosts = {
+    '127.0.0.1',
+    'localhost',
+    '::1',
+    '0:0:0:0:0:0:0:1',
+  };
+
+  static bool _isLoopbackHost(String h) {
+    final low = h.toLowerCase();
+    return _loopbackHosts.contains(low) || low.startsWith('127.');
+  }
+
+  /// Parses CLI args (see `--help` / kPrintBridgeUsage). Unknown options throw
+  /// [FormatException] so typos fail loudly instead of silently starting a
+  /// mis-configured server. `--help` is handled by the caller BEFORE this.
   factory BridgeConfig.fromArgs(List<String> args) {
     final targets = <String, PrinterTarget>{};
     var port = 8787;
     var maxBytes = 1024 * 1024;
+    var host = '127.0.0.1';
+    var printerName = 'default';
+    var demoRequested = false;
     String? configPath;
 
     for (var i = 0; i < args.length; i++) {
       final arg = args[i];
-      String? next() => (i + 1 < args.length) ? args[++i] : null;
-      switch (arg) {
-        case '--target':
-          final value = next();
-          if (value == null)
-            throw const FormatException('--target needs a value');
-          final eq = value.indexOf('=');
-          if (eq <= 0) {
-            throw FormatException('expected name=host:port', value);
-          }
-          targets[value.substring(0, eq)] = PrinterTarget.parse(
-            value.substring(eq + 1),
-          );
-        case '--config':
-          configPath = next();
-        case '--port':
-          port = int.parse(next() ?? '8787');
-        case '--max-bytes':
-          maxBytes = int.parse(next() ?? '$maxBytes');
+      String next(String forFlag) {
+        if (i + 1 >= args.length) {
+          throw FormatException('$forFlag needs a value');
+        }
+        return args[++i];
       }
+
+      switch (arg) {
+        case '--help':
+        case '-h':
+          // Defensive: the entry point handles help first, but never treat it
+          // as an unknown option here.
+          break;
+        case '--demo':
+        case '--sink':
+          demoRequested = true;
+        case '--printer-name':
+          printerName = next('--printer-name');
+        case '--target':
+          final value = next('--target');
+          final eq = value.indexOf('=');
+          if (eq > 0) {
+            targets[value.substring(0, eq)] =
+                PrinterTarget.parse(value.substring(eq + 1));
+          } else if (eq == 0) {
+            throw FormatException('expected name=host:port', value);
+          } else {
+            // no name given -> use --printer-name (default "default").
+            targets[printerName] = PrinterTarget.parse(value);
+          }
+        case '--host':
+          host = next('--host');
+          if (!_isLoopbackHost(host)) {
+            throw FormatException(
+              'print_bridge is LOCAL-ONLY; --host must be a loopback address '
+              '(127.0.0.1 / localhost / ::1)',
+              host,
+            );
+          }
+        case '--config':
+          configPath = next('--config');
+        case '--port':
+          port = _parseInt(next('--port'), '--port');
+        case '--max-bytes':
+          maxBytes = _parseInt(next('--max-bytes'), '--max-bytes');
+        default:
+          throw FormatException('unknown option', arg);
+      }
+    }
+
+    if (demoRequested && targets.isNotEmpty) {
+      throw const FormatException(
+        '--demo/--sink cannot be combined with --target (a sink prints nothing)',
+      );
     }
 
     if (configPath != null) {
@@ -71,12 +139,23 @@ class BridgeConfig {
       return BridgeConfig(
         targets: {...fromFile.targets, ...targets},
         maxPayloadBytes: targets.isEmpty ? fromFile.maxPayloadBytes : maxBytes,
+        host: host,
         port: port,
       );
     }
 
     return BridgeConfig(
-        targets: targets, maxPayloadBytes: maxBytes, port: port);
+      targets: targets,
+      maxPayloadBytes: maxBytes,
+      host: host,
+      port: port,
+    );
+  }
+
+  static int _parseInt(String value, String forFlag) {
+    final n = int.tryParse(value);
+    if (n == null) throw FormatException('$forFlag must be an integer', value);
+    return n;
   }
 
   /// Parses a JSON config:

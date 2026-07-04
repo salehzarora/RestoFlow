@@ -30,18 +30,44 @@ confirmed printed)"**. A demo sink is even more explicit: `accepted_sink`
 ## Run
 
 ```sh
-# Demo SINK mode (no printer needed) — accepts jobs, does NOT reach hardware:
-dart run print_bridge
+# Show all options and exit (does NOT start the server):
+dart run print_bridge --help
 
-# Forward to a real RAW 9100 printer:
+# Demo SINK mode (no printer needed) — accepts jobs, does NOT reach hardware:
+dart run print_bridge --demo            # (same as no args)
+
+# Forward to ONE network RAW 9100 printer:
+dart run print_bridge --target 192.0.2.10:9100
+
+# Named / multiple printers:
 dart run print_bridge --target receipt=192.0.2.10:9100 --target kitchen=192.0.2.20:9100
 
 # From a JSON config (see bridge.config.example.json):
 dart run print_bridge --config bridge.config.example.json --port 8787
 ```
 
-Flags: `--target name=host:port` (repeatable), `--config path.json`,
-`--port 8787`, `--max-bytes 1048576`.
+**Stop it:** press **Ctrl+C** — the bridge closes the server and exits cleanly.
+
+Flags:
+
+| Flag | Meaning |
+|---|---|
+| `-h`, `--help` | Print usage and exit 0 (no server). |
+| `--demo`, `--sink` | Explicit demo sink (default when no `--target`). Prints nothing. Cannot be combined with `--target`. |
+| `--target host:port` | A network printer; named by `--printer-name` (default `default`). |
+| `--target name=host:port` | A named network printer (repeatable). |
+| `--printer-name <name>` | Name for an unnamed `--target`. |
+| `--host <addr>` | Loopback bind address (default `127.0.0.1`). **Local-only**: `127.0.0.1` / `localhost` / `::1` only. |
+| `--port <n>` | Bind port (default `8787`). |
+| `--config <path.json>` | Load targets/port from JSON. |
+| `--max-bytes <n>` | Reject payloads larger than n bytes (default `1048576`). |
+
+An unknown flag (or a non-loopback `--host`) fails loudly with exit `64` and does
+**not** start a mis-configured server.
+
+The startup banner states the mode (DEMO SINK vs TCP), the loopback URL, the
+configured printers, the exact `--dart-define` to point the POS/KDS at it, and —
+in sink mode — a warning that nothing prints.
 
 ## HTTP API
 
