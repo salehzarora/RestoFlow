@@ -356,20 +356,33 @@ service-role key; production grants are an operator/DBA action):
 
 3. The grant makes `is_platform_admin = true`, but live reads still need **MFA
    aal2**. Local TOTP is enabled in `supabase/config.toml` (`[auth.mfa.totp]`).
-   Without an aal2 session the gate now shows the honest **"Multi-factor
-   authentication required"** screen (RF-119) — correct, not a bug.
 
-   > **Manual/operator limitation (RF-119, honest):** the admin app has **no
-   > sign-in screen and no in-app MFA (TOTP) enrolment/challenge UI** — by design
-   > it reads the ambient session via `get_my_context` (anon-key transport, no
-   > service-role key). Reaching aal2 today is an **operator/manual** step: sign
-   > in and enrol/verify TOTP out-of-band with the Supabase Auth client
-   > (`supabase.auth.mfa.enroll` → `challenge` → `verify`) so the session JWT
-   > carries `"aal":"aal2"`, then reload the admin app. An in-app admin
-   > login + TOTP enrolment flow is a documented follow-up (RF-119-b); RF-119
-   > does NOT fake completion or grant access without a real aal2 session.
-   > The server enforcement (`app.platform_admin_guard`) is the real boundary;
-   > `is_mfa_aal2` is only the UX signal the gate reads.
+   **RF-119-b — in-app sign-in + TOTP MFA (now built).** The admin app has a real
+   platform-operator flow — no service-role key (PUBLIC anon key only, D-011):
+   - **Sign in** with email + password (the same account you granted above). It is
+     email/password ONLY — no sign-up, no onboarding; a platform grant is a manual
+     DBA action, never self-service. A restaurant owner who signs in is NOT a
+     platform admin and gets the platform-panel explainer.
+   - If you hold a grant but the session is not aal2, the app shows the MFA screen:
+     - **first time (no factor):** it starts a TOTP **enrolment** — add the shown
+       **setup key** (or the `otpauth://` URI) to an authenticator app (Google
+       Authenticator, 1Password, …), then enter the current 6-digit code to
+       verify. The secret/URI are shown ONCE and never stored;
+     - **thereafter (enrolled):** it **challenges** the existing factor — just
+       enter the current 6-digit code.
+   - On a successful verify the client session becomes aal2; the app **re-fetches
+     `get_my_context`** and enters the overview ONLY when the SERVER confirms
+     `is_mfa_aal2` — never on the client's own state. A wrong code shows a safe
+     generic error and NO platform data. **Sign out** is available on every state.
+
+   > **Honest scope (RF-119-b):** the app renders the TOTP **setup key + otpauth
+   > URI as text** for manual/authenticator entry — there is no in-app QR *image*
+   > renderer (no QR package added); paste the URI into a QR/TOTP tool if you want
+   > a scannable code. The server enforcement (`app.platform_admin_guard`:
+   > grant + aal2 + reason) remains the real boundary — the client aal2 state is a
+   > UX signal only. Still production-hardening: no admin account provisioning UI
+   > (grants stay a DBA action), no per-read operator reason entry (a fixed audited
+   > reason is used), and no QR-image renderer.
 
 ## 7c. POS/KDS device settings + auto-print (for the staff on the device)
 
