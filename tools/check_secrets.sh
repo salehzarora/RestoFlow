@@ -14,7 +14,8 @@
 #      AWS / Google keys, PEM private keys, Slack tokens).
 #
 # It NEVER prints a matched secret value — only "<file>:<line>" locations.
-# Exit code 0 = clean, 1 = potential leak found. Wire into CI in a later ticket.
+# Exit code 0 = clean, 1 = potential leak found. This IS enforced in CI as a
+# guardrail step (.github/workflows/ci.yml — DECISION D-011).
 #
 # Run from anywhere in the repo:   bash tools/check_secrets.sh
 # (Windows: use Git Bash.)
@@ -44,8 +45,11 @@ while IFS= read -r -d '' f; do
     *.example) continue ;;   # placeholder templates are allowed
   esac
   base="$(basename "$f")"
+  # Match env files by ANY prefix, not just the ".env"-leading dotfile forms, so
+  # a non-dotfile secret env file (e.g. supabasekey.env.local) is blocked by name
+  # even if a .gitignore gap let it slip past --exclude-standard (RF-LIVE-001).
   case "$base" in
-    .env|.env.*)
+    .env|.env.*|*.env|*.env.local)
       echo "BLOCK  un-ignored env file (may hold secrets): $f"; fail=1 ;;
   esac
   case "$f" in
