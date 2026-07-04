@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "if [ ! -d flutter ]; then git clone https://github.com/flutter/flutter.git --depth 1 -b 3.44.2 flutter; fi && flutter/bin/flutter config --enable-web && flutter/bin/flutter pub get",
+  "buildCommand": "cd apps/dashboard && ../../flutter/bin/flutter build web --release --dart-define=RESTOFLOW_DEMO_MODE=false --dart-define=RESTOFLOW_SUPABASE_URL=$RESTOFLOW_SUPABASE_URL --dart-define=RESTOFLOW_SUPABASE_ANON_KEY=$RESTOFLOW_SUPABASE_ANON_KEY",
+  "outputDirectory": "apps/dashboard/build/web",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
