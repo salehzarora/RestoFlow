@@ -23,6 +23,9 @@ class PinLoginScreen extends StatefulWidget {
     required this.onStartSession,
     this.surface,
     this.appBarActions = const <Widget>[],
+    this.attemptLimiter,
+    this.attemptScope,
+    this.expiredNotice = false,
     super.key,
   });
 
@@ -35,6 +38,21 @@ class PinLoginScreen extends StatefulWidget {
   /// Host-provided app-bar actions (sprint I: the language switcher must be
   /// reachable on EVERY page, including the PIN screen).
   final List<Widget> appBarActions;
+
+  /// RF-118: optional client-side PIN attempt limiter. Null (the DEFAULT) => the
+  /// screen behaves exactly as before (the authoritative SERVER lockout, RF-051,
+  /// still applies). When provided, repeated wrong PINs impose a VISIBLE local
+  /// cooldown (mirroring the server) that resets on a successful sign-in.
+  final PinAttemptLimiter? attemptLimiter;
+
+  /// RF-118: maps the selected staff member to the limiter scope key (default:
+  /// the employee profile id). Hosts prepend the deviceId so the client scope
+  /// mirrors the server's per-(employee, device) lockout.
+  final String Function(DeviceStaffMember member)? attemptScope;
+
+  /// RF-118: when true, show a "session expired — sign in again" notice at the
+  /// top of the picker (the host sets it after an expiry-triggered sign-out).
+  final bool expiredNotice;
 
   /// Starts the PIN session; returns null on success (the host rebuilds past
   /// this screen) or a typed error to show.
@@ -56,6 +74,10 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
   PinLoginError? _error;
   bool _busy = false;
 
+  /// RF-118: the selected member's client attempt/lockout snapshot (empty when
+  /// no limiter is wired). Drives the visible cooldown + input disabling.
+  PinAttemptState _lock = PinAttemptState.empty;
+
   @override
   void dispose() {
     _pin.dispose();
@@ -66,11 +88,29 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
     _staff = widget.staffRepository.listStaff();
     _selected = null;
     _error = null;
+    _lock = PinAttemptState.empty;
   });
+
+  String _scopeKey(DeviceStaffMember m) =>
+      widget.attemptScope?.call(m) ?? m.employeeProfileId;
+
+  /// Loads the persisted client lockout state for a just-selected member.
+  Future<void> _loadLock(DeviceStaffMember member) async {
+    final limiter = widget.attemptLimiter;
+    if (limiter == null) return;
+    final state = await limiter.stateFor(_scopeKey(member));
+    if (!mounted || _selected != member) return;
+    setState(() => _lock = state);
+  }
 
   Future<void> _submit() async {
     final selected = _selected;
     if (selected == null || _busy) return;
+    // RF-118: a live client cooldown blocks the attempt before any server call.
+    if (_lock.isLocked(DateTime.now())) {
+      setState(() => _error = PinLoginError.locked);
+      return;
+    }
     final pin = _pin.text;
     if (!RegExp(r'^[0-9]{4,8}$').hasMatch(pin)) {
       setState(() => _error = PinLoginError.wrongPin);
@@ -81,10 +121,24 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
       _error = null;
     });
     final error = await widget.onStartSession(selected.employeeProfileId, pin);
+    // RF-118: record the outcome in the client limiter REGARDLESS of mount — a
+    // successful login unmounts this screen, but the counter reset must still run.
+    final limiter = widget.attemptLimiter;
+    var lock = _lock;
+    if (limiter != null) {
+      if (error == null) {
+        await limiter.recordSuccess(_scopeKey(selected));
+        lock = PinAttemptState.empty;
+      } else if (error == PinLoginError.wrongPin ||
+          error == PinLoginError.locked) {
+        lock = await limiter.recordFailure(_scopeKey(selected));
+      }
+    }
     if (!mounted) return;
     setState(() {
       _busy = false;
       _error = error;
+      _lock = lock;
       if (error != null) _pin.clear();
     });
     // On success the host swaps this screen out; nothing more to do here.
@@ -184,6 +238,16 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
       shrinkWrap: true,
       padding: const EdgeInsets.all(RestoflowSpacing.xl),
       children: [
+        // RF-118: shown after an inactivity/max-age expiry signed the operator
+        // out — a clear, recoverable "enter your PIN again" prompt.
+        if (widget.expiredNotice) ...[
+          RestoflowNoticeBanner(
+            tone: RestoflowTone.info,
+            icon: Icons.lock_clock_outlined,
+            body: l10n.pinSessionExpired,
+          ),
+          const SizedBox(height: RestoflowSpacing.lg),
+        ],
         Text(
           l10n.pinLoginPickName,
           textAlign: TextAlign.center,
@@ -198,11 +262,16 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
             child: _StaffTile(
               member: member,
               roleLabel: _roleLabel(l10n, member.role),
-              onTap: () => setState(() {
-                _selected = member;
-                _error = null;
-                _pin.clear();
-              }),
+              onTap: () {
+                setState(() {
+                  _selected = member;
+                  _error = null;
+                  _lock = PinAttemptState.empty;
+                  _pin.clear();
+                });
+                // RF-118: hydrate any persisted client cooldown for this member.
+                _loadLock(member);
+              },
             ),
           ),
       ],
@@ -320,6 +389,9 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
   Widget _pinEntry(BuildContext context, DeviceStaffMember member) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // RF-118: a live client cooldown disables entry and shows a safe, visible
+    // "too many attempts" banner (in addition to the field error).
+    final locked = _lock.isLocked(DateTime.now());
     final errorText = switch (_error) {
       null => null,
       PinLoginError.wrongPin => l10n.pinLoginWrongPin,
@@ -347,10 +419,19 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
             ),
           ),
           const SizedBox(height: RestoflowSpacing.lg),
+          if (locked) ...[
+            RestoflowNoticeBanner(
+              tone: RestoflowTone.danger,
+              icon: Icons.lock_clock_outlined,
+              body: l10n.pinLoginLocked,
+            ),
+            const SizedBox(height: RestoflowSpacing.md),
+          ],
           TextField(
             key: const Key('pin-input'),
             controller: _pin,
             autofocus: true,
+            enabled: !locked,
             obscureText: true,
             keyboardType: TextInputType.number,
             maxLength: _maxPinLength,
@@ -374,7 +455,7 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
               child: RestoflowNumericKeypad(
                 onDigit: _keypadDigit,
                 onBackspace: _keypadBackspace,
-                enabled: !_busy,
+                enabled: !_busy && !locked,
                 buttonHeight: 48,
               ),
             ),
@@ -382,7 +463,7 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
           const SizedBox(height: RestoflowSpacing.lg),
           FilledButton(
             key: const Key('pin-submit'),
-            onPressed: _busy ? null : _submit,
+            onPressed: (_busy || locked) ? null : _submit,
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
             ),

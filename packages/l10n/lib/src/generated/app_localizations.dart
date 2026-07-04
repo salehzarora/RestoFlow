@@ -3694,6 +3694,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t pair this device. Please try again.'**
   String get pairingFailed;
 
+  /// Safe rate-limit error after too many invalid pairing attempts (RF-118); reveals only that the caller is throttled.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Please wait a few minutes and try again.'**
+  String get pairingLocked;
+
   /// Dashboard navigation label for the printers surface.
   ///
   /// In en, this message translates to:
@@ -4671,6 +4677,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sign-in isn\'t available right now.'**
   String get pinLoginUnavailable;
+
+  /// Shown on the PIN screen after an inactivity/max-age expiry signed the operator out (RF-118).
+  ///
+  /// In en, this message translates to:
+  /// **'Session expired. Please enter your PIN again.'**
+  String get pinSessionExpired;
 
   /// PIN sign-in submit button.
   ///

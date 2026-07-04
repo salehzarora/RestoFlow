@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
@@ -167,6 +168,51 @@ final posImageUrlResolverProvider = Provider<DeviceImageUrlResolver?>(
 /// precondition failure (42501), or a transient transport error all resolve to
 /// `null` (fail-closed) - there is no path to a fake or forced session.
 class PosSessionController extends AsyncNotifier<SyncSession?> {
+  /// RF-118: when the current PIN session was established (drives the client
+  /// expiry policy). Null when no session is active.
+  DateTime? _startedAt;
+
+  /// RF-118: when the app was last backgrounded — the last-activity anchor for
+  /// the INACTIVITY check (a device left idle re-requires the PIN on resume).
+  DateTime? _pausedAt;
+
+  /// RF-118 test seam: the clock the expiry window reads. Defaults to the wall
+  /// clock; overridden in tests to exercise the real 30-min / 8-h boundaries
+  /// deterministically.
+  @visibleForTesting
+  DateTime Function() clock = DateTime.now;
+
+  /// RF-118: records that the app went to the background (called from the POS
+  /// lifecycle guard). The FIRST background moment after a sign-in/resume wins
+  /// (`??=`): on mobile, foregrounding passes back through hidden/inactive, which
+  /// must NOT reset the idle anchor to ~now (that would defeat inactivity expiry).
+  void noteAppPaused() => _pausedAt ??= clock();
+
+  /// RF-118: at a SAFE boundary (app resume), end the session if it is stale per
+  /// [policy] (inactivity or the absolute max age). Returns true when it ended a
+  /// session (so the gate can show the "session expired — enter PIN again"
+  /// notice). Never fires mid-order: it is only consulted on resume, and a
+  /// backgrounded POS is not ringing up a sale. Voids no money / order. The pause
+  /// anchor is CONSUMED here so the next background cycle re-records it; when the
+  /// app was never backgrounded (anchor null) the operator counts as active
+  /// (lastActivity = now, zero idle) so only the max age can expire the session.
+  bool endSessionIfExpired(PinSessionExpiryPolicy policy) {
+    final started = _startedAt;
+    if (state.valueOrNull == null || started == null) return false;
+    final pausedAt = _pausedAt;
+    _pausedAt = null;
+    final now = clock();
+    if (!policy.isExpired(
+      startedAt: started,
+      lastActivityAt: pausedAt ?? now,
+      now: now,
+    )) {
+      return false;
+    }
+    endSession();
+    return true;
+  }
+
   @override
   FutureOr<SyncSession?> build() {
     final cfg = ref.watch(runtimeConfigProvider);
@@ -193,6 +239,8 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
           pinSessionId: started.pinSessionId,
           deviceId: config.deviceId,
         );
+        _startedAt = clock(); // RF-118: start the client expiry window.
+        _pausedAt = null;
         unawaited(_openShiftBestEffort(transport, session));
         return session;
       },
@@ -335,6 +383,8 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
           pinSessionId: started.pinSessionId,
           deviceId: deviceId,
         );
+        _startedAt = clock(); // RF-118: start the client expiry window.
+        _pausedAt = null;
         state = AsyncData(session);
         // A cashier needs an open shift before payments (RF-055); best-effort.
         unawaited(_openShiftBestEffort(transport, session));
@@ -354,9 +404,20 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// captured open-shift handle (RF-113) so a new sign-in starts fresh.
   void endSession() {
     ref.read(posOpenShiftProvider.notifier).clear();
+    _startedAt = null; // RF-118: close the client expiry window.
+    _pausedAt = null;
     state = const AsyncData(null);
   }
 }
+
+/// RF-118: the POS staff PIN-session expiry policy (client-side). Defaults to an
+/// 8-hour absolute max age (mirroring the SERVER `pin_sessions.expires_at`
+/// window, RF-051) plus a 30-minute inactivity timeout — generous enough that a
+/// normal service session (or the RF-112 browser smoke) never trips, but a
+/// device left idle re-requires the PIN on the next resume. Overridable in tests.
+final posPinSessionExpiryPolicyProvider = Provider<PinSessionExpiryPolicy>(
+  (ref) => const PinSessionExpiryPolicy(),
+);
 
 /// Owns [PosSessionController].
 final posSessionControllerProvider =

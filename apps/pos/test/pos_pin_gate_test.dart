@@ -46,10 +46,14 @@ Future<void> _pump(
   required SyncRpcTransport transport,
   DeviceContext device = _device,
   DeviceStaffRepository? staff,
+  List<Override> overrides = const <Override>[],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [posAuthTransportProvider.overrideWithValue(transport)],
+      overrides: [
+        posAuthTransportProvider.overrideWithValue(transport),
+        ...overrides,
+      ],
       child: MaterialApp(
         localizationsDelegates: restoflowLocalizationsDelegates,
         supportedLocales: kSupportedLocales,
@@ -61,6 +65,23 @@ Future<void> _pump(
       ),
     ),
   );
+  await tester.pumpAndSettle();
+}
+
+/// Drives the app to the background then back to the foreground through the
+/// LEGAL lifecycle sequence, so the gate's WidgetsBindingObserver records a pause
+/// and re-checks expiry on resume.
+Future<void> _backgroundThenResume(WidgetTester tester) async {
+  for (final s in const [
+    AppLifecycleState.inactive,
+    AppLifecycleState.hidden,
+    AppLifecycleState.paused,
+    AppLifecycleState.hidden,
+    AppLifecycleState.inactive,
+    AppLifecycleState.resumed,
+  ]) {
+    tester.binding.handleAppLifecycleStateChanged(s);
+  }
   await tester.pumpAndSettle();
 }
 
@@ -151,6 +172,47 @@ void main() {
     expect(find.text(l10n.authTryAgain), findsOneWidget);
     expect(find.text(l10n.authAccessDenied), findsNothing);
     expect(find.byKey(const Key('pos-surface')), findsNothing);
+  });
+
+  testWidgets('RF-118: an idle session expires on resume, returns to the PIN '
+      'gate, and shows the localized "enter PIN again" notice', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await _pump(
+      tester,
+      transport: _FakeTransport((fn, p) {
+        if (fn == 'sync_push') {
+          return <String, dynamic>{
+            'ok': true,
+            'results': <dynamic>[
+              <String, dynamic>{
+                'operation_type': 'shift.open',
+                'status': 'applied',
+                'ok': true,
+              },
+            ],
+          };
+        }
+        return fn == 'start_pin_session' ? 'pin-session-1' : null;
+      }),
+      overrides: [
+        // Zero inactivity => any background+resume expires the session.
+        posPinSessionExpiryPolicyProvider.overrideWithValue(
+          const PinSessionExpiryPolicy(inactivityTimeout: Duration.zero),
+        ),
+      ],
+    );
+    await tester.tap(find.byKey(const Key('pin-staff-emp-1')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('pin-input')), '1234');
+    await tester.tap(find.byKey(const Key('pin-submit')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pos-surface')), findsOneWidget);
+
+    await _backgroundThenResume(tester);
+
+    expect(find.byKey(const Key('pos-surface')), findsNothing);
+    expect(find.byType(PinLoginScreen), findsOneWidget);
+    expect(find.text(l10n.pinSessionExpired), findsOneWidget);
   });
 }
 

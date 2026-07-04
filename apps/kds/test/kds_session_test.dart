@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_kds/src/state/kds_session.dart';
@@ -285,5 +286,151 @@ void main() {
         expect(transport.functions, isEmpty);
       },
     );
+  });
+
+  group('KdsSessionController staff PIN-session expiry (RF-118)', () {
+    final t0 = DateTime.utc(2026, 7, 4, 9);
+    const policy = PinSessionExpiryPolicy(); // 30-min idle / 8-h max age
+
+    // Signs in through the INTERACTIVE path under a CONTROLLABLE clock (config is
+    // null so build() does not auto-establish first), stamping the expiry
+    // window's start at [signInAt] so later checks can advance time precisely.
+    Future<(ProviderContainer, KdsSessionController)> signedIn(
+      DateTime signInAt,
+    ) async {
+      final container = containerFor(
+        isDemoMode: false,
+        transport: _RecordingTransport((_, _) async => 'pin-session-id'),
+        config: null,
+      );
+      final controller = container.read(kdsSessionControllerProvider.notifier);
+      await container.read(
+        kdsSessionControllerProvider.future,
+      ); // build() -> null
+      controller.clock = () => signInAt;
+      final err = await controller.signInWithPin(
+        deviceId: 'device-abc',
+        deviceSessionId: 'devsess-1',
+        employeeProfileId: 'emp-1',
+        pin: 'verifier-xyz',
+      );
+      expect(err, isNull);
+      expect(container.read(kdsSyncSessionProvider), isNotNull);
+      return (container, controller);
+    }
+
+    test('an active session (minutes in) is NOT expired', () async {
+      final (container, controller) = await signedIn(t0);
+      controller.clock = () => t0.add(const Duration(minutes: 5));
+      expect(controller.endSessionIfExpired(policy), isFalse);
+      expect(container.read(kdsSyncSessionProvider), isNotNull);
+    });
+
+    test(
+      'expires after 30 minutes of inactivity (background then resume)',
+      () async {
+        final (container, controller) = await signedIn(t0);
+        controller.clock = () => t0; // background at sign-in time
+        controller.noteAppPaused();
+        controller.clock = () =>
+            t0.add(const Duration(minutes: 31)); // resume 31m
+        expect(controller.endSessionIfExpired(policy), isTrue);
+        expect(
+          container.read(kdsSyncSessionProvider),
+          isNull,
+          reason: 'expiry clears the staff session -> back to the PIN gate',
+        );
+      },
+    );
+
+    test(
+      'does NOT expire on resume when idle < the inactivity window',
+      () async {
+        final (container, controller) = await signedIn(t0);
+        controller.clock = () => t0;
+        controller.noteAppPaused();
+        controller.clock = () =>
+            t0.add(const Duration(minutes: 20)); // 20m < 30m
+        expect(controller.endSessionIfExpired(policy), isFalse);
+        expect(container.read(kdsSyncSessionProvider), isNotNull);
+      },
+    );
+
+    test(
+      'expires after the 8-hour absolute max age (even while active)',
+      () async {
+        final (container, controller) = await signedIn(t0);
+        controller.clock = () => t0.add(const Duration(hours: 8, minutes: 1));
+        expect(controller.endSessionIfExpired(policy), isTrue);
+        expect(container.read(kdsSyncSessionProvider), isNull);
+      },
+    );
+
+    test('a long-but-active session (never backgrounded) is NOT idle-expired '
+        '(the idle anchor is now, not the sign-in time)', () async {
+      final (container, controller) = await signedIn(t0);
+      // 40 minutes since sign-in, but NEVER backgrounded -> active, not idle.
+      controller.clock = () => t0.add(const Duration(minutes: 40));
+      expect(
+        controller.endSessionIfExpired(policy),
+        isFalse,
+        reason: 'without a pause, idle is measured from now (fixes ?? started)',
+      );
+      expect(container.read(kdsSyncSessionProvider), isNotNull);
+    });
+
+    test(
+      'the first background moment wins: a foreground pass through hidden '
+      'does NOT reset the idle anchor (mobile-lifecycle correctness)',
+      () async {
+        final (container, controller) = await signedIn(t0);
+        controller.clock = () => t0;
+        controller.noteAppPaused(); // real background at t0
+        // Foregrounding re-fires noteAppPaused (hidden on the way up) 40m later:
+        controller.clock = () => t0.add(const Duration(minutes: 40));
+        controller.noteAppPaused(); // ??= : must NOT overwrite the t0 anchor
+        expect(
+          controller.endSessionIfExpired(policy),
+          isTrue,
+          reason: 'idle measured from the true background (t0), not the resume',
+        );
+        expect(container.read(kdsSyncSessionProvider), isNull);
+      },
+    );
+
+    test('the pause anchor is consumed on resume (no phantom idle expiry on a '
+        'later resume with no new background)', () async {
+      final (container, controller) = await signedIn(t0);
+      controller.clock = () => t0;
+      controller.noteAppPaused();
+      controller.clock = () => t0.add(const Duration(minutes: 10));
+      expect(
+        controller.endSessionIfExpired(policy),
+        isFalse,
+      ); // consumes anchor
+      controller.clock = () => t0.add(const Duration(minutes: 50));
+      expect(
+        controller.endSessionIfExpired(policy),
+        isFalse,
+        reason: 'anchor was consumed -> active, not idle-expired',
+      );
+      expect(container.read(kdsSyncSessionProvider), isNotNull);
+    });
+
+    test('endSessionIfExpired is a no-op when there is no session', () async {
+      final container = containerFor(
+        isDemoMode: false,
+        transport: _RecordingTransport((_, _) async => null), // wrong PIN
+        config: _ctx(),
+      );
+      await container.read(kdsSessionControllerProvider.future); // null session
+      final controller = container.read(kdsSessionControllerProvider.notifier);
+      expect(
+        controller.endSessionIfExpired(
+          const PinSessionExpiryPolicy(maxAge: Duration.zero),
+        ),
+        isFalse,
+      );
+    });
   });
 }

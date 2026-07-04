@@ -27,6 +27,8 @@ export 'src/auth_gated_home.dart';
 export 'src/auth_state_views.dart';
 export 'src/membership_picker_view.dart';
 export 'src/pin_login_screen.dart';
+// RF-118: durable (shared_preferences) client PIN-attempt lockout store.
+export 'src/shared_preferences_pin_attempt_store.dart';
 export 'src/real_mode_unconfigured_view.dart';
 export 'src/real_repo_not_wired.dart';
 export 'src/supabase_device_staff_repository.dart';

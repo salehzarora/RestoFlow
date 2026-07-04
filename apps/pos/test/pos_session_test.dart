@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
@@ -307,5 +308,124 @@ void main() {
         expect(await outbox.recentEntries(), isEmpty);
       },
     );
+  });
+
+  // RF-118 blocking-fix parity: the POS staff PIN-session expiry (the same shared
+  // PinSessionExpiryPolicy the KDS now mirrors). Uses a CONTROLLABLE clock so the
+  // real 30-min / 8-h boundaries + the idle-anchor correctness are deterministic.
+  group('PosSessionController staff PIN-session expiry (RF-118)', () {
+    final t0 = DateTime.utc(2026, 7, 4, 9);
+    const policy = PinSessionExpiryPolicy(); // 30-min idle / 8-h max age
+
+    Future<(ProviderContainer, PosSessionController)> signedIn(
+      DateTime signInAt,
+    ) async {
+      final container = containerFor(
+        isDemoMode: false,
+        transport: _RecordingTransport((function, _) async {
+          // The best-effort shift.open push is fire-and-forget; return an applied
+          // result so it settles cleanly (not under test here).
+          if (function == 'sync_push') {
+            return <String, dynamic>{
+              'ok': true,
+              'results': <dynamic>[
+                <String, dynamic>{
+                  'operation_type': 'shift.open',
+                  'status': 'applied',
+                  'ok': true,
+                },
+              ],
+            };
+          }
+          return 'pin-session-id';
+        }),
+        config: null, // no auto-establish: sign in manually under a fixed clock
+      );
+      final controller = container.read(posSessionControllerProvider.notifier);
+      await container.read(
+        posSessionControllerProvider.future,
+      ); // build() -> null
+      controller.clock = () => signInAt;
+      final err = await controller.signInWithPin(
+        deviceId: 'device-abc',
+        deviceSessionId: 'devsess-1',
+        employeeProfileId: 'emp-1',
+        pin: 'verifier-xyz',
+      );
+      expect(err, isNull);
+      await pumpEventQueue(); // let the fire-and-forget shift bootstrap settle
+      expect(container.read(posSyncSessionProvider), isNotNull);
+      return (container, controller);
+    }
+
+    test('an active session (minutes in) is NOT expired', () async {
+      final (container, controller) = await signedIn(t0);
+      controller.clock = () => t0.add(const Duration(minutes: 5));
+      expect(controller.endSessionIfExpired(policy), isFalse);
+      expect(container.read(posSyncSessionProvider), isNotNull);
+    });
+
+    test(
+      'expires after 30 minutes of inactivity (background then resume)',
+      () async {
+        final (container, controller) = await signedIn(t0);
+        controller.clock = () => t0;
+        controller.noteAppPaused();
+        controller.clock = () => t0.add(const Duration(minutes: 31));
+        expect(controller.endSessionIfExpired(policy), isTrue);
+        expect(container.read(posSyncSessionProvider), isNull);
+      },
+    );
+
+    test(
+      'expires after the 8-hour absolute max age (even while active)',
+      () async {
+        final (container, controller) = await signedIn(t0);
+        controller.clock = () => t0.add(const Duration(hours: 8, minutes: 1));
+        expect(controller.endSessionIfExpired(policy), isTrue);
+        expect(container.read(posSyncSessionProvider), isNull);
+      },
+    );
+
+    test(
+      'a long-but-active session (never backgrounded) is NOT idle-expired',
+      () async {
+        final (container, controller) = await signedIn(t0);
+        controller.clock = () => t0.add(const Duration(minutes: 40));
+        expect(
+          controller.endSessionIfExpired(policy),
+          isFalse,
+          reason: 'without a pause, idle is measured from now, not sign-in',
+        );
+        expect(container.read(posSyncSessionProvider), isNotNull);
+      },
+    );
+
+    test('the first background moment wins (mobile foreground pass-through '
+        'hidden does not reset the idle anchor)', () async {
+      final (container, controller) = await signedIn(t0);
+      controller.clock = () => t0;
+      controller.noteAppPaused();
+      controller.clock = () => t0.add(const Duration(minutes: 40));
+      controller.noteAppPaused(); // must NOT overwrite
+      expect(controller.endSessionIfExpired(policy), isTrue);
+      expect(container.read(posSyncSessionProvider), isNull);
+    });
+
+    test('endSessionIfExpired is a no-op when there is no session', () async {
+      final container = containerFor(
+        isDemoMode: false,
+        transport: _RecordingTransport((_, _) async => null), // wrong PIN
+        config: _ctx(),
+      );
+      await container.read(posSessionControllerProvider.future);
+      final controller = container.read(posSessionControllerProvider.notifier);
+      expect(
+        controller.endSessionIfExpired(
+          const PinSessionExpiryPolicy(maxAge: Duration.zero),
+        ),
+        isFalse,
+      );
+    });
   });
 }

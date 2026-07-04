@@ -501,6 +501,59 @@ value unchanged.
   it (enforced server-side; `close_shift` counts cash tenders only). The receipt shows the
   tender type. Void/refund of a completed payment remains out of scope (D-023).
 
+## 7e. Rate limits + session expiry (RF-118)
+
+RestoFlow throttles credential guessing and bounds how long a device/PIN session
+stays valid. **The server enforcement is authoritative; the client pieces are a
+visible UX mirror** (they cannot be bypassed *there* by clearing browser storage).
+
+**Configured thresholds/durations** (all centralized — change in one place):
+
+| What | Threshold | Cooldown / lifetime | Scope | Where |
+|---|---|---|---|---|
+| Staff PIN attempts | 5 wrong PINs | 15-min lockout | per (employee, device) | server `start_pin_session` (RF-051) |
+| Device pairing attempts | 10 invalid codes | 15-min lockout | per calling principal (`auth.uid()`) | server `redeem_device_pairing` (RF-118) |
+| Enrollment code | — | 15-min TTL, consume-once | per code | server (RF-112) |
+| PIN session | — | 8 h absolute max age | per session | server `pin_sessions.expires_at` (RF-051) |
+| Device session | — | 7-day max age | per session | server `device_sessions.expires_at` (RF-118) |
+| Client PIN cooldown | 5 wrong PINs | 15 min, **survives refresh** | per (device, employee) | client `PinAttemptLimiter` (shared_preferences) |
+| Client PIN-session staleness | — | 30-min idle / 8-h max | per session | client `PinSessionExpiryPolicy`, checked on app resume |
+
+**What you'll see:**
+- Enter a wrong PIN 5× on the POS/KDS PIN screen → a **"Too many attempts…"**
+  banner, the keypad + Sign-in disable, and further tries are blocked locally
+  until the cooldown lapses (and the server refuses too). A correct PIN before
+  the cap resets the counter.
+- Type wrong pairing codes repeatedly → after 10, the pairing screen shows a safe
+  generic **"Too many attempts. Please wait a few minutes…"**. The **lockout**
+  message is deliberately generic — it reveals only that the caller is throttled,
+  never whether a code exists / belongs elsewhere / expired.
+  - Precise disclosure policy (RF-118, honest): a **blind guess** (a code that
+    matches no live pairing) always returns the generic `invalid_code`. The more
+    specific `expired` / `wrong_type` (POS-vs-KDS) results are returned ONLY when
+    the submitted code actually HASHES to a real pairing row — i.e. to a caller who
+    already possesses a valid code — so they give a legitimate operator actionable
+    guidance without leaking code existence to an attacker who is guessing. These
+    two states are intentionally preserved (not collapsed) for that UX; the
+    server-side `rf161` tests assert them.
+- Leave a signed-in **POS or KDS** idle/backgrounded past 30 min (or 8 h total) →
+  on the next resume the session ends and the PIN screen shows **"Session expired.
+  Please enter your PIN again."** It fires only on resume (never mid-order) and
+  voids no money/order. (Both surfaces enforce it — the POS via its persistent
+  gate, the KDS via an app-root lifecycle observer above its board/gate swap.)
+
+**Demo/pilot safe · what is still production-hardening (honest):**
+- The pairing lockout keys on the caller's auth principal, which an attacker can
+  refresh via `signInAnonymously()` — so it stops a naive single-session loop and
+  is defence-in-depth, **not** production-grade brute-force protection. Real
+  protection needs **IP/edge/gateway rate-limiting** and/or **disabling anonymous
+  sign-in** in production (it is only needed to bootstrap pairing). Enrollment
+  codes stay consume-once + 15-min TTL + high-entropy regardless.
+- All durations are **interim (Q-009), not frozen.**
+- Client PIN-session expiry is **resume-time** (not a live idle timer) and does
+  not yet gate individual sensitive actions with step-up re-auth (RF-118-b).
+- Device-session expiry bites at **restore/launch**, not mid-session.
+
 ## 8. Known limitations (honest list)
 
 - **Printing hardware**: a real **local bridge** now exists (RF-115, §7d) — network
@@ -531,9 +584,14 @@ value unchanged.
 - **On the web (Chrome)**, "secure storage" for the device-session token is
   browser-managed storage, not an OS keystore — fine for local development;
   a hardware pilot should run the POS/KDS as desktop/mobile builds.
-- **PIN session window** is an interim 8h assumption (Q-009); device sessions
-  have no expiry (revocation-bounded, Q-009).
-- **Rate limiting** on device pairing/restore endpoints is deferred.
+- **PIN session window** is an interim 8h assumption (Q-009); device sessions now
+  have a **7-day max age** enforced at restore/launch (RF-118, `device_sessions.expires_at`),
+  in addition to revocation — the durations are still interim (Q-009).
+- **Rate limiting**: device-pairing redeem and PIN attempts now have app/backend
+  lockout (RF-118: pairing per calling `auth.uid()` principal, 10 attempts → 15-min
+  cooldown; PIN per employee+device, 5 → 15 min). This is DB-layer + client
+  defence-in-depth only — **production edge/IP rate-limiting** (resistant to
+  minting a fresh anonymous principal per attempt) remains future hardening.
 - **Realtime** is polling-first everywhere; no push.
 - **Human RLS/security sign-off** is still required before real tenant data
   (AGENTS.md gate) — this build is a local pilot foundation, not a paid

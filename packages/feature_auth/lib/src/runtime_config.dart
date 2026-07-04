@@ -74,3 +74,20 @@ class RuntimeConfig {
 final runtimeConfigProvider = Provider<RuntimeConfig>(
   (ref) => RuntimeConfig.fromEnvironment(),
 );
+
+/// RF-118: the client PIN-attempt persistence seam (durable lockout counter).
+/// Defaults to in-memory (demo/tests — no cross-refresh persistence); POS/KDS
+/// `main.dart` override it with a `SharedPreferencesPinAttemptStore` so a
+/// too-many-attempts cooldown survives a browser refresh. Stores only a count +
+/// a timestamp — NEVER a PIN/secret.
+final pinAttemptStoreProvider = Provider<PinAttemptStore>(
+  (ref) => InMemoryPinAttemptStore(),
+);
+
+/// RF-118: the shared client PIN attempt limiter — a VISIBLE, UX-facing mirror of
+/// the authoritative server lockout (RF-051: 5 failures per (employee, device) =>
+/// a 15-minute cooldown). Consumed by the POS + KDS PIN gates; the server remains
+/// the real enforcement.
+final pinAttemptLimiterProvider = Provider<PinAttemptLimiter>(
+  (ref) => PinAttemptLimiter(store: ref.watch(pinAttemptStoreProvider)),
+);

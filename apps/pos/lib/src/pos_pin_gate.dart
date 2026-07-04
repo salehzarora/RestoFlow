@@ -15,7 +15,7 @@ import 'widgets/language_selector.dart';
 /// `start_pin_session` with the RESTORED device context's in-memory
 /// device-session handle — fail-closed: no session means no POS, and there is
 /// no fake or bypass path.
-class PosPinGate extends ConsumerWidget {
+class PosPinGate extends ConsumerStatefulWidget {
   const PosPinGate({
     required this.device,
     required this.staffRepository,
@@ -34,11 +34,59 @@ class PosPinGate extends ConsumerWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(posSyncSessionProvider);
-    if (session != null) return child;
+  ConsumerState<PosPinGate> createState() => _PosPinGateState();
+}
 
-    final staff = staffRepository;
+/// RF-118: the gate observes the app lifecycle so a PIN session that has gone
+/// stale (inactivity or the absolute max age, per [posPinSessionExpiryPolicyProvider])
+/// is ended on the NEXT resume — never mid-order — and the operator is asked to
+/// re-enter their PIN. Demo mode never mounts this gate; a normal/smoke session
+/// (seconds–minutes, not backgrounded) never trips the policy.
+class _PosPinGateState extends ConsumerState<PosPinGate>
+    with WidgetsBindingObserver {
+  bool _expiredNotice = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = ref.read(posSessionControllerProvider.notifier);
+    if (state == AppLifecycleState.resumed) {
+      final policy = ref.read(posPinSessionExpiryPolicyProvider);
+      if (controller.endSessionIfExpired(policy) && mounted) {
+        setState(() => _expiredNotice = true);
+      }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      controller.noteAppPaused();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final device = widget.device;
+    final session = ref.watch(posSyncSessionProvider);
+    if (session != null) {
+      // Re-authenticated: clear any stale "expired" notice for the next sign-out.
+      if (_expiredNotice) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _expiredNotice = false);
+        });
+      }
+      return widget.child;
+    }
+
+    final staff = widget.staffRepository;
     final deviceId = device.deviceId;
     final deviceSessionId = device.deviceSessionId;
     if (staff == null || deviceId == null || deviceSessionId == null) {
@@ -52,6 +100,13 @@ class PosPinGate extends ConsumerWidget {
       surface: AppSurface.pos,
       // Sprint (I): the language switcher is reachable on the PIN screen too.
       appBarActions: const [LanguageSelector()],
+      // RF-118: a visible client cooldown mirroring the server per-(employee,
+      // device) lockout — scope the client counter by deviceId + employee so one
+      // operator's mistakes never lock the whole device/restaurant.
+      attemptLimiter: ref.watch(pinAttemptLimiterProvider),
+      attemptScope: (member) => '$deviceId:${member.employeeProfileId}',
+      // RF-118: shown after an inactivity/max-age expiry signed the operator out.
+      expiredNotice: _expiredNotice,
       onStartSession: (employeeProfileId, pin) => ref
           .read(posSessionControllerProvider.notifier)
           .signInWithPin(

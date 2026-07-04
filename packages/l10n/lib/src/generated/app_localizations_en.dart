@@ -1922,6 +1922,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pairingFailed => 'Couldn\'t pair this device. Please try again.';
 
   @override
+  String get pairingLocked =>
+      'Too many attempts. Please wait a few minutes and try again.';
+
+  @override
   String get dashboardNavPrinters => 'Printers';
 
   @override
@@ -2453,6 +2457,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pinLoginUnavailable => 'Sign-in isn\'t available right now.';
+
+  @override
+  String get pinSessionExpired =>
+      'Session expired. Please enter your PIN again.';
 
   @override
   String get pinLoginSubmit => 'Sign in';

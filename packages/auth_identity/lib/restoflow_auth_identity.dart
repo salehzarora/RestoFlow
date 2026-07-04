@@ -32,6 +32,10 @@ export 'src/membership_context.dart';
 export 'src/membership_role.dart';
 export 'src/membership_selection.dart';
 export 'src/my_context.dart';
+// RF-118: client-side PIN attempt limiter + staff PIN-session expiry policy
+// (pure logic; UX mirrors of the authoritative server RF-051 lockout / window).
+export 'src/pin_attempt_limiter.dart';
+export 'src/pin_session_expiry_policy.dart';
 export 'src/pin_session_service.dart';
 export 'src/role_entry_policy.dart';
 // RF-108 Stage 2: Supabase bootstrap config + transport factory (anon key only).

@@ -1906,6 +1906,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get pairingFailed => 'تعذّر اقتران هذا الجهاز. حاول مرة أخرى.';
 
   @override
+  String get pairingLocked =>
+      'محاولات كثيرة جدًا. يُرجى الانتظار بضع دقائق ثم المحاولة مرة أخرى.';
+
+  @override
   String get dashboardNavPrinters => 'الطابعات';
 
   @override
@@ -2436,6 +2440,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pinLoginUnavailable => 'تسجيل الدخول غير متاح الآن.';
+
+  @override
+  String get pinSessionExpired =>
+      'انتهت صلاحية الجلسة. يُرجى إدخال رمز PIN مرة أخرى.';
 
   @override
   String get pinLoginSubmit => 'تسجيل الدخول';
