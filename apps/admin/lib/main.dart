@@ -12,6 +12,7 @@ import 'src/auth/admin_auth_flow.dart';
 import 'src/auth/supabase_admin_auth.dart';
 import 'src/platform_admin_screen.dart';
 import 'src/state/locale_controller.dart';
+import 'src/state/platform_admin_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,17 +66,25 @@ Future<void> main() async {
     return;
   }
   final client = Supabase.instance.client;
+  // ONE session-carrying transport, shared by BOTH get_my_context AND the platform
+  // overview reads (RF-119-b Codex fix): both must ride the SAME authenticated
+  // client so the operator's aal2 session reaches app.platform_admin_guard.
+  final transport = SupabaseSyncRpcTransport(client);
   runApp(
     ProviderScope(
-      overrides: [localeOverride],
+      overrides: [
+        localeOverride,
+        // The overview repo reads through this SAME transport — never a fresh
+        // sessionless anon-key client (which the guard would reject). Default is
+        // null (fail-closed); this override is what enables real platform reads.
+        platformAdminTransportProvider.overrideWithValue(transport),
+      ],
       child: AdminApp(
         demoMode: false,
         authService: SupabaseAdminAuthService(client),
-        // The context fetcher rides the SAME session-carrying client, so
+        // The context fetcher rides the SAME session-carrying transport, so
         // get_my_context sees auth.uid() + the assurance claim.
-        fetchContext: AuthContextRepository(
-          SupabaseSyncRpcTransport(client),
-        ).fetchMyContext,
+        fetchContext: AuthContextRepository(transport).fetchMyContext,
       ),
     ),
   );
