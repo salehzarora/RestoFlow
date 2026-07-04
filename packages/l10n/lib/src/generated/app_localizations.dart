@@ -574,6 +574,36 @@ abstract class AppLocalizations {
   /// **'Demo order — not sent to a backend, kitchen, or printer.'**
   String get posDemoOrderNotice;
 
+  /// RF-114: POS outbox chip — N orders queued locally, not yet delivered.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} pending sync'**
+  String posOutboxPending(int count);
+
+  /// RF-114: POS outbox chip — a queued order is being delivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing…'**
+  String get posOutboxSyncing;
+
+  /// RF-114: POS outbox chip — N orders failed to sync; tap to retry all.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} failed — retry'**
+  String posOutboxFailed(int count);
+
+  /// RF-114: POS outbox chip — every submitted order is confirmed by the backend.
+  ///
+  /// In en, this message translates to:
+  /// **'All orders synced'**
+  String get posOutboxSynced;
+
+  /// RF-114: POS outbox — retry-all-failed action label.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry all'**
+  String get posOutboxRetryAll;
+
   /// POS heading on the local order-confirmation panel after Send Order.
   ///
   /// In en, this message translates to:

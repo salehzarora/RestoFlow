@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
+import 'durable_outbox_store.dart';
 import 'order_submission.dart';
 
 /// Thrown when an order submission cannot be built or enqueued.
@@ -149,7 +150,11 @@ class DemoOutboxStore implements OutboxRepository {
 /// entry's `local_operation_id` (D-022). Money stays integer minor units (D-007;
 /// values are passed through verbatim from the captured snapshot - no float).
 class RealOutboxRepository implements OutboxRepository {
-  RealOutboxRepository(this._transport, this._session);
+  RealOutboxRepository(
+    this._transport,
+    this._session, {
+    DurableOutboxStore? store,
+  }) : _store = store;
 
   /// The shared public-schema RPC transport, or null when real mode was selected
   /// but the Supabase config was missing/invalid (fail-closed).
@@ -159,8 +164,27 @@ class RealOutboxRepository implements OutboxRepository {
   /// one (fail-closed: no session => no real submit).
   final SyncSession? _session;
 
-  /// Queued entries (in-memory; durable `data_local` persistence is deferred).
-  final List<OutboxEntry> _entries = <OutboxEntry>[];
+  /// RF-114: the durable store the queue is loaded from + persisted to (survives
+  /// refresh/restart). Null => in-memory only (existing tests / no store wired).
+  final DurableOutboxStore? _store;
+
+  /// Queued entries, LAZILY loaded from [_store] on first access (RF-114). Null
+  /// until loaded so a fresh repo picks up orders queued before a refresh/restart.
+  List<OutboxEntry>? _entries;
+
+  /// Loads the durable queue once (per repo instance). Cheap no-op thereafter.
+  Future<void> _ensureLoaded() async {
+    final store = _store;
+    _entries ??= store == null ? <OutboxEntry>[] : await store.load();
+  }
+
+  /// Writes the current queue back to the durable store (no-op when in-memory).
+  Future<void> _persist() async {
+    final store = _store;
+    if (store != null) {
+      await store.persist(_entries ?? const <OutboxEntry>[]);
+    }
+  }
 
   bool get _ready => _transport != null && _session != null;
 
@@ -177,32 +201,37 @@ class RealOutboxRepository implements OutboxRepository {
   @override
   Future<OutboxEntry> enqueue(OutboxEntry entry) async {
     _ensureReady();
+    await _ensureLoaded();
+    final entries = _entries!;
     // Idempotency: at most one row per (deviceId, localOperationId) - mirrors the
     // server transport identity (DECISION D-022). A duplicate returns the stored
     // entry instead of adding a second.
-    for (final e in _entries) {
+    for (final e in entries) {
       if (e.deviceId == entry.deviceId &&
           e.localOperationId == entry.localOperationId) {
         return e;
       }
     }
-    _entries.add(entry);
+    entries.add(entry);
+    await _persist();
     return entry;
   }
 
   @override
   Future<List<OutboxEntry>> recentEntries() async {
     _ensureReady();
-    return List.unmodifiable(_entries.reversed);
+    await _ensureLoaded();
+    return List.unmodifiable(_entries!.reversed);
   }
 
   @override
   Future<OutboxEntry> push(String entryId) async {
     _ensureReady();
+    await _ensureLoaded();
     final transport = _transport!;
     final session = _session!;
     final idx = _indexOf(entryId);
-    final entry = _entries[idx];
+    final entry = _entries![idx];
     OutboxEntry updated;
     try {
       final raw = await transport.invoke('sync_push', <String, dynamic>{
@@ -221,27 +250,31 @@ class RealOutboxRepository implements OutboxRepository {
         lastErrorCode: e.code ?? e.kind.name,
       );
     }
-    _entries[idx] = updated;
+    _entries![idx] = updated;
+    await _persist();
     return updated;
   }
 
   @override
   Future<OutboxEntry> retry(String entryId) async {
     _ensureReady();
+    await _ensureLoaded();
     final idx = _indexOf(entryId);
-    final current = _entries[idx];
+    final current = _entries![idx];
     if (!current.syncState.isFailed) return current;
     final updated = current.copyWith(
       syncState: OutboxSyncState.pending,
       clearError: true,
     );
-    _entries[idx] = updated;
+    _entries![idx] = updated;
+    await _persist();
     return updated;
   }
 
   int _indexOf(String entryId) {
-    for (var i = 0; i < _entries.length; i++) {
-      if (_entries[i].id == entryId) return i;
+    final entries = _entries!;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id == entryId) return i;
     }
     throw OrderSubmissionException('unknown outbox entry: $entryId');
   }

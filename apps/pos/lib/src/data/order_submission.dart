@@ -200,6 +200,27 @@ class OrderSummary {
   final int itemCount;
   final int subtotalMinor;
   final String currencyCode;
+
+  /// RF-114 durable-outbox persistence (integer minor money only, D-007).
+  Map<String, Object?> toJson() => <String, Object?>{
+    'order_number': orderNumber,
+    'order_type': orderType == OrderType.dineIn ? 'dine_in' : 'takeaway',
+    'table_label': tableLabel,
+    'item_count': itemCount,
+    'subtotal_minor': subtotalMinor,
+    'currency_code': currencyCode,
+  };
+
+  factory OrderSummary.fromJson(Map<String, Object?> json) => OrderSummary(
+    orderNumber: json['order_number'] as String? ?? '',
+    orderType: json['order_type'] == 'dine_in'
+        ? OrderType.dineIn
+        : OrderType.takeaway,
+    tableLabel: json['table_label'] as String?,
+    itemCount: (json['item_count'] as num?)?.toInt() ?? 0,
+    subtotalMinor: (json['subtotal_minor'] as num?)?.toInt() ?? 0,
+    currencyCode: json['currency_code'] as String? ?? 'ILS',
+  );
 }
 
 /// One client outbox entry (RF-115): a queued order submission plus its sync
@@ -236,6 +257,65 @@ class OutboxEntry {
   final DateTime clientCreatedAt;
   final int attemptCount;
   final String? lastErrorCode;
+
+  /// RF-114 durable-outbox persistence. Stores ONLY what a retry needs: the
+  /// idempotency identity `(deviceId, localOperationId)`, the op envelope, the
+  /// server-shaped [payloadJson] (integer minor money only, D-007; no secrets,
+  /// no service-role key), a UI [summary], and the lifecycle. Tenant scope is
+  /// server-derived from the session and is NOT part of the transmitted op, so
+  /// nothing sensitive is persisted here.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'id': id,
+    'device_id': deviceId,
+    'local_operation_id': localOperationId,
+    'operation_type': operationType,
+    'target_entity': targetEntity,
+    'target_id': targetId,
+    'payload_json': payloadJson,
+    'summary': summary.toJson(),
+    'sync_state': syncState.wire,
+    'client_created_at': clientCreatedAt.toIso8601String(),
+    'attempt_count': attemptCount,
+    'last_error_code': lastErrorCode,
+  };
+
+  /// Parses a persisted entry. Fail-safe: an unparseable/foreign-shape entry
+  /// throws [FormatException] so the store can drop it rather than crash the
+  /// POS on start (schema drift / a corrupt localStorage value).
+  factory OutboxEntry.fromJson(Map<String, Object?> json) {
+    final wire = json['sync_state'] as String?;
+    final state = OutboxSyncState.values.firstWhere(
+      (s) => s.wire == wire,
+      orElse: () => throw FormatException('unknown sync_state: $wire'),
+    );
+    final createdRaw = json['client_created_at'] as String?;
+    final created = DateTime.tryParse(createdRaw ?? '');
+    if (created == null) {
+      throw FormatException('bad client_created_at: $createdRaw');
+    }
+    final summaryRaw = json['summary'];
+    if (summaryRaw is! Map) {
+      throw const FormatException('missing summary');
+    }
+    return OutboxEntry(
+      id: json['id'] as String? ?? (throw const FormatException('missing id')),
+      deviceId: json['device_id'] as String? ?? '',
+      localOperationId:
+          json['local_operation_id'] as String? ??
+          (throw const FormatException('missing local_operation_id')),
+      operationType: json['operation_type'] as String? ?? 'order.submit',
+      targetEntity: json['target_entity'] as String? ?? 'order',
+      targetId: json['target_id'] as String? ?? '',
+      payloadJson:
+          json['payload_json'] as String? ??
+          (throw const FormatException('missing payload_json')),
+      summary: OrderSummary.fromJson(summaryRaw.cast<String, Object?>()),
+      syncState: state,
+      clientCreatedAt: created,
+      attemptCount: (json['attempt_count'] as num?)?.toInt() ?? 0,
+      lastErrorCode: json['last_error_code'] as String?,
+    );
+  }
 
   OutboxEntry copyWith({
     OutboxSyncState? syncState,

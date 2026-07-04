@@ -257,6 +257,25 @@ class AppLocalizationsHe extends AppLocalizations {
       'הזמנת הדגמה — לא נשלחה לשרת, למטבח או למדפסת.';
 
   @override
+  String posOutboxPending(int count) {
+    return '$count ממתינות לסנכרון';
+  }
+
+  @override
+  String get posOutboxSyncing => 'מסנכרן…';
+
+  @override
+  String posOutboxFailed(int count) {
+    return '$count נכשלו — נסה שוב';
+  }
+
+  @override
+  String get posOutboxSynced => 'כל ההזמנות סונכרנו';
+
+  @override
+  String get posOutboxRetryAll => 'נסה שוב';
+
+  @override
   String get posOrderSubmittedTitle => 'ההזמנה נשלחה';
 
   @override

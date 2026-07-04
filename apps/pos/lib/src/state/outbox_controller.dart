@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../data/durable_outbox_store.dart';
 import '../data/ids.dart';
 import '../data/order_submission.dart';
 import '../data/outbox_repository.dart';
@@ -32,11 +34,100 @@ class OrderSubmitResult {
 class OutboxController extends Notifier<List<OutboxEntry>> {
   late OutboxRepository _repo;
   int _seq = 0;
+  bool _disposed = false;
+  bool _sweeping = false;
+
+  /// Auto-retry cap for a transiently-FAILED entry before it waits for a manual
+  /// retry (so a persistently-rejecting backend is not spammed).
+  static const int _maxAutoAttempts = 5;
 
   @override
   List<OutboxEntry> build() {
     _repo = ref.watch(outboxRepositoryProvider);
+    ref.onDispose(() => _disposed = true);
+    // RF-114: load any orders queued before a refresh / tab close / app restart
+    // (the durable outbox) and best-effort deliver them. Fire-and-forget so
+    // build() stays synchronous; state updates when the async load completes.
+    _recover();
+    // Optional periodic sweep so queued / transiently-failed orders sync once
+    // connectivity/backend recovers (no connectivity dependency). OFF unless an
+    // interval is provided — main.dart enables it for the real app; tests leave
+    // it null so `pumpAndSettle` terminates (a periodic timer never settles).
+    final interval = ref.read(outboxAutoSweepIntervalProvider);
+    if (interval != null) {
+      final timer = Timer.periodic(interval, (_) => _sweep());
+      ref.onDispose(timer.cancel);
+    }
     return const <OutboxEntry>[];
+  }
+
+  /// Loads the durable queue on start and delivers whatever is not yet applied.
+  /// Fail-closed: if the real outbox has no session/transport yet it throws, so
+  /// we simply skip — a later rebuild (after PIN sign-in) re-runs this.
+  Future<void> _recover() async {
+    final List<OutboxEntry> loaded;
+    try {
+      loaded = await _repo.recentEntries();
+    } catch (_) {
+      return;
+    }
+    if (_disposed || loaded.isEmpty) return;
+    state = loaded;
+    await _sweep();
+  }
+
+  /// Best-effort delivery of queued orders: re-queue + push transiently-FAILED
+  /// entries (up to [_maxAutoAttempts]) and push still-PENDING ones. Retries are
+  /// idempotent (`(deviceId, localOperationId)`, D-022) so a re-push after a
+  /// restart never creates a duplicate. Single-flight; aborts on session loss.
+  Future<void> _sweep() async {
+    if (_sweeping || _disposed) return;
+    _sweeping = true;
+    try {
+      final failed = <String>[
+        for (final e in state)
+          if (e.syncState.isFailed && e.attemptCount < _maxAutoAttempts) e.id,
+      ];
+      final pending = <String>[
+        for (final e in state)
+          if (e.syncState.isPending) e.id,
+      ];
+      for (final id in failed) {
+        if (_disposed) return;
+        try {
+          await retryEntry(id);
+        } catch (_) {
+          return; // session/transport lost — stop; a later sweep resumes.
+        }
+      }
+      for (final id in pending) {
+        if (_disposed) return;
+        final cur = entryById(id);
+        if (cur == null || !cur.syncState.isPending) continue;
+        try {
+          await pushEntry(id);
+        } catch (_) {
+          return;
+        }
+      }
+    } finally {
+      _sweeping = false;
+    }
+  }
+
+  /// Manually re-queues + pushes every FAILED entry ("Sync failed — retry all").
+  Future<void> retryAllFailed() async {
+    final failed = <String>[
+      for (final e in state)
+        if (e.syncState.isFailed) e.id,
+    ];
+    for (final id in failed) {
+      try {
+        await retryEntry(id);
+      } catch (_) {
+        break;
+      }
+    }
   }
 
   /// Builds + enqueues an order submission from the current cart snapshot.
@@ -205,8 +296,25 @@ final outboxRepositoryProvider = Provider<OutboxRepository>((ref) {
   final cfg = ref.watch(runtimeConfigProvider);
   if (cfg.isDemoMode) return DemoOutboxStore();
   final transport = ref.watch(posAuthTransportProvider);
-  return RealOutboxRepository(transport, ref.watch(posSyncSessionProvider));
+  return RealOutboxRepository(
+    transport,
+    ref.watch(posSyncSessionProvider),
+    // RF-114: durable persistence so queued orders survive refresh/restart.
+    store: ref.watch(durableOutboxStoreProvider),
+  );
 });
+
+/// RF-114: the durable outbox store (localStorage-backed on web). Null by
+/// default => in-memory only (demo mode / tests). Overridden in `main.dart` for
+/// the real app with a [SharedPrefsOutboxStore] built on the shared
+/// SharedPreferences instance.
+final durableOutboxStoreProvider = Provider<DurableOutboxStore?>((ref) => null);
+
+/// RF-114: the periodic auto-sweep interval that re-delivers queued/failed
+/// orders once the backend recovers. Null by default => NO periodic timer (so
+/// widget-test `pumpAndSettle` terminates). `main.dart` enables it for the real
+/// app; recovery-on-start + manual retry work regardless of this.
+final outboxAutoSweepIntervalProvider = Provider<Duration?>((ref) => null);
 
 /// The POS outbox controller (recent entries, most recent first).
 final outboxControllerProvider =

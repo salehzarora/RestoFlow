@@ -260,6 +260,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Demo order — not sent to a backend, kitchen, or printer.';
 
   @override
+  String posOutboxPending(int count) {
+    return '$count pending sync';
+  }
+
+  @override
+  String get posOutboxSyncing => 'Syncing…';
+
+  @override
+  String posOutboxFailed(int count) {
+    return '$count failed — retry';
+  }
+
+  @override
+  String get posOutboxSynced => 'All orders synced';
+
+  @override
+  String get posOutboxRetryAll => 'Retry all';
+
+  @override
   String get posOrderSubmittedTitle => 'Order sent';
 
   @override

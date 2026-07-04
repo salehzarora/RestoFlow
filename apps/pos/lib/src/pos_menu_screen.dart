@@ -12,6 +12,7 @@ import 'widgets/device_settings_menu.dart';
 import 'widgets/language_selector.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
+import 'widgets/outbox_status_indicator.dart';
 
 /// The RF-100 POS demo screen: a filterable menu grid beside a live cart panel.
 ///
@@ -42,7 +43,13 @@ class PosMenuScreen extends StatelessWidget {
         ),
         // Device settings sprint: the ⋮ device menu rides beside the language
         // switcher — operational staff controls, never owner/admin actions.
-        actions: const [LanguageSelector(), DeviceSettingsMenu()],
+        // RF-114: a compact order-outbox sync indicator (pending/syncing/failed/
+        // synced) sits first so the cashier sees sync state while ringing orders.
+        actions: const [
+          OutboxStatusIndicator(),
+          LanguageSelector(),
+          DeviceSettingsMenu(),
+        ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
