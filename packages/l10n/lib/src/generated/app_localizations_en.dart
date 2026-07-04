@@ -636,7 +636,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posLastCashPayment => 'Last cash payment';
 
   @override
-  String get posShiftDemoNote => 'Demo shift — not synced';
+  String get posShiftDemoNote =>
+      'Demo — reconciliation is computed locally and not saved to a server.';
 
   @override
   String get posShiftRealName => 'Current shift';
@@ -644,6 +645,99 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posShiftRealNote =>
       'Opened at sign-in — cash totals are tracked on the server';
+
+  @override
+  String get posShiftCloseTitle => 'Close shift & count cash';
+
+  @override
+  String get posShiftCloseMenuItem => 'Close shift';
+
+  @override
+  String get posShiftCloseConfirmTitle => 'Close this shift?';
+
+  @override
+  String get posShiftCloseConfirmBody =>
+      'The shift will be closed with the counted amount and can\'t be reopened.';
+
+  @override
+  String get posShiftCancelAction => 'Cancel';
+
+  @override
+  String get posShiftCloseAction => 'Close shift';
+
+  @override
+  String get posShiftDoneAction => 'Done';
+
+  @override
+  String get posShiftNoOpenShift => 'No open shift on this device.';
+
+  @override
+  String get posShiftNoOpenShiftHint =>
+      'A shift opens automatically when a cashier signs in.';
+
+  @override
+  String get posShiftOpenedAt => 'Opened at';
+
+  @override
+  String get posShiftOpeningFloat => 'Opening float';
+
+  @override
+  String get posShiftExpectedCash => 'Expected cash';
+
+  @override
+  String get posShiftExpectedAtClose =>
+      'Expected cash is calculated on the server at close.';
+
+  @override
+  String get posShiftCountedLabel => 'Counted cash';
+
+  @override
+  String get posShiftInvalidAmount => 'Enter a valid amount.';
+
+  @override
+  String get posShiftReasonLabel =>
+      'Reason (required if there\'s a difference)';
+
+  @override
+  String get posShiftReasonRequired =>
+      'Enter a reason when the counted cash differs from expected.';
+
+  @override
+  String get posShiftClosedTitle => 'Shift closed';
+
+  @override
+  String get posShiftBalanced => 'Balanced';
+
+  @override
+  String get posShiftOver => 'Over';
+
+  @override
+  String get posShiftShort => 'Short';
+
+  @override
+  String get posShiftDifference => 'Difference';
+
+  @override
+  String get posShiftCloseUnavailable =>
+      'Closing is unavailable — a staff session on a paired device is required.';
+
+  @override
+  String get posShiftClosePermissionDenied =>
+      'You aren\'t allowed to close this shift.';
+
+  @override
+  String get posShiftCloseServerRejected =>
+      'The server rejected the close — a reason may be required or the shift state is invalid.';
+
+  @override
+  String get posShiftCloseFailed => 'Couldn\'t close the shift.';
+
+  @override
+  String get posShiftCouldNotRestore =>
+      'Couldn\'t restore the shift state. Sign in again to open a shift.';
+
+  @override
+  String get posShiftReturnToPin => 'Sign out';
 
   @override
   String get posSyncSendingReal => 'Sending to the backend…';
@@ -1802,6 +1896,36 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dashboardSettingsRealNotice =>
       'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.';
+
+  @override
+  String get dashboardShiftCloseSectionTitle => 'Shift reconciliation (POS)';
+
+  @override
+  String get dashboardShiftCloseToggleLabel =>
+      'Show “Close shift & count cash” on the POS';
+
+  @override
+  String get dashboardShiftCloseToggleHelp =>
+      'When on, cashiers can close their shift and count the cash drawer on the POS for this branch. Turning it off hides that workflow; payments are unaffected.';
+
+  @override
+  String get dashboardShiftCloseOwnerOnly =>
+      'Only an owner can change this setting.';
+
+  @override
+  String get dashboardShiftCloseUnavailable =>
+      'Couldn’t load this setting right now. Try again later.';
+
+  @override
+  String get dashboardShiftCloseSaved => 'Setting saved.';
+
+  @override
+  String get dashboardShiftCloseDenied =>
+      'You don’t have permission to change this setting.';
+
+  @override
+  String get dashboardShiftCloseSaveFailed =>
+      'Couldn’t save the setting. Please try again.';
 
   @override
   String get setupTitle => 'Setup';

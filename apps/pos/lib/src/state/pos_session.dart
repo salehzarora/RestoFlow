@@ -6,6 +6,8 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/ids.dart';
+import '../data/shift_repository.dart';
+import 'pos_shift.dart';
 
 /// Operator-supplied real-mode PIN/device context (RF-131), read from
 /// `--dart-define`.
@@ -213,8 +215,10 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   ) async {
     final ids = RandomClientIdGenerator();
     final shiftId = ids.newId();
+    final cashDrawerSessionId = ids.newId();
+    const openingFloatMinor = 0;
     try {
-      await transport.invoke('sync_push', <String, dynamic>{
+      final raw = await transport.invoke('sync_push', <String, dynamic>{
         'p_pin_session_id': session.pinSessionId,
         'p_device_id': session.deviceId,
         'p_operations': <dynamic>[
@@ -226,15 +230,82 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
             'client_created_at': DateTime.now().toIso8601String(),
             'payload': <String, dynamic>{
               'shift_id': shiftId,
-              'cash_drawer_session_id': ids.newId(),
-              'opening_float_minor': 0,
+              'cash_drawer_session_id': cashDrawerSessionId,
+              'opening_float_minor': openingFloatMinor,
             },
           },
         ],
       });
+      // RF-113: capture the shift handle when we actually opened it, so the
+      // close/reconcile UI has the shift id + opening float. A conflict (a shift
+      // already open with a different id) leaves the handle null -> the close UI
+      // shows an honest "no open shift on this device" state (never a fake one).
+      if (_shiftOpenApplied(raw)) {
+        ref
+            .read(posOpenShiftProvider.notifier)
+            .set(
+              PosOpenShift(
+                shiftId: shiftId,
+                cashDrawerSessionId: cashDrawerSessionId,
+                openingFloatMinor: openingFloatMinor,
+                openedAt: DateTime.now(),
+              ),
+            );
+      } else {
+        // The open did NOT apply — almost always because a shift is ALREADY
+        // open for this (org, branch, device) from before a refresh/re-sign-in.
+        // RECOVER that shift's handle via a secure sync_pull read so the
+        // close/reconcile UI works instead of falsely reporting "no open shift".
+        await _recoverOpenShift(transport, session);
+      }
     } catch (_) {
       // Best-effort: the payment path reports its own error if no shift opened.
     }
+  }
+
+  /// Recover the current server-open shift's handle for this device (RF-113).
+  /// Fail-soft: on any read failure the handle stays null and the panel shows an
+  /// honest "couldn't restore — sign in again" state (never a fake shift).
+  Future<void> _recoverOpenShift(
+    SyncRpcTransport transport,
+    SyncSession session,
+  ) async {
+    try {
+      final info = await RealShiftRepository(
+        transport,
+        session,
+        RandomClientIdGenerator(),
+      ).readOpenShift();
+      if (info != null) {
+        ref
+            .read(posOpenShiftProvider.notifier)
+            .set(
+              PosOpenShift(
+                shiftId: info.shiftId,
+                cashDrawerSessionId: info.cashDrawerSessionId,
+                openingFloatMinor: info.openingFloatMinor,
+                openedAt: info.openedAt,
+              ),
+            );
+      }
+    } catch (_) {
+      // Fail-soft: leave the handle null.
+    }
+  }
+
+  /// True when the `shift.open` op in a `sync_push` envelope applied (the shift is
+  /// now open for the id we sent). An idempotent replay of the SAME shift also
+  /// reports 'applied'; a conflict/rejection does not.
+  bool _shiftOpenApplied(Object? raw) {
+    if (raw is! Map) return false;
+    final results = raw['results'];
+    if (results is! List) return false;
+    for (final r in results) {
+      if (r is Map && r['operation_type'] == 'shift.open') {
+        return r['status'] == 'applied' && r['ok'] != false;
+      }
+    }
+    return false;
   }
 
   /// INTERACTIVE PIN sign-in (sprint): establishes the session from the RESTORED
@@ -279,8 +350,12 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   }
 
   /// Ends the current staff session locally (the server session expires on its
-  /// own window — Q-009). The POS falls back to the PIN screen.
-  void endSession() => state = const AsyncData(null);
+  /// own window — Q-009). The POS falls back to the PIN screen. Clears the
+  /// captured open-shift handle (RF-113) so a new sign-in starts fresh.
+  void endSession() {
+    ref.read(posOpenShiftProvider.notifier).clear();
+    state = const AsyncData(null);
+  }
 }
 
 /// Owns [PosSessionController].

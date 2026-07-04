@@ -1291,7 +1291,7 @@ abstract class AppLocalizations {
   /// POS honest note that the shift/cash-drawer context is a local demo and not synced.
   ///
   /// In en, this message translates to:
-  /// **'Demo shift — not synced'**
+  /// **'Demo — reconciliation is computed locally and not saved to a server.'**
   String get posShiftDemoNote;
 
   /// REAL-mode shift bar label: a real shift was opened on the server at PIN sign-in.
@@ -1305,6 +1305,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Opened at sign-in — cash totals are tracked on the server'**
   String get posShiftRealNote;
+
+  /// No description provided for @posShiftCloseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Close shift & count cash'**
+  String get posShiftCloseTitle;
+
+  /// No description provided for @posShiftCloseMenuItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Close shift'**
+  String get posShiftCloseMenuItem;
+
+  /// No description provided for @posShiftCloseConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Close this shift?'**
+  String get posShiftCloseConfirmTitle;
+
+  /// No description provided for @posShiftCloseConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The shift will be closed with the counted amount and can\'t be reopened.'**
+  String get posShiftCloseConfirmBody;
+
+  /// No description provided for @posShiftCancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get posShiftCancelAction;
+
+  /// No description provided for @posShiftCloseAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Close shift'**
+  String get posShiftCloseAction;
+
+  /// No description provided for @posShiftDoneAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get posShiftDoneAction;
+
+  /// No description provided for @posShiftNoOpenShift.
+  ///
+  /// In en, this message translates to:
+  /// **'No open shift on this device.'**
+  String get posShiftNoOpenShift;
+
+  /// No description provided for @posShiftNoOpenShiftHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A shift opens automatically when a cashier signs in.'**
+  String get posShiftNoOpenShiftHint;
+
+  /// No description provided for @posShiftOpenedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened at'**
+  String get posShiftOpenedAt;
+
+  /// No description provided for @posShiftOpeningFloat.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening float'**
+  String get posShiftOpeningFloat;
+
+  /// No description provided for @posShiftExpectedCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected cash'**
+  String get posShiftExpectedCash;
+
+  /// No description provided for @posShiftExpectedAtClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected cash is calculated on the server at close.'**
+  String get posShiftExpectedAtClose;
+
+  /// No description provided for @posShiftCountedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Counted cash'**
+  String get posShiftCountedLabel;
+
+  /// No description provided for @posShiftInvalidAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid amount.'**
+  String get posShiftInvalidAmount;
+
+  /// No description provided for @posShiftReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (required if there\'s a difference)'**
+  String get posShiftReasonLabel;
+
+  /// No description provided for @posShiftReasonRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a reason when the counted cash differs from expected.'**
+  String get posShiftReasonRequired;
+
+  /// No description provided for @posShiftClosedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift closed'**
+  String get posShiftClosedTitle;
+
+  /// No description provided for @posShiftBalanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Balanced'**
+  String get posShiftBalanced;
+
+  /// No description provided for @posShiftOver.
+  ///
+  /// In en, this message translates to:
+  /// **'Over'**
+  String get posShiftOver;
+
+  /// No description provided for @posShiftShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Short'**
+  String get posShiftShort;
+
+  /// No description provided for @posShiftDifference.
+  ///
+  /// In en, this message translates to:
+  /// **'Difference'**
+  String get posShiftDifference;
+
+  /// No description provided for @posShiftCloseUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Closing is unavailable — a staff session on a paired device is required.'**
+  String get posShiftCloseUnavailable;
+
+  /// No description provided for @posShiftClosePermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'You aren\'t allowed to close this shift.'**
+  String get posShiftClosePermissionDenied;
+
+  /// No description provided for @posShiftCloseServerRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The server rejected the close — a reason may be required or the shift state is invalid.'**
+  String get posShiftCloseServerRejected;
+
+  /// No description provided for @posShiftCloseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t close the shift.'**
+  String get posShiftCloseFailed;
+
+  /// No description provided for @posShiftCouldNotRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t restore the shift state. Sign in again to open a shift.'**
+  String get posShiftCouldNotRestore;
+
+  /// No description provided for @posShiftReturnToPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get posShiftReturnToPin;
 
   /// REAL-mode sync note while the order push is in flight.
   ///
@@ -3489,6 +3657,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.'**
   String get dashboardSettingsRealNotice;
+
+  /// RF-113: Settings section for the per-branch POS shift-close policy.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift reconciliation (POS)'**
+  String get dashboardShiftCloseSectionTitle;
+
+  /// RF-113: label for the toggle that shows/hides the POS shift-close workflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show “Close shift & count cash” on the POS'**
+  String get dashboardShiftCloseToggleLabel;
+
+  /// RF-113: help text under the shift-close toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, cashiers can close their shift and count the cash drawer on the POS for this branch. Turning it off hides that workflow; payments are unaffected.'**
+  String get dashboardShiftCloseToggleHelp;
+
+  /// RF-113: note shown to non-owners; the toggle is read-only for them.
+  ///
+  /// In en, this message translates to:
+  /// **'Only an owner can change this setting.'**
+  String get dashboardShiftCloseOwnerOnly;
+
+  /// RF-113: shown when the policy read fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load this setting right now. Try again later.'**
+  String get dashboardShiftCloseUnavailable;
+
+  /// RF-113: confirmation snackbar after a successful policy save.
+  ///
+  /// In en, this message translates to:
+  /// **'Setting saved.'**
+  String get dashboardShiftCloseSaved;
+
+  /// RF-113: snackbar when the server denies the policy write.
+  ///
+  /// In en, this message translates to:
+  /// **'You don’t have permission to change this setting.'**
+  String get dashboardShiftCloseDenied;
+
+  /// RF-113: snackbar when the policy write fails for a transient reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t save the setting. Please try again.'**
+  String get dashboardShiftCloseSaveFailed;
 
   /// Title of the real-mode setup center on the dashboard overview.
   ///

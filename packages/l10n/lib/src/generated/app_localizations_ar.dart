@@ -635,7 +635,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posLastCashPayment => 'آخر دفعة نقدية';
 
   @override
-  String get posShiftDemoNote => 'وردية تجريبية — غير متزامنة';
+  String get posShiftDemoNote =>
+      'وضع تجريبي — الجرد محسوب محليًا ولا يُحفظ على الخادم.';
 
   @override
   String get posShiftRealName => 'الوردية الحالية';
@@ -643,6 +644,98 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posShiftRealNote =>
       'فُتحت عند تسجيل الدخول — إجماليات النقد تُتابَع على الخادم';
+
+  @override
+  String get posShiftCloseTitle => 'إغلاق الوردية وجرد النقد';
+
+  @override
+  String get posShiftCloseMenuItem => 'إغلاق الوردية';
+
+  @override
+  String get posShiftCloseConfirmTitle => 'تأكيد إغلاق الوردية';
+
+  @override
+  String get posShiftCloseConfirmBody =>
+      'ستُغلق الوردية بالمبلغ المعدود ولا يمكن التراجع.';
+
+  @override
+  String get posShiftCancelAction => 'إلغاء';
+
+  @override
+  String get posShiftCloseAction => 'إغلاق الوردية';
+
+  @override
+  String get posShiftDoneAction => 'تم';
+
+  @override
+  String get posShiftNoOpenShift => 'لا توجد وردية مفتوحة على هذا الجهاز.';
+
+  @override
+  String get posShiftNoOpenShiftHint =>
+      'تُفتح الوردية تلقائيًا عند تسجيل دخول الكاشير.';
+
+  @override
+  String get posShiftOpenedAt => 'فُتحت الساعة';
+
+  @override
+  String get posShiftOpeningFloat => 'الرصيد الافتتاحي';
+
+  @override
+  String get posShiftExpectedCash => 'النقد المتوقع';
+
+  @override
+  String get posShiftExpectedAtClose =>
+      'يُحتسب النقد المتوقع على الخادم عند الإغلاق.';
+
+  @override
+  String get posShiftCountedLabel => 'النقد المعدود';
+
+  @override
+  String get posShiftInvalidAmount => 'أدخل مبلغًا صحيحًا.';
+
+  @override
+  String get posShiftReasonLabel => 'السبب (مطلوب عند وجود فرق)';
+
+  @override
+  String get posShiftReasonRequired =>
+      'أدخل سببًا عند اختلاف النقد المعدود عن المتوقع.';
+
+  @override
+  String get posShiftClosedTitle => 'تم إغلاق الوردية';
+
+  @override
+  String get posShiftBalanced => 'مطابق';
+
+  @override
+  String get posShiftOver => 'زيادة';
+
+  @override
+  String get posShiftShort => 'عجز';
+
+  @override
+  String get posShiftDifference => 'الفرق';
+
+  @override
+  String get posShiftCloseUnavailable =>
+      'الإغلاق غير متاح — يلزم جلسة موظف على جهاز مقترن.';
+
+  @override
+  String get posShiftClosePermissionDenied =>
+      'غير مصرّح لك بإغلاق هذه الوردية.';
+
+  @override
+  String get posShiftCloseServerRejected =>
+      'رفض الخادم الإغلاق — قد يلزم إدخال سبب أو أن حالة الوردية غير صالحة.';
+
+  @override
+  String get posShiftCloseFailed => 'تعذّر إغلاق الوردية.';
+
+  @override
+  String get posShiftCouldNotRestore =>
+      'تعذّر استرجاع حالة الوردية. سجّل الدخول مجددًا لفتح وردية.';
+
+  @override
+  String get posShiftReturnToPin => 'تسجيل الخروج';
 
   @override
   String get posSyncSendingReal => 'جارٍ الإرسال إلى الخادم…';
@@ -1787,6 +1880,36 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get dashboardSettingsRealNotice =>
       'هذه هي القيم الحقيقية لمساحة العمل. تعديل الإعدادات غير متصل في هذا الإصدار بعد، لذا لا يوجد شيء للحفظ هنا.';
+
+  @override
+  String get dashboardShiftCloseSectionTitle => 'تسوية الوردية (نقطة البيع)';
+
+  @override
+  String get dashboardShiftCloseToggleLabel =>
+      'إظهار «إغلاق الوردية وعدّ النقد» على نقطة البيع';
+
+  @override
+  String get dashboardShiftCloseToggleHelp =>
+      'عند التفعيل، يمكن للكاشير إغلاق ورديته وعدّ درج النقد على نقطة البيع لهذا الفرع. إيقافه يُخفي هذا الإجراء؛ ولا يؤثر على المدفوعات.';
+
+  @override
+  String get dashboardShiftCloseOwnerOnly =>
+      'يمكن للمالك فقط تغيير هذا الإعداد.';
+
+  @override
+  String get dashboardShiftCloseUnavailable =>
+      'تعذّر تحميل هذا الإعداد الآن. حاول مرة أخرى لاحقًا.';
+
+  @override
+  String get dashboardShiftCloseSaved => 'تم حفظ الإعداد.';
+
+  @override
+  String get dashboardShiftCloseDenied =>
+      'ليست لديك صلاحية لتغيير هذا الإعداد.';
+
+  @override
+  String get dashboardShiftCloseSaveFailed =>
+      'تعذّر حفظ الإعداد. حاول مرة أخرى.';
 
   @override
   String get setupTitle => 'الإعداد';

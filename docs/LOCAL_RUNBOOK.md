@@ -263,9 +263,25 @@ banner.
    (`order.submit`) with an idempotency key (device + local operation id,
    D-022). Cash payment uses `payment.create`; the server assigns the receipt
    number. `record_payment` REQUIRES an open shift (RF-055): the POS opens one
-   automatically (opening float 0) right after the staff PIN sign-in —
-   closing/reconciling shifts and a real opening-float entry are still
-   deferred with the RF-055 UI.
+   automatically (opening float 0) right after the staff PIN sign-in. To
+   **close/reconcile** it, open the POS **⋮ device menu → Close shift** (RF-113):
+   enter the counted cash and the panel shows the server-computed **expected vs
+   counted vs difference** (over/short) in ₪. After a close the POS **returns to
+   PIN sign-in** (a cashier can't sell without a shift; the next sign-in opens a
+   fresh one). On a **browser refresh** the POS re-reads the still-open shift via
+   `sync_pull` and Close shift keeps working; if it genuinely can't be restored it
+   shows an honest "sign in again" state rather than a misleading "no open shift".
+   A real opening-float entry (non-zero) is still deferred.
+   **Owner switch (RF-113):** the visible Close-shift workflow is a per-branch
+   policy the owner controls from **Dashboard → Settings → "Shift reconciliation
+   (POS)"** (`branches.pos_shift_close_enabled`, default **on**; owner-only —
+   managers/cashiers see it read-only, and the POS device can never change it).
+   When it's **off** the POS simply **hides** the ⋮ Close-shift entry; payments
+   are unaffected because the server's own open-shift requirement (RF-055) is a
+   separate, always-on rule. The POS reads the flag token-proven via
+   `public.get_device_pos_shift_close_enabled`; the Dashboard reads/writes it via
+   `public.get_branch_pos_shift_close_enabled` / `set_branch_pos_shift_close_enabled`
+   (owner gate = rank ≥ restaurant_owner, same as the other branch settings).
 2. KDS (real, paired, PIN session as kitchen staff): the board polls
    `public.sync_pull` — financial entities (payments/shifts/cash drawer) are
    **never pulled** for kitchen staff, and the board renders no money (T-003).
@@ -402,8 +418,11 @@ owner login, no secrets):
 - **Modifiers/sizes/variants** are not in the real POS menu yet (base-price
   items only), although the Menu tab can already manage them.
 - **Shifts/cash drawer**: payments REQUIRE an open shift (RF-055); the POS
-  auto-opens one (float 0) at staff sign-in, but there is no UI to close or
-  reconcile a shift yet, and no real opening-float entry.
+  auto-opens one (float 0) at staff sign-in. A shift can now be **closed and
+  reconciled** from the POS ⋮ device menu → Close shift (RF-113) — counted cash
+  in, server-computed expected/counted/difference out. Still deferred: a real
+  **opening-float** entry, and the manager **reconcile** sign-off (`reconcile_shift`
+  is server-only, not a client op).
 - **On the web (Chrome)**, "secure storage" for the device-session token is
   browser-managed storage, not an OS keystore — fine for local development;
   a hardware pilot should run the POS/KDS as desktop/mobile builds.

@@ -143,7 +143,23 @@ void main() {
 
     test('real mode: a started PIN session yields SyncSession(pinSessionId, '
         'deviceId) and calls public.start_pin_session (never app.*)', () async {
-      final transport = _RecordingTransport((_, _) async => 'pin-session-id');
+      // start_pin_session yields the pin-session id; the best-effort shift.open
+      // push APPLIES (a fresh shift), so no sync_pull recovery is needed (RF-113).
+      final transport = _RecordingTransport((function, _) async {
+        if (function == 'sync_push') {
+          return <String, dynamic>{
+            'ok': true,
+            'results': <dynamic>[
+              <String, dynamic>{
+                'operation_type': 'shift.open',
+                'status': 'applied',
+                'ok': true,
+              },
+            ],
+          };
+        }
+        return 'pin-session-id';
+      });
       final container = containerFor(
         isDemoMode: false,
         transport: transport,

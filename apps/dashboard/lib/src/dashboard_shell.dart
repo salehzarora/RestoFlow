@@ -8,6 +8,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'admin/branch_shift_close_policy_repository.dart';
 import 'admin/real_admin_views.dart';
 import 'dashboard_home_screen.dart';
 import 'printers/printers_repository.dart';
@@ -163,6 +164,31 @@ class _DashboardShellState extends State<DashboardShell> {
   late final AdminRepository? _realDeviceRepo = widget.deviceRepositoryFor
       ?.call(_adminScope);
 
+  /// RF-113: the real per-branch shift-close policy read/write seam for the
+  /// Settings tab, built once. Null unless there is an authenticated transport
+  /// AND a concrete restaurant+branch in scope -> the toggle is then omitted.
+  late final BranchShiftClosePolicyRepository? _shiftClosePolicyRepo =
+      _buildShiftClosePolicyRepo();
+
+  BranchShiftClosePolicyRepository? _buildShiftClosePolicyRepo() {
+    final transport = widget.reportsTransport;
+    final membership = widget.membership;
+    final restaurantId = membership?.restaurantId;
+    final branchId = membership?.branchId;
+    if (transport == null ||
+        membership == null ||
+        restaurantId == null ||
+        branchId == null) {
+      return null;
+    }
+    return SupabaseBranchShiftClosePolicyRepository(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+      branchId: branchId,
+    );
+  }
+
   /// Printers/Staff/Tables: real repository when injected, else the labelled
   /// demo store.
   late final PrintersRepository _printersRepo =
@@ -230,6 +256,7 @@ class _DashboardShellState extends State<DashboardShell> {
               : RealSettingsView(
                   membership: widget.membership!,
                   currencyCode: widget.currencyCode,
+                  policyRepository: _shiftClosePolicyRepo,
                 ),
       },
     );
