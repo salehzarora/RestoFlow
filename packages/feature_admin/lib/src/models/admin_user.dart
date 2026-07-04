@@ -5,15 +5,22 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 class AdminUser {
   const AdminUser({
     required this.id,
+    String? membershipId,
     required this.displayName,
     required this.email,
     required this.role,
     required this.scopeLabel,
     required this.status,
     this.isSelf = false,
-  });
+  }) : membershipId = membershipId ?? id;
 
   final String id;
+
+  /// The real `membership_id` (RF-116) that role-change and revoke target — never
+  /// the display id. Defaults to [id] when omitted (the demo store, where [id] is
+  /// already the row key). The real repository sets both to the membership id.
+  final String membershipId;
+
   final String displayName;
   final String email;
 
@@ -32,6 +39,7 @@ class AdminUser {
 
   AdminUser copyWith({MembershipRole? role, String? status}) => AdminUser(
     id: id,
+    membershipId: membershipId,
     displayName: displayName,
     email: email,
     role: role ?? this.role,

@@ -1186,6 +1186,42 @@ abstract class AppLocalizations {
   /// **'Print failed'**
   String get printStatusFailed;
 
+  /// Print-job status: the local print bridge CONFIRMED it wrote the bytes to the printer transport. This is delivery-to-printer, NOT a hardware paper-print acknowledgement (ESC/POS over a socket has none).
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to the printer (not confirmed printed)'**
+  String get printStatusSentToPrinter;
+
+  /// Print-job status: a local print bridge is configured/expected but could not be reached; the job was prepared but not delivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Print bridge unavailable — job not sent'**
+  String get printStatusBridgeUnavailable;
+
+  /// Button that re-runs a failed / bridge-unavailable / not-configured print job.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get printRetryAction;
+
+  /// Device-settings bridge row: a local print bridge answered its health check.
+  ///
+  /// In en, this message translates to:
+  /// **'Print bridge: connected'**
+  String get deviceSettingsBridgeConnected;
+
+  /// Device-settings bridge row: a local print bridge is configured but not currently reachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Print bridge: unavailable'**
+  String get deviceSettingsBridgeUnavailable;
+
+  /// Device-settings bridge row: when the last print job was submitted to the bridge.
+  ///
+  /// In en, this message translates to:
+  /// **'Last print job: {time}'**
+  String deviceSettingsBridgeLastJob(String time);
+
   /// Label of the receipt print-job status line on the POS order confirmation.
   ///
   /// In en, this message translates to:
@@ -3268,6 +3304,24 @@ abstract class AppLocalizations {
   /// **'Role updated'**
   String get adminRoleUpdated;
 
+  /// No description provided for @adminRevokeMemberTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke access?'**
+  String get adminRevokeMemberTitle;
+
+  /// No description provided for @adminRevokeMemberBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the member’s access to this organization and ends any PIN sign-in. You can’t undo this here.'**
+  String get adminRevokeMemberBody;
+
+  /// No description provided for @adminMemberRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Access revoked'**
+  String get adminMemberRevoked;
+
   /// No description provided for @adminDevicesTitle.
   ///
   /// In en, this message translates to:
@@ -3657,6 +3711,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.'**
   String get dashboardSettingsRealNotice;
+
+  /// RF-116: title of the owner-only editable settings card on the real Settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit branch details'**
+  String get dashboardSettingsEditableTitle;
+
+  /// RF-116: label for the editable branch display-name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch name'**
+  String get dashboardSettingsBranchNameLabel;
+
+  /// RF-116: label for the editable restaurant display-name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant name'**
+  String get dashboardSettingsRestaurantNameLabel;
+
+  /// RF-116: hint under the receipt-prefix field; blank means leave unchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave blank to keep the current prefix'**
+  String get dashboardSettingsReceiptPrefixHint;
+
+  /// RF-116: note that currency stays locked to ILS and is not editable.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency is fixed to ₪ (ILS) for the pilot and can’t be changed here.'**
+  String get dashboardSettingsCurrencyLocked;
 
   /// RF-113: Settings section for the per-branch POS shift-close policy.
   ///
@@ -4605,6 +4689,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sign in again'**
   String get kdsSignInAgain;
+
+  /// POS action on the order confirmation that opens the payment sheet (cash or a non-cash tender).
+  ///
+  /// In en, this message translates to:
+  /// **'Take payment'**
+  String get posTakePayment;
+
+  /// POS label above the tender-type selector (Cash / Card / Bit / External) on the payment sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Tender type'**
+  String get posTenderTypeLabel;
+
+  /// POS heading of the payment sheet when a non-cash (externally-recorded) tender is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Record external payment'**
+  String get posExternalPaymentTitle;
+
+  /// POS payment method value: card (externally recorded; no charge processed by RestoFlow).
+  ///
+  /// In en, this message translates to:
+  /// **'Card'**
+  String get posPaymentMethodCard;
+
+  /// POS payment method value: Bit (the mobile transfer app; externally recorded).
+  ///
+  /// In en, this message translates to:
+  /// **'Bit'**
+  String get posPaymentMethodBit;
+
+  /// POS payment method value: another external tender, recorded without a real charge.
+  ///
+  /// In en, this message translates to:
+  /// **'External'**
+  String get posPaymentMethodExternal;
+
+  /// POS honest note on the payment sheet for a non-cash tender: RestoFlow records the tender but processes no charge.
+  ///
+  /// In en, this message translates to:
+  /// **'External payment recorded — RestoFlow does not process the card or transfer; no real charge is made.'**
+  String get posNonCashNote;
+
+  /// POS label for the tax line on the cart/checkout summary and receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Tax'**
+  String get posTaxLabel;
+
+  /// POS label for the order grand total (subtotal minus discount plus tax) on the cart/checkout summary.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get posGrandTotal;
+
+  /// POS action on the order confirmation that opens the order-level discount sheet; also the sheet heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply discount'**
+  String get posApplyDiscount;
+
+  /// POS label for the applied order-level discount line on the summary and receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount'**
+  String get posDiscountLabel;
+
+  /// POS discount-type option: a fixed money amount off the order.
+  ///
+  /// In en, this message translates to:
+  /// **'Fixed amount'**
+  String get posDiscountFixedLabel;
+
+  /// POS discount-type option: a percentage off the order.
+  ///
+  /// In en, this message translates to:
+  /// **'Percentage'**
+  String get posDiscountPercentLabel;
+
+  /// POS label for the discount value input (money amount for fixed, or percent for percentage).
+  ///
+  /// In en, this message translates to:
+  /// **'Discount value'**
+  String get posDiscountValueLabel;
+
+  /// POS label for the required discount reason input.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get posDiscountReasonLabel;
+
+  /// POS validation message when the typed discount value is empty or malformed.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid discount'**
+  String get posDiscountValueInvalid;
+
+  /// POS validation message when the discount reason is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'A reason is required'**
+  String get posDiscountReasonRequired;
+
+  /// POS validation message when the fixed discount amount is larger than the order subtotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount can\'t exceed the subtotal'**
+  String get posDiscountExceedsSubtotal;
+
+  /// POS action that applies the entered order-level discount.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get posDiscountApplyAction;
+
+  /// POS honest message when a cashier without the discount permission tries to apply one (server permission_denied).
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have permission to apply a discount — ask a manager.'**
+  String get posDiscountPermissionDenied;
+
+  /// POS message when applying the discount failed for a non-permission reason (rejected/unavailable).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t apply the discount'**
+  String get posDiscountFailed;
+
+  /// POS honest note that in demo mode the discount is computed and applied locally, not on a backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo discount — applied locally'**
+  String get posDiscountDemoNote;
 }
 
 class _AppLocalizationsDelegate

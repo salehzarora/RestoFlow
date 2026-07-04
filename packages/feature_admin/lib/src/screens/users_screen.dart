@@ -22,6 +22,10 @@ class AdminUsersScreen extends ConsumerWidget {
     final users = ref.watch(adminUsersProvider);
     final scope = ref.watch(adminScopeProvider);
     final manage = canManage(scope.actingRole);
+    // Grant is only offered when the repository actually supports it (the demo
+    // store does; the real dashboard repository does not — inviting brand-new
+    // accounts is out of scope, RF-116). Hidden rather than a button that fails.
+    final canGrant = manage && ref.watch(adminControllerProvider).supportsGrant;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -31,13 +35,12 @@ class AdminUsersScreen extends ConsumerWidget {
           subtitle: l10n.adminUsersSubtitle,
           icon: Icons.group_outlined,
           actions: [
-            FilledButton.icon(
-              onPressed: manage
-                  ? () => _showGrantDialog(context, ref, scope)
-                  : null,
-              icon: const Icon(Icons.person_add_alt_1, size: 18),
-              label: Text(l10n.adminGrantUser),
-            ),
+            if (canGrant)
+              FilledButton.icon(
+                onPressed: () => _showGrantDialog(context, ref, scope),
+                icon: const Icon(Icons.person_add_alt_1, size: 18),
+                label: Text(l10n.adminGrantUser),
+              ),
           ],
         ),
         Expanded(
@@ -79,6 +82,7 @@ class AdminUsersScreen extends ConsumerWidget {
                             roleRank(scope.actingRole) > roleRank(u.role),
                         onChangeRole: () =>
                             _showChangeRoleDialog(context, ref, u, scope),
+                        onRevoke: () => _showRevokeDialog(context, ref, u),
                       ),
                     ),
                 ],
@@ -128,11 +132,13 @@ class _UserTile extends StatelessWidget {
     required this.user,
     required this.canManage,
     required this.onChangeRole,
+    required this.onRevoke,
   });
 
   final AdminUser user;
   final bool canManage;
   final VoidCallback onChangeRole;
+  final VoidCallback onRevoke;
 
   @override
   Widget build(BuildContext context) {
@@ -220,18 +226,20 @@ class _UserTile extends StatelessWidget {
                 ],
               ),
             ),
-            // Actions: change role (allowed) + revoke (deferred to RF-061 wiring).
+            // Actions: change role + revoke (RF-116). Revoke is disabled for an
+            // already-revoked membership (re-revoke is a no-op the server rejects).
             PopupMenuButton<String>(
               enabled: canManage,
               onSelected: (v) {
                 if (v == 'role') onChangeRole();
+                if (v == 'revoke') onRevoke();
               },
               itemBuilder: (context) => [
                 PopupMenuItem(value: 'role', child: Text(l10n.adminChangeRole)),
                 PopupMenuItem(
                   value: 'revoke',
-                  enabled: false,
-                  child: Text('${l10n.adminRevoke} · ${l10n.adminComingSoon}'),
+                  enabled: !revoked,
+                  child: Text(l10n.adminRevoke),
                 ),
               ],
             ),
@@ -397,6 +405,44 @@ Future<void> _showChangeRoleDialog(
     context: context,
     builder: (_) => _ChangeRoleDialog(user: user, roles: roles, ref: ref),
   );
+}
+
+/// Confirms then revokes a membership (RF-116). The server is the authoritative
+/// guard (self/rank); this only surfaces the honest applied / denied / failed
+/// result. The list reloads on success (the controller invalidates the loader).
+Future<void> _showRevokeDialog(
+  BuildContext context,
+  WidgetRef ref,
+  AdminUser user,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(l10n.adminRevokeMemberTitle),
+      content: Text(l10n.adminRevokeMemberBody),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(l10n.adminCancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(l10n.adminRevoke),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final result = await ref
+      .read(adminControllerProvider)
+      .revokeMembership(user.membershipId);
+  final message = result.fold(
+    (_) => l10n.adminMemberRevoked,
+    (f) => adminFailureMessage(l10n, f),
+  );
+  messenger.showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _ChangeRoleDialog extends StatefulWidget {

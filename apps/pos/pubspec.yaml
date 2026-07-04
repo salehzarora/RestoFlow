@@ -20,6 +20,10 @@ dependencies:
     path: ../../packages/money
   restoflow_design_system:
     path: ../../packages/design_system
+  # RF-115: the ESC/POS adapter + the LOCAL print-bridge client (loopback HTTP,
+  # honest outcomes) that turns a prepared receipt into a real/sink print.
+  restoflow_printing:
+    path: ../../packages/printing
   # RF-108 Stage 4: the auth gate (demo-mode fallback / role-based entry).
   restoflow_auth_identity:
     path: ../../packages/auth_identity

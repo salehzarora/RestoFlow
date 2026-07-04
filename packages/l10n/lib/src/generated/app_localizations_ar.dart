@@ -584,6 +584,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printStatusFailed => 'فشلت الطباعة';
 
   @override
+  String get printStatusSentToPrinter =>
+      'أُرسِل إلى الطابعة (دون تأكيد الطباعة الفعلية)';
+
+  @override
+  String get printStatusBridgeUnavailable =>
+      'جسر الطباعة غير متاح — لم تُرسَل المهمة';
+
+  @override
+  String get printRetryAction => 'إعادة المحاولة';
+
+  @override
+  String get deviceSettingsBridgeConnected => 'جسر الطباعة: متصل';
+
+  @override
+  String get deviceSettingsBridgeUnavailable => 'جسر الطباعة: غير متاح';
+
+  @override
+  String deviceSettingsBridgeLastJob(String time) {
+    return 'آخر مهمة طباعة: $time';
+  }
+
+  @override
   String get posReceiptPrintLabel => 'طباعة الإيصال';
 
   @override
@@ -1673,6 +1695,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminRoleUpdated => 'تم تحديث الدور';
 
   @override
+  String get adminRevokeMemberTitle => 'إلغاء الوصول؟';
+
+  @override
+  String get adminRevokeMemberBody =>
+      'يؤدي هذا إلى إزالة وصول العضو إلى هذه المؤسسة وإنهاء أي تسجيل دخول برمز PIN. لا يمكن التراجع عن ذلك من هنا.';
+
+  @override
+  String get adminMemberRevoked => 'تم إلغاء الوصول';
+
+  @override
   String get adminDevicesTitle => 'الأجهزة';
 
   @override
@@ -1880,6 +1912,23 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get dashboardSettingsRealNotice =>
       'هذه هي القيم الحقيقية لمساحة العمل. تعديل الإعدادات غير متصل في هذا الإصدار بعد، لذا لا يوجد شيء للحفظ هنا.';
+
+  @override
+  String get dashboardSettingsEditableTitle => 'تعديل تفاصيل الفرع';
+
+  @override
+  String get dashboardSettingsBranchNameLabel => 'اسم الفرع';
+
+  @override
+  String get dashboardSettingsRestaurantNameLabel => 'اسم المطعم';
+
+  @override
+  String get dashboardSettingsReceiptPrefixHint =>
+      'اتركه فارغًا للإبقاء على البادئة الحالية';
+
+  @override
+  String get dashboardSettingsCurrencyLocked =>
+      'العملة مثبّتة على ₪ (شيكل) للتجربة ولا يمكن تغييرها من هنا.';
 
   @override
   String get dashboardShiftCloseSectionTitle => 'تسوية الوردية (نقطة البيع)';
@@ -2394,4 +2443,73 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kdsSignInAgain => 'تسجيل الدخول مرة أخرى';
+
+  @override
+  String get posTakePayment => 'استلام الدفعة';
+
+  @override
+  String get posTenderTypeLabel => 'طريقة الدفع';
+
+  @override
+  String get posExternalPaymentTitle => 'تسجيل دفعة خارجية';
+
+  @override
+  String get posPaymentMethodCard => 'بطاقة';
+
+  @override
+  String get posPaymentMethodBit => 'بِت';
+
+  @override
+  String get posPaymentMethodExternal => 'دفع خارجي';
+
+  @override
+  String get posNonCashNote =>
+      'دفعة خارجية مُسجّلة — لا يقوم RestoFlow بمعالجة البطاقة أو التحويل؛ لا يتم أي خصم فعلي.';
+
+  @override
+  String get posTaxLabel => 'الضريبة';
+
+  @override
+  String get posGrandTotal => 'الإجمالي';
+
+  @override
+  String get posApplyDiscount => 'تطبيق خصم';
+
+  @override
+  String get posDiscountLabel => 'الخصم';
+
+  @override
+  String get posDiscountFixedLabel => 'مبلغ ثابت';
+
+  @override
+  String get posDiscountPercentLabel => 'نسبة مئوية';
+
+  @override
+  String get posDiscountValueLabel => 'قيمة الخصم';
+
+  @override
+  String get posDiscountReasonLabel => 'السبب';
+
+  @override
+  String get posDiscountValueInvalid => 'أدخل خصمًا صالحًا';
+
+  @override
+  String get posDiscountReasonRequired => 'السبب مطلوب';
+
+  @override
+  String get posDiscountExceedsSubtotal =>
+      'لا يمكن أن يتجاوز الخصم المجموع الفرعي';
+
+  @override
+  String get posDiscountApplyAction => 'تطبيق';
+
+  @override
+  String get posDiscountPermissionDenied =>
+      'ليست لديك صلاحية تطبيق الخصم — اطلب مديرًا.';
+
+  @override
+  String get posDiscountFailed => 'تعذّر تطبيق الخصم';
+
+  @override
+  String get posDiscountDemoNote => 'خصم تجريبي — مُطبّق محليًا';
 }

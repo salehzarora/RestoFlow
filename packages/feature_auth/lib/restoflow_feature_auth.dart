@@ -15,8 +15,13 @@ export 'src/supabase_device_pairing_repository.dart';
 // Device settings sprint: the token-proven per-device printer read + the
 // shared settings-sheet printers section (honest capability statuses).
 export 'src/device_printer_assignments_section.dart';
+// RF-115: the shared print-bridge status view-model rendered in the section.
+export 'src/print_bridge_status.dart';
 export 'src/supabase_device_printer_assignments_repository.dart';
 export 'src/supabase_device_shift_close_policy_repository.dart';
+// RF-117: the token-proven per-branch tax-setting read (BranchTax over the
+// device transport; default-OFF fail-soft).
+export 'src/supabase_device_branch_tax_repository.dart';
 export 'src/auth_gate_view.dart';
 export 'src/auth_gated_home.dart';
 export 'src/auth_state_views.dart';

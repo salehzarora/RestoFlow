@@ -4,11 +4,16 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+
 import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
+import '../format/payment_method_label.dart';
+import '../format/tax_math.dart';
 import '../state/cart_controller.dart';
 import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
+import '../state/pos_branch_tax.dart';
 import 'order_confirmation.dart';
 import 'order_setup_section.dart';
 import 'shift_context_bar.dart';
@@ -50,6 +55,15 @@ class CartPanel extends ConsumerWidget {
           .where((e) => e.syncState.isPending)
           .length;
 
+      // RF-117: the branch tax setting (default OFF). When it adds tax we show a
+      // Tax line + grand total in the footer and thread the integer tax into the
+      // submitted order. Exclusive mode, integer minor units, no float.
+      final tax =
+          ref.watch(posBranchTaxProvider).valueOrNull ?? BranchTax.disabled;
+      final taxMinor = tax.addsTax
+          ? taxMinorExclusive(cart.subtotalMinor, tax.rateBp)
+          : 0;
+
       body = Material(
         key: const ValueKey('cart-view'),
         color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -89,7 +103,10 @@ class CartPanel extends ConsumerWidget {
             ),
             _CartFooter(
               l10n: l10n,
-              subtotalText: MoneyFormatter.format(cart.subtotal),
+              subtotalMinor: cart.subtotalMinor,
+              taxMinor: taxMinor,
+              taxRateBp: taxMinor > 0 ? tax.rateBp : 0,
+              currencyCode: cart.currencyCode,
               orderType: setup.orderType,
               tableLabel: setup.assignedTable?.label,
               // Part G polish: when items are ready but dine-in still lacks
@@ -104,6 +121,8 @@ class CartPanel extends ConsumerWidget {
                       cartController: controller,
                       setupController: setupController,
                       l10n: l10n,
+                      taxTotalMinor: taxMinor,
+                      taxRateBp: taxMinor > 0 ? tax.rateBp : 0,
                     )
                   : null,
             ),
@@ -144,6 +163,8 @@ Future<void> _submitOrder({
   required CartController cartController,
   required OrderSetupController setupController,
   required AppLocalizations l10n,
+  int taxTotalMinor = 0,
+  int taxRateBp = 0,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final outbox = ref.read(outboxControllerProvider.notifier);
@@ -155,6 +176,8 @@ Future<void> _submitOrder({
       orderType: setup.orderType,
       tableId: setup.assignedTable?.tableId,
       tableLabel: setup.assignedTable?.label,
+      // RF-117: the integer tax the server validates (grand = subtotal + tax).
+      taxTotalMinor: taxTotalMinor,
     );
     // Safe to clear now: the order is durably queued in the outbox.
     cartController.submitOrder(
@@ -165,6 +188,9 @@ Future<void> _submitOrder({
       localOperationId: result.entry.localOperationId,
       // RF-130: the server order id a payment.create references (RF-129).
       orderId: result.entry.targetId,
+      // RF-117: carry the tax onto the confirmation/receipt.
+      taxTotalMinor: taxTotalMinor,
+      taxRateBp: taxRateBp,
     );
     setupController.reset();
   } on OrderSubmissionException {
@@ -550,7 +576,10 @@ class _SelectionSummary extends StatelessWidget {
 class _CartFooter extends StatelessWidget {
   const _CartFooter({
     required this.l10n,
-    required this.subtotalText,
+    required this.subtotalMinor,
+    required this.taxMinor,
+    required this.taxRateBp,
+    required this.currencyCode,
     required this.orderType,
     required this.tableLabel,
     required this.onSend,
@@ -558,7 +587,13 @@ class _CartFooter extends StatelessWidget {
   });
 
   final AppLocalizations l10n;
-  final String subtotalText;
+  final int subtotalMinor;
+
+  /// The integer tax (RF-117), 0 when the branch adds no tax. When > 0 the
+  /// footer shows a Tax line + grand total; otherwise only the subtotal.
+  final int taxMinor;
+  final int taxRateBp;
+  final String currencyCode;
   final OrderType orderType;
   final String? tableLabel;
   final VoidCallback? onSend;
@@ -589,21 +624,61 @@ class _CartFooter extends StatelessWidget {
               tableLabel: tableLabel,
             ),
             const SizedBox(height: RestoflowSpacing.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(l10n.posCartSubtotal, style: theme.textTheme.titleMedium),
-                Text(
-                  subtotalText,
-                  key: const Key('cart-subtotal'),
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: theme.colorScheme.primary,
+            // RF-117: with tax OFF (the default) only the subtotal shows — the
+            // `cart-subtotal` figure is the amount the cashier reads aloud and
+            // keeps its emphasis. With tax ON, the subtotal de-emphasises to a
+            // line item and the GRAND total (subtotal + tax) becomes the loud
+            // figure. Integer minor units throughout.
+            if (taxMinor > 0) ...[
+              _SummaryRow(
+                label: l10n.posCartSubtotal,
+                value: MoneyFormatter.formatMinor(subtotalMinor, currencyCode),
+                valueKey: const Key('cart-subtotal'),
+              ),
+              const SizedBox(height: RestoflowSpacing.xs),
+              _SummaryRow(
+                label: taxLineLabel(l10n, taxRateBp),
+                value: MoneyFormatter.formatMinor(taxMinor, currencyCode),
+                valueKey: const Key('cart-tax'),
+              ),
+              const SizedBox(height: RestoflowSpacing.xs),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(l10n.posGrandTotal, style: theme.textTheme.titleMedium),
+                  Text(
+                    MoneyFormatter.formatMinor(
+                      subtotalMinor + taxMinor,
+                      currencyCode,
+                    ),
+                    key: const Key('cart-grand-total'),
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ] else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    l10n.posCartSubtotal,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  Text(
+                    MoneyFormatter.formatMinor(subtotalMinor, currencyCode),
+                    key: const Key('cart-subtotal'),
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: RestoflowSpacing.sm),
             // Part G polish: the one actionable reason Send can be disabled
             // with a filled cart — dine-in without a table — is spelled out
@@ -645,6 +720,45 @@ class _CartFooter extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A compact label/value summary row for the cart footer breakdown (RF-117:
+/// subtotal + tax lines above the grand total). The value carries an optional
+/// [valueKey] so tests can read the exact figure.
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.label, required this.value, this.valueKey});
+
+  final String label;
+  final String value;
+  final Key? valueKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: RestoflowSpacing.sm),
+        Text(
+          value,
+          key: valueKey,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

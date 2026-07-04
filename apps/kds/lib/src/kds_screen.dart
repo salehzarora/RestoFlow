@@ -6,6 +6,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'widgets/kds_board.dart';
 import 'widgets/kds_state_message.dart';
+import 'widgets/kds_ticket_card.dart' show KdsTicketPrintStatus;
 
 /// Local Kitchen Display screen (RF-034, restyled in RF-102): renders
 /// fake/local tickets grouped by station with bump/recall actions. Pure UI +
@@ -45,10 +46,10 @@ class KdsScreen extends StatefulWidget {
   /// would lie and revert on the next poll); the demo board keeps it.
   final bool allowRecall;
 
-  /// Optional per-ticket kitchen print-job status label (device settings
-  /// sprint, Part D) — the LIVE board wires the print controller through
-  /// here; null (demo/tests) renders no status line.
-  final String? Function(KdsTicketView ticket)? printStatusFor;
+  /// Optional per-ticket kitchen print-job status (RF-115) — the LIVE board
+  /// wires the print controller through here (label + Retry); null (demo/tests)
+  /// renders no status line.
+  final KdsTicketPrintStatus? Function(KdsTicketView ticket)? printStatusFor;
 
   /// Optional sink invoked AFTER a successful forward advance (sprint): the
   /// LIVE board pushes the matching `order.status` through `public.sync_push`

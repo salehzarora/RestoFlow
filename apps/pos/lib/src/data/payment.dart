@@ -1,10 +1,32 @@
-/// Payment tender method (RF-116). Only cash in this milestone (RF-054 limits
-/// `payments.method` to `cash`; card/online are deferred).
+/// Payment tender method (RF-116 / RF-117). Cash plus the non-cash tenders the
+/// server records as EXTERNAL — `card`, `bit`, `external` (RF-117 extends
+/// `payments.method` from `cash` to `cash|card|bit|external`). A non-cash tender
+/// is "record external tender" only: RestoFlow processes NO card charge, so the
+/// server stamps amount = tendered = grand total, change = 0, and `close_shift`
+/// sums ONLY `cash`, meaning non-cash never inflates expected cash (MONEY §14).
 enum PaymentMethod {
-  cash('cash');
+  cash('cash'),
+  card('card'),
+  bit('bit'),
+  externalTender('external');
 
   const PaymentMethod(this.wire);
+
+  /// The DB `payments.method` string (matches the RF-117 CHECK constraint).
   final String wire;
+
+  /// Whether this tender is physical cash (drawer movement, change due). All
+  /// other tenders are externally-recorded with no change and no drawer cash.
+  bool get isCash => this == PaymentMethod.cash;
+
+  /// The [PaymentMethod] for a DB wire string, or null when unknown. Used to
+  /// read the server-echoed `method` back from a `record_payment` result.
+  static PaymentMethod? fromWire(Object? wire) {
+    for (final m in PaymentMethod.values) {
+      if (m.wire == wire) return m;
+    }
+    return null;
+  }
 }
 
 /// Payment lifecycle status (RF-116). Mirrors the frozen `payments.status`

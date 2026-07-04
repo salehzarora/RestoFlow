@@ -16,6 +16,9 @@ class SubmittedOrderView {
     required this.currencyCode,
     required this.subtotalMinor,
     required this.lines,
+    this.discountTotalMinor = 0,
+    this.taxTotalMinor = 0,
+    this.taxRateBp = 0,
     this.tableLabel,
     this.outboxEntryId,
     this.localOperationId,
@@ -27,6 +30,48 @@ class SubmittedOrderView {
   final String currencyCode;
   final int subtotalMinor;
   final List<SubmittedLineView> lines;
+
+  /// Order-level discount (integer minor units, D-007). 0 until a discount is
+  /// applied post-submit (RF-117 part C). In real mode this is the
+  /// SERVER-AUTHORITATIVE value read back from `apply_discount`; in demo mode it
+  /// is computed locally with the same clamp (discount <= subtotal).
+  final int discountTotalMinor;
+
+  /// Tax (integer minor units, D-007) computed at submit from the branch tax
+  /// setting (RF-117 part B), exclusive mode. 0 when tax is disabled (the
+  /// default), keeping grand == subtotal for the existing demo/e2e flows.
+  final int taxTotalMinor;
+
+  /// The tax rate in integer BASIS POINTS captured at submit (0 when disabled),
+  /// so the confirmation/receipt can render a "Tax (17.00%)"-style line. No
+  /// float — the percent is formatted from this integer.
+  final int taxRateBp;
+
+  /// The authoritative order total: `subtotal − discount + tax`, integer minor
+  /// units, never negative (the discount is clamped to the subtotal server-side
+  /// and demo-side). This is the amount the customer pays.
+  int get grandTotalMinor {
+    final grand = subtotalMinor - discountTotalMinor + taxTotalMinor;
+    return grand < 0 ? 0 : grand;
+  }
+
+  /// Copies the view, overriding the post-submit money lines (used when an
+  /// order-level discount is applied and the totals must reflect the result).
+  SubmittedOrderView copyWith({int? discountTotalMinor, int? taxTotalMinor}) =>
+      SubmittedOrderView(
+        orderNumber: orderNumber,
+        orderType: orderType,
+        currencyCode: currencyCode,
+        subtotalMinor: subtotalMinor,
+        lines: lines,
+        discountTotalMinor: discountTotalMinor ?? this.discountTotalMinor,
+        taxTotalMinor: taxTotalMinor ?? this.taxTotalMinor,
+        taxRateBp: taxRateBp,
+        tableLabel: tableLabel,
+        outboxEntryId: outboxEntryId,
+        localOperationId: localOperationId,
+        orderId: orderId,
+      );
 
   /// The assigned dine-in table label, or null for takeaway / unassigned.
   final String? tableLabel;

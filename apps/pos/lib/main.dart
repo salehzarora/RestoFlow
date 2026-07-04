@@ -5,11 +5,14 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart';
 
+import 'src/print/print_bridge.dart';
 import 'src/pos_menu_screen.dart';
 import 'src/pos_pairing_gate.dart';
 import 'src/pos_pin_gate.dart';
 import 'src/state/locale_controller.dart';
+import 'src/state/pos_branch_tax.dart';
 import 'src/state/pos_device_context.dart';
 import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_session.dart';
@@ -50,11 +53,21 @@ Future<void> main() async {
           posShiftClosePolicyReaderProvider.overrideWithValue(
             seams.shiftClosePolicy,
           ),
+        // RF-117: the token-proven per-branch tax setting (owner-controlled;
+        // default-OFF if unread — never invents a tax the owner did not set).
+        if (seams != null)
+          posBranchTaxReaderProvider.overrideWithValue(seams.branchTax),
         // Device settings sprint (Part G): the pairing repo IS the device
         // session manager (unpair = best-effort server self-revoke + local
         // clear) — exposed to the settings sheet's Unpair control.
         if (seams?.pairing case final DeviceSessionManager manager)
           posDeviceSessionManagerProvider.overrideWithValue(manager),
+        // RF-115: a LOCAL print bridge, ONLY when a loopback URL is provided
+        // (`--dart-define=RESTOFLOW_PRINT_BRIDGE_URL=http://127.0.0.1:8787`).
+        // Off by default (dormant) so demo/tests are unaffected; a non-loopback
+        // or unparseable URL is rejected fail-soft (stays dormant, no crash).
+        if (_buildReceiptBridge() case final PosPrintBridge bridge)
+          posPrintBridgeProvider.overrideWithValue(bridge),
       ],
       child: PosApp(
         devicePairingRepository: seams?.pairing,
@@ -65,6 +78,27 @@ Future<void> main() async {
   );
 }
 
+/// RF-115: builds the POS receipt print bridge from the compile-time loopback
+/// URL, or null when unset/invalid. Loopback is ENFORCED by the client's guard
+/// (`assertLoopbackBridgeUrl`); a non-loopback or malformed value fails soft
+/// (dormant, no crash) so a misconfig never points the app at the network.
+PosPrintBridge? _buildReceiptBridge() {
+  const url = String.fromEnvironment('RESTOFLOW_PRINT_BRIDGE_URL');
+  if (url.isEmpty) return null;
+  try {
+    final client = PrintBridgeClient(
+      baseUrl: url,
+      httpClient: HttpBridgeHttpClient(),
+      role: 'receipt',
+    );
+    return EscPosReceiptBridge(
+      dispatcher: PrintBridgeDispatcher(client: client),
+    );
+  } catch (_) {
+    return null; // non-loopback / malformed URL -> dormant
+  }
+}
+
 typedef _RealDeviceSeams = ({
   DevicePairingRepository pairing,
   DeviceStaffRepository staff,
@@ -72,6 +106,7 @@ typedef _RealDeviceSeams = ({
   DeviceImageUrlResolver imageResolver,
   DevicePrinterAssignmentsReader printerAssignments,
   DeviceShiftClosePolicyReader shiftClosePolicy,
+  DeviceBranchTaxReader branchTax,
 });
 
 /// RF-161 + sprint: the REAL device-auth seams for production POS. In real mode
@@ -118,6 +153,11 @@ _realDeviceAuth() async {
         // RF-113: same token-proven anonymous session reads the branch's
         // shift-close visibility policy.
         shiftClosePolicy: SupabaseDeviceShiftClosePolicyRepository(
+          transport: transport,
+          secretStore: store,
+        ),
+        // RF-117: same token-proven session reads the branch's tax setting.
+        branchTax: SupabaseDeviceBranchTaxRepository(
           transport: transport,
           secretStore: store,
         ),

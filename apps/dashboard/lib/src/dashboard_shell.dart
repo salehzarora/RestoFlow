@@ -10,6 +10,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'admin/branch_shift_close_policy_repository.dart';
 import 'admin/real_admin_views.dart';
+import 'admin/supabase_settings_repository.dart';
 import 'dashboard_home_screen.dart';
 import 'printers/printers_repository.dart';
 import 'printers/printers_screen.dart';
@@ -70,6 +71,7 @@ class DashboardShell extends StatefulWidget {
     this.membership,
     this.currencyCode,
     this.deviceRepositoryFor,
+    this.usersRepositoryFor,
     this.menuReadSource,
     this.menuWriter,
     this.menuImageStorage,
@@ -92,6 +94,11 @@ class DashboardShell extends StatefulWidget {
   /// Builds the REAL device repository for the active admin scope (RF-160).
   /// Null in demo mode / widget tests -> the Devices tab uses the demo store.
   final AdminRepository Function(AdminScope scope)? deviceRepositoryFor;
+
+  /// Builds the REAL users repository for the active admin scope (RF-116).
+  /// Null in demo mode / widget tests -> the Users tab keeps the demo store
+  /// (demo) or the honest not-connected state (real mode without it).
+  final AdminRepository Function(AdminScope scope)? usersRepositoryFor;
 
   /// The REAL menu read (`public.list_menu`) — with [menuWriter], the Menu tab
   /// manages the real backend menu; null => the labelled demo store.
@@ -164,6 +171,13 @@ class _DashboardShellState extends State<DashboardShell> {
   late final AdminRepository? _realDeviceRepo = widget.deviceRepositoryFor
       ?.call(_adminScope);
 
+  /// The real users repository for the active scope (RF-116), built once. Null in
+  /// demo mode / tests -> the Users tab keeps the demo store (demo) or the honest
+  /// not-connected state (real mode without it).
+  late final AdminRepository? _realUsersRepo = widget.usersRepositoryFor?.call(
+    _adminScope,
+  );
+
   /// RF-113: the real per-branch shift-close policy read/write seam for the
   /// Settings tab, built once. Null unless there is an authenticated transport
   /// AND a concrete restaurant+branch in scope -> the toggle is then omitted.
@@ -182,6 +196,31 @@ class _DashboardShellState extends State<DashboardShell> {
       return null;
     }
     return SupabaseBranchShiftClosePolicyRepository(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+      branchId: branchId,
+    );
+  }
+
+  /// RF-116: the settings read/write seam for the owner-only editable
+  /// branch/restaurant fields, built once. Null unless there is an authenticated
+  /// transport AND a concrete restaurant+branch in scope -> the editable section
+  /// is then omitted (the honest read-only workspace view remains).
+  late final SettingsRepository? _settingsRepo = _buildSettingsRepo();
+
+  SettingsRepository? _buildSettingsRepo() {
+    final transport = widget.reportsTransport;
+    final membership = widget.membership;
+    final restaurantId = membership?.restaurantId;
+    final branchId = membership?.branchId;
+    if (transport == null ||
+        membership == null ||
+        restaurantId == null ||
+        branchId == null) {
+      return null;
+    }
+    return SupabaseSettingsRepository(
       transport: transport,
       organizationId: membership.organizationId,
       restaurantId: restaurantId,
@@ -234,18 +273,12 @@ class _DashboardShellState extends State<DashboardShell> {
           TablesScreen(repository: _tablesRepo),
           demo: _tablesDemo,
         ),
-        // Users/Settings (sprint): REAL mode never renders the demo store's
-        // fabricated people/values — it shows the honest not-connected state
-        // and the real workspace values instead. Demo mode keeps the labelled
-        // demo surfaces.
-        6 =>
-          widget.membership == null
-              ? _adminSurface(
-                  const AdminUsersScreen(),
-                  repository: _adminStore,
-                  demo: true,
-                )
-              : const RealUsersUnavailableView(),
+        // Users/Settings: REAL mode never renders the demo store's fabricated
+        // people/values. When the real users repository is wired (RF-116), the
+        // Users tab manages real memberships (list + change-role + revoke); a
+        // real membership WITHOUT it falls back to the honest not-connected
+        // state. Demo mode keeps the labelled demo surface.
+        6 => _usersSurface(),
         _ =>
           widget.membership == null
               ? _adminSurface(
@@ -257,6 +290,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   membership: widget.membership!,
                   currencyCode: widget.currencyCode,
                   policyRepository: _shiftClosePolicyRepo,
+                  settingsRepository: _settingsRepo,
                 ),
       },
     );
@@ -361,6 +395,28 @@ class _DashboardShellState extends State<DashboardShell> {
           ),
         Expanded(child: report),
       ],
+    );
+  }
+
+  /// The Users tab (RF-116). Demo mode: the labelled demo store. Real mode with
+  /// the injected users repository: the SAME [AdminUsersScreen] over `list_members`
+  /// / `update_role` / `revoke_membership` (a denied/failed list shows an honest
+  /// state, never fabricated members). Real mode without it: the honest
+  /// not-connected view.
+  Widget _usersSurface() {
+    if (widget.membership == null) {
+      return _adminSurface(
+        const AdminUsersScreen(),
+        repository: _adminStore,
+        demo: true,
+      );
+    }
+    final real = _realUsersRepo;
+    if (real == null) return const RealUsersUnavailableView();
+    return _adminSurface(
+      const AdminUsersScreen(),
+      repository: real,
+      demo: false,
     );
   }
 

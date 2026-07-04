@@ -49,6 +49,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     required OrderType orderType,
     String? tableId,
     String? tableLabel,
+    int taxTotalMinor = 0,
   }) async {
     if (lines.isEmpty) {
       throw const OrderSubmissionException('cannot submit an empty cart');
@@ -115,9 +116,12 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       tableId: tableId,
       currencyCode: currencyCode,
       subtotalMinor: subtotalMinor,
-      // RF-115 carries no tax/discount preview; the authoritative totals are the
-      // money engine's job (RF-036). Grand total == subtotal for now.
-      grandTotalMinor: subtotalMinor,
+      // RF-117: tax computed client-side from the owner's per-branch setting
+      // (0 when disabled). Discount stays 0 at submit (it is applied post-submit,
+      // server-authoritative). The server validates grand = subtotal − discount
+      // + tax and grand >= 0 (integer minor units, D-007).
+      taxTotalMinor: taxTotalMinor,
+      grandTotalMinor: subtotalMinor + taxTotalMinor,
       items: items,
       clientCreatedAt: createdAt,
     );

@@ -22,6 +22,16 @@
 /// reprint-audit RPC live elsewhere.
 library;
 
+// RF-115: the LOCAL print-bridge transport — a loopback HTTP client with honest
+// outcomes (accepted / sentToPrinter / failed), a local-only URL guard, a
+// package:http seam impl, a PrintTransport adapter, and an encode+submit
+// dispatcher. No app CANNOT open raw TCP/USB from web; a bridge is the honest
+// path to a physical printer, and "sent to printer" is never claimed unless the
+// bridge confirms the transport write.
+export 'src/bridge/http_bridge_client.dart';
+export 'src/bridge/print_bridge_client.dart';
+export 'src/bridge/print_bridge_dispatcher.dart';
+export 'src/bridge/print_bridge_transport.dart';
 export 'src/codec/print_document_codec.dart';
 // RF-074: cash-drawer kick trigger — a narrow input contract + a dispatcher
 // that enqueues a one-shot, no-retry `cashDrawer` job (consumes RF-070's

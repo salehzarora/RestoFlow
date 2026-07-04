@@ -5,15 +5,22 @@ import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import 'print_bridge_status.dart';
+
 /// The printer-assignments section (Part B): what the owner configured for
 /// THIS station's branch, read through the token-proven device RPC. Safe
 /// metadata only; statuses are HONEST — a configured printer shows
-/// "bridge required" (this build has no physical transport), never "Ready".
+/// "bridge required" (no bridge configured), never "Ready".
+///
+/// RF-115: when a LOCAL print bridge is configured, [bridgeStatus] adds a global
+/// bridge row (connected / unavailable + last job) beside the capability note,
+/// reaching BOTH the POS and KDS device-settings surfaces from one place.
 class PrinterAssignmentsSection extends StatelessWidget {
   const PrinterAssignmentsSection({
     required this.l10n,
     required this.assignmentsAsync,
     this.stationNames = false,
+    this.bridgeStatus,
     super.key,
   });
 
@@ -25,6 +32,10 @@ class PrinterAssignmentsSection extends StatelessWidget {
 
   /// KDS: show the stations routed to each kitchen printer.
   final bool stationNames;
+
+  /// RF-115: the local print-bridge snapshot, or null when no bridge is
+  /// configured (the default — the row is then hidden, unchanged behaviour).
+  final PrinterBridgeStatus? bridgeStatus;
 
   static String _formatTime(DateTime dt) {
     String two(int v) => v.toString().padLeft(2, '0');
@@ -100,6 +111,12 @@ class PrinterAssignmentsSection extends StatelessWidget {
           body: l10n.deviceSettingsCapabilityNote,
           tone: RestoflowTone.info,
         ),
+        // RF-115: the global LOCAL print-bridge row (only when a bridge is
+        // configured) — connected / unavailable + the last submitted job time.
+        if (bridgeStatus case final status?) ...[
+          const SizedBox(height: RestoflowSpacing.sm),
+          _BridgeStatusRow(l10n: l10n, status: status),
+        ],
         if (result case Success(:final value)) ...[
           const SizedBox(height: RestoflowSpacing.xs),
           Text(
@@ -109,6 +126,47 @@ class PrinterAssignmentsSection extends StatelessWidget {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// RF-115: the global LOCAL print-bridge status row — connected / unavailable
+/// plus the last submitted-job time. Never a printer IP or any money.
+class _BridgeStatusRow extends StatelessWidget {
+  const _BridgeStatusRow({required this.l10n, required this.status});
+
+  final AppLocalizations l10n;
+  final PrinterBridgeStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final connected = status.connectivity == PrintBridgeConnectivity.connected;
+    final tone = connected ? RestoflowTone.success : RestoflowTone.warning;
+    final style = tone.styleOf(theme);
+    final base = connected
+        ? l10n.deviceSettingsBridgeConnected
+        : l10n.deviceSettingsBridgeUnavailable;
+    final lastJobAt = status.lastJobAt;
+    final label = lastJobAt == null
+        ? base
+        : '$base · ${l10n.deviceSettingsBridgeLastJob(PrinterAssignmentsSection._formatTime(lastJobAt))}';
+    return Row(
+      key: const Key('bridge-status-row'),
+      children: [
+        Icon(
+          connected ? Icons.link : Icons.link_off,
+          size: RestoflowIconSizes.sm,
+          color: style.accent,
+        ),
+        const SizedBox(width: RestoflowSpacing.xs),
+        Expanded(
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(color: style.accent),
+          ),
+        ),
       ],
     );
   }

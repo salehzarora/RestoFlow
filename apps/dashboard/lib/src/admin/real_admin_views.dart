@@ -6,6 +6,7 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'branch_shift_close_policy_repository.dart';
+import 'supabase_settings_repository.dart';
 
 /// Honest REAL-mode replacements for the demo-backed Users/Settings tabs
 /// (sprint). The demo store must never render fabricated people or values as
@@ -50,6 +51,7 @@ class RealSettingsView extends StatefulWidget {
     required this.membership,
     this.currencyCode,
     this.policyRepository,
+    this.settingsRepository,
     super.key,
   });
 
@@ -60,6 +62,12 @@ class RealSettingsView extends StatefulWidget {
   /// is no authenticated transport or no concrete branch in scope — the toggle
   /// section is then omitted (never a fake control).
   final BranchShiftClosePolicyRepository? policyRepository;
+
+  /// RF-116: the settings read/write seam for the owner-only editable branch/
+  /// restaurant fields. Null when there is no authenticated transport or no
+  /// concrete branch in scope — the editable section is then omitted (the honest
+  /// read-only workspace view remains). The server enforces the owner gate.
+  final SettingsRepository? settingsRepository;
 
   @override
   State<RealSettingsView> createState() => _RealSettingsViewState();
@@ -72,6 +80,14 @@ class _RealSettingsViewState extends State<RealSettingsView> {
   bool _policyReadFailed = false;
   bool _savingPolicy = false;
 
+  /// RF-116: the editable branch/restaurant fields (owner-only).
+  final _branchName = TextEditingController();
+  final _receiptPrefix = TextEditingController();
+  final _restaurantName = TextEditingController();
+  SettingsPrefill? _prefill;
+  bool _savingBranch = false;
+  bool _savingRestaurant = false;
+
   /// Only a full owner (org/restaurant) may change branch settings — this
   /// mirrors the server gate (`set_branch_pos_shift_close_enabled` requires
   /// rank >= restaurant_owner). Managers/cashiers see the current value
@@ -79,6 +95,17 @@ class _RealSettingsViewState extends State<RealSettingsView> {
   bool get _canEdit =>
       widget.membership.role == MembershipRole.orgOwner ||
       widget.membership.role == MembershipRole.restaurantOwner;
+
+  /// The owner-only editable section is shown only with a settings seam AND a
+  /// concrete branch in scope — exactly like the RF-113 toggle. Otherwise the
+  /// honest read-only workspace view remains (never a fake form).
+  bool get _showEditable =>
+      widget.settingsRepository != null &&
+      _canEdit &&
+      widget.membership.branchId != null;
+
+  /// A concrete restaurant is in scope, so its name is editable too.
+  bool get _hasRestaurant => widget.membership.restaurantId != null;
 
   @override
   void initState() {
@@ -88,6 +115,22 @@ class _RealSettingsViewState extends State<RealSettingsView> {
       _loadingPolicy = true;
       _loadPolicy(repo);
     }
+    // Seed the editable fields with the resolved membership names, then refine
+    // them from list_org_structure (the source of truth for the current name).
+    _branchName.text = widget.membership.branchName ?? '';
+    _restaurantName.text = widget.membership.restaurantName ?? '';
+    final settings = widget.settingsRepository;
+    if (_showEditable && settings != null) {
+      _loadPrefill(settings);
+    }
+  }
+
+  @override
+  void dispose() {
+    _branchName.dispose();
+    _receiptPrefix.dispose();
+    _restaurantName.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPolicy(BranchShiftClosePolicyRepository repo) async {
@@ -98,6 +141,76 @@ class _RealSettingsViewState extends State<RealSettingsView> {
       _policyReadFailed = value == null;
       _loadingPolicy = false;
     });
+  }
+
+  Future<void> _loadPrefill(SettingsRepository repo) async {
+    final prefill = await repo.readPrefill();
+    if (!mounted || prefill == null) return;
+    setState(() {
+      _prefill = prefill;
+      // Overwrite the seeded fallback with the readable current value.
+      if (prefill.branchName != null) _branchName.text = prefill.branchName!;
+      if (prefill.restaurantName != null) {
+        _restaurantName.text = prefill.restaurantName!;
+      }
+    });
+  }
+
+  String _writeMessage(
+    AppLocalizations l10n,
+    SettingsWrite result,
+  ) => switch (result) {
+    // Reuses the RF-113 save-result strings (applied / role-denied / failed).
+    SettingsWrite.ok => l10n.dashboardShiftCloseSaved,
+    SettingsWrite.denied => l10n.dashboardShiftCloseDenied,
+    SettingsWrite.unavailable => l10n.dashboardShiftCloseSaveFailed,
+  };
+
+  Future<void> _saveBranch() async {
+    final repo = widget.settingsRepository;
+    if (repo == null || _savingBranch) return;
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final name = _branchName.text.trim();
+    if (name.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.adminErrName)));
+      return;
+    }
+    setState(() => _savingBranch = true);
+    final prefix = _receiptPrefix.text.trim();
+    final result = await repo.saveBranch(
+      name: name,
+      // A blank receipt prefix leaves the current value unchanged (null param).
+      receiptPrefix: prefix.isEmpty ? null : prefix,
+      status: _prefill?.branchStatus ?? 'active',
+    );
+    if (!mounted) return;
+    setState(() => _savingBranch = false);
+    messenger.showSnackBar(
+      SnackBar(content: Text(_writeMessage(l10n, result))),
+    );
+  }
+
+  Future<void> _saveRestaurant() async {
+    final repo = widget.settingsRepository;
+    if (repo == null || _savingRestaurant) return;
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final name = _restaurantName.text.trim();
+    if (name.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.adminErrName)));
+      return;
+    }
+    setState(() => _savingRestaurant = true);
+    final result = await repo.saveRestaurant(
+      name: name,
+      status: _prefill?.restaurantStatus ?? 'active',
+    );
+    if (!mounted) return;
+    setState(() => _savingRestaurant = false);
+    messenger.showSnackBar(
+      SnackBar(content: Text(_writeMessage(l10n, result))),
+    );
   }
 
   Future<void> _onToggle(bool next) async {
@@ -139,9 +252,10 @@ class _RealSettingsViewState extends State<RealSettingsView> {
         ),
         const SizedBox(height: RestoflowSpacing.md),
         // The blanket "nothing to save" notice is honest ONLY when there is no
-        // editable control — with the RF-113 toggle present, the workspace
-        // fields below are self-evidently read-only.
-        if (widget.policyRepository == null) ...[
+        // editable control — with the RF-113 toggle or the RF-116 editable
+        // section present, the workspace fields below are self-evidently
+        // read-only.
+        if (widget.policyRepository == null && !_showEditable) ...[
           RestoflowNoticeBanner(
             tone: RestoflowTone.info,
             icon: Icons.lock_outline,
@@ -178,12 +292,115 @@ class _RealSettingsViewState extends State<RealSettingsView> {
             ],
           ),
         ),
+        if (_showEditable) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          AdminSectionCard(
+            title: l10n.dashboardSettingsEditableTitle,
+            icon: Icons.edit_outlined,
+            child: _editableFields(context, l10n),
+          ),
+        ],
         if (widget.policyRepository != null) ...[
           const SizedBox(height: RestoflowSpacing.md),
           AdminSectionCard(
             title: l10n.dashboardShiftCloseSectionTitle,
             icon: Icons.point_of_sale_outlined,
             child: _shiftClosePolicy(context, l10n),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The owner-only editable fields (RF-116): branch display name + receipt
+  /// prefix (one Save), and — when a concrete restaurant is in scope — the
+  /// restaurant name (its own Save). Currency stays locked (ILS-only pilot).
+  /// Every Save calls the real backend RPC and reflects the true result.
+  Widget _editableFields(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Currency is fixed to ILS — a read-only note, NEVER an editable selector.
+        Row(
+          children: [
+            Icon(
+              Icons.lock_outline,
+              size: RestoflowIconSizes.sm,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: RestoflowSpacing.xs),
+            Expanded(
+              child: Text(
+                l10n.dashboardSettingsCurrencyLocked,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: RestoflowSpacing.md),
+        TextField(
+          key: const Key('settings-branch-name'),
+          controller: _branchName,
+          decoration: InputDecoration(
+            labelText: l10n.dashboardSettingsBranchNameLabel,
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.md),
+        TextField(
+          key: const Key('settings-receipt-prefix'),
+          controller: _receiptPrefix,
+          decoration: InputDecoration(
+            labelText: l10n.adminFieldReceiptPrefix,
+            helperText: l10n.dashboardSettingsReceiptPrefixHint,
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.md),
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: FilledButton(
+            key: const Key('settings-save-branch'),
+            onPressed: _savingBranch ? null : _saveBranch,
+            child: _savingBranch
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(l10n.adminSave),
+          ),
+        ),
+        if (_hasRestaurant) ...[
+          const Divider(height: RestoflowSpacing.xl),
+          TextField(
+            key: const Key('settings-restaurant-name'),
+            controller: _restaurantName,
+            decoration: InputDecoration(
+              labelText: l10n.dashboardSettingsRestaurantNameLabel,
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FilledButton(
+              key: const Key('settings-save-restaurant'),
+              onPressed: _savingRestaurant ? null : _saveRestaurant,
+              child: _savingRestaurant
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(l10n.adminSave),
+            ),
           ),
         ],
       ],

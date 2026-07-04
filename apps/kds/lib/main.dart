@@ -6,12 +6,14 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 
 import 'src/kds_pairing_gate.dart';
 import 'src/kds_pin_gate.dart';
 import 'src/kds_synced_home.dart';
 import 'src/kitchen_orders_home.dart';
+import 'src/print/kds_print_bridge.dart';
 import 'src/state/kds_device_context.dart';
 import 'src/state/kds_printer_assignments.dart';
 import 'src/state/kds_session.dart';
@@ -90,6 +92,27 @@ _realDeviceAuth() async {
     // Fail closed (e.g. anonymous sign-ins disabled on the project): no fake
     // pairing — the app renders DeviceSignInUnavailableView with the fix.
     return (seams: null, problem: RealDeviceAuthProblem.signInUnavailable);
+  }
+}
+
+/// RF-115: builds the KDS kitchen print bridge from the compile-time loopback
+/// URL, or null when unset/invalid. Loopback is ENFORCED by the client's guard
+/// (`assertLoopbackBridgeUrl`); a non-loopback or malformed value fails soft
+/// (dormant, no crash) so a misconfig never points the app at the network.
+KdsPrintBridge? _buildKitchenBridge() {
+  const url = String.fromEnvironment('RESTOFLOW_PRINT_BRIDGE_URL');
+  if (url.isEmpty) return null;
+  try {
+    final client = PrintBridgeClient(
+      baseUrl: url,
+      httpClient: HttpBridgeHttpClient(),
+      role: 'kitchen',
+    );
+    return EscPosKitchenBridge(
+      dispatcher: PrintBridgeDispatcher(client: client),
+    );
+  } catch (_) {
+    return null; // non-loopback / malformed URL -> dormant
   }
 }
 
@@ -182,6 +205,12 @@ class KdsApp extends StatelessWidget {
           kdsAuthTransportProvider.overrideWithValue(transport),
         if (printerAssignmentsReader case final reader?)
           kdsPrinterAssignmentsReaderProvider.overrideWithValue(reader),
+        // RF-115: a LOCAL kitchen print bridge, ONLY when a loopback URL is
+        // provided (`--dart-define=RESTOFLOW_PRINT_BRIDGE_URL=http://127.0.0.1:8787`).
+        // Off by default (dormant); a non-loopback / malformed URL is rejected
+        // fail-soft (stays dormant, no crash — never points at the network).
+        if (_buildKitchenBridge() case final KdsPrintBridge bridge)
+          kdsPrintBridgeProvider.overrideWithValue(bridge),
         // Device settings sprint (Part G): the pairing repo IS the device
         // session manager (unpair = best-effort server self-revoke + local
         // clear) — exposed to the settings sheet's Unpair control.

@@ -29,17 +29,20 @@ class PaymentController extends Notifier<PaymentState> {
     return PaymentState(shift: _repo.shiftContext(), payments: const {});
   }
 
-  /// Takes a cash payment for [orderNumber] (settling the order [orderId] in real
-  /// mode; ignored by the demo store). [amountMinor] is the order total and
-  /// [tenderedMinor] is the cash received; throws [PaymentException] if the tender
-  /// does not cover the total or (real mode) the push fails / is unauthorized.
-  /// Returns the recorded [CashPayment].
+  /// Records a payment for [orderNumber] (settling the order [orderId] in real
+  /// mode; ignored by the demo store). [amountMinor] is the order total and, for
+  /// a CASH [method], [tenderedMinor] is the cash received; a NON-CASH tender
+  /// (card/bit/external) is externally recorded for the exact total with no
+  /// change (RF-117). Throws [PaymentException] if a cash tender does not cover
+  /// the total or (real mode) the push fails / is unauthorized. Returns the
+  /// recorded [CashPayment].
   Future<CashPayment> payCash({
     required String orderId,
     required String orderNumber,
     required int amountMinor,
     required int tenderedMinor,
     required String currencyCode,
+    PaymentMethod method = PaymentMethod.cash,
   }) async {
     final payment = await _repo.recordCashPayment(
       orderId: orderId,
@@ -47,6 +50,7 @@ class PaymentController extends Notifier<PaymentState> {
       amountMinor: amountMinor,
       tenderedMinor: tenderedMinor,
       currencyCode: currencyCode,
+      method: method,
     );
     state = PaymentState(
       shift: _repo.shiftContext(),

@@ -407,14 +407,110 @@ owner login, no secrets):
   owner/admin state. To use the device again, pair it with a fresh enrollment
   code from **Dashboard → Devices**.
 
+## 7d. Print bridge, users/settings, taxes/discounts/tenders (RF-115/116/117)
+
+The "ops demo bundle" — three connected capabilities for the supervised local demo.
+None of them fakes success: each shows the true backend/hardware result.
+
+### Print bridge (RF-115) — real local printing, honestly
+
+The web app cannot open a raw ESC/POS socket, so physical printing goes through a
+**local companion bridge**. A small reference bridge ships in `tools/print_bridge/`:
+
+```sh
+cd tools/print_bridge && dart pub get
+dart run print_bridge --help              # all options (does not start the server)
+dart run print_bridge --demo              # DEMO SINK — accepts jobs, prints nothing
+dart run print_bridge --target 192.0.2.10:9100          # real RAW/TCP 9100 printer
+dart run print_bridge --target receipt=192.0.2.10:9100 --target kitchen=192.0.2.20:9100
+# Stop it with Ctrl+C (clean shutdown + exit). An unknown flag or a non-loopback
+# --host fails with exit 64 and does NOT start a mis-configured server.
+```
+
+Then launch the POS/KDS pointed at the **loopback** bridge only:
+
+```sh
+flutter run -d chrome --dart-define=RESTOFLOW_PRINT_BRIDGE_URL=http://127.0.0.1:8787
+```
+
+- The bridge binds **127.0.0.1 only**; the app's bridge URL is guarded to loopback
+  (a non-loopback URL is refused, mirroring the e2e local-only guard). The printer's
+  LAN target lives ONLY in the bridge's local config — the app/server never learn it
+  (the device printer read still omits `connection_config`).
+- **Honest statuses**: a receipt/ticket job is `prepared` (no bridge) →
+  `sent to printer` (the bridge confirmed it wrote the bytes to the printer) →
+  `bridge unavailable` / `failed` with a safe reason. There is **no "printed &
+  confirmed" state**: ESC/POS over a socket has no paper-level acknowledgement, so the
+  strongest truthful terminal state is "sent to the printer". A **demo sink** bridge
+  says so and stays `prepared` (it reached no hardware). The ⋮ device-settings sheet
+  shows a live **bridge status** row; a failed/unavailable job gets a **Retry** button.
+- POS receipt carries money (totals / tender / change); the **KDS kitchen ticket stays
+  money-free** (code, table, station, items, modifier ×N, notes). The bridge is **off by
+  default** — with no `--dart-define` the apps behave exactly as before (prepared-only).
+
+### Users management (RF-116)
+
+Dashboard → **Users** is real in real mode: it lists the organisation's members
+(`list_members`, owner/manager+), shows each role/status, lets an owner **change a
+role** (`update_role`) or **revoke** a member (`revoke_membership` — sets the membership
+revoked and terminates any linked staff PIN). Server-enforced: you can only act on
+members you strictly outrank, never on yourself, and **never** platform-admin. A
+role/revoke you are not allowed to make returns an honest "permission denied", not a
+fake success. **Inviting brand-new accounts is intentionally not built** (there is no
+client email→account lookup) — the grant/invite affordance is hidden in real mode.
+Demo mode keeps its labelled sample people.
+
+### Settings management (RF-116)
+
+Dashboard → **Settings** now has real editable fields for an owner (branch/restaurant
+display name, receipt-number prefix) written via the existing settings RPCs, alongside
+the RF-113 shift-close toggle and the RF-117 tax control below. Every field has a real
+persisted backend path and an honest saved/denied/failed result — **no fake Save
+button**. **Currency stays locked to ILS/₪** (shown read-only, no selector). Fields not
+readable server-side (address/receipt-prefix) start blank; a blank leaves the stored
+value unchanged.
+
+### Taxes, discounts, non-cash tenders (RF-117)
+
+- **Tax** is a per-branch owner setting (Dashboard → Settings): enable + a rate in basis
+  points, **default OFF** (no jurisdiction is frozen — Q-001/Q-002, so no hard-coded
+  rate). When enabled, the POS reads it (token-proven), shows a tax line on the cart and
+  receipt, and includes the integer tax in the order total (exclusive / added-on-top;
+  round-half-away, integer minor units). The server validates the total is internally
+  consistent. *Follow-up (documented): the server does not yet re-derive the tax rate
+  inside `submit_order`; the demo computes it client-side from the owner's setting.*
+- **Discounts** — the POS confirmation screen (before payment) has an **order-level
+  discount** (fixed ₪ or %, with a required reason). It is applied through the
+  server-authoritative `apply_discount` RPC (recomputes totals from snapshots, clamps to
+  the subtotal, audits) and is **authorised**: a cashier without the discount permission
+  gets an honest "ask a manager", never a fake local discount. The payment then charges
+  the server-recomputed total.
+- **Non-cash tenders** — the payment sheet has a **tender selector**: Cash / Card / Bit /
+  External. Card/Bit/External are **"record external tender" only** — RestoFlow processes
+  no card charge and says so ("no real charge"); they record the exact amount with no
+  change. **Only cash affects the shift's expected drawer cash** — non-cash never inflates
+  it (enforced server-side; `close_shift` counts cash tenders only). The receipt shows the
+  tender type. Void/refund of a completed payment remains out of scope (D-023).
+
 ## 8. Known limitations (honest list)
 
-- **Printing hardware**: config only; no transport dispatch; no test print.
-  The ESC/POS engine exists (`packages/printing`, network-first design);
-  Bluetooth/USB transports are not installed (Q-006/Q-015, human-gated).
-- **Users tab**: no member read API yet — honest empty state, no real member
-  management from the dashboard.
-- **Settings tab**: read-only real values; no settings read/save round-trip.
+- **Printing hardware**: a real **local bridge** now exists (RF-115, §7d) — network
+  RAW/TCP 9100 works through it; jobs report honest `sent to printer` / `failed`
+  statuses, never a confirmed physical print (ESC/POS has no paper ack). The bridge is
+  off by default; **Bluetooth/USB transports are still not installed** (Q-006/Q-015,
+  human-gated), and there is no durable offline print spool (that is RF-114).
+- **Users tab**: real in real mode (RF-116) — list / change-role / revoke. **Inviting
+  brand-new accounts is not built** (no client email→account lookup); grant is hidden.
+- **Settings tab**: real editable fields for an owner (RF-116) — branch/restaurant name,
+  receipt prefix, the shift-close toggle, and the tax setting. **Currency is locked to
+  ILS**. Address / receipt-prefix are write-only (not readable to prefill).
+- **Taxes** (RF-117): a per-branch owner setting, **default off**, no frozen rate
+  (Q-001/Q-002); computed client-side and validated for total-consistency server-side —
+  server-side tax-rate re-derivation in `submit_order` is a follow-up. Exclusive/added
+  only (inclusive mode is stored but not wired).
+- **Non-cash tenders** (RF-117): card/Bit/external are recorded as **external tenders**
+  only — no payment processor, no real charge, no void/refund of a completed payment
+  (D-023). Only cash affects the shift drawer.
 - **Modifiers/sizes/variants** are not in the real POS menu yet (base-price
   items only), although the Menu tab can already manage them.
 - **Shifts/cash drawer**: payments REQUIRE an open shift (RF-055); the POS

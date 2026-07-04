@@ -319,6 +319,30 @@ class DemoAdminStore implements AdminRepository {
     return Success(next);
   }
 
+  @override
+  Future<AdminResult<AdminUser>> revokeMembership(String membershipId) async {
+    final idx = _users.indexWhere((u) => u.membershipId == membershipId);
+    if (idx < 0) return const Failure(AdminNotFound());
+    final user = _users[idx];
+    // Never revoke self; only a managing actor who strictly outranks the target
+    // (mirrors the RF-116 server guard).
+    if (user.isSelf) {
+      return const Failure(AdminPermissionDenied('self_revoke'));
+    }
+    if (!canManage(_actor)) {
+      return const Failure(AdminPermissionDenied('role_rank'));
+    }
+    if (roleRank(_actor) <= roleRank(user.role)) {
+      return const Failure(AdminPermissionDenied('role_rank'));
+    }
+    if (user.status == 'revoked') {
+      return const Failure(AdminConflict('bad_state'));
+    }
+    final next = user.copyWith(status: 'revoked');
+    _users[idx] = next;
+    return Success(next);
+  }
+
   // ----------------------------------------------------------------- devices ---
   @override
   Future<AdminResult<List<AdminDevice>>> loadDevices() async =>
@@ -476,4 +500,9 @@ class DemoAdminStore implements AdminRepository {
   /// The demo store simulates the full manager-side RF-112 lifecycle.
   @override
   bool get supportsManualLifecycle => true;
+
+  /// The demo store simulates granting a new membership (the real repository
+  /// does not — inviting brand-new accounts is out of scope, RF-116).
+  @override
+  bool get supportsGrant => true;
 }

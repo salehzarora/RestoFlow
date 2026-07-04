@@ -8,6 +8,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../print/kds_print_bridge.dart';
 import '../state/kds_auto_print_prefs.dart';
 import '../state/kds_device_context.dart';
 import '../state/kds_printer_assignments.dart';
@@ -118,6 +119,11 @@ class KdsDeviceSettingsSheet extends ConsumerWidget {
                         l10n: l10n,
                         assignmentsAsync: assignmentsAsync,
                         stationNames: true,
+                        // RF-115: the LOCAL print-bridge status row (only when a
+                        // bridge is configured — null hides it).
+                        bridgeStatus: ref
+                            .watch(kdsPrintBridgeStatusProvider)
+                            .valueOrNull,
                       ),
                       const SizedBox(height: RestoflowSpacing.md),
                       // Part G: staff-safe connection maintenance (refresh /

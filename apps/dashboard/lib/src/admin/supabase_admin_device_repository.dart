@@ -191,6 +191,10 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
   @override
   bool get supportsManualLifecycle => false;
 
+  // This repository backs ONLY the Devices tab; it never grants memberships.
+  @override
+  bool get supportsGrant => false;
+
   @override
   Future<AdminResult<AdminDevice>> revokeDevice(String deviceId) async {
     final Object? raw;
@@ -264,6 +268,10 @@ class SupabaseAdminDeviceRepository implements AdminRepository {
     required String userId,
     required MembershipRole newRole,
   }) async => const Failure(AdminTransient());
+
+  @override
+  Future<AdminResult<AdminUser>> revokeMembership(String membershipId) async =>
+      const Failure(AdminTransient());
 
   // ------------------------------------------------------------------ helpers ---
 

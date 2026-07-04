@@ -4,21 +4,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/payment.dart';
 import '../data/payment_repository.dart';
 import '../format/cash_input.dart';
 import '../format/money_format.dart';
+import '../format/payment_method_label.dart';
 import '../state/payment_controller.dart';
 
 /// The ASCII decimal separator the cash field accepts (mirrors the input
 /// formatter's `[0-9.]`). A format character, not user-facing copy.
 const String _decimalSeparator = '.';
 
-/// Modal cash-payment entry (RF-116): amount due, a cash-received field with
-/// an on-screen numeric keypad + quick-cash buttons, LIVE change due, and
-/// validation (cash must cover the total; reject empty / invalid /
-/// insufficient). Confirm records a completed cash payment via
-/// [paymentControllerProvider] and closes the sheet. Money is integer minor
-/// units throughout — no floats.
+/// Modal payment entry (RF-116 / RF-117): a TENDER selector (Cash / Card / Bit /
+/// External), the amount due, and — for CASH — a cash-received field with an
+/// on-screen numeric keypad + quick-cash buttons, LIVE change due, and validation
+/// (cash must cover the total). For a NON-CASH tender the cash field/keypad/change
+/// are HIDDEN (there is no drawer cash) and an honest note explains that RestoFlow
+/// records the tender but processes no card/transfer charge. Confirm records a
+/// completed payment via [paymentControllerProvider] and closes the sheet: CASH
+/// keeps tendered + change; non-cash records amount = order total, change = 0.
+/// Money is integer minor units throughout — no floats.
 class CashPaymentSheet extends ConsumerStatefulWidget {
   const CashPaymentSheet({
     required this.orderNumber,
@@ -62,6 +67,15 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   final TextEditingController _controller = TextEditingController();
   bool _submitting = false;
 
+  /// The selected tender (RF-117). Cash is the default; a non-cash tender is
+  /// externally recorded (no drawer cash, no change).
+  PaymentMethod _method = PaymentMethod.cash;
+
+  void _selectMethod(PaymentMethod method) {
+    if (_method == method) return;
+    setState(() => _method = method);
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -98,8 +112,16 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   }
 
   Future<void> _confirm() async {
-    final tendered = _tenderedMinor;
-    if (tendered == null || tendered < widget.amountMinor) return;
+    // CASH must physically cover the total; a NON-CASH tender records the exact
+    // order total (the server forces tendered = total, change = 0 anyway).
+    final int tendered;
+    if (_method.isCash) {
+      final entered = _tenderedMinor;
+      if (entered == null || entered < widget.amountMinor) return;
+      tendered = entered;
+    } else {
+      tendered = widget.amountMinor;
+    }
     setState(() => _submitting = true);
     final navigator = Navigator.of(context);
     try {
@@ -111,6 +133,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
             amountMinor: widget.amountMinor,
             tenderedMinor: tendered,
             currencyCode: widget.currencyCode,
+            method: _method,
           );
       navigator.pop();
     } on PaymentException {
@@ -134,13 +157,19 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final isCash = _method.isCash;
     final tendered = _tenderedMinor;
     final hasInput = _controller.text.trim().isNotEmpty;
-    final invalid = hasInput && tendered == null;
-    final insufficient = tendered != null && tendered < widget.amountMinor;
-    final canConfirm =
-        tendered != null && tendered >= widget.amountMinor && !_submitting;
-    final changeMinor = (tendered != null && tendered >= widget.amountMinor)
+    final invalid = isCash && hasInput && tendered == null;
+    final insufficient =
+        isCash && tendered != null && tendered < widget.amountMinor;
+    // Cash: the tender must cover the total. Non-cash: nothing to type, so the
+    // Confirm is enabled as soon as the sheet is not submitting.
+    final canConfirm = isCash
+        ? (tendered != null && tendered >= widget.amountMinor && !_submitting)
+        : !_submitting;
+    final changeMinor =
+        (isCash && tendered != null && tendered >= widget.amountMinor)
         ? tendered - widget.amountMinor
         : null;
 
@@ -165,12 +194,20 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                 Icon(Icons.payments_outlined, color: theme.colorScheme.primary),
                 const SizedBox(width: RestoflowSpacing.sm),
                 Text(
-                  l10n.posPaymentTitle,
+                  isCash ? l10n.posPaymentTitle : l10n.posExternalPaymentTitle,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: RestoflowSpacing.md),
+            // RF-117: the tender selector (Cash / Card / Bit / External).
+            _TenderSelector(
+              l10n: l10n,
+              selected: _method,
+              enabled: !_submitting,
+              onSelect: _selectMethod,
             ),
             const SizedBox(height: RestoflowSpacing.md),
             _AmountRow(
@@ -182,80 +219,85 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
               emphasised: true,
             ),
             const SizedBox(height: RestoflowSpacing.md),
-            TextField(
-              key: const Key('cash-received-field'),
-              controller: _controller,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: l10n.posCashReceived,
-                border: const OutlineInputBorder(),
-                errorText: errorText,
-              ),
-            ),
-            const SizedBox(height: RestoflowSpacing.sm),
-            Wrap(
-              spacing: RestoflowSpacing.sm,
-              runSpacing: RestoflowSpacing.sm,
-              children: [
-                for (final amount in _quickAmounts)
-                  OutlinedButton(
-                    key: amount == widget.amountMinor
-                        ? const Key('quick-cash-exact')
-                        : null,
-                    onPressed: () => _setAmount(amount),
-                    // Design-polish: >=48dp quick-cash targets.
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(64, 48),
-                      textStyle: theme.textTheme.titleSmall,
-                    ),
-                    child: Text(
-                      amount == widget.amountMinor
-                          ? l10n.posCashExact
-                          : MoneyFormatter.formatMinor(
-                              amount,
-                              widget.currencyCode,
-                            ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: RestoflowSpacing.md),
-            // Design-polish: a large on-screen keypad (touch terminals have no
-            // OS keyboard) appending into the same controller as the field.
-            RestoflowNumericKeypad(
-              onDigit: _appendChar,
-              onBackspace: _backspace,
-              enabled: !_submitting,
-              buttonHeight: 52,
-              trailingKey: FilledButton.tonal(
-                onPressed: _submitting
-                    ? null
-                    : () => _appendChar(_decimalSeparator),
-                style: FilledButton.styleFrom(
-                  textStyle: theme.textTheme.titleLarge,
-                  padding: EdgeInsets.zero,
+            // CASH: the cash-received field + quick-cash + keypad + live change.
+            // NON-CASH: hidden (no drawer cash) — an honest external-tender note.
+            if (isCash) ...[
+              TextField(
+                key: const Key('cash-received-field'),
+                controller: _controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
                 ),
-                child: const Text(_decimalSeparator),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: l10n.posCashReceived,
+                  border: const OutlineInputBorder(),
+                  errorText: errorText,
+                ),
               ),
-            ),
-            const SizedBox(height: RestoflowSpacing.md),
-            _ChangeDueRow(
-              label: l10n.posChangeDue,
-              value: changeMinor == null
-                  ? '—'
-                  : MoneyFormatter.formatMinor(
-                      changeMinor,
-                      widget.currencyCode,
+              const SizedBox(height: RestoflowSpacing.sm),
+              Wrap(
+                spacing: RestoflowSpacing.sm,
+                runSpacing: RestoflowSpacing.sm,
+                children: [
+                  for (final amount in _quickAmounts)
+                    OutlinedButton(
+                      key: amount == widget.amountMinor
+                          ? const Key('quick-cash-exact')
+                          : null,
+                      onPressed: () => _setAmount(amount),
+                      // Design-polish: >=48dp quick-cash targets.
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(64, 48),
+                        textStyle: theme.textTheme.titleSmall,
+                      ),
+                      child: Text(
+                        amount == widget.amountMinor
+                            ? l10n.posCashExact
+                            : MoneyFormatter.formatMinor(
+                                amount,
+                                widget.currencyCode,
+                              ),
+                      ),
                     ),
-              hasChange: changeMinor != null,
-            ),
+                ],
+              ),
+              const SizedBox(height: RestoflowSpacing.md),
+              // Design-polish: a large on-screen keypad (touch terminals have no
+              // OS keyboard) appending into the same controller as the field.
+              RestoflowNumericKeypad(
+                onDigit: _appendChar,
+                onBackspace: _backspace,
+                enabled: !_submitting,
+                buttonHeight: 52,
+                trailingKey: FilledButton.tonal(
+                  onPressed: _submitting
+                      ? null
+                      : () => _appendChar(_decimalSeparator),
+                  style: FilledButton.styleFrom(
+                    textStyle: theme.textTheme.titleLarge,
+                    padding: EdgeInsets.zero,
+                  ),
+                  child: const Text(_decimalSeparator),
+                ),
+              ),
+              const SizedBox(height: RestoflowSpacing.md),
+              _ChangeDueRow(
+                label: l10n.posChangeDue,
+                value: changeMinor == null
+                    ? '—'
+                    : MoneyFormatter.formatMinor(
+                        changeMinor,
+                        widget.currencyCode,
+                      ),
+                hasChange: changeMinor != null,
+              ),
+            ] else
+              _NonCashNote(message: l10n.posNonCashNote),
             const SizedBox(height: RestoflowSpacing.md),
             SizedBox(
               width: double.infinity,
@@ -269,6 +311,101 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The RF-117 tender selector: a Wrap of choice chips (Cash / Card / Bit /
+/// External) so the row wraps on a narrow sheet instead of overflowing. Each
+/// chip carries a stable Key for tests.
+class _TenderSelector extends StatelessWidget {
+  const _TenderSelector({
+    required this.l10n,
+    required this.selected,
+    required this.enabled,
+    required this.onSelect,
+  });
+
+  final AppLocalizations l10n;
+  final PaymentMethod selected;
+  final bool enabled;
+  final ValueChanged<PaymentMethod> onSelect;
+
+  static const Map<PaymentMethod, String> _keys = <PaymentMethod, String>{
+    PaymentMethod.cash: 'tender-cash',
+    PaymentMethod.card: 'tender-card',
+    PaymentMethod.bit: 'tender-bit',
+    PaymentMethod.externalTender: 'tender-external',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.posTenderTypeLabel,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.xs),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.xs,
+          children: [
+            for (final method in PaymentMethod.values)
+              ChoiceChip(
+                key: Key(_keys[method]!),
+                label: Text(paymentMethodLabel(l10n, method)),
+                selected: selected == method,
+                onSelected: enabled ? (_) => onSelect(method) : null,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The honest non-cash note: RestoFlow records the tender but processes no real
+/// charge (RF-117). Neutral info tone, distinct from the change readout.
+class _NonCashNote extends StatelessWidget {
+  const _NonCashNote({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const Key('non-cash-note'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(RestoflowSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: RestoflowIconSizes.sm,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
