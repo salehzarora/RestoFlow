@@ -23,7 +23,9 @@ library;
 /// The compile-time production app URL (`--dart-define=RESTOFLOW_APP_URL=...`).
 /// Empty when unset (local/dev builds), in which case the live web origin is
 /// used instead. Never a secret — it is a public site URL.
-const String kAppUrlFromEnvironment = String.fromEnvironment('RESTOFLOW_APP_URL');
+const String kAppUrlFromEnvironment = String.fromEnvironment(
+  'RESTOFLOW_APP_URL',
+);
 
 /// Pure resolver for the sign-up email redirect. [configuredAppUrl] and [base]
 /// are injectable so the resolution rules are unit-testable without a real web
