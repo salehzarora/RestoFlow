@@ -140,6 +140,8 @@ class SupabaseDevicePairingRepository
     'expired' => PairingFailureKind.expired,
     'wrong_type' => PairingFailureKind.wrongScope,
     'invalid_type' => PairingFailureKind.invalidCode,
+    // RF-118: the server rate-limited this caller after too many invalid codes.
+    'locked' => PairingFailureKind.lockedOut,
     'permission_denied' => PairingFailureKind.denied,
     _ => PairingFailureKind.unknown,
   };

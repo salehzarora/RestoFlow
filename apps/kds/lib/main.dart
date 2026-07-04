@@ -8,6 +8,7 @@ import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/kds_pairing_gate.dart';
 import 'src/kds_pin_gate.dart';
@@ -24,6 +25,9 @@ Future<void> main() async {
   // Language before first frame: the persisted per-device choice wins; the
   // FIRST-LAUNCH default is ARABIC (the official language — sprint).
   final persistedLocale = await readPersistedLocale();
+  // RF-118: durable client PIN-attempt lockout counter (survives refresh — a
+  // count + timestamp only, never a PIN; the server RF-051 lockout is authority).
+  final prefs = await SharedPreferences.getInstance();
   final real = await _realDeviceAuth();
   final seams = real.seams;
   runApp(
@@ -34,6 +38,7 @@ Future<void> main() async {
       printerAssignmentsReader: seams?.printerAssignments,
       realAuthProblem: real.problem,
       initialLocale: persistedLocale ?? const Locale('ar'),
+      pinAttemptStore: SharedPreferencesPinAttemptStore(prefs),
     ),
   );
 }
@@ -145,6 +150,7 @@ class KdsApp extends StatelessWidget {
     this.realAuthProblem,
     this.initialDevice,
     this.initialLocale,
+    this.pinAttemptStore,
     super.key,
   });
 
@@ -180,6 +186,11 @@ class KdsApp extends StatelessWidget {
   /// Null (tests) keeps [initialLocaleProvider]'s default.
   final Locale? initialLocale;
 
+  /// RF-118: durable client PIN-attempt store (survives refresh). Null (tests)
+  /// keeps the in-memory default, so the client cooldown still works — it just
+  /// resets on reload.
+  final PinAttemptStore? pinAttemptStore;
+
   /// RF-058: an OPTIONAL realtime invalidation source. When provided (and a sync
   /// [source] is too), realtime hints are bridged to refresh() on top of
   /// polling. Null -> polling-only (realtime is never required).
@@ -199,6 +210,9 @@ class KdsApp extends StatelessWidget {
       overrides: [
         if (initialLocale case final locale?)
           initialLocaleProvider.overrideWithValue(locale),
+        // RF-118: durable client PIN-attempt lockout store when provided.
+        if (pinAttemptStore case final store?)
+          pinAttemptStoreProvider.overrideWithValue(store),
         // Sprint: the PIN/session + sync calls ride the SAME authenticated
         // (anonymous) transport as the pairing repo (D-011/RF-161).
         if (authTransport case final transport?)

@@ -78,6 +78,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen> {
         PairingFailureKind.denied => l10n.pairingInvalidCode,
         PairingFailureKind.expired => l10n.pairingExpired,
         PairingFailureKind.wrongScope => l10n.pairingWrongScope,
+        PairingFailureKind.lockedOut => l10n.pairingLocked,
         PairingFailureKind.network => l10n.authNetworkError,
         PairingFailureKind.unknown => l10n.pairingFailed,
       };

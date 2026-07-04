@@ -51,6 +51,10 @@ class KdsPinGate extends ConsumerWidget {
       surface: AppSurface.kds,
       // Sprint (I): the language switcher is reachable on the PIN screen too.
       appBarActions: const [LanguageSelector()],
+      // RF-118: the same visible client cooldown as the POS, scoped per
+      // (device, employee) to mirror the server lockout (money-free surface).
+      attemptLimiter: ref.watch(pinAttemptLimiterProvider),
+      attemptScope: (member) => '$deviceId:${member.employeeProfileId}',
       onStartSession: (employeeProfileId, pin) => ref
           .read(kdsSessionControllerProvider.notifier)
           .signInWithPin(

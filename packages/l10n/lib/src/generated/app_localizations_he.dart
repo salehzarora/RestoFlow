@@ -1892,6 +1892,10 @@ class AppLocalizationsHe extends AppLocalizations {
   String get pairingFailed => 'לא ניתן לצמד את המכשיר. נסו שוב.';
 
   @override
+  String get pairingLocked =>
+      'יותר מדי ניסיונות. אנא המתינו כמה דקות ונסו שוב.';
+
+  @override
   String get dashboardNavPrinters => 'מדפסות';
 
   @override
@@ -2416,6 +2420,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get pinLoginUnavailable => 'הכניסה אינה זמינה כעת.';
+
+  @override
+  String get pinSessionExpired => 'פג תוקף החיבור. אנא הזינו את קוד ה-PIN שוב.';
 
   @override
   String get pinLoginSubmit => 'כניסה';

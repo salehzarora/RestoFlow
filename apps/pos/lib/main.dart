@@ -45,6 +45,12 @@ Future<void> main() async {
         outboxAutoSweepIntervalProvider.overrideWithValue(
           const Duration(seconds: 25),
         ),
+        // RF-118: the client PIN-attempt lockout counter persists to
+        // shared_preferences too, so a too-many-attempts cooldown survives a
+        // refresh (a count + timestamp only — never a PIN; server is authoritative).
+        pinAttemptStoreProvider.overrideWithValue(
+          SharedPreferencesPinAttemptStore(prefs),
+        ),
         // The PIN/session + sync_push calls must ride the SAME authenticated
         // (anonymous) transport as the pairing repo — the plain anon transport
         // cannot reach the authenticated-only RPC grants (D-011/RF-161).

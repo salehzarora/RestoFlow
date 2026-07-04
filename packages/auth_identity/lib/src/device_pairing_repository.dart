@@ -14,6 +14,11 @@ enum PairingFailureKind {
   /// The code belongs to another organization/branch than the active scope.
   wrongScope,
 
+  /// Too many invalid pairing attempts — temporarily rate-limited (RF-118). A
+  /// safe generic signal: it reveals only that the caller is throttled, never
+  /// whether a code exists / belongs elsewhere / expired.
+  lockedOut,
+
   /// The caller/device is not permitted to pair here.
   denied,
 
