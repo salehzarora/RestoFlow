@@ -525,8 +525,17 @@ visible UX mirror** (they cannot be bypassed *there* by clearing browser storage
   until the cooldown lapses (and the server refuses too). A correct PIN before
   the cap resets the counter.
 - Type wrong pairing codes repeatedly → after 10, the pairing screen shows a safe
-  generic **"Too many attempts. Please wait a few minutes…"** (it never reveals
-  whether a code exists / belongs elsewhere / expired).
+  generic **"Too many attempts. Please wait a few minutes…"**. The **lockout**
+  message is deliberately generic — it reveals only that the caller is throttled,
+  never whether a code exists / belongs elsewhere / expired.
+  - Precise disclosure policy (RF-118, honest): a **blind guess** (a code that
+    matches no live pairing) always returns the generic `invalid_code`. The more
+    specific `expired` / `wrong_type` (POS-vs-KDS) results are returned ONLY when
+    the submitted code actually HASHES to a real pairing row — i.e. to a caller who
+    already possesses a valid code — so they give a legitimate operator actionable
+    guidance without leaking code existence to an attacker who is guessing. These
+    two states are intentionally preserved (not collapsed) for that UX; the
+    server-side `rf161` tests assert them.
 - Leave a signed-in POS idle/backgrounded past 30 min (or 8 h total) → on the next
   resume the session ends and the PIN screen shows **"Session expired. Please
   enter your PIN again."** It never fires mid-order (only on resume) and voids no

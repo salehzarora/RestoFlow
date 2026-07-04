@@ -18,9 +18,14 @@
 --   * The lockout is checked BEFORE the code hash + pairing lookup (before any
 --     expensive/sensitive validation), per the RF-118 backend guidance.
 --   * A locked caller receives a NEW safe 'locked' error. Being rate-limited is
---     NOT code/account-existence sensitive, so surfacing it leaks nothing (all
---     OTHER failures keep the generic invalid_code / expired / wrong_type shapes,
---     which already collapse fail-closed cases -- no scope leak).
+--     NOT code/account-existence sensitive, so surfacing it leaks nothing. The
+--     non-locked shapes are UNCHANGED from RF-161 and honest about disclosure: a
+--     BLIND guess (a code hashing to no live pairing) always returns the generic
+--     'invalid_code'; the more specific 'expired' / 'wrong_type' are returned ONLY
+--     when the submitted code actually HASHES to a real pairing row -- i.e. to a
+--     caller who already holds a valid code -- so they aid a legitimate operator
+--     without leaking code existence to a guesser. Intentionally preserved (the
+--     rf161 tests assert them); NOT collapsed by RF-118.
 --   * Least privilege: device_pairing_attempt_states is written ONLY by the
 --     SECURITY DEFINER RPC (via app.note_pairing_failure, NOT granted to app
 --     roles); authenticated may READ only its OWN row (self-scoped RLS). No
