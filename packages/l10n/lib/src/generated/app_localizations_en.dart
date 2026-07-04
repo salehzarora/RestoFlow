@@ -276,6 +276,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posOutboxSynced => 'All orders synced';
 
   @override
+  String get posOutboxAttention => 'Sync attention needed';
+
+  @override
   String get posOutboxRetryAll => 'Retry all';
 
   @override

@@ -83,6 +83,7 @@
   "posOutboxSyncing": "מסנכרן…",
   "posOutboxFailed": "{count} נכשלו — נסה שוב",
   "posOutboxSynced": "כל ההזמנות סונכרנו",
+  "posOutboxAttention": "הסנכרון דורש טיפול",
   "posOutboxRetryAll": "נסה שוב",
   "posOrderSubmittedTitle": "ההזמנה נשלחה",
   "posOrderNumberLabel": "מספר הזמנה",

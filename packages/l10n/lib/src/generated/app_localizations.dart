@@ -598,6 +598,12 @@ abstract class AppLocalizations {
   /// **'All orders synced'**
   String get posOutboxSynced;
 
+  /// RF-114: POS outbox chip — a queued order is in a conflict/resolved state that needs review; NOT confirmed synced.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync attention needed'**
+  String get posOutboxAttention;
+
   /// RF-114: POS outbox — retry-all-failed action label.
   ///
   /// In en, this message translates to:

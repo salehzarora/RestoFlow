@@ -115,4 +115,52 @@ void main() {
     // failed/pending take precedence — none here, so no retry affordance.
     expect(find.byKey(const Key('outbox-retry-all')), findsNothing);
   });
+
+  // RF-114 Codex fix: conflict/resolved must NOT fall through to "All synced".
+  testWidgets('conflict shows "attention needed", NOT all-synced', (
+    tester,
+  ) async {
+    await _pump(tester, [
+      _e(OutboxSyncState.conflict, op: 'a'),
+      _e(OutboxSyncState.applied, op: 'b'),
+    ]);
+    expect(find.text('Sync attention needed'), findsOneWidget);
+    expect(find.text('All orders synced'), findsNothing);
+    // conflict is not auto-retryable, so no retry-all affordance.
+    expect(find.byKey(const Key('outbox-retry-all')), findsNothing);
+  });
+
+  testWidgets('resolved is treated conservatively (attention, NOT synced)', (
+    tester,
+  ) async {
+    await _pump(tester, [_e(OutboxSyncState.resolved)]);
+    expect(find.text('Sync attention needed'), findsOneWidget);
+    expect(find.text('All orders synced'), findsNothing);
+  });
+
+  testWidgets('mixed states pick the safest priority (failed > conflict)', (
+    tester,
+  ) async {
+    await _pump(tester, [
+      _e(OutboxSyncState.rejected, op: 'a'),
+      _e(OutboxSyncState.conflict, op: 'b'),
+      _e(OutboxSyncState.applied, op: 'c'),
+    ]);
+    // failed (retryable) outranks conflict; never "all synced".
+    expect(find.text('1 failed — retry'), findsOneWidget);
+    expect(find.text('All orders synced'), findsNothing);
+    expect(find.byKey(const Key('outbox-retry-all')), findsOneWidget);
+  });
+
+  testWidgets(
+    'created shows pending; a pending mixed with applied is NOT synced',
+    (tester) async {
+      await _pump(tester, [
+        _e(OutboxSyncState.created, op: 'a'),
+        _e(OutboxSyncState.applied, op: 'b'),
+      ]);
+      expect(find.text('1 pending sync'), findsOneWidget);
+      expect(find.text('All orders synced'), findsNothing);
+    },
+  );
 }

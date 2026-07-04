@@ -26,11 +26,35 @@ class OutboxStatusIndicator extends ConsumerWidget {
     final entries = ref.watch(outboxControllerProvider);
     if (entries.isEmpty) return const SizedBox.shrink();
 
-    final failed = entries.where((e) => e.syncState.isFailed).length;
-    final syncing = entries
-        .where((e) => e.syncState == OutboxSyncState.inFlight)
-        .length;
-    final pending = entries.where((e) => e.syncState.isPending).length;
+    // CONSERVATIVE aggregation (RF-114 Codex fix): "All orders synced" shows ONLY
+    // when EVERY entry is `applied` (backend-confirmed). Non-final / ambiguous
+    // states never fall through to synced.
+    //  * failed    = rejected/dead      -> retryable; tap = retry all.
+    //  * attention = conflict/resolved  -> needs review; NOT auto-retried, NOT synced.
+    //  * syncing   = in_flight.
+    //  * pending   = created/pending.
+    // Priority (safest first): failed / attention  >  syncing  >  pending  >  synced.
+    var failed = 0;
+    var attention = 0;
+    var syncing = 0;
+    var pending = 0;
+    for (final e in entries) {
+      switch (e.syncState) {
+        case OutboxSyncState.rejected:
+        case OutboxSyncState.dead:
+          failed++;
+        case OutboxSyncState.conflict:
+        case OutboxSyncState.resolved:
+          attention++;
+        case OutboxSyncState.inFlight:
+          syncing++;
+        case OutboxSyncState.created:
+        case OutboxSyncState.pending:
+          pending++;
+        case OutboxSyncState.applied:
+          break;
+      }
+    }
 
     final theme = Theme.of(context);
     final IconData icon;
@@ -43,6 +67,12 @@ class OutboxStatusIndicator extends ConsumerWidget {
       label = l10n.posOutboxFailed(failed);
       onTap = () =>
           ref.read(outboxControllerProvider.notifier).retryAllFailed();
+    } else if (attention > 0) {
+      // conflict/resolved: retry-all re-queues only FAILED entries, so this is an
+      // honest "attention needed" warning, not a retry affordance and NOT synced.
+      icon = Icons.warning_amber_outlined;
+      color = theme.colorScheme.error;
+      label = l10n.posOutboxAttention;
     } else if (syncing > 0) {
       icon = Icons.sync;
       color = theme.colorScheme.primary;

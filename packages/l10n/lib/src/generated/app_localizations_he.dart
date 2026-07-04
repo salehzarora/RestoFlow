@@ -273,6 +273,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posOutboxSynced => 'כל ההזמנות סונכרנו';
 
   @override
+  String get posOutboxAttention => 'הסנכרון דורש טיפול';
+
+  @override
   String get posOutboxRetryAll => 'נסה שוב';
 
   @override

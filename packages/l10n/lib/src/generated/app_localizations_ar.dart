@@ -273,6 +273,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posOutboxSynced => 'تمت مزامنة جميع الطلبات';
 
   @override
+  String get posOutboxAttention => 'المزامنة تحتاج انتباه';
+
+  @override
   String get posOutboxRetryAll => 'إعادة المحاولة';
 
   @override

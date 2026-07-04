@@ -320,6 +320,8 @@
   },
   "posOutboxSynced": "All orders synced",
   "@posOutboxSynced": {"description": "RF-114: POS outbox chip — every submitted order is confirmed by the backend."},
+  "posOutboxAttention": "Sync attention needed",
+  "@posOutboxAttention": {"description": "RF-114: POS outbox chip — a queued order is in a conflict/resolved state that needs review; NOT confirmed synced."},
   "posOutboxRetryAll": "Retry all",
   "@posOutboxRetryAll": {"description": "RF-114: POS outbox — retry-all-failed action label."},
   "posOrderSubmittedTitle": "Order sent",

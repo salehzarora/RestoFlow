@@ -83,6 +83,7 @@
   "posOutboxSyncing": "جارٍ المزامنة…",
   "posOutboxFailed": "{count} فشلت — إعادة المحاولة",
   "posOutboxSynced": "تمت مزامنة جميع الطلبات",
+  "posOutboxAttention": "المزامنة تحتاج انتباه",
   "posOutboxRetryAll": "إعادة المحاولة",
   "posOrderSubmittedTitle": "تم إرسال الطلب",
   "posOrderNumberLabel": "رقم الطلب",
