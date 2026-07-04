@@ -6,6 +6,71 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'state/kds_session.dart';
 import 'widgets/language_selector.dart';
 
+/// RF-118: the KDS staff PIN-session expiry LIFECYCLE observer, mounted at the
+/// app ROOT (above the live/non-live `home` swap).
+///
+/// WHY app-level (not inside the gate, unlike the POS): the KDS routes the LIVE
+/// board (`KdsSyncedHome`) as a SIBLING of the PIN gate — `home: live ? board :
+/// nonLiveHome` — so the gate is UNMOUNTED the instant a staff session goes live.
+/// An observer inside the gate would therefore be torn down exactly when expiry
+/// matters (during an active session). Wrapping the whole `home` keeps ONE
+/// observer alive across the swap. On resume it ends a stale session (per
+/// [kdsPinSessionExpiryPolicyProvider], inactivity or max age) — which flips the
+/// session null, so the app root re-mounts the gate — and raises
+/// [kdsExpiredNoticeProvider] so the re-mounted gate shows the "enter PIN again"
+/// notice; a new session clears it. The KDS surface stays MONEY-FREE throughout.
+class KdsSessionLifecycleObserver extends ConsumerStatefulWidget {
+  const KdsSessionLifecycleObserver({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  ConsumerState<KdsSessionLifecycleObserver> createState() =>
+      _KdsSessionLifecycleObserverState();
+}
+
+class _KdsSessionLifecycleObserverState
+    extends ConsumerState<KdsSessionLifecycleObserver>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = ref.read(kdsSessionControllerProvider.notifier);
+    if (state == AppLifecycleState.resumed) {
+      final policy = ref.read(kdsPinSessionExpiryPolicyProvider);
+      if (controller.endSessionIfExpired(policy)) {
+        ref.read(kdsExpiredNoticeProvider.notifier).show();
+      }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      controller.noteAppPaused();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // A newly established session clears any stale "expired" notice (the gate is
+    // re-mounted only when a session is null, so clearing here is enough).
+    ref.listen(kdsSyncSessionProvider, (previous, next) {
+      if (next != null) {
+        ref.read(kdsExpiredNoticeProvider.notifier).clear();
+      }
+    });
+    return widget.child;
+  }
+}
+
 /// The KDS staff PIN gate (DECISION D-006): after the device is PAIRED, a
 /// personal staff PIN session is required before the kitchen board.
 ///
@@ -13,7 +78,10 @@ import 'widgets/language_selector.dart';
 /// root then mounts the LIVE board off the same session); without one it shows
 /// the shared, MONEY-FREE [PinLoginScreen] (SECURITY T-003 — nothing on this
 /// surface ever renders money). Fail-closed: no session means no board, and
-/// there is no fake or bypass path.
+/// there is no fake or bypass path. RF-118: the session-expiry LIFECYCLE lives in
+/// [KdsSessionLifecycleObserver] at the app root (the gate is torn down when the
+/// live board mounts); this gate just SHOWS the expiry notice via
+/// [kdsExpiredNoticeProvider] when it re-appears.
 class KdsPinGate extends ConsumerWidget {
   const KdsPinGate({
     required this.device,
@@ -55,6 +123,9 @@ class KdsPinGate extends ConsumerWidget {
       // (device, employee) to mirror the server lockout (money-free surface).
       attemptLimiter: ref.watch(pinAttemptLimiterProvider),
       attemptScope: (member) => '$deviceId:${member.employeeProfileId}',
+      // RF-118: shown after an inactivity/max-age expiry signed the operator out
+      // (raised by KdsSessionLifecycleObserver at the app root).
+      expiredNotice: ref.watch(kdsExpiredNoticeProvider),
       onStartSession: (employeeProfileId, pin) => ref
           .read(kdsSessionControllerProvider.notifier)
           .signInWithPin(

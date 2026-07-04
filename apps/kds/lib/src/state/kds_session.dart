@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
@@ -159,6 +160,51 @@ final kdsAuthTransportProvider = Provider<SyncRpcTransport?>((ref) {
 /// precondition failure (42501), or a transient transport error all resolve to
 /// `null` (fail-closed) - there is no path to a fake or forced session.
 class KdsSessionController extends AsyncNotifier<SyncSession?> {
+  /// RF-118: when the current PIN session was established (drives the client
+  /// expiry policy). Null when no session is active. Mirrors the POS controller.
+  DateTime? _startedAt;
+
+  /// RF-118: when the app was last backgrounded — the last-activity anchor for
+  /// the INACTIVITY check (a device left idle re-requires the PIN on resume).
+  DateTime? _pausedAt;
+
+  /// RF-118 test seam: the clock the expiry window reads. Defaults to the wall
+  /// clock; overridden in tests to exercise the real 30-min / 8-h boundaries
+  /// deterministically.
+  @visibleForTesting
+  DateTime Function() clock = DateTime.now;
+
+  /// RF-118: records that the app went to the background (called from the KDS
+  /// lifecycle guard). The FIRST background moment after a sign-in/resume wins
+  /// (`??=`): on mobile, foregrounding passes back through hidden/inactive, which
+  /// must NOT reset the idle anchor to ~now (that would defeat inactivity expiry).
+  void noteAppPaused() => _pausedAt ??= clock();
+
+  /// RF-118: at a SAFE boundary (app resume), end the session if it is stale per
+  /// [policy] (inactivity or the absolute max age). Returns true when it ended a
+  /// session (so the gate can show the "session expired — enter PIN again"
+  /// notice). The KDS surface is money-free, so this only ever drops the kitchen
+  /// board back to the PIN screen — it touches no financial state. The pause
+  /// anchor is CONSUMED here so the next background cycle re-records it; when the
+  /// app was never backgrounded (anchor null) the operator counts as active
+  /// (lastActivity = now, zero idle) so only the max age can expire the session.
+  bool endSessionIfExpired(PinSessionExpiryPolicy policy) {
+    final started = _startedAt;
+    if (state.valueOrNull == null || started == null) return false;
+    final pausedAt = _pausedAt;
+    _pausedAt = null;
+    final now = clock();
+    if (!policy.isExpired(
+      startedAt: started,
+      lastActivityAt: pausedAt ?? now,
+      now: now,
+    )) {
+      return false;
+    }
+    endSession();
+    return true;
+  }
+
   @override
   FutureOr<SyncSession?> build() {
     final cfg = ref.watch(runtimeConfigProvider);
@@ -180,10 +226,14 @@ class KdsSessionController extends AsyncNotifier<SyncSession?> {
       pinVerifier: config.pinVerifier,
     );
     return result.fold<SyncSession?>(
-      (started) => SyncSession(
-        pinSessionId: started.pinSessionId,
-        deviceId: config.deviceId,
-      ),
+      (started) {
+        _startedAt = clock(); // RF-118: start the client expiry window.
+        _pausedAt = null;
+        return SyncSession(
+          pinSessionId: started.pinSessionId,
+          deviceId: config.deviceId,
+        );
+      },
       // Wrong PIN / locked-or-precondition (42501) / transient: fail closed.
       (failure) => null,
     );
@@ -211,6 +261,8 @@ class KdsSessionController extends AsyncNotifier<SyncSession?> {
     );
     return result.fold<PinLoginError?>(
       (started) {
+        _startedAt = clock(); // RF-118: start the client expiry window.
+        _pausedAt = null;
         state = AsyncData(
           SyncSession(pinSessionId: started.pinSessionId, deviceId: deviceId),
         );
@@ -227,13 +279,52 @@ class KdsSessionController extends AsyncNotifier<SyncSession?> {
 
   /// Ends the current staff session locally (the server window expires on its
   /// own — Q-009). The KDS falls back to the PIN screen.
-  void endSession() => state = const AsyncData(null);
+  void endSession() {
+    _startedAt = null; // RF-118: close the client expiry window.
+    _pausedAt = null;
+    state = const AsyncData(null);
+  }
 }
 
 /// Owns [KdsSessionController].
 final kdsSessionControllerProvider =
     AsyncNotifierProvider<KdsSessionController, SyncSession?>(
       KdsSessionController.new,
+    );
+
+/// RF-118: the KDS staff PIN-session expiry policy (client-side) — the SAME
+/// default as the POS (8-hour absolute max age mirroring the server
+/// `pin_sessions.expires_at` window, RF-051, plus a 30-minute inactivity
+/// timeout). Generous enough that a normal kitchen session never trips, but a
+/// device left idle re-requires the PIN on the next resume. Overridable in tests.
+final kdsPinSessionExpiryPolicyProvider = Provider<PinSessionExpiryPolicy>(
+  (ref) => const PinSessionExpiryPolicy(),
+);
+
+/// RF-118: whether the LAST sign-out was due to session expiry, so the PIN gate
+/// shows the "enter PIN again" notice after the app root re-mounts it.
+///
+/// The KDS routes the LIVE board (`KdsSyncedHome`) as a SIBLING of the gate
+/// (`home: live ? board : gate`), so the gate — and any lifecycle observer inside
+/// it — is torn down the instant a session goes live (unlike the POS, whose gate
+/// stays mounted as the surface's parent). The lifecycle observer therefore lives
+/// at the app root (`KdsSessionLifecycleObserver`), ABOVE that swap, and hands the
+/// expiry signal to the re-mounted gate through THIS provider. Cleared whenever a
+/// new session is established.
+class KdsExpiredNoticeNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  /// An inactivity/max-age expiry just signed the operator out.
+  void show() => state = true;
+
+  /// A fresh session (or a manual re-entry) clears the notice.
+  void clear() => state = false;
+}
+
+final kdsExpiredNoticeProvider =
+    NotifierProvider<KdsExpiredNoticeNotifier, bool>(
+      KdsExpiredNoticeNotifier.new,
     );
 
 /// The current authenticated KDS sync session - the `(pinSessionId, deviceId)`
