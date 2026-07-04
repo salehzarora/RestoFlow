@@ -42,6 +42,10 @@ set local role authenticated;
 -- ===== T-009 + T-007: grant-only platform admin ============================= 1-4
 set local app.current_app_user_id = '00000000-0000-0000-0000-00000000eef0';
 set local app.current_organization_id = '00000000-0000-0000-0000-0000000000a0';
+-- RF-119: the platform path now requires MFA aal2 (app.platform_admin_guard). The
+-- assurance is read ONLY from request.jwt.claims (no sub => auth.uid() stays null,
+-- so the GUC identity above is preserved); provide the required aal2 claim.
+set local request.jwt.claims = '{"aal":"aal2"}';
 select is(app.is_platform_admin(), true, 'grant holder: is_platform_admin() is true');
 select is((select count(*) from restaurants)::int, 0,
   'T-009: a platform-admin grant alone (no membership) yields ZERO tenant rows on the normal path');

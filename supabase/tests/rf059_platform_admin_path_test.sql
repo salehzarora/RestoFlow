@@ -36,6 +36,10 @@ set local role authenticated;
 -- ===== platform admin (grant holder, NO membership) ========================= 1-5
 set local app.current_app_user_id = '00000000-0000-0000-0000-00000000ee0f';
 set local app.current_organization_id = '';
+-- RF-119: the platform path now requires MFA aal2 (app.platform_admin_guard). The
+-- assurance level is read ONLY from request.jwt.claims (no sub => auth.uid() stays
+-- null, so the GUC identity above is preserved); provide the required aal2 claim.
+set local request.jwt.claims = '{"aal":"aal2"}';
 select is(app.is_platform_admin(), true, 'grant holder: app.is_platform_admin() is true');                                                   -- 1
 select is((app.platform_admin_list_organizations('support incident #42') ->> 'ok')::boolean, true,
   'platform admin can use the audited platform path (ok=true)');                                                                              -- 2
