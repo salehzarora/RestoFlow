@@ -60,9 +60,17 @@ class _AdminPlatformGateState extends State<AdminPlatformGate> {
           );
         }
         return snap.data!.fold(
-          (ctx) => ctx.isPlatformAdmin
-              ? const PlatformAdminScreen()
-              : AdminGateExplainer(signedIn: true, onRetry: _retry),
+          (ctx) => switch ((ctx.isPlatformAdmin, ctx.hasMfaAal2)) {
+            // Active platform grant + an MFA (aal2) session: enter the panel. Data
+            // reads still enforce grant + MFA + reason server-side (RF-091).
+            (true, true) => const PlatformAdminScreen(),
+            // RF-119: an active grant but NO MFA session -> an HONEST "MFA
+            // required" state, NOT the panel (whose reads would fail 42501). The
+            // aal2 flag is a UX signal only; the server stays the authority.
+            (true, false) => AdminMfaRequiredView(onRetry: _retry),
+            // Signed in but not a platform admin (e.g. a restaurant owner).
+            (false, _) => AdminGateExplainer(signedIn: true, onRetry: _retry),
+          },
           (failure) => switch (failure) {
             // No session, or a session the backend rejects (unlinked/inactive):
             // the explainer, not a dead end — this app has no login by design.
@@ -174,6 +182,77 @@ class AdminGateExplainer extends StatelessWidget {
                     label: Text(l10n.authTryAgain),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// RF-119: the honest "multi-factor authentication required" state — shown to an
+/// account that HOLDS an active platform-admin grant but whose current session is
+/// NOT MFA-verified (aal2). It never shows platform data (the server would deny
+/// every read); it explains that this is the platform panel (not the restaurant
+/// Dashboard), that platform-wide data needs an MFA-verified sign-in, and how to
+/// proceed. Money-free; RTL-safe. This gate weakens nothing — reads stay gated by
+/// `app.platform_admin_guard` server-side.
+class AdminMfaRequiredView extends StatelessWidget {
+  const AdminMfaRequiredView({required this.onRetry, super.key});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return _GateScaffold(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: RestoflowPanelWidths.helpPanel,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.all(RestoflowSpacing.xl),
+            children: [
+              Center(child: RestoflowBrandMark(title: l10n.adminAppTitle)),
+              const SizedBox(height: RestoflowSpacing.xl),
+              RestoflowNoticeBanner(
+                tone: RestoflowTone.warning,
+                icon: Icons.security_outlined,
+                title: l10n.adminMfaRequiredTitle,
+                body: l10n.adminMfaRequiredBody,
+              ),
+              const SizedBox(height: RestoflowSpacing.sm),
+              // Reuse the existing "this is the platform panel, not the owner's
+              // panel" copy so the user knows they are in the right app.
+              Text(
+                l10n.adminGateNotOwner,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: RestoflowSpacing.lg),
+              RestoflowSectionCard(
+                title: l10n.adminMfaRequiredNextTitle,
+                children: [
+                  const SizedBox(height: RestoflowSpacing.md),
+                  Text(
+                    l10n.adminMfaRequiredHint,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+              const SizedBox(height: RestoflowSpacing.lg),
+              Center(
+                child: FilledButton.tonalIcon(
+                  key: const Key('admin-mfa-retry'),
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh, size: RestoflowIconSizes.sm),
+                  label: Text(l10n.authTryAgain),
+                ),
               ),
             ],
           ),

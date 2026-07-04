@@ -334,6 +334,30 @@ abstract class AppLocalizations {
   /// **'Open Dashboard'**
   String get adminGateOpenDashboard;
 
+  /// RF-119 admin gate title: an active platform-admin grant but no MFA (aal2) session.
+  ///
+  /// In en, this message translates to:
+  /// **'Multi-factor authentication required'**
+  String get adminMfaRequiredTitle;
+
+  /// RF-119 admin gate body explaining the platform admin needs an aal2/MFA session.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account has platform-admin access, but this sign-in is not multi-factor (MFA) verified. Platform-wide data requires an MFA-verified session.'**
+  String get adminMfaRequiredBody;
+
+  /// RF-119 admin gate section title for the MFA next-steps guidance.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete multi-factor authentication'**
+  String get adminMfaRequiredNextTitle;
+
+  /// RF-119 admin gate guidance to complete MFA (setup is operator/manual; see the runbook).
+  ///
+  /// In en, this message translates to:
+  /// **'Verify multi-factor authentication for your platform-operator account, then reload. See docs/LOCAL_RUNBOOK.md for platform-admin MFA setup.'**
+  String get adminMfaRequiredHint;
+
   /// Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up).
   ///
   /// In en, this message translates to:

@@ -10,6 +10,7 @@ class MyContext {
     required this.appUser,
     required this.isPlatformAdmin,
     required this.memberships,
+    this.hasMfaAal2 = false,
   });
 
   /// The caller's own identity.
@@ -18,6 +19,14 @@ class MyContext {
   /// Separate platform-plane boolean (D-026) - NEVER a membership; no
   /// organization/restaurant/branch is derivable from it.
   final bool isPlatformAdmin;
+
+  /// RF-119: whether the caller's OWN Supabase Auth session is at assurance level
+  /// aal2 (`get_my_context.is_mfa_aal2`). A UX signal only - the admin gate uses
+  /// it to show an honest "MFA required" state for a platform admin WITHOUT MFA;
+  /// it is NEVER an authorization decision (platform data reads are gated
+  /// server-side by `app.platform_admin_guard`). Defaults false (fail-closed) when
+  /// the field is absent (a pre-RF-119 server, or a caller that does not use it).
+  final bool hasMfaAal2;
 
   /// The caller's own memberships as a LIST (D-004); may be empty. Never
   /// collapsed into a single global role.
@@ -62,10 +71,15 @@ class MyContext {
         MembershipContext.fromJson(entry.cast<String, dynamic>()),
       );
     }
+    // RF-119: tolerant parse (additive, non-breaking) - a missing or non-bool
+    // `is_mfa_aal2` fails closed to false (a pre-RF-119 server, or a non-admin
+    // consumer). Never throws on this field.
+    final mfaAal2 = json['is_mfa_aal2'];
     return MyContext(
       appUser: AppUserContext.fromJson(appUserJson.cast<String, dynamic>()),
       isPlatformAdmin: isPlatformAdmin,
       memberships: List.unmodifiable(memberships),
+      hasMfaAal2: mfaAal2 is bool ? mfaAal2 : false,
     );
   }
 }

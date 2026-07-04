@@ -38,11 +38,13 @@ Map<String, dynamic> membership({
 Map<String, dynamic> context({
   Map<String, dynamic>? user,
   bool isPlatformAdmin = false,
+  bool? isMfaAal2,
   List<Map<String, dynamic>>? memberships,
 }) => {
   'ok': true,
   'app_user': user ?? appUser(),
   'is_platform_admin': isPlatformAdmin,
+  if (isMfaAal2 != null) 'is_mfa_aal2': isMfaAal2,
   'memberships': memberships ?? [membership()],
 };
 
@@ -116,6 +118,35 @@ void main() {
       );
       expect(ctx.isPlatformAdmin, isTrue);
       expect(ctx.memberships, isEmpty);
+    });
+
+    group('RF-119 is_mfa_aal2 (tolerant, fail-closed to false)', () {
+      test('true when the server reports is_mfa_aal2 = true', () {
+        expect(MyContext.fromJson(context(isMfaAal2: true)).hasMfaAal2, isTrue);
+      });
+      test('false when is_mfa_aal2 = false', () {
+        expect(
+          MyContext.fromJson(context(isMfaAal2: false)).hasMfaAal2,
+          isFalse,
+        );
+      });
+      test(
+        'false (fail-closed) when the field is ABSENT (pre-RF-119 server)',
+        () {
+          expect(MyContext.fromJson(context()).hasMfaAal2, isFalse);
+        },
+      );
+      test('false (fail-closed) when the field is a non-bool', () {
+        final raw = context()..['is_mfa_aal2'] = 'aal2';
+        expect(MyContext.fromJson(raw).hasMfaAal2, isFalse);
+      });
+      test('a platform admin without MFA parses grant=true, mfa=false', () {
+        final ctx = MyContext.fromJson(
+          context(isPlatformAdmin: true, isMfaAal2: false),
+        );
+        expect(ctx.isPlatformAdmin, isTrue);
+        expect(ctx.hasMfaAal2, isFalse);
+      });
     });
   });
 

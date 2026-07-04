@@ -23,6 +23,7 @@ MembershipContext mem(MembershipRole role) => MembershipContext(
 
 MyContext ctx({
   bool admin = false,
+  bool mfa = false,
   List<MembershipContext> memberships = const [],
 }) => MyContext(
   appUser: const AppUserContext(
@@ -32,6 +33,7 @@ MyContext ctx({
     isActive: true,
   ),
   isPlatformAdmin: admin,
+  hasMfaAal2: mfa,
   memberships: memberships,
 );
 
@@ -56,19 +58,49 @@ void main() {
     expect(find.text(l10n.adminOverviewTitle), findsOneWidget);
   });
 
-  testWidgets('auth mode: a platform admin reaches the platform overview', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      AdminApp(
-        demoMode: false,
-        fetchContext: fetcherForContext(ctx(admin: true)),
-      ),
-    );
-    final l10n = await en();
-    expect(find.text(l10n.adminOverviewTitle), findsOneWidget);
-  });
+  testWidgets(
+    'auth mode: a platform admin WITH an MFA (aal2) session reaches the '
+    'platform overview',
+    (tester) async {
+      await _pump(
+        tester,
+        AdminApp(
+          demoMode: false,
+          fetchContext: fetcherForContext(ctx(admin: true, mfa: true)),
+        ),
+      );
+      final l10n = await en();
+      expect(find.text(l10n.adminOverviewTitle), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'RF-119 auth mode: a platform admin WITHOUT an MFA session gets the honest '
+    'MFA-required state, never the overview and never fake platform data',
+    (tester) async {
+      await _pump(
+        tester,
+        AdminApp(
+          demoMode: false,
+          // Active platform grant (admin: true) but NO aal2 session (mfa: false).
+          fetchContext: fetcherForContext(ctx(admin: true)),
+        ),
+      );
+      final l10n = await en();
+      expect(find.byType(AdminMfaRequiredView), findsOneWidget);
+      expect(find.text(l10n.adminMfaRequiredTitle), findsOneWidget);
+      expect(find.text(l10n.adminMfaRequiredBody), findsOneWidget);
+      expect(find.text(l10n.adminMfaRequiredHint), findsOneWidget);
+      // It IS the platform panel (not the restaurant Dashboard), and it is NOT
+      // the overview / any fake platform figures.
+      expect(find.text(l10n.adminGateNotOwner), findsOneWidget);
+      expect(find.text(l10n.adminOverviewTitle), findsNothing);
+      expect(find.byKey(const Key('admin-mfa-retry')), findsOneWidget);
+      // Not the wrong-account explainer (they ARE a platform admin) or a denial.
+      expect(find.text(l10n.adminGateNotAdminAccount), findsNothing);
+      expect(find.text(l10n.authAccessDenied), findsNothing);
+    },
+  );
 
   testWidgets(
     'auth mode: a tenant role without the platform flag gets the HONEST '
@@ -163,17 +195,44 @@ void main() {
   });
 
   testWidgets(
-    'auth mode: a platform admin with zero memberships still reaches the overview',
+    'auth mode: a platform admin (MFA) with zero memberships still reaches the '
+    'overview',
     (tester) async {
       await _pump(
         tester,
         AdminApp(
           demoMode: false,
-          fetchContext: fetcherForContext(ctx(admin: true)),
+          fetchContext: fetcherForContext(ctx(admin: true, mfa: true)),
         ),
       );
       final l10n = await en();
       expect(find.text(l10n.adminOverviewTitle), findsOneWidget);
     },
   );
+
+  testWidgets('RF-119 the MFA-required view renders in Arabic (RTL) safely', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: AdminMfaRequiredView(onRetry: () {}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      Directionality.of(tester.element(find.byType(AdminMfaRequiredView))),
+      TextDirection.rtl,
+    );
+    expect(find.text('مطلوب مصادقة متعددة العوامل'), findsOneWidget);
+  });
 }

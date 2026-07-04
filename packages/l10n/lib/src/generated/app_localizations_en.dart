@@ -133,6 +133,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminGateOpenDashboard => 'Open Dashboard';
 
   @override
+  String get adminMfaRequiredTitle => 'Multi-factor authentication required';
+
+  @override
+  String get adminMfaRequiredBody =>
+      'Your account has platform-admin access, but this sign-in is not multi-factor (MFA) verified. Platform-wide data requires an MFA-verified session.';
+
+  @override
+  String get adminMfaRequiredNextTitle =>
+      'Complete multi-factor authentication';
+
+  @override
+  String get adminMfaRequiredHint =>
+      'Verify multi-factor authentication for your platform-operator account, then reload. See docs/LOCAL_RUNBOOK.md for platform-admin MFA setup.';
+
+  @override
   String get adminAccessDeniedTitle => 'Platform admin access denied';
 
   @override

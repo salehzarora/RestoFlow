@@ -131,6 +131,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminGateOpenDashboard => 'فتح لوحة المطعم';
 
   @override
+  String get adminMfaRequiredTitle => 'مطلوب مصادقة متعددة العوامل';
+
+  @override
+  String get adminMfaRequiredBody =>
+      'حسابك يملك صلاحية مسؤول المنصة، لكن تسجيل الدخول هذا غير موثّق بمصادقة متعددة العوامل (MFA). تتطلّب بيانات المنصة جلسة موثّقة بمصادقة متعددة العوامل.';
+
+  @override
+  String get adminMfaRequiredNextTitle => 'أكمل المصادقة متعددة العوامل';
+
+  @override
+  String get adminMfaRequiredHint =>
+      'فعّل المصادقة متعددة العوامل لحساب مشغّل المنصة، ثم أعد التحميل. راجع docs/LOCAL_RUNBOOK.md لإعداد مصادقة مسؤول المنصة.';
+
+  @override
   String get adminAccessDeniedTitle => 'تم رفض الوصول إلى إدارة المنصة';
 
   @override
