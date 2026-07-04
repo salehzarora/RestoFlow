@@ -131,6 +131,20 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminGateOpenDashboard => 'פתיחת לוח המסעדה';
 
   @override
+  String get adminMfaRequiredTitle => 'נדרש אימות רב-שלבי';
+
+  @override
+  String get adminMfaRequiredBody =>
+      'לחשבון שלך יש הרשאת מנהל פלטפורמה, אך כניסה זו אינה מאומתת באימות רב-שלבי (MFA). נתוני הפלטפורמה מחייבים סשן מאומת ב-MFA.';
+
+  @override
+  String get adminMfaRequiredNextTitle => 'השלימו את האימות הרב-שלבי';
+
+  @override
+  String get adminMfaRequiredHint =>
+      'אמתו אימות רב-שלבי עבור חשבון מפעיל הפלטפורמה, ואז טענו מחדש. ראו docs/LOCAL_RUNBOOK.md להגדרת אימות מנהל הפלטפורמה.';
+
+  @override
   String get adminAccessDeniedTitle => 'הגישה לניהול הפלטפורמה נדחתה';
 
   @override

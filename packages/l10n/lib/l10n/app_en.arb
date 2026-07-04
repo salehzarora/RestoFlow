@@ -144,6 +144,14 @@
   "@adminGateProvisionHint": {"description": "Admin gate note about how platform access is provisioned (no self-service)."},
   "adminGateOpenDashboard": "Open Dashboard",
   "@adminGateOpenDashboard": {"description": "Admin gate action that opens the restaurant Dashboard app."},
+  "adminMfaRequiredTitle": "Multi-factor authentication required",
+  "@adminMfaRequiredTitle": {"description": "RF-119 admin gate title: an active platform-admin grant but no MFA (aal2) session."},
+  "adminMfaRequiredBody": "Your account has platform-admin access, but this sign-in is not multi-factor (MFA) verified. Platform-wide data requires an MFA-verified session.",
+  "@adminMfaRequiredBody": {"description": "RF-119 admin gate body explaining the platform admin needs an aal2/MFA session."},
+  "adminMfaRequiredNextTitle": "Complete multi-factor authentication",
+  "@adminMfaRequiredNextTitle": {"description": "RF-119 admin gate section title for the MFA next-steps guidance."},
+  "adminMfaRequiredHint": "Verify multi-factor authentication for your platform-operator account, then reload. See docs/LOCAL_RUNBOOK.md for platform-admin MFA setup.",
+  "@adminMfaRequiredHint": {"description": "RF-119 admin gate guidance to complete MFA (setup is operator/manual; see the runbook)."},
   "adminAccessDeniedTitle": "Platform admin access denied",
   "@adminAccessDeniedTitle": {
     "description": "Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up)."
