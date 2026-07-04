@@ -1,107 +1,26 @@
 import 'package:flutter/material.dart';
-import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
-import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
-import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show AuthContextFetcher;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-import 'platform_admin_screen.dart';
 import 'util/external_link.dart';
 import 'widgets/language_selector.dart';
 
 /// The dashboard app's stable local origin (docs/LOCAL_RUNBOOK.md — the
 /// `_run_dashboard_real.bat` fixed port). Shown as a copyable link on the
-/// gate so a restaurant owner who opened the wrong app can jump to the right
-/// one. Local-run helper only; a deployed build would use its real domain.
+/// explainer so a restaurant owner who opened the wrong app can jump to the
+/// right one. Local-run helper only; a deployed build would use its real domain.
 const String kLocalDashboardUrl = 'http://localhost:57026';
 
-/// App-level platform gate for the admin surface (sprint: admin access
-/// clarification).
-///
-/// Replaces the shared gate's dead-end "Account access denied" for this app:
-/// the admin app has NO sign-in flow by design (platform access is granted
-/// manually — D-026), so an unauthenticated visitor or a signed-in tenant
-/// account (e.g. a restaurant owner) gets an HONEST explainer of what this
-/// app is and where to go, never a scary generic denial. A real platform
-/// admin (`is_platform_admin == true` from `get_my_context`) enters the
-/// overview exactly as before; data reads still enforce grant + MFA + reason
-/// server-side (RF-091) — this gate weakens nothing.
-class AdminPlatformGate extends StatefulWidget {
-  const AdminPlatformGate({required this.fetchContext, super.key});
-
-  final AuthContextFetcher fetchContext;
-
-  @override
-  State<AdminPlatformGate> createState() => _AdminPlatformGateState();
-}
-
-class _AdminPlatformGateState extends State<AdminPlatformGate> {
-  late Future<Result<MyContext, AuthFailure>> _future = widget.fetchContext();
-
-  void _retry() {
-    setState(() {
-      _future = widget.fetchContext();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return FutureBuilder<Result<MyContext, AuthFailure>>(
-      future: _future,
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return _GateScaffold(
-            child: RestoflowStateView(
-              showSpinner: true,
-              title: l10n.authLoadingAccount,
-            ),
-          );
-        }
-        return snap.data!.fold(
-          (ctx) => switch ((ctx.isPlatformAdmin, ctx.hasMfaAal2)) {
-            // Active platform grant + an MFA (aal2) session: enter the panel. Data
-            // reads still enforce grant + MFA + reason server-side (RF-091).
-            (true, true) => const PlatformAdminScreen(),
-            // RF-119: an active grant but NO MFA session -> an HONEST "MFA
-            // required" state, NOT the panel (whose reads would fail 42501). The
-            // aal2 flag is a UX signal only; the server stays the authority.
-            (true, false) => AdminMfaRequiredView(onRetry: _retry),
-            // Signed in but not a platform admin (e.g. a restaurant owner).
-            (false, _) => AdminGateExplainer(signedIn: true, onRetry: _retry),
-          },
-          (failure) => switch (failure) {
-            // No session, or a session the backend rejects (unlinked/inactive):
-            // the explainer, not a dead end — this app has no login by design.
-            AuthUnauthenticatedFailure() || AuthDeniedFailure() =>
-              AdminGateExplainer(signedIn: false, onRetry: _retry),
-            // Transport/config problems stay an honest error with retry.
-            _ => _GateScaffold(
-              child: RestoflowStateView(
-                icon: Icons.error_outline,
-                tone: RestoflowTone.danger,
-                title: l10n.authError,
-                actions: [
-                  FilledButton.tonal(
-                    onPressed: _retry,
-                    child: Text(l10n.authTryAgain),
-                  ),
-                ],
-              ),
-            ),
-          },
-        );
-      },
-    );
-  }
-}
-
-/// The honest "this is the platform panel" explainer (Arabic-first copy).
+/// The honest "this is the platform panel" explainer (Arabic-first copy) — shown
+/// by [AdminAuthFlow] when a signed-in account is NOT a platform admin (e.g. a
+/// restaurant owner). Explains what this app is, points to the Dashboard, and
+/// (RF-119-b) lets the operator sign out to try a different account. This gate
+/// weakens nothing — platform reads stay grant + aal2 + reason gated server-side.
 class AdminGateExplainer extends StatelessWidget {
   const AdminGateExplainer({
     required this.signedIn,
     required this.onRetry,
+    this.onSignOut,
     super.key,
   });
 
@@ -110,6 +29,10 @@ class AdminGateExplainer extends StatelessWidget {
   final bool signedIn;
 
   final VoidCallback onRetry;
+
+  /// RF-119-b: when provided (a real session exists), a Sign-out action lets the
+  /// operator switch accounts. Null when there is no session.
+  final VoidCallback? onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -181,78 +104,17 @@ class AdminGateExplainer extends StatelessWidget {
                     ),
                     label: Text(l10n.authTryAgain),
                   ),
+                  if (signedIn && onSignOut != null)
+                    TextButton.icon(
+                      key: const Key('admin-gate-signout'),
+                      onPressed: onSignOut,
+                      icon: const Icon(
+                        Icons.logout,
+                        size: RestoflowIconSizes.sm,
+                      ),
+                      label: Text(l10n.authSignOut),
+                    ),
                 ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// RF-119: the honest "multi-factor authentication required" state — shown to an
-/// account that HOLDS an active platform-admin grant but whose current session is
-/// NOT MFA-verified (aal2). It never shows platform data (the server would deny
-/// every read); it explains that this is the platform panel (not the restaurant
-/// Dashboard), that platform-wide data needs an MFA-verified sign-in, and how to
-/// proceed. Money-free; RTL-safe. This gate weakens nothing — reads stay gated by
-/// `app.platform_admin_guard` server-side.
-class AdminMfaRequiredView extends StatelessWidget {
-  const AdminMfaRequiredView({required this.onRetry, super.key});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return _GateScaffold(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: RestoflowPanelWidths.helpPanel,
-          ),
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.all(RestoflowSpacing.xl),
-            children: [
-              Center(child: RestoflowBrandMark(title: l10n.adminAppTitle)),
-              const SizedBox(height: RestoflowSpacing.xl),
-              RestoflowNoticeBanner(
-                tone: RestoflowTone.warning,
-                icon: Icons.security_outlined,
-                title: l10n.adminMfaRequiredTitle,
-                body: l10n.adminMfaRequiredBody,
-              ),
-              const SizedBox(height: RestoflowSpacing.sm),
-              // Reuse the existing "this is the platform panel, not the owner's
-              // panel" copy so the user knows they are in the right app.
-              Text(
-                l10n.adminGateNotOwner,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: RestoflowSpacing.lg),
-              RestoflowSectionCard(
-                title: l10n.adminMfaRequiredNextTitle,
-                children: [
-                  const SizedBox(height: RestoflowSpacing.md),
-                  Text(
-                    l10n.adminMfaRequiredHint,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-              const SizedBox(height: RestoflowSpacing.lg),
-              Center(
-                child: FilledButton.tonalIcon(
-                  key: const Key('admin-mfa-retry'),
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh, size: RestoflowIconSizes.sm),
-                  label: Text(l10n.authTryAgain),
-                ),
               ),
             ],
           ),

@@ -32,7 +32,11 @@ import 'widgets/language_selector.dart';
 ///     management UX is missing. Real-mode failures render categorized safe
 ///     states (not configured / access denied / generic) — see [_ErrorState].
 class PlatformAdminScreen extends ConsumerWidget {
-  const PlatformAdminScreen({super.key});
+  const PlatformAdminScreen({this.onSignOut, super.key});
+
+  /// RF-119-b: when provided (real mode), an app-bar Sign-out action clears the
+  /// platform-operator session. Null in demo mode (no session to sign out of).
+  final VoidCallback? onSignOut;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -65,6 +69,13 @@ class PlatformAdminScreen extends ConsumerWidget {
             icon: const Icon(Icons.refresh),
             tooltip: l10n.adminRefresh,
           ),
+          if (onSignOut case final signOut?)
+            IconButton(
+              key: const Key('platform-signout-button'),
+              onPressed: signOut,
+              icon: const Icon(Icons.logout),
+              tooltip: l10n.authSignOut,
+            ),
         ],
       ),
       body: overviewAsync.when(

@@ -145,6 +145,42 @@ class AppLocalizationsAr extends AppLocalizations {
       'فعّل المصادقة متعددة العوامل لحساب مشغّل المنصة، ثم أعد التحميل. راجع docs/LOCAL_RUNBOOK.md لإعداد مصادقة مسؤول المنصة.';
 
   @override
+  String get adminSignInTitle => 'تسجيل دخول مشغّل المنصة';
+
+  @override
+  String get adminSignInInvalid => 'بريد إلكتروني أو كلمة مرور غير صحيحة.';
+
+  @override
+  String get adminMfaEnrollTitle => 'إعداد تطبيق المصادقة';
+
+  @override
+  String get adminMfaEnrollBody =>
+      'أضِف هذا الحساب إلى تطبيق مصادقة (مثل Google Authenticator أو 1Password) — امسح رابط الإعداد كرمز QR أو ألصق مفتاح الإعداد — ثم أدخل الرمز المكوّن من 6 أرقام أدناه للإنهاء.';
+
+  @override
+  String get adminMfaSetupKey => 'مفتاح الإعداد';
+
+  @override
+  String get adminMfaChallengeTitle => 'أدخل رمز المصادقة';
+
+  @override
+  String get adminMfaChallengeBody =>
+      'افتح تطبيق المصادقة وأدخل الرمز الحالي المكوّن من 6 أرقام.';
+
+  @override
+  String get adminMfaCodeLabel => 'رمز من 6 أرقام';
+
+  @override
+  String get adminMfaVerifyAction => 'تحقّق';
+
+  @override
+  String get adminMfaVerifyFailed =>
+      'لم يُقبل الرمز. أدخل الرمز الحالي من تطبيقك.';
+
+  @override
+  String get adminMfaEnrollError => 'تعذّر بدء إعداد المصادقة. حاول مرة أخرى.';
+
+  @override
   String get adminAccessDeniedTitle => 'تم رفض الوصول إلى إدارة المنصة';
 
   @override

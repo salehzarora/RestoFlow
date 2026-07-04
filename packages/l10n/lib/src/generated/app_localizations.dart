@@ -358,6 +358,72 @@ abstract class AppLocalizations {
   /// **'Verify multi-factor authentication for your platform-operator account, then reload. See docs/LOCAL_RUNBOOK.md for platform-admin MFA setup.'**
   String get adminMfaRequiredHint;
 
+  /// RF-119-b admin sign-in screen title (distinct from the restaurant Dashboard login).
+  ///
+  /// In en, this message translates to:
+  /// **'Platform operator sign in'**
+  String get adminSignInTitle;
+
+  /// RF-119-b safe admin sign-in credential error (no account-existence leak).
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong email or password.'**
+  String get adminSignInInvalid;
+
+  /// RF-119-b TOTP enrolment section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up an authenticator app'**
+  String get adminMfaEnrollTitle;
+
+  /// RF-119-b TOTP enrolment instructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Add this account to an authenticator app (e.g. Google Authenticator, 1Password) — scan the setup URI as a QR code or paste the setup key — then enter the 6-digit code below to finish.'**
+  String get adminMfaEnrollBody;
+
+  /// RF-119-b label for the one-time TOTP setup key / URI shown during enrolment.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup key'**
+  String get adminMfaSetupKey;
+
+  /// RF-119-b TOTP challenge section title (an authenticator is already enrolled).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your authentication code'**
+  String get adminMfaChallengeTitle;
+
+  /// RF-119-b TOTP challenge instructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Open your authenticator app and enter the current 6-digit code.'**
+  String get adminMfaChallengeBody;
+
+  /// RF-119-b label for the TOTP code entry field.
+  ///
+  /// In en, this message translates to:
+  /// **'6-digit code'**
+  String get adminMfaCodeLabel;
+
+  /// RF-119-b TOTP verify button.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify'**
+  String get adminMfaVerifyAction;
+
+  /// RF-119-b safe generic TOTP verification failure.
+  ///
+  /// In en, this message translates to:
+  /// **'That code wasn\'t accepted. Enter the current code from your app.'**
+  String get adminMfaVerifyFailed;
+
+  /// RF-119-b safe error when starting TOTP enrolment fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t start authenticator setup. Please try again.'**
+  String get adminMfaEnrollError;
+
   /// Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up).
   ///
   /// In en, this message translates to:
