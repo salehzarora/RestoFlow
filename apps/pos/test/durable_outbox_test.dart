@@ -29,16 +29,19 @@ const SyncSession _session = SyncSession(
   deviceId: 'device-abc',
 );
 
-const String _prefsKey = 'restoflow.pos.outbox.v1';
+// RF-114: the durable store is keyed per-device; the session device is the scope.
+const String _scope = 'device-abc'; // == _session.deviceId
+const String _prefsKey = 'restoflow.pos.outbox.v1.device-abc';
 
 OutboxEntry _entry({
   String localOperationId = 'op-1',
   String orderId = 'order-1',
+  String deviceId = 'device-abc',
 }) {
   final payload = OrderSubmissionPayload(
     orderId: orderId,
     localOperationId: localOperationId,
-    deviceId: 'demo-device',
+    deviceId: 'device-abc',
     organizationId: 'demo-org',
     restaurantId: 'demo-restaurant',
     branchId: 'demo-branch',
@@ -60,7 +63,10 @@ OutboxEntry _entry({
   );
   return OutboxEntry(
     id: 'outbox-$localOperationId',
-    deviceId: 'demo-device',
+    deviceId: deviceId,
+    organizationId: 'demo-org',
+    restaurantId: 'demo-restaurant',
+    branchId: 'demo-branch',
     localOperationId: localOperationId,
     operationType: 'order.submit',
     targetEntity: 'order',
@@ -132,7 +138,7 @@ void main() {
       final store1 = SharedPrefsOutboxStore(
         await SharedPreferences.getInstance(),
       );
-      await store1.persist([_entry()]);
+      await store1.persist(_scope, [_entry()]);
       final persisted = (await SharedPreferences.getInstance()).getString(
         _prefsKey,
       );
@@ -145,7 +151,7 @@ void main() {
       final store2 = SharedPrefsOutboxStore(
         await SharedPreferences.getInstance(),
       );
-      final loaded = await store2.load();
+      final loaded = await store2.load(_scope);
       expect(loaded, hasLength(1));
       expect(loaded.single.localOperationId, 'op-1');
       expect(loaded.single.syncState, OutboxSyncState.pending);
@@ -163,7 +169,7 @@ void main() {
         final store = SharedPrefsOutboxStore(
           await SharedPreferences.getInstance(),
         );
-        expect(await store.load(), isEmpty);
+        expect(await store.load(_scope), isEmpty);
       },
     );
 
@@ -176,7 +182,7 @@ void main() {
         final store = SharedPrefsOutboxStore(
           await SharedPreferences.getInstance(),
         );
-        expect(await store.load(), isEmpty);
+        expect(await store.load(_scope), isEmpty);
       },
     );
   });
@@ -331,6 +337,75 @@ void main() {
         // The cashier's device re-rings the SAME logical op (same local_operation_id).
         await repo2.enqueue(_entry());
         expect(await repo2.recentEntries(), hasLength(1));
+      },
+    );
+  });
+
+  group('scope binding — never submit under the wrong device (RF-114)', () {
+    setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+    const sessionB = SyncSession(pinSessionId: 'pin-B', deviceId: 'device-B');
+
+    test(
+      'an order queued on device A is NOT loaded/submitted under device B',
+      () async {
+        final transport = _RecordingTransport(
+          (_, _) async => _envelope(<String, dynamic>{
+            'local_operation_id': 'op-1',
+            'status': 'applied',
+          }),
+        );
+        // Device A queues an order (persisted under A's per-device key).
+        final repoA = RealOutboxRepository(
+          transport,
+          _session,
+          store: SharedPrefsOutboxStore(await SharedPreferences.getInstance()),
+        );
+        await repoA.enqueue(_entry());
+        expect(
+          (await SharedPreferences.getInstance()).getString(_prefsKey),
+          isNotNull,
+        );
+
+        // Device B (a different deviceId — e.g. re-paired as a NEW device) shares
+        // the same localStorage but loads from ITS OWN key -> sees NONE of A's
+        // queue, and never submits it.
+        final repoB = RealOutboxRepository(
+          transport,
+          sessionB,
+          store: SharedPrefsOutboxStore(await SharedPreferences.getInstance()),
+        );
+        expect(await repoB.recentEntries(), isEmpty);
+        expect(transport.params, isEmpty);
+      },
+    );
+
+    test(
+      'the replay guard refuses a foreign-device entry (conflict, not sent)',
+      () async {
+        // Defence beyond the per-device key: a stale/legacy entry whose deviceId
+        // != the current session's device, sitting under this session's key.
+        final foreign = _entry(deviceId: 'device-OTHER');
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          _prefsKey: jsonEncode(<String, Object?>{
+            'version': 1,
+            'entries': [foreign.toJson()],
+          }),
+        });
+        final transport = _RecordingTransport(
+          (_, _) async => fail('a foreign-scope order must NOT be submitted'),
+        );
+        final repo = RealOutboxRepository(
+          transport,
+          _session,
+          store: SharedPrefsOutboxStore(await SharedPreferences.getInstance()),
+        );
+        expect(await repo.recentEntries(), hasLength(1));
+
+        final pushed = await repo.push(foreign.id);
+        expect(pushed.syncState, OutboxSyncState.conflict);
+        expect(pushed.lastErrorCode, 'device_scope_mismatch');
+        expect(transport.params, isEmpty); // backend never contacted
       },
     );
   });

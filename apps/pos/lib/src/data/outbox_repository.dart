@@ -172,17 +172,22 @@ class RealOutboxRepository implements OutboxRepository {
   /// until loaded so a fresh repo picks up orders queued before a refresh/restart.
   List<OutboxEntry>? _entries;
 
+  /// RF-114 scope binding: the durable queue is keyed by THIS session's device
+  /// id, so a re-paired-as-new device (a different deviceId) never loads or
+  /// submits another device's queued orders. Only reached after [_ensureReady].
+  String get _scopeKey => _session!.deviceId;
+
   /// Loads the durable queue once (per repo instance). Cheap no-op thereafter.
   Future<void> _ensureLoaded() async {
     final store = _store;
-    _entries ??= store == null ? <OutboxEntry>[] : await store.load();
+    _entries ??= store == null ? <OutboxEntry>[] : await store.load(_scopeKey);
   }
 
   /// Writes the current queue back to the durable store (no-op when in-memory).
   Future<void> _persist() async {
     final store = _store;
     if (store != null) {
-      await store.persist(_entries ?? const <OutboxEntry>[]);
+      await store.persist(_scopeKey, _entries ?? const <OutboxEntry>[]);
     }
   }
 
@@ -232,6 +237,23 @@ class RealOutboxRepository implements OutboxRepository {
     final session = _session!;
     final idx = _indexOf(entryId);
     final entry = _entries![idx];
+
+    // RF-114 scope guard (defence in depth beyond the per-device store key): an
+    // order queued for a DIFFERENT device MUST NOT be submitted under this
+    // session (e.g. it survived an unpair/re-pair as a new device). Mark it
+    // `conflict` so the UI surfaces "attention needed" — never silently sent to
+    // the wrong device/branch, never faked as synced, never deleted here.
+    if (entry.deviceId != session.deviceId) {
+      final stale = entry.copyWith(
+        syncState: OutboxSyncState.conflict,
+        attemptCount: entry.attemptCount + 1,
+        lastErrorCode: 'device_scope_mismatch',
+      );
+      _entries![idx] = stale;
+      await _persist();
+      return stale;
+    }
+
     OutboxEntry updated;
     try {
       final raw = await transport.invoke('sync_push', <String, dynamic>{

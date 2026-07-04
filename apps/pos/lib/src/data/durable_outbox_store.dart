@@ -15,33 +15,45 @@ import 'order_submission.dart';
 /// demo-safe, web-durable interim store; Drift remains the native/hardware-pilot
 /// target (see the completion roadmap).
 abstract class DurableOutboxStore {
-  /// Loads the persisted entries (most recent first is NOT guaranteed; the
-  /// caller orders). Never throws — a corrupt/foreign value yields an empty
-  /// list so the POS starts clean instead of crashing.
-  Future<List<OutboxEntry>> load();
+  /// Loads the persisted entries for [scopeKey] (a stable per-device/scope key,
+  /// RF-114). Never throws — a corrupt/foreign value yields an empty list so the
+  /// POS starts clean instead of crashing. Orders queued under a DIFFERENT scope
+  /// key are not returned, so an order queued on one device is never loaded
+  /// under a different device/session.
+  Future<List<OutboxEntry>> load(String scopeKey);
 
-  /// Replaces the persisted set with [entries] (integer minor money only; no
-  /// secrets, no service-role key, no real tenant scope — see [OutboxEntry]).
-  Future<void> persist(List<OutboxEntry> entries);
+  /// Replaces the persisted set for [scopeKey] with [entries] (integer minor
+  /// money only; no secrets, no service-role key — see [OutboxEntry]).
+  Future<void> persist(String scopeKey, List<OutboxEntry> entries);
 }
 
 /// A `shared_preferences`-backed [DurableOutboxStore]: one schema-versioned JSON
-/// envelope `{version, entries[]}` under a stable key. Web-durable (localStorage).
+/// envelope `{version, entries[]}` PER SCOPE key. Web-durable (localStorage). The
+/// full storage key is `<prefix>.<scopeKey>`, so each paired device's queue is
+/// isolated (RF-114 scope binding): a re-paired-as-new device (new deviceId)
+/// gets a fresh, empty queue and cannot pick up another device's pending orders.
 class SharedPrefsOutboxStore implements DurableOutboxStore {
-  SharedPrefsOutboxStore(this._prefs, {String key = _defaultKey}) : _key = key;
+  SharedPrefsOutboxStore(this._prefs, {String keyPrefix = _defaultPrefix})
+    : _prefix = keyPrefix;
 
   final SharedPreferences _prefs;
-  final String _key;
+  final String _prefix;
 
-  static const String _defaultKey = 'restoflow.pos.outbox.v1';
+  static const String _defaultPrefix = 'restoflow.pos.outbox.v1';
 
   /// Bump ONLY on an incompatible envelope/entry shape change; an unrecognised
   /// version is ignored on load (start clean) rather than mis-parsed.
   static const int schemaVersion = 1;
 
+  String _keyFor(String scopeKey) {
+    // Keep only key-safe chars so a scope value can never break the key space.
+    final safe = scopeKey.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return '$_prefix.$safe';
+  }
+
   @override
-  Future<List<OutboxEntry>> load() async {
-    final raw = _prefs.getString(_key);
+  Future<List<OutboxEntry>> load(String scopeKey) async {
+    final raw = _prefs.getString(_keyFor(scopeKey));
     if (raw == null || raw.isEmpty) return <OutboxEntry>[];
     try {
       final decoded = jsonDecode(raw);
@@ -67,11 +79,11 @@ class SharedPrefsOutboxStore implements DurableOutboxStore {
   }
 
   @override
-  Future<void> persist(List<OutboxEntry> entries) async {
+  Future<void> persist(String scopeKey, List<OutboxEntry> entries) async {
     final envelope = <String, Object?>{
       'version': schemaVersion,
       'entries': [for (final e in entries) e.toJson()],
     };
-    await _prefs.setString(_key, jsonEncode(envelope));
+    await _prefs.setString(_keyFor(scopeKey), jsonEncode(envelope));
   }
 }

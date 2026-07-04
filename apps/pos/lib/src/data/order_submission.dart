@@ -241,11 +241,20 @@ class OutboxEntry {
     required this.summary,
     required this.syncState,
     required this.clientCreatedAt,
+    this.organizationId,
+    this.restaurantId,
+    this.branchId,
     this.attemptCount = 0,
     this.lastErrorCode,
   });
 
   final String id;
+
+  /// The ORIGINAL device this order was queued on (DECISION D-022). RF-114 binds
+  /// a durable entry to its device: on replay the outbox refuses to submit it
+  /// under a session for a DIFFERENT device (survives unpair/re-pair) — see
+  /// [RealOutboxRepository]. In real mode this is the real device-session
+  /// deviceId, never a demo placeholder.
   final String deviceId;
   final String localOperationId;
   final String operationType; // 'order.submit'
@@ -255,6 +264,14 @@ class OutboxEntry {
   final OrderSummary summary;
   final OutboxSyncState syncState;
   final DateTime clientCreatedAt;
+
+  /// RF-114 defensive scope metadata: the ORIGINAL tenant scope this order was
+  /// queued under (from the paired device context; null when unknown/demo).
+  /// Local-only — never transmitted (the server derives scope from the session).
+  final String? organizationId;
+  final String? restaurantId;
+  final String? branchId;
+
   final int attemptCount;
   final String? lastErrorCode;
 
@@ -275,6 +292,9 @@ class OutboxEntry {
     'summary': summary.toJson(),
     'sync_state': syncState.wire,
     'client_created_at': clientCreatedAt.toIso8601String(),
+    'organization_id': organizationId,
+    'restaurant_id': restaurantId,
+    'branch_id': branchId,
     'attempt_count': attemptCount,
     'last_error_code': lastErrorCode,
   };
@@ -312,6 +332,9 @@ class OutboxEntry {
       summary: OrderSummary.fromJson(summaryRaw.cast<String, Object?>()),
       syncState: state,
       clientCreatedAt: created,
+      organizationId: json['organization_id'] as String?,
+      restaurantId: json['restaurant_id'] as String?,
+      branchId: json['branch_id'] as String?,
       attemptCount: (json['attempt_count'] as num?)?.toInt() ?? 0,
       lastErrorCode: json['last_error_code'] as String?,
     );
@@ -333,6 +356,9 @@ class OutboxEntry {
     summary: summary,
     syncState: syncState ?? this.syncState,
     clientCreatedAt: clientCreatedAt,
+    organizationId: organizationId,
+    restaurantId: restaurantId,
+    branchId: branchId,
     attemptCount: attemptCount ?? this.attemptCount,
     lastErrorCode: clearError ? null : (lastErrorCode ?? this.lastErrorCode),
   );

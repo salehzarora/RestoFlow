@@ -10,6 +10,7 @@ import '../data/ids.dart';
 import '../data/order_submission.dart';
 import '../data/outbox_repository.dart';
 import 'cart_controller.dart';
+import 'pos_device_context.dart';
 import 'pos_session.dart';
 
 /// Demo tenant/device scope for submitted orders (DECISION D-001/D-002/D-022).
@@ -169,6 +170,25 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     final orderNumber = isDemo ? 'DEMO-$n' : displayOrderCode(orderId);
     final createdAt = DateTime.now();
 
+    // RF-114 scope binding: a REAL order is bound to the CURRENT paired device +
+    // tenant scope (never a demo placeholder). deviceId comes from the active
+    // sync session (the authoritative device identity, also used as the durable
+    // store key); org/restaurant/branch come from the paired device context (for
+    // defensive replay metadata). On replay the outbox refuses to submit an order
+    // whose deviceId != the current session's device (survives unpair/re-pair).
+    final session = isDemo ? null : ref.read(posSyncSessionProvider);
+    final ctx = isDemo ? null : ref.read(posDeviceContextProvider);
+    final deviceId = isDemo
+        ? kDemoDeviceId
+        : (session?.deviceId ?? ctx?.deviceId ?? kDemoDeviceId);
+    final organizationId = isDemo
+        ? kDemoOrgId
+        : (ctx?.organizationId ?? kDemoOrgId);
+    final restaurantId = isDemo
+        ? kDemoRestaurantId
+        : (ctx?.restaurantId ?? kDemoRestaurantId);
+    final branchId = isDemo ? kDemoBranchId : (ctx?.branchId ?? kDemoBranchId);
+
     final items = lines
         .map(
           (l) => OrderSubmissionItem(
@@ -199,10 +219,10 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     final payload = OrderSubmissionPayload(
       orderId: orderId,
       localOperationId: localOperationId,
-      deviceId: kDemoDeviceId,
-      organizationId: kDemoOrgId,
-      restaurantId: kDemoRestaurantId,
-      branchId: kDemoBranchId,
+      deviceId: deviceId,
+      organizationId: organizationId,
+      restaurantId: restaurantId,
+      branchId: branchId,
       orderType: orderType,
       tableId: tableId,
       currencyCode: currencyCode,
@@ -219,7 +239,10 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
 
     final entry = OutboxEntry(
       id: entryId,
-      deviceId: kDemoDeviceId,
+      deviceId: deviceId,
+      organizationId: organizationId,
+      restaurantId: restaurantId,
+      branchId: branchId,
       localOperationId: localOperationId,
       operationType: 'order.submit',
       targetEntity: 'order',
