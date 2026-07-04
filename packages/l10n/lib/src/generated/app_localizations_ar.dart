@@ -257,6 +257,28 @@ class AppLocalizationsAr extends AppLocalizations {
       'طلب تجريبي — لم يُرسَل إلى خادم أو مطبخ أو طابعة.';
 
   @override
+  String posOutboxPending(int count) {
+    return '$count بانتظار المزامنة';
+  }
+
+  @override
+  String get posOutboxSyncing => 'جارٍ المزامنة…';
+
+  @override
+  String posOutboxFailed(int count) {
+    return '$count فشلت — إعادة المحاولة';
+  }
+
+  @override
+  String get posOutboxSynced => 'تمت مزامنة جميع الطلبات';
+
+  @override
+  String get posOutboxAttention => 'المزامنة تحتاج انتباه';
+
+  @override
+  String get posOutboxRetryAll => 'إعادة المحاولة';
+
+  @override
   String get posOrderSubmittedTitle => 'تم إرسال الطلب';
 
   @override

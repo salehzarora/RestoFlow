@@ -39,7 +39,7 @@ OutboxEntry _entry({
   final payload = OrderSubmissionPayload(
     orderId: orderId,
     localOperationId: localOperationId,
-    deviceId: 'demo-device',
+    deviceId: 'device-abc',
     organizationId: 'demo-org',
     restaurantId: 'demo-restaurant',
     branchId: 'demo-branch',
@@ -61,7 +61,7 @@ OutboxEntry _entry({
   );
   return OutboxEntry(
     id: 'outbox-$localOperationId',
-    deviceId: 'demo-device',
+    deviceId: 'device-abc',
     localOperationId: localOperationId,
     operationType: 'order.submit',
     targetEntity: 'order',

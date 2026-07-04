@@ -306,6 +306,24 @@
   "@posDemoOrderNotice": {
     "description": "POS notice on the local order confirmation clarifying nothing was sent to a backend/kitchen/printer."
   },
+  "posOutboxPending": "{count} pending sync",
+  "@posOutboxPending": {
+    "description": "RF-114: POS outbox chip — N orders queued locally, not yet delivered.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "posOutboxSyncing": "Syncing…",
+  "@posOutboxSyncing": {"description": "RF-114: POS outbox chip — a queued order is being delivered."},
+  "posOutboxFailed": "{count} failed — retry",
+  "@posOutboxFailed": {
+    "description": "RF-114: POS outbox chip — N orders failed to sync; tap to retry all.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "posOutboxSynced": "All orders synced",
+  "@posOutboxSynced": {"description": "RF-114: POS outbox chip — every submitted order is confirmed by the backend."},
+  "posOutboxAttention": "Sync attention needed",
+  "@posOutboxAttention": {"description": "RF-114: POS outbox chip — a queued order is in a conflict/resolved state that needs review; NOT confirmed synced."},
+  "posOutboxRetryAll": "Retry all",
+  "@posOutboxRetryAll": {"description": "RF-114: POS outbox — retry-all-failed action label."},
   "posOrderSubmittedTitle": "Order sent",
   "@posOrderSubmittedTitle": {
     "description": "POS heading on the local order-confirmation panel after Send Order."

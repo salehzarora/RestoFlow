@@ -6,12 +6,15 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_printing/restoflow_printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'src/data/durable_outbox_store.dart';
 import 'src/print/print_bridge.dart';
 import 'src/pos_menu_screen.dart';
 import 'src/pos_pairing_gate.dart';
 import 'src/pos_pin_gate.dart';
 import 'src/state/locale_controller.dart';
+import 'src/state/outbox_controller.dart';
 import 'src/state/pos_branch_tax.dart';
 import 'src/state/pos_device_context.dart';
 import 'src/state/pos_printer_assignments.dart';
@@ -23,6 +26,9 @@ Future<void> main() async {
   // Language before first frame: the persisted per-device choice wins; the
   // FIRST-LAUNCH default is ARABIC (the official language — sprint).
   final persistedLocale = await readPersistedLocale();
+  // RF-114: the durable outbox persists to shared_preferences (localStorage on
+  // web), so orders queued while offline survive a refresh / tab close / restart.
+  final prefs = await SharedPreferences.getInstance();
   final real = await _realDeviceAuth();
   final seams = real.seams;
   runApp(
@@ -30,6 +36,14 @@ Future<void> main() async {
       overrides: [
         initialLocaleProvider.overrideWithValue(
           persistedLocale ?? const Locale('ar'),
+        ),
+        // RF-114: durable outbox + a periodic sweep so queued orders re-deliver
+        // once the backend recovers (idempotent retries, D-022; no duplicates).
+        durableOutboxStoreProvider.overrideWithValue(
+          SharedPrefsOutboxStore(prefs),
+        ),
+        outboxAutoSweepIntervalProvider.overrideWithValue(
+          const Duration(seconds: 25),
         ),
         // The PIN/session + sync_push calls must ride the SAME authenticated
         // (anonymous) transport as the pairing repo — the plain anon transport

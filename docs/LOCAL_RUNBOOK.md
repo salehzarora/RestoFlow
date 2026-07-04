@@ -261,8 +261,17 @@ banner.
    `public.pos_menu` over the live `menu_items` rows you created in the Menu
    tab. Orders go through the offline outbox → `public.sync_push`
    (`order.submit`) with an idempotency key (device + local operation id,
-   D-022). Cash payment uses `payment.create`; the server assigns the receipt
-   number. `record_payment` REQUIRES an open shift (RF-055): the POS opens one
+   D-022). **Durable offline outbox (RF-114):** the outbox now persists to
+   local storage, so if the backend/network is down when you Send, the order is
+   queued (not lost) and **survives a browser refresh / tab close / restart**. A
+   compact sync chip in the POS app bar shows **pending / syncing / failed —
+   retry / all synced**; queued orders auto-retry when the backend recovers, and
+   a failed one has a manual Retry. Retries reuse the same `local_operation_id`,
+   so the server dedupes (D-022) — a retry never creates a duplicate order. It
+   never shows "synced" until the backend confirms. (Interim store =
+   `shared_preferences`/localStorage; the canonical Drift outbox is the
+   native/pilot target — see the completion roadmap.) Cash payment uses
+   `payment.create`; the server assigns the receipt number. `record_payment` REQUIRES an open shift (RF-055): the POS opens one
    automatically (opening float 0) right after the staff PIN sign-in. To
    **close/reconcile** it, open the POS **⋮ device menu → Close shift** (RF-113):
    enter the counted cash and the panel shows the server-computed **expected vs
