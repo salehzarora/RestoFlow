@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'src/admin_platform_gate.dart';
+import 'src/auth/admin_auth.dart';
+import 'src/auth/admin_auth_flow.dart';
+import 'src/auth/supabase_admin_auth.dart';
 import 'src/platform_admin_screen.dart';
 import 'src/state/locale_controller.dart';
 
@@ -13,35 +18,101 @@ Future<void> main() async {
   // Language before first frame: the persisted per-device choice wins; the
   // FIRST-LAUNCH default is ARABIC (the official language — sprint).
   final persistedLocale = await readPersistedLocale();
+  final localeOverride = initialLocaleProvider.overrideWithValue(
+    persistedLocale ?? const Locale('ar'),
+  );
+
+  final config = RuntimeConfig.fromEnvironment();
+  // DEMO mode (the DEFAULT): the demo-backed platform overview, no session.
+  if (config.isDemoMode) {
+    runApp(
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const AdminApp(demoMode: true),
+      ),
+    );
+    return;
+  }
+  // Real mode but no valid anon-key config: an honest, fail-closed help page.
+  final supabase = config.supabase;
+  if (supabase == null) {
+    runApp(
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const AdminApp(demoMode: false, realModeUnconfigured: true),
+      ),
+    );
+    return;
+  }
+  // RF-119-b: initialise Supabase (session persistence) with the PUBLIC anon key
+  // ONLY (DECISION D-011 — the config already rejects any service-role/secret
+  // key). The SAME client carries the GoTrue session (incl. the aal claim after
+  // TOTP MFA) into public.get_my_context / the platform RPCs.
+  try {
+    await Supabase.initialize(
+      url: supabase.url,
+      publishableKey: supabase.anonKey,
+    );
+  } catch (_) {
+    // Fail-closed: a bootstrap failure shows the honest config help page, never a
+    // crash or a demo fallback. Never echo the offending value.
+    runApp(
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const AdminApp(demoMode: false, realModeUnconfigured: true),
+      ),
+    );
+    return;
+  }
+  final client = Supabase.instance.client;
   runApp(
     ProviderScope(
-      overrides: [
-        initialLocaleProvider.overrideWithValue(
-          persistedLocale ?? const Locale('ar'),
-        ),
-      ],
-      child: const AdminApp(),
+      overrides: [localeOverride],
+      child: AdminApp(
+        demoMode: false,
+        authService: SupabaseAdminAuthService(client),
+        // The context fetcher rides the SAME session-carrying client, so
+        // get_my_context sees auth.uid() + the assurance claim.
+        fetchContext: AuthContextRepository(
+          SupabaseSyncRpcTransport(client),
+        ).fetchMyContext,
+      ),
     ),
   );
 }
 
-/// Localized platform-admin app (RF-020 + RF-108 + RF-120), behind the shared
-/// auth gate.
+/// Localized platform-admin app (RF-020 + RF-108 + RF-119 + RF-119-b).
 ///
-/// In DEMO mode (`RESTOFLOW_DEMO_MODE` default true) it shows the platform
-/// overview (RF-120, demo-backed). In auth mode it routes through the
-/// platform-admin gate (`AppSurface.admin`): entry is allowed ONLY when
-/// `is_platform_admin == true` (D-026 - never a tenant role). The overview is
-/// demo data behind a repository seam (real RF-091 platform-admin RPC wiring is
-/// deferred). RTL/LTR via the shared `packages/l10n` wiring.
+/// DEMO mode (`RESTOFLOW_DEMO_MODE` default true) shows the demo platform
+/// overview (no session). REAL mode runs the honest operator flow via
+/// [AdminAuthFlow]: platform-operator sign-in → (if platform admin without aal2)
+/// interactive TOTP MFA enrol/challenge → the overview once the SERVER confirms
+/// aal2. Entry is ALWAYS gated server-side by `app.platform_admin_guard`
+/// (grant + aal2 + reason); a restaurant owner/manager is never a platform admin
+/// (D-026). No service-role key (D-011). RTL/LTR via the shared `packages/l10n`.
 class AdminApp extends ConsumerWidget {
-  const AdminApp({this.demoMode, this.fetchContext, super.key});
+  const AdminApp({
+    this.demoMode,
+    this.authService,
+    this.fetchContext,
+    this.realModeUnconfigured = false,
+    super.key,
+  });
 
   /// Test-only override of the demo/auth mode (null => `RESTOFLOW_DEMO_MODE`).
   final bool? demoMode;
 
-  /// Test-only override of the auth-context fetcher (null => env config).
+  /// The real (or fake, in tests) platform-operator auth + MFA service. Null in
+  /// demo mode and when real mode is unconfigured.
+  final AdminAuthService? authService;
+
+  /// The `get_my_context` fetcher (rides the same session-carrying client). Null
+  /// in demo mode and when real mode is unconfigured.
   final AuthContextFetcher? fetchContext;
+
+  /// True when real mode was selected but Supabase config was missing/invalid or
+  /// the bootstrap failed → the honest unconfigured help page.
+  final bool realModeUnconfigured;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -49,7 +120,6 @@ class AdminApp extends ConsumerWidget {
       onGenerateTitle: (context) => AppLocalizations.of(context).adminAppTitle,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
-      // Sprint (I): the persisted user-selected language drives the app.
       locale: ref.watch(localeControllerProvider),
       localeResolutionCallback: restoflowResolveLocale,
       debugShowCheckedModeBanner: false,
@@ -58,23 +128,18 @@ class AdminApp extends ConsumerWidget {
     );
   }
 
-  /// Sprint (admin access clarification): the admin surface no longer rides
-  /// the shared tenant gate's dead-end states. Demo renders the overview;
-  /// real mode without valid config gets the honest unconfigured help page
-  /// (mirrors apps/dashboard); otherwise [AdminPlatformGate] admits platform
-  /// admins and explains the app to everyone else. Entry stays gated by
-  /// `get_my_context.is_platform_admin` (D-026); data reads still require an
-  /// active grant + MFA + reason server-side (RF-091).
   Widget _home() {
     final demo = demoMode ?? authDemoModeEnabled();
+    // Demo shows the overview (no session). No sign-out (nothing to sign out of).
     if (demo) return const PlatformAdminScreen();
-    final injected = fetchContext;
-    if (injected != null) return AdminPlatformGate(fetchContext: injected);
-    if (RuntimeConfig.fromEnvironment().supabase == null) {
-      // Real mode but the anon-key config is missing/invalid: an honest,
-      // fail-closed help page (never a generic error, never a demo fallback).
-      return const RealModeUnconfiguredView();
+    if (realModeUnconfigured) return const RealModeUnconfiguredView();
+    final service = authService;
+    final fetch = fetchContext;
+    if (service != null && fetch != null) {
+      return AdminAuthFlow(authService: service, fetchContext: fetch);
     }
-    return AdminPlatformGate(fetchContext: authContextFetcherFromEnvironment());
+    // Real mode with no wired auth (e.g. a bare AdminApp(demoMode: false)) fails
+    // closed to the honest unconfigured help page — never a bypass.
+    return const RealModeUnconfiguredView();
   }
 }

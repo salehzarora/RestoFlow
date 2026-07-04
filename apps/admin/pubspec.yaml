@@ -27,6 +27,12 @@ dependencies:
   # platform-admin repo calls the RF-125 public.platform_admin_* wrappers through.
   restoflow_data_remote:
     path: ../../packages/data_remote
+  # RF-119-b: real platform-operator sign-in + TOTP MFA. supabase_flutter provides
+  # Supabase.initialize (session persistence) + the anon-key SupabaseClient whose
+  # GoTrue session carries auth.uid()/aal into get_my_context; and the gotrue MFA
+  # API (auth.mfa.enroll/challenge/verify). PUBLIC anon key only — no service-role
+  # key (DECISION D-011). Same constraint as apps/dashboard (RF-151/RF-152).
+  supabase_flutter: '>=2.0.0 <3.0.0'
   # Sprint (admin gate): Result<MyContext, AuthFailure> for the app-level
   # platform gate (already in the workspace graph via feature_auth).
   restoflow_core:

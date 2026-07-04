@@ -145,6 +145,42 @@ class AppLocalizationsHe extends AppLocalizations {
       'אמתו אימות רב-שלבי עבור חשבון מפעיל הפלטפורמה, ואז טענו מחדש. ראו docs/LOCAL_RUNBOOK.md להגדרת אימות מנהל הפלטפורמה.';
 
   @override
+  String get adminSignInTitle => 'כניסת מפעיל פלטפורמה';
+
+  @override
+  String get adminSignInInvalid => 'אימייל או סיסמה שגויים.';
+
+  @override
+  String get adminMfaEnrollTitle => 'הגדרת אפליקציית אימות';
+
+  @override
+  String get adminMfaEnrollBody =>
+      'הוסיפו חשבון זה לאפליקציית אימות (למשל Google Authenticator או 1Password) — סרקו את כתובת ההגדרה כקוד QR או הדביקו את מפתח ההגדרה — ואז הזינו את הקוד בן 6 הספרות למטה כדי לסיים.';
+
+  @override
+  String get adminMfaSetupKey => 'מפתח הגדרה';
+
+  @override
+  String get adminMfaChallengeTitle => 'הזינו את קוד האימות';
+
+  @override
+  String get adminMfaChallengeBody =>
+      'פתחו את אפליקציית האימות והזינו את הקוד הנוכחי בן 6 הספרות.';
+
+  @override
+  String get adminMfaCodeLabel => 'קוד בן 6 ספרות';
+
+  @override
+  String get adminMfaVerifyAction => 'אימות';
+
+  @override
+  String get adminMfaVerifyFailed =>
+      'הקוד לא התקבל. הזינו את הקוד הנוכחי מהאפליקציה.';
+
+  @override
+  String get adminMfaEnrollError => 'לא ניתן להתחיל את הגדרת האימות. נסו שוב.';
+
+  @override
   String get adminAccessDeniedTitle => 'הגישה לניהול הפלטפורמה נדחתה';
 
   @override

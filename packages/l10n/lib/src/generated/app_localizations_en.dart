@@ -148,6 +148,43 @@ class AppLocalizationsEn extends AppLocalizations {
       'Verify multi-factor authentication for your platform-operator account, then reload. See docs/LOCAL_RUNBOOK.md for platform-admin MFA setup.';
 
   @override
+  String get adminSignInTitle => 'Platform operator sign in';
+
+  @override
+  String get adminSignInInvalid => 'Wrong email or password.';
+
+  @override
+  String get adminMfaEnrollTitle => 'Set up an authenticator app';
+
+  @override
+  String get adminMfaEnrollBody =>
+      'Add this account to an authenticator app (e.g. Google Authenticator, 1Password) — scan the setup URI as a QR code or paste the setup key — then enter the 6-digit code below to finish.';
+
+  @override
+  String get adminMfaSetupKey => 'Setup key';
+
+  @override
+  String get adminMfaChallengeTitle => 'Enter your authentication code';
+
+  @override
+  String get adminMfaChallengeBody =>
+      'Open your authenticator app and enter the current 6-digit code.';
+
+  @override
+  String get adminMfaCodeLabel => '6-digit code';
+
+  @override
+  String get adminMfaVerifyAction => 'Verify';
+
+  @override
+  String get adminMfaVerifyFailed =>
+      'That code wasn\'t accepted. Enter the current code from your app.';
+
+  @override
+  String get adminMfaEnrollError =>
+      'Couldn\'t start authenticator setup. Please try again.';
+
+  @override
   String get adminAccessDeniedTitle => 'Platform admin access denied';
 
   @override
