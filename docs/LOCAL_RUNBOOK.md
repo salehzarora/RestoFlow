@@ -325,11 +325,22 @@ restaurant accounts can never use it:
 - Live platform data additionally requires, server-side (RF-091): an ACTIVE
   `platform_admin_grants` row **and** an MFA (aal2) session **and** a
   non-empty audited reason on every read. There is deliberately NO
-  grant/revoke RPC and no self-service path.
-- A visitor without that access now sees an explainer screen (Arabic-first):
-  "هذه لوحة إدارة المنصة، وليست لوحة صاحب المطعم." /
-  "استخدم Dashboard لإدارة المطعم." — with an Open-Dashboard action and the
-  local Dashboard URL. This replaces the old dead-end "Account access denied".
+  grant/revoke RPC and no self-service path. **RF-119** also closed the one
+  older un-gated path: `app.platform_admin_list_organizations` (RF-059) now
+  requires aal2 too (via `app.platform_admin_guard`).
+- **RF-119** made the gate distinguish these states HONESTLY (no fake data, no
+  bypass), driven by `get_my_context` (which now returns `is_mfa_aal2` — the
+  caller's own session assurance, a UX signal only, never authorization):
+  - **not a platform admin** (e.g. a restaurant owner) → the "this is the
+    platform panel, not the restaurant owner's panel" explainer (Arabic-first:
+    "هذه لوحة إدارة المنصة، وليست لوحة صاحب المطعم.") with an Open-Dashboard action;
+  - **platform admin but no MFA session** → an honest **"Multi-factor
+    authentication required"** screen (it is the platform panel, not the
+    Dashboard, and platform data needs an MFA-verified session) — NOT the panel,
+    and NOT a broken data-denial inside it;
+  - **platform admin + MFA (aal2)** → the platform overview;
+  - **unconfigured** (no Supabase URL/anon key) → the same "Real mode is not
+    configured" help page as the other apps.
 
 **Local, dev-only platform-admin provisioning** (safe flow — no bypass, no
 service-role key; production grants are an operator/DBA action):
@@ -343,16 +354,22 @@ service-role key; production grants are an operator/DBA action):
    select id, id from app_users where email = 'you@example.test';
    ```
 
-3. The gate now admits you (`is_platform_admin = true`), but live reads still
-   need **MFA aal2**: local TOTP is enabled in `supabase/config.toml`
-   (`[auth.mfa.totp]`), and the admin app has no MFA enrolment UI yet — so
-   without an aal2 session you will see the honest "Platform admin access
-   denied" data state (grant + MFA required). That state is correct, not a
-   bug.
+3. The grant makes `is_platform_admin = true`, but live reads still need **MFA
+   aal2**. Local TOTP is enabled in `supabase/config.toml` (`[auth.mfa.totp]`).
+   Without an aal2 session the gate now shows the honest **"Multi-factor
+   authentication required"** screen (RF-119) — correct, not a bug.
 
-Note the admin app has no sign-in screen of its own in this build; it reads
-the session state via `get_my_context`. Missing Supabase config shows the
-same "Real mode is not configured" help page as the other apps.
+   > **Manual/operator limitation (RF-119, honest):** the admin app has **no
+   > sign-in screen and no in-app MFA (TOTP) enrolment/challenge UI** — by design
+   > it reads the ambient session via `get_my_context` (anon-key transport, no
+   > service-role key). Reaching aal2 today is an **operator/manual** step: sign
+   > in and enrol/verify TOTP out-of-band with the Supabase Auth client
+   > (`supabase.auth.mfa.enroll` → `challenge` → `verify`) so the session JWT
+   > carries `"aal":"aal2"`, then reload the admin app. An in-app admin
+   > login + TOTP enrolment flow is a documented follow-up (RF-119-b); RF-119
+   > does NOT fake completion or grant access without a real aal2 session.
+   > The server enforcement (`app.platform_admin_guard`) is the real boundary;
+   > `is_mfa_aal2` is only the UX signal the gate reads.
 
 ## 7c. POS/KDS device settings + auto-print (for the staff on the device)
 

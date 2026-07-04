@@ -14,7 +14,10 @@
 > Last updated after: **RF-112** (browser e2e smoke), **RF-113** (shift
 > close/reconcile), **RF-114** (durable offline outbox), **RF-115** (print
 > bridge), **RF-116** (real users/settings), **RF-117** (taxes/discounts/non-cash
-> tenders), **RF-118** (rate limits + session expiry: pairing brute-force lockout,
+> tenders), **RF-119** (platform-admin MFA: server aal2 enforcement verified +
+> `platform_admin_list_organizations` gated + `get_my_context.is_mfa_aal2` +
+> honest Admin "MFA required" gate; in-app enrolment deferred to RF-119-b),
+> **RF-118** (rate limits + session expiry: pairing brute-force lockout,
 > device-session max age, visible client PIN cooldown + session-inactivity policy).
 
 ---
@@ -164,7 +167,9 @@ error), and the protected RF-112 browser smoke exercises the core path.
 - **Fiscal/tax compliance** — freeze jurisdiction (Q-001), tax mode/rate,
   legal receipt numbering/format + reset cadence (Q-003/Q-004), certified
   hardware if mandated.
-- **Platform admin MFA (RF-119)** + a hardened, fully-audited platform-admin plane.
+- **Platform admin MFA (RF-119) — server + honest gate DONE; in-app operator
+  login + TOTP enrolment/challenge UI (RF-119-b) remains** for a fully self-service,
+  hardened platform-admin plane.
 - **Observability** — centralized logging, metrics, error reporting (Sentry-class),
   uptime/alerting, per-tenant audit viewer.
 - **Ops at scale** — automated backups + PITR, migration safety/rollback, blue/green
@@ -196,8 +201,16 @@ error), and the protected RF-112 browser smoke exercises the core path.
   rate-limiting and/or anonymous-sign-in disabled in prod; PIN-session TTL and all
   durations remain interim (Q-009, unfrozen); no anomaly detection; sensitive-action
   step-up re-auth not wired. *Close these before an unsupervised pilot.*
-- **RF-119 — platform-admin MFA.** The platform-admin plane has no enforced MFA /
-  AAL2 step-up. *Do this before any platform-admin acts on production tenants.*
+- **RF-119 — platform-admin MFA — DONE (server + honest gate); in-app enrolment
+  is follow-up.** ✅ Platform data reads ARE MFA-enforced server-side:
+  `app.platform_admin_guard` requires an active grant + **aal2** + reason (RF-091),
+  and RF-119 closed the last un-gated path (`platform_admin_list_organizations`,
+  RF-059, now aal2-gated). `get_my_context` returns `is_mfa_aal2` so the Admin gate
+  shows an **honest "MFA required" state** (grant but no aal2) instead of a broken
+  denial — never fake platform data. ⚠️ **Remaining:** the admin app has no in-app
+  login + TOTP enrolment/challenge UI (reaching aal2 is an operator/manual
+  out-of-band step today) → **RF-119-b**; the flag is a UX signal, the server is
+  the authority.
 - **R-007 offline authorization staleness.** A device revoked while offline can
   still act until it reconnects; the offline window is unfrozen (Q-009).
 - **R-003 RLS/tenant isolation sign-off.** The MVP-era RPCs are gated on a human
@@ -291,8 +304,10 @@ Prioritized for **pilot-readiness first**, then production hardening:
    the R-003 human RLS/security sign-off.
 6. **Reports + exports** (date ranges, tender/tax/discount breakdown, CSV).
 7. **User invite flow** (safe add-new-account path).
-8. **RF-119 — platform-admin MFA** + observability (logging/metrics/error
-   reporting) — the first hard production gates.
+8. **RF-119-b — platform-admin in-app login + TOTP enrolment/challenge UI**
+   (RF-119 delivered the server aal2 enforcement + honest MFA-required gate;
+   the admin app still has no in-app sign-in/MFA flow — reaching aal2 is an
+   operator/manual step today) + observability (logging/metrics/error reporting).
 9. **Freeze fiscal/jurisdiction** (Q-001..Q-004): tax mode/rate + legal receipt
    numbering — required before any real fiscal use.
 
