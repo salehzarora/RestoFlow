@@ -536,10 +536,11 @@ visible UX mirror** (they cannot be bypassed *there* by clearing browser storage
     guidance without leaking code existence to an attacker who is guessing. These
     two states are intentionally preserved (not collapsed) for that UX; the
     server-side `rf161` tests assert them.
-- Leave a signed-in POS idle/backgrounded past 30 min (or 8 h total) → on the next
-  resume the session ends and the PIN screen shows **"Session expired. Please
-  enter your PIN again."** It never fires mid-order (only on resume) and voids no
-  money/order.
+- Leave a signed-in **POS or KDS** idle/backgrounded past 30 min (or 8 h total) →
+  on the next resume the session ends and the PIN screen shows **"Session expired.
+  Please enter your PIN again."** It fires only on resume (never mid-order) and
+  voids no money/order. (Both surfaces enforce it — the POS via its persistent
+  gate, the KDS via an app-root lifecycle observer above its board/gate swap.)
 
 **Demo/pilot safe · what is still production-hardening (honest):**
 - The pairing lockout keys on the caller's auth principal, which an attacker can
@@ -583,9 +584,14 @@ visible UX mirror** (they cannot be bypassed *there* by clearing browser storage
 - **On the web (Chrome)**, "secure storage" for the device-session token is
   browser-managed storage, not an OS keystore — fine for local development;
   a hardware pilot should run the POS/KDS as desktop/mobile builds.
-- **PIN session window** is an interim 8h assumption (Q-009); device sessions
-  have no expiry (revocation-bounded, Q-009).
-- **Rate limiting** on device pairing/restore endpoints is deferred.
+- **PIN session window** is an interim 8h assumption (Q-009); device sessions now
+  have a **7-day max age** enforced at restore/launch (RF-118, `device_sessions.expires_at`),
+  in addition to revocation — the durations are still interim (Q-009).
+- **Rate limiting**: device-pairing redeem and PIN attempts now have app/backend
+  lockout (RF-118: pairing per calling `auth.uid()` principal, 10 attempts → 15-min
+  cooldown; PIN per employee+device, 5 → 15 min). This is DB-layer + client
+  defence-in-depth only — **production edge/IP rate-limiting** (resistant to
+  minting a fresh anonymous principal per attempt) remains future hardening.
 - **Realtime** is polling-first everywhere; no push.
 - **Human RLS/security sign-off** is still required before real tenant data
   (AGENTS.md gate) — this build is a local pilot foundation, not a paid
