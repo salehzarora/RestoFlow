@@ -55,7 +55,8 @@ while IFS= read -r -d '' f; do
   case "$f" in
     *.pem|*.key|*.p12|*.pfx|*.keystore|*.jks|*service_role*|*service-role* \
     |*credentials*.json|google-services.json|GoogleService-Info.plist \
-    |signing_keys.json|*/signing_keys.json)
+    |signing_keys.json|*/signing_keys.json \
+    |.mcp.json|*/.mcp.json)
       echo "BLOCK  un-ignored secret-bearing file: $f"; fail=1 ;;
   esac
 done < <(scan_list)
