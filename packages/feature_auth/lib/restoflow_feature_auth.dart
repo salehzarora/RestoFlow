@@ -8,6 +8,7 @@ library;
 
 export 'src/auth_context_fetcher.dart';
 export 'src/auth_gate_host.dart';
+export 'src/auth_redirect.dart';
 export 'src/device_pairing_screen.dart';
 export 'src/device_sign_in_unavailable_view.dart';
 export 'src/flutter_secure_device_session_store.dart';
