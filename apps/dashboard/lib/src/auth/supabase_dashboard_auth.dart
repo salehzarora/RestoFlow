@@ -17,6 +17,7 @@ import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
 import 'package:supabase/supabase.dart';
 
 import '../admin/supabase_admin_device_repository.dart';
+import '../admin/supabase_users_repository.dart';
 import '../menu/supabase_menu_image_storage.dart';
 import '../printers/printers_repository.dart';
 import '../staff/staff_repository.dart';
@@ -56,6 +57,7 @@ const String kDefaultOnboardingTimezone = 'UTC';
   OnboardingRepository onboarding,
   AuthContextFetcher fetchContext,
   AdminRepository Function(AdminScope scope) deviceRepositoryFor,
+  AdminRepository Function(AdminScope scope) usersRepositoryFor,
   MenuReadSource menuReadSource,
   MenuWriter menuWriter,
   MenuImageStorage menuImageStorage,
@@ -77,6 +79,13 @@ buildDashboardRealAuth(SupabaseClient client) {
     // RF-160: the real device repository, built per active admin scope. Only the
     // dashboard Devices tab consumes it (management-driven device provisioning).
     deviceRepositoryFor: (scope) => SupabaseAdminDeviceRepository(
+      transport: transport,
+      scope: scope,
+      currentUserId: currentUserId,
+    ),
+    // RF-116: the real users repository, built per active admin scope. Only the
+    // dashboard Users tab consumes it (list_members + update_role + revoke).
+    usersRepositoryFor: (scope) => SupabaseUsersRepository(
       transport: transport,
       scope: scope,
       currentUserId: currentUserId,

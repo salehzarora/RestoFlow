@@ -1,12 +1,16 @@
 name: restoflow_printing
-description: RestoFlow printing package - the replaceable printing adapter (RF-070). Pure-Dart, hardware-free - render-neutral PrintDocument, ESC/POS byte adapter, profiles, in-memory transport. No spool/templates/real transport (later tickets).
+description: RestoFlow printing package - the replaceable printing adapter (RF-070) + a local print-bridge transport (RF-115). Pure-Dart, hardware-free - render-neutral PrintDocument, ESC/POS byte adapter, profiles, in-memory transport, and a loopback HTTP print-bridge client with honest outcomes.
 publish_to: none
 version: 0.0.1
 environment:
   sdk: ^3.12.0
 resolution: workspace
 
-# RF-070: pure Dart, no Flutter/dart:ui, no hardware, no money math. Uses only
-# the Dart SDK (dart:typed_data). No production dependencies.
+# RF-070: pure Dart, no Flutter/dart:ui, no hardware, no money math. RF-115 adds
+# the loopback print-bridge client; its ONLY production dependency is package:http
+# (cross-platform: browser on web, dart:io on the VM) behind an injected seam, so
+# the client logic stays fully unit-testable with no sockets.
+dependencies:
+  http: ^1.0.0
 dev_dependencies:
   test: ^1.25.0

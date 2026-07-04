@@ -8,6 +8,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../print/print_bridge.dart';
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_printer_assignments.dart';
@@ -116,6 +117,11 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                       PrinterAssignmentsSection(
                         l10n: l10n,
                         assignmentsAsync: assignmentsAsync,
+                        // RF-115: the LOCAL print-bridge status row (only when a
+                        // bridge is configured — null hides it).
+                        bridgeStatus: ref
+                            .watch(posPrintBridgeStatusProvider)
+                            .valueOrNull,
                       ),
                       const SizedBox(height: RestoflowSpacing.md),
                       // Part G: staff-safe connection maintenance (refresh /

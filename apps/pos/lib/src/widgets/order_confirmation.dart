@@ -9,7 +9,10 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 
 import '../data/order_submission.dart';
+import '../data/payment.dart' show CashPayment;
 import '../format/money_format.dart';
+import '../format/payment_method_label.dart';
+import '../print/print_bridge.dart';
 import '../state/outbox_controller.dart';
 import '../state/payment_controller.dart';
 import '../state/pos_auto_print_prefs.dart';
@@ -17,6 +20,7 @@ import '../state/pos_printer_assignments.dart';
 import '../state/receipt_print_controller.dart';
 import '../state/submitted_order_view.dart';
 import 'cash_payment_sheet.dart';
+import 'discount_sheet.dart';
 import 'receipt_preview.dart';
 import 'receipt_print_preview.dart';
 
@@ -43,7 +47,6 @@ class OrderConfirmation extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final subtotalText = MoneyFormatter.format(order.subtotal);
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
 
     // RF-115: live outbox/sync status for this order (null on the RF-101 path).
@@ -77,13 +80,19 @@ class OrderConfirmation extends ConsumerWidget {
       final stored = ref.read(posAutoPrintReceiptProvider).valueOrNull;
       if (stored == false) return; // explicitly off — show nothing
       final printer = assignments.hasEnabledPrinter;
+      // RF-115: prepare, then — if a LOCAL bridge is configured — encode +
+      // submit it. With no bridge the job stays honestly "prepared" (the prior
+      // behavior). A confirmed bridge write flips it to "sent to printer";
+      // never a fabricated hardware print.
+      final bridge = ref.read(posPrintBridgeProvider);
       ref
           .read(receiptPrintControllerProvider.notifier)
-          .prepare(
+          .prepareAndDispatch(
             orderNumber: order.orderNumber,
             hasEnabledPrinter: printer,
             buildDocument: () =>
                 buildReceiptDocument(l10n, order, paid, isDemo: isDemo),
+            submitToBridge: bridge == null ? null : bridge.submit,
           );
     });
 
@@ -178,23 +187,10 @@ class OrderConfirmation extends ConsumerWidget {
                 if (payment == null) ...[
                   for (final line in order.lines) _ConfirmationLine(line: line),
                   const Divider(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        l10n.posCartSubtotal,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      Text(
-                        subtotalText,
-                        key: const Key('confirmation-subtotal'),
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
+                  // RF-117: subtotal always; discount/tax lines when present; the
+                  // grand total (what the customer pays) is the loud figure once
+                  // there's a discount or tax, else the subtotal keeps emphasis.
+                  _OrderTotals(order: order, l10n: l10n),
                   const SizedBox(height: RestoflowSpacing.md),
                   // RF-141B: shared design-system notice (subtle info tone).
                   // Demo only — a REAL order was actually sent (or shows its
@@ -206,10 +202,13 @@ class OrderConfirmation extends ConsumerWidget {
                     ),
                 ] else ...[
                   ReceiptPreview(order: order, payment: payment),
-                  // Part D: the HONEST receipt print-job status (prepared /
-                  // not configured / failed — never a fake "printed").
+                  // RF-115: the HONEST receipt print-job status (prepared /
+                  // sent to printer / bridge unavailable / not configured /
+                  // failed — never a fake "printed") with a Retry action.
                   _ReceiptPrintStatusLine(
-                    orderNumber: order.orderNumber,
+                    order: order,
+                    payment: payment,
+                    isDemo: isDemo,
                     l10n: l10n,
                   ),
                 ],
@@ -228,20 +227,46 @@ class OrderConfirmation extends ConsumerWidget {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
+                            // RF-116/RF-117: opens the payment sheet (cash or a
+                            // non-cash tender). The e2e depends on this KEY.
                             key: const Key('pay-cash-button'),
                             onPressed: () => CashPaymentSheet.show(
                               context,
                               orderId: order.orderId,
                               orderNumber: order.orderNumber,
-                              amountMinor: order.subtotalMinor,
+                              // RF-117: pay the GRAND total (subtotal − discount
+                              // + tax), not the bare subtotal.
+                              amountMinor: order.grandTotalMinor,
                               currencyCode: order.currencyCode,
                             ),
                             icon: const Icon(Icons.payments_outlined),
-                            label: Text(l10n.posPayCash),
+                            label: Text(l10n.posTakePayment),
                             style: RestoflowButtonStyles.big(context),
                           ),
                         ),
                         const SizedBox(height: RestoflowSpacing.sm),
+                        // RF-117 part C: apply an order-level discount before
+                        // payment (server-authoritative + authorized in real
+                        // mode; local in demo). Hidden once a discount is
+                        // applied so it is not stacked twice.
+                        if (order.discountTotalMinor == 0)
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              key: const Key('apply-discount-button'),
+                              onPressed: () => DiscountSheet.show(
+                                context,
+                                orderId: order.orderId ?? '',
+                                subtotalMinor: order.subtotalMinor,
+                                taxTotalMinor: order.taxTotalMinor,
+                                currencyCode: order.currencyCode,
+                              ),
+                              icon: const Icon(Icons.percent),
+                              label: Text(l10n.posApplyDiscount),
+                            ),
+                          ),
+                        if (order.discountTotalMinor == 0)
+                          const SizedBox(height: RestoflowSpacing.sm),
                         SizedBox(
                           width: double.infinity,
                           child: TextButton.icon(
@@ -347,23 +372,29 @@ class _ServiceModeRow extends StatelessWidget {
   }
 }
 
-/// The receipt print-job status under the receipt card (Part D): renders
+/// The receipt print-job status under the receipt card (RF-115): renders
 /// nothing while no job exists (auto-print off / not yet triggered), and the
-/// honest status otherwise. "Printed" is only reachable once a real print
-/// bridge confirms — never in this build.
+/// HONEST status otherwise — prepared / sent to printer / bridge unavailable /
+/// not configured / failed. "Printed" (hardware-confirmed) is unreachable by
+/// design. A Retry action re-runs a failed / bridge-unavailable / not-configured
+/// job through the same pipeline.
 class _ReceiptPrintStatusLine extends ConsumerWidget {
   const _ReceiptPrintStatusLine({
-    required this.orderNumber,
+    required this.order,
+    required this.payment,
+    required this.isDemo,
     required this.l10n,
   });
 
-  final String orderNumber;
+  final SubmittedOrderView order;
+  final CashPayment payment;
+  final bool isDemo;
   final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final job = ref.watch(
-      receiptPrintControllerProvider.select((jobs) => jobs[orderNumber]),
+      receiptPrintControllerProvider.select((jobs) => jobs[order.orderNumber]),
     );
     if (job == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
@@ -372,6 +403,16 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
         l10n.printStatusPrepared,
         RestoflowTone.info,
         Icons.print_outlined,
+      ),
+      PrintJobStatus.sentToPrinter => (
+        l10n.printStatusSentToPrinter,
+        RestoflowTone.success,
+        Icons.print,
+      ),
+      PrintJobStatus.bridgeUnavailable => (
+        l10n.printStatusBridgeUnavailable,
+        RestoflowTone.warning,
+        Icons.print_disabled,
       ),
       PrintJobStatus.printed => (
         l10n.printStatusPrinted,
@@ -390,6 +431,10 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
       ),
     };
     final style = tone.styleOf(theme);
+    final canRetry =
+        job.status == PrintJobStatus.failed ||
+        job.status == PrintJobStatus.bridgeUnavailable ||
+        job.status == PrintJobStatus.notConfigured;
     return Padding(
       key: const Key('receipt-print-status'),
       padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
@@ -404,9 +449,37 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
               style: theme.textTheme.bodySmall?.copyWith(color: style.accent),
             ),
           ),
+          if (canRetry) ...[
+            const SizedBox(width: RestoflowSpacing.xs),
+            TextButton.icon(
+              key: const Key('receipt-print-retry'),
+              onPressed: () => _retry(ref),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: Text(l10n.printRetryAction),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  void _retry(WidgetRef ref) {
+    final assignments = switch (ref
+        .read(posPrinterAssignmentsProvider)
+        .valueOrNull) {
+      Success(:final value) => value,
+      _ => null,
+    };
+    final bridge = ref.read(posPrintBridgeProvider);
+    ref
+        .read(receiptPrintControllerProvider.notifier)
+        .retry(
+          orderNumber: order.orderNumber,
+          hasEnabledPrinter: assignments?.hasEnabledPrinter ?? false,
+          buildDocument: () =>
+              buildReceiptDocument(l10n, order, payment, isDemo: isDemo),
+          submitToBridge: bridge == null ? null : bridge.submit,
+        );
   }
 }
 
@@ -596,6 +669,101 @@ class _SyncStatusCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The pre-payment order totals (RF-117): subtotal always; a discount line
+/// (signed) and a tax line ("Tax (17%)") when present; and the GRAND total when
+/// either is present. With neither, the subtotal keeps the loud emphasis (the
+/// `confirmation-subtotal` figure) so the existing plain-order confirmation is
+/// unchanged. Integer minor units throughout.
+class _OrderTotals extends StatelessWidget {
+  const _OrderTotals({required this.order, required this.l10n});
+
+  final SubmittedOrderView order;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = order.currencyCode;
+    final hasBreakdown =
+        order.discountTotalMinor > 0 || order.taxTotalMinor > 0;
+    return Column(
+      children: [
+        _TotalsRow(
+          label: l10n.posCartSubtotal,
+          value: MoneyFormatter.formatMinor(order.subtotalMinor, currency),
+          valueKey: const Key('confirmation-subtotal'),
+          // Loud only when it IS the payable figure (no tax/discount).
+          emphasised: !hasBreakdown,
+        ),
+        if (order.discountTotalMinor > 0) ...[
+          const SizedBox(height: RestoflowSpacing.xs),
+          _TotalsRow(
+            label: l10n.posDiscountLabel,
+            value: MoneyFormatter.formatSignedDeltaMinor(
+              -order.discountTotalMinor,
+              currency,
+            ),
+            valueKey: const Key('confirmation-discount'),
+          ),
+        ],
+        if (order.taxTotalMinor > 0) ...[
+          const SizedBox(height: RestoflowSpacing.xs),
+          _TotalsRow(
+            label: taxLineLabel(l10n, order.taxRateBp),
+            value: MoneyFormatter.formatMinor(order.taxTotalMinor, currency),
+            valueKey: const Key('confirmation-tax'),
+          ),
+        ],
+        if (hasBreakdown) ...[
+          const SizedBox(height: RestoflowSpacing.xs),
+          _TotalsRow(
+            label: l10n.posGrandTotal,
+            value: MoneyFormatter.formatMinor(order.grandTotalMinor, currency),
+            valueKey: const Key('confirmation-grand-total'),
+            emphasised: true,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A label/value row for [_OrderTotals]; [emphasised] makes the value the loud
+/// primary figure (subtotal when plain, grand total when there's a breakdown).
+class _TotalsRow extends StatelessWidget {
+  const _TotalsRow({
+    required this.label,
+    required this.value,
+    this.valueKey,
+    this.emphasised = false,
+  });
+
+  final String label;
+  final String value;
+  final Key? valueKey;
+  final bool emphasised;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final valueStyle = emphasised
+        ? theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.primary,
+          )
+        : theme.textTheme.titleMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(child: Text(label, style: theme.textTheme.titleMedium)),
+        const SizedBox(width: RestoflowSpacing.sm),
+        Text(value, key: valueKey, style: valueStyle),
+      ],
     );
   }
 }

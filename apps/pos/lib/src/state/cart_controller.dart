@@ -298,6 +298,8 @@ class CartController extends Notifier<CartViewState> {
     String? outboxEntryId,
     String? localOperationId,
     String? orderId,
+    int taxTotalMinor = 0,
+    int taxRateBp = 0,
   }) {
     if (_cart.isEmpty) return;
     final order = LocalOrder.submitFromCart(_cart, orderType: orderType);
@@ -338,11 +340,26 @@ class CartController extends Notifier<CartViewState> {
       orderId: orderId,
       currencyCode: order.currencyCode,
       subtotalMinor: order.subtotalMinorPreview + modifiersTotal,
+      // RF-117: tax computed at submit from the branch setting (0 when disabled).
+      taxTotalMinor: taxTotalMinor,
+      taxRateBp: taxRateBp,
       lines: lines,
     );
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
+    _emit();
+  }
+
+  /// Updates the confirmed order's totals after an order-level discount is
+  /// applied (RF-117 part C). In real mode the values are the
+  /// SERVER-AUTHORITATIVE `discount_total_minor` (+ recomputed grand) from
+  /// `apply_discount`; in demo mode they are computed locally with the same
+  /// clamp. No-op when no order is being confirmed.
+  void applyOrderDiscount({required int discountTotalMinor}) {
+    final current = _submittedOrder;
+    if (current == null) return;
+    _submittedOrder = current.copyWith(discountTotalMinor: discountTotalMinor);
     _emit();
   }
 

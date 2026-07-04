@@ -111,7 +111,7 @@ void main() {
   testWidgets('the ticket card renders the print-status line when given one '
       '(and nothing when null)', (tester) async {
     final l10n = await _en();
-    Widget card({String? printStatus}) => MaterialApp(
+    Widget card({KdsTicketPrintStatus? printStatus}) => MaterialApp(
       locale: const Locale('en'),
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
@@ -129,7 +129,9 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(card(printStatus: l10n.printStatusPrepared));
+    await tester.pumpWidget(
+      card(printStatus: KdsTicketPrintStatus(label: l10n.printStatusPrepared)),
+    );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('ticket-print-status')), findsOneWidget);
     expect(find.textContaining(l10n.printStatusPrepared), findsOneWidget);

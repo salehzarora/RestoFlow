@@ -7,10 +7,12 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/testing.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-/// Sprint: in REAL mode the Users/Settings tabs must never render the demo
-/// store's fabricated people ("Dana Reyes" et al.) or demo values under a
-/// demo banner — Users shows the honest not-connected state; Settings shows
-/// the REAL resolved workspace values, read-only, with no Save affordance.
+/// In REAL mode the Users/Settings tabs must never render the demo store's
+/// fabricated people ("Dana Reyes" et al.) or demo values under a demo banner.
+/// Without a real users repository injected the Users tab shows the honest
+/// not-connected state. The Settings tab shows the REAL resolved workspace
+/// values; for an owner it ALSO exposes the RF-116 owner-only editable section
+/// (branch/restaurant name + receipt prefix) with real Save affordances.
 
 const _orgWideOwner = MembershipContext(
   id: 'm-1',
@@ -121,8 +123,10 @@ void main() {
     expect(find.text(l10n.adminGrantUser), findsNothing);
   });
 
-  testWidgets('real-mode Settings shows the RESOLVED workspace values, '
-      'read-only — no demo banner, no Save', (tester) async {
+  testWidgets('real-mode Settings shows the RESOLVED workspace values plus the '
+      'owner editable section — no demo banner, no demo values', (
+    tester,
+  ) async {
     final l10n = await en();
     await _pumpReal(tester);
     await tester.tap(find.text(l10n.dashboardNavSettings));
@@ -131,16 +135,23 @@ void main() {
     expect(find.text(l10n.adminDemoBanner), findsNothing);
     // The REAL resolved values (org + first restaurant/branch + currency).
     expect(find.text('Olive Group'), findsWidgets);
-    expect(find.text('Olive North'), findsOneWidget);
+    // The restaurant name shows in the read-only workspace card AND the editable
+    // field (owner), so it appears more than once — never fabricated, never demo.
+    expect(find.text('Olive North'), findsWidgets);
     expect(find.text('Main hall'), findsWidgets);
-    expect(find.text('ILS'), findsOneWidget);
-    // The identity fields remain read-only: no Save button, no demo values.
-    expect(find.text(l10n.adminSave), findsNothing);
+    expect(
+      find.text('ILS'),
+      findsOneWidget,
+    ); // currency stays read-only (locked)
     expect(find.text('America/New_York'), findsNothing);
     expect(find.text('128 Main Street, Suite 4'), findsNothing);
-    // RF-113: with the real branch policy in scope, the (honest, editable)
-    // shift-close toggle replaces the blanket "nothing to save" notice.
+    // RF-116: the org-wide OWNER (resolved to a concrete branch) gets the
+    // editable section — a real Save affordance, no blanket "nothing to save".
     expect(find.text(l10n.dashboardSettingsRealNotice), findsNothing);
+    expect(find.text(l10n.dashboardSettingsEditableTitle), findsOneWidget);
+    expect(find.byKey(const Key('settings-branch-name')), findsOneWidget);
+    expect(find.text(l10n.adminSave), findsWidgets);
+    // RF-113: the honest, editable shift-close toggle is also present.
     expect(find.text(l10n.dashboardShiftCloseSectionTitle), findsOneWidget);
     expect(find.byKey(const Key('shift-close-policy-toggle')), findsOneWidget);
   });

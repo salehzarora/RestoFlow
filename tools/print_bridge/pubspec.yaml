@@ -1,0 +1,13 @@
+name: print_bridge
+description: RestoFlow reference LOCAL print bridge (RF-115) - a standalone, loopback-only HTTP companion service that forwards ESC/POS jobs to a RAW 9100 printer (or a demo sink). Not part of the Flutter apps.
+publish_to: none
+version: 0.0.1
+
+# Standalone (NOT a workspace member): its own resolution, no Flutter, only the
+# Dart SDK (dart:io / dart:convert). The printer LAN target lives ONLY here, in
+# local flags/config — never in the app or the server (RF-115 security model).
+environment:
+  sdk: ^3.4.0
+
+dev_dependencies:
+  test: ^1.24.0

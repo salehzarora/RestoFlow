@@ -8,6 +8,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/payment.dart';
 import '../format/money_format.dart';
+import '../format/payment_method_label.dart';
 import '../state/submitted_order_view.dart';
 import 'receipt_print_preview.dart';
 
@@ -104,30 +105,71 @@ class ReceiptPreview extends ConsumerWidget {
                 ),
             ],
             const _DashedRule(),
+            // RF-117: when there's a discount or tax, break out subtotal /
+            // discount / tax above the grand total; otherwise the single Total
+            // line keeps the plain receipt unchanged (grand == subtotal).
+            if (order.discountTotalMinor > 0 || order.taxTotalMinor > 0) ...[
+              _ReceiptLine(
+                label: l10n.posCartSubtotal,
+                value: MoneyFormatter.formatMinor(
+                  order.subtotalMinor,
+                  currency,
+                ),
+              ),
+              if (order.discountTotalMinor > 0)
+                _ReceiptLine(
+                  label: l10n.posDiscountLabel,
+                  value: MoneyFormatter.formatSignedDeltaMinor(
+                    -order.discountTotalMinor,
+                    currency,
+                  ),
+                  valueKey: const Key('receipt-discount'),
+                ),
+              if (order.taxTotalMinor > 0)
+                _ReceiptLine(
+                  label: taxLineLabel(l10n, order.taxRateBp),
+                  value: MoneyFormatter.formatMinor(
+                    order.taxTotalMinor,
+                    currency,
+                  ),
+                  valueKey: const Key('receipt-tax'),
+                ),
+            ],
             _ReceiptLine(
-              label: l10n.posReceiptTotal,
-              value: MoneyFormatter.formatMinor(order.subtotalMinor, currency),
+              label: (order.discountTotalMinor > 0 || order.taxTotalMinor > 0)
+                  ? l10n.posGrandTotal
+                  : l10n.posReceiptTotal,
+              value: MoneyFormatter.formatMinor(
+                order.grandTotalMinor,
+                currency,
+              ),
               emphasised: true,
               valueKey: const Key('receipt-total'),
             ),
-            const SizedBox(height: RestoflowSpacing.xs),
-            _ReceiptLine(
-              label: l10n.posCashReceived,
-              value: MoneyFormatter.formatMinor(
-                payment.tenderedMinor,
-                currency,
+            // CASH shows the tender + change; a non-cash tender records neither.
+            if (payment.method.isCash) ...[
+              const SizedBox(height: RestoflowSpacing.xs),
+              _ReceiptLine(
+                label: l10n.posCashReceived,
+                value: MoneyFormatter.formatMinor(
+                  payment.tenderedMinor,
+                  currency,
+                ),
+                valueKey: const Key('receipt-cash'),
               ),
-              valueKey: const Key('receipt-cash'),
-            ),
-            _ReceiptLine(
-              label: l10n.posChangeDue,
-              value: MoneyFormatter.formatMinor(payment.changeMinor, currency),
-              valueKey: const Key('receipt-change'),
-            ),
+              _ReceiptLine(
+                label: l10n.posChangeDue,
+                value: MoneyFormatter.formatMinor(
+                  payment.changeMinor,
+                  currency,
+                ),
+                valueKey: const Key('receipt-change'),
+              ),
+            ],
             const _DashedRule(),
             _ReceiptLine(
               label: l10n.posPaymentMethodLabel,
-              value: l10n.posPaymentMethodCash,
+              value: paymentMethodLabel(l10n, payment.method),
             ),
             _ReceiptLine(label: l10n.posPaidAtLabel, value: paidAt),
             const SizedBox(height: RestoflowSpacing.sm),

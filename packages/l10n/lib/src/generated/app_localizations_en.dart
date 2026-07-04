@@ -585,6 +585,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get printStatusFailed => 'Print failed';
 
   @override
+  String get printStatusSentToPrinter =>
+      'Sent to the printer (not confirmed printed)';
+
+  @override
+  String get printStatusBridgeUnavailable =>
+      'Print bridge unavailable — job not sent';
+
+  @override
+  String get printRetryAction => 'Retry';
+
+  @override
+  String get deviceSettingsBridgeConnected => 'Print bridge: connected';
+
+  @override
+  String get deviceSettingsBridgeUnavailable => 'Print bridge: unavailable';
+
+  @override
+  String deviceSettingsBridgeLastJob(String time) {
+    return 'Last print job: $time';
+  }
+
+  @override
   String get posReceiptPrintLabel => 'Receipt print';
 
   @override
@@ -1684,6 +1706,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRoleUpdated => 'Role updated';
 
   @override
+  String get adminRevokeMemberTitle => 'Revoke access?';
+
+  @override
+  String get adminRevokeMemberBody =>
+      'This removes the member’s access to this organization and ends any PIN sign-in. You can’t undo this here.';
+
+  @override
+  String get adminMemberRevoked => 'Access revoked';
+
+  @override
   String get adminDevicesTitle => 'Devices';
 
   @override
@@ -1896,6 +1928,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dashboardSettingsRealNotice =>
       'These are your real workspace values. Editing settings is not connected in this build yet, so there is nothing to save here.';
+
+  @override
+  String get dashboardSettingsEditableTitle => 'Edit branch details';
+
+  @override
+  String get dashboardSettingsBranchNameLabel => 'Branch name';
+
+  @override
+  String get dashboardSettingsRestaurantNameLabel => 'Restaurant name';
+
+  @override
+  String get dashboardSettingsReceiptPrefixHint =>
+      'Leave blank to keep the current prefix';
+
+  @override
+  String get dashboardSettingsCurrencyLocked =>
+      'Currency is fixed to ₪ (ILS) for the pilot and can’t be changed here.';
 
   @override
   String get dashboardShiftCloseSectionTitle => 'Shift reconciliation (POS)';
@@ -2412,4 +2461,73 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kdsSignInAgain => 'Sign in again';
+
+  @override
+  String get posTakePayment => 'Take payment';
+
+  @override
+  String get posTenderTypeLabel => 'Tender type';
+
+  @override
+  String get posExternalPaymentTitle => 'Record external payment';
+
+  @override
+  String get posPaymentMethodCard => 'Card';
+
+  @override
+  String get posPaymentMethodBit => 'Bit';
+
+  @override
+  String get posPaymentMethodExternal => 'External';
+
+  @override
+  String get posNonCashNote =>
+      'External payment recorded — RestoFlow does not process the card or transfer; no real charge is made.';
+
+  @override
+  String get posTaxLabel => 'Tax';
+
+  @override
+  String get posGrandTotal => 'Total';
+
+  @override
+  String get posApplyDiscount => 'Apply discount';
+
+  @override
+  String get posDiscountLabel => 'Discount';
+
+  @override
+  String get posDiscountFixedLabel => 'Fixed amount';
+
+  @override
+  String get posDiscountPercentLabel => 'Percentage';
+
+  @override
+  String get posDiscountValueLabel => 'Discount value';
+
+  @override
+  String get posDiscountReasonLabel => 'Reason';
+
+  @override
+  String get posDiscountValueInvalid => 'Enter a valid discount';
+
+  @override
+  String get posDiscountReasonRequired => 'A reason is required';
+
+  @override
+  String get posDiscountExceedsSubtotal =>
+      'Discount can\'t exceed the subtotal';
+
+  @override
+  String get posDiscountApplyAction => 'Apply';
+
+  @override
+  String get posDiscountPermissionDenied =>
+      'You don\'t have permission to apply a discount — ask a manager.';
+
+  @override
+  String get posDiscountFailed => 'Couldn\'t apply the discount';
+
+  @override
+  String get posDiscountDemoNote => 'Demo discount — applied locally';
 }

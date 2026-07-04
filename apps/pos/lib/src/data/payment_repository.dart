@@ -27,16 +27,21 @@ class PaymentException implements Exception {
 /// Supabase-backed implementation lands with the device/PIN-session auth bridge.
 /// Nothing here contacts a backend or a printer.
 abstract class PaymentRepository {
-  /// Records a completed cash payment for the order [orderId] (the server order
-  /// id a real `payment.create` references; ignored by the demo store which keys
-  /// on [orderNumber]). Throws [PaymentException] if [tenderedMinor] is less than
-  /// [amountMinor] (demo) or the real push fails / is unauthorized (fail-closed).
+  /// Records a completed payment for the order [orderId] (the server order id a
+  /// real `payment.create` references; ignored by the demo store which keys on
+  /// [orderNumber]). [method] is the tender (RF-117): CASH requires
+  /// [tenderedMinor] >= [amountMinor] and yields change; a NON-CASH tender
+  /// (card/bit/external) is externally recorded with change 0 and
+  /// tendered = [amountMinor] (the order total). Throws [PaymentException] if a
+  /// cash tender does not cover the total (demo) or the real push fails / is
+  /// unauthorized (fail-closed).
   Future<CashPayment> recordCashPayment({
     required String orderId,
     required String orderNumber,
     required int amountMinor,
     required int tenderedMinor,
     required String currencyCode,
+    PaymentMethod method = PaymentMethod.cash,
   });
 
   /// The current demo shift / cash-drawer context.
@@ -89,11 +94,15 @@ class DemoPaymentStore implements PaymentRepository {
     required int amountMinor,
     required int tenderedMinor,
     required String currencyCode,
+    PaymentMethod method = PaymentMethod.cash,
   }) async {
     if (amountMinor < 0 || tenderedMinor < 0) {
       throw const PaymentException('amounts must not be negative');
     }
-    if (tenderedMinor < amountMinor) {
+    // RF-117: only CASH must physically cover the total (change is drawer cash).
+    // A NON-CASH tender is externally recorded for the exact order total with no
+    // change and no drawer movement (mirrors app.record_payment).
+    if (method.isCash && tenderedMinor < amountMinor) {
       throw const PaymentException(
         'tendered amount must cover the order total',
       );
@@ -106,16 +115,19 @@ class DemoPaymentStore implements PaymentRepository {
 
     _seq++;
     final n = _seq.toString().padLeft(4, '0');
+    // NON-CASH: record amount = tendered = order total, change = 0 (no float).
+    final effectiveTendered = method.isCash ? tenderedMinor : amountMinor;
+    final changeMinor = method.isCash ? tenderedMinor - amountMinor : 0;
     final payment = CashPayment(
       paymentId: 'demo-payment-$n',
       orderNumber: orderNumber,
       deviceId: _demoDeviceId,
       localOperationId: 'demo-pay-op-$n',
-      method: PaymentMethod.cash,
+      method: method,
       status: PaymentStatus.completed,
       amountMinor: amountMinor,
-      tenderedMinor: tenderedMinor,
-      changeMinor: tenderedMinor - amountMinor,
+      tenderedMinor: effectiveTendered,
+      changeMinor: changeMinor,
       currencyCode: currencyCode,
       receiptNumber: 'PROV-$n',
       paidAt: _clock(),
@@ -134,7 +146,12 @@ class DemoPaymentStore implements PaymentRepository {
 
   @override
   ShiftContext shiftContext() {
-    final sales = _payments.fold<int>(0, (sum, p) => sum + p.amountMinor);
+    // RF-117: only CASH rolls into the drawer (non-cash tenders never move
+    // drawer cash — mirrors close_shift summing method='cash' only, MONEY §14).
+    final sales = _payments.fold<int>(
+      0,
+      (sum, p) => p.method.isCash ? sum + p.amountMinor : sum,
+    );
     return ShiftContext(
       shiftOpen: _shift.status == ShiftStatus.open,
       drawerOpen: _drawer.status == CashDrawerSessionStatus.active,
@@ -197,6 +214,7 @@ class RealPaymentRepository implements PaymentRepository {
     required int amountMinor,
     required int tenderedMinor,
     required String currencyCode,
+    PaymentMethod method = PaymentMethod.cash,
   }) async {
     final transport = _transport;
     final session = _session;
@@ -218,9 +236,11 @@ class RealPaymentRepository implements PaymentRepository {
     final clientPaymentId = _idGenerator.newId();
     final createdAt = DateTime.now();
     // The op `payload` is the server-accepted subset (RF-056): order_id + the
-    // cash tender. The server reads the order total, computes change, allocates
-    // the receipt, and resolves the open shift/drawer from the session/device -
-    // none of which the client sends. Money is integer minor units (no float).
+    // tender (RF-117: cash|card|bit|external). The server reads the order total,
+    // computes change, allocates the receipt, and resolves the open shift/drawer
+    // from the session/device - none of which the client sends. A NON-CASH tender
+    // has amount_tendered = the order total (the server forces it anyway; for
+    // cash the physical tender is passed through). Integer minor units (no float).
     final op = <String, dynamic>{
       'local_operation_id': localOperationId,
       'operation_type': 'payment.create',
@@ -229,7 +249,7 @@ class RealPaymentRepository implements PaymentRepository {
       'client_created_at': createdAt.toIso8601String(),
       'payload': <String, dynamic>{
         'order_id': orderId,
-        'tender_type': PaymentMethod.cash.wire, // 'cash'
+        'tender_type': method.wire, // 'cash' | 'card' | 'bit' | 'external'
         'amount_tendered_minor': tenderedMinor,
       },
     };
@@ -255,6 +275,7 @@ class RealPaymentRepository implements PaymentRepository {
       amountMinor: amountMinor,
       tenderedMinor: tenderedMinor,
       currencyCode: currencyCode,
+      requestedMethod: method,
       paidAt: createdAt,
     );
   }
@@ -278,6 +299,7 @@ class RealPaymentRepository implements PaymentRepository {
     required int amountMinor,
     required int tenderedMinor,
     required String currencyCode,
+    required PaymentMethod requestedMethod,
     required DateTime paidAt,
   }) {
     Never reject(String code) =>
@@ -316,13 +338,17 @@ class RealPaymentRepository implements PaymentRepository {
     // Integer minor units only - a float/absent change is a contract violation.
     final changeMinor = op['change_due_minor'];
     if (changeMinor is! int) reject('invalid_change_due_minor');
+    // RF-117: the server ECHOES the recorded tender method; trust it, falling
+    // back to the requested tender only if the field is absent (older server).
+    final recordedMethod =
+        PaymentMethod.fromWire(op['method']) ?? requestedMethod;
 
     return CashPayment(
       paymentId: paymentId,
       orderNumber: orderNumber,
       deviceId: deviceId,
       localOperationId: localOperationId,
-      method: PaymentMethod.cash,
+      method: recordedMethod,
       status: PaymentStatus.completed,
       amountMinor: amountMinor,
       tenderedMinor: tenderedMinor,

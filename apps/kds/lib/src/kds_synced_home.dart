@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'kds_screen.dart';
+import 'print/kds_print_bridge.dart';
 import 'print/kds_ticket_document.dart';
 import 'state/kds_kitchen_print_controller.dart';
+import 'state/kds_printer_assignments.dart';
 import 'state/kds_session.dart';
 import 'state/kds_status_pusher.dart';
 import 'widgets/device_settings_menu.dart';
 import 'widgets/kds_state_message.dart';
+import 'widgets/kds_ticket_card.dart' show KdsTicketPrintStatus;
 import 'widgets/language_selector.dart';
 
 /// The provider-backed KDS home (RF-063): watches [kdsViewStateProvider] and
@@ -101,8 +105,10 @@ class KdsSyncedHome extends ConsumerWidget {
           // board too; stale (last good pull) data is visibly flagged.
           appBarActions: const [LanguageSelector(), DeviceSettingsMenu()],
           showStaleBanner: vs.isStale,
-          printStatusFor: (ticket) => _printStatusLabel(
+          printStatusFor: (ticket) => _printStatusFor(
+            ref,
             l10n,
+            ticket,
             printJobs[KdsKitchenPrintController.keyFor(ticket)],
           ),
           onAdvanced: pusher == null
@@ -123,12 +129,18 @@ class KdsSyncedHome extends ConsumerWidget {
                   // nothing. The controller honors the per-device toggle +
                   // printer assignment; the widget only owns the l10n payload.
                   if (to == KitchenTicketStatus.acknowledged && pushedOk) {
+                    // RF-115: prepare, then — if a LOCAL bridge is configured —
+                    // encode + submit it. With no bridge the job stays honestly
+                    // "prepared"; a confirmed bridge write flips it to "sent to
+                    // printer", never a fabricated hardware print.
+                    final bridge = ref.read(kdsPrintBridgeProvider);
                     ref
                         .read(kdsKitchenPrintControllerProvider.notifier)
                         .prepareOnAcknowledge(
                           ticket,
                           buildDocument: () =>
                               buildKdsTicketDocument(l10n, ticket),
+                          submitToBridge: bridge == null ? null : bridge.submit,
                         );
                   }
                 },
@@ -137,17 +149,51 @@ class KdsSyncedHome extends ConsumerWidget {
     );
   }
 
-  /// The honest kitchen print-job status label for a ticket, or null when no
-  /// job exists yet (auto-print off / not acknowledged). "Printed" is only
-  /// reachable once a real print bridge confirms — never in this build.
-  String? _printStatusLabel(AppLocalizations l10n, KdsPrintJob? job) {
+  /// The honest kitchen print-job status for a ticket, or null when no job
+  /// exists yet (auto-print off / not acknowledged). A confirmed bridge write
+  /// shows "sent to printer" (NOT a hardware-confirmed print, which stays
+  /// unreachable); recoverable states expose a Retry action.
+  KdsTicketPrintStatus? _printStatusFor(
+    WidgetRef ref,
+    AppLocalizations l10n,
+    KdsTicketView ticket,
+    KdsPrintJob? job,
+  ) {
     if (job == null) return null;
-    return switch (job.status) {
-      KdsPrintJobStatus.prepared => l10n.printStatusPrepared,
-      KdsPrintJobStatus.printed => l10n.printStatusPrinted,
-      KdsPrintJobStatus.failed => l10n.printStatusFailed,
-      KdsPrintJobStatus.notConfigured => l10n.printStatusNotConfigured,
+    final (label, canRetry) = switch (job.status) {
+      KdsPrintJobStatus.prepared => (l10n.printStatusPrepared, false),
+      KdsPrintJobStatus.sentToPrinter => (l10n.printStatusSentToPrinter, false),
+      KdsPrintJobStatus.bridgeUnavailable => (
+        l10n.printStatusBridgeUnavailable,
+        true,
+      ),
+      KdsPrintJobStatus.printed => (l10n.printStatusPrinted, false),
+      KdsPrintJobStatus.failed => (l10n.printStatusFailed, true),
+      KdsPrintJobStatus.notConfigured => (l10n.printStatusNotConfigured, true),
     };
+    return KdsTicketPrintStatus(
+      label: label,
+      onRetry: canRetry ? () => _retryPrint(ref, l10n, ticket) : null,
+    );
+  }
+
+  /// Re-runs a recoverable kitchen print job through the same pipeline.
+  void _retryPrint(WidgetRef ref, AppLocalizations l10n, KdsTicketView ticket) {
+    final assignments = switch (ref
+        .read(kdsPrinterAssignmentsProvider)
+        .valueOrNull) {
+      Success(:final value) => value,
+      _ => null,
+    };
+    final bridge = ref.read(kdsPrintBridgeProvider);
+    ref
+        .read(kdsKitchenPrintControllerProvider.notifier)
+        .retry(
+          ticket,
+          hasEnabledPrinter: assignments?.hasEnabledPrinter ?? false,
+          buildDocument: () => buildKdsTicketDocument(l10n, ticket),
+          submitToBridge: bridge == null ? null : bridge.submit,
+        );
   }
 
   Widget _scaffold(BuildContext context, AppLocalizations l10n, Widget body) =>

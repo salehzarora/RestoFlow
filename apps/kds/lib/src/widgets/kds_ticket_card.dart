@@ -6,6 +6,18 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'kds_status_chip.dart';
 
+/// The honest per-ticket kitchen print-job status for the card (RF-115): a
+/// localized label plus an optional Retry action (shown for failed /
+/// bridge-unavailable / not-configured jobs). Money-free — it is chrome only.
+class KdsTicketPrintStatus {
+  const KdsTicketPrintStatus({required this.label, this.onRetry});
+
+  final String label;
+
+  /// Non-null => a Retry button is shown, wired to re-run the job.
+  final VoidCallback? onRetry;
+}
+
 /// A polished KDS ticket card: a header row (the HUMAN order number — the same
 /// `displayOrderCode` the POS shows — + colour-coded status chip), order-type/
 /// table/station pills, large readable item lines with their modifier and note
@@ -39,11 +51,11 @@ class KdsTicketCard extends StatelessWidget {
   /// Null hides the action (the LIVE board — forward-only backend).
   final VoidCallback? onRecall;
 
-  /// Optional kitchen print-job status label (device settings sprint,
-  /// Part D): a small honest line ("prepared — bridge required" etc.) after
-  /// the acknowledge trigger. Null renders nothing (demo boards). Never
-  /// money — it is a chrome label from l10n.
-  final String? printStatus;
+  /// Optional kitchen print-job status (RF-115): a small honest line
+  /// ("prepared — bridge required" / "sent to printer" / "failed" …) after the
+  /// acknowledge trigger, with a Retry action on recoverable states. Null
+  /// renders nothing (demo boards). Never money — chrome only.
+  final KdsTicketPrintStatus? printStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -151,14 +163,23 @@ class KdsTicketCard extends StatelessWidget {
                     const SizedBox(width: RestoflowSpacing.xs),
                     Expanded(
                       child: Text(
-                        '${l10n.kdsTicketPrintLabel}: $status',
-                        maxLines: 1,
+                        '${l10n.kdsTicketPrintLabel}: ${status.label}',
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
+                    if (status.onRetry case final onRetry?) ...[
+                      const SizedBox(width: RestoflowSpacing.xs),
+                      TextButton.icon(
+                        key: const Key('ticket-print-retry'),
+                        onPressed: onRetry,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: Text(l10n.printRetryAction),
+                      ),
+                    ],
                   ],
                 ),
               ],

@@ -142,6 +142,12 @@ class AdminController {
     adminUsersProvider,
   );
 
+  Future<AdminResult<AdminUser>> revokeMembership(String membershipId) =>
+      _run(() => _repo.revokeMembership(membershipId), adminUsersProvider);
+
+  /// See [AdminRepository.supportsGrant].
+  bool get supportsGrant => _repo.supportsGrant;
+
   // devices
   Future<AdminResult<AdminDevice>> createDevice({
     required String label,

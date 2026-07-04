@@ -48,7 +48,9 @@ void main() {
     await _submitTakeaway(tester, l10n);
 
     expect(find.byKey(const Key('pay-cash-button')), findsOneWidget);
-    expect(find.text(l10n.posPayCash), findsWidgets);
+    // RF-117: the payment entry button is now tender-neutral ("Take payment")
+    // since the sheet supports cash + non-cash tenders.
+    expect(find.text(l10n.posTakePayment), findsWidgets);
   });
 
   testWidgets('the payment sheet shows the amount due', (tester) async {

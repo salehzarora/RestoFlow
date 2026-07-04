@@ -55,6 +55,19 @@ abstract class AdminRepository {
     required MembershipRole newRole,
   });
 
+  /// `public.revoke_membership` (RF-116) — deactivates a membership
+  /// (status → `revoked`, PIN sign-in terminated). Role-rank guarded: the actor
+  /// must strictly outrank the target and can never revoke their own membership.
+  Future<AdminResult<AdminUser>> revokeMembership(String membershipId);
+
+  /// Whether this repository can grant a brand-new membership to an existing
+  /// user. The demo store simulates it (true); the real dashboard repository
+  /// returns false — inviting/creating brand-new accounts is intentionally out
+  /// of scope (RF-116: there is no client email→app_user lookup), so the Users
+  /// screen hides the grant affordance rather than offering an action that
+  /// always fails. List + change-role + revoke remain fully wired.
+  bool get supportsGrant => true;
+
   // ---- Devices (API_CONTRACT §4.27–§4.29 / D-033/D-034) ---------------------
   Future<AdminResult<List<AdminDevice>>> loadDevices();
 

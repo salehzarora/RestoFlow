@@ -95,6 +95,7 @@ Future<void> main() async {
         onboardingRepository: real.onboarding,
         fetchContext: real.fetchContext,
         deviceRepositoryFor: real.deviceRepositoryFor,
+        usersRepositoryFor: real.usersRepositoryFor,
         menuReadSource: real.menuReadSource,
         menuWriter: real.menuWriter,
         menuImageStorage: real.menuImageStorage,
@@ -123,6 +124,7 @@ class DashboardApp extends ConsumerWidget {
     this.selectedContextStore,
     this.deviceContext,
     this.deviceRepositoryFor,
+    this.usersRepositoryFor,
     this.menuReadSource,
     this.menuWriter,
     this.menuImageStorage,
@@ -156,6 +158,11 @@ class DashboardApp extends ConsumerWidget {
   /// only in authenticated real mode; the dashboard Devices tab uses it there and
   /// falls back to the demo store otherwise (demo default preserved).
   final AdminRepository Function(AdminScope scope)? deviceRepositoryFor;
+
+  /// Builds the REAL users repository for a given admin scope (RF-116). Non-null
+  /// only in authenticated real mode; the dashboard Users tab uses it there and
+  /// falls back to the demo store (demo) / honest not-connected state otherwise.
+  final AdminRepository Function(AdminScope scope)? usersRepositoryFor;
 
   /// The REAL menu seams (sprint): `list_menu` read + `menu_upsert_*` writer.
   /// Null in demo mode / tests => the Menu tab keeps its labelled demo store.
@@ -230,6 +237,7 @@ class DashboardApp extends ConsumerWidget {
             membership: resolved.membership,
             currencyCode: resolved.currencyCode,
             deviceRepositoryFor: deviceRepositoryFor,
+            usersRepositoryFor: usersRepositoryFor,
             menuReadSource: menuReadSource,
             menuWriter: menuWriter,
             menuImageStorage: menuImageStorage,

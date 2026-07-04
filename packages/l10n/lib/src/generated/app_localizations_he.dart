@@ -580,6 +580,27 @@ class AppLocalizationsHe extends AppLocalizations {
   String get printStatusFailed => 'ההדפסה נכשלה';
 
   @override
+  String get printStatusSentToPrinter => 'נשלח למדפסת (ללא אישור הדפסה בפועל)';
+
+  @override
+  String get printStatusBridgeUnavailable =>
+      'גשר ההדפסה אינו זמין — העבודה לא נשלחה';
+
+  @override
+  String get printRetryAction => 'נסה שוב';
+
+  @override
+  String get deviceSettingsBridgeConnected => 'גשר הדפסה: מחובר';
+
+  @override
+  String get deviceSettingsBridgeUnavailable => 'גשר הדפסה: לא זמין';
+
+  @override
+  String deviceSettingsBridgeLastJob(String time) {
+    return 'עבודת ההדפסה האחרונה: $time';
+  }
+
+  @override
   String get posReceiptPrintLabel => 'הדפסת קבלה';
 
   @override
@@ -1665,6 +1686,16 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminRoleUpdated => 'התפקיד עודכן';
 
   @override
+  String get adminRevokeMemberTitle => 'לבטל את הגישה?';
+
+  @override
+  String get adminRevokeMemberBody =>
+      'פעולה זו מסירה את גישת החבר לארגון ומסיימת כל כניסה עם קוד PIN. לא ניתן לבטל זאת מכאן.';
+
+  @override
+  String get adminMemberRevoked => 'הגישה בוטלה';
+
+  @override
   String get adminDevicesTitle => 'מכשירים';
 
   @override
@@ -1866,6 +1897,23 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get dashboardSettingsRealNotice =>
       'אלה הערכים האמיתיים של סביבת העבודה. עריכת ההגדרות עדיין אינה מחוברת בגרסה זו, ולכן אין כאן מה לשמור.';
+
+  @override
+  String get dashboardSettingsEditableTitle => 'עריכת פרטי הסניף';
+
+  @override
+  String get dashboardSettingsBranchNameLabel => 'שם הסניף';
+
+  @override
+  String get dashboardSettingsRestaurantNameLabel => 'שם המסעדה';
+
+  @override
+  String get dashboardSettingsReceiptPrefixHint =>
+      'השאירו ריק כדי לשמור על הקידומת הנוכחית';
+
+  @override
+  String get dashboardSettingsCurrencyLocked =>
+      'המטבע קבוע ל-₪ (ILS) עבור הפיילוט ולא ניתן לשנותו כאן.';
 
   @override
   String get dashboardShiftCloseSectionTitle => 'התאמת משמרת (קופה)';
@@ -2376,4 +2424,73 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kdsSignInAgain => 'כניסה מחדש';
+
+  @override
+  String get posTakePayment => 'קבלת תשלום';
+
+  @override
+  String get posTenderTypeLabel => 'אמצעי תשלום';
+
+  @override
+  String get posExternalPaymentTitle => 'רישום תשלום חיצוני';
+
+  @override
+  String get posPaymentMethodCard => 'כרטיס';
+
+  @override
+  String get posPaymentMethodBit => 'ביט';
+
+  @override
+  String get posPaymentMethodExternal => 'חיצוני';
+
+  @override
+  String get posNonCashNote =>
+      'תשלום חיצוני נרשם — RestoFlow אינו מעבד את הכרטיס או ההעברה; לא מבוצע חיוב אמיתי.';
+
+  @override
+  String get posTaxLabel => 'מס';
+
+  @override
+  String get posGrandTotal => 'סה״כ';
+
+  @override
+  String get posApplyDiscount => 'החלת הנחה';
+
+  @override
+  String get posDiscountLabel => 'הנחה';
+
+  @override
+  String get posDiscountFixedLabel => 'סכום קבוע';
+
+  @override
+  String get posDiscountPercentLabel => 'אחוז';
+
+  @override
+  String get posDiscountValueLabel => 'ערך ההנחה';
+
+  @override
+  String get posDiscountReasonLabel => 'סיבה';
+
+  @override
+  String get posDiscountValueInvalid => 'הזינו הנחה תקינה';
+
+  @override
+  String get posDiscountReasonRequired => 'נדרשת סיבה';
+
+  @override
+  String get posDiscountExceedsSubtotal =>
+      'ההנחה לא יכולה לעלות על סכום הביניים';
+
+  @override
+  String get posDiscountApplyAction => 'החל';
+
+  @override
+  String get posDiscountPermissionDenied =>
+      'אין לך הרשאה להחיל הנחה — פנה למנהל.';
+
+  @override
+  String get posDiscountFailed => 'לא ניתן להחיל את ההנחה';
+
+  @override
+  String get posDiscountDemoNote => 'הנחת דמו — הוחלה מקומית';
 }

@@ -9,6 +9,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 
 import '../data/payment.dart';
 import '../format/money_format.dart';
+import '../format/payment_method_label.dart';
 import '../print/print_document.dart';
 import '../print/print_service.dart';
 import '../state/submitted_order_view.dart';
@@ -140,35 +141,68 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               ),
                           ],
                           const _Rule(),
+                          // RF-117: subtotal/discount/tax breakout when present.
+                          if (order.discountTotalMinor > 0 ||
+                              order.taxTotalMinor > 0) ...[
+                            _Line(
+                              label: l10n.posCartSubtotal,
+                              value: MoneyFormatter.formatMinor(
+                                order.subtotalMinor,
+                                currency,
+                              ),
+                            ),
+                            if (order.discountTotalMinor > 0)
+                              _Line(
+                                label: l10n.posDiscountLabel,
+                                value: MoneyFormatter.formatSignedDeltaMinor(
+                                  -order.discountTotalMinor,
+                                  currency,
+                                ),
+                              ),
+                            if (order.taxTotalMinor > 0)
+                              _Line(
+                                label: taxLineLabel(l10n, order.taxRateBp),
+                                value: MoneyFormatter.formatMinor(
+                                  order.taxTotalMinor,
+                                  currency,
+                                ),
+                              ),
+                          ],
                           _Line(
-                            label: l10n.posReceiptTotal,
+                            label:
+                                (order.discountTotalMinor > 0 ||
+                                    order.taxTotalMinor > 0)
+                                ? l10n.posGrandTotal
+                                : l10n.posReceiptTotal,
                             value: MoneyFormatter.formatMinor(
-                              order.subtotalMinor,
+                              order.grandTotalMinor,
                               currency,
                             ),
                             emphasised: true,
                             valueKey: const Key('preview-total'),
                           ),
-                          _Line(
-                            label: l10n.posCashReceived,
-                            value: MoneyFormatter.formatMinor(
-                              payment.tenderedMinor,
-                              currency,
+                          if (payment.method.isCash) ...[
+                            _Line(
+                              label: l10n.posCashReceived,
+                              value: MoneyFormatter.formatMinor(
+                                payment.tenderedMinor,
+                                currency,
+                              ),
+                              valueKey: const Key('preview-cash'),
                             ),
-                            valueKey: const Key('preview-cash'),
-                          ),
-                          _Line(
-                            label: l10n.posChangeDue,
-                            value: MoneyFormatter.formatMinor(
-                              payment.changeMinor,
-                              currency,
+                            _Line(
+                              label: l10n.posChangeDue,
+                              value: MoneyFormatter.formatMinor(
+                                payment.changeMinor,
+                                currency,
+                              ),
+                              valueKey: const Key('preview-change'),
                             ),
-                            valueKey: const Key('preview-change'),
-                          ),
+                          ],
                           const _Rule(),
                           _Line(
                             label: l10n.posPaymentMethodLabel,
-                            value: l10n.posPaymentMethodCash,
+                            value: paymentMethodLabel(l10n, payment.method),
                           ),
                           const SizedBox(height: RestoflowSpacing.sm),
                           if (isDemo) ...[
@@ -269,21 +303,49 @@ PrintDocument buildReceiptDocument(
           PrintLine.sub('${l10n.posItemNoteLabel}: ${line.note}'),
       ],
       PrintLine.rule(),
+      // RF-117: subtotal/discount/tax breakout only when there's a discount or
+      // tax; otherwise the single Total line keeps the plain receipt unchanged.
+      if (order.discountTotalMinor > 0 || order.taxTotalMinor > 0) ...[
+        PrintLine.kv(
+          l10n.posCartSubtotal,
+          MoneyFormatter.formatMinor(order.subtotalMinor, currency),
+        ),
+        if (order.discountTotalMinor > 0)
+          PrintLine.kv(
+            l10n.posDiscountLabel,
+            MoneyFormatter.formatSignedDeltaMinor(
+              -order.discountTotalMinor,
+              currency,
+            ),
+          ),
+        if (order.taxTotalMinor > 0)
+          PrintLine.kv(
+            taxLineLabel(l10n, order.taxRateBp),
+            MoneyFormatter.formatMinor(order.taxTotalMinor, currency),
+          ),
+      ],
       PrintLine.kv(
-        l10n.posReceiptTotal,
-        MoneyFormatter.formatMinor(order.subtotalMinor, currency),
+        (order.discountTotalMinor > 0 || order.taxTotalMinor > 0)
+            ? l10n.posGrandTotal
+            : l10n.posReceiptTotal,
+        MoneyFormatter.formatMinor(order.grandTotalMinor, currency),
         emphasised: true,
       ),
-      PrintLine.kv(
-        l10n.posCashReceived,
-        MoneyFormatter.formatMinor(payment.tenderedMinor, currency),
-      ),
-      PrintLine.kv(
-        l10n.posChangeDue,
-        MoneyFormatter.formatMinor(payment.changeMinor, currency),
-      ),
+      if (payment.method.isCash) ...[
+        PrintLine.kv(
+          l10n.posCashReceived,
+          MoneyFormatter.formatMinor(payment.tenderedMinor, currency),
+        ),
+        PrintLine.kv(
+          l10n.posChangeDue,
+          MoneyFormatter.formatMinor(payment.changeMinor, currency),
+        ),
+      ],
       PrintLine.rule(),
-      PrintLine.kv(l10n.posPaymentMethodLabel, l10n.posPaymentMethodCash),
+      PrintLine.kv(
+        l10n.posPaymentMethodLabel,
+        paymentMethodLabel(l10n, payment.method),
+      ),
       if (isDemo) ...[
         PrintLine.note(l10n.posReceiptProvisionalNote),
         PrintLine.note(l10n.posReceiptDemoNote),
