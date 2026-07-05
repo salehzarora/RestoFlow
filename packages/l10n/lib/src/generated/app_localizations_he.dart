@@ -181,6 +181,25 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminMfaEnrollError => 'לא ניתן להתחיל את הגדרת האימות. נסו שוב.';
 
   @override
+  String adminSignedInAs(String email) {
+    return 'מחובר כ-$email';
+  }
+
+  @override
+  String get adminSignInEmailRequired => 'הזינו את אימייל העבודה שלכם.';
+
+  @override
+  String get adminSignInPasswordRequired => 'הזינו את הסיסמה.';
+
+  @override
+  String get adminSecureConsoleTagline =>
+      'קונסולת מפעיל · כל פעולה נרשמת לביקורת';
+
+  @override
+  String get adminMfaScanInstruction =>
+      'סרקו את קוד ה-QR באפליקציית אימות, או הזינו את מפתח ההגדרה ידנית.';
+
+  @override
   String get adminAccessDeniedTitle => 'הגישה לניהול הפלטפורמה נדחתה';
 
   @override

@@ -185,6 +185,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t start authenticator setup. Please try again.';
 
   @override
+  String adminSignedInAs(String email) {
+    return 'Signed in as $email';
+  }
+
+  @override
+  String get adminSignInEmailRequired => 'Enter your work email.';
+
+  @override
+  String get adminSignInPasswordRequired => 'Enter your password.';
+
+  @override
+  String get adminSecureConsoleTagline =>
+      'Operator console · every action is audited';
+
+  @override
+  String get adminMfaScanInstruction =>
+      'Scan this QR code with an authenticator app, or enter the setup key by hand.';
+
+  @override
   String get adminAccessDeniedTitle => 'Platform admin access denied';
 
   @override

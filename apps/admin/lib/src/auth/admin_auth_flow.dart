@@ -122,8 +122,13 @@ class _AdminAuthFlowState extends State<AdminAuthFlow> {
         return snap.data!.fold(
           (ctx) => switch ((ctx.isPlatformAdmin, ctx.hasMfaAal2)) {
             // Active grant + an MFA (aal2) session: the overview. Reads still
-            // enforce grant + aal2 + reason server-side (RF-091).
-            (true, true) => PlatformAdminScreen(onSignOut: _signOut),
+            // enforce grant + aal2 + reason server-side (RF-091). DESIGN-002:
+            // pass the operator email (from get_my_context) for the header's
+            // "signed in as" identity.
+            (true, true) => PlatformAdminScreen(
+              onSignOut: _signOut,
+              operatorEmail: ctx.appUser.email,
+            ),
             // Active grant but NO aal2: the interactive TOTP enrol/challenge.
             (true, false) => AdminMfaScreen(
               authService: widget.authService,

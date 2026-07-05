@@ -424,6 +424,36 @@ abstract class AppLocalizations {
   /// **'Couldn\'t start authenticator setup. Please try again.'**
   String get adminMfaEnrollError;
 
+  /// DESIGN-002: shows the platform operator which account is signed in (email is non-secret; confirms identity on the MFA screen and overview).
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in as {email}'**
+  String adminSignedInAs(String email);
+
+  /// DESIGN-002: instructional empty-field validator for the admin sign-in email (replaces the bare field label).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your work email.'**
+  String get adminSignInEmailRequired;
+
+  /// DESIGN-002: instructional empty-field validator for the admin sign-in password (replaces the bare field label).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your password.'**
+  String get adminSignInPasswordRequired;
+
+  /// DESIGN-002: the trust/console-identity tagline on the platform-operator sign-in and MFA screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator console · every action is audited'**
+  String get adminSecureConsoleTagline;
+
+  /// DESIGN-002: instruction above the enrolment QR code + manual setup key.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan this QR code with an authenticator app, or enter the setup key by hand.'**
+  String get adminMfaScanInstruction;
+
   /// Platform-admin safe-state title shown when the backend denies the read (missing platform-admin grant or MFA step-up).
   ///
   /// In en, this message translates to:

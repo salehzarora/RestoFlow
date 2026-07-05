@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../widgets/language_selector.dart';
 import 'admin_auth.dart';
+import 'admin_console_identity.dart';
 
 /// RF-119-b — the platform-operator MFA screen, shown ONLY to an account that
 /// holds an active platform-admin grant but whose session is not yet aal2
@@ -162,18 +164,28 @@ class _AdminMfaScreenState extends State<AdminMfaScreen> {
               maxWidth: RestoflowPanelWidths.helpPanel,
             ),
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const RestoflowStateView(showSpinner: true)
                 : _initError
                 ? _errorState(context, l10n)
                 : ListView(
                     shrinkWrap: true,
                     padding: const EdgeInsets.all(RestoflowSpacing.xl),
                     children: [
+                      // DESIGN-002: a "secure console" identity + the signed-in
+                      // account, so the operator can trust the surface and
+                      // confirm which account is being MFA-verified. currentEmail
+                      // is NON-secret (see AdminAuthService).
+                      AdminConsoleIdentity(
+                        email: widget.authService.currentEmail,
+                      ),
+                      const SizedBox(height: RestoflowSpacing.lg),
                       RestoflowNoticeBanner(
                         tone: RestoflowTone.warning,
                         icon: Icons.security_outlined,
                         title: l10n.adminMfaRequiredTitle,
-                        body: l10n.adminGateNotOwner,
+                        // DESIGN-002: the CORRECT MFA body (was adminGateNotOwner,
+                        // which described the panel, not why MFA is required).
+                        body: l10n.adminMfaRequiredBody,
                       ),
                       const SizedBox(height: RestoflowSpacing.lg),
                       if (_mode == _MfaMode.enroll)
@@ -232,18 +244,52 @@ class _AdminMfaScreenState extends State<AdminMfaScreen> {
         ),
       ),
       const SizedBox(height: RestoflowSpacing.md),
+      // DESIGN-002: render the one-time otpauth:// URI as a scannable QR
+      // *locally* (qr_flutter = pure-Dart `qr` encoder + CustomPaint). No
+      // network, no external QR API — the URI is only painted in memory during
+      // enrolment and is never stored or logged. A light card keeps the QR
+      // scannable regardless of theme.
+      Center(
+        child: Container(
+          padding: const EdgeInsets.all(RestoflowSpacing.md),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: QrImageView(
+            key: const Key('admin-mfa-qr'),
+            data: enrollment.uri,
+            version: QrVersions.auto,
+            size: 180,
+            backgroundColor: Colors.white,
+            semanticsLabel: l10n.adminMfaScanInstruction,
+          ),
+        ),
+      ),
+      const SizedBox(height: RestoflowSpacing.sm),
+      Text(
+        l10n.adminMfaScanInstruction,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      const SizedBox(height: RestoflowSpacing.md),
       RestoflowSectionCard(
         title: l10n.adminMfaSetupKey,
         children: [
           const SizedBox(height: RestoflowSpacing.sm),
-          // The setup key (short) + otpauth URI (long) are shown ONCE for
-          // enrolment — paste the key into an authenticator app, or the URI into
-          // a QR/TOTP tool. Neither is persisted or logged. The URI is a wrapping
-          // SelectableText so a long value never overflows.
+          // The manual-entry fallback: the setup key (short) + the otpauth URI
+          // (long), shown ONCE for enrolment and never persisted or logged.
+          // Both are FORCED LTR so the machine strings keep their order under
+          // ar/he (the code block already forces LTR; the URI's SelectableText
+          // now does too — DESIGN-002 fixes an RTL misrendering of the URI).
           RestoflowCodeBlock(lines: [enrollment.secret]),
           const SizedBox(height: RestoflowSpacing.sm),
           SelectableText(
             enrollment.uri,
+            textDirection: TextDirection.ltr,
             style: theme.textTheme.bodySmall?.copyWith(
               fontFamily: 'monospace',
               color: theme.colorScheme.onSurfaceVariant,
