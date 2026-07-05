@@ -237,4 +237,153 @@ void main() {
       throwsA(isA<OwnerReportsException>()),
     );
   });
+
+  // --- LIVE-DASHBOARD-001: owner_daily_report -> sales_summary fallback -------
+
+  // A deployed sales_summary payload (today + a zero-filled last-7-days tail).
+  Map<String, dynamic> salesSummary() => <String, dynamic>{
+    'ok': true,
+    'entity': 'sales_summary',
+    'currency_code': 'ILS',
+    'today': <String, dynamic>{
+      'orders_count': 5,
+      'payments_count': 3,
+      'gross_minor': 12000,
+    },
+    'last_7_days': <Map<String, dynamic>>[
+      {'day': '2026-06-29', 'orders_count': 0, 'gross_minor': 0},
+      {'day': '2026-07-05', 'orders_count': 5, 'gross_minor': 12000},
+    ],
+  };
+
+  test('missing owner_daily_report RPC (PGRST202) -> falls back to '
+      'sales_summary and maps its LIMITED figures', () async {
+    final calls = <String>[];
+    final transport = _FakeTransport((fn, _) {
+      calls.add(fn);
+      if (fn == 'owner_daily_report') {
+        throw const SyncTransportException(
+          SyncTransportErrorKind.server,
+          code: 'PGRST202',
+          message:
+              'Could not find the function public.owner_daily_report'
+              '(p_branch_id, p_organization_id, p_restaurant_id) in the '
+              'schema cache',
+        );
+      }
+      return salesSummary();
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    // Tried the new RPC FIRST, then fell back to the deployed one — same scope.
+    expect(calls, ['owner_daily_report', 'sales_summary']);
+    expect(transport.lastParams, {
+      'p_organization_id': 'org-1',
+      'p_restaurant_id': 'rest-1',
+      'p_branch_id': 'branch-1',
+    });
+
+    // The figures sales_summary actually provides (integer minor, D-007).
+    expect(report.currencyCode, 'ILS');
+    expect(report.businessDateLabel, '2026-07-05');
+    expect(report.orderCount, 5);
+    expect(report.completedOrderCount, 3);
+    expect(report.grossSalesMinor, 12000);
+    // net/collected/cash mirror gross in the limited build (no discount/tenders).
+    expect(report.netSalesMinor, 12000);
+    expect(report.collectedMinor, 12000);
+    expect(report.cashSalesMinor, 12000);
+    // orders - completed payments = open/unpaid approximation.
+    expect(report.openOrderCount, 2);
+    expect(report.unpaidOrderCount, 2);
+  });
+
+  test('the sales_summary fallback keeps UNSUPPORTED fields honest / empty '
+      '(never fabricated)', () async {
+    final transport = _FakeTransport((fn, _) {
+      if (fn == 'owner_daily_report') {
+        throw const SyncTransportException(
+          SyncTransportErrorKind.server,
+          code: 'PGRST202',
+          message: 'Could not find the function public.owner_daily_report',
+        );
+      }
+      return salesSummary();
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    expect(report.discountTotalMinor, 0);
+    expect(report.voidCount, 0);
+    expect(report.voidTotalMinor, 0);
+    expect(report.lastCashPaymentMinor, 0);
+    expect(report.paymentMethods, isEmpty); // no tender breakdown
+    expect(report.comparison, isNull); // no prior-day -> no "vs yesterday"
+    expect(report.hourlyNetSales, isEmpty); // chart stays hidden
+    expect(report.branches, isEmpty);
+    expect(report.topItems, isEmpty);
+    expect(report.recentOrders, isEmpty);
+    expect(report.shiftStatus, 'none');
+    expect(report.openingFloatMinor, 0);
+    expect(report.expectedCashMinor, 0);
+    expect(report.countedCashMinor, 0);
+  });
+
+  test('permission-denied (42501) NEVER falls back -> OwnerReportsException '
+      '(sales_summary is not even attempted)', () async {
+    final calls = <String>[];
+    final transport = _FakeTransport((fn, _) {
+      calls.add(fn);
+      throw const SyncTransportException(
+        SyncTransportErrorKind.auth,
+        code: '42501',
+        message: 'permission denied',
+      );
+    });
+
+    await expectLater(
+      RealOwnerReportsRepository(
+        null,
+        scope: _scope(),
+        transport: transport,
+      ).loadReport(),
+      throwsA(isA<OwnerReportsException>()),
+    );
+    // Fail-closed: the auth denial must NOT be converted into fallback data.
+    expect(calls, ['owner_daily_report']);
+  });
+
+  test(
+    'a NON-missing server error does not fall back -> OwnerReportsException',
+    () async {
+      final calls = <String>[];
+      final transport = _FakeTransport((fn, _) {
+        calls.add(fn);
+        throw const SyncTransportException(
+          SyncTransportErrorKind.server,
+          code: 'P0001', // a real server-side raise, not a missing function
+          message: 'boom',
+        );
+      });
+
+      await expectLater(
+        RealOwnerReportsRepository(
+          null,
+          scope: _scope(),
+          transport: transport,
+        ).loadReport(),
+        throwsA(isA<OwnerReportsException>()),
+      );
+      expect(calls, ['owner_daily_report']);
+    },
+  );
 }
