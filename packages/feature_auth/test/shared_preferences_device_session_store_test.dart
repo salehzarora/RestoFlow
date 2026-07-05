@@ -79,4 +79,87 @@ void main() {
     expect(cred.toString(), contains('device-123'));
     expect(cred.toString(), contains('***'));
   });
+
+  // LIVE-DEVICE-001 (Codex fix): /pos and /kds share one browser origin, so the
+  // POS and KDS stores MUST use surface-specific prefixes or they collide.
+  group('surface-specific prefixes do NOT collide (shared web origin)', () {
+    const posCred = DeviceSessionCredential(
+      deviceId: 'pos-device',
+      sessionToken: 'pos-token',
+    );
+    const kdsCred = DeviceSessionCredential(
+      deviceId: 'kds-device',
+      sessionToken: 'kds-token',
+    );
+
+    test('the two canonical prefixes are distinct', () {
+      expect(kPosDeviceSessionPrefix, isNot(kKdsDeviceSessionPrefix));
+      expect(kPosDeviceSessionPrefix, 'restoflow.pos.device_session.v1');
+      expect(kKdsDeviceSessionPrefix, 'restoflow.kds.device_session.v1');
+    });
+
+    test('a custom prefix isolates the stored keys', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await SharedPreferencesDeviceSessionSecretStore(
+        prefs,
+        keyPrefix: kPosDeviceSessionPrefix,
+      ).write(posCred);
+      // The value lands under the POS-prefixed key, not the default one.
+      expect(
+        prefs.getString('restoflow.pos.device_session.v1.device_id'),
+        'pos-device',
+      );
+      expect(prefs.getString('restoflow.device_session.v1.device_id'), isNull);
+    });
+
+    test(
+      'writing the POS credential does NOT make the KDS store read it',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        await SharedPreferencesDeviceSessionSecretStore(
+          prefs,
+          keyPrefix: kPosDeviceSessionPrefix,
+        ).write(posCred);
+
+        final kds = SharedPreferencesDeviceSessionSecretStore(
+          prefs,
+          keyPrefix: kKdsDeviceSessionPrefix,
+        );
+        // KDS sees NOTHING (no cross-surface read that it would reject + clear).
+        expect(await kds.read(), isNull);
+        // ...and POS is still readable (KDS never touched it).
+        final pos = SharedPreferencesDeviceSessionSecretStore(
+          prefs,
+          keyPrefix: kPosDeviceSessionPrefix,
+        );
+        expect(await pos.read(), posCred);
+      },
+    );
+
+    test('clearing the KDS store does NOT clear the POS credential (and vice '
+        'versa)', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final pos = SharedPreferencesDeviceSessionSecretStore(
+        prefs,
+        keyPrefix: kPosDeviceSessionPrefix,
+      );
+      final kds = SharedPreferencesDeviceSessionSecretStore(
+        prefs,
+        keyPrefix: kKdsDeviceSessionPrefix,
+      );
+      await pos.write(posCred);
+      await kds.write(kdsCred);
+
+      // Clearing KDS leaves POS intact.
+      await kds.clear();
+      expect(await kds.read(), isNull);
+      expect(await pos.read(), posCred);
+
+      // ...and the reverse: clearing POS leaves a re-written KDS intact.
+      await kds.write(kdsCred);
+      await pos.clear();
+      expect(await pos.read(), isNull);
+      expect(await kds.read(), kdsCred);
+    });
+  });
 }

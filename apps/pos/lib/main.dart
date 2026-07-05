@@ -158,8 +158,13 @@ _realDeviceAuth(SharedPreferences prefs) async {
     // (the same localStorage the RF-114 outbox uses); NATIVE keeps the OS
     // keychain. restore_device_session is token-proven server-side (no principal
     // binding), so persisting {deviceId, token} is all a restore needs.
+    // POS-specific web prefix: /pos and /kds share one origin's localStorage, so
+    // each surface MUST use its own key (else KDS reads+clears POS's credential).
     final DeviceSessionSecretStore store = kIsWeb
-        ? SharedPreferencesDeviceSessionSecretStore(prefs)
+        ? SharedPreferencesDeviceSessionSecretStore(
+            prefs,
+            keyPrefix: kPosDeviceSessionPrefix,
+          )
         : FlutterSecureDeviceSessionStore();
     return (
       seams: (

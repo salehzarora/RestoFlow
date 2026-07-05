@@ -78,8 +78,13 @@ _realDeviceAuth(SharedPreferences prefs) async {
     // restart (flutter_secure_storage's web backing is not reliably durable in
     // the hosted build); NATIVE keeps the OS keychain. restore_device_session is
     // token-proven server-side, so persisting {deviceId, token} is sufficient.
+    // KDS-specific web prefix: /pos and /kds share one origin's localStorage, so
+    // each surface MUST use its own key (else it collides with POS's credential).
     final DeviceSessionSecretStore store = kIsWeb
-        ? SharedPreferencesDeviceSessionSecretStore(prefs)
+        ? SharedPreferencesDeviceSessionSecretStore(
+            prefs,
+            keyPrefix: kKdsDeviceSessionPrefix,
+          )
         : FlutterSecureDeviceSessionStore();
     return (
       seams: (

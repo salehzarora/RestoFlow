@@ -2,13 +2,27 @@
 ///
 /// After a device redeems its one-time pairing code (`redeem_device_pairing`), the
 /// backend returns a raw device-session token EXACTLY ONCE. That token is a bearer
-/// secret: possession of it (with the device id) lets the device restore/operate. It
-/// therefore MUST live only in OS-backed secure storage (Keychain / Keystore /
-/// equivalent) — NEVER in `SharedPreferences`, NEVER logged, NEVER shown in the UI.
+/// secret: possession of it (with the device id) lets the device restore/operate.
+///
+/// STORAGE (platform-specific): NEVER logged, NEVER shown in the UI, and cleared
+/// on unpair / server-side revocation.
+///  * NATIVE (mobile/desktop): it MUST live only in OS-backed secure storage
+///    (Keychain / Keystore / equivalent) — NEVER in `SharedPreferences`.
+///  * HOSTED FLUTTER WEB (LIVE-DEVICE-001): an MVP compromise — it may live in
+///    `localStorage` (via `shared_preferences`), because `flutter_secure_storage`
+///    on the web is ITSELF just same-origin browser storage (AES-in-`localStorage`
+///    with the key ALSO in `localStorage`), so it is no more protected there, and
+///    its web backing was not reliably durable in the hosted build. The web token
+///    is same-origin-JS-readable; the REAL controls remain **server-side**:
+///    `restore_device_session` re-proves the token each launch (token-only, no
+///    principal binding) and a lost device is **revoked** server-side (RF-160/161).
+///    On a shared origin (POS `/pos` + KDS `/kds`) each surface uses a DISTINCT
+///    storage key so they cannot read/clear each other's credential.
 ///
 /// This is a pure-Dart seam so repositories depend on the abstraction and stay
-/// testable with [InMemoryDeviceSessionSecretStore]; the real OS-backed
-/// implementation (`flutter_secure_storage`) lives in a Flutter package.
+/// testable with [InMemoryDeviceSessionSecretStore]; the OS-backed
+/// (`flutter_secure_storage`) and web (`shared_preferences`) implementations live
+/// in a Flutter package.
 library;
 
 /// The secret a paired device must keep: the raw session [sessionToken] (bearer
@@ -41,10 +55,11 @@ class DeviceSessionCredential {
       'DeviceSessionCredential(deviceId: $deviceId, token: ***)';
 }
 
-/// A secure, single-slot store for the [DeviceSessionCredential] (RF-161). One
-/// device app install holds at most one device-session secret. Implementations MUST
-/// use OS-backed secure storage; the token is cleared on sign-out / unpair /
-/// server-side revocation (fail-closed).
+/// A single-slot store for the [DeviceSessionCredential] (RF-161). One device app
+/// install holds at most one device-session secret. Native implementations MUST
+/// use OS-backed secure storage; hosted Flutter Web may use `localStorage` /
+/// `shared_preferences` (see the library note above). The token is cleared on
+/// sign-out / unpair / server-side revocation (fail-closed).
 abstract interface class DeviceSessionSecretStore {
   /// Persists (overwriting any prior) the device-session credential securely.
   Future<void> write(DeviceSessionCredential credential);

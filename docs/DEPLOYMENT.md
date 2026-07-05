@@ -192,7 +192,11 @@ hosting; the security model is the same as an on-premise device.
   in the hosted build, and on web it is anyway just AES-in-`localStorage` with a
   same-origin key (no OS keychain), so this is no less protected. **Native:** the
   OS Keychain/Keystore via `flutter_secure_storage` (unchanged). The token is never
-  logged or shown.
+  logged or shown. Because `/pos` and `/kds` share **one origin** (and
+  `localStorage` is per-origin, not per-path), POS and KDS use **surface-specific
+  storage keys** (`restoflow.pos.device_session.v1` vs
+  `restoflow.kds.device_session.v1`), so one surface never reads or clears the
+  other's credential.
 - **Staff PIN session is SEPARATE from device pairing.** The device stays paired;
   the per-shift staff **PIN session** may expire (RF-118) — an expired PIN shows
   the **PIN sign-in**, NOT the pairing screen. On launch: paired device restored →

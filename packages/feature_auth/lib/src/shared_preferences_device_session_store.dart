@@ -1,6 +1,16 @@
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// LIVE-DEVICE-001 — SURFACE-SPECIFIC web storage prefixes. The hosted deploy
+/// serves POS at `/pos` and KDS at `/kds` on the SAME origin, and browser
+/// `localStorage` is per-ORIGIN (shared across paths). So POS and KDS MUST use
+/// DISTINCT credential keys — otherwise KDS would read POS's credential, reject
+/// it as the wrong device type, and CLEAR the shared slot (un-pairing POS). Each
+/// app passes its own prefix; the default is used only where a surface is
+/// irrelevant (e.g. a single-app native install).
+const String kPosDeviceSessionPrefix = 'restoflow.pos.device_session.v1';
+const String kKdsDeviceSessionPrefix = 'restoflow.kds.device_session.v1';
+
 /// A `shared_preferences`-backed [DeviceSessionSecretStore] (LIVE-DEVICE-001) —
 /// used ON WEB so a paired POS/KDS tablet stays paired across an F5 / browser
 /// restart, which the `flutter_secure_storage` web backing does NOT reliably do
