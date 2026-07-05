@@ -34,7 +34,7 @@ Vercel's env store (or a secrets manager), **never in git**.
 |---|---|---|---|
 | `RESTOFLOW_SUPABASE_URL` | public project URL | ✅ | A public endpoint, not a secret. |
 | `RESTOFLOW_SUPABASE_ANON_KEY` | **anon / publishable key** | ✅ | **SAFE for clients** — RLS-gated, no elevated privilege. |
-| `RESTOFLOW_DEMO_MODE` | `false` | ✅ (set in vercel.json) | Enables the real auth gate; see §4. |
+| `RESTOFLOW_DEMO_MODE` | `false` | ✅ (pinned in the build script) | Pinned to `false` by [tools/vercel_build_dashboard.sh](../tools/vercel_build_dashboard.sh) (invoked by vercel.json's `buildCommand`); enables the real auth gate — see §4. |
 | `RESTOFLOW_AUTH_REDIRECT_URL` | public app URL | ⬜ optional | RF-LIVE-002 override for the sign-up email-confirmation redirect. Leave **unset** to derive it from the runtime web origin (correct for prod + preview); set only for a custom domain. Public URL, never a secret. See §5. |
 | `RESTOFLOW_DASHBOARD_URL` | public Dashboard URL | ⬜ optional | RF-LIVE-002 — the hosted Dashboard URL the **Admin** app's "open the Dashboard" link points at. Unset falls back to the local dev URL. Public URL, never a secret. |
 
@@ -75,8 +75,9 @@ render the honest "real mode unconfigured" screen.
   production build that **omits** the flag would serve the demo UI as if it were
   the product.
 - The hosted dashboard build **must** pass `--dart-define=RESTOFLOW_DEMO_MODE=false`
-  — [vercel.json](../vercel.json) already does. **Never remove it**, and verify any
-  alternate deploy path also sets it.
+  — [tools/vercel_build_dashboard.sh](../tools/vercel_build_dashboard.sh) (invoked by
+  [vercel.json](../vercel.json)'s `buildCommand`) already does. **Never remove it**,
+  and verify any alternate deploy path also sets it.
 - If real mode is selected but the URL/anon key is missing or invalid, the app
   **fails closed** to an honest "unconfigured" help page — it never silently falls
   back to demo and never crashes.
