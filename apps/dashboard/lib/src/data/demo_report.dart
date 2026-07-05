@@ -85,9 +85,11 @@ class HourlyNetSales {
   final int netSalesMinor;
 }
 
-/// DESIGN-002 — a prior-period comparison summary for KPI deltas. DISPLAY-ONLY
-/// demo data: real mode leaves it null, so a delta is NEVER shown against
-/// data that doesn't exist. Money is integer MINOR units (D-007).
+/// DESIGN-002 — a prior-period comparison summary for KPI deltas. DISPLAY-ONLY.
+/// Populated in demo mode, and in live mode from a SAFE "vs yesterday" derived
+/// from `sales_summary.last_7_days` (LIVE-UX-001); it is null only when no honest
+/// prior exists, so a delta is NEVER shown against data that doesn't exist. Money
+/// is integer MINOR units (D-007).
 class ReportComparison {
   const ReportComparison({
     required this.grossSalesMinor,
@@ -196,11 +198,22 @@ class DashboardReport {
   final List<HourlyNetSales> hourlyNetSales;
 
   /// DESIGN-002 (display-only): the prior-period totals KPI deltas compare
-  /// against. Null in real mode — deltas hide when absent (never invented).
+  /// against. Populated in demo and in the live-limited "vs yesterday" fallback
+  /// (LIVE-UX-001); null only when no honest prior exists — deltas hide then
+  /// (never invented).
   final ReportComparison? comparison;
 
-  /// True when there is nothing to report (drives the empty state).
-  bool get isEmpty => orderCount == 0 && recentOrders.isEmpty;
+  /// True when there is nothing to report (drives the empty state). LIVE-UX-001:
+  /// this also requires NO money — a day can collect real revenue
+  /// (`grossSalesMinor` / `collectedMinor` > 0) on orders created earlier while
+  /// having zero orders created today, and that money must never be hidden behind
+  /// a "No report data" empty state.
+  bool get isEmpty =>
+      orderCount == 0 &&
+      completedOrderCount == 0 &&
+      recentOrders.isEmpty &&
+      grossSalesMinor == 0 &&
+      collectedMinor == 0;
 
   /// Cash reconciliation variance = counted - expected (signed, integer minor).
   int get varianceMinor => countedCashMinor - expectedCashMinor;

@@ -973,6 +973,26 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardLiveDataTag => 'חי · מוגבל';
 
   @override
+  String get dashboardLiveReportsTitle => 'דוחות חיים';
+
+  @override
+  String get dashboardLiveReportsPending =>
+      'ניתוח מפורט — מכירות לפי שעה, פריטים מובילים, מכירות לפי סניף והזמנות אחרונות — יופיע כאן לאחר הפעלת הדוחות המלאים.';
+
+  @override
+  String adminDevicesShownCount(int count) {
+    return '$count מכשירים';
+  }
+
+  @override
+  String adminDevicesRevokedCount(int count) {
+    return '$count מבוטלים';
+  }
+
+  @override
+  String get adminDevicesRevokedSection => 'מכשירים שבוטלו';
+
+  @override
   String get dashboardGrossSales => 'מכירות ברוטו';
 
   @override

@@ -6,6 +6,7 @@ DashboardReport _report({
   int orderCount = 0,
   int expectedCashMinor = 0,
   int countedCashMinor = 0,
+  int collectedMinor = 0,
   List<RecentOrderRow> recentOrders = const [],
 }) => DashboardReport(
   currencyCode: 'ILS',
@@ -13,7 +14,7 @@ DashboardReport _report({
   grossSalesMinor: netSalesMinor,
   netSalesMinor: netSalesMinor,
   discountTotalMinor: 0,
-  collectedMinor: 0,
+  collectedMinor: collectedMinor,
   cashSalesMinor: 0,
   lastCashPaymentMinor: 0,
   orderCount: orderCount,
@@ -51,7 +52,7 @@ void main() {
     expect(report.varianceMinor, -1300); // 1283200 - 1284500
   });
 
-  test('isEmpty is true only when there are no orders and no recent rows', () {
+  test('isEmpty is true only with no orders, no recent rows AND no money', () {
     expect(_report(orderCount: 0).isEmpty, isTrue);
     expect(_report(orderCount: 7).isEmpty, isFalse);
     expect(
@@ -71,5 +72,9 @@ void main() {
       ).isEmpty,
       isFalse,
     );
+    // LIVE-UX-001: a day that collected real revenue on earlier-created orders
+    // (0 orders created today) is NOT empty — money is never hidden.
+    expect(_report(netSalesMinor: 8000, orderCount: 0).isEmpty, isFalse);
+    expect(_report(collectedMinor: 8000, orderCount: 0).isEmpty, isFalse);
   });
 }

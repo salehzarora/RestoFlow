@@ -1912,6 +1912,36 @@ abstract class AppLocalizations {
   /// **'Live · limited'**
   String get dashboardLiveDataTag;
 
+  /// Owner dashboard real-mode reports banner title, making the live-but-limited state feel intentional (LIVE-UX-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Live reports'**
+  String get dashboardLiveReportsTitle;
+
+  /// Owner dashboard note listing the analytics that are not yet available in the live-limited report; shown instead of empty cards (LIVE-UX-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Detailed analytics — sales by hour, top items, sales by branch, and recent orders — will appear here once full reporting is enabled.'**
+  String get dashboardLiveReportsPending;
+
+  /// Devices screen: count of live (non-revoked) devices shown above the list; status-neutral because they may be pending/paired/active, not only 'active' (LIVE-UX-001).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} devices'**
+  String adminDevicesShownCount(int count);
+
+  /// Devices screen: count of revoked devices (LIVE-UX-001).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} revoked'**
+  String adminDevicesRevokedCount(int count);
+
+  /// Devices screen: collapsed section title holding the read-only revoked-device history (LIVE-UX-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked devices'**
+  String get adminDevicesRevokedSection;
+
   /// Owner dashboard KPI card label for gross sales (before discounts).
   ///
   /// In en, this message translates to:

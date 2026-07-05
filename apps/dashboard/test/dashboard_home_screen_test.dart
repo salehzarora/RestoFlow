@@ -1,12 +1,66 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_dashboard/src/data/demo_report.dart';
 import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+
+/// A live-LIMITED report like the sales_summary fallback produces (LIVE-UX-001):
+/// KPIs + a safe "vs yesterday" comparison, but NO hourly / branch / top-item /
+/// recent-order data (nothing fabricated).
+class _LimitedRepo implements OwnerReportsRepository {
+  const _LimitedRepo();
+  @override
+  Future<DashboardReport> loadReport() async => const DashboardReport(
+    currencyCode: 'ILS',
+    businessDateLabel: '2026-07-05',
+    grossSalesMinor: 12000,
+    netSalesMinor: 12000,
+    discountTotalMinor: 0,
+    collectedMinor: 12000,
+    cashSalesMinor: 12000,
+    lastCashPaymentMinor: 0,
+    orderCount: 5,
+    completedOrderCount: 3,
+    openOrderCount: 2,
+    unpaidOrderCount: 2,
+    voidCount: 0,
+    voidTotalMinor: 0,
+    openingFloatMinor: 0,
+    expectedCashMinor: 0,
+    countedCashMinor: 0,
+    shiftStatus: 'none',
+    branches: [],
+    topItems: [],
+    recentOrders: [],
+    paymentMethods: [],
+    comparison: ReportComparison(
+      grossSalesMinor: 8000,
+      netSalesMinor: 8000,
+      orderCount: 4,
+      cashSalesMinor: 8000,
+    ),
+  );
+}
+
+Widget _wrapLimited() => ProviderScope(
+  overrides: [
+    runtimeConfigProvider.overrideWithValue(
+      RuntimeConfig.test(isDemoMode: false),
+    ),
+    ownerReportsRepositoryProvider.overrideWithValue(const _LimitedRepo()),
+  ],
+  child: const MaterialApp(
+    locale: Locale('en'),
+    localizationsDelegates: restoflowLocalizationsDelegates,
+    supportedLocales: kSupportedLocales,
+    home: DashboardHomeScreen(),
+  ),
+);
 
 Widget _wrap() => const ProviderScope(
   child: MaterialApp(
@@ -181,4 +235,35 @@ void main() {
 
     expect(_kpi(tester, 'kpi-net-sales'), '₪620.00');
   });
+
+  testWidgets(
+    'LIVE-UX-001: a live-LIMITED report reads as intentional — a pending-'
+    'analytics note, honest KPI deltas, NO empty section cards, NO fake chart',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(_wrapLimited());
+      await tester.pumpAndSettle();
+
+      // The titled live banner + the calm "more analytics coming" note.
+      expect(find.byKey(const Key('reports-realmode-banner')), findsOneWidget);
+      expect(find.text('Live reports'), findsWidgets); // banner title
+      expect(
+        find.byKey(const Key('reports-limited-analytics')),
+        findsOneWidget,
+      );
+
+      // Empty sections are HIDDEN (never bare titled cards) and NO fabricated
+      // sales-by-hour chart is drawn.
+      expect(find.byKey(const Key('sales-by-branch-card')), findsNothing);
+      expect(find.byKey(const Key('top-items-card')), findsNothing);
+      expect(find.byKey(const Key('recent-orders-card')), findsNothing);
+      expect(find.byKey(const Key('sales-by-hour-card')), findsNothing);
+
+      // The safe prior-day comparison lights up honest, integer-% KPI deltas
+      // (today 12000 vs yesterday 8000 = +50%), so live no longer looks bare.
+      expect(find.textContaining('50% vs yesterday'), findsWidgets);
+      // Still real data only — the KPI values are the live figures, not demo.
+      expect(_kpi(tester, 'kpi-net-sales'), '₪120.00');
+    },
+  );
 }

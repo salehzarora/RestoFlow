@@ -989,6 +989,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardLiveDataTag => 'Live · limited';
 
   @override
+  String get dashboardLiveReportsTitle => 'Live reports';
+
+  @override
+  String get dashboardLiveReportsPending =>
+      'Detailed analytics — sales by hour, top items, sales by branch, and recent orders — will appear here once full reporting is enabled.';
+
+  @override
+  String adminDevicesShownCount(int count) {
+    return '$count devices';
+  }
+
+  @override
+  String adminDevicesRevokedCount(int count) {
+    return '$count revoked';
+  }
+
+  @override
+  String get adminDevicesRevokedSection => 'Revoked devices';
+
+  @override
   String get dashboardGrossSales => 'Gross sales';
 
   @override
