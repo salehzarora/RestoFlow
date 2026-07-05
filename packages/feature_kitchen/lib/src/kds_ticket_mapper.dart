@@ -68,6 +68,12 @@ class KdsTicketMapper {
         orderType: orderType is String ? orderType : null,
         tableLabel: tableId is String ? tableLabels[tableId] : null,
         notes: notes is String && notes.isNotEmpty ? notes : null,
+        // DESIGN-001 display-only pluck: when the order was submitted, for the
+        // elapsed/urgency pill. `created_at` is the stable server insert time
+        // (`updated_at` bumps on every status push and would under-report
+        // age); `client_created_at` is the offline-client fallback. Still a
+        // money-free pluck — timestamps only.
+        submittedAt: _parseTimestamp(o['created_at'], o['client_created_at']),
       );
     }
 
@@ -148,11 +154,25 @@ class KdsTicketMapper {
                 orderType: b.info.orderType,
                 tableLabel: b.info.tableLabel,
                 notes: b.info.notes,
+                submittedAt: b.info.submittedAt,
               ),
             )
             .toList()
           ..sort((a, b) => a.kitchenTicketId.compareTo(b.kitchenTicketId));
     return tickets;
+  }
+
+  /// Parses the submit timestamp from the wire row: `created_at` first (the
+  /// stable server anchor), then `client_created_at`. Non-string / unparseable
+  /// values yield null — the card then shows no elapsed pill rather than a
+  /// fabricated age (DESIGN-001).
+  static DateTime? _parseTimestamp(Object? createdAt, Object? clientCreatedAt) {
+    if (createdAt is String) {
+      final parsed = DateTime.tryParse(createdAt);
+      if (parsed != null) return parsed;
+    }
+    if (clientCreatedAt is String) return DateTime.tryParse(clientCreatedAt);
+    return null;
   }
 
   /// Minimal order-status -> kitchen-ticket-status projection.
@@ -191,10 +211,12 @@ class _OrderInfo {
     required this.orderType,
     required this.tableLabel,
     required this.notes,
+    required this.submittedAt,
   });
 
   final String status;
   final String? orderType;
   final String? tableLabel;
   final String? notes;
+  final DateTime? submittedAt;
 }
