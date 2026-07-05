@@ -107,3 +107,33 @@ abstract final class RestoflowDurations {
   /// Larger reveals (panels, sheets).
   static const Duration slow = Duration(milliseconds: 300);
 }
+
+/// Soft elevation tiers (design language v2, DESIGN-001).
+///
+/// The product keeps its hairline-outlined flat cards; these shadows ADD depth
+/// selectively (hover/popover/dialog moments) instead of Material elevation
+/// tints. The shadow ink is the brand's green-black (`#10201A`) at low alpha,
+/// so shadows read as the same material as the dark sidebar rather than a
+/// neutral grey. Purely additive tokens — nothing consumes them implicitly.
+abstract final class RestoflowShadows {
+  /// Resting list items and quiet tiles.
+  static const List<BoxShadow> xs = [
+    BoxShadow(color: Color(0x0D10201A), offset: Offset(0, 1), blurRadius: 2),
+  ];
+
+  /// Standard cards on the tinted canvas.
+  static const List<BoxShadow> sm = [
+    BoxShadow(color: Color(0x1210201A), offset: Offset(0, 1), blurRadius: 3),
+    BoxShadow(color: Color(0x0A10201A), offset: Offset(0, 1), blurRadius: 2),
+  ];
+
+  /// Hover emphasis and popovers.
+  static const List<BoxShadow> md = [
+    BoxShadow(color: Color(0x1410201A), offset: Offset(0, 4), blurRadius: 14),
+  ];
+
+  /// Dialogs, sheets, and other top surfaces.
+  static const List<BoxShadow> lg = [
+    BoxShadow(color: Color(0x2410201A), offset: Offset(0, 12), blurRadius: 32),
+  ];
+}
