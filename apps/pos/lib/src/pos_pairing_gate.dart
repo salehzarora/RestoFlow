@@ -125,6 +125,9 @@ class _PosPairingGateState extends ConsumerState<PosPairingGate> {
         setState(() => _device = context);
         _publish(context);
       },
+      // LIVE-DEVICE-001: prefill the code from a hosted `…/pos?pair=CODE` link
+      // (or a QR that encodes it) so staff don't type it by hand; null off-web.
+      initialCode: pairingCodeFromUrl(),
       // Sprint (I): the language switcher is reachable before pairing too.
       appBarActions: const [LanguageSelector()],
     );

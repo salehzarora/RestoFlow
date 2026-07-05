@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -29,7 +30,7 @@ Future<void> main() async {
   // RF-114: the durable outbox persists to shared_preferences (localStorage on
   // web), so orders queued while offline survive a refresh / tab close / restart.
   final prefs = await SharedPreferences.getInstance();
-  final real = await _realDeviceAuth();
+  final real = await _realDeviceAuth(prefs);
   final seams = real.seams;
   runApp(
     ProviderScope(
@@ -138,7 +139,7 @@ typedef _RealDeviceSeams = ({
 /// instead of the legacy account gate (which used to surface a misleading
 /// "Account access denied" on devices) — NEVER a fake pairing or staff list.
 Future<({_RealDeviceSeams? seams, RealDeviceAuthProblem? problem})>
-_realDeviceAuth() async {
+_realDeviceAuth(SharedPreferences prefs) async {
   if (authDemoModeEnabled()) return (seams: null, problem: null);
   final SupabaseBootstrapConfig config;
   try {
@@ -151,7 +152,20 @@ _realDeviceAuth() async {
       config: config,
     ).createAnonymousDeviceSession();
     final transport = session.transport;
-    final store = FlutterSecureDeviceSessionStore();
+    // LIVE-DEVICE-001: on WEB the paired-device credential must survive an F5 /
+    // browser restart. flutter_secure_storage's web backing is not reliably
+    // durable in the hosted build, so on web persist it via shared_preferences
+    // (the same localStorage the RF-114 outbox uses); NATIVE keeps the OS
+    // keychain. restore_device_session is token-proven server-side (no principal
+    // binding), so persisting {deviceId, token} is all a restore needs.
+    // POS-specific web prefix: /pos and /kds share one origin's localStorage, so
+    // each surface MUST use its own key (else KDS reads+clears POS's credential).
+    final DeviceSessionSecretStore store = kIsWeb
+        ? SharedPreferencesDeviceSessionSecretStore(
+            prefs,
+            keyPrefix: kPosDeviceSessionPrefix,
+          )
+        : FlutterSecureDeviceSessionStore();
     return (
       seams: (
         pairing: SupabaseDevicePairingRepository(

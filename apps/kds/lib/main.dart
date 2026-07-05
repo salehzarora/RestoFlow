@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -28,7 +29,7 @@ Future<void> main() async {
   // RF-118: durable client PIN-attempt lockout counter (survives refresh — a
   // count + timestamp only, never a PIN; the server RF-051 lockout is authority).
   final prefs = await SharedPreferences.getInstance();
-  final real = await _realDeviceAuth();
+  final real = await _realDeviceAuth(prefs);
   final seams = real.seams;
   runApp(
     KdsApp(
@@ -60,7 +61,7 @@ typedef _RealDeviceSeams = ({
 /// honest state instead of the legacy account gate (which used to surface a
 /// misleading "Account access denied" on devices) — NEVER a fake pairing.
 Future<({_RealDeviceSeams? seams, RealDeviceAuthProblem? problem})>
-_realDeviceAuth() async {
+_realDeviceAuth(SharedPreferences prefs) async {
   if (authDemoModeEnabled()) return (seams: null, problem: null);
   final SupabaseBootstrapConfig config;
   try {
@@ -72,7 +73,19 @@ _realDeviceAuth() async {
     final transport = await SupabaseAuthBootstrap(
       config: config,
     ).createAnonymousDeviceTransport();
-    final store = FlutterSecureDeviceSessionStore();
+    // LIVE-DEVICE-001: on WEB persist the paired-device credential via
+    // shared_preferences so a KDS tablet stays paired across F5 / browser
+    // restart (flutter_secure_storage's web backing is not reliably durable in
+    // the hosted build); NATIVE keeps the OS keychain. restore_device_session is
+    // token-proven server-side, so persisting {deviceId, token} is sufficient.
+    // KDS-specific web prefix: /pos and /kds share one origin's localStorage, so
+    // each surface MUST use its own key (else it collides with POS's credential).
+    final DeviceSessionSecretStore store = kIsWeb
+        ? SharedPreferencesDeviceSessionSecretStore(
+            prefs,
+            keyPrefix: kKdsDeviceSessionPrefix,
+          )
+        : FlutterSecureDeviceSessionStore();
     return (
       seams: (
         pairing: SupabaseDevicePairingRepository(
