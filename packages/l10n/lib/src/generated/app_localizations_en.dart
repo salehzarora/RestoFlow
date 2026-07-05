@@ -1066,6 +1066,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'To explore the demo instead, run the app without any configuration — demo mode is the default.';
 
   @override
+  String get authProductionDemoBlockedTitle =>
+      'Demo mode is on with real credentials';
+
+  @override
+  String get authProductionDemoBlockedBody =>
+      'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. RestoFlow never presents demo data as production.';
+
+  @override
   String get authDeviceSignInUnavailableTitle => 'Device sign-in unavailable';
 
   @override

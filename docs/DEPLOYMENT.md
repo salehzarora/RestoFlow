@@ -35,6 +35,8 @@ Vercel's env store (or a secrets manager), **never in git**.
 | `RESTOFLOW_SUPABASE_URL` | public project URL | ✅ | A public endpoint, not a secret. |
 | `RESTOFLOW_SUPABASE_ANON_KEY` | **anon / publishable key** | ✅ | **SAFE for clients** — RLS-gated, no elevated privilege. |
 | `RESTOFLOW_DEMO_MODE` | `false` | ✅ (set in vercel.json) | Enables the real auth gate; see §4. |
+| `RESTOFLOW_AUTH_REDIRECT_URL` | public app URL | ⬜ optional | RF-LIVE-002 override for the sign-up email-confirmation redirect. Leave **unset** to derive it from the runtime web origin (correct for prod + preview); set only for a custom domain. Public URL, never a secret. See §5. |
+| `RESTOFLOW_DASHBOARD_URL` | public Dashboard URL | ⬜ optional | RF-LIVE-002 — the hosted Dashboard URL the **Admin** app's "open the Dashboard" link points at. Unset falls back to the local dev URL. Public URL, never a secret. |
 
 These are the exact `--dart-define` names the apps read
 ([supabase_bootstrap_config.dart](../packages/auth_identity/lib/src/supabase_bootstrap_config.dart),
@@ -78,6 +80,13 @@ render the honest "real mode unconfigured" screen.
 - If real mode is selected but the URL/anon key is missing or invalid, the app
   **fails closed** to an honest "unconfigured" help page — it never silently falls
   back to demo and never crashes.
+- **RF-LIVE-002 demo-safety guard**: a **release** build left in demo mode **while
+  valid real credentials are also present** (e.g. a hosted build that set the
+  Supabase URL/anon key but forgot `RESTOFLOW_DEMO_MODE=false`) is an *accidental
+  production demo*. The Dashboard and Admin apps now **fail closed** to an honest
+  "demo mode is on with real credentials" page instead of serving demo data as if
+  it were live. Explicit local/dev demo (no real config present) and debug builds
+  are unaffected — so local demo still works exactly as before.
 
 ---
 
@@ -87,31 +96,34 @@ The dashboard uses **email + password** sign-in and **email confirmation on
 sign-up** only (admin adds **TOTP MFA**). There is **no** magic-link / OAuth /
 password-reset deep-link callback surface.
 
-- **Sign-up email confirmation** redirect is governed by the **Supabase project's
-  Site URL / Redirect URLs** (the app does not yet pass `emailRedirectTo`). For the
-  hosted dashboard you **must** set, in the Supabase dashboard → Authentication →
-  URL configuration:
-  - **Site URL** → the Vercel production domain.
-  - **Redirect URLs** allowlist → the Vercel production + preview domains.
-- Do **not** leave these at a `localhost`/dev value, or confirmed owners will be
-  redirected to the wrong host. *(Deriving the redirect from the runtime origin in
-  code is a tracked follow-up — see §6.)*
+- **Sign-up email confirmation** redirect is now **origin-derived in code**
+  (RF-LIVE-002): `signUp` passes `emailRedirectTo` from the current web origin
+  (`kIsWeb`-guarded, [auth_redirect.dart](../packages/feature_auth/lib/src/auth_redirect.dart)),
+  so a confirmation link returns to whatever host is serving the app —
+  `localhost:<port>` in dev, the Vercel domain in prod/preview — with no config.
+  Set the optional `RESTOFLOW_AUTH_REDIRECT_URL` override only for a custom domain.
+  Off the web (non-web builds) it returns null and the SDK/project default applies.
+- Still set the Supabase project's **Redirect URLs** allowlist (Authentication →
+  URL configuration) to include the Vercel production + preview domains (and any
+  custom domain), so GoTrue accepts the origin-derived redirect target.
 
 ---
 
-## 6. Known limitations / follow-ups (proposed **RF-LIVE-002**)
+## 6. RF-LIVE-002 — hosted auth + mode-safety hardening (**done**)
 
-These are **not** fixed here (they change shipped app behaviour and are beyond
-RF-LIVE-001's minimal-safety scope); track them next:
+The three RF-LIVE-001 follow-ups are now implemented (design/UI + config only; no
+backend/RLS/RPC change):
 
-- **Origin-derived email redirect**: pass `emailRedirectTo` from the runtime web
-  origin (`kIsWeb`-guarded) on `signUp`, plus a test, so confirmation links follow
-  the deploy host automatically instead of relying on Supabase Site URL config.
-- **Admin "open Dashboard" link** hardcodes `http://localhost:57026`
-  ([admin_platform_gate.dart](../apps/admin/lib/src/admin_platform_gate.dart)) —
-  derive it from config/origin before hosting the Admin app.
-- **Demo-mode defence-in-depth**: assert a release build is not in demo mode (or
-  invert the default so real must be opted into), so demo can never ship as prod.
+- ✅ **Origin-derived email redirect** — `signUp` passes an origin-derived
+  `emailRedirectTo` (shared, unit-tested `resolveAuthRedirectUrl` in feature_auth),
+  with an optional `RESTOFLOW_AUTH_REDIRECT_URL` override for custom domains; null
+  off-web. See §5.
+- ✅ **Admin "open Dashboard" link** no longer hardcodes `localhost:57026` —
+  `resolveDashboardUrl()` ([admin_platform_gate.dart](../apps/admin/lib/src/admin_platform_gate.dart))
+  prefers `RESTOFLOW_DASHBOARD_URL` (hosted) and falls back to the local dev URL.
+- ✅ **Production demo-mode safety** — a release build in demo mode with valid real
+  credentials present fails closed to an honest help page (see §4), so demo can
+  never ship as production; explicit local/dev demo is preserved.
 
 ---
 

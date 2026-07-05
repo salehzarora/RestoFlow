@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 
@@ -24,7 +25,11 @@ import 'auth_context_fetcher.dart' show authDemoModeEnabled;
 /// backend or silently falling back to a fake-live screen. Real mode never
 /// bypasses auth and never crashes the app at this layer.
 class RuntimeConfig {
-  const RuntimeConfig._(this.isDemoMode, this.supabase);
+  const RuntimeConfig._(
+    this.isDemoMode,
+    this.supabase, {
+    this.isDemoModeMisconfigured = false,
+  });
 
   /// Whether the app runs the in-memory Demo* repositories (the DEFAULT).
   final bool isDemoMode;
@@ -35,17 +40,42 @@ class RuntimeConfig {
   /// instead of contacting a backend.
   final SupabaseBootstrapConfig? supabase;
 
+  /// RF-LIVE-002 — true when this is a RELEASE build that selected DEMO mode
+  /// while a VALID real Supabase config is ALSO present: a dangerous
+  /// misconfiguration (real credentials but demo UI, e.g. a hosted Vercel build
+  /// that forgot `RESTOFLOW_DEMO_MODE=false`). The app must FAIL CLOSED with an
+  /// honest config error instead of serving demo data as if it were production.
+  /// It is false for local/dev demo (no real config present) and for debug
+  /// builds, so developer preview is unaffected.
+  final bool isDemoModeMisconfigured;
+
   /// Real mode is simply the negation of demo mode (single source of truth).
   bool get isRealMode => !isDemoMode;
 
   /// Builds the runtime config from the existing compile-time `--dart-define`
   /// reads. [demoModeOverride] lets a host force the mode (e.g. tests) without
   /// re-reading any env value; when omitted, the audited [authDemoModeEnabled]
-  /// read decides, defaulting to demo.
-  factory RuntimeConfig.fromEnvironment({bool? demoModeOverride}) {
+  /// read decides, defaulting to demo. [isReleaseBuild] and [realConfigPresent]
+  /// are injectable ONLY so the production demo-safety guard is unit-testable;
+  /// production uses `kReleaseMode` + the real config presence check.
+  factory RuntimeConfig.fromEnvironment({
+    bool? demoModeOverride,
+    bool isReleaseBuild = kReleaseMode,
+    bool Function()? realConfigPresent,
+  }) {
     final demo = demoModeOverride ?? authDemoModeEnabled();
     if (demo) {
-      return const RuntimeConfig._(true, null);
+      // Production demo-safety: a RELEASE build in demo mode WITH a valid real
+      // config is an accidental production demo -> flag it so the app fails
+      // closed. `&&` short-circuits, so the config read is skipped off-release.
+      final misconfigured =
+          isReleaseBuild &&
+          (realConfigPresent ?? SupabaseBootstrapConfig.isPresentAndValid)();
+      return RuntimeConfig._(
+        true,
+        null,
+        isDemoModeMisconfigured: misconfigured,
+      );
     }
     try {
       return RuntimeConfig._(false, SupabaseBootstrapConfig.fromEnvironment());
@@ -60,11 +90,17 @@ class RuntimeConfig {
   /// Test seam: build an explicit config WITHOUT reading any `--dart-define`.
   /// Lets pure `ProviderContainer` tests force demo/real selection (and, in real
   /// mode, supply or omit a [supabase] config) with no SupabaseClient and no
-  /// network.
+  /// network. [isDemoModeMisconfigured] defaults false so existing tests are
+  /// unaffected.
   factory RuntimeConfig.test({
     required bool isDemoMode,
     SupabaseBootstrapConfig? supabase,
-  }) => RuntimeConfig._(isDemoMode, supabase);
+    bool isDemoModeMisconfigured = false,
+  }) => RuntimeConfig._(
+    isDemoMode,
+    supabase,
+    isDemoModeMisconfigured: isDemoModeMisconfigured,
+  );
 }
 
 /// The global swap point every repository seam watches to choose Demo* (default)

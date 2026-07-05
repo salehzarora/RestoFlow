@@ -3,17 +3,37 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-/// A helpful, honest "real mode is not configured" page.
+/// Why the honest config help page is being shown.
+enum RealModeConfigIssue {
+  /// REAL mode was selected but the Supabase config is missing/invalid, or the
+  /// backend bootstrap failed at startup.
+  unconfigured,
+
+  /// RF-LIVE-002: DEMO mode is on in a RELEASE build while VALID real
+  /// credentials are present — an accidental production demo. Fail closed rather
+  /// than serve demo data as if it were live.
+  demoModeInProduction,
+}
+
+/// A helpful, honest config help page.
 ///
 /// Shown when an app is started in REAL mode (`RESTOFLOW_DEMO_MODE=false`) but
 /// the Supabase connection config is missing/invalid — or when the backend
-/// bootstrap failed at startup. RestoFlow never fakes a backend, so instead of
-/// crashing (or silently showing demo data as if it were real) the app explains
-/// exactly which `--dart-define` values real mode needs and how to run the demo
-/// instead. The env names are technical identifiers (not translated prose); all
-/// sentences come from `restoflow_l10n` (D-014).
+/// bootstrap failed at startup — OR (RF-LIVE-002) when a RELEASE build is in DEMO
+/// mode while valid real credentials are present. RestoFlow never fakes a backend
+/// and never serves demo data as production, so instead of crashing (or silently
+/// showing demo data as if it were real) the app explains exactly which
+/// `--dart-define` values are needed and how to run the demo instead. The env
+/// names are technical identifiers (not translated prose); all sentences come
+/// from `restoflow_l10n` (D-014).
 class RealModeUnconfiguredView extends StatelessWidget {
-  const RealModeUnconfiguredView({super.key});
+  const RealModeUnconfiguredView({
+    this.issue = RealModeConfigIssue.unconfigured,
+    super.key,
+  });
+
+  /// Which honest config state to explain (default: real-mode unconfigured).
+  final RealModeConfigIssue issue;
 
   /// The demo/real flag read by `authDemoModeEnabled` (default true = demo).
   static const String demoModeEnvName = 'RESTOFLOW_DEMO_MODE';
@@ -21,6 +41,7 @@ class RealModeUnconfiguredView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final isProductionDemo = issue == RealModeConfigIssue.demoModeInProduction;
     final defines = [
       '--dart-define=$demoModeEnvName=false',
       '--dart-define=${SupabaseBootstrapConfig.urlEnvName}=<supabase-url>',
@@ -40,10 +61,19 @@ class RealModeUnconfiguredView extends StatelessWidget {
             padding: const EdgeInsets.all(RestoflowSpacing.xl),
             children: [
               RestoflowNoticeBanner(
+                key: Key(
+                  isProductionDemo
+                      ? 'production-demo-blocked'
+                      : 'real-mode-unconfigured',
+                ),
                 tone: RestoflowTone.warning,
                 icon: Icons.settings_outlined,
-                title: l10n.authRealModeUnconfiguredTitle,
-                body: l10n.authRealModeUnconfiguredBody,
+                title: isProductionDemo
+                    ? l10n.authProductionDemoBlockedTitle
+                    : l10n.authRealModeUnconfiguredTitle,
+                body: isProductionDemo
+                    ? l10n.authProductionDemoBlockedBody
+                    : l10n.authRealModeUnconfiguredBody,
               ),
               const SizedBox(height: RestoflowSpacing.lg),
               RestoflowSectionCard(

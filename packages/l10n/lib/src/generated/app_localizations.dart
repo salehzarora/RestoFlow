@@ -2062,6 +2062,18 @@ abstract class AppLocalizations {
   /// **'To explore the demo instead, run the app without any configuration — demo mode is the default.'**
   String get authRealModeUnconfiguredDemoHint;
 
+  /// Title of the help page shown when a release build is in demo mode while valid real backend credentials are present (an accidental production demo).
+  ///
+  /// In en, this message translates to:
+  /// **'Demo mode is on with real credentials'**
+  String get authProductionDemoBlockedTitle;
+
+  /// Body of the production-demo-blocked help page explaining the misconfiguration and how to fix it.
+  ///
+  /// In en, this message translates to:
+  /// **'This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. RestoFlow never presents demo data as production.'**
+  String get authProductionDemoBlockedBody;
+
   /// Title of the help page shown when POS/KDS device bootstrap fails because anonymous sign-in is rejected by the backend.
   ///
   /// In en, this message translates to:

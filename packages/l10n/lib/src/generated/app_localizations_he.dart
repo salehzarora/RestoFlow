@@ -1051,6 +1051,14 @@ class AppLocalizationsHe extends AppLocalizations {
       'כדי לנסות את הדמו במקום זאת, הפעל את האפליקציה ללא כל הגדרה — מצב הדמו הוא ברירת המחדל.';
 
   @override
+  String get authProductionDemoBlockedTitle =>
+      'מצב הדגמה פעיל עם פרטי התחברות אמיתיים';
+
+  @override
+  String get authProductionDemoBlockedBody =>
+      'לגרסה זו יש הגדרות חיבור שרת תקפות אך היא פועלת במצב הדגמה, ולכן היא תציג נתוני הדגמה כאילו היו אמיתיים. כבה את מצב ההדגמה כדי להציג נתונים אמיתיים, או הסר את הגדרות החיבור כדי להריץ את ההדגמה. RestoFlow לעולם אינו מציג נתוני הדגמה כנתוני ייצור.';
+
+  @override
   String get authDeviceSignInUnavailableTitle => 'כניסת המכשיר אינה זמינה';
 
   @override

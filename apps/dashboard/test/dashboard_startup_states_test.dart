@@ -44,4 +44,20 @@ void main() {
     expect(find.byType(DashboardShell), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('RF-LIVE-002: an accidental production demo (misconfigured) '
+      'fails closed to the blocked page — never the demo shell', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: DashboardApp(demoMode: true, demoModeMisconfigured: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RealModeUnconfiguredView), findsOneWidget);
+    expect(find.byKey(const Key('production-demo-blocked')), findsOneWidget);
+    expect(find.byType(DashboardShell), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

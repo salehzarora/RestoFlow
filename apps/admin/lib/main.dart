@@ -24,6 +24,18 @@ Future<void> main() async {
   );
 
   final config = RuntimeConfig.fromEnvironment();
+  // RF-LIVE-002: a RELEASE build left in demo mode while valid real credentials
+  // are present is an accidental production demo — fail closed with an honest
+  // help page. Local demo (no real config present) is unaffected.
+  if (config.isDemoModeMisconfigured) {
+    runApp(
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const AdminApp(demoMode: true, demoModeMisconfigured: true),
+      ),
+    );
+    return;
+  }
   // DEMO mode (the DEFAULT): the demo-backed platform overview, no session.
   if (config.isDemoMode) {
     runApp(
@@ -105,6 +117,7 @@ class AdminApp extends ConsumerWidget {
     this.authService,
     this.fetchContext,
     this.realModeUnconfigured = false,
+    this.demoModeMisconfigured = false,
     super.key,
   });
 
@@ -123,6 +136,11 @@ class AdminApp extends ConsumerWidget {
   /// the bootstrap failed → the honest unconfigured help page.
   final bool realModeUnconfigured;
 
+  /// RF-LIVE-002: true when a RELEASE build is in DEMO mode while VALID real
+  /// credentials are present (an accidental production demo) → the honest
+  /// "demo mode with real credentials" help page, never demo data as production.
+  final bool demoModeMisconfigured;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
@@ -138,6 +156,13 @@ class AdminApp extends ConsumerWidget {
   }
 
   Widget _home() {
+    // RF-LIVE-002: an accidental production demo (release + demo-mode + valid
+    // real credentials) fails closed BEFORE the demo overview ever renders.
+    if (demoModeMisconfigured) {
+      return const RealModeUnconfiguredView(
+        issue: RealModeConfigIssue.demoModeInProduction,
+      );
+    }
     final demo = demoMode ?? authDemoModeEnabled();
     // Demo shows the overview (no session). No sign-out (nothing to sign out of).
     if (demo) return const PlatformAdminScreen();

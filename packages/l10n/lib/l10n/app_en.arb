@@ -1098,6 +1098,14 @@
   "@authRealModeUnconfiguredDemoHint": {
     "description": "Hint on the real-mode-unconfigured help page explaining how to run the demo."
   },
+  "authProductionDemoBlockedTitle": "Demo mode is on with real credentials",
+  "@authProductionDemoBlockedTitle": {
+    "description": "Title of the help page shown when a release build is in demo mode while valid real backend credentials are present (an accidental production demo)."
+  },
+  "authProductionDemoBlockedBody": "This build has valid backend connection settings but is running in demo mode, so it would show demo data as if it were live. Turn off demo mode to serve real data, or remove the connection settings to run the demo. RestoFlow never presents demo data as production.",
+  "@authProductionDemoBlockedBody": {
+    "description": "Body of the production-demo-blocked help page explaining the misconfiguration and how to fix it."
+  },
   "authDeviceSignInUnavailableTitle": "Device sign-in unavailable",
   "@authDeviceSignInUnavailableTitle": {
     "description": "Title of the help page shown when POS/KDS device bootstrap fails because anonymous sign-in is rejected by the backend."

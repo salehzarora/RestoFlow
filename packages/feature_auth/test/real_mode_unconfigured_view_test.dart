@@ -3,13 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-Future<void> _pump(WidgetTester tester, {Locale? locale}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  Locale? locale,
+  RealModeConfigIssue issue = RealModeConfigIssue.unconfigured,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       locale: locale,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
-      home: const RealModeUnconfiguredView(),
+      home: RealModeUnconfiguredView(issue: issue),
     ),
   );
   await tester.pumpAndSettle();
@@ -39,5 +43,43 @@ void main() {
     await _pump(tester, locale: const Locale('ar'));
     expect(find.byType(RealModeUnconfiguredView), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  group('RF-LIVE-002 production-demo-blocked issue', () {
+    testWidgets('the demoModeInProduction issue shows the blocked copy + key', (
+      tester,
+    ) async {
+      await _pump(tester, issue: RealModeConfigIssue.demoModeInProduction);
+      expect(find.byKey(const Key('production-demo-blocked')), findsOneWidget);
+      expect(find.byKey(const Key('real-mode-unconfigured')), findsNothing);
+      expect(
+        find.text('Demo mode is on with real credentials'),
+        findsOneWidget,
+      );
+      // Still teaches the fix (turn off demo mode) — and never a secret.
+      expect(find.textContaining('RESTOFLOW_DEMO_MODE=false'), findsOneWidget);
+      expect(find.textContaining('eyJ'), findsNothing);
+    });
+
+    testWidgets('the default (unconfigured) issue keeps its own key/title', (
+      tester,
+    ) async {
+      await _pump(tester);
+      expect(find.byKey(const Key('real-mode-unconfigured')), findsOneWidget);
+      expect(find.byKey(const Key('production-demo-blocked')), findsNothing);
+      expect(find.text('Real mode is not configured'), findsOneWidget);
+    });
+
+    testWidgets('the blocked page renders under RTL (Arabic) safely', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        locale: const Locale('ar'),
+        issue: RealModeConfigIssue.demoModeInProduction,
+      );
+      expect(find.byKey(const Key('production-demo-blocked')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

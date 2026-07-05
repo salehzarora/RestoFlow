@@ -328,6 +328,8 @@
   "authRealModeUnconfiguredBody": "האפליקציה הופעלה במצב אמת, אך הגדרות החיבור לשרת חסרות או שגויות. RestoFlow לעולם אינו מזייף שרת, ולכן מצב האמת נשאר נעול עד שיסופקו הגדרות תקינות.",
   "authRealModeUnconfiguredHowTo": "הפעל את האפליקציה עם הערכים הבאים",
   "authRealModeUnconfiguredDemoHint": "כדי לנסות את הדמו במקום זאת, הפעל את האפליקציה ללא כל הגדרה — מצב הדמו הוא ברירת המחדל.",
+  "authProductionDemoBlockedTitle": "מצב הדגמה פעיל עם פרטי התחברות אמיתיים",
+  "authProductionDemoBlockedBody": "לגרסה זו יש הגדרות חיבור שרת תקפות אך היא פועלת במצב הדגמה, ולכן היא תציג נתוני הדגמה כאילו היו אמיתיים. כבה את מצב ההדגמה כדי להציג נתונים אמיתיים, או הסר את הגדרות החיבור כדי להריץ את ההדגמה. RestoFlow לעולם אינו מציג נתוני הדגמה כנתוני ייצור.",
   "authDeviceSignInUnavailableTitle": "כניסת המכשיר אינה זמינה",
   "authDeviceSignInUnavailableBody": "כניסת מכשירים אנונימית מושבתת או שאימות Supabase אינו מוגדר.",
   "authDeviceSignInUnavailableHowTo": "איך לתקן",

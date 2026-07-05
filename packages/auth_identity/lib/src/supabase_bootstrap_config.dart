@@ -129,6 +129,20 @@ class SupabaseBootstrapConfig {
       anonKey: read(anonKeyEnvName),
     );
   }
+
+  /// RF-LIVE-002 — true when a VALID real config (public URL + anon key) is
+  /// present, WITHOUT throwing. Used to detect the dangerous "real credentials
+  /// present but the app is in demo mode" case in a release build. Returns false
+  /// for missing/placeholder/invalid/service-role config (all fail-closed). Reads
+  /// no secret into any log; [readEnv] is injectable for tests.
+  static bool isPresentAndValid({String Function(String name)? readEnv}) {
+    try {
+      SupabaseBootstrapConfig.fromEnvironment(readEnv: readEnv);
+      return true;
+    } on SupabaseConfigException {
+      return false;
+    }
+  }
 }
 
 /// Reads a compile-time `--dart-define` value (the production source). Returns

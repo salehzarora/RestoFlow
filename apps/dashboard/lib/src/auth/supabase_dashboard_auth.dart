@@ -6,7 +6,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminRepository, AdminScope;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show AuthContextFetcher;
+    show AuthContextFetcher, authRedirectUrlFromEnvironment;
 import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
     show
         MenuImageStorage,
@@ -23,7 +23,6 @@ import '../printers/printers_repository.dart';
 import '../staff/staff_repository.dart';
 import '../tables/tables_repository.dart';
 import 'dashboard_auth_repository.dart';
-import 'email_redirect.dart';
 import 'onboarding_repository.dart';
 
 /// The real, Supabase-backed dashboard auth + onboarding implementations
@@ -168,14 +167,14 @@ class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
     required String password,
   }) async {
     try {
+      // RF-LIVE-002: the email-confirmation link returns to the CURRENT web
+      // origin (or an explicit RESTOFLOW_AUTH_REDIRECT_URL override) so a hosted
+      // Dashboard confirms on the right host — never a stale localhost/dev value.
+      // Null (non-web) uses the SDK/project default. Never a secret.
       final response = await _client.auth.signUp(
         email: email,
         password: password,
-        // Send the confirmation email's redirect to the production app URL
-        // (RESTOFLOW_APP_URL) or the live web origin — never GoTrue's default
-        // localhost Site URL. Null (off the web, no config) keeps the prior
-        // behavior of deferring to the project's configured Site URL.
-        emailRedirectTo: resolveEmailRedirectUrl(),
+        emailRedirectTo: authRedirectUrlFromEnvironment(),
       );
       // A session means auto-confirm is on; no session means the project requires
       // an email confirmation before a session is issued (honest pending state).

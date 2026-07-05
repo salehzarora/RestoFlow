@@ -91,6 +91,17 @@ void main() {
     expect(find.text(l10n.adminOverviewTitle), findsOneWidget);
   });
 
+  testWidgets('RF-LIVE-002: an accidental production demo (misconfigured) '
+      'fails closed to the blocked page, never the overview', (tester) async {
+    await _pump(
+      tester,
+      const AdminApp(demoMode: true, demoModeMisconfigured: true),
+    );
+    final l10n = await en();
+    expect(find.byKey(const Key('production-demo-blocked')), findsOneWidget);
+    expect(find.text(l10n.adminOverviewTitle), findsNothing);
+  });
+
   testWidgets('real mode with no wired auth fails closed to the unconfigured '
       'help page (never a bypass)', (tester) async {
     await _pump(tester, const AdminApp(demoMode: false));
