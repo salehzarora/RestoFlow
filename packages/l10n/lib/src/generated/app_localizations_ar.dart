@@ -1889,6 +1889,29 @@ class AppLocalizationsAr extends AppLocalizations {
       'تنتهي صلاحية هذا الرمز قريبًا ويمكن استرداده مرة واحدة.';
 
   @override
+  String get pairingPanelTitle => 'إقران هذا الجهاز';
+
+  @override
+  String get pairingPanelInstructions =>
+      'افتح هذا الرابط على الجهاز اللوحي، أو امسح رمز QR، ثم اضغط على إقران.';
+
+  @override
+  String get pairingPanelScanLabel => 'امسح لفتحه على الجهاز اللوحي';
+
+  @override
+  String get pairingPanelLinkLabel => 'رابط الإقران';
+
+  @override
+  String get pairingPanelCopyLink => 'نسخ الرابط';
+
+  @override
+  String get pairingPanelCodeLabel => 'رمز الإقران';
+
+  @override
+  String get pairingPanelManualOnly =>
+      'لا يوجد رابط تطبيق لهذا النوع من الأجهزة — أدخل الرمز يدويًا على الجهاز اللوحي.';
+
+  @override
   String get adminTokenStartedTitle => 'بدأت جلسة الجهاز';
 
   @override

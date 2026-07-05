@@ -47,6 +47,10 @@ dependencies:
   # RF-113: the owner Settings / Users / Devices admin surfaces (demo-backed).
   restoflow_feature_admin:
     path: ../../packages/feature_admin
+  # LIVE-OPS-001: OFFLINE/local QR rendering for the device pairing panel (no
+  # external QR API, no network). Same pure-Dart package the Admin MFA screen
+  # uses; scoped to the Dashboard app (feature_admin stays QR-free via a seam).
+  qr_flutter: '>=4.1.0 <5.0.0'
 dev_dependencies:
   flutter_test:
     sdk: flutter

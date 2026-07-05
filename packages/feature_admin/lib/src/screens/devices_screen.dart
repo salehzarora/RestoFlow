@@ -7,6 +7,7 @@ import '../models/admin_failure.dart';
 import '../models/device_models.dart';
 import '../models/role_rank.dart';
 import '../state/admin_providers.dart';
+import '../state/device_pairing_panel.dart';
 import '../widgets/admin_common.dart';
 import '../widgets/one_time_secret_dialog.dart';
 
@@ -245,21 +246,37 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   Future<void> _issueCode() async {
-    final l10n = AppLocalizations.of(context);
+    // LIVE-OPS-001: prefer the host-provided QR pairing panel (Dashboard); when
+    // absent, keep the plain one-time-code dialog. Read the seam before the await.
+    final present = ref.read(devicePairingPanelProvider);
     setState(() => _busy = true);
     final r = await _ctrl.issueEnrollmentCode(widget.device.id);
     if (!mounted) return;
     setState(() => _busy = false);
-    r.fold(
-      (issued) => OneTimeSecretDialog.show(
+    final issued = r.fold<EnrollmentCodeIssued?>((v) => v, (f) {
+      _onFailure(f);
+      return null;
+    });
+    if (issued == null || !mounted) return;
+    if (present != null) {
+      await present(
         context,
-        title: l10n.adminCodeIssuedTitle,
-        subtitle: l10n.adminCodeIssuedSubtitle,
-        secret: issued.code,
-        icon: Icons.qr_code_2,
-        footnote: l10n.adminCodeExpiresNote,
-      ),
-      _onFailure,
+        PairingPanelRequest(
+          deviceLabel: widget.device.label,
+          deviceType: widget.device.deviceType,
+          code: issued.code,
+        ),
+      );
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    await OneTimeSecretDialog.show(
+      context,
+      title: l10n.adminCodeIssuedTitle,
+      subtitle: l10n.adminCodeIssuedSubtitle,
+      secret: issued.code,
+      icon: Icons.qr_code_2,
+      footnote: l10n.adminCodeExpiresNote,
     );
   }
 

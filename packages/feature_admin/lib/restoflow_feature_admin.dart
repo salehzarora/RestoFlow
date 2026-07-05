@@ -25,6 +25,7 @@ export 'src/data/demo_admin_store.dart';
 
 // State (Riverpod providers + the write controller + overrides).
 export 'src/state/admin_providers.dart';
+export 'src/state/device_pairing_panel.dart';
 
 // UI (the three owner admin surfaces + reusable building blocks: the demo
 // banner, the page header/section/state/pill primitives, and the failure/role

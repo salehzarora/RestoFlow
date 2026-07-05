@@ -77,6 +77,7 @@ void main() {
       WidgetTester tester,
       AdminRepository repo, {
       AdminScope scope = AdminScope.demo,
+      PairingPanelPresenter? pairingPanel,
     }) async {
       tester.view.physicalSize = const Size(1400, 2200);
       tester.view.devicePixelRatio = 1.0;
@@ -84,7 +85,11 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: adminFeatureOverrides(scope: scope, repository: repo),
+          overrides: [
+            ...adminFeatureOverrides(scope: scope, repository: repo),
+            if (pairingPanel != null)
+              devicePairingPanelProvider.overrideWithValue(pairingPanel),
+          ],
           child: MaterialApp(
             localizationsDelegates: restoflowLocalizationsDelegates,
             supportedLocales: kSupportedLocales,
@@ -235,6 +240,61 @@ void main() {
           find.widgetWithText(FilledButton, 'Add device'),
         );
         expect(create.onPressed, isNull);
+      },
+    );
+
+    Map<String, dynamic> issueResult() => {
+      'ok': true,
+      'enrollment_code': 'CODE-XY',
+      'device_id': 'dev-1',
+      'device_pairing_id': 'pair-1',
+    };
+
+    testWidgets(
+      'LIVE-OPS-001: issuing a code shows the host QR pairing panel (not the '
+      'plain one-time dialog), passing the device type + code',
+      (tester) async {
+        PairingPanelRequest? captured;
+        final t = _FakeTransport((fn, p) {
+          if (fn == 'list_devices') return listWith('none');
+          if (fn == 'issue_device_enrollment_code') return issueResult();
+          return null;
+        });
+        await pump(
+          tester,
+          _repo(t),
+          pairingPanel: (ctx, req) async => captured = req,
+        );
+
+        await tester.tap(find.text('Issue code'));
+        await tester.pumpAndSettle();
+
+        expect(captured, isNotNull);
+        expect(captured!.code, 'CODE-XY');
+        expect(captured!.deviceType, 'pos');
+        expect(captured!.deviceLabel, 'Counter POS');
+        // The host panel REPLACED the plain one-time-secret dialog.
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+        expect(find.text(l10n.adminShownOnce), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'LIVE-OPS-001: with NO host panel, issuing a code falls back to the '
+      'one-time-secret dialog (no behaviour lost)',
+      (tester) async {
+        final t = _FakeTransport((fn, p) {
+          if (fn == 'list_devices') return listWith('none');
+          if (fn == 'issue_device_enrollment_code') return issueResult();
+          return null;
+        });
+        await pump(tester, _repo(t)); // no pairing-panel override
+
+        await tester.tap(find.text('Issue code'));
+        await tester.pumpAndSettle();
+
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+        expect(find.text(l10n.adminShownOnce), findsOneWidget);
       },
     );
   });

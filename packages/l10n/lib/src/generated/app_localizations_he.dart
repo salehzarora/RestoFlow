@@ -1878,6 +1878,29 @@ class AppLocalizationsHe extends AppLocalizations {
   String get adminCodeExpiresNote => 'תוקף הקוד פג בקרוב וניתן לפדותו פעם אחת.';
 
   @override
+  String get pairingPanelTitle => 'התאמת המכשיר הזה';
+
+  @override
+  String get pairingPanelInstructions =>
+      'פתחו את הקישור הזה בטאבלט, או סרקו את קוד ה-QR, ואז הקישו על התאמה.';
+
+  @override
+  String get pairingPanelScanLabel => 'סרקו כדי לפתוח בטאבלט';
+
+  @override
+  String get pairingPanelLinkLabel => 'קישור התאמה';
+
+  @override
+  String get pairingPanelCopyLink => 'העתקת קישור';
+
+  @override
+  String get pairingPanelCodeLabel => 'קוד התאמה';
+
+  @override
+  String get pairingPanelManualOnly =>
+      'אין קישור אפליקציה לסוג מכשיר זה — הזינו את הקוד ידנית בטאבלט.';
+
+  @override
   String get adminTokenStartedTitle => 'מושב המכשיר התחיל';
 
   @override
