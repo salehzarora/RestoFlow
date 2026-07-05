@@ -181,6 +181,34 @@ hosting; the security model is the same as an on-premise device.
   session carries **no membership**, so RLS returns **zero tenant data**; it can
   only attempt pairing, and pairing is **rate-limited** (RF-118 brute-force
   lockout). So a public URL is safe — the URL is not the secret.
+- **Pairing PERSISTS across refresh / browser restart (LIVE-DEVICE-001).** A paired
+  tablet must stay paired until explicitly unpaired or revoked — pressing F5 must
+  NOT return to the pairing screen. The paired-device credential (`{deviceId,
+  sessionToken}`) is persisted on the device and re-proven on every launch via the
+  **token-proven** `restore_device_session` (no principal binding, so a fresh
+  anonymous session each launch is fine). **Web:** persisted in `localStorage` via
+  `shared_preferences` (the same durable store the RF-114 outbox uses) — chosen
+  because `flutter_secure_storage`'s web backing did not reliably survive refresh
+  in the hosted build, and on web it is anyway just AES-in-`localStorage` with a
+  same-origin key (no OS keychain), so this is no less protected. **Native:** the
+  OS Keychain/Keystore via `flutter_secure_storage` (unchanged). The token is never
+  logged or shown.
+- **Staff PIN session is SEPARATE from device pairing.** The device stays paired;
+  the per-shift staff **PIN session** may expire (RF-118) — an expired PIN shows
+  the **PIN sign-in**, NOT the pairing screen. On launch: paired device restored →
+  PIN sign-in (enter PIN) → surface.
+- **Recovery / reset:** the ⋮ device-settings sheet has an explicit **Unpair**
+  action (`DeviceSessionManager.unpair` — best-effort server `revoke_device_session`
+  + local clear), returning the tablet to the pairing screen. A credential the
+  server has revoked (or a corrupt/wrong-type one) is cleared automatically on the
+  next restore and falls back to pairing — self-recovering, never a fake session.
+- **Easier pairing (LIVE-DEVICE-001):** the pairing screen **prefills** the code
+  from a `…/pos?pair=CODE` / `…/kds?pair=CODE` URL (a Dashboard-generated link, or
+  a QR that encodes it), so staff don't type it by hand. It is prefill-only — the
+  operator still taps **Pair**; the code is never auto-redeemed. The code is
+  short-lived, single-use, and rate-limited, so it is not a durable secret. *(A
+  Dashboard QR that renders this link is a natural follow-up — the `qr` package is
+  already a dependency.)*
 - **Revocation:** a lost/stolen tablet is revoked from the Dashboard (RF-160/RF-161),
   removing future access including across the offline window (RISK R-007).
 - **No service-role key** ever reaches POS/KDS (or any client) — anon/publishable
