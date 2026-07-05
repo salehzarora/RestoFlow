@@ -77,9 +77,45 @@ class KdsBoard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final columns = _columns();
+    // ONE clock read per board build (DESIGN-001): every card computes its
+    // elapsed pill against the same instant, and the value refreshes with the
+    // sync-poll rebuild — deliberately no timer (pumpAndSettle test corpus).
+    final now = DateTime.now();
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= _wideBreakpoint) {
+          // DESIGN-001: when every column fits at its 340px minimum (large
+          // kitchen TVs), the columns GROW to fill the screen instead of
+          // clustering at the reading edge of a horizontal scroller. Below
+          // that (including the 1400px test viewport, where 4 × (340+12) + 12
+          // = 1420 > 1400) the original fixed-width scroll path is unchanged.
+          final fillsScreen =
+              constraints.maxWidth >=
+              columns.length * (_columnWidth + RestoflowSpacing.md) +
+                  RestoflowSpacing.md;
+          if (fillsScreen) {
+            return Padding(
+              padding: const EdgeInsets.all(RestoflowSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < columns.length; i++) ...[
+                    if (i > 0) const SizedBox(width: RestoflowSpacing.md),
+                    Expanded(
+                      child: _StatusColumn(
+                        column: columns[i],
+                        l10n: l10n,
+                        now: now,
+                        onAdvance: onAdvance,
+                        onRecall: onRecall,
+                        printStatusFor: printStatusFor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.all(RestoflowSpacing.md),
@@ -96,6 +132,7 @@ class KdsBoard extends StatelessWidget {
                       child: _StatusColumn(
                         column: column,
                         l10n: l10n,
+                        now: now,
                         onAdvance: onAdvance,
                         onRecall: onRecall,
                         printStatusFor: printStatusFor,
@@ -130,6 +167,7 @@ class KdsBoard extends StatelessWidget {
                       KdsTicketCard(
                         ticket: ticket,
                         l10n: l10n,
+                        now: now,
                         printStatus: printStatusFor?.call(ticket),
                         onAdvance: (to) => onAdvance(ticket, to),
                         onRecall: onRecall == null
@@ -150,6 +188,7 @@ class _StatusColumn extends StatelessWidget {
   const _StatusColumn({
     required this.column,
     required this.l10n,
+    required this.now,
     required this.onAdvance,
     required this.onRecall,
     this.printStatusFor,
@@ -157,6 +196,10 @@ class _StatusColumn extends StatelessWidget {
 
   final _BoardColumn column;
   final AppLocalizations l10n;
+
+  /// The board's single build-time clock read (see [KdsBoard.build]).
+  final DateTime now;
+
   final void Function(KdsTicketView ticket, KitchenTicketStatus to) onAdvance;
   final void Function(KdsTicketView ticket)? onRecall;
   final KdsTicketPrintStatus? Function(KdsTicketView ticket)? printStatusFor;
@@ -185,6 +228,7 @@ class _StatusColumn extends StatelessWidget {
                       KdsTicketCard(
                         ticket: ticket,
                         l10n: l10n,
+                        now: now,
                         printStatus: printStatusFor?.call(ticket),
                         onAdvance: (to) => onAdvance(ticket, to),
                         onRecall: onRecall == null

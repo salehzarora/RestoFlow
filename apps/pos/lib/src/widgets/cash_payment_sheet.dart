@@ -67,13 +67,22 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   final TextEditingController _controller = TextEditingController();
   bool _submitting = false;
 
+  /// DESIGN-001: true after a [PaymentException] — the sheet previously
+  /// swallowed the failure and just re-enabled Confirm with ZERO feedback (a
+  /// silent dead-end under rush). Renders a pinned danger banner; any new
+  /// input or attempt clears it.
+  bool _failed = false;
+
   /// The selected tender (RF-117). Cash is the default; a non-cash tender is
   /// externally recorded (no drawer cash, no change).
   PaymentMethod _method = PaymentMethod.cash;
 
   void _selectMethod(PaymentMethod method) {
     if (_method == method) return;
-    setState(() => _method = method);
+    setState(() {
+      _method = method;
+      _failed = false;
+    });
   }
 
   @override
@@ -89,7 +98,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     final digits = minor % 100;
     final text = '${minor ~/ 100}.${digits.toString().padLeft(2, '0')}';
     _controller.text = text;
-    setState(() {});
+    setState(() => _failed = false);
   }
 
   /// Keypad wiring (design-polish): the on-screen keypad appends into the SAME
@@ -99,7 +108,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     final text = _controller.text + ch;
     _controller.text = text;
     _controller.selection = TextSelection.collapsed(offset: text.length);
-    setState(() {});
+    setState(() => _failed = false);
   }
 
   void _backspace() {
@@ -108,7 +117,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     final next = text.substring(0, text.length - 1);
     _controller.text = next;
     _controller.selection = TextSelection.collapsed(offset: next.length);
-    setState(() {});
+    setState(() => _failed = false);
   }
 
   Future<void> _confirm() async {
@@ -122,7 +131,10 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     } else {
       tendered = widget.amountMinor;
     }
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _failed = false;
+    });
     final navigator = Navigator.of(context);
     try {
       await ref
@@ -135,9 +147,19 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
             currencyCode: widget.currencyCode,
             method: _method,
           );
-      navigator.pop();
+      // The sheet is drag/barrier-dismissible while the push is in flight;
+      // popping an already-dismissed sheet would pop the ROOT POS route.
+      if (mounted) navigator.pop();
     } on PaymentException {
-      if (mounted) setState(() => _submitting = false);
+      // DESIGN-001: an honest, visible failure — the payment was NOT recorded
+      // and the cashier must know. The banner below the sheet body says so;
+      // Confirm stays enabled as the retry.
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _failed = true;
+        });
+      }
     }
   }
 
@@ -178,7 +200,11 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
         : (insufficient ? l10n.posCashInsufficient : null);
 
     return SafeArea(
-      child: Padding(
+      // DESIGN-001 (review fix): scrollable body. The tallest configuration
+      // is exactly the FAILURE state (banner + keypad + change row); on short
+      // POS displays (e.g. 1366×768) a fixed Column clipped the Confirm/retry
+      // button the moment the cashier most needed it.
+      child: SingleChildScrollView(
         padding: EdgeInsetsDirectional.fromSTEB(
           RestoflowSpacing.lg,
           0,
@@ -232,7 +258,9 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                 ],
-                onChanged: (_) => setState(() {}),
+                // Hardware-keyboard edits clear a stale failure banner too
+                // (the on-screen keypad path clears it via _appendChar).
+                onChanged: (_) => setState(() => _failed = false),
                 decoration: InputDecoration(
                   labelText: l10n.posCashReceived,
                   border: const OutlineInputBorder(),
@@ -298,13 +326,28 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
               ),
             ] else
               _NonCashNote(message: l10n.posNonCashNote),
+            if (_failed) ...[
+              const SizedBox(height: RestoflowSpacing.md),
+              // DESIGN-001: the payment-failure banner — pinned in the sheet
+              // (not a transient SnackBar), danger tone, honest about state.
+              RestoflowNoticeBanner(
+                key: const Key('payment-failed-banner'),
+                tone: RestoflowTone.danger,
+                title: l10n.posPaymentFailedTitle,
+                body: l10n.posPaymentFailedBody,
+              ),
+            ],
             const SizedBox(height: RestoflowSpacing.md),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 key: const Key('confirm-payment-button'),
                 onPressed: canConfirm ? _confirm : null,
-                icon: const Icon(Icons.check),
+                // While the push is in flight the button says so (finite:
+                // the spinner exists only between tap and result).
+                icon: _submitting
+                    ? const RestoflowInlineSpinner()
+                    : const Icon(Icons.check),
                 label: Text(l10n.posConfirmPayment),
                 style: RestoflowButtonStyles.big(context),
               ),

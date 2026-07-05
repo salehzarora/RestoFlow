@@ -361,6 +361,19 @@ class _CartLineTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                // DESIGN-001 hierarchy: '× qty · unit price' directly under
+                // the name (was a bare unit price buried at the tile bottom,
+                // easy to miss). Its OWN Text — the name above must stay an
+                // exact-match standalone string (test contract). Money is a
+                // pre-formatted integer-minor string; tabular figures keep
+                // columns steady.
+                Text(
+                  l10n.posCartQtyUnit(line.quantity, unitPriceText),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
                 // Selected modifiers (order-time snapshots) as compact
                 // sub-lines; their deltas are already in the line total. A
                 // PAID option additionally shows its signed delta (Part E) —
@@ -408,13 +421,6 @@ class _CartLineTile extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                const SizedBox(height: RestoflowSpacing.xxs),
-                Text(
-                  unitPriceText,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
               ],
             ),
           ),
@@ -425,13 +431,16 @@ class _CartLineTile extends StatelessWidget {
             onDecrease: onDecrease,
           ),
           const SizedBox(width: RestoflowSpacing.sm),
-          SizedBox(
-            width: 76,
+          // DESIGN-001: minWidth (not a fixed 76px box) so a long ₪ total
+          // grows instead of clipping; tabular figures align the column.
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 76),
             child: Text(
               lineTotalText,
               textAlign: TextAlign.end,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),

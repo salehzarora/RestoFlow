@@ -46,6 +46,7 @@ class KdsTicketView {
     this.orderType,
     this.tableLabel,
     this.notes,
+    this.submittedAt,
   });
 
   final String kitchenTicketId;
@@ -71,6 +72,14 @@ class KdsTicketView {
 
   /// The order-level kitchen note (orders.notes), if any.
   final String? notes;
+
+  /// When the order was submitted (DESIGN-001, display only): the server's
+  /// `orders.created_at` insert time, falling back to the client-reported
+  /// `client_created_at`. Drives the elapsed-time/urgency signal on the ticket
+  /// card. Null when the wire row carried neither (the card then simply shows
+  /// no elapsed pill — never a fabricated age). NOT a money field and not used
+  /// for any business decision.
+  final DateTime? submittedAt;
 
   /// The current local status; mutated by bump/recall on the screen.
   KitchenTicketStatus status;

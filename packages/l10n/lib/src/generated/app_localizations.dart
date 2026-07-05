@@ -4870,6 +4870,24 @@ abstract class AppLocalizations {
   /// **'External payment recorded — RestoFlow does not process the card or transfer; no real charge is made.'**
   String get posNonCashNote;
 
+  /// DESIGN-001: title of the pinned danger banner in the payment sheet after a failed payment push (previously a silent failure).
+  ///
+  /// In en, this message translates to:
+  /// **'Payment not recorded'**
+  String get posPaymentFailedTitle;
+
+  /// DESIGN-001: body of the payment-failure banner. Honest: nothing was recorded; the Confirm button doubles as the retry.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment could not be recorded. Check the connection and try again — the order stays unpaid until this succeeds.'**
+  String get posPaymentFailedBody;
+
+  /// DESIGN-001: the muted 'quantity times unit price' line under a cart item's name (e.g. '× 2 · ₪42.00'). unitPrice arrives as a pre-formatted money string (integer minor units upstream).
+  ///
+  /// In en, this message translates to:
+  /// **'× {quantity} · {unitPrice}'**
+  String posCartQtyUnit(int quantity, String unitPrice);
+
   /// POS label for the tax line on the cart/checkout summary and receipt.
   ///
   /// In en, this message translates to:

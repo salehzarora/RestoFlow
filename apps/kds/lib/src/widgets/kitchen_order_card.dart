@@ -35,13 +35,11 @@ class KitchenOrderCard extends StatelessWidget {
   final VoidCallback onRecall;
 
   /// Age-based urgency for the elapsed pill — the kitchen's primary scan
-  /// signal. Static (computed at build, like the minutes themselves): fresh
-  /// (<10m) info, ageing (10–19m) warning, late (≥20m) danger.
-  static RestoflowTone elapsedTone(int minutes) {
-    if (minutes >= 20) return RestoflowTone.danger;
-    if (minutes >= 10) return RestoflowTone.warning;
-    return RestoflowTone.info;
-  }
+  /// signal. Static (computed at build, like the minutes themselves).
+  /// DESIGN-001: delegates to the shared [RestoflowUrgency] thresholds so the
+  /// demo and live boards can never disagree about what "late" means.
+  static RestoflowTone elapsedTone(int minutes) =>
+      RestoflowUrgency.toneForMinutes(minutes);
 
   @override
   Widget build(BuildContext context) {
@@ -58,8 +56,12 @@ class KitchenOrderCard extends StatelessWidget {
     // accent so kitchen instructions stand out on the dark board.
     final statusAccent = kdsStatusTone(ticket.status).styleOf(theme).accent;
     final noteColor = RestoflowTone.warning.styleOf(theme).accent;
+    // DESIGN-001 (parity with the live KdsTicketCard): cleared work steps
+    // back visually — a bumped ticket dims so the active columns stay loud;
+    // cancelled keeps full contrast (its danger accent IS the signal).
+    final dimmed = ticket.status == KitchenTicketStatus.bumped;
 
-    return Card(
+    final card = Card(
       key: Key('kitchen-card-${ticket.ticketId}'),
       margin: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.md),
       color: theme.colorScheme.surfaceContainerLow,
@@ -147,6 +149,9 @@ class KitchenOrderCard extends StatelessWidget {
         ),
       ),
     );
+
+    if (!dimmed) return card;
+    return Opacity(opacity: 0.62, child: card);
   }
 }
 

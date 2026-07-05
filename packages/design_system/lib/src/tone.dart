@@ -145,3 +145,32 @@ extension RestoflowToneResolver on RestoflowTone {
     }
   }
 }
+
+/// Elapsed-time urgency thresholds for kitchen surfaces (DESIGN-001).
+///
+/// The demo kitchen board shipped these thresholds (design-polish sprint,
+/// `elapsedTone` in the demo order card): under [warningMinutes] a ticket is
+/// calm, from [warningMinutes] it needs eyes, from [dangerMinutes] it is
+/// overdue. Hoisted here so the demo and live boards resolve urgency through
+/// ONE map and can never disagree. Deliberately returns one of the EXISTING
+/// five [RestoflowTone]s — the tone enum is a frozen 5-value contract
+/// (`components_test` pins `RestoflowTone.values` at length 5).
+abstract final class RestoflowUrgency {
+  /// From this many minutes a ticket renders in the warning tone.
+  static const int warningMinutes = 10;
+
+  /// From this many minutes a ticket renders in the danger tone.
+  static const int dangerMinutes = 20;
+
+  /// The urgency tone for a ticket open for [minutes] (values below
+  /// [warningMinutes], including negatives from clock skew, are calm info).
+  static RestoflowTone toneForMinutes(int minutes) {
+    if (minutes >= dangerMinutes) return RestoflowTone.danger;
+    if (minutes >= warningMinutes) return RestoflowTone.warning;
+    return RestoflowTone.info;
+  }
+
+  /// Convenience overload for a [Duration] since submit.
+  static RestoflowTone toneForElapsed(Duration elapsed) =>
+      toneForMinutes(elapsed.inMinutes);
+}

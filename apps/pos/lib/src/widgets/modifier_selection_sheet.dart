@@ -642,7 +642,8 @@ class _OptionQuantityStepper extends StatelessWidget {
               icon: const Icon(Icons.remove, size: RestoflowIconSizes.sm),
               tooltip: l10n.posDecreaseQuantity,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              // DESIGN-001: raised to the product's 44dp touch floor (was 40).
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             ),
             SizedBox(
               width: 24,
@@ -660,7 +661,8 @@ class _OptionQuantityStepper extends StatelessWidget {
               icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
               tooltip: l10n.posIncreaseQuantity,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              // DESIGN-001: raised to the product's 44dp touch floor (was 40).
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             ),
           ],
         ),

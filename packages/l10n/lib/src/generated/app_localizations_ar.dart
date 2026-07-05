@@ -2547,6 +2547,18 @@ class AppLocalizationsAr extends AppLocalizations {
       'دفعة خارجية مُسجّلة — لا يقوم RestoFlow بمعالجة البطاقة أو التحويل؛ لا يتم أي خصم فعلي.';
 
   @override
+  String get posPaymentFailedTitle => 'لم يتم تسجيل الدفعة';
+
+  @override
+  String get posPaymentFailedBody =>
+      'تعذّر تسجيل الدفعة. تحقّق من الاتصال ثم حاول مرة أخرى — يبقى الطلب غير مدفوع حتى نجاح التسجيل.';
+
+  @override
+  String posCartQtyUnit(int quantity, String unitPrice) {
+    return '× $quantity · $unitPrice';
+  }
+
+  @override
   String get posTaxLabel => 'الضريبة';
 
   @override
