@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_dashboard/src/admin/supabase_admin_device_repository.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
@@ -72,17 +73,18 @@ void main() {
   });
 
   group('AdminDevicesScreen with a REAL repo', () {
-    Future<void> pump(WidgetTester tester, AdminRepository repo) async {
+    Future<void> pump(
+      WidgetTester tester,
+      AdminRepository repo, {
+      AdminScope scope = AdminScope.demo,
+    }) async {
       tester.view.physicalSize = const Size(1400, 2200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: adminFeatureOverrides(
-            scope: AdminScope.demo,
-            repository: repo,
-          ),
+          overrides: adminFeatureOverrides(scope: scope, repository: repo),
           child: MaterialApp(
             localizationsDelegates: restoflowLocalizationsDelegates,
             supportedLocales: kSupportedLocales,
@@ -148,13 +150,92 @@ void main() {
       expect(find.textContaining('Revoked'), findsWidgets);
     });
 
-    testWidgets('a revoked device offers a fresh Issue code action', (
-      tester,
-    ) async {
-      final t = _FakeTransport((fn, p) => listWith('revoked'));
-      await pump(tester, _repo(t));
-      expect(find.text('Issue code'), findsOneWidget);
-      expect(find.text('Revoke'), findsNothing);
-    });
+    testWidgets(
+      'LIVE-UX-001: a revoked device is HIDDEN from the active list (collapsed '
+      'under "Revoked devices") and offers NO issue-code / revoke',
+      (tester) async {
+        final t = _FakeTransport((fn, p) => listWith('revoked'));
+        await pump(tester, _repo(t));
+
+        // Not clutter in the active list: no revoked tile, no misleading actions.
+        // (Issuing a code for a revoked/inactive device raises 42501, which the
+        // client can only show as a bogus "you don't have permission" toast.)
+        expect(find.text('Issue code'), findsNothing);
+        expect(find.text('Revoke'), findsNothing);
+        expect(find.text('Counter POS'), findsNothing);
+
+        // It moved to the collapsed revoked section (the "show revoked" toggle).
+        final section = find.byKey(const Key('revoked-devices-section'));
+        expect(section, findsOneWidget);
+        expect(find.byKey(const Key('device-counts')), findsOneWidget);
+
+        // Expanding reveals the read-only tile — still NO issue-code / revoke.
+        await tester.tap(section);
+        await tester.pumpAndSettle();
+        expect(find.text('Counter POS'), findsOneWidget);
+        expect(find.text('Issue code'), findsNothing);
+        expect(find.text('Revoke'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'LIVE-UX-001: revoking removes the device from the ACTIVE list (it lands '
+      'in the collapsed revoked section)',
+      (tester) async {
+        var revoked = false;
+        final t = _FakeTransport((fn, p) {
+          if (p.containsKey('p_organization_id')) {
+            return listWith(revoked ? 'revoked' : 'active');
+          }
+          revoked = true;
+          return {'ok': true, 'device_id': 'dev-1'};
+        });
+        await pump(tester, _repo(t));
+        // Active to start: the tile + its Revoke action are in the main list.
+        expect(find.text('Counter POS'), findsOneWidget);
+        expect(find.text('Revoke'), findsOneWidget);
+        expect(find.byKey(const Key('revoked-devices-section')), findsNothing);
+
+        await tester.tap(find.text('Revoke'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Revoke'));
+        await tester.pumpAndSettle();
+
+        // Refetched: gone from the active list, now under the revoked section.
+        expect(revoked, isTrue);
+        expect(find.text('Counter POS'), findsNothing); // collapsed away
+        expect(
+          find.byKey(const Key('revoked-devices-section')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'LIVE-UX-001: a below-manager role gets NO usable device manage action — '
+      'Revoke/Issue-code are hidden and Create is DISABLED (so the "you don\'t '
+      'have permission" toast can never fire from a visible/tappable action)',
+      (tester) async {
+        final t = _FakeTransport((fn, p) => listWith('active'));
+        await pump(
+          tester,
+          _repo(t),
+          scope: AdminScope.demo.copyWith(actingRole: MembershipRole.cashier),
+        );
+        // The device still lists (a cashier may READ), but the destructive
+        // per-device actions the backend would deny are HIDDEN entirely.
+        expect(find.text('Counter POS'), findsOneWidget);
+        expect(find.text('Revoke'), findsNothing);
+        expect(find.text('Issue code'), findsNothing);
+        // The header create affordance uses the real "Add device" label and is
+        // present but DISABLED (onPressed null) for a below-manager role, so it
+        // is never tappable — asserting on onPressed catches a future regression
+        // that re-enables it (which would resurrect the permission-denied toast).
+        final create = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Add device'),
+        );
+        expect(create.onPressed, isNull);
+      },
+    );
   });
 }
