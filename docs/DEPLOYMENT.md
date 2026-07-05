@@ -12,31 +12,52 @@
 
 ## 1. What deploys where
 
-| Surface | Target | Mode | Notes |
+**One** Vercel project + **one** hosted Supabase project serve all three role apps
+as Flutter web at their own paths (LIVE-APPS-001), so restaurant tablets open each
+role separately:
+
+| Path | Surface | Mode | Notes |
 |---|---|---|---|
-| `apps/dashboard` (owner/manager web) | **Vercel** (public web) | **REAL** | The only surface wired for hosted web deploy today ([vercel.json](../vercel.json)). |
-| `apps/admin` (platform admin) | not hosted yet | — | Server-gated by `platform_admin_guard` + aal2; treat as local/internal until a hosted target is defined (see §6). |
-| `apps/pos`, `apps/kds` | device apps | REAL | Paired-device auth; not web-deployed. |
+| `/` | `apps/dashboard` (owner/manager) | **REAL** | Manager tablet. GoTrue email/password sign-in. |
+| `/pos`, `/pos/*` | `apps/pos` (cashier) | **REAL** | Cashier tablet. Anonymous device session → pairing → PIN (§8). |
+| `/kds`, `/kds/*` | `apps/kds` (kitchen) | **REAL** | Kitchen tablet. Money-free; anonymous device session → pairing → PIN (§8). |
+| — | `apps/admin` (platform admin) | — | **Out of scope / internal only** — no web target; separate plane (`platform_admin_guard` + aal2). If ever hosted it gets its **own** project/domain + security review (see §6). |
 
 The Vercel build ([vercel.json](../vercel.json)) clones **Flutter pinned to `3.44.2`**
-(matching CI), builds `apps/dashboard` web `--release`, outputs
-`apps/dashboard/build/web`, and adds an SPA rewrite (`/(.*) → /index.html`) so
-GoRouter deep links resolve on hard refresh.
+(matching CI) and runs [tools/vercel_build_web.sh](../tools/vercel_build_web.sh),
+which builds **all three** apps `--release` — dashboard with `--base-href=/`, POS
+with `--base-href=/pos/`, KDS with `--base-href=/kds/` — then copies the POS and
+KDS builds **under** the dashboard output (`apps/dashboard/build/web/{pos,kds}`).
+`outputDirectory` stays `apps/dashboard/build/web`. Ordered SPA rewrites give each
+subtree its own fallback so hard-refresh / deep links resolve (real static assets
+are served from the filesystem before rewrites apply):
+
+```
+/pos/(.*) → /pos/index.html      /kds/(.*) → /kds/index.html
+/pos      → /pos/index.html      /kds      → /kds/index.html
+/(.*)     → /index.html          (dashboard, catch-all LAST)
+```
+
+Each app uses `MaterialApp(home:)` (no top-level router) and `web/index.html`'s
+`<base href="$FLUTTER_BASE_HREF">` placeholder, so subpath base-hrefs are native
+and navigation stays base-href-relative.
 
 ---
 
 ## 2. Required environment variables (NAMES only — never commit values)
 
-Set these as **Vercel Production/Preview environment variables**. Values live in
-Vercel's env store (or a secrets manager), **never in git**.
+Set these as **Vercel Production/Preview environment variables** — the **same
+values feed all three apps** (dashboard, POS, KDS). Values live in Vercel's env
+store (or a secrets manager), **never in git**.
 
 | Env var | Value class | Required | Notes |
 |---|---|---|---|
 | `RESTOFLOW_SUPABASE_URL` | public project URL | ✅ | A public endpoint, not a secret. |
-| `RESTOFLOW_SUPABASE_ANON_KEY` | **anon / publishable key** | ✅ | **SAFE for clients** — RLS-gated, no elevated privilege. |
-| `RESTOFLOW_DEMO_MODE` | `false` | ✅ (pinned in the build script) | Pinned to `false` by [tools/vercel_build_dashboard.sh](../tools/vercel_build_dashboard.sh) (invoked by vercel.json's `buildCommand`); enables the real auth gate — see §4. |
+| `RESTOFLOW_SUPABASE_ANON_KEY` | **anon / publishable key** | ✅ | **SAFE for clients** — RLS-gated, no elevated privilege. POS/KDS ride an **anonymous** device session over this key (§8), never a service-role key. |
+| `RESTOFLOW_DEMO_MODE` | `false` | ✅ (pinned in the build script) | Pinned to `false` for all three apps by [tools/vercel_build_web.sh](../tools/vercel_build_web.sh) (invoked by vercel.json's `buildCommand`); enables the real auth gate — see §4. |
 | `RESTOFLOW_AUTH_REDIRECT_URL` | public app URL | ⬜ optional | RF-LIVE-002 override for the sign-up email-confirmation redirect. Leave **unset** to derive it from the runtime web origin (correct for prod + preview); set only for a custom domain. Public URL, never a secret. See §5. |
 | `RESTOFLOW_DASHBOARD_URL` | public Dashboard URL | ⬜ optional | RF-LIVE-002 — the hosted Dashboard URL the **Admin** app's "open the Dashboard" link points at. Unset falls back to the local dev URL. Public URL, never a secret. |
+| `RESTOFLOW_PRINT_BRIDGE_URL` | — | ❌ **never on Vercel** | A per-device **LOCAL loopback** define (`http://127.0.0.1:8787`) for on-site ESC/POS printing; loopback-enforced client-side. It is a local-run concern only — **do not set it as a hosted Vercel env var** (a non-loopback value fails soft/dormant). |
 
 These are the exact `--dart-define` names the apps read
 ([supabase_bootstrap_config.dart](../packages/auth_identity/lib/src/supabase_bootstrap_config.dart),
@@ -74,10 +95,10 @@ render the honest "real mode unconfigured" screen.
 - `RESTOFLOW_DEMO_MODE` **defaults to `true`** (demo, in-memory, no auth). A
   production build that **omits** the flag would serve the demo UI as if it were
   the product.
-- The hosted dashboard build **must** pass `--dart-define=RESTOFLOW_DEMO_MODE=false`
-  — [tools/vercel_build_dashboard.sh](../tools/vercel_build_dashboard.sh) (invoked by
-  [vercel.json](../vercel.json)'s `buildCommand`) already does. **Never remove it**,
-  and verify any alternate deploy path also sets it.
+- The hosted web build **must** pass `--dart-define=RESTOFLOW_DEMO_MODE=false` for
+  **all three apps** — [tools/vercel_build_web.sh](../tools/vercel_build_web.sh)
+  (invoked by [vercel.json](../vercel.json)'s `buildCommand`) already does. **Never
+  remove it**, and verify any alternate deploy path also sets it.
 - If real mode is selected but the URL/anon key is missing or invalid, the app
   **fails closed** to an honest "unconfigured" help page — it never silently falls
   back to demo and never crashes.
@@ -87,7 +108,9 @@ render the honest "real mode unconfigured" screen.
   production demo*. The Dashboard and Admin apps now **fail closed** to an honest
   "demo mode is on with real credentials" page instead of serving demo data as if
   it were live. Explicit local/dev demo (no real config present) and debug builds
-  are unaffected — so local demo still works exactly as before.
+  are unaffected — so local demo still works exactly as before. **POS/KDS do not
+  yet carry this guard** (LIVE-APPS-001 follow-up, §8) — for them the build pinning
+  `RESTOFLOW_DEMO_MODE=false` is the safety, so never ship a POS/KDS build without it.
 
 ---
 
@@ -136,3 +159,37 @@ backend/RLS/RPC change):
 - CI enforces this: `bash tools/check_secrets.sh` blocks un-ignored env/secret
   files and credential-shaped values (DECISION D-011).
 - Only `*.example` templates (placeholder values) are tracked.
+
+---
+
+## 8. Hosted POS / KDS — device apps at `/pos` and `/kds` (LIVE-APPS-001)
+
+POS (`/pos`) and KDS (`/kds`) are served from the **same** Vercel project +
+Supabase project as the Dashboard (§1). They need **no app-code change** for
+hosting; the security model is the same as an on-premise device.
+
+- **Supabase prerequisite — Anonymous sign-ins MUST be enabled.** POS/KDS bootstrap
+  an **anonymous device session** (`createAnonymousDeviceSession` / `…Transport`;
+  an authenticated but **membership-less** principal — DECISION D-011, never a
+  service-role key) to reach the pairing + PIN RPCs. Enable it in the Supabase
+  dashboard → Authentication → Providers → **Anonymous**. If it is off, POS/KDS
+  honestly render `DeviceSignInUnavailableView` (never a fake pairing).
+- **Protected by pairing + PIN, NOT by a hidden URL.** A fresh tablet at `/pos` or
+  `/kds` is **inert** until it is paired with a short-lived **enrollment code**
+  issued from the Dashboard → Devices (RF-160), then unlocked per shift by a
+  **staff PIN session** (`start_pin_session`, DECISION D-006). The anonymous
+  session carries **no membership**, so RLS returns **zero tenant data**; it can
+  only attempt pairing, and pairing is **rate-limited** (RF-118 brute-force
+  lockout). So a public URL is safe — the URL is not the secret.
+- **Revocation:** a lost/stolen tablet is revoked from the Dashboard (RF-160/RF-161),
+  removing future access including across the offline window (RISK R-007).
+- **No service-role key** ever reaches POS/KDS (or any client) — anon/publishable
+  only (§3). **KDS is money-free** (SECURITY T-003): it reads tickets via
+  `sync_pull` and shows no prices.
+- **`RESTOFLOW_PRINT_BRIDGE_URL` is NOT a hosted var** — it is a per-device local
+  loopback define for on-site ESC/POS printing (§2); never set it on Vercel.
+- **Follow-up (deferred):** extend the RF-LIVE-002 production **demo-mode
+  misconfiguration guard** (§4) to POS/KDS so a release build with real credentials
+  but a missing `RESTOFLOW_DEMO_MODE=false` fails closed there too. Until then the
+  build pinning the flag is the safety.
+- **Admin stays out** of this deployment — internal platform plane only (§1/§6).
