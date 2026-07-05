@@ -23,6 +23,7 @@ import '../printers/printers_repository.dart';
 import '../staff/staff_repository.dart';
 import '../tables/tables_repository.dart';
 import 'dashboard_auth_repository.dart';
+import 'email_redirect.dart';
 import 'onboarding_repository.dart';
 
 /// The real, Supabase-backed dashboard auth + onboarding implementations
@@ -170,6 +171,11 @@ class SupabaseDashboardAuthRepository implements DashboardAuthRepository {
       final response = await _client.auth.signUp(
         email: email,
         password: password,
+        // Send the confirmation email's redirect to the production app URL
+        // (RESTOFLOW_APP_URL) or the live web origin — never GoTrue's default
+        // localhost Site URL. Null (off the web, no config) keeps the prior
+        // behavior of deferring to the project's configured Site URL.
+        emailRedirectTo: resolveEmailRedirectUrl(),
       );
       // A session means auto-confirm is on; no session means the project requires
       // an email confirmation before a session is issued (honest pending state).
