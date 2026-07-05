@@ -127,9 +127,36 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
       branches: const [],
       topItems: const [],
       recentOrders: const [],
-      // No fabricated hourly curve in real mode (sales-by-hour is a later slice).
-      hourlyNetSales: const [],
+      // RF-REPORT-002: TODAY's REAL sales-by-hour (billed net, integer minor). A
+      // day with no sales / a malformed payload maps to empty, so the chart stays
+      // hidden — never a fabricated or flat-zero curve.
+      hourlyNetSales: _hourly(raw['hourly']),
     );
+  }
+
+  /// Maps the RPC's `hourly: [{hour, net_minor}]` (RF-REPORT-002 — TODAY's
+  /// branch-local sales-by-hour, integer minor) to the chart's [HourlyNetSales]
+  /// rows (label `HH:00`). Non-list / malformed input, or a day with NO net sales
+  /// in ANY hour, yields an EMPTY list so the data-gated chart stays hidden — the
+  /// live-limited report never shows a fabricated or flat-zero curve.
+  static List<HourlyNetSales> _hourly(Object? raw) {
+    if (raw is! List) return const [];
+    final rows = <HourlyNetSales>[];
+    var anyNonZero = false;
+    for (final row in raw) {
+      if (row is! Map) continue;
+      final hour = _int(row['hour']);
+      if (hour < 0 || hour > 23) continue;
+      final net = _int(row['net_minor']);
+      if (net != 0) anyNonZero = true;
+      rows.add(
+        HourlyNetSales(
+          hourLabel: '${hour.toString().padLeft(2, '0')}:00',
+          netSalesMinor: net,
+        ),
+      );
+    }
+    return anyNonZero ? rows : const [];
   }
 
   /// Whether [e] means the `owner_daily_report` FUNCTION does not exist yet (so

@@ -62,6 +62,55 @@ Widget _wrapLimited() => ProviderScope(
   ),
 );
 
+/// A real report carrying RF-REPORT-002 sales-by-hour data (LIVE-OPS-001).
+class _HourlyRepo implements OwnerReportsRepository {
+  const _HourlyRepo();
+  @override
+  Future<DashboardReport> loadReport() async => const DashboardReport(
+    currencyCode: 'ILS',
+    businessDateLabel: '2026-07-05',
+    grossSalesMinor: 12000,
+    netSalesMinor: 12000,
+    discountTotalMinor: 0,
+    collectedMinor: 12000,
+    cashSalesMinor: 12000,
+    lastCashPaymentMinor: 0,
+    orderCount: 5,
+    completedOrderCount: 3,
+    openOrderCount: 2,
+    unpaidOrderCount: 2,
+    voidCount: 0,
+    voidTotalMinor: 0,
+    openingFloatMinor: 0,
+    expectedCashMinor: 0,
+    countedCashMinor: 0,
+    shiftStatus: 'none',
+    branches: [],
+    topItems: [],
+    recentOrders: [],
+    paymentMethods: [],
+    hourlyNetSales: [
+      HourlyNetSales(hourLabel: '09:00', netSalesMinor: 4000),
+      HourlyNetSales(hourLabel: '14:00', netSalesMinor: 8000),
+    ],
+  );
+}
+
+Widget _wrapHourly() => ProviderScope(
+  overrides: [
+    runtimeConfigProvider.overrideWithValue(
+      RuntimeConfig.test(isDemoMode: false),
+    ),
+    ownerReportsRepositoryProvider.overrideWithValue(const _HourlyRepo()),
+  ],
+  child: const MaterialApp(
+    locale: Locale('en'),
+    localizationsDelegates: restoflowLocalizationsDelegates,
+    supportedLocales: kSupportedLocales,
+    home: DashboardHomeScreen(),
+  ),
+);
+
 Widget _wrap() => const ProviderScope(
   child: MaterialApp(
     locale: Locale('en'),
@@ -264,6 +313,27 @@ void main() {
       expect(find.textContaining('50% vs yesterday'), findsWidgets);
       // Still real data only — the KPI values are the live figures, not demo.
       expect(_kpi(tester, 'kpi-net-sales'), '₪120.00');
+      // With NO hourly data the sales-by-hour chart stays hidden (fallback).
+      expect(find.byKey(const Key('sales-by-hour-card')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'RF-REPORT-002: the sales-by-hour chart RENDERS in real mode when hourly '
+    'data exists, and the "more analytics" note is SUPPRESSED for it (the chart '
+    'is real, not coming-soon)',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(_wrapHourly());
+      await tester.pumpAndSettle();
+
+      // Real hourly data -> the data-gated chart card + the DESIGN-002 bar chart.
+      expect(find.byKey(const Key('sales-by-hour-card')), findsOneWidget);
+      expect(find.byType(RestoflowBarChart), findsOneWidget);
+      // Guard the showLimitedNote gate: with a real chart present the "more
+      // analytics coming" note must NOT render (it would contradict the chart).
+      // A refactor dropping the hourly term from the gate would fail HERE.
+      expect(find.byKey(const Key('reports-limited-analytics')), findsNothing);
     },
   );
 }
