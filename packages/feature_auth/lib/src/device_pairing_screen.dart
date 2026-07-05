@@ -18,6 +18,7 @@ class DevicePairingScreen extends StatefulWidget {
     required this.deviceType,
     required this.onPaired,
     this.appBarActions = const <Widget>[],
+    this.initialCode,
     super.key,
   });
 
@@ -33,6 +34,11 @@ class DevicePairingScreen extends StatefulWidget {
   /// reachable on EVERY page, including pre-pairing).
   final List<Widget> appBarActions;
 
+  /// LIVE-DEVICE-001: an enrollment code to PREFILL (e.g. from a `?pair=CODE`
+  /// hosted link / QR). Null => the field starts empty. The operator still taps
+  /// "Pair" — the code is never auto-redeemed. Never a long-lived secret.
+  final String? initialCode;
+
   @override
   State<DevicePairingScreen> createState() => _DevicePairingScreenState();
 }
@@ -42,6 +48,14 @@ class _DevicePairingScreenState extends State<DevicePairingScreen> {
   final _code = TextEditingController();
   bool _busy = false;
   PairingFailureKind? _errorKind;
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefill a URL-provided code; the operator confirms with "Pair".
+    final prefill = widget.initialCode?.trim();
+    if (prefill != null && prefill.isNotEmpty) _code.text = prefill;
+  }
 
   @override
   void dispose() {

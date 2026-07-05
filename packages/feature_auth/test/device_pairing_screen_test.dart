@@ -65,6 +65,44 @@ void main() {
     expect(repo.lastCode, isNull);
   });
 
+  testWidgets('LIVE-DEVICE-001: initialCode (from a ?pair= link) prefills the '
+      'field; the operator still taps Pair', (tester) async {
+    final repo = _FakePairing(
+      const Success(
+        DeviceContext(
+          organizationId: 'o',
+          branchId: 'b',
+          deviceId: 'd',
+          deviceType: 'pos',
+        ),
+      ),
+    );
+    await _pump(
+      tester,
+      DevicePairingScreen(
+        repository: repo,
+        deviceType: 'pos',
+        onPaired: (_) {},
+        initialCode: 'PREFILL-99',
+      ),
+    );
+    // The code field is prefilled from the URL — no manual typing.
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const Key('pairing-code')))
+          .controller
+          ?.text,
+      'PREFILL-99',
+    );
+    // NOT auto-redeemed — the repo is only called after the operator taps Pair.
+    expect(repo.lastCode, isNull);
+    await tester.tap(find.byKey(const Key('pairing-submit')));
+    // One frame drains the async pairWithCode (no pumpAndSettle: onPaired is a
+    // no-op here, so the submit spinner would animate forever).
+    await tester.pump();
+    expect(repo.lastCode, 'PREFILL-99');
+  });
+
   testWidgets('a successful pair hands the backend context to onPaired', (
     tester,
   ) async {
