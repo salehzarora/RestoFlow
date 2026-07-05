@@ -6,13 +6,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_dashboard/main.dart';
+import 'package:restoflow_dashboard/src/auth/dashboard_auth_flow.dart';
 import 'package:restoflow_dashboard/src/auth/dashboard_auth_repository.dart';
 import 'package:restoflow_dashboard/src/auth/login_signup_screen.dart';
 import 'package:restoflow_dashboard/src/auth/onboarding_repository.dart';
 import 'package:restoflow_dashboard/src/auth/onboarding_screen.dart';
 import 'package:restoflow_dashboard/src/dashboard_home_screen.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show AuthContextFetcher;
+    show AuthContextFetcher, AuthDeniedView, AuthErrorView, AuthLoadingView;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// A controllable fake real-auth seam (no Supabase, no network).
@@ -114,9 +116,53 @@ MyContext _ctx({List<MembershipContext> memberships = const []}) => MyContext(
 AuthContextFetcher _fetch(MyContext context) =>
     () async => Success<MyContext, AuthFailure>(context);
 
+AuthContextFetcher _fail(AuthFailure failure) =>
+    () async => Failure<MyContext, AuthFailure>(failure);
+
+/// A fetcher that returns [results] in order, repeating the LAST entry once the
+/// list is exhausted (so a "transient then success" or a "stable failure across
+/// all retries" sequence is easy to script). [calls] counts invocations.
+AuthContextFetcher _sequence(
+  List<Result<MyContext, AuthFailure>> results, {
+  List<int>? calls,
+}) {
+  var i = 0;
+  return () async {
+    calls?.add(++i);
+    final r = results[i - 1 < results.length ? i - 1 : results.length - 1];
+    return r;
+  };
+}
+
 Future<void> _pump(WidgetTester tester, Widget app) async {
   await tester.pumpWidget(ProviderScope(child: app));
   await tester.pumpAndSettle();
+}
+
+/// Pumps a [DashboardAuthFlow] DIRECTLY (no session lifecycle: a null auth
+/// repository makes it assume signed-in and load context immediately), with a
+/// ZERO retry backoff so the bounded context retry runs instantly in tests.
+Future<void> _pumpFlow(
+  WidgetTester tester, {
+  required AuthContextFetcher fetchContext,
+  OnboardingRepository? onboardingRepository,
+}) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        theme: restoflowBaseTheme(),
+        home: DashboardAuthFlow(
+          fetchContext: fetchContext,
+          onboardingRepository: onboardingRepository,
+          contextRetryBackoff: Duration.zero,
+          onReady: (_, _) =>
+              const Text('DASHBOARD-READY', textDirection: TextDirection.ltr),
+        ),
+      ),
+    ),
+  );
 }
 
 Future<AppLocalizations> _en() =>
@@ -357,5 +403,99 @@ void main() {
       expect(l10n.onboardingCreateAction, isNotEmpty);
       expect(l10n.onboardingRestaurantNameRequired, isNotEmpty);
     }
+  });
+
+  // --- LIVE-DASHBOARD-001: hosted context restore (loading/error != setup) ---
+
+  testWidgets('while context is LOADING it shows the skeleton, never setup', (
+    tester,
+  ) async {
+    // A fetch that never completes: the flow stays in the loading state.
+    final pending = Completer<Result<MyContext, AuthFailure>>();
+    await _pumpFlow(tester, fetchContext: () => pending.future);
+    await tester.pump(); // let initState kick off the (pending) context load
+
+    expect(find.byType(AuthLoadingView), findsOneWidget);
+    expect(find.byType(OnboardingScreen), findsNothing);
+    expect(find.byType(DashboardHomeScreen), findsNothing);
+  });
+
+  testWidgets(
+    'a STABLE context error shows retry/error, NOT the setup screen',
+    (tester) async {
+      // A network failure that never clears -> after the bounded retry, the
+      // generic error/retry view (never onboarding, never a silent dashboard).
+      await _pumpFlow(
+        tester,
+        fetchContext: _fail(const AuthNetworkFailure()),
+        onboardingRepository: FakeOnboardingRepository(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AuthErrorView), findsOneWidget);
+      expect(find.byType(OnboardingScreen), findsNothing);
+      expect(find.text('DASHBOARD-READY'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a TRANSIENT 42501 (hosted refresh JWT race) self-heals to the dashboard, '
+    'never flashing setup',
+    (tester) async {
+      // Attempt 1: denied (JWT not attached yet). Attempt 2: the real context.
+      final calls = <int>[];
+      await _pumpFlow(
+        tester,
+        fetchContext: _sequence([
+          const Failure(AuthDeniedFailure()),
+          Success(_ctx(memberships: [_mem(MembershipRole.orgOwner)])),
+        ], calls: calls),
+        onboardingRepository: FakeOnboardingRepository(),
+      );
+      await tester.pumpAndSettle();
+
+      // It retried, then landed on the dashboard — not onboarding.
+      expect(calls.length, greaterThanOrEqualTo(2));
+      expect(find.text('DASHBOARD-READY'), findsOneWidget);
+      expect(find.byType(OnboardingScreen), findsNothing);
+      expect(find.byType(AuthDeniedView), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a STABLE 42501 (a genuine new principal) still reaches onboarding after '
+    'the retries exhaust',
+    (tester) async {
+      final calls = <int>[];
+      await _pumpFlow(
+        tester,
+        // Every attempt denies: this is a real no-account principal, not a race.
+        fetchContext: _sequence([
+          const Failure(AuthDeniedFailure()),
+        ], calls: calls),
+        onboardingRepository: FakeOnboardingRepository(),
+      );
+      await tester.pumpAndSettle();
+
+      // It retried the bounded number of times before showing setup.
+      expect(calls.length, greaterThanOrEqualTo(2));
+      expect(find.byType(OnboardingScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('setup shows ONLY on confirmed no-context (NoMemberships), and '
+      'a successful empty context is not retried away', (tester) async {
+    final calls = <int>[];
+    await _pumpFlow(
+      tester,
+      // A SUCCESSFUL get_my_context that clearly enumerated zero memberships.
+      fetchContext: _sequence([Success(_ctx())], calls: calls),
+      onboardingRepository: FakeOnboardingRepository(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OnboardingScreen), findsOneWidget);
+    // A success is terminal — it must NOT trigger the transient retry loop.
+    expect(calls.length, 1);
   });
 }

@@ -10,9 +10,22 @@
 /// deltas. Fields not yet sourced server-side in Slice 1 — sales-by-hour, shift/
 /// cash reconciliation, per-branch, top items, recent orders — stay at honest
 /// zero/empty (the RF-140 real-mode banner tells the owner the live report is
-/// limited); the Overview's data-gated chart simply does not render. FAIL-CLOSED:
-/// with no transport/scope (or any transport failure) it throws — never
-/// fabricated data, never a silent demo fallback.
+/// limited); the Overview's data-gated chart simply does not render.
+///
+/// COMPATIBILITY FALLBACK (LIVE-DASHBOARD-001): the RF-REPORT-001 migration is
+/// merged but intentionally NOT applied to the live database until R-003 sign-off,
+/// so on production `owner_daily_report` does not exist yet and PostgREST answers
+/// with a "could not find the function" error (PGRST202/404). ONLY for that
+/// missing-RPC signature this repository falls back to the already-deployed
+/// `public.sales_summary` and maps the LIMITED figures it provides (orders +
+/// completed-payment gross), leaving everything else at honest zero/empty (still
+/// the RF-140 "live · limited" report). The fallback NEVER fires on a permission /
+/// tenant-isolation / auth error (42501) — those stay FAIL-CLOSED so a denied
+/// caller never silently sees fallback data.
+///
+/// FAIL-CLOSED: with no transport/scope (or any non-missing transport failure, or
+/// a rejected `ok != true` body) it throws — never fabricated data, never a
+/// silent demo fallback.
 library;
 
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -55,10 +68,18 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
         'p_restaurant_id': m.restaurantId,
         'p_branch_id': m.branchId,
       });
-    } on SyncTransportException {
+    } on SyncTransportException catch (e) {
+      // LIVE-DASHBOARD-001: on production `owner_daily_report` is not deployed
+      // yet, so PostgREST returns a "could not find the function" error. ONLY
+      // that missing-RPC signature falls back to the deployed `sales_summary`;
+      // an auth/permission denial (42501) stays fail-closed below.
+      if (_isMissingRpc(e)) return _loadFromSalesSummary(t, m);
       throw const OwnerReportsException('owner_daily_report transport failure');
     }
     if (raw is! Map || raw['ok'] != true) {
+      // A deployed RPC that REJECTED the caller (e.g. {ok:false,
+      // error:'permission_denied'}) is NOT a missing-RPC case — fail closed,
+      // never fall back and never fabricate.
       throw const OwnerReportsException('owner_daily_report rejected');
     }
 
@@ -108,6 +129,91 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
       recentOrders: const [],
       // No fabricated hourly curve in real mode (sales-by-hour is a later slice).
       hourlyNetSales: const [],
+    );
+  }
+
+  /// Whether [e] means the `owner_daily_report` FUNCTION does not exist yet (so
+  /// the deployed `sales_summary` is a safe compatibility fallback), as opposed
+  /// to a permission / tenant / auth denial (which must stay fail-closed).
+  ///
+  /// NEVER treats an auth denial (SQLSTATE 42501 -> [SyncTransportErrorKind.auth])
+  /// as missing — a denied caller must never be handed fallback data. Otherwise a
+  /// PostgREST "could not find the function ... in the schema cache" (PGRST202, or
+  /// the 404 some SDK versions surface) or a Postgres undefined-function message
+  /// counts as missing.
+  static bool _isMissingRpc(SyncTransportException e) {
+    if (e.kind == SyncTransportErrorKind.auth) return false;
+    final code = (e.code ?? '').toUpperCase();
+    if (code == 'PGRST202' || code == '404') return true;
+    final message = (e.message ?? '').toLowerCase();
+    return message.contains('could not find the function') ||
+        (message.contains('function') && message.contains('does not exist'));
+  }
+
+  /// Compatibility fallback (LIVE-DASHBOARD-001): reads the deployed
+  /// `public.sales_summary` and maps the LIMITED figures it exposes (orders +
+  /// completed-payment gross) into a [DashboardReport]. Everything the summary
+  /// does not carry — the billed/collected split, tender breakdown, prior-day
+  /// deltas, voids, shift/cash, per-branch, top items, recent orders, hourly —
+  /// stays at honest zero/empty (still the RF-140 "live · limited" report). Money
+  /// is integer minor throughout (D-007). FAIL-CLOSED: a rejected body or a
+  /// transport failure (including a permission denial on the summary itself)
+  /// throws — the fallback never fabricates and never chains onward.
+  Future<DashboardReport> _loadFromSalesSummary(
+    SyncRpcTransport t,
+    MembershipContext m,
+  ) async {
+    final Object? raw;
+    try {
+      raw = await t.invoke('sales_summary', <String, dynamic>{
+        'p_organization_id': m.organizationId,
+        'p_restaurant_id': m.restaurantId,
+        'p_branch_id': m.branchId,
+      });
+    } on SyncTransportException {
+      throw const OwnerReportsException('sales_summary transport failure');
+    }
+    if (raw is! Map || raw['ok'] != true) {
+      throw const OwnerReportsException('sales_summary rejected');
+    }
+    final today = raw['today'];
+    final ordersCount = today is Map ? _int(today['orders_count']) : 0;
+    final paymentsCount = today is Map ? _int(today['payments_count']) : 0;
+    final grossMinor = today is Map ? _int(today['gross_minor']) : 0;
+    final days = raw['last_7_days'];
+    final dateLabel = days is List && days.isNotEmpty && days.last is Map
+        ? ((days.last as Map)['day'] ?? '').toString()
+        : '';
+    // sales_summary reports only completed-payment gross; with no discount engine
+    // and cash-only payments in this build, net/collected/cash MIRROR it (they
+    // MUST split once tenders/discounts land). openOrders is the honest
+    // orders-without-a-completed-payment approximation.
+    final openOrders = ordersCount - paymentsCount;
+    return DashboardReport(
+      currencyCode: (raw['currency_code'] ?? '').toString(),
+      businessDateLabel: dateLabel,
+      grossSalesMinor: grossMinor,
+      netSalesMinor: grossMinor,
+      discountTotalMinor: 0,
+      collectedMinor: grossMinor,
+      cashSalesMinor: grossMinor,
+      lastCashPaymentMinor: 0,
+      orderCount: ordersCount,
+      completedOrderCount: paymentsCount,
+      openOrderCount: openOrders < 0 ? 0 : openOrders,
+      unpaidOrderCount: openOrders < 0 ? 0 : openOrders,
+      voidCount: 0,
+      voidTotalMinor: 0,
+      openingFloatMinor: 0,
+      expectedCashMinor: 0,
+      countedCashMinor: 0,
+      shiftStatus: 'none',
+      branches: const [],
+      topItems: const [],
+      recentOrders: const [],
+      paymentMethods: const [],
+      // No prior-day block from sales_summary -> no "vs yesterday" deltas
+      // (comparison stays null) and no hourly curve (chart stays hidden).
     );
   }
 

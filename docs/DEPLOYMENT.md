@@ -225,3 +225,38 @@ hosting; the security model is the same as an on-premise device.
   but a missing `RESTOFLOW_DEMO_MODE=false` fails closed there too. Until then the
   build pinning the flag is the safety.
 - **Admin stays out** of this deployment — internal platform plane only (§1/§6).
+
+## 9. Hosted Dashboard — context restore + reports fallback (LIVE-DASHBOARD-001)
+
+Two hosted-only Dashboard behaviours were hardened; **both are client-side — no
+live DB migration, no schema/RLS/RPC change.**
+
+- **Refresh no longer flashes "Set up your restaurant."** On a hosted F5 the
+  restored Supabase session's JWT can attach to the transport **after** the first
+  `get_my_context` fires, so that first call runs effectively anonymous and the
+  `SECURITY DEFINER` resolver returns **42501** (AuthDenied) even for a
+  fully-provisioned owner — which previously routed straight to onboarding /
+  create-restaurant. The auth flow now **retries the context load a bounded number
+  of times** (`DashboardAuthFlow.contextRetryBackoff`, default 350 ms × up to 3
+  attempts) before rendering any terminal state, so that race **self-heals to the
+  dashboard**. While loading it shows the skeleton; a stable network/server error
+  shows **retry/error**; onboarding is reached only on a **confirmed** no-context —
+  either `NoMemberships` (a successful `get_my_context` that clearly enumerated
+  zero memberships) or a **stable** 42501 that survived the retries (a genuinely new
+  principal whose `app_user` is not bootstrapped until `create_organization`, which
+  is **idempotent** — so even a mis-routed existing owner is never duplicated). A
+  42501 is **never** silently turned into a new org/restaurant.
+- **Overview no longer shows "Couldn't load reports."** The RF-REPORT-001
+  `owner_daily_report` migration is merged but **intentionally not applied to live**
+  until R-003 sign-off, so on production that function does not exist and PostgREST
+  answers with a **"could not find the function"** error (`PGRST202` / `404`). The
+  real owner-reports repository now treats **only that missing-RPC signature** as a
+  cue to fall back to the already-deployed **`public.sales_summary`**, mapping the
+  limited figures it provides (orders + completed-payment gross; everything else
+  honest zero/empty). It stays the RF-140 **"live · limited"** report. The fallback
+  is **fail-closed**: it **never** fires on a permission / tenant-isolation / auth
+  denial (**42501**) or on any non-missing server error, and a rejected
+  `sales_summary` (e.g. a below-manager caller) still throws — a denied caller
+  **never** silently sees fallback data. **When `owner_daily_report` is applied to
+  live (post R-003), the fallback simply stops triggering** — no client change is
+  needed to retire it.

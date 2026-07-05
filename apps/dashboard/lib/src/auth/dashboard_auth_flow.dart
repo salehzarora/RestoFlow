@@ -43,6 +43,7 @@ class DashboardAuthFlow extends StatefulWidget {
     this.onboardingRepository,
     this.selectedContextStore,
     this.deviceContext,
+    this.contextRetryBackoff = const Duration(milliseconds: 350),
     super.key,
   });
 
@@ -65,6 +66,17 @@ class DashboardAuthFlow extends StatefulWidget {
   /// The org/branch-scoped device context, cleared on sign-out (RF-152
   /// foundation). Null => an internal controller (absent by default).
   final DeviceContextController? deviceContext;
+
+  /// Delay between bounded context-reload retries (LIVE-DASHBOARD-001).
+  ///
+  /// A hosted refresh can fire the first `get_my_context` before the restored
+  /// session's JWT is attached to the transport, so that call runs effectively
+  /// anonymous and returns 42501 (AuthDenied) even for a fully-provisioned owner.
+  /// Retrying a bounded number of times lets that race SELF-HEAL to the dashboard
+  /// instead of flashing the onboarding / "set up your restaurant" screen. A
+  /// STABLE 42501 (a genuinely new principal with no linked app_user) survives
+  /// the retries and still reaches onboarding. Tests inject [Duration.zero].
+  final Duration contextRetryBackoff;
 
   @override
   State<DashboardAuthFlow> createState() => _DashboardAuthFlowState();
@@ -125,10 +137,33 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
     }
   }
 
+  /// How many times to (re)load the context before rendering a TERMINAL state.
+  /// A hosted session-restore race resolves the JWT only after the first
+  /// `get_my_context` fires (LIVE-DASHBOARD-001); a bounded retry lets that heal.
+  static const int _maxContextAttempts = 3;
+
   Future<void> _loadContext() async {
-    setState(() => _contextResult = null);
-    final result = await widget.fetchContext();
+    setState(
+      () => _contextResult = null,
+    ); // null => loading (skeleton, NOT setup)
+    var result = await widget.fetchContext();
     if (!mounted) return;
+    // A denied / network / unknown failure on a signed-in principal is most often
+    // a TRANSIENT race (a not-yet-attached JWT after a hosted refresh, or a blip)
+    // rather than a genuine "no account" — retry a bounded number of times before
+    // showing any terminal state so a real refresh self-heals to the dashboard
+    // instead of flashing onboarding. A malformed response or no-session result
+    // won't change on retry, so those fall through immediately.
+    var attempt = 1;
+    while (attempt < _maxContextAttempts && _isTransient(result)) {
+      if (widget.contextRetryBackoff > Duration.zero) {
+        await Future<void>.delayed(widget.contextRetryBackoff);
+        if (!mounted) return;
+      }
+      result = await widget.fetchContext();
+      if (!mounted) return;
+      attempt++;
+    }
     // Restore the persisted selection and RE-VALIDATE it against the live
     // memberships (fail-closed): a stale/unknown id is dropped so the user lands
     // on the picker instead of a scope they may no longer access.
@@ -139,6 +174,21 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
       _selectedMembershipId = restored;
     });
   }
+
+  /// Whether [result] may be a transient session/network race worth retrying
+  /// before a terminal render (LIVE-DASHBOARD-001). Only failures that plausibly
+  /// change once the restored session settles are retryable; a success, a
+  /// malformed response, or an explicit no-session result are not.
+  static bool _isTransient(Result<MyContext, AuthFailure> result) =>
+      switch (result) {
+        Success<MyContext, AuthFailure>() => false,
+        Failure<MyContext, AuthFailure>(:final failure) => switch (failure) {
+          AuthDeniedFailure() ||
+          AuthNetworkFailure() ||
+          AuthUnknownFailure() => true,
+          _ => false,
+        },
+      };
 
   Future<String?> _restoreValidatedSelection(
     Result<MyContext, AuthFailure> result,
@@ -195,8 +245,14 @@ class _DashboardAuthFlowState extends State<DashboardAuthFlow> {
     return switch (state) {
       AuthGateLoading() => const AuthLoadingView(),
       AuthGateReady(:final membership) => widget.onReady(context, membership),
-      // No organization yet (fresh sign-up is AuthDenied until create_organization
-      // bootstraps the app_user; an existing user with no org is NoMemberships).
+      // No organization yet -> onboarding. An existing member-less user is
+      // NoMemberships (a SUCCESSFUL get_my_context that clearly enumerated zero
+      // memberships). A fresh sign-up is AuthDenied until create_organization
+      // bootstraps its app_user; by here that AuthDenied is STABLE (it survived
+      // `_loadContext`'s bounded retry, so it is a genuine no-account principal,
+      // not a transient hosted-refresh JWT race — LIVE-DASHBOARD-001). We never
+      // silently create an org: onboarding calls create_organization, which is
+      // idempotent, so even a mis-routed existing owner is not duplicated.
       AuthGateNoMemberships() ||
       AuthGatePlatformAdminNoMemberships() ||
       AuthGateAuthDenied() ||
