@@ -27,6 +27,13 @@
 .env
 .env.*
 !.env.example
+# Generic env-file forms — the `.env` / `.env.*` rules above only match names
+# that START with ".env", so a non-dotfile env file (e.g. `supabasekey.env.local`,
+# `staging.env`) would otherwise be committable. These catch any prefix so a local
+# secret env file can never be staged by a plain `git add .` (RF-LIVE-001).
+*.env
+*.env.local
+supabasekey.env.local
 *.pem
 *.key
 *.p12
@@ -111,6 +118,9 @@ lib/generated_plugin_registrant.dart
 
 # Claude Code local agent metadata (e.g. .claude/settings.local.json) — never committed.
 .claude/
+# Local MCP server config may carry access tokens — never commit (root or nested).
+.mcp.json
+**/.mcp.json
 
 # ----------------------------------------------------------------------------
 # Operating system
