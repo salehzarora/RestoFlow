@@ -73,6 +73,19 @@ class _ReportContent extends StatelessWidget {
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
 
+    // DESIGN-002: a trend delta vs the prior period, when one exists (demo
+    // mode). Null in real mode -> the card shows no delta (never invented).
+    // Integer percentage math only (no float money).
+    final comparison = report.comparison;
+    RestoflowMetricDelta? deltaOf(int current, int? prior) {
+      final pct = deltaPercent(current, prior);
+      if (pct == null) return null;
+      return RestoflowMetricDelta(
+        label: l10n.dashboardDeltaVsYesterday(pct.abs()),
+        positive: pct >= 0,
+      );
+    }
+
     final header = _ReportHeader(
       report: report,
       isDemo: isDemo,
@@ -113,18 +126,21 @@ class _ReportContent extends StatelessWidget {
         label: l10n.dashboardGrossSales,
         value: money(report.grossSalesMinor),
         icon: Icons.point_of_sale_outlined,
+        delta: deltaOf(report.grossSalesMinor, comparison?.grossSalesMinor),
       ),
       RestoflowMetricCard(
         key: const Key('kpi-net-sales'),
         label: l10n.dashboardTodaySales,
         value: money(report.netSalesMinor),
         icon: Icons.payments_outlined,
+        delta: deltaOf(report.netSalesMinor, comparison?.netSalesMinor),
       ),
       RestoflowMetricCard(
         key: const Key('kpi-orders'),
         label: l10n.dashboardOrders,
         value: report.orderCount.toString(),
         icon: Icons.receipt_long_outlined,
+        delta: deltaOf(report.orderCount, comparison?.orderCount),
       ),
       RestoflowMetricCard(
         key: const Key('kpi-avg-ticket'),
@@ -137,6 +153,7 @@ class _ReportContent extends StatelessWidget {
         label: l10n.dashboardCashSales,
         value: money(report.cashSalesMinor),
         icon: Icons.account_balance_wallet_outlined,
+        delta: deltaOf(report.cashSalesMinor, comparison?.cashSalesMinor),
       ),
       RestoflowMetricCard(
         key: const Key('kpi-completed'),
@@ -262,6 +279,35 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
+    // DESIGN-002: the sales-by-hour chart. Renders only when the report carries
+    // hourly data (demo mode); real mode leaves it out, so nothing is
+    // fabricated. Money stays integer-minor: the chart takes raw ints and the
+    // peak label is formatted here.
+    final hourly = report.hourlyNetSales;
+    final Widget? salesByHour = hourly.isEmpty
+        ? null
+        : RestoflowSectionCard(
+            key: const Key('sales-by-hour-card'),
+            title: l10n.dashboardSalesByHour,
+            children: [
+              const SizedBox(height: RestoflowSpacing.sm),
+              RestoflowBarChart(
+                bars: [
+                  for (final h in hourly)
+                    RestoflowBarDatum(
+                      label: h.hourLabel.split(':').first,
+                      value: h.netSalesMinor,
+                    ),
+                ],
+                peakValueLabel: money(
+                  hourly
+                      .map((h) => h.netSalesMinor)
+                      .reduce((a, b) => a > b ? a : b),
+                ),
+              ),
+            ],
+          );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumn = constraints.maxWidth >= _twoColBreakpoint;
@@ -314,6 +360,10 @@ class _ReportContent extends StatelessWidget {
             header,
             const SizedBox(height: RestoflowSpacing.lg),
             _KpiGrid(cards: kpis),
+            if (salesByHour != null) ...[
+              const SizedBox(height: RestoflowSpacing.lg),
+              salesByHour,
+            ],
             const SizedBox(height: RestoflowSpacing.lg),
             sections,
           ],
@@ -326,9 +376,10 @@ class _ReportContent extends StatelessWidget {
       method == 'cash' ? l10n.dashboardPaymentMethodCash : method;
 }
 
-/// The reports page header: an icon badge, the heading, the report day context
-/// (day + a demo/live pill), and the refresh action (flattened from the former
-/// nested AppBar).
+/// The reports page header. DESIGN-002: consolidated onto the shared
+/// [RestoflowPageHeader] (was a hand-rolled Row) so every dashboard tab's
+/// header reads identically. The data-source pill + refresh ride the header's
+/// trailing actions; the day context is the subtitle.
 class _ReportHeader extends StatelessWidget {
   const _ReportHeader({
     required this.report,
@@ -343,60 +394,21 @@ class _ReportHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final dayText =
         '${l10n.dashboardReportDayLabel}: ${report.businessDateLabel}';
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: scheme.primaryContainer,
-            borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          ),
-          child: Icon(
-            Icons.insights_outlined,
-            size: RestoflowIconSizes.lg,
-            color: scheme.onPrimaryContainer,
-          ),
+    // The Key stays on the header so find.byKey('reports-heading') matches, and
+    // the title/subtitle keep the pinned 'Owner reports' / 'Report day: …'
+    // strings.
+    return RestoflowPageHeader(
+      key: const Key('reports-heading'),
+      icon: Icons.insights_outlined,
+      title: l10n.dashboardReportsHeading,
+      subtitle: dayText,
+      actions: [
+        RestoflowStatusPill(
+          label: isDemo ? l10n.dashboardDemoDay : l10n.dashboardLiveDataTag,
+          tone: RestoflowTone.info,
         ),
-        const SizedBox(width: RestoflowSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                l10n.dashboardReportsHeading,
-                key: const Key('reports-heading'),
-                style: theme.textTheme.headlineSmall,
-              ),
-              const SizedBox(height: RestoflowSpacing.xs),
-              Wrap(
-                spacing: RestoflowSpacing.sm,
-                runSpacing: RestoflowSpacing.xs,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    dayText,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  RestoflowStatusPill(
-                    label: isDemo
-                        ? l10n.dashboardDemoDay
-                        : l10n.dashboardLiveDataTag,
-                    tone: RestoflowTone.info,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: RestoflowSpacing.sm),
         IconButton(
           key: const Key('reports-refresh-button'),
           onPressed: onRefresh,
@@ -436,20 +448,91 @@ class _KpiGrid extends StatelessWidget {
   }
 }
 
-/// The loading state while the report is fetched through the repository
-/// (exactly ONE CircularProgressIndicator — pinned by dashboard_states_test).
+/// The loading state while the report is fetched. DESIGN-002: a static skeleton
+/// of the Overview (header + KPI grid + chart) instead of a lone spinner —
+/// deliberately spinner-free and non-animated (the shared [RestoflowSkeleton] is
+/// static, so it stays `pumpAndSettle`-safe). The localized caption remains for
+/// screen readers.
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return RestoflowStateView(
+    final theme = Theme.of(context);
+    return ListView(
       key: const Key('reports-loading'),
-      showSpinner: true,
-      message: l10n.dashboardLoadingReports,
+      padding: const EdgeInsets.all(RestoflowSpacing.lg),
+      children: [
+        Row(
+          children: [
+            const RestoflowSkeleton(
+              width: 44,
+              height: 44,
+              radius: RestoflowRadii.md,
+            ),
+            const SizedBox(width: RestoflowSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  RestoflowSkeleton(width: 180, height: 22),
+                  SizedBox(height: RestoflowSpacing.sm),
+                  RestoflowSkeleton(width: 130, height: 14),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        _KpiGrid(
+          cards: const [
+            _MetricSkeleton(),
+            _MetricSkeleton(),
+            _MetricSkeleton(),
+            _MetricSkeleton(),
+          ],
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(RestoflowSpacing.lg),
+            child: RestoflowSkeleton(height: 168, radius: RestoflowRadii.md),
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.md),
+        Center(
+          child: Text(
+            l10n.dashboardLoadingReports,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
+}
+
+/// A single KPI card skeleton (a label bar + a value bar).
+class _MetricSkeleton extends StatelessWidget {
+  const _MetricSkeleton();
+
+  @override
+  Widget build(BuildContext context) => const Card(
+    child: Padding(
+      padding: EdgeInsets.all(RestoflowSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RestoflowSkeleton(width: 90, height: 14),
+          SizedBox(height: RestoflowSpacing.md),
+          RestoflowSkeleton(width: 120, height: 24),
+        ],
+      ),
+    ),
+  );
 }
 
 /// The error state when the report fails to load, with a retry action.

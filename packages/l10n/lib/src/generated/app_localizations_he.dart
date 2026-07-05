@@ -1980,6 +1980,20 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardModeReal => 'אמת';
 
   @override
+  String get dashboardModeDemoData => 'נתוני דמו';
+
+  @override
+  String get dashboardModeLiveData => 'נתונים חיים';
+
+  @override
+  String get dashboardSalesByHour => 'מכירות לפי שעה';
+
+  @override
+  String dashboardDeltaVsYesterday(int percent) {
+    return '$percent% לעומת אתמול';
+  }
+
+  @override
   String get dashboardUsersNotConnectedTitle => 'ניהול המשתמשים עדיין לא מחובר';
 
   @override

@@ -74,6 +74,12 @@ DashboardReport computeOwnerReport(OwnerReportDataset data) {
     topItems: _topItems(sales, currency),
     recentOrders: _recentOrders(data.orders, currency),
     paymentMethods: _paymentMethods(paid, cashSalesMinor, currency),
+    // DESIGN-002 (display-only): pass the dataset's demo hourly curve and
+    // prior-period summary straight through. Both are empty/null in real mode,
+    // so the Overview's chart and deltas simply don't render there — the money
+    // totals above are unaffected (still derived from `orders`).
+    hourlyNetSales: data.hourlyNetSales,
+    comparison: data.priorPeriod,
   );
 }
 

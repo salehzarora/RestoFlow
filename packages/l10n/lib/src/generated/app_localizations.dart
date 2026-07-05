@@ -3850,6 +3850,30 @@ abstract class AppLocalizations {
   /// **'Real'**
   String get dashboardModeReal;
 
+  /// DESIGN-002: user-facing header data-source pill for demo mode (replaces the developer 'Demo' label).
+  ///
+  /// In en, this message translates to:
+  /// **'Demo data'**
+  String get dashboardModeDemoData;
+
+  /// DESIGN-002: user-facing header data-source pill for real mode (replaces the developer 'Real' label).
+  ///
+  /// In en, this message translates to:
+  /// **'Live data'**
+  String get dashboardModeLiveData;
+
+  /// DESIGN-002: title of the Overview sales-by-hour chart card.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by hour'**
+  String get dashboardSalesByHour;
+
+  /// DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs yesterday'**
+  String dashboardDeltaVsYesterday(int percent);
+
   /// Honest real-mode Users tab state: no member read API exists yet, so no list is shown.
   ///
   /// In en, this message translates to:

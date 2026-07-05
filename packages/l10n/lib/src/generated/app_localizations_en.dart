@@ -2012,6 +2012,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardModeReal => 'Real';
 
   @override
+  String get dashboardModeDemoData => 'Demo data';
+
+  @override
+  String get dashboardModeLiveData => 'Live data';
+
+  @override
+  String get dashboardSalesByHour => 'Sales by hour';
+
+  @override
+  String dashboardDeltaVsYesterday(int percent) {
+    return '$percent% vs yesterday';
+  }
+
+  @override
   String get dashboardUsersNotConnectedTitle =>
       'User management not connected yet';
 

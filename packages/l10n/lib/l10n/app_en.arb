@@ -1638,6 +1638,17 @@
   "@dashboardModeDemo": {"description": "Header mode pill when the app runs on in-memory demo data."},
   "dashboardModeReal": "Real",
   "@dashboardModeReal": {"description": "Header mode pill when the app runs against the real backend."},
+  "dashboardModeDemoData": "Demo data",
+  "@dashboardModeDemoData": {"description": "DESIGN-002: user-facing header data-source pill for demo mode (replaces the developer 'Demo' label)."},
+  "dashboardModeLiveData": "Live data",
+  "@dashboardModeLiveData": {"description": "DESIGN-002: user-facing header data-source pill for real mode (replaces the developer 'Real' label)."},
+  "dashboardSalesByHour": "Sales by hour",
+  "@dashboardSalesByHour": {"description": "DESIGN-002: title of the Overview sales-by-hour chart card."},
+  "dashboardDeltaVsYesterday": "{percent}% vs yesterday",
+  "@dashboardDeltaVsYesterday": {
+    "description": "DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.",
+    "placeholders": {"percent": {"type": "int"}}
+  },
   "dashboardUsersNotConnectedTitle": "User management not connected yet",
   "@dashboardUsersNotConnectedTitle": {"description": "Honest real-mode Users tab state: no member read API exists yet, so no list is shown."},
   "dashboardUsersNotConnectedBody": "This build cannot list or invite real members yet — there is no member directory API. Instead of showing sample people, this page stays empty. Demo mode previews how the flow will work.",

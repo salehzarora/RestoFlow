@@ -1994,6 +1994,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardModeReal => 'حقيقي';
 
   @override
+  String get dashboardModeDemoData => 'بيانات تجريبية';
+
+  @override
+  String get dashboardModeLiveData => 'بيانات مباشرة';
+
+  @override
+  String get dashboardSalesByHour => 'المبيعات حسب الساعة';
+
+  @override
+  String dashboardDeltaVsYesterday(int percent) {
+    return '$percent٪ مقارنةً بالأمس';
+  }
+
+  @override
   String get dashboardUsersNotConnectedTitle =>
       'إدارة المستخدمين غير متصلة بعد';
 
