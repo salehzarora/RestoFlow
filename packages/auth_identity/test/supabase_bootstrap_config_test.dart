@@ -171,4 +171,28 @@ void main() {
       );
     });
   });
+
+  // RF-LIVE-002: the non-throwing presence check the production demo-safety
+  // guard uses to detect "real credentials present but the app is in demo mode".
+  group('SupabaseBootstrapConfig.isPresentAndValid', () {
+    test('true when a valid real config (url + anon key) is present', () {
+      final env = <String, String>{
+        SupabaseBootstrapConfig.urlEnvName: validUrl,
+        SupabaseBootstrapConfig.anonKeyEnvName: makeJwt('anon'),
+      };
+      expect(
+        SupabaseBootstrapConfig.isPresentAndValid(
+          readEnv: (name) => env[name] ?? '',
+        ),
+        isTrue,
+      );
+    });
+
+    test('false (never throws) when the config is missing/empty', () {
+      expect(
+        SupabaseBootstrapConfig.isPresentAndValid(readEnv: (_) => ''),
+        isFalse,
+      );
+    });
+  });
 }

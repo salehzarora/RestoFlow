@@ -1060,6 +1060,14 @@ class AppLocalizationsAr extends AppLocalizations {
       'لاستكشاف النسخة التجريبية بدلاً من ذلك، شغّل التطبيق دون أي إعدادات — الوضع التجريبي هو الافتراضي.';
 
   @override
+  String get authProductionDemoBlockedTitle =>
+      'الوضع التجريبي مُفعّل مع بيانات اعتماد حقيقية';
+
+  @override
+  String get authProductionDemoBlockedBody =>
+      'يحتوي هذا الإصدار على إعدادات اتصال خلفية صالحة لكنه يعمل في الوضع التجريبي، لذا سيعرض بيانات تجريبية كأنها بيانات حقيقية. أوقِف الوضع التجريبي لعرض البيانات الحقيقية، أو أزِل إعدادات الاتصال لتشغيل النسخة التجريبية. لا يعرض RestoFlow البيانات التجريبية أبدًا كأنها بيانات إنتاج.';
+
+  @override
   String get authDeviceSignInUnavailableTitle => 'تسجيل دخول الجهاز غير متاح';
 
   @override

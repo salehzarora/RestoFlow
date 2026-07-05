@@ -39,6 +39,20 @@ Future<void> main() async {
     await readPersistedLocale() ?? const Locale('ar'),
   );
 
+  // RF-LIVE-002: a hosted RELEASE build left in demo mode while valid real
+  // credentials are present is an accidental production demo — fail closed with
+  // an honest help page instead of serving demo data as if it were live. Local
+  // demo (no real config present) is unaffected.
+  if (config.isDemoModeMisconfigured) {
+    runApp(
+      ProviderScope(
+        overrides: [localeOverride],
+        child: const DashboardApp(demoMode: true, demoModeMisconfigured: true),
+      ),
+    );
+    return;
+  }
+
   if (config.isDemoMode) {
     runApp(
       ProviderScope(
@@ -133,6 +147,7 @@ class DashboardApp extends ConsumerWidget {
     this.tablesRepositoryFor,
     this.reportsTransport,
     this.realModeUnconfigured = false,
+    this.demoModeMisconfigured = false,
     super.key,
   });
 
@@ -190,6 +205,12 @@ class DashboardApp extends ConsumerWidget {
   /// True in real mode when the Supabase anon-key config was missing/invalid.
   final bool realModeUnconfigured;
 
+  /// RF-LIVE-002: true when a RELEASE build is in DEMO mode while VALID real
+  /// credentials are present (an accidental production demo). The app fails
+  /// closed with the honest "demo mode with real credentials" help page instead
+  /// of serving demo data as if it were live.
+  final bool demoModeMisconfigured;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
@@ -207,6 +228,13 @@ class DashboardApp extends ConsumerWidget {
   }
 
   Widget _home() {
+    // RF-LIVE-002: an accidental production demo (release + demo-mode + valid
+    // real credentials) fails closed BEFORE the demo UI ever renders.
+    if (demoModeMisconfigured) {
+      return const RealModeUnconfiguredView(
+        issue: RealModeConfigIssue.demoModeInProduction,
+      );
+    }
     final demo = demoMode ?? authDemoModeEnabled();
     if (demo) return const DashboardShell();
     if (realModeUnconfigured || fetchContext == null) {
