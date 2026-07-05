@@ -57,13 +57,18 @@ class OutboxStatusIndicator extends ConsumerWidget {
     }
 
     final theme = Theme.of(context);
+    // DESIGN-001: one semantic vocabulary for sync state everywhere — the
+    // same tones the cart's pending chip and the confirmation's sync card use
+    // (this indicator previously spoke raw scheme colors: error/primary/
+    // tertiary). failed=danger, attention/pending=warning, syncing=info,
+    // synced=success. Labels and keys are unchanged (pinned test contracts).
     final IconData icon;
     final String label;
     final Color color;
     VoidCallback? onTap;
     if (failed > 0) {
       icon = Icons.error_outline;
-      color = theme.colorScheme.error;
+      color = RestoflowTone.danger.styleOf(theme).accent;
       label = l10n.posOutboxFailed(failed);
       onTap = () =>
           ref.read(outboxControllerProvider.notifier).retryAllFailed();
@@ -71,19 +76,19 @@ class OutboxStatusIndicator extends ConsumerWidget {
       // conflict/resolved: retry-all re-queues only FAILED entries, so this is an
       // honest "attention needed" warning, not a retry affordance and NOT synced.
       icon = Icons.warning_amber_outlined;
-      color = theme.colorScheme.error;
+      color = RestoflowTone.warning.styleOf(theme).accent;
       label = l10n.posOutboxAttention;
     } else if (syncing > 0) {
       icon = Icons.sync;
-      color = theme.colorScheme.primary;
+      color = RestoflowTone.info.styleOf(theme).accent;
       label = l10n.posOutboxSyncing;
     } else if (pending > 0) {
       icon = Icons.schedule_outlined;
-      color = theme.colorScheme.tertiary;
+      color = RestoflowTone.warning.styleOf(theme).accent;
       label = l10n.posOutboxPending(pending);
     } else {
       icon = Icons.cloud_done_outlined;
-      color = theme.colorScheme.primary;
+      color = RestoflowTone.success.styleOf(theme).accent;
       label = l10n.posOutboxSynced;
     }
 

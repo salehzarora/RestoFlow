@@ -1975,6 +1975,15 @@
   "@posPaymentMethodExternal": {"description": "POS payment method value: another external tender, recorded without a real charge."},
   "posNonCashNote": "External payment recorded — RestoFlow does not process the card or transfer; no real charge is made.",
   "@posNonCashNote": {"description": "POS honest note on the payment sheet for a non-cash tender: RestoFlow records the tender but processes no charge."},
+  "posPaymentFailedTitle": "Payment not recorded",
+  "@posPaymentFailedTitle": {"description": "DESIGN-001: title of the pinned danger banner in the payment sheet after a failed payment push (previously a silent failure)."},
+  "posPaymentFailedBody": "The payment could not be recorded. Check the connection and try again — the order stays unpaid until this succeeds.",
+  "@posPaymentFailedBody": {"description": "DESIGN-001: body of the payment-failure banner. Honest: nothing was recorded; the Confirm button doubles as the retry."},
+  "posCartQtyUnit": "× {quantity} · {unitPrice}",
+  "@posCartQtyUnit": {
+    "description": "DESIGN-001: the muted 'quantity times unit price' line under a cart item's name (e.g. '× 2 · ₪42.00'). unitPrice arrives as a pre-formatted money string (integer minor units upstream).",
+    "placeholders": {"quantity": {"type": "int"}, "unitPrice": {"type": "String"}}
+  },
   "posTaxLabel": "Tax",
   "@posTaxLabel": {"description": "POS label for the tax line on the cart/checkout summary and receipt."},
   "posGrandTotal": "Total",

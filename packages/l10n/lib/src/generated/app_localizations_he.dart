@@ -2527,6 +2527,18 @@ class AppLocalizationsHe extends AppLocalizations {
       'תשלום חיצוני נרשם — RestoFlow אינו מעבד את הכרטיס או ההעברה; לא מבוצע חיוב אמיתי.';
 
   @override
+  String get posPaymentFailedTitle => 'התשלום לא נרשם';
+
+  @override
+  String get posPaymentFailedBody =>
+      'לא ניתן היה לרשום את התשלום. בדקו את החיבור ונסו שוב — ההזמנה נשארת ללא תשלום עד שהרישום יצליח.';
+
+  @override
+  String posCartQtyUnit(int quantity, String unitPrice) {
+    return '× $quantity · $unitPrice';
+  }
+
+  @override
   String get posTaxLabel => 'מס';
 
   @override

@@ -2567,6 +2567,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'External payment recorded — RestoFlow does not process the card or transfer; no real charge is made.';
 
   @override
+  String get posPaymentFailedTitle => 'Payment not recorded';
+
+  @override
+  String get posPaymentFailedBody =>
+      'The payment could not be recorded. Check the connection and try again — the order stays unpaid until this succeeds.';
+
+  @override
+  String posCartQtyUnit(int quantity, String unitPrice) {
+    return '× $quantity · $unitPrice';
+  }
+
+  @override
   String get posTaxLabel => 'Tax';
 
   @override
