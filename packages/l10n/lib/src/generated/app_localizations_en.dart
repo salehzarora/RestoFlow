@@ -1902,6 +1902,29 @@ class AppLocalizationsEn extends AppLocalizations {
       'This code expires shortly and can be redeemed once.';
 
   @override
+  String get pairingPanelTitle => 'Pair this device';
+
+  @override
+  String get pairingPanelInstructions =>
+      'Open this link on the tablet, or scan the QR code, then tap Pair.';
+
+  @override
+  String get pairingPanelScanLabel => 'Scan to open on the tablet';
+
+  @override
+  String get pairingPanelLinkLabel => 'Pairing link';
+
+  @override
+  String get pairingPanelCopyLink => 'Copy link';
+
+  @override
+  String get pairingPanelCodeLabel => 'Pairing code';
+
+  @override
+  String get pairingPanelManualOnly =>
+      'This device type has no app link — enter the code on the tablet manually.';
+
+  @override
   String get adminTokenStartedTitle => 'Device session started';
 
   @override

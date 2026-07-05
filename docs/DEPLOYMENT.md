@@ -312,3 +312,39 @@ permission"* toast). So:
 > gate at rank ≥ manager). It was a UI action-visibility bug — offering "Issue code"
 > on an inactive (revoked) device — plus a lossy client error map (42501 → permission
 > denied). The SQL authority model is internally consistent and unchanged.
+
+## 11. QR pairing + real sales-by-hour reporting (LIVE-OPS-001 / RF-REPORT-002)
+
+**QR pairing (Dashboard Devices).** Issuing a POS/KDS enrollment code now shows a
+pairing panel with a **locally-rendered QR** + a copyable hosted link + the manual
+code, so staff can point a tablet straight at the pairing screen (which already
+prefills `?pair=CODE`, LIVE-DEVICE-001). **All client-side.**
+
+- The link is **origin-derived** (`{scheme}://{host}[:port]/pos?pair=CODE` or
+  `/kds`), built from the current web origin — it works on localhost, Vercel
+  preview/production, and any future custom domain. **Nothing is hardcoded** (no
+  `resto-flow-phi.vercel.app`). The Dashboard's own path/query never leaks in.
+- The **QR is OFFLINE** — `qr_flutter` (pure-Dart `qr` encoder + `CustomPaint`).
+  **No external QR API, no network.** The dependency is scoped to the **Dashboard**
+  app; `feature_admin` stays QR-free via an injected panel seam.
+- **Display only** — the Dashboard never auto-pairs; the operator still taps **Pair**
+  on the tablet. The code is short-lived, single-use, rate-limited server-side, and
+  **never logged**. A device type with no app route (not pos/kds) shows the **manual
+  code only** (no link/QR). Revoked devices still offer no Issue-code (LIVE-UX-001),
+  and the below-manager visibility rules are unchanged.
+
+**Real sales-by-hour (RF-REPORT-002).** The Overview's DESIGN-002 sales-by-hour
+chart can now render **real** data — a top-level `hourly` array of 24 branch-local
+buckets (today's **billed** net per hour) added to `owner_daily_report`
+(API_CONTRACT §4.19a). **Backend migration is NOT applied to the hosted DB.**
+
+- **The live chart stays unavailable in production until the RF-REPORT-002 migration
+  (`20260706090000`, a forward-only `CREATE OR REPLACE`) is applied to the hosted
+  Supabase after R-003 human RLS/security sign-off** (shared gate with
+  `sales_summary`/RF-REPORT-001). Locally it is validated by pgTAP only.
+- Until then the Dashboard uses the `sales_summary` fallback (LIVE-DASHBOARD-001),
+  which has **no hourly source** — the client leaves `hourlyNetSales` empty and the
+  chart **stays hidden**. The fallback **never fabricates** hourly data.
+- When applied, the chart renders only when there is **real** hourly data (a day
+  with no billed net sales maps to empty → the chart hides, never a flat-zero
+  placeholder). Money stays integer minor (D-007); KDS is untouched (money-free).

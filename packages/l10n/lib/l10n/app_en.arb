@@ -1593,6 +1593,34 @@
   "adminCodeIssuedTitle": "Enrollment code",
   "adminCodeIssuedSubtitle": "Enter this code on the device to begin pairing.",
   "adminCodeExpiresNote": "This code expires shortly and can be redeemed once.",
+  "pairingPanelTitle": "Pair this device",
+  "@pairingPanelTitle": {
+    "description": "Title of the Dashboard QR pairing panel shown after issuing a device enrollment code (LIVE-OPS-001)."
+  },
+  "pairingPanelInstructions": "Open this link on the tablet, or scan the QR code, then tap Pair.",
+  "@pairingPanelInstructions": {
+    "description": "How to use the pairing QR/link on the device (LIVE-OPS-001)."
+  },
+  "pairingPanelScanLabel": "Scan to open on the tablet",
+  "@pairingPanelScanLabel": {
+    "description": "Accessibility/label caption for the pairing QR code (LIVE-OPS-001)."
+  },
+  "pairingPanelLinkLabel": "Pairing link",
+  "@pairingPanelLinkLabel": {
+    "description": "Label for the copyable hosted pairing link (LIVE-OPS-001)."
+  },
+  "pairingPanelCopyLink": "Copy link",
+  "@pairingPanelCopyLink": {
+    "description": "Tooltip/button to copy the pairing link (LIVE-OPS-001)."
+  },
+  "pairingPanelCodeLabel": "Pairing code",
+  "@pairingPanelCodeLabel": {
+    "description": "Label for the manual pairing code shown as a fallback (LIVE-OPS-001)."
+  },
+  "pairingPanelManualOnly": "This device type has no app link — enter the code on the tablet manually.",
+  "@pairingPanelManualOnly": {
+    "description": "Shown when the device type has no pos/kds app route, so only the manual code is offered (LIVE-OPS-001)."
+  },
   "adminTokenStartedTitle": "Device session started",
   "adminTokenStartedSubtitle": "Load this session token onto the device to authenticate it.",
   "adminSessionOpen": "Session active",

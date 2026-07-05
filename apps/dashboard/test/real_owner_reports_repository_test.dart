@@ -467,4 +467,121 @@ void main() {
 
     expect(report.comparison, isNull);
   });
+
+  // --- RF-REPORT-002: TODAY sales-by-hour mapping ------------------------------
+
+  test('RF-REPORT-002: owner_daily_report hourly maps into the chart data '
+      '(HH:00 labels, integer minor)', () async {
+    final transport = _FakeTransport((_, _) {
+      final p = _payload();
+      p['hourly'] = <Map<String, dynamic>>[
+        {'hour': 0, 'net_minor': 0},
+        {'hour': 9, 'net_minor': 1000},
+        {'hour': 14, 'net_minor': 2000},
+      ];
+      return p;
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    expect(report.hourlyNetSales.length, 3);
+    expect(report.hourlyNetSales[0].hourLabel, '00:00');
+    expect(report.hourlyNetSales[1].hourLabel, '09:00');
+    expect(report.hourlyNetSales[1].netSalesMinor, 1000);
+    expect(report.hourlyNetSales[2].hourLabel, '14:00');
+    expect(report.hourlyNetSales[2].netSalesMinor, 2000);
+    expect(report.hourlyNetSales[2].netSalesMinor, isA<int>());
+  });
+
+  test('RF-REPORT-002: an ALL-ZERO hourly maps to EMPTY (chart hidden, never a '
+      'flat-zero curve)', () async {
+    final transport = _FakeTransport((_, _) {
+      final p = _payload();
+      p['hourly'] = [
+        for (var h = 0; h < 24; h++) {'hour': h, 'net_minor': 0},
+      ];
+      return p;
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    expect(report.hourlyNetSales, isEmpty);
+  });
+
+  test(
+    'RF-REPORT-002: a malformed / missing hourly is handled safely (empty)',
+    () async {
+      for (final bad in <Object?>['not-a-list', 42, null]) {
+        final transport = _FakeTransport((_, _) {
+          final p = _payload();
+          if (bad != null) p['hourly'] = bad;
+          return p;
+        });
+        final report = await RealOwnerReportsRepository(
+          null,
+          scope: _scope(),
+          transport: transport,
+        ).loadReport();
+        expect(report.hourlyNetSales, isEmpty);
+      }
+    },
+  );
+
+  test('RF-REPORT-002: hourly SKIPS non-map rows and out-of-range hours '
+      '(defensive, keeps only valid buckets)', () async {
+    final transport = _FakeTransport((_, _) {
+      final p = _payload();
+      p['hourly'] = <Object?>[
+        'not-a-map', // skipped: row is not a Map
+        42, // skipped: row is not a Map
+        {'hour': -1, 'net_minor': 9999}, // skipped: hour < 0
+        {'hour': 24, 'net_minor': 9999}, // skipped: hour > 23
+        {'hour': 9, 'net_minor': 1000}, // kept
+      ];
+      return p;
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    expect(report.hourlyNetSales.length, 1);
+    expect(report.hourlyNetSales.single.hourLabel, '09:00');
+    expect(report.hourlyNetSales.single.netSalesMinor, 1000);
+  });
+
+  test('RF-REPORT-002: the sales_summary fallback still has NO hourly (chart '
+      'stays hidden in fallback)', () async {
+    final transport = _FakeTransport((fn, _) {
+      if (fn == 'owner_daily_report') throw missingOwnerReport();
+      return <String, dynamic>{
+        'ok': true,
+        'entity': 'sales_summary',
+        'currency_code': 'ILS',
+        'today': {'orders_count': 5, 'payments_count': 3, 'gross_minor': 12000},
+        'last_7_days': <Map<String, dynamic>>[
+          {'day': '2026-07-04', 'orders_count': 4, 'gross_minor': 8000},
+          {'day': '2026-07-05', 'orders_count': 5, 'gross_minor': 12000},
+        ],
+      };
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    expect(report.hourlyNetSales, isEmpty);
+  });
 }

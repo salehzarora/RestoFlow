@@ -3640,6 +3640,48 @@ abstract class AppLocalizations {
   /// **'This code expires shortly and can be redeemed once.'**
   String get adminCodeExpiresNote;
 
+  /// Title of the Dashboard QR pairing panel shown after issuing a device enrollment code (LIVE-OPS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Pair this device'**
+  String get pairingPanelTitle;
+
+  /// How to use the pairing QR/link on the device (LIVE-OPS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Open this link on the tablet, or scan the QR code, then tap Pair.'**
+  String get pairingPanelInstructions;
+
+  /// Accessibility/label caption for the pairing QR code (LIVE-OPS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to open on the tablet'**
+  String get pairingPanelScanLabel;
+
+  /// Label for the copyable hosted pairing link (LIVE-OPS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Pairing link'**
+  String get pairingPanelLinkLabel;
+
+  /// Tooltip/button to copy the pairing link (LIVE-OPS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get pairingPanelCopyLink;
+
+  /// Label for the manual pairing code shown as a fallback (LIVE-OPS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Pairing code'**
+  String get pairingPanelCodeLabel;
+
+  /// Shown when the device type has no pos/kds app route, so only the manual code is offered (LIVE-OPS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'This device type has no app link — enter the code on the tablet manually.'**
+  String get pairingPanelManualOnly;
+
   /// No description provided for @adminTokenStartedTitle.
   ///
   /// In en, this message translates to:

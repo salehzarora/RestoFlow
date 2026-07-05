@@ -12,6 +12,7 @@ import 'admin/branch_shift_close_policy_repository.dart';
 import 'admin/real_admin_views.dart';
 import 'admin/supabase_settings_repository.dart';
 import 'dashboard_home_screen.dart';
+import 'devices/device_pairing_panel.dart';
 import 'printers/printers_repository.dart';
 import 'printers/printers_screen.dart';
 import 'setup/setup_center.dart';
@@ -442,10 +443,17 @@ class _DashboardShellState extends State<DashboardShell> {
           ),
         Expanded(
           child: ProviderScope(
-            overrides: adminFeatureOverrides(
-              scope: _adminScope,
-              repository: repository,
-            ),
+            overrides: [
+              ...adminFeatureOverrides(
+                scope: _adminScope,
+                repository: repository,
+              ),
+              // LIVE-OPS-001: the Dashboard provides the QR pairing panel (it owns
+              // the qr_flutter dependency); feature_admin stays QR-free.
+              devicePairingPanelProvider.overrideWithValue(
+                showDevicePairingPanel,
+              ),
+            ],
             child: screen,
           ),
         ),
