@@ -10,9 +10,10 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 /// owns transitions).
 ///
 /// RF-141E: rendered through the shared [RestoflowStatusPill] so the chip is
-/// fully themeable (no hardcoded colours). Each status maps to a DISTINCT
-/// semantic [RestoflowTone], preserving the at-a-glance per-status colour
-/// coding, and `dense: false` keeps the kitchen-readable (larger) text.
+/// fully themeable (no hardcoded colours). Statuses map onto the semantic
+/// [RestoflowTone] vocabulary (new/acknowledged share info-blue; bumped is the
+/// quiet neutral), and `dense: false` keeps the kitchen-readable (larger)
+/// text.
 class KdsStatusChip extends StatelessWidget {
   const KdsStatusChip({required this.status, super.key});
 
@@ -28,15 +29,21 @@ class KdsStatusChip extends StatelessWidget {
   }
 }
 
-/// Maps each kitchen-ticket status to a distinct semantic tone — warm/amber for
-/// in-progress, green for ready, red for cancelled — so the kitchen keeps its
-/// at-a-glance colour coding without any hardcoded colours. Shared by the chip
-/// AND the ticket cards' status-accent edge (design-polish sprint) so the two
-/// signals can never disagree.
+/// Maps each kitchen-ticket status to its semantic tone — blue for new and
+/// acknowledged, warm/amber while cooking, green for ready, red for
+/// cancelled, quiet neutral for bumped — so the kitchen keeps its at-a-glance
+/// colour coding without any hardcoded colours. Shared by the chip AND the
+/// ticket cards' status-accent edge (design-polish sprint) so the two signals
+/// can never disagree.
+///
+/// DESIGN-001: `newTicket` moved neutral → info so a brand-new card carries the
+/// SAME blue as the "New" column header it sits under (the approved status
+/// vocabulary: blue = new/info). Previously the most time-critical card wore
+/// the quietest colour while its column header was blue.
 RestoflowTone kdsStatusTone(KitchenTicketStatus status) {
   switch (status) {
     case KitchenTicketStatus.newTicket:
-      return RestoflowTone.neutral;
+      return RestoflowTone.info;
     case KitchenTicketStatus.acknowledged:
       return RestoflowTone.info;
     case KitchenTicketStatus.inPreparation:

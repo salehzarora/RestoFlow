@@ -41,12 +41,15 @@ void main() {
           .tone;
     }
 
-    // The signalling statuses each keep a distinct at-a-glance tone: warm/amber
-    // while cooking, green when ready, red when cancelled, brand for ack'd.
+    // The signalling statuses each keep a distinct at-a-glance tone: blue for
+    // new (DESIGN-001 — the card now matches its blue "New" column header),
+    // warm/amber while cooking, green when ready, red when cancelled.
+    expect(tones[KitchenTicketStatus.newTicket], RestoflowTone.info);
     expect(tones[KitchenTicketStatus.acknowledged], RestoflowTone.info);
     expect(tones[KitchenTicketStatus.inPreparation], RestoflowTone.warning);
     expect(tones[KitchenTicketStatus.ready], RestoflowTone.success);
     expect(tones[KitchenTicketStatus.cancelled], RestoflowTone.danger);
-    expect(tones[KitchenTicketStatus.newTicket], RestoflowTone.neutral);
+    // Cleared work stays quiet.
+    expect(tones[KitchenTicketStatus.bumped], RestoflowTone.neutral);
   });
 }

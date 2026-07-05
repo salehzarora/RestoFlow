@@ -174,6 +174,9 @@ class KdsSyncedHome extends ConsumerWidget {
     return KdsTicketPrintStatus(
       label: label,
       onRetry: canRetry ? () => _retryPrint(ref, l10n, ticket) : null,
+      // The recoverable states ARE the attention states — render them in the
+      // danger tone on the card (DESIGN-001).
+      isError: canRetry,
     );
   }
 

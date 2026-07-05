@@ -78,9 +78,54 @@ class KitchenBoard extends StatelessWidget {
       ),
     ];
 
+    // One wide-column body shared by the fill and scroll paths below.
+    Widget columnBody(_BoardColumn col) => Column(
+      key: Key('kds-col-${col.key}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        KdsColumnHeader(
+          columnKey: col.key,
+          label: col.label,
+          count: col.tickets.length,
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        Expanded(
+          child: col.tickets.isEmpty
+              ? const Align(
+                  alignment: AlignmentDirectional.topCenter,
+                  child: KdsEmptyColumnPlaceholder(),
+                )
+              : ListView(children: [for (final t in col.tickets) _card(t)]),
+        ),
+      ],
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= _wideBreakpoint) {
+          // DESIGN-001: same fill rule as the live KdsBoard — when all four
+          // columns fit at their 340px minimum (large kitchen TVs) they grow
+          // to use the whole width; below that (incl. every tested viewport)
+          // the fixed-width horizontal scroll is unchanged. Demo and live
+          // boards must read identically.
+          final fillsScreen =
+              constraints.maxWidth >=
+              columns.length * (_columnWidth + RestoflowSpacing.md) +
+                  RestoflowSpacing.md;
+          if (fillsScreen) {
+            return Padding(
+              padding: const EdgeInsets.all(RestoflowSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < columns.length; i++) ...[
+                    if (i > 0) const SizedBox(width: RestoflowSpacing.md),
+                    Expanded(child: columnBody(columns[i])),
+                  ],
+                ],
+              ),
+            );
+          }
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.all(RestoflowSpacing.md),
@@ -94,30 +139,7 @@ class KitchenBoard extends StatelessWidget {
                     ),
                     child: SizedBox(
                       width: _columnWidth,
-                      child: Column(
-                        key: Key('kds-col-${col.key}'),
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          KdsColumnHeader(
-                            columnKey: col.key,
-                            label: col.label,
-                            count: col.tickets.length,
-                          ),
-                          const SizedBox(height: RestoflowSpacing.sm),
-                          Expanded(
-                            child: col.tickets.isEmpty
-                                ? const Align(
-                                    alignment: AlignmentDirectional.topCenter,
-                                    child: KdsEmptyColumnPlaceholder(),
-                                  )
-                                : ListView(
-                                    children: [
-                                      for (final t in col.tickets) _card(t),
-                                    ],
-                                  ),
-                          ),
-                        ],
-                      ),
+                      child: columnBody(col),
                     ),
                   ),
               ],

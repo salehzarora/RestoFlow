@@ -10,12 +10,22 @@ import 'kds_status_chip.dart';
 /// localized label plus an optional Retry action (shown for failed /
 /// bridge-unavailable / not-configured jobs). Money-free — it is chrome only.
 class KdsTicketPrintStatus {
-  const KdsTicketPrintStatus({required this.label, this.onRetry});
+  const KdsTicketPrintStatus({
+    required this.label,
+    this.onRetry,
+    this.isError = false,
+  });
 
   final String label;
 
   /// Non-null => a Retry button is shown, wired to re-run the job.
   final VoidCallback? onRetry;
+
+  /// True for attention states (failed / bridge unavailable / not
+  /// configured): the status line renders in the danger tone instead of the
+  /// muted chrome color, so a print problem is visible from the pass
+  /// (DESIGN-001 — previously failures looked identical to successes).
+  final bool isError;
 }
 
 /// A polished KDS ticket card: a header row (the HUMAN order number — the same
@@ -38,11 +48,19 @@ class KdsTicketCard extends StatelessWidget {
     required this.onAdvance,
     required this.onRecall,
     this.printStatus,
+    this.now,
     super.key,
   });
 
   final KdsTicketView ticket;
   final AppLocalizations l10n;
+
+  /// Reference clock for the elapsed pill (DESIGN-001). The board passes ONE
+  /// build-time value so every card agrees; null falls back to
+  /// [DateTime.now]. Deliberately no timer (the widget-test corpus
+  /// `pumpAndSettle`s) — the live board rebuilds on every sync poll, which
+  /// refreshes elapsed for free.
+  final DateTime? now;
 
   /// Advance the ticket to [to] via the existing state machine (forward edges).
   final void Function(KitchenTicketStatus to) onAdvance;
@@ -76,7 +94,29 @@ class KdsTicketCard extends StatelessWidget {
     final statusAccent = kdsStatusTone(ticket.status).styleOf(theme).accent;
     final noteColor = RestoflowTone.warning.styleOf(theme).accent;
 
-    return Card(
+    // Elapsed-since-submit pill (DESIGN-001): computed at build, no timer.
+    // Urgency escalates through the shared thresholds (info → 10m warning →
+    // 20m danger). Negative diffs (clock skew) clamp to 0. No submittedAt on
+    // the view (older fixtures) => no pill — never a fabricated age.
+    RestoflowStatusPill? elapsedPill;
+    if (ticket.submittedAt case final submittedAt?) {
+      final minutes = (now ?? DateTime.now()).difference(submittedAt).inMinutes;
+      final clamped = minutes < 0 ? 0 : minutes;
+      elapsedPill = RestoflowStatusPill(
+        key: Key('elapsed-${ticket.kitchenTicketId}'),
+        icon: Icons.schedule,
+        label: l10n.kdsElapsedMinutes(clamped),
+        tone: RestoflowUrgency.toneForMinutes(clamped),
+        dense: false,
+      );
+    }
+
+    // Cleared work steps back visually (DESIGN-001): a bumped ticket dims so
+    // the active columns stay the loud ones. Cancelled keeps full contrast —
+    // its danger accent IS the signal.
+    final dimmed = ticket.status == KitchenTicketStatus.bumped;
+
+    final card = Card(
       margin: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.md),
       color: theme.colorScheme.surfaceContainerLow,
       child: Container(
@@ -102,6 +142,10 @@ class KdsTicketCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (elapsedPill != null) ...[
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    elapsedPill,
+                  ],
                   const SizedBox(width: RestoflowSpacing.sm),
                   KdsStatusChip(status: ticket.status),
                 ],
@@ -158,7 +202,11 @@ class KdsTicketCard extends StatelessWidget {
                     Icon(
                       Icons.print_outlined,
                       size: RestoflowIconSizes.sm,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      // A print problem must LOOK like a problem (DESIGN-001):
+                      // attention states go danger; quiet states stay muted.
+                      color: status.isError
+                          ? RestoflowTone.danger.styleOf(theme).accent
+                          : theme.colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: RestoflowSpacing.xs),
                     Expanded(
@@ -166,9 +214,16 @@ class KdsTicketCard extends StatelessWidget {
                         '${l10n.kdsTicketPrintLabel}: ${status.label}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                        style: status.isError
+                            ? theme.textTheme.bodyMedium?.copyWith(
+                                color: RestoflowTone.danger
+                                    .styleOf(theme)
+                                    .accent,
+                                fontWeight: FontWeight.w600,
+                              )
+                            : theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                       ),
                     ),
                     if (status.onRetry case final onRetry?) ...[
@@ -194,6 +249,9 @@ class KdsTicketCard extends StatelessWidget {
         ),
       ),
     );
+
+    if (!dimmed) return card;
+    return Opacity(opacity: 0.62, child: card);
   }
 }
 
