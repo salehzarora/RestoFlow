@@ -983,6 +983,26 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardLiveDataTag => 'مباشر · محدود';
 
   @override
+  String get dashboardLiveReportsTitle => 'التقارير المباشرة';
+
+  @override
+  String get dashboardLiveReportsPending =>
+      'ستظهر التحليلات التفصيلية — المبيعات حسب الساعة، والأصناف الأكثر مبيعًا، والمبيعات حسب الفرع، والطلبات الأخيرة — هنا بمجرد تفعيل التقارير الكاملة.';
+
+  @override
+  String adminDevicesShownCount(int count) {
+    return '$count أجهزة';
+  }
+
+  @override
+  String adminDevicesRevokedCount(int count) {
+    return '$count ملغى';
+  }
+
+  @override
+  String get adminDevicesRevokedSection => 'الأجهزة الملغاة';
+
+  @override
   String get dashboardGrossSales => 'إجمالي المبيعات';
 
   @override

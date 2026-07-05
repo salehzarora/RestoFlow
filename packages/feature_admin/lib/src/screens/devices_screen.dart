@@ -58,6 +58,18 @@ class AdminDevicesScreen extends ConsumerWidget {
                   body: l10n.adminDevicesEmptyBody,
                 );
               }
+              // LIVE-UX-001: keep the ACTIVE list clean — a revoked device is
+              // terminal (is_active=false: it cannot pair or re-issue a code), so
+              // it does not belong in the main list. Active/pending/paired stay
+              // up top; revoked history moves to a collapsed, read-only section.
+              final active = [
+                for (final d in list)
+                  if (d.status != DeviceLifecycleStatus.revoked) d,
+              ];
+              final revoked = [
+                for (final d in list)
+                  if (d.status == DeviceLifecycleStatus.revoked) d,
+              ];
               return ListView(
                 padding: const EdgeInsetsDirectional.fromSTEB(
                   RestoflowSpacing.lg,
@@ -67,14 +79,23 @@ class AdminDevicesScreen extends ConsumerWidget {
                 ),
                 children: [
                   const _LifecycleNote(),
+                  const SizedBox(height: RestoflowSpacing.sm),
+                  _DeviceCounts(
+                    activeCount: active.length,
+                    revokedCount: revoked.length,
+                  ),
                   const SizedBox(height: RestoflowSpacing.md),
-                  for (final d in list)
+                  for (final d in active)
                     Padding(
                       padding: const EdgeInsetsDirectional.only(
                         bottom: RestoflowSpacing.sm,
                       ),
                       child: _DeviceTile(device: d, canManage: manage),
                     ),
+                  if (revoked.isNotEmpty) ...[
+                    const SizedBox(height: RestoflowSpacing.sm),
+                    _RevokedDevicesSection(devices: revoked),
+                  ],
                 ],
               );
             },
@@ -113,6 +134,87 @@ class _LifecycleNote extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small, honest count line above the device list (LIVE-UX-001): how many
+/// devices are live vs how many have been revoked (the revoked total only shows
+/// when there are any).
+class _DeviceCounts extends StatelessWidget {
+  const _DeviceCounts({required this.activeCount, required this.revokedCount});
+
+  final int activeCount;
+  final int revokedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Row(
+      key: const Key('device-counts'),
+      children: [
+        Icon(
+          Icons.devices_outlined,
+          size: RestoflowIconSizes.xs,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: RestoflowSpacing.xs),
+        Text(l10n.adminDevicesShownCount(activeCount), style: style),
+        if (revokedCount > 0) ...[
+          Text('  ·  ', style: style),
+          Text(l10n.adminDevicesRevokedCount(revokedCount), style: style),
+        ],
+      ],
+    );
+  }
+}
+
+/// The collapsed, read-only "Revoked devices" history (LIVE-UX-001). Collapsed by
+/// default so revoked devices never clutter the active list; expanding is the
+/// "show revoked devices" affordance. Tiles are read-only (`canManage: false`):
+/// a revoked device is terminal — it offers neither Revoke nor Issue code.
+class _RevokedDevicesSection extends StatelessWidget {
+  const _RevokedDevicesSection({required this.devices});
+
+  final List<AdminDevice> devices;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: ExpansionTile(
+        key: const Key('revoked-devices-section'),
+        leading: Icon(Icons.block, color: theme.colorScheme.onSurfaceVariant),
+        title: Text(l10n.adminDevicesRevokedSection),
+        subtitle: Text(l10n.adminDevicesRevokedCount(devices.length)),
+        childrenPadding: const EdgeInsetsDirectional.fromSTEB(
+          RestoflowSpacing.md,
+          0,
+          RestoflowSpacing.md,
+          RestoflowSpacing.md,
+        ),
+        children: [
+          for (final d in devices)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                bottom: RestoflowSpacing.sm,
+              ),
+              child: _DeviceTile(device: d, canManage: false),
+            ),
         ],
       ),
     );
@@ -236,8 +338,13 @@ class _DeviceTileState extends ConsumerState<_DeviceTile> {
     final id = widget.device.id;
     ({String label, IconData icon, Future<void> Function() run})? spec =
         switch (widget.device.status) {
+          // LIVE-UX-001: a REVOKED device is is_active=false, so
+          // issue_device_enrollment_code fails closed with 42501 ("device not
+          // found, inactive") which the client can only surface as a misleading
+          // "you don't have permission" toast. So it is NOT offered here (a
+          // revoked device is terminal). none/codeExpired/rejected are still
+          // active devices where re-issuing a fresh code is valid.
           DeviceLifecycleStatus.none ||
-          DeviceLifecycleStatus.revoked ||
           DeviceLifecycleStatus.codeExpired ||
           DeviceLifecycleStatus.rejected => (
             label: l10n.adminIssueCode,

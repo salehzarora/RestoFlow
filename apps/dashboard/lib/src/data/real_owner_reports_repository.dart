@@ -152,9 +152,11 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
 
   /// Compatibility fallback (LIVE-DASHBOARD-001): reads the deployed
   /// `public.sales_summary` and maps the LIMITED figures it exposes (orders +
-  /// completed-payment gross) into a [DashboardReport]. Everything the summary
-  /// does not carry — the billed/collected split, tender breakdown, prior-day
-  /// deltas, voids, shift/cash, per-branch, top items, recent orders, hourly —
+  /// completed-payment gross) into a [DashboardReport], PLUS a safe "vs yesterday"
+  /// comparison derived from `last_7_days` (LIVE-UX-001, see [_priorDayComparison])
+  /// so the Overview KPI deltas render instead of looking bare. Everything the
+  /// summary does not carry — the billed/collected split, tender breakdown, voids,
+  /// shift/cash, per-branch, top items, recent orders, and the hourly curve —
   /// stays at honest zero/empty (still the RF-140 "live · limited" report). Money
   /// is integer minor throughout (D-007). FAIL-CLOSED: a rejected body or a
   /// transport failure (including a permission denial on the summary itself)
@@ -212,8 +214,35 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
       topItems: const [],
       recentOrders: const [],
       paymentMethods: const [],
-      // No prior-day block from sales_summary -> no "vs yesterday" deltas
-      // (comparison stays null) and no hourly curve (chart stays hidden).
+      // LIVE-UX-001: a SAFE "vs yesterday" comparison from last_7_days (lights up
+      // the Overview KPI deltas so the live-limited report no longer looks bare).
+      // Still no hourly curve (sales_summary has no hourly granularity) so the
+      // sales-by-hour chart stays hidden — never fabricated.
+      comparison: _priorDayComparison(days),
+    );
+  }
+
+  /// A SAFE prior-day ("vs yesterday") comparison from `sales_summary.last_7_days`
+  /// (LIVE-UX-001). The array is 6 prior days + today ascending, so `[len-2]` is
+  /// yesterday; it carries ONLY `{day, orders_count, gross_minor}`. So ONLY these
+  /// are honest and NOTHING is invented: gross/net/cash all map to yesterday's
+  /// completed-payment `gross_minor` (the SAME identity the today-block uses in
+  /// this limited build — net/cash MIRROR gross), and `orderCount` maps to
+  /// yesterday's `orders_count` (same per-day definition as today's). A short or
+  /// malformed array yields `null` (no delta — never a fabricated one), and
+  /// `deltaPercent` already guards a zero prior. It is deliberately NOT used to
+  /// synthesize a completed/unpaid comparison (last_7_days has no per-day
+  /// payments_count) — that would be fabrication.
+  static ReportComparison? _priorDayComparison(Object? sevenDays) {
+    if (sevenDays is! List || sevenDays.length < 2) return null;
+    final prior = sevenDays[sevenDays.length - 2];
+    if (prior is! Map) return null;
+    final priorGross = _int(prior['gross_minor']);
+    return ReportComparison(
+      grossSalesMinor: priorGross,
+      netSalesMinor: priorGross,
+      cashSalesMinor: priorGross,
+      orderCount: _int(prior['orders_count']),
     );
   }
 

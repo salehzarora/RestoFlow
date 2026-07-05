@@ -105,13 +105,20 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
       }
     }
     final liveItems = menu?.items.where((i) => !i.isDeleted);
+    // LIVE-UX-001: a REVOKED device is not part of the working setup (it cannot
+    // pair or run), so it must NOT satisfy "a POS/KDS exists" nor inflate the
+    // device total — otherwise a branch whose only POS was revoked is never
+    // prompted to create a new one. (devicesActive already excludes revoked.)
+    final liveDevices = devices
+        ?.where((d) => d.status != DeviceLifecycleStatus.revoked)
+        .toList();
     return _Counts(
-      devicesTotal: devices?.length,
-      devicesActive: devices
+      devicesTotal: liveDevices?.length,
+      devicesActive: liveDevices
           ?.where((d) => d.status == DeviceLifecycleStatus.active)
           .length,
-      posDevices: devices?.where((d) => d.deviceType == 'pos').length,
-      kdsDevices: devices?.where((d) => d.deviceType == 'kds').length,
+      posDevices: liveDevices?.where((d) => d.deviceType == 'pos').length,
+      kdsDevices: liveDevices?.where((d) => d.deviceType == 'kds').length,
       printersTotal: printers?.printers.length,
       printersEnabled: printers?.printers.where((p) => p.isEnabled).length,
       staffTotal: staff?.length,

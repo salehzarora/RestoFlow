@@ -260,3 +260,55 @@ live DB migration, no schema/RLS/RPC change.**
   **never** silently sees fallback data. **When `owner_daily_report` is applied to
   live (post R-003), the fallback simply stops triggering** — no client change is
   needed to retire it.
+
+## 10. Hosted Dashboard — live reporting clarity + devices cleanup (LIVE-UX-001)
+
+Follow-ups to §9, making the hosted Dashboard read as **intentional** rather than
+broken/old. **All client-side — no live DB migration, no schema/RLS/RPC change, no
+fabricated data.**
+
+**Live reporting clarity (Overview).** On production the Overview renders the
+`sales_summary` fallback (§9), which lacks the richer analytics — so it previously
+looked bare next to the demo. Now:
+
+- **A safe "vs yesterday" comparison is derived** from `sales_summary.last_7_days`
+  (`[len-2]` = yesterday): `orderCount` from yesterday's `orders_count`, and
+  gross/net/cash all from yesterday's completed-payment `gross_minor` (the SAME
+  identity the today-block uses in this limited build — net/cash mirror gross). This
+  lights up the KPI deltas **honestly**; a short/zero/malformed prior yields **no**
+  delta (`deltaPercent` guards it). It is deliberately **not** used to synthesize a
+  completed/unpaid comparison (`last_7_days` has no per-day `payments_count`).
+- **Empty section cards are hidden** (sales-by-branch, top items, recent orders) and
+  a calm **"more analytics coming"** note explains the gap, under a **titled** live
+  banner — so the limited state looks deliberate. **Nothing is fabricated.**
+- **The sales-by-hour chart stays hidden** in live mode — `sales_summary` has no
+  hourly granularity, so no curve is synthesised. The **live chart + top items +
+  per-branch + recent orders require the full `public.owner_daily_report`
+  (RF-REPORT-002 slices) deployed to live after R-003 sign-off**; until then the
+  "more analytics coming" note is the honest placeholder, and it retires itself once
+  the richer report lands.
+
+**Devices cleanup (Devices tab).** A revoked device is terminal
+(`devices.is_active=false`): it cannot pair and cannot re-issue an enrollment code
+(`issue_device_enrollment_code` requires `is_active`, so it fails closed with
+**42501** — which the client can only render as a misleading *"you don't have
+permission"* toast). So:
+
+- **Revoked devices are removed from the active list** and collapsed under a
+  read-only **"Revoked devices (N)"** section (expanding it is the "show revoked"
+  toggle). A small **count line** shows live vs revoked totals.
+- **Revoked devices offer neither Revoke nor Issue code** — the misleading toast can
+  no longer fire from a visible-but-impossible action. (`none`/`code_expired`/
+  `rejected` devices are still active, so re-issuing a fresh code stays available.)
+- **A below-manager role never sees the manage actions** (create/revoke/issue) — they
+  are hidden *before* the click (`canManage` = rank ≥ manager, matching every device
+  RPC's gate), so a lack-of-authority denial is never surfaced as a late toast.
+- **Setup-checklist device counts exclude revoked** devices, so a branch whose only
+  POS/KDS was revoked is correctly prompted to create a new one (a revoked device no
+  longer silently satisfies the step or inflates the device total).
+
+> Diagnosis note: the *"you don't have permission"* toast was **not** a real
+> permission problem and **not** a role-rank mismatch (list/create/issue/revoke all
+> gate at rank ≥ manager). It was a UI action-visibility bug — offering "Issue code"
+> on an inactive (revoked) device — plus a lossy client error map (42501 → permission
+> denied). The SQL authority model is internally consistent and unchanged.

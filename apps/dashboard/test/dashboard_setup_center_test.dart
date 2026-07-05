@@ -316,4 +316,28 @@ void main() {
     );
     expect(find.text('Create staff PIN'), findsOneWidget);
   });
+
+  testWidgets('LIVE-UX-001: a REVOKED-only POS does not satisfy setup — it '
+      'still prompts to create a POS (revoked is not counted)', (tester) async {
+    await _pump(
+      tester,
+      devices: const [
+        AdminDevice(
+          id: 'd-rev',
+          label: 'Old POS',
+          deviceType: 'pos',
+          branchLabel: 'Main',
+          status: DeviceLifecycleStatus.revoked,
+        ),
+        _activeKds,
+      ],
+      staff: const [_staffWithPin],
+    );
+    // The revoked POS must NOT count as a usable POS.
+    expect(find.textContaining('No POS device yet'), findsOneWidget);
+    expect(find.text('Create POS device'), findsOneWidget);
+    // And it must NOT inflate the device total: 1 live device (the KDS), so the
+    // devices card is "1/1", never "1/2" (which is what a counted revoke gives).
+    expect(find.text('1/2'), findsNothing);
+  });
 }

@@ -998,6 +998,32 @@
   "@dashboardLiveDataTag": {
     "description": "Owner dashboard pill shown in real mode in place of the 'Demo day' pill."
   },
+  "dashboardLiveReportsTitle": "Live reports",
+  "@dashboardLiveReportsTitle": {
+    "description": "Owner dashboard real-mode reports banner title, making the live-but-limited state feel intentional (LIVE-UX-001)."
+  },
+  "dashboardLiveReportsPending": "Detailed analytics — sales by hour, top items, sales by branch, and recent orders — will appear here once full reporting is enabled.",
+  "@dashboardLiveReportsPending": {
+    "description": "Owner dashboard note listing the analytics that are not yet available in the live-limited report; shown instead of empty cards (LIVE-UX-001)."
+  },
+  "adminDevicesShownCount": "{count} devices",
+  "@adminDevicesShownCount": {
+    "description": "Devices screen: count of live (non-revoked) devices shown above the list; status-neutral because they may be pending/paired/active, not only 'active' (LIVE-UX-001).",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "adminDevicesRevokedCount": "{count} revoked",
+  "@adminDevicesRevokedCount": {
+    "description": "Devices screen: count of revoked devices (LIVE-UX-001).",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "adminDevicesRevokedSection": "Revoked devices",
+  "@adminDevicesRevokedSection": {
+    "description": "Devices screen: collapsed section title holding the read-only revoked-device history (LIVE-UX-001)."
+  },
   "dashboardGrossSales": "Gross sales",
   "@dashboardGrossSales": {
     "description": "Owner dashboard KPI card label for gross sales (before discounts)."

@@ -327,7 +327,14 @@ void main() {
     expect(report.voidTotalMinor, 0);
     expect(report.lastCashPaymentMinor, 0);
     expect(report.paymentMethods, isEmpty); // no tender breakdown
-    expect(report.comparison, isNull); // no prior-day -> no "vs yesterday"
+    // LIVE-UX-001: a comparison IS now derived from last_7_days, but this
+    // fixture's yesterday is zero, so deltaPercent guards it -> NO visible
+    // "vs yesterday" delta (honest, never a fabricated jump).
+    expect(report.comparison?.grossSalesMinor, 0);
+    expect(
+      deltaPercent(report.netSalesMinor, report.comparison?.netSalesMinor),
+      isNull,
+    );
     expect(report.hourlyNetSales, isEmpty); // chart stays hidden
     expect(report.branches, isEmpty);
     expect(report.topItems, isEmpty);
@@ -386,4 +393,78 @@ void main() {
       expect(calls, ['owner_daily_report']);
     },
   );
+
+  // --- LIVE-UX-001: a SAFE "vs yesterday" comparison from last_7_days ----------
+
+  SyncTransportException missingOwnerReport() => const SyncTransportException(
+    SyncTransportErrorKind.server,
+    code: 'PGRST202',
+    message: 'Could not find the function public.owner_daily_report',
+  );
+
+  test('LIVE-UX-001: the sales_summary fallback derives a SAFE "vs yesterday" '
+      'comparison from last_7_days[len-2] (net/cash mirror gross, no '
+      'fabrication)', () async {
+    final transport = _FakeTransport((fn, _) {
+      if (fn == 'owner_daily_report') throw missingOwnerReport();
+      return <String, dynamic>{
+        'ok': true,
+        'entity': 'sales_summary',
+        'currency_code': 'ILS',
+        'today': {'orders_count': 5, 'payments_count': 3, 'gross_minor': 12000},
+        'last_7_days': <Map<String, dynamic>>[
+          {'day': '2026-07-03', 'orders_count': 2, 'gross_minor': 4000},
+          {'day': '2026-07-04', 'orders_count': 4, 'gross_minor': 8000}, // ytd
+          {'day': '2026-07-05', 'orders_count': 5, 'gross_minor': 12000}, // now
+        ],
+      };
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    final c = report.comparison;
+    expect(c, isNotNull);
+    // yesterday = last_7_days[len-2] = {orders:4, gross:8000}; the limited build
+    // mirrors net/cash onto gross, so all three carry yesterday's gross_minor.
+    expect(c!.grossSalesMinor, 8000);
+    expect(c.netSalesMinor, 8000);
+    expect(c.cashSalesMinor, 8000);
+    expect(c.orderCount, 4);
+    // The KPI deltas now compute (today 12000 vs yesterday 8000 = +50%).
+    expect(
+      deltaPercent(report.netSalesMinor, c.netSalesMinor),
+      (12000 - 8000) * 100 ~/ 8000,
+    );
+    // Still NO fabricated hourly curve — the chart must stay hidden.
+    expect(report.hourlyNetSales, isEmpty);
+  });
+
+  test('LIVE-UX-001: a short / malformed last_7_days yields NO comparison '
+      '(never a fabricated delta)', () async {
+    final transport = _FakeTransport((fn, _) {
+      if (fn == 'owner_daily_report') throw missingOwnerReport();
+      return <String, dynamic>{
+        'ok': true,
+        'entity': 'sales_summary',
+        'currency_code': 'ILS',
+        'today': {'orders_count': 5, 'payments_count': 3, 'gross_minor': 12000},
+        // Only today -> no prior day to compare against.
+        'last_7_days': <Map<String, dynamic>>[
+          {'day': '2026-07-05', 'orders_count': 5, 'gross_minor': 12000},
+        ],
+      };
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    expect(report.comparison, isNull);
+  });
 }

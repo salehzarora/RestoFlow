@@ -73,9 +73,10 @@ class _ReportContent extends StatelessWidget {
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
 
-    // DESIGN-002: a trend delta vs the prior period, when one exists (demo
-    // mode). Null in real mode -> the card shows no delta (never invented).
-    // Integer percentage math only (never floating-point).
+    // DESIGN-002: a trend delta vs the prior period, when one exists — demo, or
+    // the live-limited "vs yesterday" derived from sales_summary (LIVE-UX-001).
+    // A null comparison shows no delta (never invented). Integer percentage math
+    // only (never floating-point).
     final comparison = report.comparison;
     RestoflowMetricDelta? deltaOf(int current, int? prior) {
       final pct = deltaPercent(current, prior);
@@ -102,7 +103,11 @@ class _ReportContent extends StatelessWidget {
           )
         : RestoflowNoticeBanner(
             key: const Key('reports-realmode-banner'),
+            // LIVE-UX-001: a titled, iconed banner reads as an intentional
+            // "live but limited" state rather than a bare caution strip.
+            title: l10n.dashboardLiveReportsTitle,
             body: l10n.dashboardRealModeNotice,
+            icon: Icons.insights_outlined,
             tone: RestoflowTone.warning,
           );
 
@@ -308,48 +313,52 @@ class _ReportContent extends StatelessWidget {
             ],
           );
 
+    // LIVE-UX-001: hide sections that carry NO rows (an empty card reads as
+    // broken/old) and, when the report is live-but-limited (real mode with none
+    // of the richer analytics sourced yet), show a calm "more analytics coming"
+    // note so the gap is clearly INTENTIONAL. Never shown in demo (full data).
+    final showLimitedNote =
+        !isDemo &&
+        report.hourlyNetSales.isEmpty &&
+        report.branches.isEmpty &&
+        report.topItems.isEmpty &&
+        report.recentOrders.isEmpty;
+    final limitedNote = RestoflowNoticeBanner(
+      key: const Key('reports-limited-analytics'),
+      body: l10n.dashboardLiveReportsPending,
+      icon: Icons.query_stats_outlined,
+    );
+    final leftSections = <Widget>[summary, payment];
+    final rightSections = <Widget>[
+      if (report.branches.isNotEmpty) branches,
+      if (report.topItems.isNotEmpty) topItems,
+      if (report.recentOrders.isNotEmpty) recentOrders,
+      if (showLimitedNote) limitedNote,
+    ];
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final twoColumn = constraints.maxWidth >= _twoColBreakpoint;
+        final twoColumn =
+            constraints.maxWidth >= _twoColBreakpoint &&
+            rightSections.isNotEmpty;
         final sections = twoColumn
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Column(
-                      children: [
-                        summary,
-                        const SizedBox(height: RestoflowSpacing.lg),
-                        payment,
-                      ],
-                    ),
+                    child: Column(children: _verticallySpaced(leftSections)),
                   ),
                   const SizedBox(width: RestoflowSpacing.lg),
                   Expanded(
-                    child: Column(
-                      children: [
-                        branches,
-                        const SizedBox(height: RestoflowSpacing.lg),
-                        topItems,
-                        const SizedBox(height: RestoflowSpacing.lg),
-                        recentOrders,
-                      ],
-                    ),
+                    child: Column(children: _verticallySpaced(rightSections)),
                   ),
                 ],
               )
             : Column(
-                children: [
-                  summary,
-                  const SizedBox(height: RestoflowSpacing.lg),
-                  payment,
-                  const SizedBox(height: RestoflowSpacing.lg),
-                  branches,
-                  const SizedBox(height: RestoflowSpacing.lg),
-                  topItems,
-                  const SizedBox(height: RestoflowSpacing.lg),
-                  recentOrders,
-                ],
+                children: _verticallySpaced([
+                  ...leftSections,
+                  ...rightSections,
+                ]),
               );
 
         return ListView(
@@ -375,6 +384,16 @@ class _ReportContent extends StatelessWidget {
   static String _methodLabel(AppLocalizations l10n, String method) =>
       method == 'cash' ? l10n.dashboardPaymentMethodCash : method;
 }
+
+/// Joins [items] into a vertical run with a large gap between them. Gaps are only
+/// placed BETWEEN present items (LIVE-UX-001), so a hidden/empty section leaves no
+/// dangling double-space.
+List<Widget> _verticallySpaced(List<Widget> items) => [
+  for (var i = 0; i < items.length; i++) ...[
+    if (i > 0) const SizedBox(height: RestoflowSpacing.lg),
+    items[i],
+  ],
+];
 
 /// The reports page header. DESIGN-002: consolidated onto the shared
 /// [RestoflowPageHeader] (was a hand-rolled Row) so every dashboard tab's
