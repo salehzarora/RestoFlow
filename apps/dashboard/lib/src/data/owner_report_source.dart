@@ -371,19 +371,22 @@ OwnerReportDataset demoOwnerReportDataset() => const OwnerReportDataset(
   // summary for the KPI deltas. Sample data for the demo surface only — the
   // KPI money totals above are still DERIVED from `orders`; these never feed
   // the sums, and real mode leaves both absent (no fabricated curve/delta).
+  // The 12 hourly values SUM to the demo day's net sales (62000 minor /
+  // ₪620.00) so the chart reconciles with the "Net sales" KPI on the same
+  // screen; no single hour exceeds the day's total.
   hourlyNetSales: [
-    HourlyNetSales(hourLabel: '10:00', netSalesMinor: 4200),
-    HourlyNetSales(hourLabel: '11:00', netSalesMinor: 9800),
-    HourlyNetSales(hourLabel: '12:00', netSalesMinor: 22400),
-    HourlyNetSales(hourLabel: '13:00', netSalesMinor: 31000),
-    HourlyNetSales(hourLabel: '14:00', netSalesMinor: 15600),
-    HourlyNetSales(hourLabel: '15:00', netSalesMinor: 8400),
-    HourlyNetSales(hourLabel: '16:00', netSalesMinor: 6800),
-    HourlyNetSales(hourLabel: '17:00', netSalesMinor: 11200),
-    HourlyNetSales(hourLabel: '18:00', netSalesMinor: 24600),
-    HourlyNetSales(hourLabel: '19:00', netSalesMinor: 33800),
-    HourlyNetSales(hourLabel: '20:00', netSalesMinor: 26400),
-    HourlyNetSales(hourLabel: '21:00', netSalesMinor: 14000),
+    HourlyNetSales(hourLabel: '10:00', netSalesMinor: 1200),
+    HourlyNetSales(hourLabel: '11:00', netSalesMinor: 2900),
+    HourlyNetSales(hourLabel: '12:00', netSalesMinor: 6800),
+    HourlyNetSales(hourLabel: '13:00', netSalesMinor: 9200),
+    HourlyNetSales(hourLabel: '14:00', netSalesMinor: 4600),
+    HourlyNetSales(hourLabel: '15:00', netSalesMinor: 2500),
+    HourlyNetSales(hourLabel: '16:00', netSalesMinor: 2000),
+    HourlyNetSales(hourLabel: '17:00', netSalesMinor: 3300),
+    HourlyNetSales(hourLabel: '18:00', netSalesMinor: 7400),
+    HourlyNetSales(hourLabel: '19:00', netSalesMinor: 10100),
+    HourlyNetSales(hourLabel: '20:00', netSalesMinor: 7800),
+    HourlyNetSales(hourLabel: '21:00', netSalesMinor: 4200),
   ],
   priorPeriod: ReportComparison(
     grossSalesMinor: 57200,

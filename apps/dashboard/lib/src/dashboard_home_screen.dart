@@ -75,7 +75,7 @@ class _ReportContent extends StatelessWidget {
 
     // DESIGN-002: a trend delta vs the prior period, when one exists (demo
     // mode). Null in real mode -> the card shows no delta (never invented).
-    // Integer percentage math only (no float money).
+    // Integer percentage math only (never floating-point).
     final comparison = report.comparison;
     RestoflowMetricDelta? deltaOf(int current, int? prior) {
       final pct = deltaPercent(current, prior);

@@ -160,14 +160,20 @@ class _BarChartPainter extends CustomPainter {
         TextAlign.center,
       );
 
-      // The peak value label above the tallest bar.
+      // The peak value label above the tallest bar. Its box is widened well
+      // beyond one bar (many thin bars on a narrow phone would otherwise
+      // ellipsize the one callout number to "…") and clamped inside the canvas,
+      // so the emphasised value stays readable at every width.
       if (isPeak && peakValueLabel != null) {
+        final barCenter = left + barW / 2;
+        final labelW = (barW * 2).clamp(84.0, size.width);
+        final labelX = (barCenter - labelW / 2).clamp(0.0, size.width - labelW);
         _paintText(
           canvas,
           peakValueLabel!,
           peakLabelStyle,
-          Offset(left - barW / 2, baseY - barH - topPad),
-          barW * 2,
+          Offset(labelX, baseY - barH - topPad),
+          labelW,
           TextAlign.center,
         );
       }
