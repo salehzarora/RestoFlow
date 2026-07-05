@@ -7,6 +7,7 @@ import 'package:restoflow_dashboard/src/data/owner_report_source.dart';
 import 'package:restoflow_dashboard/src/data/owner_reports_repository.dart';
 import 'package:restoflow_dashboard/src/data/report_calculator.dart';
 import 'package:restoflow_dashboard/src/state/dashboard_providers.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 /// A repository whose [loadReport] resolves after a delay (to observe loading).
@@ -44,7 +45,11 @@ void main() {
     await tester.pump(); // first frame: future still pending
 
     expect(find.byKey(const Key('reports-loading')), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    // DESIGN-002: the loading state is now a static skeleton (no spinner) —
+    // deliberately spinner-free so it stays pumpAndSettle-safe. The localized
+    // caption remains for screen readers.
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(RestoflowSkeleton), findsWidgets);
     expect(find.text('Loading reports…'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 80)); // resolve the future

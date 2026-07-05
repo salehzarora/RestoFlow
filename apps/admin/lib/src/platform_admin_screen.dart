@@ -32,11 +32,16 @@ import 'widgets/language_selector.dart';
 ///     management UX is missing. Real-mode failures render categorized safe
 ///     states (not configured / access denied / generic) — see [_ErrorState].
 class PlatformAdminScreen extends ConsumerWidget {
-  const PlatformAdminScreen({this.onSignOut, super.key});
+  const PlatformAdminScreen({this.onSignOut, this.operatorEmail, super.key});
 
   /// RF-119-b: when provided (real mode), an app-bar Sign-out action clears the
   /// platform-operator session. Null in demo mode (no session to sign out of).
   final VoidCallback? onSignOut;
+
+  /// DESIGN-002: the signed-in operator email (from `get_my_context`), shown in
+  /// the overview header so the operator can confirm which account is active.
+  /// NON-secret; null in demo mode (no session).
+  final String? operatorEmail;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -79,8 +84,11 @@ class PlatformAdminScreen extends ConsumerWidget {
         ],
       ),
       body: overviewAsync.when(
-        data: (overview) =>
-            _OverviewContent(overview: overview, isDemo: isDemo),
+        data: (overview) => _OverviewContent(
+          overview: overview,
+          isDemo: isDemo,
+          operatorEmail: operatorEmail,
+        ),
         loading: () => const _LoadingState(),
         error: (error, _) => _ErrorState(error: error, onRetry: refresh),
       ),
@@ -90,9 +98,16 @@ class PlatformAdminScreen extends ConsumerWidget {
 
 /// The loaded overview: a scrollable, responsive layout of all sections.
 class _OverviewContent extends StatelessWidget {
-  const _OverviewContent({required this.overview, required this.isDemo});
+  const _OverviewContent({
+    required this.overview,
+    required this.isDemo,
+    this.operatorEmail,
+  });
 
   final PlatformOverview overview;
+
+  /// The signed-in operator email (real mode), or null (demo).
+  final String? operatorEmail;
 
   /// Whether the data is demo (computed locally) or real (the limited RF-091
   /// read panel). Drives the banner, the header pill, and which KPIs / sections
@@ -115,7 +130,11 @@ class _OverviewContent extends StatelessWidget {
             body: l10n.adminRealModeNotice,
             tone: RestoflowTone.warning,
           );
-    final header = _OverviewHeader(overview: overview, isDemo: isDemo);
+    final header = _OverviewHeader(
+      overview: overview,
+      isDemo: isDemo,
+      operatorEmail: operatorEmail,
+    );
 
     if (overview.isEmpty) {
       return ListView(
@@ -294,16 +313,24 @@ class _OverviewContent extends StatelessWidget {
 /// The overview title + the platform "as of" context (day + a data-source pill:
 /// "Demo data" in demo mode, "Live · limited" in real mode).
 class _OverviewHeader extends StatelessWidget {
-  const _OverviewHeader({required this.overview, required this.isDemo});
+  const _OverviewHeader({
+    required this.overview,
+    required this.isDemo,
+    this.operatorEmail,
+  });
 
   final PlatformOverview overview;
   final bool isDemo;
+
+  /// The signed-in operator email (real mode), or null (demo).
+  final String? operatorEmail;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final asOf = '${l10n.adminOverviewAsOf} ${overview.generatedDateLabel}';
+    final email = operatorEmail;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -332,6 +359,17 @@ class _OverviewHeader extends StatelessWidget {
             ),
           ],
         ),
+        // DESIGN-002: confirm which operator account is signed in (real mode).
+        if (email != null && email.isNotEmpty) ...[
+          const SizedBox(height: RestoflowSpacing.xxs),
+          Text(
+            l10n.adminSignedInAs(email),
+            key: const Key('platform-signed-in-as'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ],
     );
   }

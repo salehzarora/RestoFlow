@@ -73,6 +73,44 @@ class RecentOrderRow {
   final String currencyCode;
 }
 
+/// DESIGN-002 — one hour's net sales for the sales-by-hour chart. Money is
+/// integer MINOR units (D-007); [hourLabel] is a plain `HH:00` data string.
+/// DISPLAY-ONLY: present in demo mode; absent (empty list) in real mode until a
+/// backend hourly report is wired, so real mode never fabricates a curve.
+class HourlyNetSales {
+  const HourlyNetSales({required this.hourLabel, required this.netSalesMinor});
+
+  /// Plain `HH:00` data string (not localized chrome).
+  final String hourLabel;
+  final int netSalesMinor;
+}
+
+/// DESIGN-002 — a prior-period comparison summary for KPI deltas. DISPLAY-ONLY
+/// demo data: real mode leaves it null, so a delta is NEVER shown against
+/// data that doesn't exist. Money is integer MINOR units (D-007).
+class ReportComparison {
+  const ReportComparison({
+    required this.grossSalesMinor,
+    required this.netSalesMinor,
+    required this.orderCount,
+    required this.cashSalesMinor,
+  });
+
+  final int grossSalesMinor;
+  final int netSalesMinor;
+  final int orderCount;
+  final int cashSalesMinor;
+}
+
+/// A signed integer percentage change of [current] vs [prior], or null when a
+/// delta can't be computed (no prior, or prior is zero). Integer (truncating)
+/// math only — never floating-point (D-007-adjacent discipline). Positive means
+/// growth.
+int? deltaPercent(int current, int? prior) {
+  if (prior == null || prior == 0) return null;
+  return (current - prior) * 100 ~/ prior;
+}
+
 /// One payment-method breakdown row (count + total). The MVP records cash only,
 /// so this honestly reports a single `cash` line.
 class PaymentMethodLine {
@@ -117,6 +155,8 @@ class DashboardReport {
     required this.topItems,
     required this.recentOrders,
     required this.paymentMethods,
+    this.hourlyNetSales = const <HourlyNetSales>[],
+    this.comparison,
   });
 
   final String currencyCode;
@@ -150,6 +190,14 @@ class DashboardReport {
   final List<TopItem> topItems;
   final List<RecentOrderRow> recentOrders;
   final List<PaymentMethodLine> paymentMethods;
+
+  /// DESIGN-002 (display-only): net sales per hour for the sales-by-hour chart.
+  /// Empty in real mode (no fabricated curve) — the chart hides when empty.
+  final List<HourlyNetSales> hourlyNetSales;
+
+  /// DESIGN-002 (display-only): the prior-period totals KPI deltas compare
+  /// against. Null in real mode — deltas hide when absent (never invented).
+  final ReportComparison? comparison;
 
   /// True when there is nothing to report (drives the empty state).
   bool get isEmpty => orderCount == 0 && recentOrders.isEmpty;

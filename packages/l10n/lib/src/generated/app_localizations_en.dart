@@ -185,6 +185,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t start authenticator setup. Please try again.';
 
   @override
+  String adminSignedInAs(String email) {
+    return 'Signed in as $email';
+  }
+
+  @override
+  String get adminSignInEmailRequired => 'Enter your work email.';
+
+  @override
+  String get adminSignInPasswordRequired => 'Enter your password.';
+
+  @override
+  String get adminSecureConsoleTagline =>
+      'Operator console · every action is audited';
+
+  @override
+  String get adminMfaScanInstruction =>
+      'Scan this QR code with an authenticator app, or enter the setup key by hand.';
+
+  @override
   String get adminAccessDeniedTitle => 'Platform admin access denied';
 
   @override
@@ -1991,6 +2010,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dashboardModeReal => 'Real';
+
+  @override
+  String get dashboardModeDemoData => 'Demo data';
+
+  @override
+  String get dashboardModeLiveData => 'Live data';
+
+  @override
+  String get dashboardSalesByHour => 'Sales by hour';
+
+  @override
+  String dashboardDeltaVsYesterday(int percent) {
+    return '$percent% vs yesterday';
+  }
 
   @override
   String get dashboardUsersNotConnectedTitle =>

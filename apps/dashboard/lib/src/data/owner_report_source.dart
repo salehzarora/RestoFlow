@@ -10,7 +10,8 @@
 /// strings — no clock dependency, so the reports are deterministic and testable.
 library;
 
-import 'demo_report.dart' show kDemoCurrencyCode;
+import 'demo_report.dart'
+    show HourlyNetSales, ReportComparison, kDemoCurrencyCode;
 
 /// One ordered line: a menu item at a snapshot unit price, a quantity, and an
 /// optional integer line discount (minor units). `gross = unitPrice * quantity`;
@@ -131,6 +132,8 @@ class OwnerReportDataset {
     required this.businessDateLabel,
     required this.orders,
     required this.shift,
+    this.hourlyNetSales = const <HourlyNetSales>[],
+    this.priorPeriod,
   });
 
   final String currencyCode;
@@ -139,6 +142,15 @@ class OwnerReportDataset {
   final String businessDateLabel;
   final List<ReportOrder> orders;
   final ReportShift shift;
+
+  /// DESIGN-002 (DISPLAY-ONLY demo data): illustrative net sales per hour for
+  /// the sales-by-hour chart, and a prior-period summary for KPI deltas. Both
+  /// are sample data for the demo surface (the dashboard's demo banner labels
+  /// it as such) and are absent in real mode, so the real Overview never shows
+  /// a fabricated curve or delta. The KPI totals are still DERIVED from
+  /// [orders] — these fields never feed the money sums.
+  final List<HourlyNetSales> hourlyNetSales;
+  final ReportComparison? priorPeriod;
 }
 
 // Demo menu unit prices (integer minor units, ILS).
@@ -354,6 +366,34 @@ OwnerReportDataset demoOwnerReportDataset() => const OwnerReportDataset(
       ],
     ),
   ],
+  // DESIGN-002 (DISPLAY-ONLY demo data): an illustrative lunch + dinner
+  // service curve for the sales-by-hour chart, and a prior-period ("yesterday")
+  // summary for the KPI deltas. Sample data for the demo surface only — the
+  // KPI money totals above are still DERIVED from `orders`; these never feed
+  // the sums, and real mode leaves both absent (no fabricated curve/delta).
+  // The 12 hourly values SUM to the demo day's net sales (62000 minor /
+  // ₪620.00) so the chart reconciles with the "Net sales" KPI on the same
+  // screen; no single hour exceeds the day's total.
+  hourlyNetSales: [
+    HourlyNetSales(hourLabel: '10:00', netSalesMinor: 1200),
+    HourlyNetSales(hourLabel: '11:00', netSalesMinor: 2900),
+    HourlyNetSales(hourLabel: '12:00', netSalesMinor: 6800),
+    HourlyNetSales(hourLabel: '13:00', netSalesMinor: 9200),
+    HourlyNetSales(hourLabel: '14:00', netSalesMinor: 4600),
+    HourlyNetSales(hourLabel: '15:00', netSalesMinor: 2500),
+    HourlyNetSales(hourLabel: '16:00', netSalesMinor: 2000),
+    HourlyNetSales(hourLabel: '17:00', netSalesMinor: 3300),
+    HourlyNetSales(hourLabel: '18:00', netSalesMinor: 7400),
+    HourlyNetSales(hourLabel: '19:00', netSalesMinor: 10100),
+    HourlyNetSales(hourLabel: '20:00', netSalesMinor: 7800),
+    HourlyNetSales(hourLabel: '21:00', netSalesMinor: 4200),
+  ],
+  priorPeriod: ReportComparison(
+    grossSalesMinor: 57200,
+    netSalesMinor: 56800,
+    orderCount: 6,
+    cashSalesMinor: 44100,
+  ),
 );
 
 /// An EMPTY business day (no orders), used to render and test the empty state.

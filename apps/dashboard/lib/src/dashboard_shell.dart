@@ -642,7 +642,11 @@ class _ShellHeaderBar extends StatelessWidget {
           ),
           const SizedBox(width: RestoflowSpacing.sm),
           RestoflowStatusPill(
-            label: isReal ? l10n.dashboardModeReal : l10n.dashboardModeDemo,
+            // DESIGN-002: user-facing data-source wording (was the developer
+            // "Demo" / "Real" jargon).
+            label: isReal
+                ? l10n.dashboardModeLiveData
+                : l10n.dashboardModeDemoData,
             tone: isReal ? RestoflowTone.success : RestoflowTone.info,
             icon: isReal ? Icons.cloud_done_outlined : Icons.science_outlined,
           ),

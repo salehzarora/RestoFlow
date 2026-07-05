@@ -1,11 +1,16 @@
-# Design Implementation Notes — Phase 1 (DESIGN-001)
+# Design Implementation Notes
 
-> Status: DESIGN-001 implemented on `design/DESIGN-001-kds-pos-polish` (no push/PR/merge — human-gated).
-> Scope: apply the approved **Design Language v2** direction to the shipped Flutter apps, KDS + POS critical
-> polish first. Design/UI only — **no backend, RLS/RPC, migration, money-logic, or auth change**.
-> Ticket-ID note: `DESIGN-xxx` is the owner-directed ID for this phase; it is not an `RF-<n>` Jira ticket
-> (Jira is Codex-controlled and was not touched). The shared-package edit below is explicitly flagged per
-> the CLAUDE.md shared-package rule.
+> Phase 1 = **DESIGN-001** (KDS + POS, merged to main via PR #110 / Jira RF-122). Phase 2 =
+> **DESIGN-002** (Admin + Dashboard) — see the section at the end of this file.
+> Design/UI only throughout — **no backend, RLS/RPC, migration, money-logic, or auth-security change**.
+> `DESIGN-xxx` is the owner-directed phase ID (not an `RF-<n>` Jira ticket; Jira is Codex-controlled and
+> was not touched). Shared-package edits are explicitly flagged per the CLAUDE.md shared-package rule.
+
+---
+
+# Phase 1 — DESIGN-001 (KDS + POS)
+
+> Status: implemented on `design/DESIGN-001-kds-pos-polish`; **merged to main (PR #110, Jira RF-122).**
 
 ## 1. Design direction applied
 
@@ -119,3 +124,73 @@ See the DESIGN-001 final report (branch summary): full suite = `dart format --se
 design_system/l10n/feature_kitchen/feature_auth), `dart run tools/check_l10n.dart`, and the three Git
 Bash guards (`check_secrets.sh`, `check_no_hardcoded_strings.sh`, `check_no_float_money.sh`), per
 [LOCAL_RUNBOOK.md](LOCAL_RUNBOOK.md) §9.
+
+---
+
+# Phase 2 — DESIGN-002 (Admin MFA trust polish + Dashboard Overview v2)
+
+> Status: implemented on `design/DESIGN-002-admin-dashboard-polish` (from main @ PR #110 / #111).
+> **No push/PR/merge — human-gated.** Design/UI only: **no auth/security logic, no backend/RLS/RPC/
+> migration, no live data, no service-role, no Jira.** l10n changes are add-only (+ the regen dance).
+
+## A. Admin MFA trust polish (`apps/admin`)
+
+Presentation only — the server enforcement (`app.platform_admin_guard`: grant + aal2 + reason,
+anon-key only) is untouched; the client assurance stays a UX signal.
+
+- **Scannable QR, rendered locally.** The one-time `otpauth://` enrolment URI is drawn as a QR with
+  `qr_flutter` (pure-Dart `qr` encoder + `CustomPaint`) — **no network, no external QR API**; the
+  secret/URI is only painted in memory during enrolment and is never stored or logged. The manual
+  setup-key fallback stays, and the URI's `SelectableText` is now **forced `TextDirection.ltr`** so the
+  machine string keeps its order under ar/he (fixes an RTL misrendering).
+- **Correct MFA copy.** The banner body now uses `adminMfaRequiredBody` (was `adminGateNotOwner`, which
+  described the panel, not why MFA is required — the correct string already existed, unused).
+- **Operator identity.** "Signed in as &lt;email&gt;" (non-secret, from `AdminAuthService.currentEmail` /
+  `get_my_context`) on the MFA screen and the platform-overview header. A shared `AdminConsoleIdentity`
+  (shield + audited-console tagline) marks the privileged surface on the sign-in + MFA screens.
+- **Error hierarchy.** Sign-in failures surface in a top-level danger banner (were the password field's
+  `errorText`, which put network/unknown errors misleadingly under "Password"); empty-field validators
+  are instructional (were bare field labels). The MFA loading spinner uses the shared `RestoflowStateView`.
+- **Dependency:** `qr_flutter >=4.1.0 <5.0.0` added to `apps/admin` (resolved cleanly in the workspace).
+
+## B. Dashboard Overview v2 (`apps/dashboard` + `packages/design_system`)
+
+- **KPI deltas + sales-by-hour chart, DATA-GATED.** Both render only when the report carries the data.
+  In demo mode the demo report supplies an illustrative hourly curve + a "yesterday" summary (**sample
+  display data**, behind the existing demo banner); **real mode leaves both absent**, so the real
+  Overview never shows a fabricated curve/delta and stays honest / fail-closed. KPI money totals are
+  still derived from the demo orders — the new fields never feed the sums; money stays integer-minor.
+- **design_system additions (reusable):** `RestoflowMetricCard.delta` (optional ▲/▼ trend line,
+  success/danger) and `RestoflowBarChart` (static single-hue `CustomPainter`; no animation → pumpAndSettle
+  -safe; no money formatting / no l10n).
+- **Consolidation:** the hand-rolled report header → shared `RestoflowPageHeader` (pinned keys/strings
+  preserved). Loading → static skeleton (no spinner). Header data-source pill → user-facing "Demo data" /
+  "Live data" (was developer "Demo" / "Real").
+
+## Intentionally NOT implemented (DESIGN-002)
+
+| Deferred | Reason |
+|---|---|
+| Real backend hourly/prior-period reporting | Out of scope (no backend work); the demo curve/deltas are display-only and gated so real mode stays honest. |
+| Full cross-package pill/card/header consolidation (feature_admin `AdminPill`/`AdminSectionCard`, feature_menu `MenuPill`/`MenuSectionCard`) | A large, separate effort touching many pinned tests — its own future ticket. This phase consolidated only the Overview header + the new shared components. |
+| Retitling the Overview page from "Owner reports" to the "Overview" nav label | Would be an l10n VALUE edit (not add-only) + a pinned-test change; the nav/page naming is left as-is. |
+| In-app admin TOTP QR *scanning* / camera | Out of scope; enrolment shows the QR to scan with the operator's own authenticator app. |
+
+## Recommended DESIGN-003 scope
+
+1. Cross-package component consolidation into `design_system` (pills, section cards, page headers,
+   entity cards) with a deliberate test-contract migration.
+2. Real backend reporting (hourly + period comparison) so the chart/deltas light up in real mode — an
+   engineering (not design) effort, backend-owned.
+3. Broader `RestoflowShadows` adoption on light surfaces; POS/KDS skeleton loading states.
+
+## Manual validation checklist (demo mode, no backend)
+
+- [ ] `cd apps/admin && flutter run -d chrome` (real mode needs the dart-defines; demo shows the overview):
+      on the MFA enrol screen a scannable QR renders, the setup key + otpauth URI show LTR under Arabic,
+      the banner explains MFA, and "Signed in as …" appears; a bad sign-in shows a top banner, not a
+      Password-field error.
+- [ ] `cd apps/dashboard && flutter run -d chrome` → Overview: KPI cards show ▲ deltas "vs yesterday", a
+      "Sales by hour" chart renders with the peak labelled, the header reads through `RestoflowPageHeader`,
+      the loading flash is a skeleton (no spinner), and the header pill says "Demo data".
+- [ ] Arabic + Hebrew: both surfaces mirror; the QR/URI/chart stay readable; no overflow.

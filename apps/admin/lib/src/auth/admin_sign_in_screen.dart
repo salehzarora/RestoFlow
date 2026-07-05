@@ -4,6 +4,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../widgets/language_selector.dart';
 import 'admin_auth.dart';
+import 'admin_console_identity.dart';
 
 /// RF-119-b — the platform-operator sign-in screen (email + password ONLY: no
 /// sign-up and no onboarding — platform-admin access is provisioned manually,
@@ -85,6 +86,11 @@ class _AdminSignInScreenState extends State<AdminSignInScreen> {
                 padding: const EdgeInsets.all(RestoflowSpacing.xl),
                 children: [
                   Center(child: RestoflowBrandMark(title: l10n.adminAppTitle)),
+                  const SizedBox(height: RestoflowSpacing.md),
+                  // DESIGN-002: the "secure console" identity — signals this is
+                  // the privileged, audited operator panel (no session yet, so
+                  // no email).
+                  const AdminConsoleIdentity(),
                   const SizedBox(height: RestoflowSpacing.lg),
                   Text(
                     l10n.adminSignInTitle,
@@ -101,6 +107,18 @@ class _AdminSignInScreenState extends State<AdminSignInScreen> {
                     ),
                   ),
                   const SizedBox(height: RestoflowSpacing.xl),
+                  // DESIGN-002: a top-level danger banner for sign-in failures
+                  // (was the password field's errorText, which surfaced network
+                  // / unknown errors misleadingly under "Password"). Rendered
+                  // once, above the form, only when an error is present.
+                  if (_errorText(l10n) case final message?) ...[
+                    RestoflowNoticeBanner(
+                      key: const Key('admin-signin-error'),
+                      tone: RestoflowTone.danger,
+                      body: message,
+                    ),
+                    const SizedBox(height: RestoflowSpacing.md),
+                  ],
                   TextFormField(
                     key: const Key('admin-signin-email'),
                     controller: _email,
@@ -111,8 +129,10 @@ class _AdminSignInScreenState extends State<AdminSignInScreen> {
                       labelText: l10n.authEmailLabel,
                       prefixIcon: const Icon(Icons.mail_outline),
                     ),
+                    // DESIGN-002: instructional validator (was the bare field
+                    // label, which read like a mislabelled error).
                     validator: (v) => (v == null || v.trim().isEmpty)
-                        ? l10n.authEmailLabel
+                        ? l10n.adminSignInEmailRequired
                         : null,
                   ),
                   const SizedBox(height: RestoflowSpacing.md),
@@ -126,10 +146,9 @@ class _AdminSignInScreenState extends State<AdminSignInScreen> {
                     decoration: InputDecoration(
                       labelText: l10n.authPasswordLabel,
                       prefixIcon: const Icon(Icons.lock_outline),
-                      errorText: _errorText(l10n),
                     ),
                     validator: (v) => (v == null || v.isEmpty)
-                        ? l10n.authPasswordLabel
+                        ? l10n.adminSignInPasswordRequired
                         : null,
                   ),
                   const SizedBox(height: RestoflowSpacing.lg),

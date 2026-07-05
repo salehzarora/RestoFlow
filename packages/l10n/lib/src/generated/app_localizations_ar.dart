@@ -181,6 +181,25 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminMfaEnrollError => 'تعذّر بدء إعداد المصادقة. حاول مرة أخرى.';
 
   @override
+  String adminSignedInAs(String email) {
+    return 'تم تسجيل الدخول باسم $email';
+  }
+
+  @override
+  String get adminSignInEmailRequired => 'أدخل بريدك الإلكتروني للعمل.';
+
+  @override
+  String get adminSignInPasswordRequired => 'أدخل كلمة المرور.';
+
+  @override
+  String get adminSecureConsoleTagline =>
+      'لوحة المُشغّل · كل إجراء مُسجَّل للتدقيق';
+
+  @override
+  String get adminMfaScanInstruction =>
+      'امسح رمز QR هذا بتطبيق المصادقة، أو أدخل مفتاح الإعداد يدويًا.';
+
+  @override
   String get adminAccessDeniedTitle => 'تم رفض الوصول إلى إدارة المنصة';
 
   @override
@@ -1973,6 +1992,20 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardModeReal => 'حقيقي';
+
+  @override
+  String get dashboardModeDemoData => 'بيانات تجريبية';
+
+  @override
+  String get dashboardModeLiveData => 'بيانات مباشرة';
+
+  @override
+  String get dashboardSalesByHour => 'المبيعات حسب الساعة';
+
+  @override
+  String dashboardDeltaVsYesterday(int percent) {
+    return '$percent٪ مقارنةً بالأمس';
+  }
 
   @override
   String get dashboardUsersNotConnectedTitle =>

@@ -37,6 +37,11 @@ dependencies:
   # platform gate (already in the workspace graph via feature_auth).
   restoflow_core:
     path: ../../packages/core
+  # DESIGN-002: renders the one-time TOTP enrolment otpauth:// URI as a
+  # scannable QR *locally* (pure-Dart `qr` encoder + a CustomPaint). No
+  # network, no external QR API, no plugin/platform channel — the secret/URI
+  # is only ever painted in-memory during enrolment, never stored or logged.
+  qr_flutter: '>=4.1.0 <5.0.0'
 dev_dependencies:
   flutter_test:
     sdk: flutter
