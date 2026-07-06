@@ -130,6 +130,76 @@ class PaymentMethodLine {
   final String currencyCode;
 }
 
+/// RF-REPORT-003 (display-only) — one CLOSED shift's cash-reconciliation summary.
+/// Money is integer MINOR units (D-007); [varianceMinor] is SIGNED (counted −
+/// expected; negative = shortage). Values come only from the shift-close record.
+class ClosedShiftSummary {
+  const ClosedShiftSummary({
+    required this.shiftId,
+    required this.branchName,
+    required this.closedAtLabel,
+    required this.closedByName,
+    required this.expectedCashMinor,
+    required this.countedCashMinor,
+    required this.varianceMinor,
+    this.openedAtLabel,
+  });
+
+  final String shiftId;
+  final String branchName;
+
+  /// Plain data timestamp strings (not localized chrome).
+  final String closedAtLabel;
+  final String? openedAtLabel;
+  final String closedByName;
+
+  final int expectedCashMinor;
+  final int countedCashMinor;
+
+  /// counted − expected (SIGNED; negative = shortage).
+  final int varianceMinor;
+}
+
+/// RF-REPORT-003 (display-only) — TODAY's shift / cash reconciliation. All money
+/// integer MINOR units (D-007); [varianceMinor] is SIGNED. Null on the report in
+/// the sales_summary fallback (no real shift data); present in demo and in the
+/// real owner_daily_report. [expectedCashMinor] / [countedCashMinor] /
+/// [varianceMinor] aggregate TODAY's closed shifts (never derived from sales).
+class ShiftCash {
+  const ShiftCash({
+    required this.closedShiftCount,
+    required this.openShiftCount,
+    required this.expectedCashMinor,
+    required this.countedCashMinor,
+    required this.varianceMinor,
+    this.lastClosedShift,
+    this.recentClosedShifts = const <ClosedShiftSummary>[],
+  });
+
+  final int closedShiftCount;
+  final int openShiftCount;
+  final int expectedCashMinor;
+  final int countedCashMinor;
+  final int varianceMinor;
+  final ClosedShiftSummary? lastClosedShift;
+  final List<ClosedShiftSummary> recentClosedShifts;
+
+  bool get hasClosedShifts => closedShiftCount > 0;
+
+  /// True when this block carries ANY meaningful reconciliation signal — a closed
+  /// or open shift, a non-zero expected/counted/variance, or a last/recent close.
+  /// Used to keep a shift-only day (zero orders/sales but real closed-shift cash)
+  /// OUT of the report's generic empty state so the "Shift & cash" card renders.
+  bool get hasData =>
+      closedShiftCount > 0 ||
+      openShiftCount > 0 ||
+      expectedCashMinor != 0 ||
+      countedCashMinor != 0 ||
+      varianceMinor != 0 ||
+      lastClosedShift != null ||
+      recentClosedShifts.isNotEmpty;
+}
+
 /// An immutable, single-day owner/manager report. Every field is DERIVED from
 /// the source dataset by `computeOwnerReport`. Money fields are integer MINOR
 /// units (D-007); plain counts are never money.
@@ -159,6 +229,7 @@ class DashboardReport {
     required this.paymentMethods,
     this.hourlyNetSales = const <HourlyNetSales>[],
     this.comparison,
+    this.shiftCash,
   });
 
   final String currencyCode;
@@ -203,17 +274,27 @@ class DashboardReport {
   /// (never invented).
   final ReportComparison? comparison;
 
+  /// RF-REPORT-003 (display-only): TODAY's shift / cash reconciliation. Present in
+  /// demo and in the real owner_daily_report; NULL in the sales_summary fallback
+  /// (no real shift data — the card hides, never fabricated).
+  final ShiftCash? shiftCash;
+
   /// True when there is nothing to report (drives the empty state). LIVE-UX-001:
   /// this also requires NO money — a day can collect real revenue
   /// (`grossSalesMinor` / `collectedMinor` > 0) on orders created earlier while
   /// having zero orders created today, and that money must never be hidden behind
   /// a "No report data" empty state.
+  /// RF-REPORT-003: it ALSO requires no meaningful shift/cash reconciliation — a
+  /// real day can have zero orders/sales yet a closed shift with counted cash (an
+  /// opening float / drawer reconciliation), and that must render the "Shift &
+  /// cash" card instead of being hidden behind the generic empty state.
   bool get isEmpty =>
       orderCount == 0 &&
       completedOrderCount == 0 &&
       recentOrders.isEmpty &&
       grossSalesMinor == 0 &&
-      collectedMinor == 0;
+      collectedMinor == 0 &&
+      !(shiftCash?.hasData ?? false);
 
   /// Cash reconciliation variance = counted - expected (signed, integer minor).
   int get varianceMinor => countedCashMinor - expectedCashMinor;

@@ -938,6 +938,43 @@
   "@dashboardCashVariance": {
     "description": "Owner dashboard daily-summary row label for cash reconciliation variance (counted minus expected)."
   },
+  "dashboardShiftCashTitle": "Shift & cash",
+  "@dashboardShiftCashTitle": {
+    "description": "Owner dashboard Overview card title for today's shift / cash reconciliation (RF-REPORT-003)."
+  },
+  "dashboardShiftClosedToday": "{count} closed today",
+  "@dashboardShiftClosedToday": {
+    "description": "Count of shifts closed today, shown as a pill on the Shift & cash card (RF-REPORT-003).",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "dashboardShiftOpenNow": "{count} open now",
+  "@dashboardShiftOpenNow": {
+    "description": "Count of shifts currently open, shown as a pill on the Shift & cash card (RF-REPORT-003).",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "dashboardShiftExpectedCash": "Expected cash",
+  "@dashboardShiftExpectedCash": {
+    "description": "Shift & cash card row: expected cash (opening float + cash sales) for today's closed shifts (RF-REPORT-003)."
+  },
+  "dashboardShiftLastClosed": "Last closed shift",
+  "@dashboardShiftLastClosed": {
+    "description": "Shift & cash card sub-heading for the most recent closed shift's summary (RF-REPORT-003)."
+  },
+  "dashboardShiftClosedBy": "Closed by {name}",
+  "@dashboardShiftClosedBy": {
+    "description": "Shift & cash card: who closed the shift (RF-REPORT-003).",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "dashboardShiftNoneToday": "No closed shifts yet today.",
+  "@dashboardShiftNoneToday": {
+    "description": "Shift & cash card calm empty state when no shift has been closed today (RF-REPORT-003)."
+  },
   "dashboardShiftStatus": "Shift",
   "@dashboardShiftStatus": {
     "description": "Owner dashboard daily-summary row label preceding the current shift status."

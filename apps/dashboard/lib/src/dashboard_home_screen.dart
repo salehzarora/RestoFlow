@@ -194,17 +194,22 @@ class _ReportContent extends StatelessWidget {
           label: l10n.dashboardCashCollected,
           value: money(report.collectedMinor),
         ),
-        SummaryRow(
-          label: l10n.dashboardCashVariance,
-          value: money(report.varianceMinor),
-        ),
-        SummaryRow(
-          label: l10n.dashboardShiftStatus,
-          trailing: RestoflowStatusPill(
-            label: report.shiftStatus,
-            tone: RestoflowTone.info,
+        // RF-REPORT-003: cash reconciliation (variance) + shift status live in the
+        // dedicated "Shift & cash" card when it is present — showing them here too
+        // would duplicate (and, in real mode, contradict with ₪0.00) that card.
+        if (report.shiftCash == null) ...[
+          SummaryRow(
+            label: l10n.dashboardCashVariance,
+            value: money(report.varianceMinor),
           ),
-        ),
+          SummaryRow(
+            label: l10n.dashboardShiftStatus,
+            trailing: RestoflowStatusPill(
+              label: report.shiftStatus,
+              tone: RestoflowTone.info,
+            ),
+          ),
+        ],
       ],
     );
 
@@ -212,26 +217,33 @@ class _ReportContent extends StatelessWidget {
       key: const Key('payment-summary-card'),
       title: l10n.dashboardPaymentSummary,
       rows: [
-        SummaryRow(
-          label: l10n.dashboardOpeningFloat,
-          value: money(report.openingFloatMinor),
-        ),
+        // RF-REPORT-003: the DRAWER-reconciliation rows (opening float / expected /
+        // counted / variance) are owned by the "Shift & cash" card when present —
+        // here they would duplicate it (and read ₪0.00 in real mode). The payment
+        // card keeps the collection figures (cash sales, last cash, tenders).
+        if (report.shiftCash == null)
+          SummaryRow(
+            label: l10n.dashboardOpeningFloat,
+            value: money(report.openingFloatMinor),
+          ),
         SummaryRow(
           label: l10n.dashboardCashSales,
           value: money(report.cashSalesMinor),
         ),
-        SummaryRow(
-          label: l10n.dashboardExpectedDrawer,
-          value: money(report.expectedCashMinor),
-        ),
-        SummaryRow(
-          label: l10n.dashboardCountedCash,
-          value: money(report.countedCashMinor),
-        ),
-        SummaryRow(
-          label: l10n.dashboardCashVariance,
-          value: money(report.varianceMinor),
-        ),
+        if (report.shiftCash == null) ...[
+          SummaryRow(
+            label: l10n.dashboardExpectedDrawer,
+            value: money(report.expectedCashMinor),
+          ),
+          SummaryRow(
+            label: l10n.dashboardCountedCash,
+            value: money(report.countedCashMinor),
+          ),
+          SummaryRow(
+            label: l10n.dashboardCashVariance,
+            value: money(report.varianceMinor),
+          ),
+        ],
         SummaryRow(
           label: l10n.dashboardLastCashPayment,
           value: money(report.lastCashPaymentMinor),
@@ -328,7 +340,17 @@ class _ReportContent extends StatelessWidget {
       body: l10n.dashboardLiveReportsPending,
       icon: Icons.query_stats_outlined,
     );
-    final leftSections = <Widget>[summary, payment];
+    // RF-REPORT-003: the real (or demo) shift/cash reconciliation card. Present
+    // whenever shiftCash is populated (demo + real owner_daily_report); in the
+    // sales_summary fallback it is null, so the card hides (never fabricated) —
+    // the live-limited note already explains the gap.
+    final shiftCash = report.shiftCash;
+    final leftSections = <Widget>[
+      summary,
+      payment,
+      if (shiftCash != null)
+        _ShiftCashCard(shiftCash: shiftCash, currencyCode: report.currencyCode),
+    ];
     final rightSections = <Widget>[
       if (report.branches.isNotEmpty) branches,
       if (report.topItems.isNotEmpty) topItems,
@@ -394,6 +416,165 @@ List<Widget> _verticallySpaced(List<Widget> items) => [
     items[i],
   ],
 ];
+
+/// RF-REPORT-003 — the Overview's "Shift & cash" card: TODAY's closed-shift cash
+/// reconciliation (counts + expected/counted/variance aggregate) and the last
+/// closed shift. Money is integer-minor formatted here; variance is tinted calmly
+/// (never a dramatic red). A day with no closed shifts shows a calm empty state.
+class _ShiftCashCard extends StatelessWidget {
+  const _ShiftCashCard({required this.shiftCash, required this.currencyCode});
+
+  final ShiftCash shiftCash;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    String money(int m) => MoneyFormatter.formatMinor(m, currencyCode);
+    final last = shiftCash.lastClosedShift;
+
+    return RestoflowSectionCard(
+      key: const Key('shift-cash-card'),
+      title: l10n.dashboardShiftCashTitle,
+      children: [
+        const SizedBox(height: RestoflowSpacing.sm),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.xs,
+          children: [
+            RestoflowStatusPill(
+              label: l10n.dashboardShiftClosedToday(shiftCash.closedShiftCount),
+              tone: RestoflowTone.info,
+            ),
+            RestoflowStatusPill(
+              label: l10n.dashboardShiftOpenNow(shiftCash.openShiftCount),
+              tone: RestoflowTone.neutral,
+            ),
+          ],
+        ),
+        if (!shiftCash.hasClosedShifts) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          Text(
+            l10n.dashboardShiftNoneToday,
+            key: const Key('shift-cash-empty'),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ] else ...[
+          SectionRow(
+            label: l10n.dashboardShiftExpectedCash,
+            trailingValue: money(shiftCash.expectedCashMinor),
+          ),
+          SectionRow(
+            label: l10n.dashboardCountedCash,
+            trailingValue: money(shiftCash.countedCashMinor),
+          ),
+          _VarianceRow(
+            label: l10n.dashboardCashVariance,
+            varianceMinor: shiftCash.varianceMinor,
+            currencyCode: currencyCode,
+          ),
+          if (last != null) ...[
+            const Divider(height: RestoflowSpacing.xl),
+            _LastClosedShift(shift: last, currencyCode: currencyCode),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+/// A cash-variance row whose value is CALMLY tinted (never dramatic): exact = the
+/// default text colour, overage = success, shortage = warning. Integer minor.
+class _VarianceRow extends StatelessWidget {
+  const _VarianceRow({
+    required this.label,
+    required this.varianceMinor,
+    required this.currencyCode,
+  });
+
+  final String label;
+  final int varianceMinor;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tone = varianceMinor == 0
+        ? RestoflowTone.neutral
+        : (varianceMinor > 0 ? RestoflowTone.success : RestoflowTone.warning);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+          Text(
+            MoneyFormatter.formatMinor(varianceMinor, currencyCode),
+            key: const Key('shift-cash-variance'),
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: varianceMinor == 0
+                  ? theme.colorScheme.onSurface
+                  : tone.styleOf(theme).accent,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A compact summary of the most recent closed shift: which branch + when, who
+/// closed it, and its own cash variance (tinted calmly).
+class _LastClosedShift extends StatelessWidget {
+  const _LastClosedShift({required this.shift, required this.currencyCode});
+
+  final ClosedShiftSummary shift;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final subtitle = [
+      if (shift.branchName.isNotEmpty) shift.branchName,
+      if (shift.closedAtLabel.isNotEmpty) shift.closedAtLabel,
+    ].join(' · ');
+    return Column(
+      key: const Key('shift-cash-last'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.dashboardShiftLastClosed,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: RestoflowSpacing.xxs),
+          Text(subtitle, style: theme.textTheme.bodyMedium),
+        ],
+        if (shift.closedByName.isNotEmpty)
+          Text(
+            l10n.dashboardShiftClosedBy(shift.closedByName),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        const SizedBox(height: RestoflowSpacing.xs),
+        _VarianceRow(
+          label: l10n.dashboardCashVariance,
+          varianceMinor: shift.varianceMinor,
+          currencyCode: currencyCode,
+        ),
+      ],
+    );
+  }
+}
 
 /// The reports page header. DESIGN-002: consolidated onto the shared
 /// [RestoflowPageHeader] (was a hand-rolled Row) so every dashboard tab's

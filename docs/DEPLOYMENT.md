@@ -348,3 +348,29 @@ buckets (today's **billed** net per hour) added to `owner_daily_report`
 - When applied, the chart renders only when there is **real** hourly data (a day
   with no billed net sales maps to empty → the chart hides, never a flat-zero
   placeholder). Money stays integer minor (D-007); KDS is untouched (money-free).
+
+## 12. Real shift / cash reconciliation (RF-REPORT-003)
+
+The Overview shows a **"Shift & cash"** card with today's closed-shift cash
+reconciliation — the owner asked why a closed shift's cash (e.g. "370₪") never
+appeared. It surfaces the values `close_shift` (RF-055) already persisted on
+`shifts` (`expected_total_minor` / `counted_total_minor` / signed
+`variance_minor`) via a top-level `shift_cash` block on `owner_daily_report`
+(API_CONTRACT §4.19a). **Backend migration is NOT applied to the hosted DB.**
+
+- **Real shift/cash stays unavailable in production until the RF-REPORT-003
+  migration (`20260706100000`, a forward-only `CREATE OR REPLACE`) is applied to
+  the hosted Supabase after R-003 human RLS/security sign-off** (shared gate with
+  `sales_summary` / RF-REPORT-001/002). Locally it is validated by pgTAP only.
+- Until then the Dashboard uses the `sales_summary` fallback (LIVE-DASHBOARD-001),
+  which has **no shift source** — the client leaves `shiftCash` null and the
+  **Shift & cash card stays hidden**. The fallback **never fabricates** shift data.
+- The report **reads stored close values** — it never recomputes cash. Expected
+  cash is **opening float + completed cash payments** (card/online tenders are NOT
+  included — an RF-055 invariant); counted cash comes **only** from the shift-close
+  record; variance = counted − expected (signed). All integer minor (D-007).
+- **Business-day / midnight:** a closed shift is attributed to its **branch-local
+  `closed_at` day** (tz-less branches excluded, same as sales); a shift spanning
+  midnight counts on the day it was **closed** (cash-count day). Open shifts are a
+  live "open now" count. A day with no closed shift shows a calm empty state. KDS
+  is untouched (money-free).

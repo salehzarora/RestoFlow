@@ -8,6 +8,7 @@ DashboardReport _report({
   int countedCashMinor = 0,
   int collectedMinor = 0,
   List<RecentOrderRow> recentOrders = const [],
+  ShiftCash? shiftCash,
 }) => DashboardReport(
   currencyCode: 'ILS',
   businessDateLabel: '2026-06-28',
@@ -31,6 +32,7 @@ DashboardReport _report({
   topItems: const [],
   recentOrders: recentOrders,
   paymentMethods: const [],
+  shiftCash: shiftCash,
 );
 
 void main() {
@@ -77,4 +79,64 @@ void main() {
     expect(_report(netSalesMinor: 8000, orderCount: 0).isEmpty, isFalse);
     expect(_report(collectedMinor: 8000, orderCount: 0).isEmpty, isFalse);
   });
+
+  test(
+    'RF-REPORT-003: a shift-only day (zero orders/sales but shift/cash data) '
+    'is NOT empty — the Shift & cash card must render',
+    () {
+      // A closed shift keeps it non-empty.
+      expect(
+        _report(
+          shiftCash: const ShiftCash(
+            closedShiftCount: 1,
+            openShiftCount: 0,
+            expectedCashMinor: 0,
+            countedCashMinor: 0,
+            varianceMinor: 0,
+          ),
+        ).isEmpty,
+        isFalse,
+      );
+      // Counted cash alone (e.g. an opening float / drawer count of 370) too.
+      expect(
+        _report(
+          shiftCash: const ShiftCash(
+            closedShiftCount: 0,
+            openShiftCount: 0,
+            expectedCashMinor: 0,
+            countedCashMinor: 370,
+            varianceMinor: 370,
+          ),
+        ).isEmpty,
+        isFalse,
+      );
+      // An open shift keeps it non-empty.
+      expect(
+        _report(
+          shiftCash: const ShiftCash(
+            closedShiftCount: 0,
+            openShiftCount: 1,
+            expectedCashMinor: 0,
+            countedCashMinor: 0,
+            varianceMinor: 0,
+          ),
+        ).isEmpty,
+        isFalse,
+      );
+      // But an all-zero shiftCash (or null) does NOT rescue a truly empty day.
+      expect(
+        _report(
+          shiftCash: const ShiftCash(
+            closedShiftCount: 0,
+            openShiftCount: 0,
+            expectedCashMinor: 0,
+            countedCashMinor: 0,
+            varianceMinor: 0,
+          ),
+        ).isEmpty,
+        isTrue,
+      );
+      expect(_report(shiftCash: null).isEmpty, isTrue);
+    },
+  );
 }

@@ -1822,6 +1822,48 @@ abstract class AppLocalizations {
   /// **'Cash variance'**
   String get dashboardCashVariance;
 
+  /// Owner dashboard Overview card title for today's shift / cash reconciliation (RF-REPORT-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Shift & cash'**
+  String get dashboardShiftCashTitle;
+
+  /// Count of shifts closed today, shown as a pill on the Shift & cash card (RF-REPORT-003).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} closed today'**
+  String dashboardShiftClosedToday(int count);
+
+  /// Count of shifts currently open, shown as a pill on the Shift & cash card (RF-REPORT-003).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} open now'**
+  String dashboardShiftOpenNow(int count);
+
+  /// Shift & cash card row: expected cash (opening float + cash sales) for today's closed shifts (RF-REPORT-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Expected cash'**
+  String get dashboardShiftExpectedCash;
+
+  /// Shift & cash card sub-heading for the most recent closed shift's summary (RF-REPORT-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Last closed shift'**
+  String get dashboardShiftLastClosed;
+
+  /// Shift & cash card: who closed the shift (RF-REPORT-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Closed by {name}'**
+  String dashboardShiftClosedBy(String name);
+
+  /// Shift & cash card calm empty state when no shift has been closed today (RF-REPORT-003).
+  ///
+  /// In en, this message translates to:
+  /// **'No closed shifts yet today.'**
+  String get dashboardShiftNoneToday;
+
   /// Owner dashboard daily-summary row label preceding the current shift status.
   ///
   /// In en, this message translates to:

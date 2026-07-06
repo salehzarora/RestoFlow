@@ -116,6 +116,7 @@ class ReportShift {
     required this.openingFloatMinor,
     required this.countedCashMinor,
     required this.status,
+    this.closedByName = '',
   });
 
   final int openingFloatMinor;
@@ -123,6 +124,10 @@ class ReportShift {
 
   /// Shift status as a plain data string (e.g. `open`).
   final String status;
+
+  /// Who closed the shift (display name) — a plain data string, used by the
+  /// RF-REPORT-003 demo shift/cash card. Empty when unknown.
+  final String closedByName;
 }
 
 /// The full structured dataset an owner report is computed from.
@@ -171,6 +176,7 @@ OwnerReportDataset demoOwnerReportDataset() => const OwnerReportDataset(
     openingFloatMinor: 50000, // ₪500.00
     countedCashMinor: 97250, // expected ₪974.00 -> variance -₪1.50
     status: 'open',
+    closedByName: 'Amira K.', // demo data (not localized chrome)
   ),
   orders: [
     ReportOrder(

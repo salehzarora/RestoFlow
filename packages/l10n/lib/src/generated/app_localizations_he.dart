@@ -926,6 +926,33 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardCashVariance => 'פער מזומן';
 
   @override
+  String get dashboardShiftCashTitle => 'משמרת ומזומן';
+
+  @override
+  String dashboardShiftClosedToday(int count) {
+    return '$count נסגרו היום';
+  }
+
+  @override
+  String dashboardShiftOpenNow(int count) {
+    return '$count פתוחות כעת';
+  }
+
+  @override
+  String get dashboardShiftExpectedCash => 'מזומן צפוי';
+
+  @override
+  String get dashboardShiftLastClosed => 'המשמרת האחרונה שנסגרה';
+
+  @override
+  String dashboardShiftClosedBy(String name) {
+    return 'נסגרה על ידי $name';
+  }
+
+  @override
+  String get dashboardShiftNoneToday => 'עדיין לא נסגרו משמרות היום.';
+
+  @override
   String get dashboardShiftStatus => 'משמרת';
 
   @override

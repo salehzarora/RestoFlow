@@ -942,6 +942,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardCashVariance => 'Cash variance';
 
   @override
+  String get dashboardShiftCashTitle => 'Shift & cash';
+
+  @override
+  String dashboardShiftClosedToday(int count) {
+    return '$count closed today';
+  }
+
+  @override
+  String dashboardShiftOpenNow(int count) {
+    return '$count open now';
+  }
+
+  @override
+  String get dashboardShiftExpectedCash => 'Expected cash';
+
+  @override
+  String get dashboardShiftLastClosed => 'Last closed shift';
+
+  @override
+  String dashboardShiftClosedBy(String name) {
+    return 'Closed by $name';
+  }
+
+  @override
+  String get dashboardShiftNoneToday => 'No closed shifts yet today.';
+
+  @override
   String get dashboardShiftStatus => 'Shift';
 
   @override

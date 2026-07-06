@@ -7,10 +7,13 @@
 /// headline it SPLITS billed sales (gross/discount/net, voids) from collected
 /// payments (collected/cash/last-cash + a per-method tender breakdown), and
 /// carries a prior-day block that lights up the Overview's "vs yesterday" KPI
-/// deltas. Fields not yet sourced server-side in Slice 1 — sales-by-hour, shift/
-/// cash reconciliation, per-branch, top items, recent orders — stay at honest
-/// zero/empty (the RF-140 real-mode banner tells the owner the live report is
-/// limited); the Overview's data-gated chart simply does not render.
+/// deltas. It also maps sales-by-hour (RF-REPORT-002 -> `hourlyNetSales`) and the
+/// shift/cash reconciliation (RF-REPORT-003 -> `shiftCash`, the source of the
+/// dedicated "Shift & cash" card). The remaining fields not yet sourced
+/// server-side — per-branch, top items, recent orders, and the legacy scalar
+/// drawer fields (openingFloat/expected/counted, superseded by the shiftCash
+/// card) — stay at honest zero/empty (the RF-140 banner tells the owner the live
+/// report is limited); the data-gated cards simply do not render.
 ///
 /// COMPATIBILITY FALLBACK (LIVE-DASHBOARD-001): the RF-REPORT-001 migration is
 /// merged but intentionally NOT applied to the live database until R-003 sign-off,
@@ -131,6 +134,50 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
       // day with no sales / a malformed payload maps to empty, so the chart stays
       // hidden — never a fabricated or flat-zero curve.
       hourlyNetSales: _hourly(raw['hourly']),
+      // RF-REPORT-003: TODAY's REAL shift/cash reconciliation (stored close
+      // values). Null/malformed -> null, so the card hides (never fabricated).
+      shiftCash: _shiftCash(raw['shift_cash']),
+    );
+  }
+
+  /// Maps the RPC's `shift_cash` object (RF-REPORT-003 — TODAY's shift/cash
+  /// reconciliation, integer minor) to [ShiftCash]. Non-map input yields null so
+  /// the Overview card hides (never fabricated); a malformed nested shift is
+  /// dropped rather than crashing.
+  static ShiftCash? _shiftCash(Object? raw) {
+    if (raw is! Map) return null;
+    final recent = raw['recent_closed_shifts'];
+    return ShiftCash(
+      closedShiftCount: _int(raw['closed_shift_count']),
+      openShiftCount: _int(raw['open_shift_count']),
+      expectedCashMinor: _int(raw['expected_cash_minor']),
+      countedCashMinor: _int(raw['counted_cash_minor']),
+      varianceMinor: _int(raw['cash_variance_minor']),
+      lastClosedShift: _closedShift(raw['last_closed_shift']),
+      recentClosedShifts: recent is List
+          ? recent
+                .map(_closedShift)
+                .whereType<ClosedShiftSummary>()
+                .toList(growable: false)
+          : const [],
+    );
+  }
+
+  /// One `{shift_id, branch_name, closed_at, closed_by_name, expected/counted/
+  /// variance minor}` row -> [ClosedShiftSummary]; null for a non-map. Timestamps
+  /// are surfaced as plain strings (formatted for display upstream).
+  static ClosedShiftSummary? _closedShift(Object? raw) {
+    if (raw is! Map) return null;
+    final opened = raw['opened_at'];
+    return ClosedShiftSummary(
+      shiftId: (raw['shift_id'] ?? '').toString(),
+      branchName: (raw['branch_name'] ?? '').toString(),
+      closedAtLabel: (raw['closed_at'] ?? '').toString(),
+      openedAtLabel: opened == null ? null : opened.toString(),
+      closedByName: (raw['closed_by_name'] ?? '').toString(),
+      expectedCashMinor: _int(raw['expected_cash_minor']),
+      countedCashMinor: _int(raw['counted_cash_minor']),
+      varianceMinor: _int(raw['cash_variance_minor']),
     );
   }
 
