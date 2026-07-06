@@ -15,7 +15,9 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 class _LimitedRepo implements OwnerReportsRepository {
   const _LimitedRepo();
   @override
-  Future<DashboardReport> loadReport() async => const DashboardReport(
+  Future<DashboardReport> loadReport({
+    ReportRange range = ReportRange.today,
+  }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
     grossSalesMinor: 12000,
@@ -66,7 +68,9 @@ Widget _wrapLimited() => ProviderScope(
 class _HourlyRepo implements OwnerReportsRepository {
   const _HourlyRepo();
   @override
-  Future<DashboardReport> loadReport() async => const DashboardReport(
+  Future<DashboardReport> loadReport({
+    ReportRange range = ReportRange.today,
+  }) async => const DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-05',
     grossSalesMinor: 12000,
@@ -122,7 +126,9 @@ class _ShiftRepo implements OwnerReportsRepository {
   final bool zeroSales;
 
   @override
-  Future<DashboardReport> loadReport() async => DashboardReport(
+  Future<DashboardReport> loadReport({
+    ReportRange range = ReportRange.today,
+  }) async => DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-06',
     grossSalesMinor: zeroSales ? 0 : 12000,
@@ -169,6 +175,32 @@ Widget _wrapShift(ShiftCash? shiftCash, {bool zeroSales = false}) =>
 
 Widget _wrap() => const ProviderScope(
   child: MaterialApp(
+    locale: Locale('en'),
+    localizationsDelegates: restoflowLocalizationsDelegates,
+    supportedLocales: kSupportedLocales,
+    home: DashboardHomeScreen(),
+  ),
+);
+
+/// RF-REPORT-004 — a repo that reports the selected range as UNAVAILABLE (as the
+/// real repo does when owner_report_range isn't deployed and the range isn't
+/// today), so the honest "not available yet" panel is exercised.
+class _UnavailableRepo implements OwnerReportsRepository {
+  const _UnavailableRepo();
+  @override
+  Future<DashboardReport> loadReport({
+    ReportRange range = ReportRange.today,
+  }) async => DashboardReport.rangeUnavailable(range: range, currencyCode: '');
+}
+
+Widget _wrapUnavailable() => ProviderScope(
+  overrides: [
+    runtimeConfigProvider.overrideWithValue(
+      RuntimeConfig.test(isDemoMode: false),
+    ),
+    ownerReportsRepositoryProvider.overrideWithValue(const _UnavailableRepo()),
+  ],
+  child: const MaterialApp(
     locale: Locale('en'),
     localizationsDelegates: restoflowLocalizationsDelegates,
     supportedLocales: kSupportedLocales,
@@ -528,6 +560,74 @@ void main() {
       expect(find.text('₪370.00'), findsWidgets); // 37000 minor = ₪370.00
       // ...and the generic "No report data" empty state is NOT shown.
       expect(find.byKey(const Key('reports-empty')), findsNothing);
+    },
+  );
+
+  // --- RF-REPORT-004: range filter + deeper shift card -------------------------
+
+  testWidgets(
+    'RF-REPORT-004: the range filter is always shown; switching to Last 7 days '
+    'hides the single-day sales-by-hour chart and relabels the header',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+
+      // All four range chips render; today (default) shows the hourly chart.
+      expect(find.byKey(const Key('reports-range-filter')), findsOneWidget);
+      for (final w in const ['today', 'yesterday', 'last7', 'last30']) {
+        expect(find.byKey(Key('range-chip-$w')), findsOneWidget);
+      }
+      expect(find.byKey(const Key('sales-by-hour-card')), findsOneWidget);
+
+      // Switch to Last 7 days: a multi-day range has NO single-day curve.
+      await tester.tap(find.byKey(const Key('range-chip-last7')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sales-by-hour-card')), findsNothing);
+      // The header subtitle reads the range (not "Report day: …").
+      expect(find.text('Last 7 days'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'RF-REPORT-004: a range shift card shows the deeper per-shift detail '
+    '(opening float, duration, orders) and a recent-shifts list',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('range-chip-last7')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('shift-cash-card')), findsOneWidget);
+      // Range-neutral "closed" pill (not "closed today") for a non-today range.
+      expect(find.text('7 closed'), findsOneWidget);
+      // The per-shift detail chips (opening float ₪500.00) render...
+      expect(find.textContaining('Opening float'), findsWidgets);
+      // ...and the remaining closed shifts sit in a collapsible list.
+      expect(find.byKey(const Key('shift-cash-recent')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'RF-REPORT-004: a range the backend cannot serve shows an honest "not '
+    'available" note — no fabricated KPIs / chart, chips stay visible',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(_wrapUnavailable());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('reports-range-unavailable')),
+        findsOneWidget,
+      );
+      // Nothing fabricated in the unavailable state.
+      expect(find.byKey(const Key('kpi-net-sales')), findsNothing);
+      expect(find.byKey(const Key('sales-by-hour-card')), findsNothing);
+      expect(find.byKey(const Key('shift-cash-card')), findsNothing);
+      // The range chips stay visible so the owner can switch back to Today.
+      expect(find.byKey(const Key('reports-range-filter')), findsOneWidget);
     },
   );
 }

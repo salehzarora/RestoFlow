@@ -13,10 +13,11 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 /// A repository whose [loadReport] resolves after a delay (to observe loading).
 class _DelayedRepo implements OwnerReportsRepository {
   @override
-  Future<DashboardReport> loadReport() => Future.delayed(
-    const Duration(milliseconds: 50),
-    () => computeOwnerReport(demoOwnerReportDataset()),
-  );
+  Future<DashboardReport> loadReport({ReportRange range = ReportRange.today}) =>
+      Future.delayed(
+        const Duration(milliseconds: 50),
+        () => computeOwnerReport(demoOwnerReportDataset(), range: range),
+      );
 }
 
 Widget _wrap(OwnerReportsRepository repo) => ProviderScope(

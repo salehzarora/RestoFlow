@@ -88,6 +88,22 @@ class _RealSettingsViewState extends State<RealSettingsView> {
   bool _savingBranch = false;
   bool _savingRestaurant = false;
 
+  /// RF-REPORT-004: the branch timezone to APPLY on the next save, or null to
+  /// leave it unchanged. `list_org_structure` does not expose the current zone,
+  /// so this starts unset (the owner explicitly picks one to correct it) — a
+  /// pilot org onboarded before the Asia/Jerusalem default needs this to fix the
+  /// sales-by-hour offset.
+  String? _branchTimezone;
+
+  /// A small curated zone list for the pilot market (ILS / Israel-Palestine),
+  /// plus UTC. IANA identifiers are data, shown verbatim.
+  static const List<String> _timezoneOptions = <String>[
+    'Asia/Jerusalem',
+    'Asia/Hebron',
+    'Asia/Gaza',
+    'UTC',
+  ];
+
   /// Only a full owner (org/restaurant) may change branch settings — this
   /// mirrors the server gate (`set_branch_pos_shift_close_enabled` requires
   /// rank >= restaurant_owner). Managers/cashiers see the current value
@@ -183,6 +199,9 @@ class _RealSettingsViewState extends State<RealSettingsView> {
       // A blank receipt prefix leaves the current value unchanged (null param).
       receiptPrefix: prefix.isEmpty ? null : prefix,
       status: _prefill?.branchStatus ?? 'active',
+      // Null leaves the timezone unchanged; a picked zone corrects reporting's
+      // branch-local bucketing (RF-REPORT-004).
+      timezone: _branchTimezone,
     );
     if (!mounted) return;
     setState(() => _savingBranch = false);
@@ -360,6 +379,30 @@ class _RealSettingsViewState extends State<RealSettingsView> {
             border: const OutlineInputBorder(),
             isDense: true,
           ),
+        ),
+        const SizedBox(height: RestoflowSpacing.md),
+        // RF-REPORT-004: branch timezone picker — correcting it fixes reporting's
+        // branch-local hour/day bucketing (a UTC-onboarded pilot showed sales an
+        // hour-offset early). Null = leave unchanged; IANA ids are shown verbatim.
+        DropdownButtonFormField<String?>(
+          key: const Key('settings-branch-timezone'),
+          initialValue: _branchTimezone,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: l10n.dashboardSettingsTimezoneLabel,
+            helperText: l10n.dashboardSettingsTimezoneHint,
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+          items: [
+            DropdownMenuItem<String?>(
+              value: null,
+              child: Text(l10n.dashboardSettingsTimezoneKeep),
+            ),
+            for (final zone in _timezoneOptions)
+              DropdownMenuItem<String?>(value: zone, child: Text(zone)),
+          ],
+          onChanged: (value) => setState(() => _branchTimezone = value),
         ),
         const SizedBox(height: RestoflowSpacing.md),
         Align(

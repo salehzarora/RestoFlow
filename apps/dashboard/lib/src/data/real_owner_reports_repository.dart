@@ -56,7 +56,9 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
   final SyncRpcTransport? transport;
 
   @override
-  Future<DashboardReport> loadReport() async {
+  Future<DashboardReport> loadReport({
+    ReportRange range = ReportRange.today,
+  }) async {
     final t = transport;
     final m = scope;
     if (t == null || m == null) {
@@ -64,6 +66,96 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
         'owner-reports: no authenticated transport/scope - real read not wired',
       );
     }
+    // RF-REPORT-004: prefer `owner_report_range` (ranges + prior-period
+    // comparison + deeper shift_cash). If it is NOT deployed yet, the `today`
+    // view degrades to the deployed `owner_daily_report` (then `sales_summary`);
+    // any OTHER range shows an honest "not available yet" state rather than
+    // fabricating data or silently showing today. An auth denial (42501) is
+    // NEVER treated as missing — it stays fail-closed and throws below.
+    final Object? rangeRaw;
+    try {
+      rangeRaw = await t.invoke('owner_report_range', <String, dynamic>{
+        'p_organization_id': m.organizationId,
+        'p_restaurant_id': m.restaurantId,
+        'p_branch_id': m.branchId,
+        'p_range': range.wire,
+      });
+    } on SyncTransportException catch (e) {
+      if (_isMissingRpc(e)) {
+        if (range == ReportRange.today) return _loadDailyReport(t, m);
+        return DashboardReport.rangeUnavailable(range: range, currencyCode: '');
+      }
+      throw const OwnerReportsException('owner_report_range transport failure');
+    }
+    if (rangeRaw is! Map || rangeRaw['ok'] != true) {
+      // A deployed RPC that REJECTED the caller (permission_denied) is not a
+      // missing-RPC case — fail closed, never fall back, never fabricate.
+      throw const OwnerReportsException('owner_report_range rejected');
+    }
+    return _mapRange(rangeRaw);
+  }
+
+  /// Maps the `owner_report_range` (RF-REPORT-004) payload — current window +
+  /// prior-period comparison + hourly (single-day only) + deeper shift_cash — to
+  /// a [DashboardReport]. Money is integer minor throughout (D-007).
+  DashboardReport _mapRange(Map raw) {
+    final currency = (raw['currency_code'] ?? '').toString();
+    final range = ReportRange.fromWire((raw['range'] ?? '').toString());
+    final cur = raw['current'] is Map
+        ? (raw['current'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final cmp = raw['comparison'] is Map
+        ? (raw['comparison'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final start = (raw['range_start'] ?? '').toString();
+    final end = (raw['range_end'] ?? '').toString();
+    return DashboardReport(
+      currencyCode: currency,
+      businessDateLabel: end,
+      grossSalesMinor: _int(cur['gross_minor']),
+      netSalesMinor: _int(cur['net_minor']),
+      discountTotalMinor: _int(cur['discount_minor']),
+      voidCount: _int(cur['void_count']),
+      voidTotalMinor: _int(cur['void_total_minor']),
+      collectedMinor: _int(cur['collected_minor']),
+      cashSalesMinor: _int(cur['cash_minor']),
+      lastCashPaymentMinor: _int(cur['last_cash_payment_minor']),
+      orderCount: _int(cur['order_count']),
+      completedOrderCount: _int(cur['completed_count']),
+      openOrderCount: _int(cur['open_count']),
+      unpaidOrderCount: _int(cur['unpaid_count']),
+      paymentMethods: _tenders(cur['tenders'], currency),
+      comparison: ReportComparison(
+        grossSalesMinor: _int(cmp['gross_minor']),
+        netSalesMinor: _int(cmp['net_minor']),
+        orderCount: _int(cmp['order_count']),
+        cashSalesMinor: _int(cmp['cash_minor']),
+      ),
+      // Legacy scalar drawer fields are superseded by the shiftCash card.
+      openingFloatMinor: 0,
+      expectedCashMinor: 0,
+      countedCashMinor: 0,
+      shiftStatus: 'none',
+      branches: const [],
+      topItems: const [],
+      recentOrders: const [],
+      hourlyNetSales: _hourly(raw['hourly']),
+      shiftCash: _shiftCash(raw['shift_cash']),
+      range: range,
+      rangeSupported: true,
+      rangeStartLabel: start.isEmpty ? null : start,
+      rangeEndLabel: end.isEmpty ? null : end,
+    );
+  }
+
+  /// Reads the today-only `owner_daily_report` (RF-REPORT-001/002/003) and maps
+  /// it, falling back to `sales_summary` ONLY when that RPC is missing. This is
+  /// the compatibility path while `owner_report_range` (RF-REPORT-004) is not yet
+  /// deployed; it always yields the `today` range.
+  Future<DashboardReport> _loadDailyReport(
+    SyncRpcTransport t,
+    MembershipContext m,
+  ) async {
     final Object? raw;
     try {
       raw = await t.invoke('owner_daily_report', <String, dynamic>{
@@ -178,6 +270,15 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
       expectedCashMinor: _int(raw['expected_cash_minor']),
       countedCashMinor: _int(raw['counted_cash_minor']),
       varianceMinor: _int(raw['cash_variance_minor']),
+      // RF-REPORT-004 per-shift detail — present only from owner_report_range;
+      // ABSENT keys map to null so the today-only fallback hides these rows
+      // (never a fabricated zero).
+      openedByName: _nonEmptyOrNull(raw['opened_by_name']),
+      openingFloatMinor: _intOrNull(raw['opening_float_minor']),
+      durationMinutes: _intOrNull(raw['duration_minutes']),
+      orderCount: _intOrNull(raw['order_count']),
+      collectedMinor: _intOrNull(raw['collected_minor']),
+      cashSalesMinor: _intOrNull(raw['cash_sales_minor']),
     );
   }
 
@@ -342,4 +443,18 @@ class RealOwnerReportsRepository implements OwnerReportsRepository {
 
   static int _int(Object? value) =>
       value is int ? value : int.tryParse('$value') ?? 0;
+
+  /// Like [_int] but returns null for an ABSENT/null value (so an optional field
+  /// the payload does not carry — e.g. the today-only fallback's shift rows —
+  /// stays null and its UI row hides, rather than showing a fabricated 0).
+  static int? _intOrNull(Object? value) {
+    if (value == null) return null;
+    return value is int ? value : int.tryParse('$value');
+  }
+
+  /// A trimmed non-empty string, or null (so an absent/blank name hides).
+  static String? _nonEmptyOrNull(Object? value) {
+    final s = (value ?? '').toString().trim();
+    return s.isEmpty ? null : s;
+  }
 }

@@ -2104,6 +2104,66 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dashboardRangeToday => 'Today';
+
+  @override
+  String get dashboardRangeYesterday => 'Yesterday';
+
+  @override
+  String get dashboardRangeLast7 => 'Last 7 days';
+
+  @override
+  String get dashboardRangeLast30 => 'Last 30 days';
+
+  @override
+  String get dashboardRangeUnavailable =>
+      'This range isn\'t available in live reports yet — try Today, or check back after the reporting update ships.';
+
+  @override
+  String dashboardDeltaVsDayBefore(int percent) {
+    return '$percent% vs day before';
+  }
+
+  @override
+  String dashboardDeltaVsPrev7(int percent) {
+    return '$percent% vs previous 7 days';
+  }
+
+  @override
+  String dashboardDeltaVsPrev30(int percent) {
+    return '$percent% vs previous 30 days';
+  }
+
+  @override
+  String dashboardShiftClosedInRange(int count) {
+    return '$count closed';
+  }
+
+  @override
+  String get dashboardShiftNoneRange => 'No closed shifts in this range.';
+
+  @override
+  String dashboardShiftOpenedBy(String name) {
+    return 'Opened by $name';
+  }
+
+  @override
+  String get dashboardShiftCollected => 'Collected';
+
+  @override
+  String get dashboardShiftDurationLabel => 'Duration';
+
+  @override
+  String dashboardShiftDurationValue(int hours, int minutes) {
+    return '${hours}h ${minutes}m';
+  }
+
+  @override
+  String dashboardShiftRecentTitle(int count) {
+    return 'Recent shifts ($count)';
+  }
+
+  @override
   String get dashboardUsersNotConnectedTitle =>
       'User management not connected yet';
 
@@ -2130,6 +2190,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dashboardSettingsReceiptPrefixHint =>
       'Leave blank to keep the current prefix';
+
+  @override
+  String get dashboardSettingsTimezoneLabel => 'Branch timezone';
+
+  @override
+  String get dashboardSettingsTimezoneHint =>
+      'Used for reporting (sales-by-hour, daily totals). Israel is Asia/Jerusalem.';
+
+  @override
+  String get dashboardSettingsTimezoneKeep => 'Leave unchanged';
 
   @override
   String get dashboardSettingsCurrencyLocked =>
