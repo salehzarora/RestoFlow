@@ -1,11 +1,13 @@
-# ANDROID_BUILD — POS & KDS Android APKs for pilot testing
+# ANDROID_BUILD — POS, KDS & Dashboard Android APKs for pilot testing
 
-> Scope: **ANDROID-001** (build/packaging setup only). This documents how to build
-> installable **Android APKs** for the two on-device role apps, **`apps/pos`**
-> (cashier) and **`apps/kds`** (kitchen), so they can run on restaurant tablets for
-> the hardware pilot. Motivation: the hosted **web** builds ([DEPLOYMENT.md](DEPLOYMENT.md))
-> cannot reliably reach Bluetooth / Wi-Fi / USB thermal printers from a browser; a
-> native Android package is the path toward native printer support.
+> Scope: **ANDROID-001** + **ANDROID-001B** (build/packaging setup only). This
+> documents how to build installable **Android APKs** for the role apps —
+> **`apps/pos`** (cashier), **`apps/kds`** (kitchen), and **`apps/dashboard`**
+> (owner/manager) — so they can run on restaurant tablets for the hardware pilot.
+> Motivation: the hosted **web** builds ([DEPLOYMENT.md](DEPLOYMENT.md)) cannot
+> reliably reach Bluetooth / Wi-Fi / USB thermal printers from a browser; a native
+> Android package is the path toward native printer support. (`apps/dashboard`
+> stays the primary **web/Vercel** deploy as well — Android is additive.)
 >
 > This ticket added the Android platform scaffolding and configured app identity.
 > It did **not** wire native printing and did **not** change any backend, schema,
@@ -19,11 +21,12 @@
 |---|---|---|---|
 | RestoFlow POS | `apps/pos` | `com.restoflow.pos` | **RestoFlow POS** |
 | RestoFlow KDS | `apps/kds` | `com.restoflow.kds` | **RestoFlow KDS** |
+| RestoFlow Dashboard | `apps/dashboard` | `com.restoflow.dashboard` | **RestoFlow Dashboard** |
 
-The two IDs are distinct, so both apps install side-by-side on one tablet. Identity
+The IDs are distinct, so all three apps install side-by-side on one tablet. Identity
 is set in each app's `android/app/build.gradle.kts` (`namespace` + `applicationId`),
 `android/app/src/main/AndroidManifest.xml` (`android:label`), and
-`android/app/src/main/kotlin/com/restoflow/<pos|kds>/MainActivity.kt` (`package`).
+`android/app/src/main/kotlin/com/restoflow/<pos|kds|dashboard>/MainActivity.kt` (`package`).
 
 ---
 
@@ -38,15 +41,15 @@ is set in each app's `android/app/build.gradle.kts` (`namespace` + `applicationI
 > **NOTE**: The initial ANDROID-001 packaging ran in an environment with **no
 > Android SDK/JDK** (`flutter doctor` reported `[X] Android toolchain`), so the APK
 > binaries were not produced then. After the toolchain was installed, both **debug
-> APKs build successfully** — `flutter build apk --debug` for `apps/pos` and
-> `apps/kds` (verified). Confirm `flutter doctor` shows the Android row as `[√]`
-> before building.
+> APKs build successfully** — `flutter build apk --debug` for `apps/pos`,
+> `apps/kds`, and `apps/dashboard` (verified). Confirm `flutter doctor` shows the
+> Android row as `[√]` before building.
 
 ---
 
 ## 3. Build commands
 
-Run from each app directory (`apps/pos`, then `apps/kds`).
+Run from each app directory (`apps/pos`, `apps/kds`, `apps/dashboard`).
 
 ### 3a. Demo-mode APK (no backend, no secrets) — easiest for first install
 
@@ -55,8 +58,9 @@ fully offline with seeded data and needs **no** environment values. Good for ver
 install + UI on a tablet.
 
 ```bash
-cd apps/pos && flutter build apk --debug     # -> debug APK, no signing needed
-cd apps/kds && flutter build apk --debug
+cd apps/pos       && flutter build apk --debug   # -> debug APK, no signing needed
+cd apps/kds       && flutter build apk --debug
+cd apps/dashboard && flutter build apk --debug
 ```
 
 ### 3b. Real-backend APK (hosted Supabase) — for a real pilot
@@ -77,11 +81,17 @@ cd apps/kds && flutter build apk --release \
   --dart-define=RESTOFLOW_DEMO_MODE=false \
   --dart-define=RESTOFLOW_SUPABASE_URL="$RESTOFLOW_SUPABASE_URL" \
   --dart-define=RESTOFLOW_SUPABASE_ANON_KEY="$RESTOFLOW_SUPABASE_ANON_KEY"
+
+cd apps/dashboard && flutter build apk --release \
+  --dart-define=RESTOFLOW_DEMO_MODE=false \
+  --dart-define=RESTOFLOW_SUPABASE_URL="$RESTOFLOW_SUPABASE_URL" \
+  --dart-define=RESTOFLOW_SUPABASE_ANON_KEY="$RESTOFLOW_SUPABASE_ANON_KEY"
 ```
 
 Notes:
 - The `main` (release) manifest declares `android.permission.INTERNET` so real-mode
-  login / device pairing / sync work on a release build (ANDROID-001 fix).
+  networking works on a release build — POS/KDS login, device pairing, and sync;
+  Dashboard sign-in, org/branch data, and reports (ANDROID-001 / ANDROID-001B fix).
 - `RESTOFLOW_PRINT_BRIDGE_URL` is a per-device **local loopback** define only; it is
   never a hosted value and is not needed for a normal pilot build.
 - A `--release` APK is signed with the **debug** key by default (see §5) — fine for
@@ -90,8 +100,9 @@ Notes:
 ### 3c. Output paths
 
 ```
-apps/pos/build/app/outputs/flutter-apk/app-debug.apk     (or app-release.apk)
-apps/kds/build/app/outputs/flutter-apk/app-debug.apk     (or app-release.apk)
+apps/pos/build/app/outputs/flutter-apk/app-debug.apk         (or app-release.apk)
+apps/kds/build/app/outputs/flutter-apk/app-debug.apk         (or app-release.apk)
+apps/dashboard/build/app/outputs/flutter-apk/app-debug.apk   (or app-release.apk)
 ```
 
 ---
