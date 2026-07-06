@@ -364,12 +364,12 @@ void main() {
       );
     }
 
-    // Top items: #1 and #2 ranked, with quantities.
+    // Top items: "1c" ranked rows (numbered badge + name + `×qty · amount`).
     expect(find.text('Top items'), findsOneWidget);
+    expect(find.byType(RestoflowRankRow), findsWidgets);
     expect(find.text('Margherita Pizza'), findsOneWidget);
-    expect(find.text('#1 · ×4'), findsOneWidget);
     expect(find.text('Classic Burger'), findsOneWidget);
-    expect(find.text('#2 · ×4'), findsOneWidget);
+    expect(find.textContaining('×4'), findsWidgets); // both top sellers sold ×4
 
     // Recent orders: numbers, statuses and a dine-in table label.
     expect(find.text('Recent orders'), findsOneWidget);

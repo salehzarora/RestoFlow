@@ -1029,6 +1029,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardUnpaidOrders => 'הזמנות שלא שולמו';
 
   @override
+  String get dashboardPaymentMix => 'תמהיל תשלומים';
+
+  @override
   String get dashboardPaymentSummary => 'סיכום תשלום ומזומן';
 
   @override
@@ -2202,6 +2205,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get setupTitle => 'הגדרה';
+
+  @override
+  String get setupReadyHeadline => 'הסניף מוכן לשירות';
 
   @override
   String get setupSubtitle => 'הכינו את הסניף הזה לשירות';

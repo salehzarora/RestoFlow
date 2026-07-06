@@ -73,8 +73,9 @@ void main() {
     expect(find.byKey(const Key('sales-by-hour-card')), findsOneWidget);
     expect(find.byType(RestoflowBarChart), findsOneWidget);
 
-    // Trend deltas on the four money/count KPIs (all up in the demo data).
-    expect(find.byIcon(Icons.arrow_upward), findsNWidgets(4));
+    // Trend deltas: the four money/count KPIs + the "1c" hero net-sales delta —
+    // all up in the demo data.
+    expect(find.byIcon(Icons.arrow_upward), findsNWidgets(5));
     expect(find.byIcon(Icons.arrow_downward), findsNothing);
     expect(find.textContaining('vs yesterday'), findsWidgets);
   });

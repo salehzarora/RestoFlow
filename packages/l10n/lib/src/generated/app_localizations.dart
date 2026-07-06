@@ -2002,6 +2002,12 @@ abstract class AppLocalizations {
   /// **'Unpaid orders'**
   String get dashboardUnpaidOrders;
 
+  /// Dashboard '1c' Overview card title for the payment-mix donut (cash vs card share).
+  ///
+  /// In en, this message translates to:
+  /// **'Payment mix'**
+  String get dashboardPaymentMix;
+
   /// Owner dashboard heading for the payment and cash-drawer summary card.
   ///
   /// In en, this message translates to:
@@ -4215,6 +4221,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Setup'**
   String get setupTitle;
+
+  /// Dashboard '1c' readiness strip headline when the branch is fully set up.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch ready for service'**
+  String get setupReadyHeadline;
 
   /// Subtitle of the setup center.
   ///
