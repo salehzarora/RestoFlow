@@ -1045,6 +1045,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardUnpaidOrders => 'Unpaid orders';
 
   @override
+  String get dashboardPaymentMix => 'Payment mix';
+
+  @override
   String get dashboardPaymentSummary => 'Payment & cash summary';
 
   @override
@@ -2237,6 +2240,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get setupTitle => 'Setup';
+
+  @override
+  String get setupReadyHeadline => 'Branch ready for service';
 
   @override
   String get setupSubtitle => 'Get this branch ready for service';

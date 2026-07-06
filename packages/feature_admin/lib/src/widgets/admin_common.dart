@@ -18,8 +18,11 @@ String adminRoleLabel(AppLocalizations l10n, MembershipRole role) =>
     };
 
 /// A page header: an optional icon badge, a title, an optional subtitle, and
-/// trailing actions. Delegates to the shared [RestoflowPageHeader] so every
-/// admin/dashboard page opens with the same visual language.
+/// trailing actions. Dashboard "1c": delegates to the full-bleed brand-gradient
+/// [RestoflowGradientHeader] so every admin/dashboard page opens with the same
+/// warm hero band. The trailing [actions] are re-themed to read on the gradient
+/// (white primary buttons, white-foreground outlined/text/icon buttons) via a
+/// scoped [Theme], so existing call sites keep passing their ordinary buttons.
 class AdminPageHeader extends StatelessWidget {
   const AdminPageHeader({
     required this.title,
@@ -39,17 +42,31 @@ class AdminPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RestoflowPageHeader(
+    final theme = Theme.of(context);
+    final onGradient = theme.copyWith(
+      filledButtonTheme: FilledButtonThemeData(
+        style: RestoflowGradientHeader.whiteActionStyle(context),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: Colors.white),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(foregroundColor: Colors.white),
+      ),
+    );
+    return RestoflowGradientHeader(
       title: title,
       subtitle: subtitle,
       icon: icon,
-      actions: actions,
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.lg,
-        RestoflowSpacing.lg,
-        RestoflowSpacing.lg,
-        RestoflowSpacing.sm,
-      ),
+      actions: [
+        for (final action in actions) Theme(data: onGradient, child: action),
+      ],
     );
   }
 }

@@ -19,7 +19,9 @@ bool menuFilterAllows(MenuActiveFilter filter, bool isActive) =>
     };
 
 /// A page header: a strong title, a muted subtitle, and optional trailing
-/// content (e.g. a scope badge).
+/// content (e.g. a scope badge). Dashboard "1c": the full-bleed brand-gradient
+/// [RestoflowGradientHeader], matching every other dashboard screen; the
+/// trailing badge rides the header's action slot.
 class MenuPageHeader extends StatelessWidget {
   const MenuPageHeader({
     required this.title,
@@ -34,37 +36,11 @@ class MenuPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: RestoflowSpacing.xs),
-                Text(
-                  subtitle!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        if (trailing != null) ...[
-          const SizedBox(width: RestoflowSpacing.md),
-          trailing!,
-        ],
-      ],
+    return RestoflowGradientHeader(
+      icon: Icons.restaurant_menu,
+      title: title,
+      subtitle: subtitle,
+      actions: [if (trailing case final t?) t],
     );
   }
 }

@@ -132,7 +132,13 @@ class DashboardShell extends StatefulWidget {
   /// (demo mode / legacy tests).
   final Future<void> Function()? onSignOut;
 
-  static const double _wideBreakpoint = RestoflowBreakpoints.wide;
+  /// Dashboard "1c" responsive breakpoints (§9). Below [_railBreakpoint] the
+  /// shell shows a phone bottom nav; from there the side rail stays on the
+  /// reading-start side, icon-only in [_railBreakpoint.._fullRailBreakpoint) and
+  /// full-labelled above, widening at [_desktopBreakpoint].
+  static const double _railBreakpoint = 560;
+  static const double _fullRailBreakpoint = 720;
+  static const double _desktopBreakpoint = 1100;
 
   @override
   State<DashboardShell> createState() => _DashboardShellState();
@@ -307,15 +313,24 @@ class _DashboardShellState extends State<DashboardShell> {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final isWide =
-                    constraints.maxWidth >= DashboardShell._wideBreakpoint;
-                if (isWide) {
+                // Dashboard "1c" responsive rules (§9): the labelled/icon rail
+                // stays on the reading-start side (right in RTL) for every
+                // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
+                final width = constraints.maxWidth;
+                if (width >= DashboardShell._railBreakpoint) {
+                  final compact = width < DashboardShell._fullRailBreakpoint;
+                  final railWidth = width >= DashboardShell._desktopBreakpoint
+                      ? 232.0
+                      : (compact ? 72.0 : 212.0);
                   return Row(
                     children: [
                       _SideNav(
                         destinations: _destinations(l10n),
                         selectedIndex: _index,
                         onSelected: _select,
+                        membership: widget.membership,
+                        width: railWidth,
+                        compact: compact,
                       ),
                       Expanded(child: content),
                     ],
@@ -624,7 +639,8 @@ class _ShellHeaderBar extends StatelessWidget {
         horizontal: RestoflowSpacing.lg,
         vertical: RestoflowSpacing.sm,
       ),
-      color: scheme.surfaceContainerHigh,
+      // Dashboard "1c": a clean white top bar over the warm canvas.
+      color: scheme.surface,
       child: Row(
         children: [
           Container(
@@ -697,108 +713,142 @@ class _MenuUnavailable extends StatelessWidget {
   }
 }
 
-/// The premium dark side panel (wide layout): a brand lockup on top and one
-/// tappable labelled row per destination. Colours come from the dark-sidebar
-/// palette in [RestoflowSemanticColors]; the active item gets a rounded brand
-/// fill, inactive items stay muted. RTL-safe (Rows + directional padding).
+/// The Dashboard "1c" LIGHT side rail: a white panel with an end hairline, a
+/// gradient brand lockup on top, one tappable destination per row (active =
+/// brand-green fill + white foreground + soft shadow; inactive = muted ink with
+/// a warm hover), and a footer workspace card. Collapses to icon-only ([compact])
+/// on small tablets. RTL-safe (Rows + directional padding/borders); it stays on
+/// the reading-start side, so it sits on the right under Arabic/Hebrew.
 class _SideNav extends StatelessWidget {
   const _SideNav({
     required this.destinations,
     required this.selectedIndex,
     required this.onSelected,
+    required this.membership,
+    required this.width,
+    required this.compact,
   });
 
   final List<_NavItem> destinations;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
-
-  static const double _width = 240;
+  final MembershipContext? membership;
+  final double width;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final semantic =
-        theme.extension<RestoflowSemanticColors>() ??
-        RestoflowSemanticColors.of(theme.brightness);
-    return Material(
-      color: semantic.sidebarSurface,
-      child: SizedBox(
-        width: _width,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(
+    final member = membership;
+    final side = compact ? RestoflowSpacing.sm : RestoflowSpacing.lg;
+    return Container(
+      width: width,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: BorderDirectional(end: BorderSide(color: kRestoflowHairline)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsetsDirectional.fromSTEB(
+              side,
+              RestoflowSpacing.xl,
+              side,
+              RestoflowSpacing.lg,
+            ),
+            child: compact
+                ? const Center(child: RestoflowBrandMark(size: 40))
+                : RestoflowBrandMark(size: 42, title: l10n.dashboardAppTitle),
+          ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                RestoflowSpacing.sm,
+                0,
+                RestoflowSpacing.sm,
                 RestoflowSpacing.lg,
-                RestoflowSpacing.xl,
-                RestoflowSpacing.lg,
-                RestoflowSpacing.xl,
               ),
-              child: Row(
-                children: [
-                  const RestoflowBrandMark(size: 40),
-                  const SizedBox(width: RestoflowSpacing.md),
-                  Expanded(
-                    child: Text(
-                      l10n.dashboardAppTitle,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: semantic.sidebarOnSurface,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              children: [
+                for (var i = 0; i < destinations.length; i++)
+                  _SideNavTile(
+                    item: destinations[i],
+                    selected: i == selectedIndex,
+                    compact: compact,
+                    onTap: () => onSelected(i),
                   ),
-                ],
-              ),
+              ],
             ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsetsDirectional.fromSTEB(
-                  RestoflowSpacing.sm,
-                  0,
-                  RestoflowSpacing.sm,
-                  RestoflowSpacing.lg,
-                ),
-                children: [
-                  for (var i = 0; i < destinations.length; i++)
-                    _SideNavTile(
-                      item: destinations[i],
-                      selected: i == selectedIndex,
-                      semantic: semantic,
-                      onTap: () => onSelected(i),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+          if (member != null) _RailFooter(membership: member, compact: compact),
+        ],
       ),
     );
   }
 }
 
-/// One sidebar destination: icon + a visible, tappable label Text.
+/// One rail destination: brand-green fill + white foreground when selected,
+/// muted ink otherwise, with a warm hover on inactive rows. Icon-only when
+/// [compact] (label moves to a tooltip). The Row fills the rail width so the
+/// active fill spans it and the icon centres in compact mode.
 class _SideNavTile extends StatelessWidget {
   const _SideNavTile({
     required this.item,
     required this.selected,
-    required this.semantic,
+    required this.compact,
     required this.onTap,
   });
 
   final _NavItem item;
   final bool selected;
-  final RestoflowSemanticColors semantic;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final foreground = selected
-        ? semantic.sidebarActiveForeground
-        : semantic.sidebarMuted;
     final radius = BorderRadius.circular(RestoflowRadii.md);
+    final iconColor = selected ? Colors.white : kRestoflowInk3;
+    final labelColor = selected ? Colors.white : kRestoflowInk2;
+
+    final row = Row(
+      mainAxisAlignment: compact
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
+      children: [
+        Icon(
+          selected ? item.selectedIcon : item.icon,
+          size: RestoflowIconSizes.md,
+          color: iconColor,
+        ),
+        if (!compact) ...[
+          const SizedBox(width: RestoflowSpacing.md),
+          Expanded(
+            child: Text(
+              item.label,
+              style: theme.textTheme.labelLarge?.copyWith(color: labelColor),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ],
+    );
+
+    final tile = AnimatedContainer(
+      duration: RestoflowDurations.fast,
+      decoration: BoxDecoration(
+        color: selected ? kRestoflowSeedColor : Colors.transparent,
+        borderRadius: radius,
+        boxShadow: selected ? RestoflowShadows.sm : null,
+      ),
+      padding: EdgeInsetsDirectional.symmetric(
+        horizontal: compact ? RestoflowSpacing.sm : RestoflowSpacing.md,
+        vertical: RestoflowSpacing.md,
+      ),
+      child: row,
+    );
+
     return Padding(
       padding: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.xs),
       child: Material(
@@ -807,45 +857,107 @@ class _SideNavTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: radius,
-          // Subtle interaction polish: the active fill fades in/out (finite
-          // implicit animation — settles under pumpAndSettle).
-          child: AnimatedContainer(
-            duration: RestoflowDurations.fast,
-            decoration: BoxDecoration(
-              color: selected
-                  ? semantic.sidebarActiveBackground
-                  : Colors.transparent,
-              borderRadius: radius,
-            ),
-            padding: const EdgeInsetsDirectional.fromSTEB(
-              RestoflowSpacing.md,
-              RestoflowSpacing.md,
-              RestoflowSpacing.md,
-              RestoflowSpacing.md,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  selected ? item.selectedIcon : item.icon,
-                  size: RestoflowIconSizes.md,
-                  color: foreground,
-                ),
-                const SizedBox(width: RestoflowSpacing.md),
-                Expanded(
-                  child: Text(
-                    item.label,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: foreground,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // Inactive rows show a warm hover; the active row's opaque green fill
+          // sits above the ink so it stays solid.
+          hoverColor: kRestoflowCanvas,
+          child: compact ? Tooltip(message: item.label, child: tile) : tile,
         ),
       ),
     );
   }
 }
+
+/// The rail footer workspace card: a gradient avatar (org initial) + the
+/// organization name and the localized membership role. No user display name is
+/// available in [MembershipContext], so it honestly shows the workspace + role,
+/// never a fabricated person. Collapses to the avatar alone when [compact].
+class _RailFooter extends StatelessWidget {
+  const _RailFooter({required this.membership, required this.compact});
+
+  final MembershipContext membership;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final semantic =
+        theme.extension<RestoflowSemanticColors>() ??
+        RestoflowSemanticColors.of(theme.brightness);
+    final org = membership.organizationName;
+    final initial = org.isNotEmpty ? org.substring(0, 1).toUpperCase() : '?';
+    final avatar = Container(
+      width: 38,
+      height: 38,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: [theme.colorScheme.primary, semantic.accent],
+        ),
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: Text(
+        initial,
+        style: theme.textTheme.titleSmall?.copyWith(color: Colors.white),
+      ),
+    );
+    final side = compact ? RestoflowSpacing.sm : RestoflowSpacing.md;
+    return Container(
+      margin: EdgeInsetsDirectional.fromSTEB(
+        side,
+        0,
+        side,
+        RestoflowSpacing.md,
+      ),
+      padding: EdgeInsets.all(
+        compact ? RestoflowSpacing.xs : RestoflowSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: kRestoflowCanvas,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: compact
+          ? Center(child: avatar)
+          : Row(
+              children: [
+                avatar,
+                const SizedBox(width: RestoflowSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        org,
+                        style: theme.textTheme.titleSmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        _roleLabel(l10n, membership.role),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: kRestoflowInk3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+/// The localized label for a membership [role] (the six D-004 role keys).
+String _roleLabel(AppLocalizations l10n, MembershipRole role) => switch (role) {
+  MembershipRole.orgOwner => l10n.authRoleOwner,
+  MembershipRole.restaurantOwner => l10n.authRoleRestaurantOwner,
+  MembershipRole.manager => l10n.authRoleManager,
+  MembershipRole.cashier => l10n.authRoleCashier,
+  MembershipRole.kitchenStaff => l10n.authRoleKitchenStaff,
+  MembershipRole.accountant => l10n.authRoleAccountant,
+};

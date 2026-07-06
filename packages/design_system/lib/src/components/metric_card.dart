@@ -37,6 +37,8 @@ class RestoflowMetricCard extends StatelessWidget {
     this.tone,
     this.delta,
     this.onTap,
+    this.filled = false,
+    this.fillStyle,
     super.key,
   });
 
@@ -47,6 +49,18 @@ class RestoflowMetricCard extends StatelessWidget {
 
   /// Optional semantic accent for the icon + value. Null => brand primary.
   final RestoflowTone? tone;
+
+  /// Dashboard "1c" tinted variant: when true AND a [tone] (or [fillStyle]) is
+  /// set, the tile is painted in the tone's container with a white rounded icon
+  /// box holding the tone accent icon, a dark value, and an on-container label.
+  /// Without a tone/fillStyle (or when false) the tile keeps the plain
+  /// white-card look.
+  final bool filled;
+
+  /// An explicit fill palette that overrides [tone] for the [filled] variant —
+  /// used for the terracotta "accent" tile, which is a semantic colour rather
+  /// than one of the five [RestoflowTone]s.
+  final RestoflowToneStyle? fillStyle;
 
   /// Optional trend delta (DESIGN-002) rendered under the value.
   final RestoflowMetricDelta? delta;
@@ -59,7 +73,23 @@ class RestoflowMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final accent = tone == null ? scheme.primary : tone!.styleOf(theme).accent;
+    final toneStyle = tone?.styleOf(theme);
+    final resolvedFill = fillStyle ?? toneStyle;
+
+    // Dashboard "1c" tinted tile: a coloured container + white icon box.
+    if (filled && resolvedFill != null) {
+      return _FilledTile(
+        label: label,
+        value: value,
+        caption: caption,
+        icon: icon,
+        delta: delta,
+        onTap: onTap,
+        toneStyle: resolvedFill,
+      );
+    }
+
+    final accent = tone == null ? scheme.primary : toneStyle!.accent;
     final captionText = caption;
 
     final content = Padding(
@@ -121,6 +151,110 @@ class RestoflowMetricCard extends StatelessWidget {
               onTap: tap,
               borderRadius: BorderRadius.circular(RestoflowRadii.lg),
               child: content,
+            ),
+    );
+  }
+}
+
+/// The Dashboard "1c" tinted KPI tile: `tone.container` background, a white
+/// rounded icon box holding the `tone.accent` icon at the reading end of the
+/// label row, a dark value, and (optionally) the delta + a muted caption.
+class _FilledTile extends StatelessWidget {
+  const _FilledTile({
+    required this.label,
+    required this.value,
+    required this.caption,
+    required this.icon,
+    required this.delta,
+    required this.onTap,
+    required this.toneStyle,
+  });
+
+  final String label;
+  final String value;
+  final String? caption;
+  final IconData? icon;
+  final RestoflowMetricDelta? delta;
+  final VoidCallback? onTap;
+  final RestoflowToneStyle toneStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final captionText = caption;
+    final iconData = icon;
+    final content = Padding(
+      padding: const EdgeInsets.all(RestoflowSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: toneStyle.onContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (iconData != null) ...[
+                const SizedBox(width: RestoflowSpacing.sm),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(iconData, size: 18, color: toneStyle.accent),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          Text(
+            value,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: kRestoflowInk,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (delta case final d?) ...[
+            const SizedBox(height: RestoflowSpacing.xs),
+            _DeltaLine(delta: d),
+          ],
+          if (captionText != null) ...[
+            const SizedBox(height: RestoflowSpacing.xs),
+            Text(
+              captionText,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: toneStyle.onContainer.withValues(alpha: 0.82),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    final tap = onTap;
+    final radius = BorderRadius.circular(RestoflowRadii.lg);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: toneStyle.container,
+        borderRadius: radius,
+      ),
+      child: tap == null
+          ? content
+          : Material(
+              type: MaterialType.transparency,
+              child: InkWell(onTap: tap, borderRadius: radius, child: content),
             ),
     );
   }
