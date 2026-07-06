@@ -374,3 +374,76 @@ appeared. It surfaces the values `close_shift` (RF-055) already persisted on
   midnight counts on the day it was **closed** (cash-count day). Open shifts are a
   live "open now" count. A day with no closed shift shows a calm empty state. KDS
   is untouched (money-free).
+
+## 13. Range reporting v2 + rollout (RF-REPORT-004 — `owner_report_range`)
+
+**Current reporting state (supersedes §9–§12's then-pending "not applied" wording).**
+RF-REPORT-001/002/003 — the `owner_daily_report` RPC (billed/collected split +
+`hourly` + `shift_cash`; API_CONTRACT §4.19a) — **have been applied to hosted
+production (2026-07-06)** after the R-003 RLS/security sign-off, so the Dashboard
+Overview reads the **real `owner_daily_report`** (the `sales_summary` fallback of
+§9 remains a permanent safety net). **RF-REPORT-004 (`owner_report_range`,
+API_CONTRACT §4.19b) is committed at PR level but NOT yet applied** to hosted.
+
+**What RF-REPORT-004 adds** (API_CONTRACT §4.19b): the Overview's date-range
+controls (**Today / Yesterday / Last 7 days / Last 30 days**) with a prior-period
+comparison, an accurate **branch-local "today"**, single-day **hourly**, and a
+**deeper shift/cash** card — via the NEW additive `public.owner_report_range` RPC.
+`owner_daily_report` is untouched and stays the compatibility fallback for Today.
+
+**Dashboard behavior BEFORE the RF-REPORT-004 migration is applied (current prod):**
+- **Today still works** — it degrades to the deployed `owner_daily_report` (then
+  `sales_summary`).
+- **Yesterday / Last 7 days / Last 30 days** show an honest **"range not available
+  yet"** state — never today's data mislabelled.
+- **No fake comparison / hourly / shift details.** Auth/permission/tenant errors
+  fail closed (a denied caller never sees fabricated or fallback data).
+
+**Applying RF-REPORT-004 requires the SAME R-003-style preflight as the 001/002/003
+apply** (do NOT run hosted commands without explicit human approval):
+- Exactly **ONE** pending migration expected:
+  `20260706110000_rf_report_004_owner_report_range.sql` (a forward-only
+  `CREATE OR REPLACE`). If `supabase migration list --linked` shows anything else
+  pending, **STOP**.
+- **No `db reset`. No seed** (`--include-seed`). **No `--include-all`** unless
+  explicitly justified and re-confirmed. **No destructive flags.**
+- **Confirm the target project ref** matches the expected production project
+  before any command; **STOP** if the linked ref differs.
+- **Backup posture decision first** (Free plan = no automated backups; the human
+  accepts/records the risk or takes a manual snapshot) — as with the 001/002/003
+  apply.
+- Apply via the normal linked migration path (`supabase db push --linked --yes`),
+  capture high-level output only, **STOP on any error** (do not retry blindly).
+- **Post-apply schema-cache reload ONLY if needed** — Supabase auto-reloads on
+  DDL; if the Dashboard/RPC still returns `PGRST202`, run
+  `NOTIFY pgrst, 'reload schema';` in the SQL editor. No unrelated SQL.
+- **No client redeploy needed** — the deployed Dashboard auto-switches from the
+  range-unavailable / `owner_daily_report` path to `owner_report_range` once the
+  function resolves.
+
+**Branch timezone operational note (no migration required).** The production
+**pilot branch was onboarded with `UTC`** (the old client default), which shifted
+the sales-by-hour chart by the Israel offset. To fix it, set the branch to
+**`Asia/Jerusalem`** in **Settings → Branch timezone** (the already-deployed
+`update_branch_settings(p_timezone)`, IANA/DB-validated) — **no DB migration is
+required just to correct that branch setting.** New organizations now default to
+`Asia/Jerusalem`.
+
+**Post-migration smoke tests** (owner/manager, after the apply):
+- **Dashboard Today** loads real range data (not the range-unavailable state).
+- **Yesterday / Last 7 days / Last 30 days** load with real current + comparison
+  figures.
+- **Hourly chart** renders for a single-day range with real data; **hidden** for
+  multi-day ranges and genuinely empty days (never a fabricated/flat-zero curve).
+- **Shift & cash v2** shows expected/counted/signed variance + per-shift opening
+  float, opened-by, duration, and order/collected/cash for the range's closed
+  shifts.
+- **Permission denied** — a `kitchen_staff` / below-financial-read caller sees an
+  honest denied state (fail closed), never fallback data.
+- **POS `/pos` + KDS `/kds` unchanged**; KDS remains **money-free**.
+
+**Rollback / roll-forward:** any fix ships as a NEW forward-only
+`CREATE OR REPLACE` migration (never edit an applied one); the client already
+degrades safely if `owner_report_range` is absent (Today via `owner_daily_report`,
+other ranges range-unavailable). No data is touched (read-only function); no
+destructive rollback.
