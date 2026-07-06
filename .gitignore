@@ -184,6 +184,21 @@ android/app/debug/
 android/app/profile/
 android/app/release/
 android/local.properties
+# Monorepo apps (apps/*/android) — Android build artifacts + machine/secret files
+# (ANDROID-001). The Gradle sources (build.gradle.kts, manifests, wrapper) ARE
+# committed; only generated output, the local SDK path, and signing config are not.
+**/android/.gradle/
+**/android/.kotlin/
+**/android/captures/
+**/android/build/
+**/android/app/build/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/.cxx/
+**/android/local.properties
+**/android/key.properties
+**/android/**/GeneratedPluginRegistrant.java
 ios/Pods/
 ios/.symlinks/
 ios/Flutter/Flutter.framework
