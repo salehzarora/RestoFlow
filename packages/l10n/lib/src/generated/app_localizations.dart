@@ -4000,6 +4000,96 @@ abstract class AppLocalizations {
   /// **'{percent}% vs yesterday'**
   String dashboardDeltaVsYesterday(int percent);
 
+  /// RF-REPORT-004 reporting-range chip: today.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get dashboardRangeToday;
+
+  /// RF-REPORT-004 reporting-range chip: yesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get dashboardRangeYesterday;
+
+  /// RF-REPORT-004 reporting-range chip: the rolling last 7 days (incl. today).
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get dashboardRangeLast7;
+
+  /// RF-REPORT-004 reporting-range chip: the rolling last 30 days (incl. today).
+  ///
+  /// In en, this message translates to:
+  /// **'Last 30 days'**
+  String get dashboardRangeLast30;
+
+  /// RF-REPORT-004 honest state shown when the owner_report_range RPC isn't deployed yet and the chosen range isn't today.
+  ///
+  /// In en, this message translates to:
+  /// **'This range isn\'t available in live reports yet — try Today, or check back after the reporting update ships.'**
+  String get dashboardRangeUnavailable;
+
+  /// RF-REPORT-004 KPI trend delta suffix for the Yesterday range (vs the day before). percent is the absolute integer percentage change.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs day before'**
+  String dashboardDeltaVsDayBefore(int percent);
+
+  /// RF-REPORT-004 KPI trend delta suffix for the Last 7 days range. percent is the absolute integer percentage change.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs previous 7 days'**
+  String dashboardDeltaVsPrev7(int percent);
+
+  /// RF-REPORT-004 KPI trend delta suffix for the Last 30 days range. percent is the absolute integer percentage change.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% vs previous 30 days'**
+  String dashboardDeltaVsPrev30(int percent);
+
+  /// RF-REPORT-004 Shift & cash pill: count of shifts closed in the selected (non-today) range.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} closed'**
+  String dashboardShiftClosedInRange(int count);
+
+  /// RF-REPORT-004 Shift & cash calm empty state for a non-today range with no closed shifts.
+  ///
+  /// In en, this message translates to:
+  /// **'No closed shifts in this range.'**
+  String get dashboardShiftNoneRange;
+
+  /// RF-REPORT-004 Shift & cash: who opened the shift.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened by {name}'**
+  String dashboardShiftOpenedBy(String name);
+
+  /// RF-REPORT-004 Shift & cash per-shift detail: total collected (all tenders) in the shift.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get dashboardShiftCollected;
+
+  /// RF-REPORT-004 Shift & cash per-shift detail label: shift duration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get dashboardShiftDurationLabel;
+
+  /// RF-REPORT-004 shift duration formatted as hours and minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h {minutes}m'**
+  String dashboardShiftDurationValue(int hours, int minutes);
+
+  /// RF-REPORT-004 collapsible header for the remaining closed shifts in the range (beyond the last one shown in detail).
+  ///
+  /// In en, this message translates to:
+  /// **'Recent shifts ({count})'**
+  String dashboardShiftRecentTitle(int count);
+
   /// Honest real-mode Users tab state: no member read API exists yet, so no list is shown.
   ///
   /// In en, this message translates to:
@@ -4047,6 +4137,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Leave blank to keep the current prefix'**
   String get dashboardSettingsReceiptPrefixHint;
+
+  /// RF-REPORT-004: label for the branch timezone picker in Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch timezone'**
+  String get dashboardSettingsTimezoneLabel;
+
+  /// RF-REPORT-004: hint under the branch timezone picker explaining its effect on reporting.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for reporting (sales-by-hour, daily totals). Israel is Asia/Jerusalem.'**
+  String get dashboardSettingsTimezoneHint;
+
+  /// RF-REPORT-004: the branch timezone picker option that leaves the current zone unchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave unchanged'**
+  String get dashboardSettingsTimezoneKeep;
 
   /// RF-116: note that currency stays locked to ILS and is not editable.
   ///

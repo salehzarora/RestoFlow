@@ -52,11 +52,15 @@ abstract interface class SettingsRepository {
   Future<SettingsPrefill?> readPrefill();
 
   /// Writes the branch display name (+ optional receipt prefix; blank = leave
-  /// unchanged). [status] preserves the branch's current status.
+  /// unchanged). [status] preserves the branch's current status. [timezone] is an
+  /// IANA zone to set (e.g. `Asia/Jerusalem`) or null to leave it unchanged —
+  /// correcting it fixes reporting's branch-local hour/day bucketing
+  /// (RF-REPORT-004).
   Future<SettingsWrite> saveBranch({
     required String name,
     String? receiptPrefix,
     required String status,
+    String? timezone,
   });
 
   /// Writes the restaurant display name. [status] preserves the current status.
@@ -128,6 +132,7 @@ class SupabaseSettingsRepository implements SettingsRepository {
     required String name,
     String? receiptPrefix,
     required String status,
+    String? timezone,
   }) async {
     final Object? raw;
     try {
@@ -136,15 +141,18 @@ class SupabaseSettingsRepository implements SettingsRepository {
           name,
           receiptPrefix ?? '',
           status,
+          timezone ?? '',
         ]),
         'p_organization_id': organizationId,
         'p_restaurant_id': restaurantId,
         'p_branch_id': branchId,
         'p_name': name,
-        // A NULL text param leaves the field unchanged (address/timezone are not
-        // edited from this surface; a blank receipt prefix leaves it unchanged).
+        // A NULL text param leaves the field unchanged (address is not edited
+        // here; a blank receipt prefix / unset timezone leaves it unchanged).
+        // RF-REPORT-004: a non-null timezone corrects the branch-local reporting
+        // bucketing (the server validates it against pg_timezone_names).
         'p_address': null,
-        'p_timezone': null,
+        'p_timezone': timezone,
         'p_receipt_prefix': receiptPrefix,
         'p_status': status,
       });

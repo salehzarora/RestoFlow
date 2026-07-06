@@ -189,4 +189,54 @@ void main() {
       expect(report.paymentMethods, isEmpty);
     });
   });
+
+  // RF-REPORT-004 — deterministic demo range reports.
+  group('demoRangeReport', () {
+    test('today delegates to the detailed report (branches / top items)', () {
+      final r = demoRangeReport(ReportRange.today);
+      expect(r.range, ReportRange.today);
+      expect(r.rangeSupported, isTrue);
+      expect(r.netSalesMinor, 62000); // same as the detailed demo day
+      expect(r.branches, isNotEmpty);
+      expect(r.hourlyNetSales, isNotEmpty); // single day -> curve present
+    });
+
+    test('yesterday: single-day -> hourly present and reconciles with net', () {
+      final r = demoRangeReport(ReportRange.yesterday);
+      expect(r.range, ReportRange.yesterday);
+      expect(r.netSalesMinor, 56800); // matches the today-report prior period
+      expect(r.hourlyNetSales, isNotEmpty);
+      final hourlySum = r.hourlyNetSales.fold<int>(
+        0,
+        (s, h) => s + h.netSalesMinor,
+      );
+      expect(hourlySum, r.netSalesMinor); // exact integer reconciliation
+      expect(r.comparison, isNotNull); // vs the day before
+    });
+
+    test('last7: multi-day -> NO hourly curve, but a prior-7 comparison', () {
+      final r = demoRangeReport(ReportRange.last7);
+      expect(r.range, ReportRange.last7);
+      expect(r.hourlyNetSales, isEmpty); // multi-day: chart hides
+      expect(r.comparison, isNotNull);
+      expect(r.netSalesMinor, greaterThan(62000)); // a week sums above one day
+      // Deep shift card populated with per-shift detail.
+      expect(r.shiftCash, isNotNull);
+      expect(r.shiftCash!.closedShiftCount, 7);
+      expect(r.shiftCash!.lastClosedShift!.hasDetail, isTrue);
+      expect(r.shiftCash!.recentClosedShifts.length, 7);
+    });
+
+    test('last30: multi-day, 30 closed shifts, deterministic + integer', () {
+      final a = demoRangeReport(ReportRange.last30);
+      final b = demoRangeReport(ReportRange.last30);
+      expect(a.hourlyNetSales, isEmpty);
+      expect(a.shiftCash!.closedShiftCount, 30);
+      expect(a.shiftCash!.recentClosedShifts.length, 8); // list capped at 8
+      // Deterministic (no clock / randomness).
+      expect(a.netSalesMinor, b.netSalesMinor);
+      expect(a.cashSalesMinor, b.cashSalesMinor);
+      expect(a.shiftCash!.varianceMinor, b.shiftCash!.varianceMinor);
+    });
+  });
 }

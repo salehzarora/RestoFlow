@@ -38,11 +38,66 @@ class DashboardHomeScreen extends ConsumerWidget {
     // already provides the persistent chrome); the refresh action rides the
     // report header so it stays on the page.
     return Scaffold(
-      body: reportAsync.when(
-        data: (report) =>
-            _ReportContent(report: report, isDemo: isDemo, onRefresh: refresh),
-        loading: () => const _LoadingState(),
-        error: (_, _) => _ErrorState(onRetry: refresh),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _RangeFilterBar(),
+          Expanded(
+            child: reportAsync.when(
+              data: (report) => _ReportContent(
+                report: report,
+                isDemo: isDemo,
+                onRefresh: refresh,
+              ),
+              loading: () => const _LoadingState(),
+              error: (_, _) => _ErrorState(onRetry: refresh),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// RF-REPORT-004 — the reporting range filter (Today / Yesterday / Last 7 days /
+/// Last 30 days). Selecting a chip writes [reportRangeProvider]; the report
+/// provider watches it and reloads for the new window. Rendered ABOVE the
+/// loading/error/data states so the range can be changed at any time. The chip
+/// labels are localized; the Wrap keeps it responsive + RTL-correct.
+class _RangeFilterBar extends ConsumerWidget {
+  const _RangeFilterBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final selected = ref.watch(reportRangeProvider);
+    String labelFor(ReportRange r) => switch (r) {
+      ReportRange.today => l10n.dashboardRangeToday,
+      ReportRange.yesterday => l10n.dashboardRangeYesterday,
+      ReportRange.last7 => l10n.dashboardRangeLast7,
+      ReportRange.last30 => l10n.dashboardRangeLast30,
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        RestoflowSpacing.lg,
+        RestoflowSpacing.md,
+        RestoflowSpacing.lg,
+        0,
+      ),
+      child: Wrap(
+        key: const Key('reports-range-filter'),
+        spacing: RestoflowSpacing.sm,
+        runSpacing: RestoflowSpacing.xs,
+        children: [
+          for (final r in ReportRange.values)
+            ChoiceChip(
+              key: Key('range-chip-${r.wire}'),
+              label: Text(labelFor(r)),
+              selected: selected == r,
+              onSelected: (_) =>
+                  ref.read(reportRangeProvider.notifier).state = r,
+            ),
+        ],
       ),
     );
   }
@@ -73,16 +128,23 @@ class _ReportContent extends StatelessWidget {
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
 
-    // DESIGN-002: a trend delta vs the prior period, when one exists — demo, or
-    // the live-limited "vs yesterday" derived from sales_summary (LIVE-UX-001).
-    // A null comparison shows no delta (never invented). Integer percentage math
-    // only (never floating-point).
+    // DESIGN-002 / RF-REPORT-004: a trend delta vs the prior EQUIVALENT period,
+    // when one exists — demo, the live-limited "vs yesterday" (LIVE-UX-001), or
+    // the range's prior window (owner_report_range). The label matches the
+    // selected range; a null comparison shows no delta (never invented). Integer
+    // percentage math only (never floating-point).
+    String deltaLabel(int pct) => switch (report.range) {
+      ReportRange.today => l10n.dashboardDeltaVsYesterday(pct),
+      ReportRange.yesterday => l10n.dashboardDeltaVsDayBefore(pct),
+      ReportRange.last7 => l10n.dashboardDeltaVsPrev7(pct),
+      ReportRange.last30 => l10n.dashboardDeltaVsPrev30(pct),
+    };
     final comparison = report.comparison;
     RestoflowMetricDelta? deltaOf(int current, int? prior) {
       final pct = deltaPercent(current, prior);
       if (pct == null) return null;
       return RestoflowMetricDelta(
-        label: l10n.dashboardDeltaVsYesterday(pct.abs()),
+        label: deltaLabel(pct.abs()),
         positive: pct >= 0,
       );
     }
@@ -111,6 +173,22 @@ class _ReportContent extends StatelessWidget {
             tone: RestoflowTone.warning,
           );
 
+    // RF-REPORT-004: the selected range could not be served (owner_report_range
+    // not deployed yet and the range isn't today). Show an honest note — never
+    // today's data mislabelled, never fabricated figures.
+    if (!report.rangeSupported) {
+      return ListView(
+        padding: const EdgeInsets.all(RestoflowSpacing.lg),
+        children: [
+          banner,
+          const SizedBox(height: RestoflowSpacing.lg),
+          header,
+          const SizedBox(height: RestoflowSpacing.xl),
+          const _RangeUnavailable(),
+        ],
+      );
+    }
+
     if (report.isEmpty) {
       return ListView(
         padding: const EdgeInsets.all(RestoflowSpacing.lg),
@@ -135,7 +213,11 @@ class _ReportContent extends StatelessWidget {
       ),
       RestoflowMetricCard(
         key: const Key('kpi-net-sales'),
-        label: l10n.dashboardTodaySales,
+        // "Today's sales" only reads right for today; other ranges use the
+        // range-neutral "Net sales".
+        label: report.range == ReportRange.today
+            ? l10n.dashboardTodaySales
+            : l10n.dashboardNetSales,
         value: money(report.netSalesMinor),
         icon: Icons.payments_outlined,
         delta: deltaOf(report.netSalesMinor, comparison?.netSalesMinor),
@@ -349,7 +431,11 @@ class _ReportContent extends StatelessWidget {
       summary,
       payment,
       if (shiftCash != null)
-        _ShiftCashCard(shiftCash: shiftCash, currencyCode: report.currencyCode),
+        _ShiftCashCard(
+          shiftCash: shiftCash,
+          currencyCode: report.currencyCode,
+          range: report.range,
+        ),
     ];
     final rightSections = <Widget>[
       if (report.branches.isNotEmpty) branches,
@@ -422,10 +508,18 @@ List<Widget> _verticallySpaced(List<Widget> items) => [
 /// closed shift. Money is integer-minor formatted here; variance is tinted calmly
 /// (never a dramatic red). A day with no closed shifts shows a calm empty state.
 class _ShiftCashCard extends StatelessWidget {
-  const _ShiftCashCard({required this.shiftCash, required this.currencyCode});
+  const _ShiftCashCard({
+    required this.shiftCash,
+    required this.currencyCode,
+    required this.range,
+  });
 
   final ShiftCash shiftCash;
   final String currencyCode;
+
+  /// RF-REPORT-004 — the selected range, so the "closed" count reads "closed
+  /// today" for today and range-neutral "closed" otherwise.
+  final ReportRange range;
 
   @override
   Widget build(BuildContext context) {
@@ -434,6 +528,18 @@ class _ShiftCashCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     String money(int m) => MoneyFormatter.formatMinor(m, currencyCode);
     final last = shiftCash.lastClosedShift;
+    // RF-REPORT-004: the additional closed shifts beyond the one shown in detail.
+    // Exclude the last-closed by SHIFT ID (not positionally) so a payload whose
+    // last_closed_shift is null/absent while recent_closed_shifts is non-empty
+    // still shows ALL recent shifts rather than silently dropping the first one.
+    final more = last == null
+        ? shiftCash.recentClosedShifts
+        : shiftCash.recentClosedShifts
+              .where((s) => s.shiftId != last.shiftId)
+              .toList(growable: false);
+    final closedLabel = range == ReportRange.today
+        ? l10n.dashboardShiftClosedToday(shiftCash.closedShiftCount)
+        : l10n.dashboardShiftClosedInRange(shiftCash.closedShiftCount);
 
     return RestoflowSectionCard(
       key: const Key('shift-cash-card'),
@@ -444,10 +550,7 @@ class _ShiftCashCard extends StatelessWidget {
           spacing: RestoflowSpacing.sm,
           runSpacing: RestoflowSpacing.xs,
           children: [
-            RestoflowStatusPill(
-              label: l10n.dashboardShiftClosedToday(shiftCash.closedShiftCount),
-              tone: RestoflowTone.info,
-            ),
+            RestoflowStatusPill(label: closedLabel, tone: RestoflowTone.info),
             RestoflowStatusPill(
               label: l10n.dashboardShiftOpenNow(shiftCash.openShiftCount),
               tone: RestoflowTone.neutral,
@@ -457,7 +560,9 @@ class _ShiftCashCard extends StatelessWidget {
         if (!shiftCash.hasClosedShifts) ...[
           const SizedBox(height: RestoflowSpacing.md),
           Text(
-            l10n.dashboardShiftNoneToday,
+            range == ReportRange.today
+                ? l10n.dashboardShiftNoneToday
+                : l10n.dashboardShiftNoneRange,
             key: const Key('shift-cash-empty'),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurfaceVariant,
@@ -480,6 +585,10 @@ class _ShiftCashCard extends StatelessWidget {
           if (last != null) ...[
             const Divider(height: RestoflowSpacing.xl),
             _LastClosedShift(shift: last, currencyCode: currencyCode),
+          ],
+          if (more.isNotEmpty) ...[
+            const SizedBox(height: RestoflowSpacing.sm),
+            _RecentShiftsList(shifts: more, currencyCode: currencyCode),
           ],
         ],
       ],
@@ -528,7 +637,10 @@ class _VarianceRow extends StatelessWidget {
 }
 
 /// A compact summary of the most recent closed shift: which branch + when, who
-/// closed it, and its own cash variance (tinted calmly).
+/// opened/closed it, the RF-REPORT-004 per-shift detail (opening float, duration,
+/// orders / collected / cash) when available, and its own cash variance (tinted
+/// calmly). The detail rows only render when sourced (owner_report_range), so the
+/// today-only fallback shows just branch/time/closed-by/variance.
 class _LastClosedShift extends StatelessWidget {
   const _LastClosedShift({required this.shift, required this.currencyCode});
 
@@ -558,6 +670,13 @@ class _LastClosedShift extends StatelessWidget {
           const SizedBox(height: RestoflowSpacing.xxs),
           Text(subtitle, style: theme.textTheme.bodyMedium),
         ],
+        if (shift.openedByName != null && shift.openedByName!.isNotEmpty)
+          Text(
+            l10n.dashboardShiftOpenedBy(shift.openedByName!),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
         if (shift.closedByName.isNotEmpty)
           Text(
             l10n.dashboardShiftClosedBy(shift.closedByName),
@@ -565,6 +684,10 @@ class _LastClosedShift extends StatelessWidget {
               color: scheme.onSurfaceVariant,
             ),
           ),
+        if (shift.hasDetail) ...[
+          const SizedBox(height: RestoflowSpacing.xs),
+          _ShiftDetailChips(shift: shift, currencyCode: currencyCode),
+        ],
         const SizedBox(height: RestoflowSpacing.xs),
         _VarianceRow(
           label: l10n.dashboardCashVariance,
@@ -574,6 +697,179 @@ class _LastClosedShift extends StatelessWidget {
       ],
     );
   }
+}
+
+/// RF-REPORT-004 — a compact Wrap of the per-shift detail (opening float,
+/// duration, order count, collected, cash sales), each rendered only when its
+/// value is present. Muted "Label value" pieces so the card stays readable and
+/// RTL-correct without a heavy table.
+class _ShiftDetailChips extends StatelessWidget {
+  const _ShiftDetailChips({required this.shift, required this.currencyCode});
+
+  final ClosedShiftSummary shift;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    String money(int m) => MoneyFormatter.formatMinor(m, currencyCode);
+    final pieces = <String>[
+      if (shift.orderCount != null)
+        '${l10n.dashboardOrders}: ${shift.orderCount}',
+      if (shift.collectedMinor != null)
+        '${l10n.dashboardShiftCollected}: ${money(shift.collectedMinor!)}',
+      if (shift.cashSalesMinor != null)
+        '${l10n.dashboardCashSales}: ${money(shift.cashSalesMinor!)}',
+      if (shift.openingFloatMinor != null)
+        '${l10n.dashboardOpeningFloat}: ${money(shift.openingFloatMinor!)}',
+      if (shift.durationMinutes != null)
+        '${l10n.dashboardShiftDurationLabel}: '
+            '${_shiftDurationText(l10n, shift.durationMinutes!)}',
+    ];
+    if (pieces.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: RestoflowSpacing.md,
+      runSpacing: RestoflowSpacing.xxs,
+      children: [
+        for (final p in pieces)
+          Text(
+            p,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// RF-REPORT-004 — the remaining closed shifts in the range (beyond the one shown
+/// in detail), inside a collapsible section so the card is not overloaded. Each
+/// row is a compact branch · time · variance line with the per-shift detail
+/// beneath it (when available).
+class _RecentShiftsList extends StatelessWidget {
+  const _RecentShiftsList({required this.shifts, required this.currencyCode});
+
+  final List<ClosedShiftSummary> shifts;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Theme(
+      // Drop the default ExpansionTile dividers so it reads as part of the card.
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        key: const Key('shift-cash-recent'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        title: Text(
+          l10n.dashboardShiftRecentTitle(shifts.length),
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        children: [
+          for (final s in shifts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
+              child: _RecentShiftTile(shift: s, currencyCode: currencyCode),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One row in the recent-shifts list: branch · closed time on the leading side,
+/// a calmly-tinted variance on the trailing side, and the per-shift detail
+/// beneath (when sourced).
+class _RecentShiftTile extends StatelessWidget {
+  const _RecentShiftTile({required this.shift, required this.currencyCode});
+
+  final ClosedShiftSummary shift;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tone = shift.varianceMinor == 0
+        ? RestoflowTone.neutral
+        : (shift.varianceMinor > 0
+              ? RestoflowTone.success
+              : RestoflowTone.warning);
+    final title = [
+      if (shift.branchName.isNotEmpty) shift.branchName,
+      if (shift.closedAtLabel.isNotEmpty) shift.closedAtLabel,
+    ].join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(title, style: theme.textTheme.bodyMedium)),
+            Text(
+              MoneyFormatter.formatMinor(shift.varianceMinor, currencyCode),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: shift.varianceMinor == 0
+                    ? theme.colorScheme.onSurface
+                    : tone.styleOf(theme).accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        if (shift.hasDetail) ...[
+          const SizedBox(height: RestoflowSpacing.xxs),
+          _ShiftDetailChips(shift: shift, currencyCode: currencyCode),
+        ],
+      ],
+    );
+  }
+}
+
+/// RF-REPORT-004 — the honest "this range isn't available yet" panel shown in
+/// live mode when owner_report_range isn't deployed and the range isn't today
+/// (the range chips stay visible above so the owner can switch back).
+class _RangeUnavailable extends StatelessWidget {
+  const _RangeUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return RestoflowStateView(
+      key: const Key('reports-range-unavailable'),
+      icon: Icons.event_busy_outlined,
+      message: l10n.dashboardRangeUnavailable,
+    );
+  }
+}
+
+/// The header subtitle for a non-today range: the range label plus its
+/// branch-local start→end window when known (single-day windows collapse to one
+/// date). Plain data strings — the range label is localized chrome.
+String _rangeSubtitle(AppLocalizations l10n, DashboardReport report) {
+  final label = switch (report.range) {
+    ReportRange.today => l10n.dashboardRangeToday,
+    ReportRange.yesterday => l10n.dashboardRangeYesterday,
+    ReportRange.last7 => l10n.dashboardRangeLast7,
+    ReportRange.last30 => l10n.dashboardRangeLast30,
+  };
+  final start = report.rangeStartLabel;
+  final end = report.rangeEndLabel;
+  if (start != null && end != null && start.isNotEmpty && end.isNotEmpty) {
+    return start == end ? '$label · $end' : '$label · $start → $end';
+  }
+  return label;
+}
+
+/// Formats a whole-minute shift duration as a localized "Xh Ym" data string.
+String _shiftDurationText(AppLocalizations l10n, int minutes) {
+  final safe = minutes < 0 ? 0 : minutes;
+  return l10n.dashboardShiftDurationValue(safe ~/ 60, safe % 60);
 }
 
 /// The reports page header. DESIGN-002: consolidated onto the shared
@@ -594,8 +890,11 @@ class _ReportHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final dayText =
-        '${l10n.dashboardReportDayLabel}: ${report.businessDateLabel}';
+    // Today keeps the pinned "Report day: <date>" subtitle; other ranges show
+    // the range label + its branch-local start→end window when known.
+    final dayText = report.range == ReportRange.today
+        ? '${l10n.dashboardReportDayLabel}: ${report.businessDateLabel}'
+        : _rangeSubtitle(l10n, report);
     // The Key stays on the header so find.byKey('reports-heading') matches, and
     // the title/subtitle keep the pinned 'Owner reports' / 'Report day: …'
     // strings.

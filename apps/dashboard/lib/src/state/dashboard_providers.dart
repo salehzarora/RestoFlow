@@ -46,10 +46,18 @@ final ownerReportsRepositoryProvider = Provider<OwnerReportsRepository>((ref) {
   );
 }, dependencies: [dashboardMembershipProvider, dashboardAuthTransportProvider]);
 
-/// The owner dashboard report, loaded asynchronously through the repository so
-/// the UI has loading / error / empty states. Refresh by invalidating it
-/// (`ref.invalidate(dashboardReportProvider)`), which re-runs `loadReport`.
-final dashboardReportProvider = FutureProvider<DashboardReport>(
-  (ref) => ref.watch(ownerReportsRepositoryProvider).loadReport(),
-  dependencies: [ownerReportsRepositoryProvider],
+/// The selected reporting date range (RF-REPORT-004). The Overview's range chips
+/// write this; the report provider watches it, so changing the range re-runs
+/// `loadReport` for the new window. Defaults to today.
+final reportRangeProvider = StateProvider<ReportRange>(
+  (ref) => ReportRange.today,
 );
+
+/// The owner dashboard report, loaded asynchronously through the repository so
+/// the UI has loading / error / empty states. Reloads when the selected
+/// [reportRangeProvider] changes; refresh by invalidating it
+/// (`ref.invalidate(dashboardReportProvider)`), which re-runs `loadReport`.
+final dashboardReportProvider = FutureProvider<DashboardReport>((ref) {
+  final range = ref.watch(reportRangeProvider);
+  return ref.watch(ownerReportsRepositoryProvider).loadReport(range: range);
+}, dependencies: [ownerReportsRepositoryProvider, reportRangeProvider]);

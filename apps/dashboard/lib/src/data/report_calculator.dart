@@ -8,8 +8,13 @@ library;
 import 'demo_report.dart';
 import 'owner_report_source.dart';
 
-/// Computes the owner [DashboardReport] for [data].
-DashboardReport computeOwnerReport(OwnerReportDataset data) {
+/// Computes the owner [DashboardReport] for [data] over [range]. The dataset is
+/// a single computed period; [range] only labels the report and gates the hourly
+/// curve (single-day ranges carry it, multi-day ranges never do).
+DashboardReport computeOwnerReport(
+  OwnerReportDataset data, {
+  ReportRange range = ReportRange.today,
+}) {
   final currency = data.currencyCode;
 
   // Sales = every order except voided/cancelled.
@@ -114,9 +119,10 @@ DashboardReport computeOwnerReport(OwnerReportDataset data) {
     // prior-period summary straight through. Both are empty/null in real mode,
     // so the Overview's chart and deltas simply don't render there — the money
     // totals above are unaffected (still derived from `orders`).
-    hourlyNetSales: data.hourlyNetSales,
+    hourlyNetSales: range.isSingleDay ? data.hourlyNetSales : const [],
     comparison: data.priorPeriod,
     shiftCash: demoShiftCash,
+    range: range,
   );
 }
 
@@ -212,3 +218,191 @@ List<PaymentMethodLine> _paymentMethods(
 /// hardcoded snapshot.
 DashboardReport demoDashboardReport() =>
     computeOwnerReport(demoOwnerReportDataset());
+
+// ===========================================================================
+// RF-REPORT-004 — DEMO range reports. Demo data is explicitly illustrative (the
+// Overview shows a "Demo data" banner), so these deterministic, clock-free
+// per-day figures are honest demo content — never "fake real analytics". They
+// exercise the range chips + prior-period comparison + deeper shift card in demo
+// mode. Money is integer MINOR units (D-007); the only division is integer.
+// ===========================================================================
+
+/// Deterministic demo net / cash / order figures for `dayOffset` days ago
+/// (0 = today). Day 0 and 1 match the detailed today report + its "yesterday"
+/// prior, so today/last7/last30 stay coherent; older days follow a fixed
+/// pseudo-seasonal pattern (weekend lift). Pure — no clock, no randomness.
+({int netMinor, int cashMinor, int orders}) _demoDay(int dayOffset) {
+  if (dayOffset <= 0) return (netMinor: 62000, cashMinor: 47400, orders: 7);
+  if (dayOffset == 1) return (netMinor: 56800, cashMinor: 44100, orders: 6);
+  final weekday = dayOffset % 7;
+  final base = 48000 + 1700 * ((dayOffset * 3) % 12);
+  final weekendLift = (weekday == 5 || weekday == 6) ? 12000 : 0;
+  final net = base + weekendLift;
+  final cash = net * 3 ~/ 5; // ~60% cash, integer (truncating) — never float
+  final orders = 5 + (dayOffset * 2) % 9;
+  return (netMinor: net, cashMinor: cash, orders: orders);
+}
+
+/// The demo day's illustrative net-by-hour shape (sums to 62000 minor); index 9
+/// (19:00) is the peak the exact-sum remainder is folded into.
+const List<int> _demoHourShape = <int>[
+  1200,
+  2900,
+  6800,
+  9200,
+  4600,
+  2500,
+  2000,
+  3300,
+  7400,
+  10100,
+  7800,
+  4200,
+];
+const List<String> _demoHourLabels = <String>[
+  '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', //
+  '16:00', '17:00', '18:00', '19:00', '20:00', '21:00',
+];
+
+/// Scales the demo hour shape to sum EXACTLY to [target] minor (integer division
+/// with the remainder folded into the peak bucket), so a single-day range's
+/// hourly curve reconciles with its net. Empty when [target] is zero.
+List<HourlyNetSales> _demoHourlyScaled(int target) {
+  if (target <= 0) return const [];
+  const total = 62000;
+  final scaled = [for (final v in _demoHourShape) v * target ~/ total];
+  final sum = scaled.fold<int>(0, (a, b) => a + b);
+  scaled[9] += target - sum; // exact reconciliation into the peak hour
+  return [
+    for (var i = 0; i < scaled.length; i++)
+      HourlyNetSales(hourLabel: _demoHourLabels[i], netSalesMinor: scaled[i]),
+  ];
+}
+
+/// A deep demo shift/cash block for [range]: one closed shift per day in the
+/// window (newest first, capped at 8 for the list; aggregates over the full
+/// window), each with opening float, opened/closed-by, duration and the FK-style
+/// per-shift order/collected/cash detail — showcasing the RF-REPORT-004 card.
+ShiftCash _demoRangeShiftCash(ReportRange range) {
+  final startOffset = range == ReportRange.yesterday ? 1 : 0;
+  final days = switch (range) {
+    ReportRange.yesterday => 1,
+    ReportRange.last7 => 7,
+    ReportRange.last30 => 30,
+    ReportRange.today => 1,
+  };
+  const floatMinor = 50000; // ₪500 opening float
+  ClosedShiftSummary shiftFor(int offset) {
+    final day = _demoDay(offset);
+    final expected = floatMinor + day.cashMinor;
+    final variance = (offset % 3 - 1) * 250; // -250 / 0 / +250, deterministic
+    return ClosedShiftSummary(
+      shiftId: 'demo-shift-$offset',
+      branchName: offset.isEven ? 'Downtown' : 'Seaside',
+      openedAtLabel: '09:00',
+      closedAtLabel: '18:30',
+      openedByName: 'Amira K.',
+      closedByName: offset.isEven ? 'Amira K.' : 'Yusuf D.',
+      openingFloatMinor: floatMinor,
+      durationMinutes: 570, // 09:00 -> 18:30
+      orderCount: day.orders,
+      collectedMinor: day.netMinor,
+      cashSalesMinor: day.cashMinor,
+      expectedCashMinor: expected,
+      countedCashMinor: expected + variance,
+      varianceMinor: variance,
+    );
+  }
+
+  var expectedTotal = 0;
+  var countedTotal = 0;
+  for (var i = 0; i < days; i++) {
+    final s = shiftFor(startOffset + i);
+    expectedTotal += s.expectedCashMinor;
+    countedTotal += s.countedCashMinor;
+  }
+  final recent = [
+    for (var i = 0; i < (days < 8 ? days : 8); i++) shiftFor(startOffset + i),
+  ];
+  return ShiftCash(
+    closedShiftCount: days,
+    openShiftCount: 1,
+    expectedCashMinor: expectedTotal,
+    countedCashMinor: countedTotal,
+    varianceMinor: countedTotal - expectedTotal,
+    lastClosedShift: recent.isEmpty ? null : recent.first,
+    recentClosedShifts: recent,
+  );
+}
+
+/// The demo owner report for a chosen [range]. `today` returns the full detailed
+/// report (branches / top items / recent orders); the other ranges return an
+/// aggregate report (KPIs + comparison + hourly for single-day + the deep shift
+/// card) with the detail sections empty (the UI hides them). Deterministic.
+DashboardReport demoRangeReport(ReportRange range) {
+  if (range == ReportRange.today) {
+    return computeOwnerReport(demoOwnerReportDataset(), range: range);
+  }
+  const currency = kDemoCurrencyCode;
+  final (int curStart, int curEnd) = switch (range) {
+    ReportRange.yesterday => (1, 1),
+    ReportRange.last7 => (0, 6),
+    ReportRange.last30 => (0, 29),
+    ReportRange.today => (0, 0),
+  };
+  final span = curEnd - curStart + 1;
+  var net = 0, cash = 0, orders = 0;
+  for (var d = curStart; d <= curEnd; d++) {
+    final x = _demoDay(d);
+    net += x.netMinor;
+    cash += x.cashMinor;
+    orders += x.orders;
+  }
+  var priorNet = 0, priorCash = 0, priorOrders = 0;
+  for (var d = curEnd + 1; d <= curEnd + span; d++) {
+    final x = _demoDay(d);
+    priorNet += x.netMinor;
+    priorCash += x.cashMinor;
+    priorOrders += x.orders;
+  }
+  return DashboardReport(
+    currencyCode: currency,
+    businessDateLabel: '',
+    grossSalesMinor: net, // demo has no discount engine; gross == net
+    netSalesMinor: net,
+    discountTotalMinor: 0,
+    collectedMinor: cash,
+    cashSalesMinor: cash,
+    lastCashPaymentMinor: 0,
+    orderCount: orders,
+    completedOrderCount: orders,
+    openOrderCount: 0,
+    unpaidOrderCount: 0,
+    voidCount: 0,
+    voidTotalMinor: 0,
+    openingFloatMinor: 0,
+    expectedCashMinor: 0,
+    countedCashMinor: 0,
+    shiftStatus: 'closed',
+    branches: const [],
+    topItems: const [],
+    recentOrders: const [],
+    paymentMethods: [
+      PaymentMethodLine(
+        method: 'cash',
+        count: orders,
+        totalMinor: cash,
+        currencyCode: currency,
+      ),
+    ],
+    hourlyNetSales: _demoHourlyScaled(range.isSingleDay ? net : 0),
+    comparison: ReportComparison(
+      grossSalesMinor: priorNet,
+      netSalesMinor: priorNet,
+      orderCount: priorOrders,
+      cashSalesMinor: priorCash,
+    ),
+    shiftCash: _demoRangeShiftCash(range),
+    range: range,
+  );
+}

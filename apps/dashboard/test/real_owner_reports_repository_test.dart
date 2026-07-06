@@ -12,14 +12,28 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 /// breakdown, prior-day deltas; fail-closed with no transport/scope or on a
 /// rejected/failed RPC; NO fabricated hourly/branch/shift data in real mode.
 class _FakeTransport implements SyncRpcTransport {
-  _FakeTransport(this._handler);
+  _FakeTransport(this._handler, {this.rangeMissing = true});
 
   final Object? Function(String function, Map<String, dynamic> params) _handler;
+
+  /// RF-REPORT-004: by default the new `owner_report_range` RPC is treated as NOT
+  /// DEPLOYED (PGRST202), so the repo degrades to `owner_daily_report` — the path
+  /// these owner_daily_report/sales_summary tests exercise. Set false to drive
+  /// the deployed range RPC directly (the range mapping tests below).
+  final bool rangeMissing;
+
   String? lastFunction;
   Map<String, dynamic>? lastParams;
 
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    if (rangeMissing && function == 'owner_report_range') {
+      throw const SyncTransportException(
+        SyncTransportErrorKind.server,
+        code: 'PGRST202',
+        message: 'Could not find the function public.owner_report_range',
+      );
+    }
     lastFunction = function;
     lastParams = params;
     return _handler(function, params);
@@ -729,5 +743,201 @@ void main() {
     ).loadReport();
 
     expect(report.shiftCash, isNull);
+  });
+
+  // --- RF-REPORT-004: owner_report_range (ranges + comparison + deep shift) ----
+
+  Map<String, dynamic> rangePayload() => <String, dynamic>{
+    'ok': true,
+    'entity': 'owner_report_range',
+    'currency_code': 'ILS',
+    'range': 'last7',
+    'range_start': '2026-06-30',
+    'range_end': '2026-07-06',
+    'current': <String, dynamic>{
+      'order_count': 20,
+      'completed_count': 18,
+      'open_count': 2,
+      'unpaid_count': 1,
+      'gross_minor': 50000,
+      'discount_minor': 1000,
+      'net_minor': 49000,
+      'void_count': 1,
+      'void_total_minor': 3000,
+      'collected_minor': 40000,
+      'cash_minor': 25000,
+      'last_cash_payment_minor': 500,
+      'tenders': <Map<String, dynamic>>[
+        {'method': 'cash', 'count': 10, 'total_minor': 25000},
+        {'method': 'card', 'count': 8, 'total_minor': 15000},
+      ],
+    },
+    'comparison': <String, dynamic>{
+      'order_count': 15,
+      'gross_minor': 42000,
+      'net_minor': 41000,
+      'cash_minor': 20000,
+      'collected_minor': 35000,
+    },
+    'hourly': <dynamic>[], // multi-day range: no curve
+    'shift_cash': <String, dynamic>{
+      'closed_shift_count': 3,
+      'open_shift_count': 1,
+      'expected_cash_minor': 9000,
+      'counted_cash_minor': 8950,
+      'cash_variance_minor': -50,
+      'last_closed_shift': <String, dynamic>{
+        'shift_id': 's3',
+        'branch_id': 'b1',
+        'branch_name': 'Main',
+        'opened_at': '2026-07-06 09:00',
+        'closed_at': '2026-07-06 18:00',
+        'opened_by_name': 'Yara N.',
+        'closed_by_name': 'Amira K.',
+        'opening_float_minor': 5000,
+        'duration_minutes': 540,
+        'order_count': 12,
+        'collected_minor': 18000,
+        'cash_sales_minor': 9000,
+        'expected_cash_minor': 3000,
+        'counted_cash_minor': 2980,
+        'cash_variance_minor': -20,
+      },
+      'recent_closed_shifts': <Map<String, dynamic>>[
+        {
+          'shift_id': 's3',
+          'branch_name': 'Main',
+          'closed_at': '2026-07-06 18:00',
+          'opened_by_name': 'Yara N.',
+          'closed_by_name': 'Amira K.',
+          'opening_float_minor': 5000,
+          'duration_minutes': 540,
+          'order_count': 12,
+          'collected_minor': 18000,
+          'cash_sales_minor': 9000,
+          'expected_cash_minor': 3000,
+          'counted_cash_minor': 2980,
+          'cash_variance_minor': -20,
+        },
+      ],
+    },
+  };
+
+  test('RF-REPORT-004: owner_report_range payload maps into DashboardReport '
+      '(range echoed, current + prior comparison + deep per-shift detail, '
+      'integer minor)', () async {
+    final transport = _FakeTransport(
+      (_, _) => rangePayload(),
+      rangeMissing: false,
+    );
+    final repo = RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    );
+
+    final report = await repo.loadReport(range: ReportRange.last7);
+
+    // Calls the RANGE RPC with the scope + the range wire value.
+    expect(transport.lastFunction, 'owner_report_range');
+    expect(transport.lastParams, {
+      'p_organization_id': 'org-1',
+      'p_restaurant_id': 'rest-1',
+      'p_branch_id': 'branch-1',
+      'p_range': 'last7',
+    });
+
+    expect(report.range, ReportRange.last7);
+    expect(report.rangeSupported, isTrue);
+    expect(report.rangeStartLabel, '2026-06-30');
+    expect(report.rangeEndLabel, '2026-07-06');
+    // Current window.
+    expect(report.grossSalesMinor, 50000);
+    expect(report.netSalesMinor, 49000);
+    expect(report.orderCount, 20);
+    expect(report.cashSalesMinor, 25000);
+    expect(report.collectedMinor, 40000);
+    expect(report.paymentMethods.map((p) => p.method).toList(), [
+      'cash',
+      'card',
+    ]);
+    // Prior-period comparison.
+    expect(report.comparison!.netSalesMinor, 41000);
+    expect(report.comparison!.orderCount, 15);
+    // Multi-day range carries NO hourly curve (chart hidden).
+    expect(report.hourlyNetSales, isEmpty);
+    // Deep shift detail.
+    final sc = report.shiftCash!;
+    expect(sc.closedShiftCount, 3);
+    final last = sc.lastClosedShift!;
+    expect(last.openedByName, 'Yara N.');
+    expect(last.openingFloatMinor, 5000);
+    expect(last.durationMinutes, 540);
+    expect(last.orderCount, 12);
+    expect(last.collectedMinor, 18000);
+    expect(last.cashSalesMinor, 9000);
+    expect(last.hasDetail, isTrue);
+    expect(last.varianceMinor, isA<int>());
+  });
+
+  test('RF-REPORT-004: a NON-today range with owner_report_range NOT deployed '
+      '-> honest unavailable (rangeSupported false, NO fallback data)', () async {
+    final calls = <String>[];
+    // rangeMissing (default) intercepts owner_report_range as PGRST202.
+    final transport = _FakeTransport((fn, _) {
+      calls.add(fn);
+      return _payload();
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport(range: ReportRange.last30);
+
+    expect(report.rangeSupported, isFalse);
+    expect(report.range, ReportRange.last30);
+    expect(report.isEmpty, isTrue);
+    // A non-today range must NOT fall back to owner_daily_report/sales_summary.
+    expect(calls, isEmpty);
+  });
+
+  test('RF-REPORT-004: an auth denial (42501) on owner_report_range fails '
+      'closed — never falls back', () async {
+    final calls = <String>[];
+    final transport = _FakeTransport((fn, _) {
+      calls.add(fn);
+      throw const SyncTransportException(
+        SyncTransportErrorKind.auth,
+        code: '42501',
+      );
+    }, rangeMissing: false);
+
+    await expectLater(
+      RealOwnerReportsRepository(
+        null,
+        scope: _scope(),
+        transport: transport,
+      ).loadReport(range: ReportRange.last7),
+      throwsA(isA<OwnerReportsException>()),
+    );
+    // No owner_daily_report / sales_summary fallback on an auth denial.
+    expect(calls, ['owner_report_range']);
+  });
+
+  test('RF-REPORT-004: a rejected range payload (ok:false permission_denied) '
+      'fails closed', () async {
+    final transport = _FakeTransport(
+      (_, _) => <String, dynamic>{'ok': false, 'error': 'permission_denied'},
+      rangeMissing: false,
+    );
+    await expectLater(
+      RealOwnerReportsRepository(
+        null,
+        scope: _scope(),
+        transport: transport,
+      ).loadReport(range: ReportRange.today),
+      throwsA(isA<OwnerReportsException>()),
+    );
   });
 }

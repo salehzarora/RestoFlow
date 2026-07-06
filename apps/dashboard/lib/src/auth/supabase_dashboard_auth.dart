@@ -42,10 +42,15 @@ import 'onboarding_repository.dart';
 /// QUESTION Q-007 — when multi-region lands this becomes an onboarding choice.
 const String kDefaultOnboardingCurrency = 'ILS';
 
-/// Default onboarding timezone. A per-restaurant timezone picker is a follow-up
-/// (RF-152/RF-153); 'UTC' is always a valid IANA zone, so onboarding never fails
-/// the backend's timezone check.
-const String kDefaultOnboardingTimezone = 'UTC';
+/// Default onboarding timezone. The pilot is Israel-only (ILS / ₪), so new
+/// organizations default to Asia/Jerusalem — NOT 'UTC'. This matters for
+/// reporting: sales-by-hour and the branch-local business day bucket by the
+/// branch's timezone, so a 'UTC' default shifted every hour bucket by the Israel
+/// offset (the RF-REPORT-004 fix). Owners can change it later in Settings; a
+/// per-restaurant onboarding picker remains a follow-up (RF-152/RF-153).
+/// 'Asia/Jerusalem' is a valid IANA zone, so onboarding still passes the
+/// backend's timezone check.
+const String kDefaultOnboardingTimezone = 'Asia/Jerusalem';
 
 /// Builds the three real seams from ONE anon-key [client] (RF-151). The SAME
 /// client carries the GoTrue session established by sign-in/up into the

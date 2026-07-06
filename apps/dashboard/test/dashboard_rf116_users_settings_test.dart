@@ -137,6 +137,7 @@ class _FakeSettingsRepo implements SettingsRepository {
   String? lastBranchName;
   String? lastReceiptPrefix;
   String? lastBranchStatus;
+  String? lastBranchTimezone;
   String? lastRestaurantName;
 
   @override
@@ -147,11 +148,13 @@ class _FakeSettingsRepo implements SettingsRepository {
     required String name,
     String? receiptPrefix,
     required String status,
+    String? timezone,
   }) async {
     branchSaves++;
     lastBranchName = name;
     lastReceiptPrefix = receiptPrefix;
     lastBranchStatus = status;
+    lastBranchTimezone = timezone;
     return branchResult;
   }
 

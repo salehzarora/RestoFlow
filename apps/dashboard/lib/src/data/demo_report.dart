@@ -12,6 +12,36 @@ library;
 /// ISO 4217 currency for the demo, locked to ILS / ₪.
 const String kDemoCurrencyCode = 'ILS';
 
+/// RF-REPORT-004 — the reporting date range the Overview is showing. Each maps to
+/// the `owner_report_range` RPC's `p_range` wire value; the prior-equivalent
+/// window drives the "vs …" comparison. `last7` / `last30` are honest ROLLING
+/// windows (last N days incl. today), each compared to the preceding N days, so
+/// the comparison periods are always equal-length (no partial-calendar skew).
+enum ReportRange {
+  today('today'),
+  yesterday('yesterday'),
+  last7('last7'),
+  last30('last30');
+
+  const ReportRange(this.wire);
+
+  /// The `p_range` value sent to the RPC (and echoed back in the payload).
+  final String wire;
+
+  /// True for the single-day ranges, which carry a sales-by-hour curve; the
+  /// multi-day ranges intentionally do not (an averaged curve would mislead).
+  bool get isSingleDay => this == today || this == yesterday;
+
+  /// Parses a wire value back to a range; defaults to [today] for anything
+  /// unknown so a malformed echo never throws.
+  static ReportRange fromWire(String? wire) {
+    for (final r in ReportRange.values) {
+      if (r.wire == wire) return r;
+    }
+    return ReportRange.today;
+  }
+}
+
 /// One branch's daily sales row (mirrors `daily_branch_sales_report`).
 class BranchSales {
   const BranchSales({
@@ -143,6 +173,12 @@ class ClosedShiftSummary {
     required this.countedCashMinor,
     required this.varianceMinor,
     this.openedAtLabel,
+    this.openedByName,
+    this.openingFloatMinor,
+    this.durationMinutes,
+    this.orderCount,
+    this.collectedMinor,
+    this.cashSalesMinor,
   });
 
   final String shiftId;
@@ -153,11 +189,38 @@ class ClosedShiftSummary {
   final String? openedAtLabel;
   final String closedByName;
 
+  /// RF-REPORT-004 — who OPENED the shift (display name). Null when not sourced
+  /// (e.g. the today-only owner_daily_report fallback), so the row hides.
+  final String? openedByName;
+
   final int expectedCashMinor;
   final int countedCashMinor;
 
   /// counted − expected (SIGNED; negative = shortage).
   final int varianceMinor;
+
+  /// RF-REPORT-004 (all nullable — present only from owner_report_range, absent
+  /// in the today-only fallback, so each detail row hides rather than showing a
+  /// fabricated zero). Money is integer MINOR units (D-007).
+  final int? openingFloatMinor;
+
+  /// Shift length in whole minutes (closed − opened). Not money.
+  final int? durationMinutes;
+
+  /// Paid-order count in the shift, and its collected / cash sales — derived from
+  /// the FK-stamped `payments.shift_id` (reliable), never from `orders.shift_id`.
+  final int? orderCount;
+  final int? collectedMinor;
+  final int? cashSalesMinor;
+
+  /// Whether this summary carries the RF-REPORT-004 per-shift detail (float /
+  /// duration / order-sales-cash). False for the today-only fallback rows.
+  bool get hasDetail =>
+      openingFloatMinor != null ||
+      durationMinutes != null ||
+      orderCount != null ||
+      collectedMinor != null ||
+      cashSalesMinor != null;
 }
 
 /// RF-REPORT-003 (display-only) — TODAY's shift / cash reconciliation. All money
@@ -230,12 +293,67 @@ class DashboardReport {
     this.hourlyNetSales = const <HourlyNetSales>[],
     this.comparison,
     this.shiftCash,
+    this.range = ReportRange.today,
+    this.rangeSupported = true,
+    this.rangeStartLabel,
+    this.rangeEndLabel,
   });
+
+  /// RF-REPORT-004 — an honest "this range isn't available yet" report: every
+  /// figure empty and [rangeSupported] false, so the Overview keeps the range
+  /// chips and shows a calm note rather than fabricating data or silently
+  /// showing today. Used by the real repo when `owner_report_range` is not
+  /// deployed and the requested range is not `today`.
+  factory DashboardReport.rangeUnavailable({
+    required ReportRange range,
+    required String currencyCode,
+  }) => DashboardReport(
+    currencyCode: currencyCode,
+    businessDateLabel: '',
+    grossSalesMinor: 0,
+    netSalesMinor: 0,
+    discountTotalMinor: 0,
+    collectedMinor: 0,
+    cashSalesMinor: 0,
+    lastCashPaymentMinor: 0,
+    orderCount: 0,
+    completedOrderCount: 0,
+    openOrderCount: 0,
+    unpaidOrderCount: 0,
+    voidCount: 0,
+    voidTotalMinor: 0,
+    openingFloatMinor: 0,
+    expectedCashMinor: 0,
+    countedCashMinor: 0,
+    shiftStatus: 'none',
+    branches: const [],
+    topItems: const [],
+    recentOrders: const [],
+    paymentMethods: const [],
+    range: range,
+    rangeSupported: false,
+  );
 
   final String currencyCode;
 
   /// Business date as a plain data string (not localized chrome).
   final String businessDateLabel;
+
+  /// RF-REPORT-004 — the range this report covers. Drives the comparison label
+  /// ("vs yesterday" / "vs previous 7 days" …) and whether an hourly curve is
+  /// expected (single-day only).
+  final ReportRange range;
+
+  /// RF-REPORT-004 — false when the selected range could NOT be served (the live
+  /// `owner_report_range` RPC isn't deployed yet and the range isn't `today`).
+  /// The UI then shows an honest "range not available yet" note instead of
+  /// falling back to today's data or fabricating figures. Always true in demo.
+  final bool rangeSupported;
+
+  /// Optional branch-local range bounds (`YYYY-MM-DD` data strings) for a "X → Y"
+  /// caption. Null when not sourced.
+  final String? rangeStartLabel;
+  final String? rangeEndLabel;
 
   // Money fields are integer MINOR units (D-007). No floats anywhere.
   final int grossSalesMinor;

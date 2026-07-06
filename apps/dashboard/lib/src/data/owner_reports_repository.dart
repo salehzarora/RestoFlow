@@ -12,10 +12,11 @@ import 'demo_report.dart';
 import 'owner_report_source.dart';
 import 'report_calculator.dart';
 
-/// Loads the owner [DashboardReport]. Implementations may fail (network, auth,
-/// RLS) — the UI renders that as an error state.
+/// Loads the owner [DashboardReport] for a [range] (RF-REPORT-004; defaults to
+/// today). Implementations may fail (network, auth, RLS) — the UI renders that
+/// as an error state.
 abstract class OwnerReportsRepository {
-  Future<DashboardReport> loadReport();
+  Future<DashboardReport> loadReport({ReportRange range = ReportRange.today});
 }
 
 /// Computes the owner report from a structured demo dataset. There is no
@@ -32,12 +33,19 @@ class DemoOwnerReportsRepository implements OwnerReportsRepository {
   final String? failureMessage;
 
   @override
-  Future<DashboardReport> loadReport() async {
+  Future<DashboardReport> loadReport({
+    ReportRange range = ReportRange.today,
+  }) async {
     final message = failureMessage;
     if (message != null) {
       throw OwnerReportsException(message);
     }
-    return computeOwnerReport(dataset ?? demoOwnerReportDataset());
+    // An explicitly injected dataset (tests: an empty day, a custom day) is
+    // honoured verbatim for the requested range; otherwise the standard demo
+    // computes the range (RF-REPORT-004 — deterministic multi-day demo figures).
+    final injected = dataset;
+    if (injected != null) return computeOwnerReport(injected, range: range);
+    return demoRangeReport(range);
   }
 }
 

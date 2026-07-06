@@ -2086,6 +2086,66 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get dashboardRangeToday => 'اليوم';
+
+  @override
+  String get dashboardRangeYesterday => 'أمس';
+
+  @override
+  String get dashboardRangeLast7 => 'آخر ٧ أيام';
+
+  @override
+  String get dashboardRangeLast30 => 'آخر ٣٠ يومًا';
+
+  @override
+  String get dashboardRangeUnavailable =>
+      'هذا النطاق غير متاح في التقارير المباشرة بعد — جرّب اليوم، أو تحقق لاحقًا بعد إطلاق تحديث التقارير.';
+
+  @override
+  String dashboardDeltaVsDayBefore(int percent) {
+    return '$percent٪ مقارنةً بأول من أمس';
+  }
+
+  @override
+  String dashboardDeltaVsPrev7(int percent) {
+    return '$percent٪ مقارنةً بالـ٧ أيام السابقة';
+  }
+
+  @override
+  String dashboardDeltaVsPrev30(int percent) {
+    return '$percent٪ مقارنةً بالـ٣٠ يومًا السابقة';
+  }
+
+  @override
+  String dashboardShiftClosedInRange(int count) {
+    return '$count مغلقة';
+  }
+
+  @override
+  String get dashboardShiftNoneRange => 'لا توجد ورديات مغلقة في هذا النطاق.';
+
+  @override
+  String dashboardShiftOpenedBy(String name) {
+    return 'فتحها $name';
+  }
+
+  @override
+  String get dashboardShiftCollected => 'المحصّل';
+
+  @override
+  String get dashboardShiftDurationLabel => 'المدة';
+
+  @override
+  String dashboardShiftDurationValue(int hours, int minutes) {
+    return '$hoursس $minutesد';
+  }
+
+  @override
+  String dashboardShiftRecentTitle(int count) {
+    return 'ورديات حديثة ($count)';
+  }
+
+  @override
   String get dashboardUsersNotConnectedTitle =>
       'إدارة المستخدمين غير متصلة بعد';
 
@@ -2112,6 +2172,16 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get dashboardSettingsReceiptPrefixHint =>
       'اتركه فارغًا للإبقاء على البادئة الحالية';
+
+  @override
+  String get dashboardSettingsTimezoneLabel => 'المنطقة الزمنية للفرع';
+
+  @override
+  String get dashboardSettingsTimezoneHint =>
+      'تُستخدم في التقارير (المبيعات حسب الساعة والإجماليات اليومية). إسرائيل هي Asia/Jerusalem.';
+
+  @override
+  String get dashboardSettingsTimezoneKeep => 'دون تغيير';
 
   @override
   String get dashboardSettingsCurrencyLocked =>
