@@ -1073,6 +1073,8 @@
   "@dashboardUnpaidOrders": {
     "description": "Owner dashboard KPI card label for the count of unpaid orders."
   },
+  "dashboardPaymentMix": "Payment mix",
+  "@dashboardPaymentMix": {"description": "Dashboard '1c' Overview card title for the payment-mix donut (cash vs card share)."},
   "dashboardPaymentSummary": "Payment & cash summary",
   "@dashboardPaymentSummary": {
     "description": "Owner dashboard heading for the payment and cash-drawer summary card."
@@ -1820,6 +1822,8 @@
   "@dashboardShiftCloseSaveFailed": {"description": "RF-113: snackbar when the policy write fails for a transient reason."},
   "setupTitle": "Setup",
   "@setupTitle": {"description": "Title of the real-mode setup center on the dashboard overview."},
+  "setupReadyHeadline": "Branch ready for service",
+  "@setupReadyHeadline": {"description": "Dashboard '1c' readiness strip headline when the branch is fully set up."},
   "setupSubtitle": "Get this branch ready for service",
   "@setupSubtitle": {"description": "Subtitle of the setup center."},
   "setupDevices": "Devices",

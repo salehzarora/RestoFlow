@@ -191,8 +191,8 @@ void main() {
       menuItems: const [],
     );
     expect(find.text('Setup'), findsOneWidget);
-    // Four metrics now: menu + devices + printers + staff PINs.
-    expect(find.text('0/0'), findsNWidgets(4));
+    // Four readiness stat chips now: menu + devices + printers + staff PINs.
+    expect(find.textContaining('0/0'), findsNWidgets(4));
     expect(find.textContaining('No menu items yet'), findsOneWidget);
     expect(find.text('Add your first menu item'), findsOneWidget);
     expect(find.textContaining('No POS device yet'), findsOneWidget);
@@ -236,16 +236,13 @@ void main() {
       menuItems: [_menuItem(isActive: true)],
       printers: _onePrinter,
     );
-    expect(
-      find.text('This branch is ready: paired device and staff PIN in place.'),
-      findsOneWidget,
-    );
+    expect(find.text('Branch ready for service'), findsOneWidget);
     expect(find.textContaining('No device is paired'), findsNothing);
     expect(find.textContaining('No menu items yet'), findsNothing);
     expect(find.textContaining('No POS device yet'), findsNothing);
   });
 
-  testWidgets('metric cards navigate to their tabs (menu included)', (
+  testWidgets('readiness stat chips navigate to their tabs (menu included)', (
     tester,
   ) async {
     final opened = <String>[];
@@ -257,10 +254,10 @@ void main() {
       printers: _onePrinter,
       onOpen: opened.add,
     );
-    await tester.tap(find.text('Menu items'));
-    await tester.tap(find.text('Devices'));
-    await tester.tap(find.text('Printers'));
-    await tester.tap(find.text('Staff PINs'));
+    await tester.tap(find.byKey(const Key('setup-stat-menu')));
+    await tester.tap(find.byKey(const Key('setup-stat-devices')));
+    await tester.tap(find.byKey(const Key('setup-stat-printers')));
+    await tester.tap(find.byKey(const Key('setup-stat-staff')));
     expect(opened, ['menu', 'devices', 'printers', 'staff']);
   });
 
@@ -290,7 +287,7 @@ void main() {
       menuItems: [_menuItem(isActive: false)],
       printers: _onePrinter,
     );
-    expect(find.text('0/1'), findsOneWidget); // active / total
+    expect(find.textContaining('0/1'), findsOneWidget); // active / total
     expect(find.textContaining('No menu items yet'), findsOneWidget);
   });
 

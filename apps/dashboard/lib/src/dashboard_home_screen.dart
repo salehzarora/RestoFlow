@@ -124,6 +124,18 @@ class _ReportContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final semantic =
+        theme.extension<RestoflowSemanticColors>() ??
+        RestoflowSemanticColors.of(theme.brightness);
+    // The terracotta "accent" tile is a semantic colour, not one of the five
+    // RestoflowTones, so it is passed to the filled metric card as a fillStyle.
+    final accentFill = RestoflowToneStyle(
+      container: semantic.accentContainer,
+      onContainer: semantic.onAccentContainer,
+      accent: semantic.accent,
+      icon: Icons.account_balance_wallet_outlined,
+    );
 
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
@@ -227,6 +239,8 @@ class _ReportContent extends StatelessWidget {
         label: l10n.dashboardOrders,
         value: report.orderCount.toString(),
         icon: Icons.receipt_long_outlined,
+        filled: true,
+        tone: RestoflowTone.info,
         delta: deltaOf(report.orderCount, comparison?.orderCount),
       ),
       RestoflowMetricCard(
@@ -234,12 +248,16 @@ class _ReportContent extends StatelessWidget {
         label: l10n.dashboardAvgOrderValue,
         value: money(report.avgOrderValueMinor),
         icon: Icons.trending_up,
+        filled: true,
+        tone: RestoflowTone.success,
       ),
       RestoflowMetricCard(
         key: const Key('kpi-cash-sales'),
         label: l10n.dashboardCashSales,
         value: money(report.cashSalesMinor),
         icon: Icons.account_balance_wallet_outlined,
+        filled: true,
+        fillStyle: accentFill,
         delta: deltaOf(report.cashSalesMinor, comparison?.cashSalesMinor),
       ),
       RestoflowMetricCard(
@@ -248,6 +266,8 @@ class _ReportContent extends StatelessWidget {
         value: report.completedOrderCount.toString(),
         caption: openCaption,
         icon: Icons.task_alt,
+        filled: true,
+        tone: RestoflowTone.neutral,
       ),
       RestoflowMetricCard(
         key: const Key('kpi-unpaid'),
@@ -354,18 +374,25 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
+    // "1c" top sellers: a numbered rank badge + name + `×qty · amount` + a mini
+    // share bar (revenue / top revenue). Money stays formatted via MoneyFormatter.
+    final topRevenue = report.topItems.isEmpty
+        ? 0
+        : report.topItems.first.lineRevenueMinor;
     final topItems = RestoflowSectionCard(
       key: const Key('top-items-card'),
       title: l10n.dashboardTopItems,
       children: [
         for (var i = 0; i < report.topItems.length; i++)
-          SectionRow(
-            label: report.topItems[i].name,
-            secondary: '#${i + 1} · ×${report.topItems[i].quantity}',
-            trailingValue: MoneyFormatter.formatMinor(
-              report.topItems[i].lineRevenueMinor,
-              report.topItems[i].currencyCode,
-            ),
+          RestoflowRankRow(
+            rank: i + 1,
+            name: report.topItems[i].name,
+            meta:
+                '×${report.topItems[i].quantity} · '
+                '${MoneyFormatter.formatMinor(report.topItems[i].lineRevenueMinor, report.topItems[i].currencyCode)}',
+            fraction: topRevenue == 0
+                ? 0
+                : report.topItems[i].lineRevenueMinor / topRevenue,
           ),
       ],
     );
@@ -430,6 +457,12 @@ class _ReportContent extends StatelessWidget {
     final leftSections = <Widget>[
       summary,
       payment,
+      // "1c" payment-mix donut (real data only — from report.paymentMethods).
+      if (report.paymentMethods.isNotEmpty)
+        _PaymentMixCard(
+          methods: report.paymentMethods,
+          currencyCode: report.currencyCode,
+        ),
       if (shiftCash != null)
         _ShiftCashCard(
           shiftCash: shiftCash,
@@ -872,10 +905,12 @@ String _shiftDurationText(AppLocalizations l10n, int minutes) {
   return l10n.dashboardShiftDurationValue(safe ~/ 60, safe % 60);
 }
 
-/// The reports page header. DESIGN-002: consolidated onto the shared
-/// [RestoflowPageHeader] (was a hand-rolled Row) so every dashboard tab's
-/// header reads identically. The data-source pill + refresh ride the header's
-/// trailing actions; the day context is the subtitle.
+/// The Overview HERO header (Dashboard "1c"): the brand-gradient panel with the
+/// period's big net-sales value + a delta line + a sparkline, plus the pinned
+/// "Owner reports" heading, the "Report day: …" (or range) context, the
+/// demo/live pill, and the refresh action. Money is formatted via
+/// [MoneyFormatter]; the key/heading/day strings are preserved so the surface
+/// stays honest and testable. RTL-safe (Rows + directional layout).
 class _ReportHeader extends StatelessWidget {
   const _ReportHeader({
     required this.report,
@@ -890,29 +925,281 @@ class _ReportHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // Today keeps the pinned "Report day: <date>" subtitle; other ranges show
-    // the range label + its branch-local start→end window when known.
+    final theme = Theme.of(context);
+    String money(int m) => MoneyFormatter.formatMinor(m, report.currencyCode);
+    final white70 = Colors.white.withValues(alpha: 0.82);
     final dayText = report.range == ReportRange.today
         ? '${l10n.dashboardReportDayLabel}: ${report.businessDateLabel}'
         : _rangeSubtitle(l10n, report);
-    // The Key stays on the header so find.byKey('reports-heading') matches, and
-    // the title/subtitle keep the pinned 'Owner reports' / 'Report day: …'
-    // strings.
-    return RestoflowPageHeader(
-      key: const Key('reports-heading'),
-      icon: Icons.insights_outlined,
-      title: l10n.dashboardReportsHeading,
-      subtitle: dayText,
-      actions: [
-        RestoflowStatusPill(
-          label: isDemo ? l10n.dashboardDemoDay : l10n.dashboardLiveDataTag,
-          tone: RestoflowTone.info,
+    final valueLabel = report.range == ReportRange.today
+        ? l10n.dashboardTodaySales
+        : l10n.dashboardNetSales;
+    final pct = deltaPercent(
+      report.netSalesMinor,
+      report.comparison?.netSalesMinor,
+    );
+    final spark = [for (final h in report.hourlyNetSales) h.netSalesMinor];
+
+    final hero = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.insights_outlined,
+              size: RestoflowIconSizes.md,
+              color: white70,
+            ),
+            const SizedBox(width: RestoflowSpacing.sm),
+            Expanded(
+              child: Text(
+                l10n.dashboardReportsHeading,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            RestoflowStatusPill(
+              label: isDemo ? l10n.dashboardDemoDay : l10n.dashboardLiveDataTag,
+              tone: RestoflowTone.info,
+            ),
+            IconButton(
+              key: const Key('reports-refresh-button'),
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh, color: Colors.white),
+              tooltip: l10n.dashboardRefresh,
+            ),
+          ],
         ),
-        IconButton(
-          key: const Key('reports-refresh-button'),
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh),
-          tooltip: l10n.dashboardRefresh,
+        const SizedBox(height: RestoflowSpacing.sm),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    valueLabel,
+                    style: theme.textTheme.labelLarge?.copyWith(color: white70),
+                  ),
+                  const SizedBox(height: RestoflowSpacing.xxs),
+                  Text(
+                    money(report.netSalesMinor),
+                    style: theme.textTheme.displaySmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: RestoflowSpacing.xs),
+                  Text(
+                    dayText,
+                    style: theme.textTheme.bodyMedium?.copyWith(color: white70),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (pct != null) ...[
+                    const SizedBox(height: RestoflowSpacing.xs),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          pct >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                          size: RestoflowIconSizes.xs,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: RestoflowSpacing.xxs),
+                        Flexible(
+                          child: Text(
+                            _heroDeltaLabel(l10n, report.range, pct.abs()),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (spark.length > 1) ...[
+              const SizedBox(width: RestoflowSpacing.md),
+              _Sparkline(values: spark),
+            ],
+          ],
+        ),
+      ],
+    );
+
+    return ClipRRect(
+      key: const Key('reports-heading'),
+      borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+      child: RestoflowGradientHeader(hero: hero),
+    );
+  }
+}
+
+/// The hero's range-aware "vs prior period" delta label.
+String _heroDeltaLabel(AppLocalizations l10n, ReportRange range, int pct) =>
+    switch (range) {
+      ReportRange.today => l10n.dashboardDeltaVsYesterday(pct),
+      ReportRange.yesterday => l10n.dashboardDeltaVsDayBefore(pct),
+      ReportRange.last7 => l10n.dashboardDeltaVsPrev7(pct),
+      ReportRange.last30 => l10n.dashboardDeltaVsPrev30(pct),
+    };
+
+/// A tiny white polyline sparkline of the period's hourly net sales, drawn in
+/// list (chronological) order — decorative, static, money-free.
+class _Sparkline extends StatelessWidget {
+  const _Sparkline({required this.values});
+
+  final List<int> values;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 120,
+    height: 44,
+    child: CustomPaint(painter: _SparkPainter(values: values)),
+  );
+}
+
+class _SparkPainter extends CustomPainter {
+  _SparkPainter({required this.values});
+
+  final List<int> values;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+    final maxV = values.reduce((a, b) => a > b ? a : b);
+    final minV = values.reduce((a, b) => a < b ? a : b);
+    final span = (maxV - minV) == 0 ? 1 : (maxV - minV);
+    final dx = size.width / (values.length - 1);
+    final path = Path();
+    for (var i = 0; i < values.length; i++) {
+      final x = i * dx;
+      final y = size.height - ((values[i] - minV) / span) * size.height;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SparkPainter old) => old.values != values;
+}
+
+/// The "1c" payment-mix donut card: a ring of the period's tenders (real data
+/// from `report.paymentMethods`, never invented) with a legend of dot + method +
+/// share% + amount. Money via [MoneyFormatter]; RTL-safe.
+class _PaymentMixCard extends StatelessWidget {
+  const _PaymentMixCard({required this.methods, required this.currencyCode});
+
+  final List<PaymentMethodLine> methods;
+  final String currencyCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final semantic =
+        theme.extension<RestoflowSemanticColors>() ??
+        RestoflowSemanticColors.of(theme.brightness);
+    Color colorFor(String m) => switch (m) {
+      'cash' => kRestoflowSeedColor,
+      'card' => semantic.accent,
+      'bit' => semantic.info,
+      _ => semantic.warning,
+    };
+    String label(String m) => m == 'cash' ? l10n.dashboardPaymentMethodCash : m;
+    final total = methods.fold<int>(0, (s, x) => s + x.totalMinor);
+    final top = methods.reduce((a, b) => a.totalMinor >= b.totalMinor ? a : b);
+    final topPct = total == 0 ? 0 : (top.totalMinor * 100 / total).round();
+
+    return RestoflowSectionCard(
+      key: const Key('payment-mix-card'),
+      title: l10n.dashboardPaymentMix,
+      children: [
+        const SizedBox(height: RestoflowSpacing.sm),
+        Wrap(
+          spacing: RestoflowSpacing.xl,
+          runSpacing: RestoflowSpacing.md,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            RestoflowDonutChart(
+              size: 140,
+              segments: [
+                for (final m in methods)
+                  RestoflowDonutSegment(
+                    value: m.totalMinor,
+                    color: colorFor(m.method),
+                    label: label(m.method),
+                  ),
+              ],
+              centerLabel: '$topPct%',
+              centerSub: label(top.method),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final m in methods)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      bottom: RestoflowSpacing.xs,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: colorFor(m.method),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: RestoflowSpacing.sm),
+                        Text(
+                          label(m.method),
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(width: RestoflowSpacing.sm),
+                        Text(
+                          '${total == 0 ? 0 : (m.totalMinor * 100 / total).round()}% · '
+                          '${MoneyFormatter.formatMinor(m.totalMinor, currencyCode)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ),
       ],
     );

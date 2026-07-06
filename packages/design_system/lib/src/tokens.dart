@@ -8,6 +8,37 @@ import 'package:flutter/material.dart';
 /// `ColorScheme.fromSeed` seed by [restoflowBaseTheme].
 const Color kRestoflowSeedColor = Color(0xFF1B7A52);
 
+/// Warm-canvas neutrals (Dashboard "1c" / Warm-Bento direction). The dashboard
+/// sits on a warm off-white canvas with a warm hairline instead of a cool grey,
+/// and a three-step warm ink ramp for text. These are exact brand values used by
+/// the gradient header, readiness strip, rank rows, and the light side rail; the
+/// semantic status palette stays in [RestoflowSemanticColors].
+const Color kRestoflowCanvas = Color(0xFFF6F3EC); // page background
+const Color kRestoflowHairline = Color(0xFFECE5D8); // warm thin border
+const Color kRestoflowInk = Color(0xFF17201B); // primary text
+const Color kRestoflowInk2 = Color(0xFF5C665C); // secondary text
+const Color kRestoflowInk3 = Color(0xFF9A9384); // muted text
+
+/// Brand-green dark value (button hover / dark-on-white text on the gradient
+/// header's white action button).
+const Color kRestoflowBrandDark = Color(0xFF136343);
+
+/// The 118° brand gradient used by the full-bleed [RestoflowGradientHeader] and
+/// the side-rail logo tile: deep green-black → forest → brand green → a terracotta
+/// corner pushed just past the frame. RTL-safe: begins at the directional
+/// top-start and ends past the opposite side so it mirrors with the layout.
+const LinearGradient kRestoflowBrandGradient = LinearGradient(
+  begin: AlignmentDirectional.topStart,
+  end: Alignment(-1.6, 1.0),
+  colors: [
+    Color(0xFF0F231A),
+    Color(0xFF164E37),
+    Color(0xFF1B7A52),
+    Color(0xFFC2410C),
+  ],
+  stops: [0.0, 0.42, 0.70, 1.0],
+);
+
 /// 4-point spacing scale (logical pixels).
 abstract final class RestoflowSpacing {
   /// Hairline gap (title-to-subtitle inside a tile).

@@ -146,19 +146,9 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
       builder: (context, snap) {
         final counts = snap.data ?? const _Counts();
         final loading = !snap.hasData;
-        String value(int? part, int? total) => loading || total == null
-            ? l10n.setupMetricUnavailable
-            : '$part/$total';
         // A dimension is "ready" once at least one live thing exists in it.
         bool ready(int? part, int? total) =>
             !loading && total != null && (part ?? 0) > 0;
-        // Unknown counts (loading / failed load) stay neutral — never a fake
-        // green or a false alarm.
-        RestoflowTone? tone(int? part, int? total) => loading || total == null
-            ? null
-            : (ready(part, total)
-                  ? RestoflowTone.success
-                  : RestoflowTone.warning);
 
         final dimensions = <({bool countable, bool done})>[
           (
@@ -181,71 +171,67 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
         final progress = dimensions.isEmpty
             ? 0.0
             : dimensions.where((d) => d.done).length / dimensions.length;
+        final allReady =
+            dimensions.isNotEmpty && dimensions.every((d) => d.done);
 
-        return RestoflowSectionCard(
-          title: l10n.setupTitle,
-          subtitle: l10n.setupSubtitle,
-          action: IconButton(
-            tooltip: l10n.adminRetry,
-            onPressed: refresh,
-            icon: const Icon(Icons.refresh),
-          ),
+        // Dashboard "1c": the compact readiness strip. Each stat carries the SAME
+        // real count and jumps to its owning tab (tap-to-navigate preserved). A
+        // failed/loading count (total == null) omits that stat — never a fake 0.
+        final stats = <RestoflowReadinessStat>[
+          if (_menuCountable && counts.menuTotal != null)
+            RestoflowReadinessStat(
+              icon: Icons.restaurant_menu_outlined,
+              label: l10n.dashboardNavMenu,
+              done: counts.menuActive ?? 0,
+              total: counts.menuTotal!,
+              onTap: widget.onOpenMenu,
+              tapKey: const Key('setup-stat-menu'),
+            ),
+          if (counts.devicesTotal != null)
+            RestoflowReadinessStat(
+              icon: Icons.devices_outlined,
+              label: l10n.dashboardNavDevices,
+              done: counts.devicesActive ?? 0,
+              total: counts.devicesTotal!,
+              onTap: widget.onOpenDevices,
+              tapKey: const Key('setup-stat-devices'),
+            ),
+          if (counts.printersTotal != null)
+            RestoflowReadinessStat(
+              icon: Icons.print_outlined,
+              label: l10n.dashboardNavPrinters,
+              done: counts.printersEnabled ?? 0,
+              total: counts.printersTotal!,
+              onTap: widget.onOpenPrinters,
+              tapKey: const Key('setup-stat-printers'),
+            ),
+          if (counts.staffTotal != null)
+            RestoflowReadinessStat(
+              icon: Icons.badge_outlined,
+              label: l10n.dashboardNavStaff,
+              done: counts.staffWithPin ?? 0,
+              total: counts.staffTotal!,
+              onTap: widget.onOpenStaff,
+              tapKey: const Key('setup-stat-staff'),
+            ),
+        ];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: RestoflowSpacing.md),
-            if (!loading) ...[
-              _SetupProgressBar(value: progress),
-              const SizedBox(height: RestoflowSpacing.md),
-            ],
-            Wrap(
-              spacing: RestoflowSpacing.md,
-              runSpacing: RestoflowSpacing.md,
-              children: [
-                if (_menuCountable)
-                  SizedBox(
-                    width: 220,
-                    child: RestoflowMetricCard(
-                      label: l10n.setupMenu,
-                      value: value(counts.menuActive, counts.menuTotal),
-                      caption: l10n.setupMenuCaption,
-                      icon: Icons.restaurant_menu_outlined,
-                      tone: tone(counts.menuActive, counts.menuTotal),
-                      onTap: widget.onOpenMenu,
-                    ),
-                  ),
-                SizedBox(
-                  width: 220,
-                  child: RestoflowMetricCard(
-                    label: l10n.setupDevices,
-                    value: value(counts.devicesActive, counts.devicesTotal),
-                    caption: l10n.setupDevicesCaption,
-                    icon: Icons.devices_outlined,
-                    tone: tone(counts.devicesActive, counts.devicesTotal),
-                    onTap: widget.onOpenDevices,
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: RestoflowMetricCard(
-                    label: l10n.setupPrinters,
-                    value: value(counts.printersEnabled, counts.printersTotal),
-                    caption: l10n.setupPrintersCaption,
-                    icon: Icons.print_outlined,
-                    tone: tone(counts.printersEnabled, counts.printersTotal),
-                    onTap: widget.onOpenPrinters,
-                  ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: RestoflowMetricCard(
-                    label: l10n.setupStaffPin,
-                    value: value(counts.staffWithPin, counts.staffTotal),
-                    caption: l10n.setupStaffCaption,
-                    icon: Icons.badge_outlined,
-                    tone: tone(counts.staffWithPin, counts.staffTotal),
-                    onTap: widget.onOpenStaff,
-                  ),
-                ),
-              ],
+            RestoflowReadinessStrip(
+              ready: allReady,
+              readyLabel: l10n.setupReadyHeadline,
+              // Pending headline keeps the "Setup" wording (the section title).
+              pendingLabel: l10n.setupTitle,
+              stats: stats,
+              percent: (progress * 100).round(),
+              trailing: IconButton(
+                tooltip: l10n.adminRetry,
+                onPressed: refresh,
+                icon: const Icon(Icons.refresh),
+                visualDensity: VisualDensity.compact,
+              ),
             ),
             ..._nextSteps(l10n, counts, loading),
           ],
@@ -323,44 +309,9 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
         onAction: widget.onOpenStaff,
       );
     }
-    if (steps.isEmpty) {
-      if (c.devicesActive != null &&
-          c.devicesActive! > 0 &&
-          c.staffWithPin != null &&
-          c.staffWithPin! > 0) {
-        return [
-          const SizedBox(height: RestoflowSpacing.md),
-          RestoflowNoticeBanner(
-            tone: RestoflowTone.success,
-            icon: Icons.check_circle_outline,
-            body: l10n.setupReady,
-          ),
-        ];
-      }
-      return const [];
-    }
+    // A fully-ready branch shows no steps — the readiness strip's "Branch ready
+    // for service" headline is the single ready indicator (no redundant banner).
+    if (steps.isEmpty) return const [];
     return [const SizedBox(height: RestoflowSpacing.md), ...steps];
-  }
-}
-
-/// A quiet, static readiness bar (finite — safe for pumpAndSettle harnesses).
-class _SetupProgressBar extends StatelessWidget {
-  const _SetupProgressBar({required this.value});
-
-  final double value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final successStyle = RestoflowTone.success.styleOf(theme);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(RestoflowRadii.pill),
-      child: LinearProgressIndicator(
-        value: value,
-        minHeight: 6,
-        color: successStyle.accent,
-        backgroundColor: theme.colorScheme.surfaceContainerHighest,
-      ),
-    );
   }
 }

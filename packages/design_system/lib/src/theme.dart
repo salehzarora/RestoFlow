@@ -61,9 +61,16 @@ ThemeData _buildRestoflowTheme(Color seedColor, Brightness brightness) {
       )
       .apply(fontFamilyFallback: fontFallbacks);
 
+  // Dashboard "1c": a warm off-white canvas + a warm hairline on cards, for the
+  // LIGHT theme only (the dark KDS theme keeps its own surfaces). The warm
+  // neutrals are brand values shared with the gradient header / side rail.
+  final isDark = brightness == Brightness.dark;
+  final scaffoldBackground = isDark ? colorScheme.surface : kRestoflowCanvas;
+  final cardBorder = isDark ? colorScheme.outlineVariant : kRestoflowHairline;
+
   final cardShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(RestoflowRadii.lg),
-    side: BorderSide(color: colorScheme.outlineVariant),
+    side: BorderSide(color: cardBorder),
   );
   final buttonShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(RestoflowRadii.md),
@@ -75,7 +82,7 @@ ThemeData _buildRestoflowTheme(Color seedColor, Brightness brightness) {
   return base.copyWith(
     extensions: <ThemeExtension<dynamic>>[semantic],
     textTheme: textTheme,
-    scaffoldBackgroundColor: colorScheme.surface,
+    scaffoldBackgroundColor: scaffoldBackground,
     appBarTheme: AppBarTheme(
       backgroundColor: colorScheme.surface,
       foregroundColor: colorScheme.onSurface,

@@ -1039,6 +1039,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardUnpaidOrders => 'الطلبات غير المدفوعة';
 
   @override
+  String get dashboardPaymentMix => 'توزيع المدفوعات';
+
+  @override
   String get dashboardPaymentSummary => 'ملخص الدفع والنقدية';
 
   @override
@@ -2219,6 +2222,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get setupTitle => 'الإعداد';
+
+  @override
+  String get setupReadyHeadline => 'الفرع جاهز للخدمة';
 
   @override
   String get setupSubtitle => 'جهّز هذا الفرع للعمل';
