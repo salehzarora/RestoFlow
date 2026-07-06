@@ -35,10 +35,12 @@ is set in each app's `android/app/build.gradle.kts` (`namespace` + `applicationI
 - **JDK 17** (bundled with a recent Android Studio; `compileOptions`/`jvmTarget` target 17).
 - Confirm the toolchain with `flutter doctor` — the **Android toolchain** row must be `[√]`.
 
-> **ASSUMPTION**: The environment ANDROID-001 ran in had **no Android SDK/JDK**
-> (`flutter doctor` reported `[X] Android toolchain — Unable to locate Android SDK`),
-> so the APK binaries were **not** produced here; the scaffold builds on any machine
-> that satisfies the prerequisites above. Verify with `flutter doctor` before building.
+> **NOTE**: The initial ANDROID-001 packaging ran in an environment with **no
+> Android SDK/JDK** (`flutter doctor` reported `[X] Android toolchain`), so the APK
+> binaries were not produced then. After the toolchain was installed, both **debug
+> APKs build successfully** — `flutter build apk --debug` for `apps/pos` and
+> `apps/kds` (verified). Confirm `flutter doctor` shows the Android row as `[√]`
+> before building.
 
 ---
 

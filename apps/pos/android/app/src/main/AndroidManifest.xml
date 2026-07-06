@@ -1,9 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Network access for real-backend (Supabase) mode: login, device pairing,
-         and sync. flutter create only grants this in the debug/profile
-         source-sets; the release (main) manifest must declare it too, or a
-         `flutter build apk --release` pilot APK has no network (ANDROID-001). -->
-    <uses-permission android:name="android.permission.INTERNET"/>
+         and sync. flutter create only grants this in the debug and profile
+         source sets, so the release (main) manifest must declare it too, or a
+         release build's pilot APK would have no network access (ANDROID-001). -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="RestoFlow POS"
         android:name="${applicationName}"
