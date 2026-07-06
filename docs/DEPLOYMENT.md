@@ -377,13 +377,18 @@ appeared. It surfaces the values `close_shift` (RF-055) already persisted on
 
 ## 13. Range reporting v2 + rollout (RF-REPORT-004 — `owner_report_range`)
 
-**Current reporting state (supersedes §9–§12's then-pending "not applied" wording).**
-RF-REPORT-001/002/003 — the `owner_daily_report` RPC (billed/collected split +
-`hourly` + `shift_cash`; API_CONTRACT §4.19a) — **have been applied to hosted
-production (2026-07-06)** after the R-003 RLS/security sign-off, so the Dashboard
-Overview reads the **real `owner_daily_report`** (the `sales_summary` fallback of
-§9 remains a permanent safety net). **RF-REPORT-004 (`owner_report_range`,
-API_CONTRACT §4.19b) is committed at PR level but NOT yet applied** to hosted.
+**Current reporting state — ALL LIVE (supersedes §9–§12's then-pending "not applied" wording).**
+RF-REPORT-001/002/003/004 have **all been applied to hosted production (2026-07-06)**
+after the R-003 RLS/security sign-off. **RF-REPORT-004 (`owner_report_range`,
+API_CONTRACT §4.19b) is now LIVE** — the Dashboard's **range reporting v2** (Today /
+Yesterday / Last 7 days / Last 30 days + prior-period comparisons + deeper Shift &
+cash) is **available in production**, and `owner_report_range` is the **current real
+range-reporting path**. RF-REPORT-001/002/003 (`owner_daily_report`) remain applied as
+the compatibility fallback for Today; the `sales_summary` fallback of §9 remains a
+permanent safety net. The **Free-plan / no-backup risk was accepted** for this pilot
+apply (no automated Supabase backups; the migration is additive / non-destructive —
+`CREATE OR REPLACE` + `GRANT` only). Browser smoke passed (Dashboard ranges + reports
+work).
 
 **What RF-REPORT-004 adds** (API_CONTRACT §4.19b): the Overview's date-range
 controls (**Today / Yesterday / Last 7 days / Last 30 days**) with a prior-period
@@ -391,16 +396,21 @@ comparison, an accurate **branch-local "today"**, single-day **hourly**, and a
 **deeper shift/cash** card — via the NEW additive `public.owner_report_range` RPC.
 `owner_daily_report` is untouched and stays the compatibility fallback for Today.
 
-**Dashboard behavior BEFORE the RF-REPORT-004 migration is applied (current prod):**
-- **Today still works** — it degrades to the deployed `owner_daily_report` (then
-  `sales_summary`).
-- **Yesterday / Last 7 days / Last 30 days** show an honest **"range not available
-  yet"** state — never today's data mislabelled.
-- **No fake comparison / hourly / shift details.** Auth/permission/tenant errors
-  fail closed (a denied caller never sees fabricated or fallback data).
+**Dashboard behavior in production (now that RF-REPORT-004 is LIVE):**
+- **Every range** — Today / Yesterday / Last 7 days / Last 30 days — loads **real
+  data** via `owner_report_range` (real current + prior-period comparison; a genuinely
+  empty window shows an honest empty state, never fabricated).
+- **Hourly** renders only for single-day ranges (Today / Yesterday) with real data;
+  multi-day ranges show **no** hourly chart (never an averaged/fake curve).
+- **Auth/permission/tenant errors fail closed** — a denied caller (e.g. `kitchen_staff`)
+  never sees financial data or a fabricated/fallback result.
+- The `owner_daily_report` / `sales_summary` fallback (§9, API_CONTRACT §4.19b) is now
+  only a **compatibility safety net** (a pre-deploy environment or a brief schema-cache
+  window), NOT the expected normal path.
 
-**Applying RF-REPORT-004 requires the SAME R-003-style preflight as the 001/002/003
-apply** (do NOT run hosted commands without explicit human approval):
+**RF-REPORT-004 was applied (2026-07-06) via this exact preflight — and FUTURE
+reporting migrations STILL require the SAME strict R-003-style gate** (never run
+hosted commands without explicit human approval):
 - Exactly **ONE** pending migration expected:
   `20260706110000_rf_report_004_owner_report_range.sql` (a forward-only
   `CREATE OR REPLACE`). If `supabase migration list --linked` shows anything else
@@ -429,7 +439,7 @@ the sales-by-hour chart by the Israel offset. To fix it, set the branch to
 required just to correct that branch setting.** New organizations now default to
 `Asia/Jerusalem`.
 
-**Post-migration smoke tests** (owner/manager, after the apply):
+**Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).
 - **Yesterday / Last 7 days / Last 30 days** load with real current + comparison
   figures.
