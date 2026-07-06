@@ -51,6 +51,31 @@ DashboardReport computeOwnerReport(OwnerReportDataset data) {
   // Shift / drawer reconciliation: expected = opening float + cash sales.
   final expectedCashMinor = data.shift.openingFloatMinor + cashSalesMinor;
 
+  // RF-REPORT-003 (demo): a representative TODAY shift/cash reconciliation so the
+  // Overview's "Shift & cash" card renders in demo mode. Uses the same expected
+  // (opening float + cash sales) + the dataset's counted amount; variance signed.
+  // Real mode gets this from owner_daily_report; the fallback leaves it null.
+  final demoVariance = data.shift.countedCashMinor - expectedCashMinor;
+  final demoClosedShift = ClosedShiftSummary(
+    shiftId: 'demo-shift-1',
+    branchName: sales.isNotEmpty ? sales.first.branchName : '',
+    openedAtLabel: '${data.businessDateLabel} 09:00',
+    closedAtLabel: '${data.businessDateLabel} 18:30',
+    closedByName: data.shift.closedByName,
+    expectedCashMinor: expectedCashMinor,
+    countedCashMinor: data.shift.countedCashMinor,
+    varianceMinor: demoVariance,
+  );
+  final demoShiftCash = ShiftCash(
+    closedShiftCount: 1,
+    openShiftCount: 1,
+    expectedCashMinor: expectedCashMinor,
+    countedCashMinor: data.shift.countedCashMinor,
+    varianceMinor: demoVariance,
+    lastClosedShift: demoClosedShift,
+    recentClosedShifts: [demoClosedShift],
+  );
+
   return DashboardReport(
     currencyCode: currency,
     businessDateLabel: data.businessDateLabel,
@@ -80,6 +105,7 @@ DashboardReport computeOwnerReport(OwnerReportDataset data) {
     // totals above are unaffected (still derived from `orders`).
     hourlyNetSales: data.hourlyNetSales,
     comparison: data.priorPeriod,
+    shiftCash: demoShiftCash,
   );
 }
 

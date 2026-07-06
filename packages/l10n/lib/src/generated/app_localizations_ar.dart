@@ -936,6 +936,33 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardCashVariance => 'فرق النقدية';
 
   @override
+  String get dashboardShiftCashTitle => 'الوردية والنقدية';
+
+  @override
+  String dashboardShiftClosedToday(int count) {
+    return '$count مغلقة اليوم';
+  }
+
+  @override
+  String dashboardShiftOpenNow(int count) {
+    return '$count مفتوحة الآن';
+  }
+
+  @override
+  String get dashboardShiftExpectedCash => 'النقدية المتوقعة';
+
+  @override
+  String get dashboardShiftLastClosed => 'آخر وردية مغلقة';
+
+  @override
+  String dashboardShiftClosedBy(String name) {
+    return 'أغلقها $name';
+  }
+
+  @override
+  String get dashboardShiftNoneToday => 'لا توجد ورديات مغلقة اليوم بعد.';
+
+  @override
   String get dashboardShiftStatus => 'الوردية';
 
   @override

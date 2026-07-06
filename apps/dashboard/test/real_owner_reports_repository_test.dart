@@ -584,4 +584,150 @@ void main() {
 
     expect(report.hourlyNetSales, isEmpty);
   });
+
+  // --- RF-REPORT-003: TODAY shift / cash reconciliation mapping ---------------
+
+  Future<DashboardReport> loadWith(void Function(Map<String, dynamic>) mut) {
+    final transport = _FakeTransport((_, _) {
+      final p = _payload();
+      mut(p);
+      return p;
+    });
+    return RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+  }
+
+  test('RF-REPORT-003: owner_daily_report shift_cash maps into ShiftCash '
+      '(counts, expected/counted/SIGNED variance, last + recent)', () async {
+    final report = await loadWith((p) {
+      p['shift_cash'] = <String, dynamic>{
+        'closed_shift_count': 2,
+        'open_shift_count': 1,
+        'expected_cash_minor': 3500,
+        'counted_cash_minor': 3490,
+        'cash_variance_minor': -10, // negative (shortage) supported
+        'last_closed_shift': {
+          'shift_id': 's2',
+          'branch_id': 'b1',
+          'branch_name': 'Main',
+          'opened_at': '2026-07-06T09:00:00Z',
+          'closed_at': '2026-07-06T18:00:00Z',
+          'closed_by_name': 'Amira K.',
+          'expected_cash_minor': 2000,
+          'counted_cash_minor': 2050,
+          'cash_variance_minor': 50,
+        },
+        'recent_closed_shifts': [
+          {
+            'shift_id': 's2',
+            'branch_name': 'Main',
+            'closed_at': '2026-07-06T18:00:00Z',
+            'closed_by_name': 'Amira K.',
+            'expected_cash_minor': 2000,
+            'counted_cash_minor': 2050,
+            'cash_variance_minor': 50,
+          },
+          {
+            'shift_id': 's1',
+            'branch_name': 'Main',
+            'closed_at': '2026-07-06T10:00:00Z',
+            'closed_by_name': 'Amira K.',
+            'expected_cash_minor': 1500,
+            'counted_cash_minor': 1440,
+            'cash_variance_minor': -60,
+          },
+        ],
+      };
+    });
+
+    final sc = report.shiftCash;
+    expect(sc, isNotNull);
+    expect(sc!.closedShiftCount, 2);
+    expect(sc.openShiftCount, 1);
+    expect(sc.expectedCashMinor, 3500);
+    expect(sc.countedCashMinor, 3490);
+    expect(sc.varianceMinor, -10);
+    expect(sc.varianceMinor, isA<int>());
+    expect(sc.hasClosedShifts, isTrue);
+    expect(sc.lastClosedShift, isNotNull);
+    expect(sc.lastClosedShift!.shiftId, 's2');
+    expect(sc.lastClosedShift!.branchName, 'Main');
+    expect(sc.lastClosedShift!.closedByName, 'Amira K.');
+    expect(sc.lastClosedShift!.varianceMinor, 50);
+    expect(sc.recentClosedShifts.length, 2);
+    expect(sc.recentClosedShifts.first.shiftId, 's2'); // newest first
+    expect(sc.recentClosedShifts.last.varianceMinor, -60);
+  });
+
+  test(
+    'RF-REPORT-003: NO shift_cash -> null (card hides, never fabricated)',
+    () async {
+      // _payload() carries no shift_cash key.
+      final report = await loadWith((_) {});
+      expect(report.shiftCash, isNull);
+    },
+  );
+
+  test('RF-REPORT-003: a malformed shift_cash is handled safely', () async {
+    // Non-map top-level -> null.
+    var report = await loadWith((p) => p['shift_cash'] = 'nope');
+    expect(report.shiftCash, isNull);
+
+    // Malformed nested rows are DROPPED, not crashed.
+    report = await loadWith((p) {
+      p['shift_cash'] = <String, dynamic>{
+        'closed_shift_count': 1,
+        'open_shift_count': 0,
+        'expected_cash_minor': 100,
+        'counted_cash_minor': 100,
+        'cash_variance_minor': 0,
+        'last_closed_shift': 'not-a-map', // -> null
+        'recent_closed_shifts': [
+          'not-a-map',
+          42,
+          {
+            'shift_id': 'ok',
+            'branch_name': 'B',
+            'closed_at': 't',
+            'closed_by_name': 'X',
+            'expected_cash_minor': 100,
+            'counted_cash_minor': 100,
+            'cash_variance_minor': 0,
+          },
+        ],
+      };
+    });
+    expect(report.shiftCash, isNotNull);
+    expect(report.shiftCash!.lastClosedShift, isNull);
+    expect(
+      report.shiftCash!.recentClosedShifts.length,
+      1,
+    ); // only the valid row
+  });
+
+  test('RF-REPORT-003: the sales_summary fallback has NO shift_cash', () async {
+    final transport = _FakeTransport((fn, _) {
+      if (fn == 'owner_daily_report') throw missingOwnerReport();
+      return <String, dynamic>{
+        'ok': true,
+        'entity': 'sales_summary',
+        'currency_code': 'ILS',
+        'today': {'orders_count': 5, 'payments_count': 3, 'gross_minor': 12000},
+        'last_7_days': <Map<String, dynamic>>[
+          {'day': '2026-07-06', 'orders_count': 5, 'gross_minor': 12000},
+        ],
+      };
+    });
+
+    final report = await RealOwnerReportsRepository(
+      null,
+      scope: _scope(),
+      transport: transport,
+    ).loadReport();
+
+    expect(report.shiftCash, isNull);
+  });
 }

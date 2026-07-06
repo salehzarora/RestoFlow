@@ -111,6 +111,54 @@ Widget _wrapHourly() => ProviderScope(
   ),
 );
 
+/// A real report carrying an RF-REPORT-003 shift/cash block (null => the card
+/// hides, as in the sales_summary fallback).
+class _ShiftRepo implements OwnerReportsRepository {
+  const _ShiftRepo(this.shiftCash);
+  final ShiftCash? shiftCash;
+  @override
+  Future<DashboardReport> loadReport() async => DashboardReport(
+    currencyCode: 'ILS',
+    businessDateLabel: '2026-07-06',
+    grossSalesMinor: 12000,
+    netSalesMinor: 12000,
+    discountTotalMinor: 0,
+    collectedMinor: 12000,
+    cashSalesMinor: 12000,
+    lastCashPaymentMinor: 0,
+    orderCount: 5,
+    completedOrderCount: 3,
+    openOrderCount: 2,
+    unpaidOrderCount: 2,
+    voidCount: 0,
+    voidTotalMinor: 0,
+    openingFloatMinor: 0,
+    expectedCashMinor: 0,
+    countedCashMinor: 0,
+    shiftStatus: 'none',
+    branches: const [],
+    topItems: const [],
+    recentOrders: const [],
+    paymentMethods: const [],
+    shiftCash: shiftCash,
+  );
+}
+
+Widget _wrapShift(ShiftCash? shiftCash) => ProviderScope(
+  overrides: [
+    runtimeConfigProvider.overrideWithValue(
+      RuntimeConfig.test(isDemoMode: false),
+    ),
+    ownerReportsRepositoryProvider.overrideWithValue(_ShiftRepo(shiftCash)),
+  ],
+  child: const MaterialApp(
+    locale: Locale('en'),
+    localizationsDelegates: restoflowLocalizationsDelegates,
+    supportedLocales: kSupportedLocales,
+    home: DashboardHomeScreen(),
+  ),
+);
+
 Widget _wrap() => const ProviderScope(
   child: MaterialApp(
     locale: Locale('en'),
@@ -212,21 +260,41 @@ void main() {
     expect(_kpi(tester, 'kpi-unpaid'), '2');
   });
 
-  testWidgets('payment & cash summary shows the expected drawer math', (
-    tester,
-  ) async {
+  testWidgets('RF-REPORT-003: drawer reconciliation moved to the Shift & cash '
+      'card; the payment card keeps only collection figures', (tester) async {
     _useWideSurface(tester);
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('payment-summary-card')), findsOneWidget);
+    // The dedicated Shift & cash card now OWNS the drawer reconciliation math.
+    final card = find.byKey(const Key('shift-cash-card'));
+    expect(card, findsOneWidget);
+    expect(
+      find.descendant(of: card, matching: find.text('₪974.00')),
+      findsOneWidget,
+    ); // expected (50000 + 47400)
+    expect(
+      find.descendant(of: card, matching: find.text('₪972.50')),
+      findsOneWidget,
+    ); // counted
+    expect(
+      find.descendant(of: card, matching: find.text('-₪1.50')),
+      findsWidgets,
+    ); // variance (aggregate + last-closed)
+
+    // The payment card keeps collection figures but NO drawer rows (so it can
+    // never contradict the Shift & cash card with a stale ₪0.00 in real mode).
+    // "Expected in drawer" is a payment-card-only label; the shift card uses
+    // "Expected cash", so its absence proves the payment drawer rows are gone.
+    final paymentCard = find.byKey(const Key('payment-summary-card'));
+    expect(paymentCard, findsOneWidget);
     expect(find.text('Payment & cash summary'), findsOneWidget);
-    expect(find.text('Expected in drawer'), findsOneWidget);
-    expect(find.text('₪500.00'), findsWidgets); // opening float
-    expect(find.text('₪974.00'), findsWidgets); // expected drawer (50000+47400)
-    expect(find.text('₪972.50'), findsWidgets); // counted cash
-    expect(find.text('-₪1.50'), findsWidgets); // variance 97250 - 97400
-    expect(find.text('5 · ₪474.00'), findsOneWidget); // cash method breakdown
+    expect(find.text('Expected in drawer'), findsNothing);
+    expect(
+      find.descendant(of: paymentCard, matching: find.text('Counted cash')),
+      findsNothing, // "Counted cash" only lives in the shift card now
+    );
+    expect(find.text('5 · ₪474.00'), findsOneWidget); // cash method still here
   });
 
   testWidgets('daily summary shows discounts and voids', (tester) async {
@@ -334,6 +402,88 @@ void main() {
       // analytics coming" note must NOT render (it would contradict the chart).
       // A refactor dropping the hourly term from the gate would fail HERE.
       expect(find.byKey(const Key('reports-limited-analytics')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'RF-REPORT-003: renders the Shift & cash card with real reconciliation data '
+    '(expected/counted, a SIGNED negative variance, and the last closed shift)',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(
+        _wrapShift(
+          const ShiftCash(
+            closedShiftCount: 2,
+            openShiftCount: 1,
+            expectedCashMinor: 3500,
+            countedCashMinor: 3490,
+            varianceMinor: -10, // shortage
+            lastClosedShift: ClosedShiftSummary(
+              shiftId: 's2',
+              branchName: 'Main',
+              closedAtLabel: '2026-07-06 18:00',
+              closedByName: 'Amira K.',
+              expectedCashMinor: 2000,
+              countedCashMinor: 2050,
+              varianceMinor: 50,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('shift-cash-card')), findsOneWidget);
+      expect(find.text('Shift & cash'), findsOneWidget);
+      // Counts + amounts render; the negative variance carries a sign.
+      expect(find.text('2 closed today'), findsOneWidget);
+      expect(find.text('1 open now'), findsOneWidget);
+      expect(find.text('-₪0.10'), findsWidgets); // -10 minor = -₪0.10
+      // The last closed shift block (who + its own variance).
+      expect(find.byKey(const Key('shift-cash-last')), findsOneWidget);
+      expect(find.textContaining('Amira K.'), findsOneWidget);
+      expect(find.byKey(const Key('shift-cash-empty')), findsNothing);
+      // Contradiction guard (the review's scenario): the legacy payment/summary
+      // drawer-reconciliation rows are HIDDEN when the real Shift & cash card is
+      // present — no stale ₪0.00 "Expected in drawer" / "Shift: none" beside it.
+      expect(find.text('Expected in drawer'), findsNothing);
+      expect(find.text('none'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'RF-REPORT-003: shows a calm empty state when no shift closed today',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(
+        _wrapShift(
+          const ShiftCash(
+            closedShiftCount: 0,
+            openShiftCount: 1,
+            expectedCashMinor: 0,
+            countedCashMinor: 0,
+            varianceMinor: 0,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('shift-cash-card')), findsOneWidget);
+      expect(find.byKey(const Key('shift-cash-empty')), findsOneWidget);
+      expect(find.text('No closed shifts yet today.'), findsOneWidget);
+      // No amount rows in the empty state.
+      expect(find.byKey(const Key('shift-cash-variance')), findsNothing);
+      expect(find.byKey(const Key('shift-cash-last')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'RF-REPORT-003: the Shift & cash card is HIDDEN in the fallback (shiftCash '
+    'null) — never fabricated',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(_wrapShift(null));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('shift-cash-card')), findsNothing);
     },
   );
 }
