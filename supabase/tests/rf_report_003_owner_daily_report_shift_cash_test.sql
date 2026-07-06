@@ -16,7 +16,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(19);
+select plan(20);
 
 -- ===== fixture: Org A (Rest A1 tz=UTC + Rest A2 tz=NULL) and Org B ============
 insert into organizations (id, name, slug, default_currency) values
@@ -155,6 +155,14 @@ select throws_ok(
   $$ select app.owner_daily_report('00000000-0000-0000-0000-0000000b0000', null, null) $$,
   '42501', NULL, 'an Org A owner cannot read the Org B shift_cash (cross-org 42501)');
 reset role;
+
+-- ===== (20) public wrapper: INVOKER + authenticated-only (no anon/PUBLIC) ======
+select ok(
+  (select prosecdef = false from pg_proc where proname='owner_daily_report' and pronamespace='public'::regnamespace and pronargs=3)
+  and not has_function_privilege('anon', 'public.owner_daily_report(uuid, uuid, uuid)', 'execute')
+  and not has_function_privilege('public', 'public.owner_daily_report(uuid, uuid, uuid)', 'execute')
+  and has_function_privilege('authenticated', 'public.owner_daily_report(uuid, uuid, uuid)', 'execute'),
+  'public.owner_daily_report is INVOKER, authenticated-only (anon/PUBLIC cannot execute)');
 
 select * from finish();
 rollback;

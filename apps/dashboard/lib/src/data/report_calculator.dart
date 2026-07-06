@@ -55,6 +55,15 @@ DashboardReport computeOwnerReport(OwnerReportDataset data) {
   // Overview's "Shift & cash" card renders in demo mode. Uses the same expected
   // (opening float + cash sales) + the dataset's counted amount; variance signed.
   // Real mode gets this from owner_daily_report; the fallback leaves it null.
+  //
+  // Only built when the dataset has ACTUAL shift/drawer activity — an empty day
+  // (no orders, no float, no counted cash) leaves shiftCash null so it never
+  // fabricates a closed shift and never keeps a truly-empty report out of the
+  // generic empty state (RF-REPORT-003 blocker: isEmpty accounts for shiftCash).
+  final hasShiftActivity =
+      orderCount > 0 ||
+      data.shift.openingFloatMinor > 0 ||
+      data.shift.countedCashMinor > 0;
   final demoVariance = data.shift.countedCashMinor - expectedCashMinor;
   final demoClosedShift = ClosedShiftSummary(
     shiftId: 'demo-shift-1',
@@ -66,15 +75,17 @@ DashboardReport computeOwnerReport(OwnerReportDataset data) {
     countedCashMinor: data.shift.countedCashMinor,
     varianceMinor: demoVariance,
   );
-  final demoShiftCash = ShiftCash(
-    closedShiftCount: 1,
-    openShiftCount: 1,
-    expectedCashMinor: expectedCashMinor,
-    countedCashMinor: data.shift.countedCashMinor,
-    varianceMinor: demoVariance,
-    lastClosedShift: demoClosedShift,
-    recentClosedShifts: [demoClosedShift],
-  );
+  final demoShiftCash = hasShiftActivity
+      ? ShiftCash(
+          closedShiftCount: 1,
+          openShiftCount: 1,
+          expectedCashMinor: expectedCashMinor,
+          countedCashMinor: data.shift.countedCashMinor,
+          varianceMinor: demoVariance,
+          lastClosedShift: demoClosedShift,
+          recentClosedShifts: [demoClosedShift],
+        )
+      : null;
 
   return DashboardReport(
     currencyCode: currency,

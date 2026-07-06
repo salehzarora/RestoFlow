@@ -185,6 +185,19 @@ class ShiftCash {
   final List<ClosedShiftSummary> recentClosedShifts;
 
   bool get hasClosedShifts => closedShiftCount > 0;
+
+  /// True when this block carries ANY meaningful reconciliation signal — a closed
+  /// or open shift, a non-zero expected/counted/variance, or a last/recent close.
+  /// Used to keep a shift-only day (zero orders/sales but real closed-shift cash)
+  /// OUT of the report's generic empty state so the "Shift & cash" card renders.
+  bool get hasData =>
+      closedShiftCount > 0 ||
+      openShiftCount > 0 ||
+      expectedCashMinor != 0 ||
+      countedCashMinor != 0 ||
+      varianceMinor != 0 ||
+      lastClosedShift != null ||
+      recentClosedShifts.isNotEmpty;
 }
 
 /// An immutable, single-day owner/manager report. Every field is DERIVED from
@@ -271,12 +284,17 @@ class DashboardReport {
   /// (`grossSalesMinor` / `collectedMinor` > 0) on orders created earlier while
   /// having zero orders created today, and that money must never be hidden behind
   /// a "No report data" empty state.
+  /// RF-REPORT-003: it ALSO requires no meaningful shift/cash reconciliation — a
+  /// real day can have zero orders/sales yet a closed shift with counted cash (an
+  /// opening float / drawer reconciliation), and that must render the "Shift &
+  /// cash" card instead of being hidden behind the generic empty state.
   bool get isEmpty =>
       orderCount == 0 &&
       completedOrderCount == 0 &&
       recentOrders.isEmpty &&
       grossSalesMinor == 0 &&
-      collectedMinor == 0;
+      collectedMinor == 0 &&
+      !(shiftCash?.hasData ?? false);
 
   /// Cash reconciliation variance = counted - expected (signed, integer minor).
   int get varianceMinor => countedCashMinor - expectedCashMinor;

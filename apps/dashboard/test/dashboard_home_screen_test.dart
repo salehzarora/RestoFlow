@@ -114,22 +114,27 @@ Widget _wrapHourly() => ProviderScope(
 /// A real report carrying an RF-REPORT-003 shift/cash block (null => the card
 /// hides, as in the sales_summary fallback).
 class _ShiftRepo implements OwnerReportsRepository {
-  const _ShiftRepo(this.shiftCash);
+  const _ShiftRepo(this.shiftCash, {this.zeroSales = false});
   final ShiftCash? shiftCash;
+
+  /// RF-REPORT-003 blocker: a real day with ZERO orders/sales but a closed shift
+  /// — must NOT collapse to the generic empty state.
+  final bool zeroSales;
+
   @override
   Future<DashboardReport> loadReport() async => DashboardReport(
     currencyCode: 'ILS',
     businessDateLabel: '2026-07-06',
-    grossSalesMinor: 12000,
-    netSalesMinor: 12000,
+    grossSalesMinor: zeroSales ? 0 : 12000,
+    netSalesMinor: zeroSales ? 0 : 12000,
     discountTotalMinor: 0,
-    collectedMinor: 12000,
-    cashSalesMinor: 12000,
+    collectedMinor: zeroSales ? 0 : 12000,
+    cashSalesMinor: zeroSales ? 0 : 12000,
     lastCashPaymentMinor: 0,
-    orderCount: 5,
-    completedOrderCount: 3,
-    openOrderCount: 2,
-    unpaidOrderCount: 2,
+    orderCount: zeroSales ? 0 : 5,
+    completedOrderCount: zeroSales ? 0 : 3,
+    openOrderCount: zeroSales ? 0 : 2,
+    unpaidOrderCount: zeroSales ? 0 : 2,
     voidCount: 0,
     voidTotalMinor: 0,
     openingFloatMinor: 0,
@@ -144,20 +149,23 @@ class _ShiftRepo implements OwnerReportsRepository {
   );
 }
 
-Widget _wrapShift(ShiftCash? shiftCash) => ProviderScope(
-  overrides: [
-    runtimeConfigProvider.overrideWithValue(
-      RuntimeConfig.test(isDemoMode: false),
-    ),
-    ownerReportsRepositoryProvider.overrideWithValue(_ShiftRepo(shiftCash)),
-  ],
-  child: const MaterialApp(
-    locale: Locale('en'),
-    localizationsDelegates: restoflowLocalizationsDelegates,
-    supportedLocales: kSupportedLocales,
-    home: DashboardHomeScreen(),
-  ),
-);
+Widget _wrapShift(ShiftCash? shiftCash, {bool zeroSales = false}) =>
+    ProviderScope(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(
+          RuntimeConfig.test(isDemoMode: false),
+        ),
+        ownerReportsRepositoryProvider.overrideWithValue(
+          _ShiftRepo(shiftCash, zeroSales: zeroSales),
+        ),
+      ],
+      child: const MaterialApp(
+        locale: Locale('en'),
+        localizationsDelegates: restoflowLocalizationsDelegates,
+        supportedLocales: kSupportedLocales,
+        home: DashboardHomeScreen(),
+      ),
+    );
 
 Widget _wrap() => const ProviderScope(
   child: MaterialApp(
@@ -484,6 +492,42 @@ void main() {
       await tester.pumpWidget(_wrapShift(null));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('shift-cash-card')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'RF-REPORT-003 blocker: a ZERO-orders/ZERO-sales day with a closed shift '
+    'still renders the Shift & cash card and NOT the generic empty state',
+    (tester) async {
+      _useWideSurface(tester);
+      await tester.pumpWidget(
+        _wrapShift(
+          const ShiftCash(
+            closedShiftCount: 1,
+            openShiftCount: 0,
+            expectedCashMinor: 37000,
+            countedCashMinor: 37000,
+            varianceMinor: 0,
+            lastClosedShift: ClosedShiftSummary(
+              shiftId: 's1',
+              branchName: 'Main',
+              closedAtLabel: '2026-07-06 22:00',
+              closedByName: 'Amira K.',
+              expectedCashMinor: 37000,
+              countedCashMinor: 37000,
+              varianceMinor: 0,
+            ),
+          ),
+          zeroSales: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The card renders even though orders/sales are ALL zero...
+      expect(find.byKey(const Key('shift-cash-card')), findsOneWidget);
+      expect(find.text('₪370.00'), findsWidgets); // 37000 minor = ₪370.00
+      // ...and the generic "No report data" empty state is NOT shown.
+      expect(find.byKey(const Key('reports-empty')), findsNothing);
     },
   );
 }
