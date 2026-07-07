@@ -2889,4 +2889,59 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posCartBarView => 'View cart';
+
+  @override
+  String get posPrinterTransportHeading => 'Printer connection';
+
+  @override
+  String get posPrinterTransportNetwork => 'Wi-Fi';
+
+  @override
+  String get posPrinterTransportBluetooth => 'Bluetooth';
+
+  @override
+  String get posBluetoothPrinterHeading => 'Bluetooth printer (this device)';
+
+  @override
+  String get posBluetoothPrinterHelp =>
+      'Print to a paired Bluetooth thermal printer. Pair it in Android Bluetooth settings first, then refresh.';
+
+  @override
+  String get posBluetoothPairedLabel => 'Paired printers';
+
+  @override
+  String get posBluetoothRefreshAction => 'Refresh devices';
+
+  @override
+  String get posBluetoothNoDevices =>
+      'No paired Bluetooth devices. Pair your printer in Android settings, then refresh.';
+
+  @override
+  String get posBluetoothPermissionRequired =>
+      'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.';
+
+  @override
+  String get posBluetoothOff => 'Bluetooth is off — turn it on, then refresh.';
+
+  @override
+  String get posBluetoothSavedSnack => 'Bluetooth printer saved';
+
+  @override
+  String get posBluetoothSelectHint => 'Select a paired printer above.';
+
+  @override
+  String get posPrinterRemoveAction => 'Remove printer';
+
+  @override
+  String get posPrinterRemovedSnack => 'Printer removed';
+
+  @override
+  String get posPrinterNotConfigured => 'No printer configured on this device.';
+
+  @override
+  String get posPrinterErrorTimeout => 'The printer didn\'t respond in time.';
+
+  @override
+  String get posPrinterErrorUnreachable =>
+      'Couldn\'t reach the printer — check it\'s on and connected.';
 }

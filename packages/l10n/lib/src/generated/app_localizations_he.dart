@@ -2849,4 +2849,59 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posCartBarView => 'הצג סל';
+
+  @override
+  String get posPrinterTransportHeading => 'חיבור המדפסת';
+
+  @override
+  String get posPrinterTransportNetwork => 'Wi‑Fi';
+
+  @override
+  String get posPrinterTransportBluetooth => 'בלוטות\'';
+
+  @override
+  String get posBluetoothPrinterHeading => 'מדפסת בלוטות\' (מכשיר זה)';
+
+  @override
+  String get posBluetoothPrinterHelp =>
+      'הדפסה למדפסת תרמית דרך בלוטות\'. התאם אותה קודם בהגדרות הבלוטות\' של אנדרואיד, ואז רענן.';
+
+  @override
+  String get posBluetoothPairedLabel => 'מדפסות מותאמות';
+
+  @override
+  String get posBluetoothRefreshAction => 'רענון מכשירים';
+
+  @override
+  String get posBluetoothNoDevices =>
+      'לא נמצאו מכשירי בלוטות\' מותאמים. התאם את המדפסת בהגדרות אנדרואיד ואז רענן.';
+
+  @override
+  String get posBluetoothPermissionRequired =>
+      'נדרשת הרשאת בלוטות\'. אשר אותה ל‑RestoFlow בהגדרות אנדרואיד ואז רענן.';
+
+  @override
+  String get posBluetoothOff => 'הבלוטות\' כבוי — הפעל אותו ואז רענן.';
+
+  @override
+  String get posBluetoothSavedSnack => 'מדפסת הבלוטות\' נשמרה';
+
+  @override
+  String get posBluetoothSelectHint => 'בחר מדפסת מותאמת למעלה.';
+
+  @override
+  String get posPrinterRemoveAction => 'הסרת מדפסת';
+
+  @override
+  String get posPrinterRemovedSnack => 'המדפסת הוסרה';
+
+  @override
+  String get posPrinterNotConfigured => 'לא הוגדרה מדפסת במכשיר זה.';
+
+  @override
+  String get posPrinterErrorTimeout => 'המדפסת לא הגיבה בזמן.';
+
+  @override
+  String get posPrinterErrorUnreachable =>
+      'לא ניתן היה להגיע למדפסת — ודא שהיא פועלת ומחוברת.';
 }

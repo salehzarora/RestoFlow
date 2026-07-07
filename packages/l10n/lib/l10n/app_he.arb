@@ -892,5 +892,22 @@
   "posSearchNoResults": "אין פריטים התואמים לחיפוש",
   "posOptionsChipLabel": "אפשרויות",
   "posCartBarSent": "הזמנה נשלחה — פרטים",
-  "posCartBarView": "הצג סל"
+  "posCartBarView": "הצג סל",
+  "posPrinterTransportHeading": "חיבור המדפסת",
+  "posPrinterTransportNetwork": "Wi‑Fi",
+  "posPrinterTransportBluetooth": "בלוטות'",
+  "posBluetoothPrinterHeading": "מדפסת בלוטות' (מכשיר זה)",
+  "posBluetoothPrinterHelp": "הדפסה למדפסת תרמית דרך בלוטות'. התאם אותה קודם בהגדרות הבלוטות' של אנדרואיד, ואז רענן.",
+  "posBluetoothPairedLabel": "מדפסות מותאמות",
+  "posBluetoothRefreshAction": "רענון מכשירים",
+  "posBluetoothNoDevices": "לא נמצאו מכשירי בלוטות' מותאמים. התאם את המדפסת בהגדרות אנדרואיד ואז רענן.",
+  "posBluetoothPermissionRequired": "נדרשת הרשאת בלוטות'. אשר אותה ל‑RestoFlow בהגדרות אנדרואיד ואז רענן.",
+  "posBluetoothOff": "הבלוטות' כבוי — הפעל אותו ואז רענן.",
+  "posBluetoothSavedSnack": "מדפסת הבלוטות' נשמרה",
+  "posBluetoothSelectHint": "בחר מדפסת מותאמת למעלה.",
+  "posPrinterRemoveAction": "הסרת מדפסת",
+  "posPrinterRemovedSnack": "המדפסת הוסרה",
+  "posPrinterNotConfigured": "לא הוגדרה מדפסת במכשיר זה.",
+  "posPrinterErrorTimeout": "המדפסת לא הגיבה בזמן.",
+  "posPrinterErrorUnreachable": "לא ניתן היה להגיע למדפסת — ודא שהיא פועלת ומחוברת."
 }

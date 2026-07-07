@@ -2869,4 +2869,59 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posCartBarView => 'عرض السلة';
+
+  @override
+  String get posPrinterTransportHeading => 'اتصال الطابعة';
+
+  @override
+  String get posPrinterTransportNetwork => 'Wi‑Fi';
+
+  @override
+  String get posPrinterTransportBluetooth => 'بلوتوث';
+
+  @override
+  String get posBluetoothPrinterHeading => 'طابعة بلوتوث (هذا الجهاز)';
+
+  @override
+  String get posBluetoothPrinterHelp =>
+      'اطبع على طابعة حرارية عبر بلوتوث. اقترنها أولًا من إعدادات بلوتوث في أندرويد ثم حدّث القائمة.';
+
+  @override
+  String get posBluetoothPairedLabel => 'الطابعات المقترنة';
+
+  @override
+  String get posBluetoothRefreshAction => 'تحديث الأجهزة';
+
+  @override
+  String get posBluetoothNoDevices =>
+      'لا توجد أجهزة بلوتوث مقترنة. اقترن طابعتك من إعدادات أندرويد ثم حدّث.';
+
+  @override
+  String get posBluetoothPermissionRequired =>
+      'إذن البلوتوث مطلوب. اسمح به لـ RestoFlow من إعدادات أندرويد ثم حدّث.';
+
+  @override
+  String get posBluetoothOff => 'البلوتوث مُطفأ — شغّله ثم حدّث.';
+
+  @override
+  String get posBluetoothSavedSnack => 'تم حفظ طابعة البلوتوث';
+
+  @override
+  String get posBluetoothSelectHint => 'اختر طابعة مقترنة من الأعلى.';
+
+  @override
+  String get posPrinterRemoveAction => 'إزالة الطابعة';
+
+  @override
+  String get posPrinterRemovedSnack => 'تمت إزالة الطابعة';
+
+  @override
+  String get posPrinterNotConfigured => 'لا توجد طابعة مُهيّأة على هذا الجهاز.';
+
+  @override
+  String get posPrinterErrorTimeout => 'لم تستجب الطابعة في الوقت المحدد.';
+
+  @override
+  String get posPrinterErrorUnreachable =>
+      'تعذّر الوصول إلى الطابعة — تأكد أنها مشغّلة ومتصلة.';
 }

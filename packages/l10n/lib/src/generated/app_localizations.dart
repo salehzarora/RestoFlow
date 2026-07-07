@@ -5421,6 +5421,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View cart'**
   String get posCartBarView;
+
+  /// POS device-settings heading for the native printer transport chooser (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer connection'**
+  String get posPrinterTransportHeading;
+
+  /// POS printer transport option: a Wi-Fi/Ethernet network printer (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Wi-Fi'**
+  String get posPrinterTransportNetwork;
+
+  /// POS printer transport option: a Bluetooth Classic thermal printer (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get posPrinterTransportBluetooth;
+
+  /// POS device-settings heading for the on-device Bluetooth printer setup (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth printer (this device)'**
+  String get posBluetoothPrinterHeading;
+
+  /// POS help text for Bluetooth printer setup — the MVP uses already-paired devices (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Print to a paired Bluetooth thermal printer. Pair it in Android Bluetooth settings first, then refresh.'**
+  String get posBluetoothPrinterHelp;
+
+  /// POS label above the list of paired Bluetooth devices (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Paired printers'**
+  String get posBluetoothPairedLabel;
+
+  /// POS action to reload the paired Bluetooth devices list (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh devices'**
+  String get posBluetoothRefreshAction;
+
+  /// POS empty state when no paired Bluetooth devices are found (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'No paired Bluetooth devices. Pair your printer in Android settings, then refresh.'**
+  String get posBluetoothNoDevices;
+
+  /// POS message when the Android 12+ Bluetooth runtime permission is denied (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.'**
+  String get posBluetoothPermissionRequired;
+
+  /// POS message when the Bluetooth adapter is off (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth is off — turn it on, then refresh.'**
+  String get posBluetoothOff;
+
+  /// POS confirmation shown after a Bluetooth printer is saved locally (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth printer saved'**
+  String get posBluetoothSavedSnack;
+
+  /// POS hint prompting the cashier to pick a paired printer before saving/testing (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Select a paired printer above.'**
+  String get posBluetoothSelectHint;
+
+  /// POS action to remove the saved native (network/Bluetooth) printer from this device (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove printer'**
+  String get posPrinterRemoveAction;
+
+  /// POS confirmation shown after the saved printer is removed (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer removed'**
+  String get posPrinterRemovedSnack;
+
+  /// POS message when a print action runs but no native printer is configured on the device (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'No printer configured on this device.'**
+  String get posPrinterNotConfigured;
+
+  /// POS print failure reason: connection/write timed out (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'The printer didn\'t respond in time.'**
+  String get posPrinterErrorTimeout;
+
+  /// POS print failure reason: connection refused / host unreachable / not connected (ANDROID-003).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach the printer — check it\'s on and connected.'**
+  String get posPrinterErrorUnreachable;
 }
 
 class _AppLocalizationsDelegate

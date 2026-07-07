@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,13 +8,10 @@ import '../print/network_printer_tester.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_network_printer_config.dart';
 
-/// True when this build can print directly to a network printer with a raw TCP
-/// socket — i.e. the native (non-web) Android app. On web the app has no
-/// `dart:io` sockets and keeps the print-bridge path, so the section is hidden
-/// and the bridge messaging is unchanged. Overridable in tests.
-final posNativePrintingAvailableProvider = Provider<bool>(
-  (ref) => !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
-);
+// posNativePrintingAvailableProvider moved to pos_printer_transport.dart
+// (ANDROID-003); re-exported so existing importers/tests keep resolving it.
+export '../state/pos_printer_transport.dart'
+    show posNativePrintingAvailableProvider;
 
 enum _TestStatus { idle, testing, success, failure }
 
