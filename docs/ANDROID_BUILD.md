@@ -130,12 +130,11 @@ apps/dashboard/build/app/outputs/flutter-apk/app-debug.apk   (or app-release.apk
 - **Play Store.** App bundle (`flutter build appbundle`), store listing, versioning
   (`versionCode`/`versionName` — currently Flutter defaults), privacy declarations,
   and a signed upload key. Not started.
-- **Native printing.** The `restoflow_printing` package already contains an ESC/POS
-  adapter and a **local loopback print-bridge client** (honest `sent ≠ printed`), but
-  **native (Bluetooth/USB/Wi-Fi) printing is NOT wired** — it needs a platform printer
-  plugin/adapter and its own ticket. See **OPEN QUESTION Q-015** (encoding/raster
-  fallback for Arabic/Hebrew) in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) and the
-  printing owner doc [PRINTERS_AND_HARDWARE_SPEC.md](PRINTERS_AND_HARDWARE_SPEC.md).
+- **Native printing.** Native **network (Wi-Fi/Ethernet) ESC/POS printing is now
+  wired for the POS app** (ANDROID-002) — see §7. **Bluetooth** and **USB** are still
+  follow-ups (§7b). See **OPEN QUESTION Q-015** (encoding/raster fallback for
+  Arabic/Hebrew) in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) and the printing owner doc
+  [PRINTERS_AND_HARDWARE_SPEC.md](PRINTERS_AND_HARDWARE_SPEC.md).
 
 ---
 
@@ -148,3 +147,56 @@ apps/dashboard/build/app/outputs/flutter-apk/app-debug.apk   (or app-release.apk
   app stays money-free.
 - **Web deploy unchanged.** This ticket did not touch `apps/*/web/`,
   `tools/vercel_build_web.sh`, or `vercel.json`; the Vercel web build is unaffected.
+
+---
+
+## 7. Native network printing — POS (ANDROID-002)
+
+The POS app can print directly to a **network (Wi-Fi/Ethernet) ESC/POS thermal
+printer** with **no print bridge** and **no extra service**.
+
+**How it works.** `packages/restoflow_printing` gains a `NetworkTcpPrintTransport`
+(RAW/JetDirect over a `dart:io` TCP socket to `IP:9100`). It is **web-safe**: the
+socket sender is selected by a conditional import (`dart.library.io`), so the web
+apps never link `dart:io` and keep the existing print-bridge path unchanged. The POS
+builds a money-free, ASCII **ESC/POS test document**, encodes it for an 80mm profile,
+and sends the bytes over the socket. "Success" means the bytes were flushed to the
+printer (best-effort; ESC/POS over a socket has no paper-print acknowledgement).
+
+**Using it on a tablet.** POS app → ⋮ → **Device settings** → **Network printer (this
+device)**: enter the printer **IP address** and **Port** (9100 default) + an optional
+name → **Test print**. Status is honest: *not configured → saved → sending → sent /
+failed*. The config is saved **locally** per device (`shared_preferences`, no secret,
+never leaves the device). Once a printer is set up, the assigned-printer note/pill
+drop the "Requires print bridge" wording (a bridge is no longer the only path).
+
+**Permissions.** Only `android.permission.INTERNET` (already declared) — a raw TCP
+socket needs no extra Android permission.
+
+**No new dependencies.** Network printing uses only `dart:io`; no pub package or
+native plugin was added.
+
+### 7b. Bluetooth / USB printing — follow-up (deferred, ANDROID-002)
+
+**Bluetooth Classic (SPP)** is the right target (many thermal printers are Classic,
+not BLE), but it is deferred to its own ticket because it **cannot be verified here**
+(no physical BT printer) and it needs a **native plugin** (e.g.
+`flutter_bluetooth_serial` / `blue_thermal_printer` / `esc_pos_bluetooth`), each of
+which adds an unvetted Android-only dependency + a maintenance/androidX risk. Shipping
+Wi-Fi first (fully working, zero new deps) is the safe MVP, per the ticket's own
+guidance. A Bluetooth follow-up must:
+
+- Add a vetted Bluetooth Classic/SPP plugin and a `BluetoothClassicPrintTransport`
+  behind the same `PrintTransport` port (keep web builds green with a conditional
+  import / platform guard).
+- Declare Android permissions **only when the feature ships** (to keep Play Store
+  data declarations honest): `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT` (Android 12+,
+  with `usesPermissionFlags="neverForLocation"` on scan if discovery is
+  location-free), the legacy `BLUETOOTH` + `BLUETOOTH_ADMIN` (`maxSdkVersion="30"`),
+  and `ACCESS_FINE_LOCATION` **only if** discovery requires it on older Android.
+- Request the runtime permissions from the app (a `permission_handler`-style flow),
+  list paired/discovered devices, connect, and send the same ESC/POS test document.
+
+**Encoding follow-up.** The test print is ASCII/English only. Localized Arabic/Hebrew
+(RTL) printing goes through the raster path (RF-073, **OPEN QUESTION Q-015**) and is
+not exercised by this diagnostic.

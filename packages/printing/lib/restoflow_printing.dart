@@ -33,6 +33,9 @@ export 'src/bridge/print_bridge_client.dart';
 export 'src/bridge/print_bridge_dispatcher.dart';
 export 'src/bridge/print_bridge_transport.dart';
 export 'src/codec/print_document_codec.dart';
+// ANDROID-002: the on-device ESC/POS "Test print" diagnostic document builder
+// (ASCII/English-only, money-free) for the printer-setup Test print button.
+export 'src/diagnostics/escpos_test_document.dart';
 // RF-074: cash-drawer kick trigger — a narrow input contract + a dispatcher
 // that enqueues a one-shot, no-retry `cashDrawer` job (consumes RF-070's
 // PrintDrawerKickLine + RF-071 spool + the RF-58 job type/reprint guard).
@@ -59,4 +62,7 @@ export 'src/spool/print_spool.dart';
 export 'src/spool/print_spool_store.dart';
 export 'src/spool/reprint_audit_sink.dart';
 export 'src/transport/in_memory_print_transport.dart';
+// ANDROID-002: the real on-device network (Wi-Fi/Ethernet) RAW ESC/POS TCP
+// transport (port 9100). Web-safe — direct sockets link only on native.
+export 'src/transport/network_tcp_print_transport.dart';
 export 'src/transport/print_transport.dart';

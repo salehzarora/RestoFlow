@@ -2791,4 +2791,62 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posDiscountDemoNote => 'خصم تجريبي — مُطبّق محليًا';
+
+  @override
+  String get posNetworkPrinterHeading => 'طابعة الشبكة (هذا الجهاز)';
+
+  @override
+  String get posNetworkPrinterHelp =>
+      'اطبع مباشرة على طابعة حرارية عبر Wi‑Fi أو Ethernet على هذه الشبكة. لا حاجة إلى جسر الطباعة.';
+
+  @override
+  String get posNetworkPrinterIpLabel => 'عنوان IP للطابعة';
+
+  @override
+  String get posNetworkPrinterIpHint => '192.168.1.50';
+
+  @override
+  String get posNetworkPrinterPortLabel => 'المنفذ';
+
+  @override
+  String get posNetworkPrinterNameLabel => 'اسم الطابعة (اختياري)';
+
+  @override
+  String get posNetworkPrinterSaveAction => 'حفظ الطابعة';
+
+  @override
+  String get posNetworkPrinterTestAction => 'طباعة اختبار';
+
+  @override
+  String get posNetworkPrinterSavedSnack => 'تم حفظ طابعة الشبكة';
+
+  @override
+  String get posNetworkPrinterStatusNotConfigured => 'غير مُهيّأة';
+
+  @override
+  String get posNetworkPrinterStatusSaved => 'محفوظة';
+
+  @override
+  String get posNetworkPrinterTesting => 'جارٍ إرسال طباعة الاختبار…';
+
+  @override
+  String get posNetworkPrinterTestSuccess => 'تم إرسال طباعة الاختبار';
+
+  @override
+  String get posNetworkPrinterTestFailure =>
+      'تعذّر الوصول إلى الطابعة. تحقّق من عنوان IP والمنفذ ومن أنّ الطابعة على شبكة Wi‑Fi نفسها.';
+
+  @override
+  String get posNetworkPrinterInvalidIp =>
+      'أدخل عنوان IP صالحًا (مثال: 192.168.1.50).';
+
+  @override
+  String get posNetworkPrinterInvalidPort => 'أدخل منفذًا صالحًا (1–65535).';
+
+  @override
+  String get deviceSettingsNativeNetworkNote =>
+      'يمكن لهذا الجهاز الطباعة مباشرة على طابعة شبكة (تُضبط أعلاه) — لا حاجة إلى جسر الطباعة.';
+
+  @override
+  String get deviceSettingsPrinterConfigured => 'مُهيّأة';
 }

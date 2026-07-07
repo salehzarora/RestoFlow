@@ -2771,4 +2771,62 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posDiscountDemoNote => 'הנחת דמו — הוחלה מקומית';
+
+  @override
+  String get posNetworkPrinterHeading => 'מדפסת רשת (מכשיר זה)';
+
+  @override
+  String get posNetworkPrinterHelp =>
+      'הדפסה ישירה למדפסת תרמית ברשת Wi‑Fi או Ethernet. אין צורך בגשר הדפסה.';
+
+  @override
+  String get posNetworkPrinterIpLabel => 'כתובת IP של המדפסת';
+
+  @override
+  String get posNetworkPrinterIpHint => '192.168.1.50';
+
+  @override
+  String get posNetworkPrinterPortLabel => 'פורט';
+
+  @override
+  String get posNetworkPrinterNameLabel => 'שם המדפסת (אופציונלי)';
+
+  @override
+  String get posNetworkPrinterSaveAction => 'שמירת מדפסת';
+
+  @override
+  String get posNetworkPrinterTestAction => 'הדפסת בדיקה';
+
+  @override
+  String get posNetworkPrinterSavedSnack => 'מדפסת הרשת נשמרה';
+
+  @override
+  String get posNetworkPrinterStatusNotConfigured => 'לא הוגדרה';
+
+  @override
+  String get posNetworkPrinterStatusSaved => 'נשמרה';
+
+  @override
+  String get posNetworkPrinterTesting => 'שולח הדפסת בדיקה…';
+
+  @override
+  String get posNetworkPrinterTestSuccess => 'הדפסת הבדיקה נשלחה';
+
+  @override
+  String get posNetworkPrinterTestFailure =>
+      'לא ניתן היה להגיע למדפסת. בדוק את כתובת ה‑IP, הפורט, ושהמדפסת מחוברת לרשת ה‑Wi‑Fi הזו.';
+
+  @override
+  String get posNetworkPrinterInvalidIp =>
+      'הזן כתובת IP תקינה (לדוגמה 192.168.1.50).';
+
+  @override
+  String get posNetworkPrinterInvalidPort => 'הזן פורט תקין (1–65535).';
+
+  @override
+  String get deviceSettingsNativeNetworkNote =>
+      'מכשיר זה יכול להדפיס ישירות למדפסת רשת (מוגדרת למעלה) — אין צורך בגשר הדפסה.';
+
+  @override
+  String get deviceSettingsPrinterConfigured => 'מוגדרת';
 }
