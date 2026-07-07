@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../pos_palette.dart';
 import '../state/order_setup_controller.dart';
 import 'table_picker_sheet.dart';
 
@@ -43,8 +44,17 @@ class OrderSetupSection extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: SegmentedButton<OrderType>(
+              showSelectedIcon: false,
               style: SegmentedButton.styleFrom(
                 minimumSize: const Size.fromHeight(44),
+                backgroundColor: kPosChipBg,
+                foregroundColor: kRestoflowInk2,
+                selectedBackgroundColor: Colors.white,
+                selectedForegroundColor: kRestoflowBrandDark,
+                side: const BorderSide(color: kRestoflowHairline),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13),
+                ),
               ),
               segments: [
                 ButtonSegment<OrderType>(
@@ -173,31 +183,32 @@ class _WarningRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Design-polish: a compact DANGER note (tinted container) so the blocking
-    // condition is visually distinct from ordinary hints.
-    final danger = RestoflowTone.danger.styleOf(theme);
+    // DESIGN-004: an AMBER "choose a table" prompt (warning tone) — a needed
+    // step, not a hard error.
+    final warning = RestoflowTone.warning.styleOf(theme);
     return Container(
       key: const Key('table-required-warning'),
       width: double.infinity,
       padding: const EdgeInsets.all(RestoflowSpacing.sm),
       decoration: BoxDecoration(
-        color: danger.container,
-        borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+        color: warning.container,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        border: Border.all(color: warning.accent.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.error_outline,
+            Icons.event_seat,
             size: RestoflowIconSizes.sm,
-            color: danger.onContainer,
+            color: warning.onContainer,
           ),
           const SizedBox(width: RestoflowSpacing.sm),
           Expanded(
             child: Text(
               message,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: danger.onContainer,
+                color: warning.onContainer,
                 fontWeight: FontWeight.w600,
               ),
             ),

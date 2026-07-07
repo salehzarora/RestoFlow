@@ -5277,6 +5277,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Demo discount — applied locally'**
   String get posDiscountDemoNote;
+
+  /// POS device-settings heading for the on-device network (Wi-Fi/Ethernet) ESC/POS printer setup (ANDROID-002).
+  ///
+  /// In en, this message translates to:
+  /// **'Network printer (this device)'**
+  String get posNetworkPrinterHeading;
+
+  /// POS help text explaining the native network printer prints directly with no print bridge (ANDROID-002).
+  ///
+  /// In en, this message translates to:
+  /// **'Print directly to a Wi-Fi or Ethernet thermal printer on this network. No print bridge needed.'**
+  String get posNetworkPrinterHelp;
+
+  /// POS label for the network printer IP-address input.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer IP address'**
+  String get posNetworkPrinterIpLabel;
+
+  /// POS example IP address shown as the hint in the printer IP input (an example address, not translated).
+  ///
+  /// In en, this message translates to:
+  /// **'192.168.1.50'**
+  String get posNetworkPrinterIpHint;
+
+  /// POS label for the network printer TCP port input (default 9100).
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get posNetworkPrinterPortLabel;
+
+  /// POS label for the optional friendly printer name input.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer name (optional)'**
+  String get posNetworkPrinterNameLabel;
+
+  /// POS action that saves the network printer config locally on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Save printer'**
+  String get posNetworkPrinterSaveAction;
+
+  /// POS action that sends a test print to the configured network printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Test print'**
+  String get posNetworkPrinterTestAction;
+
+  /// POS confirmation shown after the network printer config is saved locally.
+  ///
+  /// In en, this message translates to:
+  /// **'Network printer saved'**
+  String get posNetworkPrinterSavedSnack;
+
+  /// POS network-printer status: no printer has been configured on this device yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not configured'**
+  String get posNetworkPrinterStatusNotConfigured;
+
+  /// POS network-printer status: a printer config is saved on this device (no test run yet).
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get posNetworkPrinterStatusSaved;
+
+  /// POS network-printer status while the test print bytes are being sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending test print…'**
+  String get posNetworkPrinterTesting;
+
+  /// POS network-printer status: the test print bytes were delivered to the printer (best-effort, not a hardware paper-print acknowledgement).
+  ///
+  /// In en, this message translates to:
+  /// **'Test print sent'**
+  String get posNetworkPrinterTestSuccess;
+
+  /// POS network-printer status: the test print could not reach the printer (unreachable/timeout).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach the printer. Check the IP address, the port, and that the printer is on this Wi-Fi network.'**
+  String get posNetworkPrinterTestFailure;
+
+  /// POS validation message when the typed printer IP address is empty or malformed.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid IP address (for example 192.168.1.50).'**
+  String get posNetworkPrinterInvalidIp;
+
+  /// POS validation message when the typed printer port is out of the 1–65535 range.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid port (1–65535).'**
+  String get posNetworkPrinterInvalidPort;
+
+  /// Device-settings capability note shown on the native Android app when direct network printing is available, replacing the print-bridge-required note (ANDROID-002).
+  ///
+  /// In en, this message translates to:
+  /// **'This device can print directly to a network printer (set up above) — no print bridge needed.'**
+  String get deviceSettingsNativeNetworkNote;
+
+  /// Device-settings status pill for an enabled assigned printer on the native Android app, replacing 'Requires print bridge' when direct network printing is available (ANDROID-002).
+  ///
+  /// In en, this message translates to:
+  /// **'Configured'**
+  String get deviceSettingsPrinterConfigured;
+
+  /// POS menu header: how many items the active menu has (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String posMenuItemCount(int count);
+
+  /// POS menu search field placeholder — filters the already-loaded items by name (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Search items…'**
+  String get posMenuSearchHint;
+
+  /// POS empty state shown when the client-side search filter matches no menu items (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'No items match your search'**
+  String get posSearchNoResults;
+
+  /// POS menu-card chip marking an item whose add opens the options/modifier sheet (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get posOptionsChipLabel;
+
+  /// POS phone bottom cart-bar label after an order was submitted (opens the confirmation) (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Order sent — details'**
+  String get posCartBarSent;
+
+  /// POS phone bottom cart-bar accessibility label to open the slide-up cart sheet (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'View cart'**
+  String get posCartBarView;
 }
 
 class _AppLocalizationsDelegate

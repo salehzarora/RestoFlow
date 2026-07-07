@@ -30,7 +30,9 @@ Widget _wrapCard(Widget card) => MaterialApp(
   locale: const Locale('en'),
   localizationsDelegates: restoflowLocalizationsDelegates,
   supportedLocales: kSupportedLocales,
-  home: Scaffold(body: SizedBox(width: 220, height: 188, child: card)),
+  // DESIGN-004: the card is taller now (a fixed 4:3 image band over the body),
+  // so the isolated-card harness gives it room for that band + the body.
+  home: Scaffold(body: SizedBox(width: 220, height: 264, child: card)),
 );
 
 void main() {

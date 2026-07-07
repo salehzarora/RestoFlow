@@ -21,6 +21,7 @@ class PrinterAssignmentsSection extends StatelessWidget {
     required this.assignmentsAsync,
     this.stationNames = false,
     this.bridgeStatus,
+    this.nativeNetworkAvailable = false,
     super.key,
   });
 
@@ -36,6 +37,12 @@ class PrinterAssignmentsSection extends StatelessWidget {
   /// RF-115: the local print-bridge snapshot, or null when no bridge is
   /// configured (the default — the row is then hidden, unchanged behaviour).
   final PrinterBridgeStatus? bridgeStatus;
+
+  /// ANDROID-002: true on the native app once a direct network printer is set
+  /// up on THIS device. The assigned-printer note/pill then drop the "requires
+  /// print bridge" wording (a bridge is no longer the only physical path).
+  /// Default false keeps the web / KDS / dashboard behaviour unchanged.
+  final bool nativeNetworkAvailable;
 
   static String _formatTime(DateTime dt) {
     String two(int v) => v.toString().padLeft(2, '0');
@@ -83,6 +90,7 @@ class PrinterAssignmentsSection extends StatelessWidget {
                 key: Key('printer-${printer.id}'),
                 l10n: l10n,
                 printer: printer,
+                nativeNetworkAvailable: nativeNetworkAvailable,
                 stationNames: stationNames
                     ? assignments.stationNamesFor(printer)
                     : const [],
@@ -105,10 +113,14 @@ class PrinterAssignmentsSection extends StatelessWidget {
         const SizedBox(height: RestoflowSpacing.xs),
         body,
         const SizedBox(height: RestoflowSpacing.sm),
-        // The standing honest capability note: this build prepares/previews
-        // print jobs; physical printing needs a bridge/native transport.
+        // The standing honest capability note. On the native app with a direct
+        // network printer set up, it says printing is available here with no
+        // bridge (ANDROID-002); otherwise it keeps the honest "needs a
+        // bridge/native transport" note.
         RestoflowNoticeBanner(
-          body: l10n.deviceSettingsCapabilityNote,
+          body: nativeNetworkAvailable
+              ? l10n.deviceSettingsNativeNetworkNote
+              : l10n.deviceSettingsCapabilityNote,
           tone: RestoflowTone.info,
         ),
         // RF-115: the global LOCAL print-bridge row (only when a bridge is
@@ -178,12 +190,17 @@ class _PrinterTile extends StatelessWidget {
   const _PrinterTile({
     required this.l10n,
     required this.printer,
+    this.nativeNetworkAvailable = false,
     this.stationNames = const [],
     super.key,
   });
 
   final AppLocalizations l10n;
   final AssignedPrinter printer;
+
+  /// ANDROID-002: drop the "requires print bridge" pill for an enabled printer
+  /// when this device can print directly to a network printer.
+  final bool nativeNetworkAvailable;
   final List<String> stationNames;
 
   @override
@@ -233,12 +250,16 @@ class _PrinterTile extends StatelessWidget {
           ),
           const SizedBox(width: RestoflowSpacing.sm),
           RestoflowStatusPill(
-            label: printer.isEnabled
-                ? l10n.deviceSettingsBridgeRequired
-                : l10n.deviceSettingsPrinterDisabled,
-            tone: printer.isEnabled
-                ? RestoflowTone.warning
-                : RestoflowTone.neutral,
+            label: !printer.isEnabled
+                ? l10n.deviceSettingsPrinterDisabled
+                : nativeNetworkAvailable
+                ? l10n.deviceSettingsPrinterConfigured
+                : l10n.deviceSettingsBridgeRequired,
+            tone: !printer.isEnabled
+                ? RestoflowTone.neutral
+                : nativeNetworkAvailable
+                ? RestoflowTone.info
+                : RestoflowTone.warning,
           ),
         ],
       ),

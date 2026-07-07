@@ -4,6 +4,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
 import '../format/money_format.dart';
+import '../pos_palette.dart';
 
 /// The band-pill display priority (menu/media sprint, Part F): the two
 /// sell-with tags first. These are the FIXED wire values — an unknown tag is
@@ -15,12 +16,10 @@ const List<String> _kTagPillPriority = [
   'new',
 ];
 
-/// At most this many tag pills fit tastefully on a 188px tile's band.
+/// At most this many tag pills fit tastefully on the card's image band.
 const int _kMaxTagPills = 2;
 
-/// The localized display label for a KNOWN tag wire value. Callers iterate
-/// [_kTagPillPriority], so the verbatim arm is unreachable — it exists only
-/// for switch exhaustiveness.
+/// The localized display label for a KNOWN tag wire value.
 String _tagLabel(AppLocalizations l10n, String tag) => switch (tag) {
   'spicy' => l10n.menuTagSpicy,
   'popular' => l10n.menuTagPopular,
@@ -39,14 +38,18 @@ RestoflowTone _tagTone(String tag) => switch (tag) {
   _ => RestoflowTone.neutral,
 };
 
-/// A POS menu tile: a category-tinted icon band, the item name, a prominent
-/// price, and a filled add-to-cart button. The whole tile is tappable.
+/// A POS menu tile (DESIGN-004 Warm/Bento): a white [Card] with a fixed 4:3
+/// cover-image band (tinted category fallback on null/error), up to two tag
+/// pills, an in-cart badge, the item name, an options indicator when
+/// configurable, a brand-green price, and a 44px filled add button. The whole
+/// tile is tappable.
 ///
-/// Pure presentation — the add action is delegated to [onAdd]. The item name is
-/// DATA (rendered via a variable) and the price is formatted integer minor-unit
-/// money; only the add action's tooltip is localized chrome. Part F: up to two
-/// localized tag pills overlay the band, and a compact tune-icon indicator by
-/// the price marks items whose add opens the options sheet.
+/// Pure presentation — the add action is delegated to [onAdd]. FROZEN contracts
+/// (widget-test corpus): the tile is a [Card]; tag pills are
+/// [RestoflowStatusPill]; the has-options indicator is `Icons.tune` + the group
+/// count; the single canonical add gesture per card is `Icons.add_shopping_cart`
+/// (no `Icons.add`). The item name is DATA; the price is formatted integer
+/// minor-unit money.
 class MenuItemCard extends StatelessWidget {
   const MenuItemCard({
     required this.item,
@@ -54,6 +57,7 @@ class MenuItemCard extends StatelessWidget {
     this.category,
     this.currencyCode = kDemoCurrencyCode,
     this.optionGroupCount = 0,
+    this.inCartQuantity = 0,
     super.key,
   });
 
@@ -67,10 +71,13 @@ class MenuItemCard extends StatelessWidget {
   /// The ACTIVE menu currency (ISO 4217); demo default preserved.
   final String currencyCode;
 
-  /// How many modifier (option) groups the ACTIVE menu attaches to this item
-  /// (the grid already computes them to pick the add path). 0 = plain one-tap
-  /// add, no indicator.
+  /// How many modifier (option) groups the ACTIVE menu attaches to this item.
+  /// 0 = plain one-tap add, no indicator.
   final int optionGroupCount;
+
+  /// The total quantity of this item already in the cart (computed by the grid
+  /// — presentation only). 0 hides the in-cart badge.
+  final int inCartQuantity;
 
   @override
   Widget build(BuildContext context) {
@@ -78,134 +85,83 @@ class MenuItemCard extends StatelessWidget {
     final theme = Theme.of(context);
     final category = this.category ?? categoryById(item.categoryId);
     final priceText = MoneyFormatter.formatMinor(item.priceMinor, currencyCode);
-    // Up to two KNOWN tags, spicy/popular first; localized labels only.
     final bandTags = [
       for (final tag in _kTagPillPriority)
         if (item.tags.contains(tag)) tag,
     ].take(_kMaxTagPills).toList();
 
     return Card(
+      elevation: 1.5,
+      color: theme.colorScheme.surface,
+      shadowColor: const Color(0x1410201A),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+        side: const BorderSide(color: kRestoflowHairline),
+      ),
       child: InkWell(
         onTap: onAdd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              // Menu/media sprint: when the real menu resolved a signed image
-              // URL, the band renders the product photo (cover-fit, layout
-              // neutral — same Expanded slot); ANY load failure falls back to
-              // the tinted category-icon band below. Demo items carry no URL,
-              // so demo rendering is unchanged. Tag pills overlay the band
-              // (image or icon) without spending tile height.
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (item.imageUrl == null)
-                    _CategoryBand(category: category)
-                  else
-                    Image.network(
-                      item.imageUrl!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      errorBuilder: (context, error, stackTrace) =>
-                          _CategoryBand(category: category),
-                    ),
-                  if (bandTags.isNotEmpty)
-                    PositionedDirectional(
-                      top: RestoflowSpacing.xs,
-                      start: RestoflowSpacing.xs,
-                      end: RestoflowSpacing.xs,
-                      child: Wrap(
-                        spacing: RestoflowSpacing.xs,
-                        runSpacing: RestoflowSpacing.xs,
-                        children: [
-                          for (final tag in bandTags)
-                            RestoflowStatusPill(
-                              label: _tagLabel(l10n, tag),
-                              tone: _tagTone(tag),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
+            // The fixed 4:3 image band: cover-fit photo (with cacheWidth) that
+            // never stretches, or the tinted category band on null/error.
+            AspectRatio(
+              aspectRatio: 4 / 3,
+              child: _ImageBand(
+                item: item,
+                category: category,
+                l10n: l10n,
+                bandTags: bandTags,
+                inCartQuantity: inCartQuantity,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(RestoflowSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    item.name,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(RestoflowSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      item.name,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: kRestoflowInk,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: RestoflowSpacing.xxs),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          priceText,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w800,
+                    Row(
+                      children: [
+                        if (optionGroupCount > 0) ...[
+                          _OptionsIndicator(
+                            count: optionGroupCount,
+                            tooltip: l10n.menuModifierGroupCount(
+                              optionGroupCount,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (optionGroupCount > 0) ...[
-                        const SizedBox(width: RestoflowSpacing.xs),
-                        // Has-options indicator: this add opens the option
-                        // sheet. NOT Icons.add / a second add_shopping_cart —
-                        // both are load-bearing test gestures.
-                        Tooltip(
-                          message: l10n.menuModifierGroupCount(
-                            optionGroupCount,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.tune,
-                                size: RestoflowIconSizes.sm,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: RestoflowSpacing.xxs),
-                              Text(
-                                optionGroupCount.toString(),
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
+                          const SizedBox(width: RestoflowSpacing.sm),
+                        ],
+                        Expanded(
+                          child: Text(
+                            priceText,
+                            textAlign: TextAlign.end,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: kRestoflowBrandDark,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: RestoflowSpacing.sm),
+                        // The canonical add gesture: a 44px filled green button.
+                        _AddButton(onAdd: onAdd, tooltip: l10n.posAddToCart),
                       ],
-                      const SizedBox(width: RestoflowSpacing.xs),
-                      // The cashier's main affordance: a >=48dp filled add
-                      // button (the icon is the canonical add gesture in the
-                      // widget-test corpus — never change it).
-                      IconButton.filled(
-                        onPressed: onAdd,
-                        tooltip: l10n.posAddToCart,
-                        constraints: const BoxConstraints(
-                          minWidth: 48,
-                          minHeight: 48,
-                        ),
-                        icon: const Icon(
-                          Icons.add_shopping_cart,
-                          size: RestoflowIconSizes.md,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -215,13 +171,197 @@ class MenuItemCard extends StatelessWidget {
   }
 }
 
+/// The 4:3 band: cover photo (with a device-pixel `cacheWidth`) or the tinted
+/// category fallback, overlaid by up to two tag pills (top) and an in-cart
+/// badge (bottom-start).
+class _ImageBand extends StatelessWidget {
+  const _ImageBand({
+    required this.item,
+    required this.category,
+    required this.l10n,
+    required this.bandTags,
+    required this.inCartQuantity,
+  });
+
+  final DemoMenuItem item;
+  final DemoCategory category;
+  final AppLocalizations l10n;
+  final List<String> bandTags;
+  final int inCartQuantity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (item.imageUrl == null)
+          _CategoryBand(category: category)
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final dpr = MediaQuery.devicePixelRatioOf(context);
+              final cacheW = (constraints.maxWidth * dpr).round();
+              return Image.network(
+                item.imageUrl!,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                cacheWidth: cacheW > 0 ? cacheW : null,
+                errorBuilder: (context, error, stackTrace) =>
+                    _CategoryBand(category: category),
+              );
+            },
+          ),
+        if (bandTags.isNotEmpty)
+          PositionedDirectional(
+            top: RestoflowSpacing.sm,
+            start: RestoflowSpacing.sm,
+            end: RestoflowSpacing.sm,
+            child: Wrap(
+              spacing: RestoflowSpacing.xs,
+              runSpacing: RestoflowSpacing.xs,
+              children: [
+                for (final tag in bandTags)
+                  RestoflowStatusPill(
+                    label: _tagLabel(l10n, tag),
+                    tone: _tagTone(tag),
+                  ),
+              ],
+            ),
+          ),
+        if (inCartQuantity > 0)
+          PositionedDirectional(
+            bottom: RestoflowSpacing.sm,
+            start: RestoflowSpacing.sm,
+            child: _InCartBadge(quantity: inCartQuantity),
+          ),
+      ],
+    );
+  }
+}
+
+/// The dark in-cart badge (cart icon + ×N) on the band's bottom-start corner.
+class _InCartBadge extends StatelessWidget {
+  const _InCartBadge({required this.quantity});
+
+  final int quantity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        RestoflowSpacing.sm,
+        RestoflowSpacing.xxs,
+        RestoflowSpacing.sm,
+        RestoflowSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: kRestoflowInk,
+        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.shopping_cart,
+            size: RestoflowIconSizes.xs,
+            color: Colors.white,
+          ),
+          const SizedBox(width: RestoflowSpacing.xxs),
+          Text(
+            '×$quantity',
+            textDirection: TextDirection.ltr,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The neutral options indicator (tune icon + group count) shown when an item's
+/// add opens the modifier sheet (FROZEN contract: tune icon + count + tooltip).
+class _OptionsIndicator extends StatelessWidget {
+  const _OptionsIndicator({required this.count, required this.tooltip});
+
+  final int count;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: RestoflowSpacing.sm,
+          vertical: RestoflowSpacing.xxs,
+        ),
+        decoration: BoxDecoration(
+          color: kPosChipBg,
+          borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.tune,
+              size: RestoflowIconSizes.xs,
+              color: kRestoflowInk2,
+            ),
+            const SizedBox(width: RestoflowSpacing.xxs),
+            Text(
+              count.toString(),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: kRestoflowInk2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The 44px filled brand-green add button with the green CTA glow.
+class _AddButton extends StatelessWidget {
+  const _AddButton({required this.onAdd, required this.tooltip});
+
+  final VoidCallback onAdd;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(13)),
+        boxShadow: kPosGreenGlow,
+      ),
+      child: IconButton.filled(
+        onPressed: onAdd,
+        tooltip: tooltip,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        style: IconButton.styleFrom(
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: theme.colorScheme.onPrimary,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(13)),
+          ),
+        ),
+        icon: const Icon(Icons.add_shopping_cart, size: RestoflowIconSizes.md),
+      ),
+    );
+  }
+}
+
 /// The category-tinted icon band — the imageless default AND the fallback for
 /// a failed image load.
-///
-/// RF-141D: Ink (not Container) so the InkWell tap/hover ripple renders OVER
-/// the tinted band, not hidden behind an opaque layer. Design-polish: a subtler
-/// tint + smaller glyph so the band reads as category colour-coding, not the
-/// tile's main content.
 class _CategoryBand extends StatelessWidget {
   const _CategoryBand({required this.category});
 
@@ -230,7 +370,7 @@ class _CategoryBand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Ink(
-      color: category.color.withValues(alpha: 0.08),
+      color: category.color.withValues(alpha: 0.10),
       child: Center(
         child: Icon(
           category.icon,

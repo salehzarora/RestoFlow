@@ -2811,4 +2811,82 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posDiscountDemoNote => 'Demo discount — applied locally';
+
+  @override
+  String get posNetworkPrinterHeading => 'Network printer (this device)';
+
+  @override
+  String get posNetworkPrinterHelp =>
+      'Print directly to a Wi-Fi or Ethernet thermal printer on this network. No print bridge needed.';
+
+  @override
+  String get posNetworkPrinterIpLabel => 'Printer IP address';
+
+  @override
+  String get posNetworkPrinterIpHint => '192.168.1.50';
+
+  @override
+  String get posNetworkPrinterPortLabel => 'Port';
+
+  @override
+  String get posNetworkPrinterNameLabel => 'Printer name (optional)';
+
+  @override
+  String get posNetworkPrinterSaveAction => 'Save printer';
+
+  @override
+  String get posNetworkPrinterTestAction => 'Test print';
+
+  @override
+  String get posNetworkPrinterSavedSnack => 'Network printer saved';
+
+  @override
+  String get posNetworkPrinterStatusNotConfigured => 'Not configured';
+
+  @override
+  String get posNetworkPrinterStatusSaved => 'Saved';
+
+  @override
+  String get posNetworkPrinterTesting => 'Sending test print…';
+
+  @override
+  String get posNetworkPrinterTestSuccess => 'Test print sent';
+
+  @override
+  String get posNetworkPrinterTestFailure =>
+      'Couldn\'t reach the printer. Check the IP address, the port, and that the printer is on this Wi-Fi network.';
+
+  @override
+  String get posNetworkPrinterInvalidIp =>
+      'Enter a valid IP address (for example 192.168.1.50).';
+
+  @override
+  String get posNetworkPrinterInvalidPort => 'Enter a valid port (1–65535).';
+
+  @override
+  String get deviceSettingsNativeNetworkNote =>
+      'This device can print directly to a network printer (set up above) — no print bridge needed.';
+
+  @override
+  String get deviceSettingsPrinterConfigured => 'Configured';
+
+  @override
+  String posMenuItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get posMenuSearchHint => 'Search items…';
+
+  @override
+  String get posSearchNoResults => 'No items match your search';
+
+  @override
+  String get posOptionsChipLabel => 'Options';
+
+  @override
+  String get posCartBarSent => 'Order sent — details';
+
+  @override
+  String get posCartBarView => 'View cart';
 }

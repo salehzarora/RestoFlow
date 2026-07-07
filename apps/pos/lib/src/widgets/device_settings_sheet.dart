@@ -11,8 +11,10 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../print/print_bridge.dart';
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_device_context.dart';
+import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_session.dart';
+import 'network_printer_section.dart';
 
 /// The POS operational device-settings sheet (device settings sprint).
 ///
@@ -44,6 +46,10 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
       Success(:final value) => value,
       _ => null,
     };
+    // ANDROID-002: native (Android) app can print directly to a network printer.
+    final nativeAvailable = ref.watch(posNativePrintingAvailableProvider);
+    final networkConfigured =
+        ref.watch(posNetworkPrinterConfigProvider).valueOrNull != null;
 
     return SafeArea(
       child: Padding(
@@ -83,6 +89,15 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
+                    // ANDROID-002: on the native app, set up + test a network
+                    // (Wi-Fi/Ethernet) printer directly — no print bridge. Shown
+                    // whatever the pairing state so a pilot can test hardware.
+                    if (nativeAvailable) ...[
+                      const NetworkPrinterSection(),
+                      const SizedBox(height: RestoflowSpacing.md),
+                      const Divider(height: 1),
+                      const SizedBox(height: RestoflowSpacing.md),
+                    ],
                     if (isDemo)
                       RestoflowNoticeBanner(
                         body: l10n.deviceSettingsDemoNote,
@@ -122,6 +137,12 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                         bridgeStatus: ref
                             .watch(posPrintBridgeStatusProvider)
                             .valueOrNull,
+                        // ANDROID-002: once a native network printer is set up on
+                        // this device, the assigned-printer note/pill drop the
+                        // "requires print bridge" wording (a bridge is no longer
+                        // the only physical path).
+                        nativeNetworkAvailable:
+                            nativeAvailable && networkConfigured,
                       ),
                       const SizedBox(height: RestoflowSpacing.md),
                       // Part G: staff-safe connection maintenance (refresh /
