@@ -19,13 +19,45 @@ import 'print_document.dart' as app;
 /// ticket logic); only the transport differs. Delivery = bytes written to the
 /// printer, NOT a hardware paper-print acknowledgement.
 class NativeKdsPrintBridge implements KdsPrintBridge {
-  const NativeKdsPrintBridge(this.sender);
+  const NativeKdsPrintBridge(
+    this.sender, {
+    this.rasterizer,
+    this.rasterWidthDots = pp.kNativeRasterWidthDots,
+  });
 
   final NativeEscPosSender sender;
 
+  /// PRINT-RTL-001: the raster renderer (null => ESC/POS text only). When set,
+  /// Arabic/Hebrew kitchen tickets (incl. an ar/he customer name) render as a
+  /// bitmap so they print correctly. MONEY-FREE: the kitchen ticket carries no
+  /// money, so neither does the rasterized image (T-003).
+  final pp.ReceiptRasterizer? rasterizer;
+
+  /// Raster width in dots (80mm = 576; multiple of 8).
+  final int rasterWidthDots;
+
   @override
-  Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) => sender
-      .send(kitchenTicketToEscPosDocument(document, columns: sender.columns));
+  Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) async {
+    final text = kitchenTicketToEscPosDocument(
+      document,
+      columns: sender.columns,
+    );
+    // PRINT-RTL-001: raster Arabic/Hebrew (+ ×) tickets; ASCII-only stays text.
+    // A rasterizer failure falls back to the text ticket.
+    var doc = text;
+    if (rasterizer != null) {
+      try {
+        doc = await pp.maybeRasterizeForRtl(
+          text,
+          rasterizer: rasterizer,
+          widthDots: rasterWidthDots,
+        );
+      } catch (_) {
+        doc = text;
+      }
+    }
+    return sender.send(doc);
+  }
 
   @override
   Future<pp.BridgeHealth> health() async => pp.BridgeHealth.connected;
@@ -42,6 +74,8 @@ final kdsActivePrintBridgeProvider = Provider<KdsPrintBridge?>((ref) {
   if (transportFactory != null) {
     return NativeKdsPrintBridge(
       NativeEscPosSender(transportFactory: transportFactory),
+      // PRINT-RTL-001: the app injects the real raster renderer; null keeps text.
+      rasterizer: ref.watch(nativePrintRasterizerProvider),
     );
   }
   return ref.watch(kdsPrintBridgeProvider);

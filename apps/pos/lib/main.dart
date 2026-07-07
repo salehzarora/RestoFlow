@@ -6,6 +6,8 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_native_printing/restoflow_native_printing.dart'
+    show nativePrintRasterizerProvider;
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -37,6 +39,12 @@ Future<void> main() async {
       overrides: [
         initialLocaleProvider.overrideWithValue(
           persistedLocale ?? const Locale('ar'),
+        ),
+        // PRINT-RTL-001: render Arabic/Hebrew (+ ₪/×) receipts as a raster image
+        // on the native Android printer path so they print correctly instead of
+        // "?????". Web/loopback stays ESC/POS text (the native path is Android-only).
+        nativePrintRasterizerProvider.overrideWithValue(
+          const FlutterReceiptRasterizer(),
         ),
         // RF-114: durable outbox + a periodic sweep so queued orders re-deliver
         // once the backend recovers (idempotent retries, D-022; no duplicates).

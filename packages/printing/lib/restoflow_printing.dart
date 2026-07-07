@@ -56,6 +56,7 @@ export 'src/receipt/receipt_input.dart';
 export 'src/receipt/receipt_money_format.dart';
 export 'src/receipt/receipt_print_dispatcher.dart';
 export 'src/receipt/receipt_rasterizer.dart';
+export 'src/receipt/rtl_raster.dart';
 export 'src/spool/print_job.dart';
 export 'src/spool/print_job_state.dart';
 export 'src/spool/print_spool.dart';

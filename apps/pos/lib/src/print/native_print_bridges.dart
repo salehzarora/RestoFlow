@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_native_printing/restoflow_native_printing.dart'
+    show nativePrintRasterizerProvider;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../state/pos_bluetooth_printer_config.dart';
@@ -26,6 +28,8 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     this.adapter = const pp.EscPosPrintAdapter(),
     this.profile = pp.PrinterProfile.escPos80mm,
     this.columns = 48,
+    this.rasterizer,
+    this.rasterWidthDots = pp.kNativeRasterWidthDots,
   });
 
   /// Builds a fresh transport per submit (a socket/BT connection is not reused).
@@ -34,10 +38,34 @@ class NativeTransportPrintBridge implements PosPrintBridge {
   final pp.PrinterProfile profile;
   final int columns;
 
+  /// PRINT-RTL-001: the raster renderer (null => ESC/POS text only). When set,
+  /// Arabic/Hebrew (+ non-ASCII ₪/×) receipts render as a bitmap so they print
+  /// correctly on printers without a Unicode codepage.
+  final pp.ReceiptRasterizer? rasterizer;
+
+  /// Raster width in dots (80mm = 576; multiple of 8).
+  final int rasterWidthDots;
+
   @override
   Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) async {
     final escpos = receiptToEscPosDocument(document, columns: columns);
-    final bytes = adapter.encode(escpos, profile);
+    // PRINT-RTL-001: on native Android, render Arabic/Hebrew (+ ₪/×) content as a
+    // raster image so it prints correctly; ASCII-only content keeps the crisp
+    // text path. A rasterizer failure falls back to the text document (a receipt
+    // with "?????" is still better than no print).
+    pp.PrintDocument doc = escpos;
+    if (rasterizer != null) {
+      try {
+        doc = await pp.maybeRasterizeForRtl(
+          escpos,
+          rasterizer: rasterizer,
+          widthDots: rasterWidthDots,
+        );
+      } catch (_) {
+        doc = escpos;
+      }
+    }
+    final bytes = adapter.encode(doc, profile);
     final transport = transportFactory();
     try {
       final result = await transport.send(bytes);
@@ -68,6 +96,8 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
   if (!ref.watch(posNativePrintingAvailableProvider)) {
     return ref.watch(posPrintBridgeProvider);
   }
+  // PRINT-RTL-001: the app injects the real raster renderer; null keeps text mode.
+  final rasterizer = ref.watch(nativePrintRasterizerProvider);
   final selected =
       ref.watch(posSelectedPrinterTransportProvider).valueOrNull ??
       PosPrinterTransportKind.network;
@@ -77,6 +107,7 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
       if (bt != null) {
         final connector = ref.watch(bluetoothPrinterConnectorProvider);
         return NativeTransportPrintBridge(
+          rasterizer: rasterizer,
           transportFactory: () => BluetoothClassicPrintTransport(
             connector: connector,
             address: bt.address,
@@ -88,6 +119,7 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
       final net = ref.watch(posNetworkPrinterConfigProvider).valueOrNull;
       if (net != null) {
         return NativeTransportPrintBridge(
+          rasterizer: rasterizer,
           transportFactory: () => pp.NetworkTcpPrintTransport(
             host: net.host,
             port: net.port,
