@@ -14,7 +14,8 @@ import '../state/pos_device_context.dart';
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_session.dart';
-import 'network_printer_section.dart';
+import '../state/pos_printer_transport.dart';
+import 'printer_settings_section.dart';
 
 /// The POS operational device-settings sheet (device settings sprint).
 ///
@@ -93,7 +94,7 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                     // (Wi-Fi/Ethernet) printer directly — no print bridge. Shown
                     // whatever the pairing state so a pilot can test hardware.
                     if (nativeAvailable) ...[
-                      const NetworkPrinterSection(),
+                      const PrinterSettingsSection(),
                       const SizedBox(height: RestoflowSpacing.md),
                       const Divider(height: 1),
                       const SizedBox(height: RestoflowSpacing.md),

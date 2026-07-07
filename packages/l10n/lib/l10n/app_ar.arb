@@ -892,5 +892,22 @@
   "posSearchNoResults": "لا توجد أصناف مطابقة لبحثك",
   "posOptionsChipLabel": "خيارات",
   "posCartBarSent": "طلب مُرسل — التفاصيل",
-  "posCartBarView": "عرض السلة"
+  "posCartBarView": "عرض السلة",
+  "posPrinterTransportHeading": "اتصال الطابعة",
+  "posPrinterTransportNetwork": "Wi‑Fi",
+  "posPrinterTransportBluetooth": "بلوتوث",
+  "posBluetoothPrinterHeading": "طابعة بلوتوث (هذا الجهاز)",
+  "posBluetoothPrinterHelp": "اطبع على طابعة حرارية عبر بلوتوث. اقترنها أولًا من إعدادات بلوتوث في أندرويد ثم حدّث القائمة.",
+  "posBluetoothPairedLabel": "الطابعات المقترنة",
+  "posBluetoothRefreshAction": "تحديث الأجهزة",
+  "posBluetoothNoDevices": "لا توجد أجهزة بلوتوث مقترنة. اقترن طابعتك من إعدادات أندرويد ثم حدّث.",
+  "posBluetoothPermissionRequired": "إذن البلوتوث مطلوب. اسمح به لـ RestoFlow من إعدادات أندرويد ثم حدّث.",
+  "posBluetoothOff": "البلوتوث مُطفأ — شغّله ثم حدّث.",
+  "posBluetoothSavedSnack": "تم حفظ طابعة البلوتوث",
+  "posBluetoothSelectHint": "اختر طابعة مقترنة من الأعلى.",
+  "posPrinterRemoveAction": "إزالة الطابعة",
+  "posPrinterRemovedSnack": "تمت إزالة الطابعة",
+  "posPrinterNotConfigured": "لا توجد طابعة مُهيّأة على هذا الجهاز.",
+  "posPrinterErrorTimeout": "لم تستجب الطابعة في الوقت المحدد.",
+  "posPrinterErrorUnreachable": "تعذّر الوصول إلى الطابعة — تأكد أنها مشغّلة ومتصلة."
 }

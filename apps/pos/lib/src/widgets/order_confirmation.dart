@@ -12,7 +12,7 @@ import '../data/order_submission.dart';
 import '../data/payment.dart' show CashPayment;
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
-import '../print/print_bridge.dart';
+import '../print/native_print_bridges.dart';
 import '../state/outbox_controller.dart';
 import '../state/payment_controller.dart';
 import '../state/pos_auto_print_prefs.dart';
@@ -75,16 +75,20 @@ class OrderConfirmation extends ConsumerWidget {
         Success(:final value) => value,
         _ => null,
       };
-      // Demo / unconfigured / failed reads: no assignments, no auto-print.
-      if (assignments == null) return;
+      // ANDROID-003: a native (Wi-Fi/Bluetooth) printer configured on THIS
+      // device counts as a printer even without a backend assignment.
+      final nativeConfigured = ref.read(posHasNativePrinterProvider);
+      // Demo / unconfigured reads with NO native printer: no auto-print.
+      if (assignments == null && !nativeConfigured) return;
       final stored = ref.read(posAutoPrintReceiptProvider).valueOrNull;
       if (stored == false) return; // explicitly off — show nothing
-      final printer = assignments.hasEnabledPrinter;
-      // RF-115: prepare, then — if a LOCAL bridge is configured — encode +
-      // submit it. With no bridge the job stays honestly "prepared" (the prior
-      // behavior). A confirmed bridge write flips it to "sent to printer";
-      // never a fabricated hardware print.
-      final bridge = ref.read(posPrintBridgeProvider);
+      final printer =
+          (assignments?.hasEnabledPrinter ?? false) || nativeConfigured;
+      // ANDROID-003: dispatch through the RESOLVED print target — a native
+      // network/Bluetooth transport on Android, else the RF-115 loopback bridge.
+      // With no target the job stays honestly "prepared"; a confirmed transport
+      // write flips it to "sent to printer"; never a fabricated hardware print.
+      final bridge = ref.read(posActivePrintBridgeProvider);
       ref
           .read(receiptPrintControllerProvider.notifier)
           .prepareAndDispatch(
@@ -470,12 +474,15 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
       Success(:final value) => value,
       _ => null,
     };
-    final bridge = ref.read(posPrintBridgeProvider);
+    // ANDROID-003: retry through the resolved native/loopback target.
+    final nativeConfigured = ref.read(posHasNativePrinterProvider);
+    final bridge = ref.read(posActivePrintBridgeProvider);
     ref
         .read(receiptPrintControllerProvider.notifier)
         .retry(
           orderNumber: order.orderNumber,
-          hasEnabledPrinter: assignments?.hasEnabledPrinter ?? false,
+          hasEnabledPrinter:
+              (assignments?.hasEnabledPrinter ?? false) || nativeConfigured,
           buildDocument: () =>
               buildReceiptDocument(l10n, order, payment, isDemo: isDemo),
           submitToBridge: bridge == null ? null : bridge.submit,
