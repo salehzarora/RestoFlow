@@ -185,6 +185,13 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'restoflow.autoprint.kds.onAcknowledge.other-dev': false,
     });
+    // ANDROID-004: on the native Android target (flutter test's default) the
+    // sheet also shows the local-printer section, so a taller viewport is
+    // needed for the lazy ListView to build the auto-print toggle below it.
+    tester.view.physicalSize = const Size(1000, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

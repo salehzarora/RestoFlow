@@ -909,5 +909,16 @@
   "posPrinterRemovedSnack": "המדפסת הוסרה",
   "posPrinterNotConfigured": "לא הוגדרה מדפסת במכשיר זה.",
   "posPrinterErrorTimeout": "המדפסת לא הגיבה בזמן.",
-  "posPrinterErrorUnreachable": "לא ניתן היה להגיע למדפסת — ודא שהיא פועלת ומחוברת."
+  "posPrinterErrorUnreachable": "לא ניתן היה להגיע למדפסת — ודא שהיא פועלת ומחוברת.",
+  "kdsPrinterSettingsTitle": "מדפסת מטבח מקומית",
+  "kdsPrinterTransportNetwork": "Wi-Fi",
+  "kdsPrinterTransportBluetooth": "בלוטות'",
+  "kdsPrinterNetworkIp": "כתובת IP של המדפסת",
+  "kdsPrinterNetworkPort": "פורט",
+  "kdsPrinterTestPrint": "הדפסת בדיקה",
+  "kdsPrinterTicketSent": "נשלח למדפסת",
+  "kdsPrinterPrintFailed": "ההדפסה נכשלה — בדוק את המדפסת ונסה שוב.",
+  "kdsPrinterNoPrinterConfigured": "לא הוגדרה מדפסת במכשיר הזה.",
+  "kdsPrinterBluetoothPairHint": "בחר מדפסת מותאמת למעלה.",
+  "kdsPrinterBluetoothPermissionRequired": "נדרשת הרשאת Bluetooth. אפשר אותה עבור RestoFlow בהגדרות Android ואז רענן."
 }

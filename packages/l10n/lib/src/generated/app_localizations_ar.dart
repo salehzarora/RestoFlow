@@ -2924,4 +2924,40 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posPrinterErrorUnreachable =>
       'تعذّر الوصول إلى الطابعة — تأكد أنها مشغّلة ومتصلة.';
+
+  @override
+  String get kdsPrinterSettingsTitle => 'طابعة المطبخ المحلية';
+
+  @override
+  String get kdsPrinterTransportNetwork => 'واي فاي';
+
+  @override
+  String get kdsPrinterTransportBluetooth => 'بلوتوث';
+
+  @override
+  String get kdsPrinterNetworkIp => 'عنوان IP للطابعة';
+
+  @override
+  String get kdsPrinterNetworkPort => 'المنفذ';
+
+  @override
+  String get kdsPrinterTestPrint => 'طباعة تجريبية';
+
+  @override
+  String get kdsPrinterTicketSent => 'أُرسلت إلى الطابعة';
+
+  @override
+  String get kdsPrinterPrintFailed =>
+      'فشلت الطباعة — تحقّق من الطابعة وحاول مجددًا.';
+
+  @override
+  String get kdsPrinterNoPrinterConfigured =>
+      'لا توجد طابعة مُهيّأة على هذا الجهاز.';
+
+  @override
+  String get kdsPrinterBluetoothPairHint => 'اختر طابعة مقترنة من الأعلى.';
+
+  @override
+  String get kdsPrinterBluetoothPermissionRequired =>
+      'إذن البلوتوث مطلوب. اسمح به لتطبيق RestoFlow في إعدادات أندرويد ثم حدّث.';
 }

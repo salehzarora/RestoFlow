@@ -1,10 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_native_printing/restoflow_native_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pos_device_context.dart';
 import 'pos_network_printer_config.dart' show kPosNetworkPrinterLocalKey;
+
+export 'package:restoflow_native_printing/restoflow_native_printing.dart'
+    show BluetoothPrinterConfig;
 
 /// A locally-saved Bluetooth Classic (SPP) ESC/POS printer for THIS device
 /// (ANDROID-003): the printer's Bluetooth [address] (MAC) + an optional name.
@@ -13,31 +17,11 @@ import 'pos_network_printer_config.dart' show kPosNetworkPrinterLocalKey;
 /// secret. Stored per paired device via `shared_preferences`, exactly like the
 /// network printer config. The address identifies a printer already BONDED in
 /// Android Bluetooth settings (the MVP uses bonded/paired devices).
-class PosBluetoothPrinterConfig {
-  const PosBluetoothPrinterConfig({required this.address, this.name});
-
-  /// The printer's Bluetooth address (MAC), e.g. `DC:0D:30:AA:BB:CC`.
-  final String address;
-
-  /// Optional friendly device name shown in the UI and on the test print.
-  final String? name;
-
-  Map<String, dynamic> toJson() => {
-    'address': address,
-    if (name != null && name!.isNotEmpty) 'name': name,
-  };
-
-  /// Parses a stored map, or null when the shape is invalid (fail-safe).
-  static PosBluetoothPrinterConfig? fromJson(Map<String, dynamic> json) {
-    final address = json['address'];
-    if (address is! String || address.trim().isEmpty) return null;
-    final name = json['name'];
-    return PosBluetoothPrinterConfig(
-      address: address.trim(),
-      name: name is String && name.trim().isNotEmpty ? name.trim() : null,
-    );
-  }
-}
+/// A locally-saved Bluetooth Classic (SPP) ESC/POS printer for THIS device
+/// (ANDROID-003). ANDROID-004 moved the shape into the shared
+/// `restoflow_native_printing` package (reused by POS + KDS); this alias keeps
+/// the POS's historical name + per-device provider below unchanged.
+typedef PosBluetoothPrinterConfig = BluetoothPrinterConfig;
 
 /// The `shared_preferences` key prefix for the per-device saved BT printer.
 const String kPosBluetoothPrinterKeyPrefix = 'restoflow.printer.bluetooth.pos.';

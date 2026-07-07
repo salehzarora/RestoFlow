@@ -5,9 +5,11 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_native_printing/restoflow_native_printing.dart'
+    show hasNativePrinterProvider;
 
 import 'kds_screen.dart';
-import 'print/kds_print_bridge.dart';
+import 'print/kds_native_printer.dart';
 import 'print/kds_ticket_document.dart';
 import 'state/kds_kitchen_print_controller.dart';
 import 'state/kds_printer_assignments.dart';
@@ -129,11 +131,13 @@ class KdsSyncedHome extends ConsumerWidget {
                   // nothing. The controller honors the per-device toggle +
                   // printer assignment; the widget only owns the l10n payload.
                   if (to == KitchenTicketStatus.acknowledged && pushedOk) {
-                    // RF-115: prepare, then — if a LOCAL bridge is configured —
-                    // encode + submit it. With no bridge the job stays honestly
-                    // "prepared"; a confirmed bridge write flips it to "sent to
-                    // printer", never a fabricated hardware print.
-                    final bridge = ref.read(kdsPrintBridgeProvider);
+                    // RF-115 + ANDROID-004: prepare, then — if a print target is
+                    // configured — encode + submit it. The ACTIVE bridge is the
+                    // native local printer (Wi-Fi/Bluetooth) when one is set up on
+                    // this Android display, else the loopback bridge. With no
+                    // target the job stays honestly "prepared"; a confirmed write
+                    // flips it to "sent to printer", never a fabricated print.
+                    final bridge = ref.read(kdsActivePrintBridgeProvider);
                     ref
                         .read(kdsKitchenPrintControllerProvider.notifier)
                         .prepareOnAcknowledge(
@@ -141,6 +145,9 @@ class KdsSyncedHome extends ConsumerWidget {
                           buildDocument: () =>
                               buildKdsTicketDocument(l10n, ticket),
                           submitToBridge: bridge == null ? null : bridge.submit,
+                          nativePrinterConfigured: ref.read(
+                            hasNativePrinterProvider,
+                          ),
                         );
                   }
                 },
@@ -188,12 +195,17 @@ class KdsSyncedHome extends ConsumerWidget {
       Success(:final value) => value,
       _ => null,
     };
-    final bridge = ref.read(kdsPrintBridgeProvider);
+    // ANDROID-004: retry through the ACTIVE bridge (native local printer when set
+    // up on this display, else the loopback bridge). A device-local printer
+    // counts as an enabled printer even without a server assignment.
+    final bridge = ref.read(kdsActivePrintBridgeProvider);
+    final hasNativePrinter = ref.read(hasNativePrinterProvider);
     ref
         .read(kdsKitchenPrintControllerProvider.notifier)
         .retry(
           ticket,
-          hasEnabledPrinter: assignments?.hasEnabledPrinter ?? false,
+          hasEnabledPrinter:
+              (assignments?.hasEnabledPrinter ?? false) || hasNativePrinter,
           buildDocument: () => buildKdsTicketDocument(l10n, ticket),
           submitToBridge: bridge == null ? null : bridge.submit,
         );

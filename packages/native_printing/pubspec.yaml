@@ -1,0 +1,35 @@
+name: restoflow_native_printing
+description: RestoFlow native on-device printing - the shared native (Wi-Fi RAW/TCP + Bluetooth Classic SPP) ESC/POS printing layer reused by the POS and KDS Android apps (ANDROID-004). Config models, a web-safe Bluetooth connector behind a conditional import, device-local config providers, test-print seams, a transport resolver, and a label-injected settings UI. Money-free by construction - it only carries already-built PrintDocuments to a transport.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.0.0"
+resolution: workspace
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: '>=2.5.0 <3.0.0'
+  # Persists the NON-SECRET device-local printer config (per device id + app
+  # namespace), exactly like the POS did in ANDROID-002/003.
+  shared_preferences: '>=2.0.0 <3.0.0'
+  # The render-neutral PrintDocument, ESC/POS adapter, profiles, transports
+  # (NetworkTcpPrintTransport), test document, and honest bridge result types.
+  restoflow_printing:
+    path: ../printing
+  # The shared design tokens/components used by the settings UI (spacing, tones,
+  # notice banner, inline spinner, icon sizes).
+  restoflow_design_system:
+    path: ../design_system
+  # ANDROID-003/004: Bluetooth Classic (SPP) thermal printing on native Android.
+  # Both are Android/iOS plugins - the web build skips them (no web platform
+  # impl) and this package references them ONLY behind a conditional import
+  # (bluetooth_connector_native.dart), so web never links native Bluetooth code.
+  print_bluetooth_thermal: ^1.1.1
+  permission_handler: ^11.3.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

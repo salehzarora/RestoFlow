@@ -18,7 +18,7 @@ BluetoothPrinterConnector createBluetoothPrinterConnector() =>
     : const _UnsupportedNativeConnector();
 
 /// Talks to a bonded Bluetooth Classic (SPP) thermal printer via
-/// `print_bluetooth_thermal` + `permission_handler`. Best-effort — every path
+/// `print_bluetooth_thermal` + `permission_handler`. Best-effort - every path
 /// maps to a typed result and NEVER throws / hangs (bounded by the timeout).
 class PluginBluetoothPrinterConnector implements BluetoothPrinterConnector {
   const PluginBluetoothPrinterConnector();
@@ -119,7 +119,7 @@ class PluginBluetoothPrinterConnector implements BluetoothPrinterConnector {
         const Duration(seconds: 2),
       );
     } catch (_) {
-      // ignore — best-effort cleanup.
+      // ignore - best-effort cleanup.
     }
   }
 }

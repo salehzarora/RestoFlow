@@ -4,6 +4,19 @@
          source sets, so the release (main) manifest must declare it too, or a
          release build's pilot APK would have no network access (ANDROID-001). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Bluetooth Classic (SPP) kitchen-ticket printing (ANDROID-004). Android
+         12+ (API 31+) uses the runtime BLUETOOTH_CONNECT (connect to a bonded
+         printer) + BLUETOOTH_SCAN; "neverForLocation" declares scan does not
+         derive location, so ACCESS_FINE_LOCATION is NOT needed (the MVP uses
+         already-paired devices, no in-app discovery). Older Android uses the
+         legacy BLUETOOTH / BLUETOOTH_ADMIN (capped at API 30). -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
     <application
         android:label="RestoFlow KDS"
         android:name="${applicationName}"
