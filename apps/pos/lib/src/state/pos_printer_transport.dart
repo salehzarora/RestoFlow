@@ -1,31 +1,20 @@
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_native_printing/restoflow_native_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pos_device_context.dart';
 import 'pos_network_printer_config.dart' show kPosNetworkPrinterLocalKey;
 
 /// True when this build can print directly to a native (Wi-Fi/Bluetooth) printer
-/// — the native Android app. On web the app has no `dart:io` sockets / Bluetooth
-/// and keeps the print-bridge path, so the native printer UI + transports are
-/// off and the bridge messaging is unchanged. Overridable in tests.
-/// (Moved here from the network printer section in ANDROID-003.)
-final posNativePrintingAvailableProvider = Provider<bool>(
-  (ref) => !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
-);
+/// — the native Android app. ANDROID-004 moved the definition into the shared
+/// `restoflow_native_printing` package; this keeps the POS's historical name
+/// pointing at the same provider instance (overrides + tests unchanged).
+final posNativePrintingAvailableProvider = nativePrintingAvailableProvider;
 
 /// Which local transport the POS uses for on-device printing (ANDROID-003).
-///
-/// On the native Android app the cashier picks one; on web there is no native
-/// transport (the app keeps the print-bridge path) and this selection is inert.
-enum PosPrinterTransportKind {
-  /// A Wi-Fi/Ethernet RAW ESC/POS printer (TCP :9100). The ANDROID-002 default.
-  network,
-
-  /// A Bluetooth Classic (SPP) thermal printer (ANDROID-003).
-  bluetooth,
-}
+/// ANDROID-004 moved the enum into the shared package; this alias keeps the
+/// POS's historical name + persisted selection provider below unchanged.
+typedef PosPrinterTransportKind = PrinterTransportKind;
 
 /// The `shared_preferences` key prefix for the per-device selected transport.
 const String kPosPrinterTransportKeyPrefix = 'restoflow.printer.selected.pos.';

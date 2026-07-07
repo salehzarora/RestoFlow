@@ -2944,4 +2944,40 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posPrinterErrorUnreachable =>
       'Couldn\'t reach the printer — check it\'s on and connected.';
+
+  @override
+  String get kdsPrinterSettingsTitle => 'Local kitchen printer';
+
+  @override
+  String get kdsPrinterTransportNetwork => 'Wi-Fi';
+
+  @override
+  String get kdsPrinterTransportBluetooth => 'Bluetooth';
+
+  @override
+  String get kdsPrinterNetworkIp => 'Printer IP address';
+
+  @override
+  String get kdsPrinterNetworkPort => 'Port';
+
+  @override
+  String get kdsPrinterTestPrint => 'Test print';
+
+  @override
+  String get kdsPrinterTicketSent => 'Sent to printer';
+
+  @override
+  String get kdsPrinterPrintFailed =>
+      'Print failed — check the printer and try again.';
+
+  @override
+  String get kdsPrinterNoPrinterConfigured =>
+      'No printer configured on this device.';
+
+  @override
+  String get kdsPrinterBluetoothPairHint => 'Select a paired printer above.';
+
+  @override
+  String get kdsPrinterBluetoothPermissionRequired =>
+      'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.';
 }

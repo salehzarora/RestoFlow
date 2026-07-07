@@ -2904,4 +2904,38 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posPrinterErrorUnreachable =>
       'לא ניתן היה להגיע למדפסת — ודא שהיא פועלת ומחוברת.';
+
+  @override
+  String get kdsPrinterSettingsTitle => 'מדפסת מטבח מקומית';
+
+  @override
+  String get kdsPrinterTransportNetwork => 'Wi-Fi';
+
+  @override
+  String get kdsPrinterTransportBluetooth => 'בלוטות\'';
+
+  @override
+  String get kdsPrinterNetworkIp => 'כתובת IP של המדפסת';
+
+  @override
+  String get kdsPrinterNetworkPort => 'פורט';
+
+  @override
+  String get kdsPrinterTestPrint => 'הדפסת בדיקה';
+
+  @override
+  String get kdsPrinterTicketSent => 'נשלח למדפסת';
+
+  @override
+  String get kdsPrinterPrintFailed => 'ההדפסה נכשלה — בדוק את המדפסת ונסה שוב.';
+
+  @override
+  String get kdsPrinterNoPrinterConfigured => 'לא הוגדרה מדפסת במכשיר הזה.';
+
+  @override
+  String get kdsPrinterBluetoothPairHint => 'בחר מדפסת מותאמת למעלה.';
+
+  @override
+  String get kdsPrinterBluetoothPermissionRequired =>
+      'נדרשת הרשאת Bluetooth. אפשר אותה עבור RestoFlow בהגדרות Android ואז רענן.';
 }

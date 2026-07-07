@@ -5523,6 +5523,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t reach the printer — check it\'s on and connected.'**
   String get posPrinterErrorUnreachable;
+
+  /// KDS device-settings heading for the on-device kitchen-ticket printer setup (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Local kitchen printer'**
+  String get kdsPrinterSettingsTitle;
+
+  /// KDS printer transport choice: a Wi-Fi/Ethernet network printer (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Wi-Fi'**
+  String get kdsPrinterTransportNetwork;
+
+  /// KDS printer transport choice: a Bluetooth Classic (SPP) printer (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get kdsPrinterTransportBluetooth;
+
+  /// KDS label for the network printer IP/host field (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer IP address'**
+  String get kdsPrinterNetworkIp;
+
+  /// KDS label for the network printer TCP port field, 9100 by default (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get kdsPrinterNetworkPort;
+
+  /// KDS action to send a money-free ESC/POS test print to the configured local printer (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Test print'**
+  String get kdsPrinterTestPrint;
+
+  /// KDS status when the kitchen ticket bytes were delivered to the local printer (delivery, not a hardware paper-print) (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to printer'**
+  String get kdsPrinterTicketSent;
+
+  /// KDS status when a local kitchen-ticket print attempt failed (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Print failed — check the printer and try again.'**
+  String get kdsPrinterPrintFailed;
+
+  /// KDS status when no local kitchen printer is configured on this device (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'No printer configured on this device.'**
+  String get kdsPrinterNoPrinterConfigured;
+
+  /// KDS hint prompting the operator to pick a paired Bluetooth printer before saving/testing (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Select a paired printer above.'**
+  String get kdsPrinterBluetoothPairHint;
+
+  /// KDS message when the Android 12+ Bluetooth runtime permission is denied (ANDROID-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.'**
+  String get kdsPrinterBluetoothPermissionRequired;
 }
 
 class _AppLocalizationsDelegate

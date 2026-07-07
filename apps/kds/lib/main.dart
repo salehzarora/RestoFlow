@@ -7,6 +7,8 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_native_printing/restoflow_native_printing.dart'
+    show nativePrinterDeviceIdProvider, nativePrinterNamespaceProvider;
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -223,6 +225,15 @@ class KdsApp extends StatelessWidget {
       overrides: [
         if (initialLocale case final locale?)
           initialLocaleProvider.overrideWithValue(locale),
+        // ANDROID-004: scope the shared native-printer device-local config store
+        // to THIS KDS display. The `kds` namespace keeps the KDS's saved printer
+        // + selected transport separate from the POS's on a shared machine; the
+        // device-id seam mirrors the paired device so the config re-reads when
+        // the pairing gate (re)publishes it (null in demo => a `local` fallback).
+        nativePrinterNamespaceProvider.overrideWithValue('kds'),
+        nativePrinterDeviceIdProvider.overrideWith(
+          (ref) => ref.watch(kdsDeviceContextProvider)?.deviceId,
+        ),
         // RF-118: durable client PIN-attempt lockout store when provided.
         if (pinAttemptStore case final store?)
           pinAttemptStoreProvider.overrideWithValue(store),

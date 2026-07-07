@@ -909,5 +909,16 @@
   "posPrinterRemovedSnack": "تمت إزالة الطابعة",
   "posPrinterNotConfigured": "لا توجد طابعة مُهيّأة على هذا الجهاز.",
   "posPrinterErrorTimeout": "لم تستجب الطابعة في الوقت المحدد.",
-  "posPrinterErrorUnreachable": "تعذّر الوصول إلى الطابعة — تأكد أنها مشغّلة ومتصلة."
+  "posPrinterErrorUnreachable": "تعذّر الوصول إلى الطابعة — تأكد أنها مشغّلة ومتصلة.",
+  "kdsPrinterSettingsTitle": "طابعة المطبخ المحلية",
+  "kdsPrinterTransportNetwork": "واي فاي",
+  "kdsPrinterTransportBluetooth": "بلوتوث",
+  "kdsPrinterNetworkIp": "عنوان IP للطابعة",
+  "kdsPrinterNetworkPort": "المنفذ",
+  "kdsPrinterTestPrint": "طباعة تجريبية",
+  "kdsPrinterTicketSent": "أُرسلت إلى الطابعة",
+  "kdsPrinterPrintFailed": "فشلت الطباعة — تحقّق من الطابعة وحاول مجددًا.",
+  "kdsPrinterNoPrinterConfigured": "لا توجد طابعة مُهيّأة على هذا الجهاز.",
+  "kdsPrinterBluetoothPairHint": "اختر طابعة مقترنة من الأعلى.",
+  "kdsPrinterBluetoothPermissionRequired": "إذن البلوتوث مطلوب. اسمح به لتطبيق RestoFlow في إعدادات أندرويد ثم حدّث."
 }

@@ -139,6 +139,7 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
     KdsTicketView ticket, {
     required PrintDocument Function() buildDocument,
     KdsBridgeSubmit? submitToBridge,
+    bool nativePrinterConfigured = false,
   }) async {
     final stored = ref.read(kdsAutoPrintAcknowledgeProvider).valueOrNull;
     if (stored == false) return; // the staff turned it off
@@ -148,12 +149,17 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
       Success(:final value) => value,
       _ => null,
     };
-    if (assignments == null) return; // demo / unconfigured / failed read
+    // ANDROID-004: a device-LOCAL native printer (Wi-Fi/Bluetooth configured on
+    // THIS display) IS this device's enabled printer, so it prints regardless of
+    // the server kitchen-printer assignment. Without one the prior policy holds:
+    // a demo / unconfigured / failed assignment read => nothing (never a fake job).
+    if (assignments == null && !nativePrinterConfigured) return;
     final key = keyFor(ticket);
     final alreadyExisted = state.containsKey(key);
     prepareForTicket(
       ticket,
-      hasEnabledPrinter: assignments.hasEnabledPrinter,
+      hasEnabledPrinter:
+          (assignments?.hasEnabledPrinter ?? false) || nativePrinterConfigured,
       buildDocument: buildDocument,
     );
     if (alreadyExisted) return; // already dispatched once

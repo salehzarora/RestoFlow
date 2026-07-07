@@ -7,7 +7,10 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_native_printing/restoflow_native_printing.dart'
+    show NativePrinterSettingsSection, nativePrintingAvailableProvider;
 
+import '../print/kds_native_printer.dart' show kdsNativePrinterStrings;
 import '../print/kds_print_bridge.dart';
 import '../state/kds_auto_print_prefs.dart';
 import '../state/kds_device_context.dart';
@@ -84,6 +87,25 @@ class KdsDeviceSettingsSheet extends ConsumerWidget {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
+                    // ANDROID-004: the on-device local kitchen printer setup
+                    // (Wi-Fi/Bluetooth). Shown only on the native Android app
+                    // (independent of demo/real — it configures THIS display's
+                    // local printer); hidden on web, where the KDS keeps the
+                    // print-bridge path unchanged. Money-free (T-003).
+                    if (ref.watch(nativePrintingAvailableProvider)) ...[
+                      Text(
+                        l10n.kdsPrinterSettingsTitle,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: RestoflowSpacing.sm),
+                      NativePrinterSettingsSection(
+                        strings: kdsNativePrinterStrings(l10n),
+                        deviceLabel: device?.displayName,
+                      ),
+                      const Divider(height: RestoflowSpacing.xl),
+                    ],
                     if (isDemo)
                       RestoflowNoticeBanner(
                         body: l10n.deviceSettingsDemoNote,
