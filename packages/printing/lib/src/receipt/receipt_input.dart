@@ -61,6 +61,7 @@ class ReceiptLabelBundle {
   const ReceiptLabelBundle({
     required this.receiptNumber,
     required this.order,
+    required this.customer,
     required this.dineIn,
     required this.takeaway,
     required this.subtotal,
@@ -72,6 +73,9 @@ class ReceiptLabelBundle {
 
   final String receiptNumber;
   final String order;
+
+  /// ORDER-CUSTOMER-001: label for the optional customer-name header row.
+  final String customer;
   final String dineIn;
   final String takeaway;
   final String subtotal;
@@ -88,6 +92,7 @@ class ReceiptLabelBundle {
   static const ReceiptLabelBundle en = ReceiptLabelBundle(
     receiptNumber: 'Receipt',
     order: 'Order',
+    customer: 'Customer',
     dineIn: 'Dine-in',
     takeaway: 'Takeaway',
     subtotal: 'Subtotal',
@@ -100,6 +105,7 @@ class ReceiptLabelBundle {
   static const ReceiptLabelBundle ar = ReceiptLabelBundle(
     receiptNumber: 'إيصال',
     order: 'طلب',
+    customer: 'الزبون',
     dineIn: 'تناول في المطعم',
     takeaway: 'سفري',
     subtotal: 'المجموع الفرعي',
@@ -112,6 +118,7 @@ class ReceiptLabelBundle {
   static const ReceiptLabelBundle he = ReceiptLabelBundle(
     receiptNumber: 'קבלה',
     order: 'הזמנה',
+    customer: 'לקוח',
     dineIn: 'ישיבה במקום',
     takeaway: 'לקחת',
     subtotal: 'סכום ביניים',
@@ -246,6 +253,7 @@ class ReceiptInput {
     this.isVoidedOrCancelled = false,
     this.exponentOverride,
     this.labels,
+    this.customerName,
   }) : items = List.unmodifiable(items),
        merchantLines = List.unmodifiable(merchantLines),
        discounts = List.unmodifiable(discounts),
@@ -261,6 +269,12 @@ class ReceiptInput {
   final String paymentId;
   final String receiptNumber;
   final String orderRef;
+
+  /// ORDER-CUSTOMER-001: the OPTIONAL customer display name (non-money). When
+  /// non-null/non-empty the builder prints a "Customer: <name>" header row; when
+  /// null it prints nothing (existing receipts are byte-identical). Does not
+  /// affect any money/tax formatting.
+  final String? customerName;
 
   final ReceiptServiceType serviceType;
   final String currencyCode;

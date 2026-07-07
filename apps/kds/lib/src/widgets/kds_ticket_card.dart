@@ -85,6 +85,7 @@ class KdsTicketCard extends StatelessWidget {
     final dineIn = ticket.orderType == 'dine_in';
     final takeaway = ticket.orderType == 'takeaway';
     final tableLabel = ticket.tableLabel;
+    final customerName = ticket.customerName;
     final showStation =
         ticket.stationId != KdsTicketMapper.unassignedStation &&
         ticket.stationId.isNotEmpty;
@@ -150,7 +151,11 @@ class KdsTicketCard extends StatelessWidget {
                   KdsStatusChip(status: ticket.status),
                 ],
               ),
-              if (dineIn || takeaway || tableLabel != null || showStation) ...[
+              if (dineIn ||
+                  takeaway ||
+                  tableLabel != null ||
+                  customerName != null ||
+                  showStation) ...[
                 const SizedBox(height: RestoflowSpacing.sm),
                 Wrap(
                   spacing: RestoflowSpacing.sm,
@@ -170,6 +175,15 @@ class KdsTicketCard extends StatelessWidget {
                       RestoflowStatusPill(
                         icon: Icons.event_seat,
                         label: '${l10n.posTableLabel} $tableLabel',
+                      ),
+                    // ORDER-CUSTOMER-001: the OPTIONAL customer name pill,
+                    // compact + kitchen-friendly, next to table/type. Money-free.
+                    if (customerName != null)
+                      RestoflowStatusPill(
+                        key: Key('customer-${ticket.kitchenTicketId}'),
+                        icon: Icons.person_outline,
+                        label:
+                            '${l10n.customerNameKitchenLabel}: $customerName',
                       ),
                     if (showStation)
                       RestoflowStatusPill(

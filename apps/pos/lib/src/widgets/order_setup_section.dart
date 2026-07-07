@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/order_submission.dart' show kCustomerNameMaxLength;
 import '../pos_palette.dart';
 import '../state/order_setup_controller.dart';
 import 'table_picker_sheet.dart';
@@ -78,7 +79,66 @@ class OrderSetupSection extends ConsumerWidget {
             _TableRow(setup: setup, controller: controller)
           else
             _TakeawayHint(message: l10n.posTableNotNeeded),
+          const SizedBox(height: RestoflowSpacing.sm),
+          // ORDER-CUSTOMER-001: an OPTIONAL customer name for this order. Shown
+          // for both order types; never gates submit.
+          _CustomerNameField(setup: setup, controller: controller),
         ],
+      ),
+    );
+  }
+}
+
+/// The OPTIONAL customer-name input (ORDER-CUSTOMER-001). A stateful field so it
+/// owns a [TextEditingController] whose text is cleared when the order-setup
+/// state resets (customer name -> null) after a successful submit / new order.
+class _CustomerNameField extends ConsumerStatefulWidget {
+  const _CustomerNameField({required this.setup, required this.controller});
+
+  final OrderSetupState setup;
+  final OrderSetupController controller;
+
+  @override
+  ConsumerState<_CustomerNameField> createState() => _CustomerNameFieldState();
+}
+
+class _CustomerNameFieldState extends ConsumerState<_CustomerNameField> {
+  late final TextEditingController _text = TextEditingController(
+    text: widget.setup.customerName ?? '',
+  );
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // Clear the field when the order-setup state resets (name -> null) after a
+    // successful submit / new order — without disturbing the cashier's typing.
+    ref.listen(orderSetupControllerProvider, (previous, next) {
+      if (next.customerName == null && _text.text.isNotEmpty) {
+        _text.clear();
+      }
+    });
+    return TextField(
+      key: const Key('customer-name-field'),
+      controller: _text,
+      // A display name is free text (ar/he/en + digits + spaces + punctuation);
+      // we only cap the length and normalize (trim/empty->null) on read — no
+      // charset filter that could reject a valid Arabic/Hebrew name.
+      maxLength: kCustomerNameMaxLength,
+      textInputAction: TextInputAction.done,
+      onChanged: widget.controller.setCustomerName,
+      decoration: InputDecoration(
+        isDense: true,
+        counterText: '',
+        prefixIcon: const Icon(Icons.person_outline),
+        labelText: l10n.customerNameLabel,
+        hintText: l10n.customerNamePlaceholder,
+        border: const OutlineInputBorder(),
       ),
     );
   }

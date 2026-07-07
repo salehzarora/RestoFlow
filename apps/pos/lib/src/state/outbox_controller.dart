@@ -142,6 +142,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     String? tableId,
     String? tableLabel,
     int taxTotalMinor = 0,
+    String? customerName,
   }) async {
     if (lines.isEmpty) {
       throw const OrderSubmissionException('cannot submit an empty cart');
@@ -150,6 +151,10 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         (tableId == null || tableId.trim().isEmpty)) {
       throw const OrderSubmissionException('dine-in order requires a table');
     }
+    // ORDER-CUSTOMER-001: normalize the OPTIONAL customer name at this single
+    // choke point (covers demo + real). Trim + empty->null + 80-char cap; never
+    // gates submit. The server re-normalizes identically.
+    final normalizedCustomerName = normalizeCustomerName(customerName);
 
     _seq++;
     final n = _seq.toString().padLeft(4, '0');
@@ -235,6 +240,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       grandTotalMinor: subtotalMinor + taxTotalMinor,
       items: items,
       clientCreatedAt: createdAt,
+      customerName: normalizedCustomerName,
     );
 
     final entry = OutboxEntry(
@@ -255,6 +261,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         itemCount: itemCount,
         subtotalMinor: subtotalMinor,
         currencyCode: currencyCode,
+        customerName: normalizedCustomerName,
       ),
       syncState: OutboxSyncState.pending,
       clientCreatedAt: createdAt,

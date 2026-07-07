@@ -183,6 +183,55 @@ void main() {
       expect(ticket.items.single.note, 'well done');
     });
 
+    test('ORDER-CUSTOMER-001: plucks the optional customer name '
+        '(trimmed; whitespace/absent -> null)', () {
+      List<Map<String, Object?>> item(String orderId, String id) => [
+        {
+          'id': id,
+          'order_id': orderId,
+          'station_id': 'grill',
+          'status': 'pending',
+          'quantity': 1,
+          'menu_item_name_snapshot': 'X',
+        },
+      ];
+      final tickets = KdsTicketMapper.map(
+        orders: [
+          {
+            'id': 'aa000000-0000-0000-0000-000000000001',
+            'status': 'submitted',
+            'customer_name': '  Sara Cohen  ',
+          },
+          {
+            'id': 'bb000000-0000-0000-0000-000000000002',
+            'status': 'submitted',
+            'customer_name': '   ',
+          },
+          {'id': 'cc000000-0000-0000-0000-000000000003', 'status': 'submitted'},
+        ],
+        orderItems: [
+          ...item('aa000000-0000-0000-0000-000000000001', 'i1'),
+          ...item('bb000000-0000-0000-0000-000000000002', 'i2'),
+          ...item('cc000000-0000-0000-0000-000000000003', 'i3'),
+        ],
+        modifiers: const [],
+        tables: const [],
+      );
+      final byId = {for (final t in tickets) t.orderId: t};
+      expect(
+        byId['aa000000-0000-0000-0000-000000000001']!.customerName,
+        'Sara Cohen',
+      );
+      expect(
+        byId['bb000000-0000-0000-0000-000000000002']!.customerName,
+        isNull,
+      );
+      expect(
+        byId['cc000000-0000-0000-0000-000000000003']!.customerName,
+        isNull,
+      );
+    });
+
     test(
       'ignores tombstoned orders, items, and modifiers (deleted_at != null)',
       () {

@@ -399,6 +399,22 @@
   "@posTableLabel": {
     "description": "POS label preceding a dining-table name/number."
   },
+  "customerNameLabel": "Customer name",
+  "@customerNameLabel": {
+    "description": "ORDER-CUSTOMER-001: label for the OPTIONAL customer-name field in the POS order/cart setup."
+  },
+  "customerNamePlaceholder": "Optional",
+  "@customerNamePlaceholder": {
+    "description": "ORDER-CUSTOMER-001: placeholder/hint for the optional POS customer-name field (it never blocks sending an order)."
+  },
+  "customerNameReceiptLabel": "Customer",
+  "@customerNameReceiptLabel": {
+    "description": "ORDER-CUSTOMER-001: label preceding the optional customer name on the cashier receipt header."
+  },
+  "customerNameKitchenLabel": "Customer",
+  "@customerNameKitchenLabel": {
+    "description": "ORDER-CUSTOMER-001: label preceding the optional customer name on the KDS kitchen ticket / order card."
+  },
   "posAssignTable": "Assign table",
   "@posAssignTable": {
     "description": "POS action that opens the table picker to assign a table to a dine-in order."

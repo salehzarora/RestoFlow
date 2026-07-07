@@ -63,11 +63,18 @@ class KdsTicketMapper {
       final tableId = o['table_id'];
       final orderType = o['order_type'];
       final notes = o['notes'];
+      // ORDER-CUSTOMER-001: the OPTIONAL customer display name (money-free pluck,
+      // trimmed + empty->null). Present on the kitchen wire row because
+      // app.redact_money only strips *_minor/receipt keys, not this display text.
+      final customerName = o['customer_name'];
       orderInfo[id] = _OrderInfo(
         status: status,
         orderType: orderType is String ? orderType : null,
         tableLabel: tableId is String ? tableLabels[tableId] : null,
         notes: notes is String && notes.isNotEmpty ? notes : null,
+        customerName: customerName is String && customerName.trim().isNotEmpty
+            ? customerName.trim()
+            : null,
         // DESIGN-001 display-only pluck: when the order was submitted, for the
         // elapsed/urgency pill. `created_at` is the stable server insert time
         // (`updated_at` bumps on every status push and would under-report
@@ -153,6 +160,7 @@ class KdsTicketMapper {
                 orderNumber: displayOrderCode(b.orderId),
                 orderType: b.info.orderType,
                 tableLabel: b.info.tableLabel,
+                customerName: b.info.customerName,
                 notes: b.info.notes,
                 submittedAt: b.info.submittedAt,
               ),
@@ -211,6 +219,7 @@ class _OrderInfo {
     required this.orderType,
     required this.tableLabel,
     required this.notes,
+    required this.customerName,
     required this.submittedAt,
   });
 
@@ -218,5 +227,6 @@ class _OrderInfo {
   final String? orderType;
   final String? tableLabel;
   final String? notes;
+  final String? customerName;
   final DateTime? submittedAt;
 }

@@ -117,6 +117,13 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               label: l10n.posTableLabel,
                               value: order.tableLabel!,
                             ),
+                          // ORDER-CUSTOMER-001: mirror buildReceiptDocument so the
+                          // WYSIWYG preview matches the printed receipt.
+                          if (order.customerName case final customer?)
+                            _Line(
+                              label: l10n.customerNameReceiptLabel,
+                              value: customer,
+                            ),
                           _Line(
                             label: l10n.posPaidAtLabel,
                             value: _formatReceiptTimestamp(payment.paidAt),
@@ -286,6 +293,10 @@ PrintDocument buildReceiptDocument(
       ),
       if (dineIn && order.tableLabel != null)
         PrintLine.kv(l10n.posTableLabel, order.tableLabel!),
+      // ORDER-CUSTOMER-001: the OPTIONAL customer name, near the top. Absent =>
+      // no row. Header metadata only — money/tax lines below are untouched.
+      if (order.customerName case final customer?)
+        PrintLine.kv(l10n.customerNameReceiptLabel, customer),
       PrintLine.kv(
         l10n.posPaidAtLabel,
         _formatReceiptTimestamp(payment.paidAt),

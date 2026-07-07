@@ -778,6 +778,30 @@ abstract class AppLocalizations {
   /// **'Table'**
   String get posTableLabel;
 
+  /// ORDER-CUSTOMER-001: label for the OPTIONAL customer-name field in the POS order/cart setup.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer name'**
+  String get customerNameLabel;
+
+  /// ORDER-CUSTOMER-001: placeholder/hint for the optional POS customer-name field (it never blocks sending an order).
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get customerNamePlaceholder;
+
+  /// ORDER-CUSTOMER-001: label preceding the optional customer name on the cashier receipt header.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get customerNameReceiptLabel;
+
+  /// ORDER-CUSTOMER-001: label preceding the optional customer name on the KDS kitchen ticket / order card.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get customerNameKitchenLabel;
+
   /// POS action that opens the table picker to assign a table to a dine-in order.
   ///
   /// In en, this message translates to:

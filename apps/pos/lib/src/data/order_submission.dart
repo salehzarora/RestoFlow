@@ -1,5 +1,22 @@
 import 'package:restoflow_domain/restoflow_domain.dart';
 
+/// ORDER-CUSTOMER-001: the max stored length of the OPTIONAL customer display
+/// name — mirrors the server's 80-char cap (`left(..., 80)` in app.sync_push).
+/// The POS input field also caps typing at this length.
+const int kCustomerNameMaxLength = 80;
+
+/// Normalizes a raw customer-name input to what is stored + sent: trims, treats
+/// an empty/whitespace-only value as null, and clamps to [kCustomerNameMaxLength].
+/// The server re-applies the same trim/empty->null/cap, so this is defence in
+/// depth. Non-money display text (never a phone number or other PII).
+String? normalizeCustomerName(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  return trimmed.length <= kCustomerNameMaxLength
+      ? trimmed
+      : trimmed.substring(0, kCustomerNameMaxLength);
+}
+
 /// Sync-operation lifecycle state for a POS outbox entry (RF-115).
 ///
 /// This MIRRORS the frozen `SyncOperationState` vocabulary (DECISION D-018),
@@ -130,6 +147,7 @@ class OrderSubmissionPayload {
     required this.items,
     required this.clientCreatedAt,
     this.notes,
+    this.customerName,
   });
 
   final String orderId;
@@ -155,6 +173,11 @@ class OrderSubmissionPayload {
   final DateTime clientCreatedAt;
   final String? notes;
 
+  /// ORDER-CUSTOMER-001: the OPTIONAL customer display name (non-money, like
+  /// [notes]). Trimmed + empty->null upstream; the server re-normalizes
+  /// (trim/empty->null/<=80). Reaches the receipt + the kitchen ticket.
+  final String? customerName;
+
   String get orderTypeWire =>
       orderType == OrderType.dineIn ? 'dine_in' : 'takeaway';
 
@@ -175,6 +198,7 @@ class OrderSubmissionPayload {
     'tax_total_minor': taxTotalMinor,
     'grand_total_minor': grandTotalMinor,
     'notes': notes,
+    'customer_name': customerName,
     'client_created_at': clientCreatedAt.toIso8601String(),
     'order_items': items.map((i) => i.toJson()).toList(growable: false),
   };
@@ -190,6 +214,7 @@ class OrderSummary {
     required this.itemCount,
     required this.subtotalMinor,
     required this.currencyCode,
+    this.customerName,
   });
 
   /// Local/provisional demo number (e.g. `DEMO-0001`) — NOT a server receipt
@@ -201,6 +226,10 @@ class OrderSummary {
   final int subtotalMinor;
   final String currencyCode;
 
+  /// ORDER-CUSTOMER-001: the OPTIONAL customer display name (non-money), so the
+  /// confirmation/receipt can show it without decoding the raw payload.
+  final String? customerName;
+
   /// RF-114 durable-outbox persistence (integer minor money only, D-007).
   Map<String, Object?> toJson() => <String, Object?>{
     'order_number': orderNumber,
@@ -209,6 +238,7 @@ class OrderSummary {
     'item_count': itemCount,
     'subtotal_minor': subtotalMinor,
     'currency_code': currencyCode,
+    'customer_name': customerName,
   };
 
   factory OrderSummary.fromJson(Map<String, Object?> json) => OrderSummary(
@@ -220,6 +250,7 @@ class OrderSummary {
     itemCount: (json['item_count'] as num?)?.toInt() ?? 0,
     subtotalMinor: (json['subtotal_minor'] as num?)?.toInt() ?? 0,
     currencyCode: json['currency_code'] as String? ?? 'ILS',
+    customerName: json['customer_name'] as String?,
   );
 }
 

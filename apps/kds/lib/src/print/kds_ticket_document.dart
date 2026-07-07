@@ -40,6 +40,10 @@ PrintDocument buildKdsTicketDocument(
         ),
       if (ticket.tableLabel case final table?)
         PrintLine.kv(l10n.posTableLabel, table),
+      // ORDER-CUSTOMER-001: the OPTIONAL customer name, near the order code /
+      // table / type. Absent => no row. Money-free display text (T-003).
+      if (ticket.customerName case final customer?)
+        PrintLine.kv(l10n.customerNameKitchenLabel, customer),
       if (showStation) PrintLine.kv(l10n.kdsStationLabel, ticket.stationId),
       PrintLine.rule(),
       for (final item in ticket.items) ...[

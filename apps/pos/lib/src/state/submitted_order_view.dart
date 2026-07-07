@@ -20,6 +20,7 @@ class SubmittedOrderView {
     this.taxTotalMinor = 0,
     this.taxRateBp = 0,
     this.tableLabel,
+    this.customerName,
     this.outboxEntryId,
     this.localOperationId,
     this.orderId,
@@ -68,6 +69,7 @@ class SubmittedOrderView {
         taxTotalMinor: taxTotalMinor ?? this.taxTotalMinor,
         taxRateBp: taxRateBp,
         tableLabel: tableLabel,
+        customerName: customerName,
         outboxEntryId: outboxEntryId,
         localOperationId: localOperationId,
         orderId: orderId,
@@ -75,6 +77,11 @@ class SubmittedOrderView {
 
   /// The assigned dine-in table label, or null for takeaway / unassigned.
   final String? tableLabel;
+
+  /// ORDER-CUSTOMER-001: the OPTIONAL customer display name captured at order
+  /// time (already trimmed + empty->null). Shown on the confirmation + printed
+  /// receipt; null when the cashier entered none. Non-money.
+  final String? customerName;
 
   /// The client-generated order id (a UUID in real mode) this order was
   /// submitted with — `OutboxEntry.targetId` (RF-129). A real `payment.create`

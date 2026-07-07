@@ -316,6 +316,13 @@ class RealOutboxRepository implements OutboxRepository {
       'table_id': body['table_id'],
       'currency_code': body['currency_code'],
       'notes': body['notes'],
+      // ORDER-CUSTOMER-001: forward the OPTIONAL customer display name so the
+      // server can stamp it on the order. Added ONLY when present so a
+      // null-customer op keeps the EXACT pre-feature wire shape — the server
+      // idempotency fingerprint is md5(op_type || payload::text), so emitting a
+      // `customer_name: null` key would change the fingerprint of existing
+      // null-customer orders and break their idempotent replay across an upgrade.
+      if (body['customer_name'] != null) 'customer_name': body['customer_name'],
       'order_items': body['order_items'],
       'subtotal_minor': body['subtotal_minor'],
       'discount_total_minor': body['discount_total_minor'],

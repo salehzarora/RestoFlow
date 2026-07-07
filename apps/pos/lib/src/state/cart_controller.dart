@@ -294,6 +294,7 @@ class CartController extends Notifier<CartViewState> {
   void submitOrder({
     OrderType orderType = OrderType.takeaway,
     String? tableLabel,
+    String? customerName,
     String? orderNumber,
     String? outboxEntryId,
     String? localOperationId,
@@ -335,6 +336,7 @@ class CartController extends Notifier<CartViewState> {
       orderNumber: resolvedNumber,
       orderType: order.orderType,
       tableLabel: tableLabel,
+      customerName: customerName,
       outboxEntryId: outboxEntryId,
       localOperationId: localOperationId,
       orderId: orderId,
