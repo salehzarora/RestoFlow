@@ -193,6 +193,80 @@ void main() {
     );
   });
 
+  // --- ORDER-CUSTOMER-001: optional customer name -------------------------
+
+  group('optional customer name on the receipt', () {
+    List<String> textsOf(PrintDocument doc) =>
+        doc.lines.whereType<PrintTextLine>().map((l) => l.text).toList();
+
+    test('prints a "Customer: <name>" header row when present', () async {
+      final texts = textsOf(
+        await CustomerReceiptPrintBuilder.build(
+          input: _enInput(issuedAt, customerName: 'Sara Cohen'),
+          paper: ReceiptPaperSpec.mm80,
+        ),
+      );
+      expect(texts, contains('Customer: Sara Cohen'));
+      // It sits directly under the Order line (near the top, above items/money).
+      final orderIdx = texts.indexWhere((t) => t.startsWith('Order:'));
+      final custIdx = texts.indexWhere((t) => t.startsWith('Customer:'));
+      expect(custIdx, orderIdx + 1);
+    });
+
+    test(
+      'prints NO customer row when absent (existing receipts unchanged)',
+      () async {
+        final texts = textsOf(
+          await CustomerReceiptPrintBuilder.build(
+            input: _enInput(issuedAt),
+            paper: ReceiptPaperSpec.mm80,
+          ),
+        );
+        expect(texts.any((t) => t.startsWith('Customer:')), isFalse);
+      },
+    );
+
+    test('does not disturb money/tax formatting', () async {
+      final texts = textsOf(
+        await CustomerReceiptPrintBuilder.build(
+          input: _enInput(issuedAt, customerName: 'Dana'),
+          paper: ReceiptPaperSpec.mm80,
+        ),
+      );
+      // The authoritative total is still rendered exactly as before.
+      expect(texts.any((t) => t.contains('58.50 ILS')), isTrue);
+    });
+
+    test('a long (80-char) name wraps within the paper width', () async {
+      final long = 'Name ${'x' * 80}';
+      final doc = await CustomerReceiptPrintBuilder.build(
+        input: _enInput(issuedAt, customerName: long),
+        paper: ReceiptPaperSpec.mm58, // 32 cols
+      );
+      for (final l in doc.lines.whereType<PrintTextLine>()) {
+        expect(l.text.length, lessThanOrEqualTo(32));
+      }
+    });
+
+    test('goes into the Arabic raster source (never as "?" text)', () async {
+      final raster = FakeReceiptRasterizer();
+      await CustomerReceiptPrintBuilder.build(
+        input: _enInput(
+          issuedAt,
+          customerName: 'محمد',
+        ).copyLocale(ReceiptLocale.ar),
+        paper: ReceiptPaperSpec.mm80,
+        rasterizer: raster,
+      );
+      expect(
+        raster.requests.single.lines.any(
+          (l) => l.contains('${ReceiptLabelBundle.ar.customer}: محمد'),
+        ),
+        isTrue,
+      );
+    });
+  });
+
   // --- Arabic / Hebrew raster path ---------------------------------------
 
   group('Arabic receipt (raster fallback)', () {
@@ -540,7 +614,11 @@ void main() {
 // Fixtures + stable-representation helper.
 // ---------------------------------------------------------------------------
 
-ReceiptInput _enInput(DateTime at, {bool isReprint = false}) => ReceiptInput(
+ReceiptInput _enInput(
+  DateTime at, {
+  bool isReprint = false,
+  String? customerName,
+}) => ReceiptInput(
   organizationId: 'org-1',
   branchId: 'branch-1',
   deviceId: 'dev-1',
@@ -551,6 +629,7 @@ ReceiptInput _enInput(DateTime at, {bool isReprint = false}) => ReceiptInput(
   currencyCode: 'ILS',
   locale: ReceiptLocale.en,
   issuedAt: at,
+  customerName: customerName,
   merchantLines: const ['My Cafe', 'Tel 123'],
   items: [
     ReceiptItemLine(
@@ -649,5 +728,6 @@ extension _ReceiptInputTestX on ReceiptInput {
     isVoidedOrCancelled: isVoidedOrCancelled,
     exponentOverride: exponentOverride,
     labels: labels,
+    customerName: customerName,
   );
 }

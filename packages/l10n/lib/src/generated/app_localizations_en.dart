@@ -377,6 +377,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posTableLabel => 'Table';
 
   @override
+  String get customerNameLabel => 'Customer name';
+
+  @override
+  String get customerNamePlaceholder => 'Optional';
+
+  @override
+  String get customerNameReceiptLabel => 'Customer';
+
+  @override
+  String get customerNameKitchenLabel => 'Customer';
+
+  @override
   String get posAssignTable => 'Assign table';
 
   @override

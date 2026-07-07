@@ -372,6 +372,18 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posTableLabel => 'שולחן';
 
   @override
+  String get customerNameLabel => 'שם לקוח';
+
+  @override
+  String get customerNamePlaceholder => 'אופציונלי';
+
+  @override
+  String get customerNameReceiptLabel => 'לקוח';
+
+  @override
+  String get customerNameKitchenLabel => 'לקוח';
+
+  @override
   String get posAssignTable => 'שיוך שולחן';
 
   @override

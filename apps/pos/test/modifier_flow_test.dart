@@ -225,8 +225,16 @@ void main() {
     await _openBurgerSheet(tester);
 
     // One required group (Doneness), two optional (Toppings, Extras).
+    // Scoped to the sheet: the optional customer-name field's "Optional" hint in
+    // the cart shares this string (ORDER-CUSTOMER-001) but is not a group pill.
     expect(find.text(l10n.posModifierRequired), findsOneWidget);
-    expect(find.text(l10n.posModifierOptional), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byType(ModifierSelectionSheet),
+        matching: find.text(l10n.posModifierOptional),
+      ),
+      findsNWidgets(2),
+    );
 
     // Counts: single-select 0/1, capped multi 0/2, open multi just 0. The
     // bare-digit finders are scoped to the pills — the Extras option
@@ -524,7 +532,15 @@ void main() {
       TextDirection.rtl,
     );
     expect(find.text(ar.posModifierRequired), findsOneWidget);
-    expect(find.text(ar.posModifierOptional), findsNWidgets(2));
+    // Scoped to the sheet (see the en case): the customer-name hint "اختياري"
+    // in the cart shares this string but is not a modifier group pill.
+    expect(
+      find.descendant(
+        of: find.byType(ModifierSelectionSheet),
+        matching: find.text(ar.posModifierOptional),
+      ),
+      findsNWidgets(2),
+    );
     expect(find.text(ar.posModifierFree), findsNWidgets(6));
     expect(find.text(ar.posModifierBasePrice('₪48.00')), findsOneWidget);
 

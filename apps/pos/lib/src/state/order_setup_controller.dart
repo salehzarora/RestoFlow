@@ -3,6 +3,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/demo_tables.dart';
+import '../data/order_submission.dart' show normalizeCustomerName;
 import 'pos_session.dart';
 
 /// Immutable selection state for the active order's service mode (RF-114): the
@@ -11,10 +12,19 @@ import 'pos_session.dart';
 /// In-memory only — this is the UI draft selection. Real persistence and the
 /// server `assign_table` RPC are deferred (see [TablesRepository]).
 class OrderSetupState {
-  const OrderSetupState({required this.orderType, this.assignedTable});
+  const OrderSetupState({
+    required this.orderType,
+    this.assignedTable,
+    this.customerName,
+  });
 
   final OrderType orderType;
   final DemoTable? assignedTable;
+
+  /// ORDER-CUSTOMER-001: the OPTIONAL customer display name for this order
+  /// (already trimmed + empty->null). Never gates submit — it is purely
+  /// additive metadata that flows to the receipt + the kitchen ticket.
+  final String? customerName;
 
   /// Dine-in orders must carry a table before they can be submitted (RF-035).
   bool get requiresTable => orderType == OrderType.dineIn;
@@ -42,8 +52,12 @@ class OrderSetupController extends Notifier<OrderSetupState> {
 
   void setOrderType(OrderType orderType) {
     if (orderType == state.orderType) return;
-    // Takeaway must not carry a table; dine-in starts unassigned.
-    state = OrderSetupState(orderType: orderType);
+    // Takeaway must not carry a table; dine-in starts unassigned. The optional
+    // customer name is order-level, so it SURVIVES an order-type switch.
+    state = OrderSetupState(
+      orderType: orderType,
+      customerName: state.customerName,
+    );
   }
 
   /// Assigns [table] to a dine-in order. No-op unless the order is dine-in and
@@ -51,15 +65,35 @@ class OrderSetupController extends Notifier<OrderSetupState> {
   void assignTable(DemoTable table) {
     if (state.orderType != OrderType.dineIn) return;
     if (!table.isAssignable) return;
-    state = OrderSetupState(orderType: OrderType.dineIn, assignedTable: table);
+    state = OrderSetupState(
+      orderType: OrderType.dineIn,
+      assignedTable: table,
+      customerName: state.customerName,
+    );
   }
 
   void clearTable() {
     if (!state.hasTable) return;
-    state = OrderSetupState(orderType: state.orderType);
+    state = OrderSetupState(
+      orderType: state.orderType,
+      customerName: state.customerName,
+    );
   }
 
-  /// Resets to the default (takeaway, no table) — used after submit / new order.
+  /// ORDER-CUSTOMER-001: sets the OPTIONAL customer name (trim + empty->null +
+  /// <=80). Never affects order type / table / submit-readiness.
+  void setCustomerName(String? value) {
+    final normalized = normalizeCustomerName(value);
+    if (normalized == state.customerName) return;
+    state = OrderSetupState(
+      orderType: state.orderType,
+      assignedTable: state.assignedTable,
+      customerName: normalized,
+    );
+  }
+
+  /// Resets to the default (takeaway, no table, no customer name) — used after
+  /// submit / new order. build() yields customerName == null, so it auto-clears.
   void reset() => state = build();
 }
 

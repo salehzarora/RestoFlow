@@ -253,10 +253,13 @@ Future<void> _submitOrder({
       tableId: setup.assignedTable?.tableId,
       tableLabel: setup.assignedTable?.label,
       taxTotalMinor: taxTotalMinor,
+      // ORDER-CUSTOMER-001: the optional customer name (null when not entered).
+      customerName: setup.customerName,
     );
     cartController.submitOrder(
       orderType: setup.orderType,
       tableLabel: setup.assignedTable?.label,
+      customerName: setup.customerName,
       orderNumber: result.orderNumber,
       outboxEntryId: result.entry.id,
       localOperationId: result.entry.localOperationId,

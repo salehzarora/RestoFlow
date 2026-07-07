@@ -372,6 +372,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posTableLabel => 'طاولة';
 
   @override
+  String get customerNameLabel => 'اسم الزبون';
+
+  @override
+  String get customerNamePlaceholder => 'اختياري';
+
+  @override
+  String get customerNameReceiptLabel => 'الزبون';
+
+  @override
+  String get customerNameKitchenLabel => 'الزبون';
+
+  @override
   String get posAssignTable => 'تعيين طاولة';
 
   @override

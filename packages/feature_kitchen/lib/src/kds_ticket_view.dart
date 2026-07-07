@@ -45,6 +45,7 @@ class KdsTicketView {
     this.orderNumber,
     this.orderType,
     this.tableLabel,
+    this.customerName,
     this.notes,
     this.submittedAt,
   });
@@ -69,6 +70,11 @@ class KdsTicketView {
   /// The dining table's human label (resolved from the pulled `tables`
   /// entity), if the order is attached to a table.
   final String? tableLabel;
+
+  /// ORDER-CUSTOMER-001: the OPTIONAL customer display name (orders.customer_name)
+  /// plucked from the pulled order row. Non-money display text (SECURITY T-003);
+  /// null when the order carried none.
+  final String? customerName;
 
   /// The order-level kitchen note (orders.notes), if any.
   final String? notes;

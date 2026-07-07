@@ -63,7 +63,21 @@ class CustomerReceiptPrintBuilder {
 
     lines
       ..add(PrintTextLine('${labels.receiptNumber}: ${input.receiptNumber}'))
-      ..add(PrintTextLine('${labels.order}: ${input.orderRef}'))
+      ..add(PrintTextLine('${labels.order}: ${input.orderRef}'));
+    // ORDER-CUSTOMER-001: the OPTIONAL customer name, near the top. Absent =>
+    // nothing is added (existing receipts unchanged). Word-wrapped to the paper
+    // width so a long name never breaks the per-line width invariant. This is
+    // header text only — no money/tax formatting is touched.
+    final customerName = input.customerName;
+    if (customerName != null && customerName.isNotEmpty) {
+      for (final text in _wrapWords(
+        '${labels.customer}: $customerName',
+        width,
+      )) {
+        lines.add(PrintTextLine(text));
+      }
+    }
+    lines
       ..add(PrintTextLine(labels.serviceType(input.serviceType)))
       ..add(PrintTextLine(input.issuedAt.toIso8601String()))
       ..add(const PrintFeedLine());
@@ -167,7 +181,15 @@ class CustomerReceiptPrintBuilder {
     }
     out
       ..add('${labels.receiptNumber}: ${input.receiptNumber}')
-      ..add('${labels.order}: ${input.orderRef}')
+      ..add('${labels.order}: ${input.orderRef}');
+    // ORDER-CUSTOMER-001: the OPTIONAL customer name goes into the rasterized
+    // ar/he source (never as `?` text). Absent => nothing added. Header text
+    // only — no money/tax touched.
+    final customerName = input.customerName;
+    if (customerName != null && customerName.isNotEmpty) {
+      out.add('${labels.customer}: $customerName');
+    }
+    out
       ..add(labels.serviceType(input.serviceType))
       ..add(input.issuedAt.toIso8601String());
 
