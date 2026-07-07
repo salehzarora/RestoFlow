@@ -2869,4 +2869,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceSettingsPrinterConfigured => 'Configured';
+
+  @override
+  String posMenuItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get posMenuSearchHint => 'Search items…';
+
+  @override
+  String get posSearchNoResults => 'No items match your search';
+
+  @override
+  String get posOptionsChipLabel => 'Options';
+
+  @override
+  String get posCartBarSent => 'Order sent — details';
+
+  @override
+  String get posCartBarView => 'View cart';
 }

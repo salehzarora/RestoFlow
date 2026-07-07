@@ -4,6 +4,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
 import '../format/money_format.dart';
+import '../pos_palette.dart';
 import '../state/cart_controller.dart';
 import '../state/pos_menu_provider.dart';
 
@@ -513,11 +514,12 @@ class _OptionTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: RestoflowDurations.fast,
         decoration: BoxDecoration(
-          color: selected ? scheme.primaryContainer : scheme.surface,
+          // DESIGN-004: selected = warm mint tint + a 1.5px brand-green border.
+          color: selected ? kPosSelectedTint : scheme.surface,
           borderRadius: BorderRadius.circular(RestoflowRadii.md),
           border: Border.all(
-            color: selected ? scheme.primary : scheme.outlineVariant,
-            width: selected ? 2 : 1,
+            color: selected ? scheme.primary : kRestoflowHairline,
+            width: selected ? 1.5 : 1,
           ),
         ),
         child: Material(

@@ -886,5 +886,11 @@
   "posNetworkPrinterInvalidIp": "הזן כתובת IP תקינה (לדוגמה 192.168.1.50).",
   "posNetworkPrinterInvalidPort": "הזן פורט תקין (1–65535).",
   "deviceSettingsNativeNetworkNote": "מכשיר זה יכול להדפיס ישירות למדפסת רשת (מוגדרת למעלה) — אין צורך בגשר הדפסה.",
-  "deviceSettingsPrinterConfigured": "מוגדרת"
+  "deviceSettingsPrinterConfigured": "מוגדרת",
+  "posMenuItemCount": "{count} פריטים",
+  "posMenuSearchHint": "חפש פריט…",
+  "posSearchNoResults": "אין פריטים התואמים לחיפוש",
+  "posOptionsChipLabel": "אפשרויות",
+  "posCartBarSent": "הזמנה נשלחה — פרטים",
+  "posCartBarView": "הצג סל"
 }

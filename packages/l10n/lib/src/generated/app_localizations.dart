@@ -5385,6 +5385,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Configured'**
   String get deviceSettingsPrinterConfigured;
+
+  /// POS menu header: how many items the active menu has (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String posMenuItemCount(int count);
+
+  /// POS menu search field placeholder — filters the already-loaded items by name (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Search items…'**
+  String get posMenuSearchHint;
+
+  /// POS empty state shown when the client-side search filter matches no menu items (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'No items match your search'**
+  String get posSearchNoResults;
+
+  /// POS menu-card chip marking an item whose add opens the options/modifier sheet (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get posOptionsChipLabel;
+
+  /// POS phone bottom cart-bar label after an order was submitted (opens the confirmation) (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'Order sent — details'**
+  String get posCartBarSent;
+
+  /// POS phone bottom cart-bar accessibility label to open the slide-up cart sheet (DESIGN-004).
+  ///
+  /// In en, this message translates to:
+  /// **'View cart'**
+  String get posCartBarView;
 }
 
 class _AppLocalizationsDelegate

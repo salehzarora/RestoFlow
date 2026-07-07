@@ -2212,5 +2212,17 @@
   "deviceSettingsNativeNetworkNote": "This device can print directly to a network printer (set up above) — no print bridge needed.",
   "@deviceSettingsNativeNetworkNote": {"description": "Device-settings capability note shown on the native Android app when direct network printing is available, replacing the print-bridge-required note (ANDROID-002)."},
   "deviceSettingsPrinterConfigured": "Configured",
-  "@deviceSettingsPrinterConfigured": {"description": "Device-settings status pill for an enabled assigned printer on the native Android app, replacing 'Requires print bridge' when direct network printing is available (ANDROID-002)."}
+  "@deviceSettingsPrinterConfigured": {"description": "Device-settings status pill for an enabled assigned printer on the native Android app, replacing 'Requires print bridge' when direct network printing is available (ANDROID-002)."},
+  "posMenuItemCount": "{count} items",
+  "@posMenuItemCount": {"description": "POS menu header: how many items the active menu has (DESIGN-004).", "placeholders": {"count": {"type": "int"}}},
+  "posMenuSearchHint": "Search items…",
+  "@posMenuSearchHint": {"description": "POS menu search field placeholder — filters the already-loaded items by name (DESIGN-004)."},
+  "posSearchNoResults": "No items match your search",
+  "@posSearchNoResults": {"description": "POS empty state shown when the client-side search filter matches no menu items (DESIGN-004)."},
+  "posOptionsChipLabel": "Options",
+  "@posOptionsChipLabel": {"description": "POS menu-card chip marking an item whose add opens the options/modifier sheet (DESIGN-004)."},
+  "posCartBarSent": "Order sent — details",
+  "@posCartBarSent": {"description": "POS phone bottom cart-bar label after an order was submitted (opens the confirmation) (DESIGN-004)."},
+  "posCartBarView": "View cart",
+  "@posCartBarView": {"description": "POS phone bottom cart-bar accessibility label to open the slide-up cart sheet (DESIGN-004)."}
 }

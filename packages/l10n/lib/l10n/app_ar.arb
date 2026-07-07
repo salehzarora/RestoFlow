@@ -886,5 +886,11 @@
   "posNetworkPrinterInvalidIp": "أدخل عنوان IP صالحًا (مثال: 192.168.1.50).",
   "posNetworkPrinterInvalidPort": "أدخل منفذًا صالحًا (1–65535).",
   "deviceSettingsNativeNetworkNote": "يمكن لهذا الجهاز الطباعة مباشرة على طابعة شبكة (تُضبط أعلاه) — لا حاجة إلى جسر الطباعة.",
-  "deviceSettingsPrinterConfigured": "مُهيّأة"
+  "deviceSettingsPrinterConfigured": "مُهيّأة",
+  "posMenuItemCount": "{count} صنف",
+  "posMenuSearchHint": "ابحث عن صنف…",
+  "posSearchNoResults": "لا توجد أصناف مطابقة لبحثك",
+  "posOptionsChipLabel": "خيارات",
+  "posCartBarSent": "طلب مُرسل — التفاصيل",
+  "posCartBarView": "عرض السلة"
 }

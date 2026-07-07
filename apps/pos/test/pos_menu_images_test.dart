@@ -238,7 +238,7 @@ void main() {
         home: Scaffold(
           body: SizedBox(
             width: 220,
-            height: 188,
+            height: 264,
             child: MenuItemCard(item: item, onAdd: () => added++),
           ),
         ),
@@ -282,7 +282,7 @@ void main() {
             home: Scaffold(
               body: SizedBox(
                 width: 220,
-                height: 188,
+                height: 264,
                 child: MenuItemCard(item: item, onAdd: () {}),
               ),
             ),
@@ -364,7 +364,7 @@ void main() {
           home: Scaffold(
             body: SizedBox(
               width: 220,
-              height: 188,
+              height: 264,
               child: MenuItemCard(item: item, onAdd: () {}),
             ),
           ),

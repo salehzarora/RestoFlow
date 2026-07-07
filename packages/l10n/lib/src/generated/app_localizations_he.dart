@@ -2829,4 +2829,24 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get deviceSettingsPrinterConfigured => 'מוגדרת';
+
+  @override
+  String posMenuItemCount(int count) {
+    return '$count פריטים';
+  }
+
+  @override
+  String get posMenuSearchHint => 'חפש פריט…';
+
+  @override
+  String get posSearchNoResults => 'אין פריטים התואמים לחיפוש';
+
+  @override
+  String get posOptionsChipLabel => 'אפשרויות';
+
+  @override
+  String get posCartBarSent => 'הזמנה נשלחה — פרטים';
+
+  @override
+  String get posCartBarView => 'הצג סל';
 }

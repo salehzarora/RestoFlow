@@ -2849,4 +2849,24 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get deviceSettingsPrinterConfigured => 'مُهيّأة';
+
+  @override
+  String posMenuItemCount(int count) {
+    return '$count صنف';
+  }
+
+  @override
+  String get posMenuSearchHint => 'ابحث عن صنف…';
+
+  @override
+  String get posSearchNoResults => 'لا توجد أصناف مطابقة لبحثك';
+
+  @override
+  String get posOptionsChipLabel => 'خيارات';
+
+  @override
+  String get posCartBarSent => 'طلب مُرسل — التفاصيل';
+
+  @override
+  String get posCartBarView => 'عرض السلة';
 }
