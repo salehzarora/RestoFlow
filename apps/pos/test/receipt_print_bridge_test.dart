@@ -185,4 +185,38 @@ void main() {
     expect(text.contains('₪96.00'), isTrue);
     expect(text.contains('Total'), isTrue);
   });
+
+  // PRINT-RASTER-STYLE-001: the converter tags each line with a raster style so
+  // the on-device Arabic/Hebrew rasterizer can size/center/emphasise it.
+  test('the converter tags every line with its raster style', () {
+    final escpos = receiptToEscPosDocument(
+      PrintDocument(
+        title: 'r',
+        lines: [
+          PrintLine.title('Order #A1'),
+          PrintLine.center('Dine-in'),
+          PrintLine.rule(),
+          PrintLine.item('2× Burger', '₪96.00'),
+          PrintLine.sub('+ cheese'),
+          PrintLine.note('thank you'),
+          PrintLine.kv('Subtotal', '₪96.00'),
+          PrintLine.kv('Total', '₪96.00', emphasised: true),
+        ],
+      ),
+    );
+    final styles = escpos.lines
+        .whereType<pp.PrintTextLine>()
+        .map((l) => l.style)
+        .toList();
+    expect(styles, const [
+      pp.PrintLineStyle.headingLarge, // title => the big order heading
+      pp.PrintLineStyle.centered, // center => service detail
+      pp.PrintLineStyle.separator, // rule
+      pp.PrintLineStyle.item, // item
+      pp.PrintLineStyle.sub, // modifier
+      pp.PrintLineStyle.note, // note
+      pp.PrintLineStyle.normal, // a plain money row
+      pp.PrintLineStyle.total, // an EMPHASISED money row is the TOTAL
+    ]);
+  });
 }

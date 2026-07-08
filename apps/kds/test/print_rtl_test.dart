@@ -95,6 +95,22 @@ void main() {
     expect(rasterized.toLowerCase().contains('minor'), isFalse);
   });
 
+  test('PRINT-RASTER-STYLE-001: the ticket reaches the rasterizer with a large '
+      'order heading and NO total style (money-free)', () async {
+    final l10n = await _ar();
+    final fake = pp.FakeReceiptRasterizer();
+    await NativeKdsPrintBridge(
+      NativeEscPosSender(transportFactory: () => _RecordingTransport()),
+      rasterizer: fake,
+    ).submit(buildKdsTicketDocument(l10n, _arabicTicket()));
+    final req = fake.requests.single;
+    // The order number is a large heading; the item is emphasised.
+    expect(req.styles.contains(pp.PrintLineStyle.headingLarge), isTrue);
+    expect(req.styles.contains(pp.PrintLineStyle.item), isTrue);
+    // The kitchen ticket is money-free — a `total` style must never appear.
+    expect(req.styles.contains(pp.PrintLineStyle.total), isFalse);
+  });
+
   test('no rasterizer -> ESC/POS TEXT fallback (no raster command)', () async {
     final l10n = await _ar();
     final transport = _RecordingTransport();

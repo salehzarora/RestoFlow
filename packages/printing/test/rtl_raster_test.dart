@@ -93,6 +93,45 @@ void main() {
       expect(fake.requests.single.widthDots, 576); // 80mm default
       expect(fake.requests.single.direction, ReceiptTextDirection.rtl);
     });
+
+    test('unstyled lines default to normal (backward-compatible)', () async {
+      final fake = FakeReceiptRasterizer();
+      await rasterizeTextDocument(
+        _textDoc(['إيصال', 'محمد']),
+        rasterizer: fake,
+      );
+      // Every line is normal — the pre-PRINT-RASTER-STYLE-001 uniform behavior.
+      expect(fake.requests.single.styles, everyElement(PrintLineStyle.normal));
+      expect(fake.requests.single.styles.length, 2); // parallel to lines
+    });
+
+    test(
+      'carries each line PrintLineStyle through, PARALLEL to lines',
+      () async {
+        final fake = FakeReceiptRasterizer();
+        await rasterizeTextDocument(
+          PrintDocument(const [
+            PrintTextLine('إيصال', style: PrintLineStyle.headingLarge),
+            PrintTextLine('محمد', style: PrintLineStyle.centered),
+            PrintTextLine('------', style: PrintLineStyle.separator),
+            PrintTextLine('برجر', style: PrintLineStyle.item),
+            PrintTextLine('  + جبنة', style: PrintLineStyle.sub),
+            PrintTextLine('» ملاحظة', style: PrintLineStyle.note),
+            PrintTextLine('₪10.00', style: PrintLineStyle.total),
+          ]),
+          rasterizer: fake,
+        );
+        expect(fake.requests.single.styles, const [
+          PrintLineStyle.headingLarge,
+          PrintLineStyle.centered,
+          PrintLineStyle.separator,
+          PrintLineStyle.item,
+          PrintLineStyle.sub,
+          PrintLineStyle.note,
+          PrintLineStyle.total,
+        ]);
+      },
+    );
   });
 
   group('maybeRasterizeForRtl', () {

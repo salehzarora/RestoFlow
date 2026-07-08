@@ -16,10 +16,25 @@ class ReceiptRasterRequest {
     required this.widthDots,
     required this.direction,
     required this.localeTag,
-  }) : lines = List.unmodifiable(lines);
+    List<PrintLineStyle>? styles,
+  }) : assert(
+         styles == null || styles.length == lines.length,
+         'styles must be parallel to lines',
+       ),
+       lines = List.unmodifiable(lines),
+       styles = List.unmodifiable(
+         styles ??
+             List<PrintLineStyle>.filled(lines.length, PrintLineStyle.normal),
+       );
 
   /// Logical, already-localized receipt lines (top to bottom).
   final List<String> lines;
+
+  /// PRINT-RASTER-STYLE-001: per-line semantic style, PARALLEL to [lines]
+  /// (styles[i] applies to lines[i]). Defaults to [PrintLineStyle.normal] for
+  /// every line when omitted, so existing callers are unchanged and the renderer
+  /// keeps its prior uniform behavior.
+  final List<PrintLineStyle> styles;
 
   /// Printable width in dots for the target paper (must be a multiple of 8).
   final int widthDots;
