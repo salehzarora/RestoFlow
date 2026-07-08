@@ -742,6 +742,18 @@ abstract class AppLocalizations {
   /// **'Order number'**
   String get posOrderNumberLabel;
 
+  /// PRINT-LAYOUT-001: the big, customer-facing order-number heading printed at the top of the receipt (the internal receipt number is no longer printed).
+  ///
+  /// In en, this message translates to:
+  /// **'Order {orderNumber}'**
+  String posReceiptOrderHeading(String orderNumber);
+
+  /// PRINT-LAYOUT-001: a short thank-you footer line on the cashier receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you for your visit'**
+  String get posReceiptThankYou;
+
   /// POS status chip label for a locally-submitted demo order.
   ///
   /// In en, this message translates to:

@@ -89,10 +89,18 @@ void main() {
       final dialog = find.byKey(const Key('receipt-print-preview'));
       expect(dialog, findsOneWidget);
       expect(find.text(l10n.receiptDemoRestaurantName), findsOneWidget);
+      // PRINT-LAYOUT-001: the INTERNAL receipt number is no longer shown to the
+      // customer; the customer-facing order number is the hero heading.
       expect(
         find.descendant(of: dialog, matching: find.textContaining('PROV-0001')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('preview-order-heading')), findsOneWidget);
+      expect(
+        find.descendant(of: dialog, matching: find.textContaining('DEMO-0001')),
         findsOneWidget,
       );
+      expect(find.byKey(const Key('preview-thank-you')), findsOneWidget);
       expect(
         tester.widget<Text>(find.byKey(const Key('preview-total'))).data,
         '₪42.00',
@@ -127,8 +135,11 @@ void main() {
     expect(fake.lastDocument, isNotNull);
     final html = documentToHtml(fake.lastDocument!);
     // The printable HTML carries the receipt details…
-    expect(html, contains('PROV-0001')); // receipt number
-    expect(html, contains('DEMO-0001')); // order number
+    // PRINT-LAYOUT-001: the internal receipt number is NOT printed…
+    expect(html, isNot(contains('PROV-0001')));
+    // …while the customer-facing order number + thank-you ARE.
+    expect(html, contains('DEMO-0001')); // order number (in the heading)
+    expect(html, contains(l10n.posReceiptThankYou)); // thank-you footer
     expect(html, contains('Classic Burger')); // item
     expect(html, contains('₪42.00')); // total + cash
     expect(html, contains('₪0.00')); // change

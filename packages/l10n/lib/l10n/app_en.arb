@@ -375,6 +375,15 @@
   "@posOrderNumberLabel": {
     "description": "POS label preceding the local/provisional demo order number."
   },
+  "posReceiptOrderHeading": "Order {orderNumber}",
+  "@posReceiptOrderHeading": {
+    "description": "PRINT-LAYOUT-001: the big, customer-facing order-number heading printed at the top of the receipt (the internal receipt number is no longer printed).",
+    "placeholders": { "orderNumber": { "type": "String" } }
+  },
+  "posReceiptThankYou": "Thank you for your visit",
+  "@posReceiptThankYou": {
+    "description": "PRINT-LAYOUT-001: a short thank-you footer line on the cashier receipt."
+  },
   "posOrderStatusSubmitted": "Submitted",
   "@posOrderStatusSubmitted": {
     "description": "POS status chip label for a locally-submitted demo order."

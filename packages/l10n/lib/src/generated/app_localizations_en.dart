@@ -359,6 +359,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posOrderNumberLabel => 'Order number';
 
   @override
+  String posReceiptOrderHeading(String orderNumber) {
+    return 'Order $orderNumber';
+  }
+
+  @override
+  String get posReceiptThankYou => 'Thank you for your visit';
+
+  @override
   String get posOrderStatusSubmitted => 'Submitted';
 
   @override

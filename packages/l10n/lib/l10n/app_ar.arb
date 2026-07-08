@@ -107,6 +107,8 @@
   "posOutboxRetryAll": "إعادة المحاولة",
   "posOrderSubmittedTitle": "تم إرسال الطلب",
   "posOrderNumberLabel": "رقم الطلب",
+  "posReceiptOrderHeading": "طلب {orderNumber}",
+  "posReceiptThankYou": "شكراً لزيارتكم",
   "posOrderStatusSubmitted": "تم الإرسال",
   "posNewOrder": "طلب جديد",
   "posOrderTypeLabel": "نوع الطلب",

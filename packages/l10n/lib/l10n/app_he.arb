@@ -107,6 +107,8 @@
   "posOutboxRetryAll": "נסה שוב",
   "posOrderSubmittedTitle": "ההזמנה נשלחה",
   "posOrderNumberLabel": "מספר הזמנה",
+  "posReceiptOrderHeading": "הזמנה {orderNumber}",
+  "posReceiptThankYou": "תודה על ביקורכם",
   "posOrderStatusSubmitted": "נשלחה",
   "posNewOrder": "הזמנה חדשה",
   "posOrderTypeLabel": "סוג הזמנה",

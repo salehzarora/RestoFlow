@@ -354,6 +354,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posOrderNumberLabel => 'رقم الطلب';
 
   @override
+  String posReceiptOrderHeading(String orderNumber) {
+    return 'طلب $orderNumber';
+  }
+
+  @override
+  String get posReceiptThankYou => 'شكراً لزيارتكم';
+
+  @override
   String get posOrderStatusSubmitted => 'تم الإرسال';
 
   @override
