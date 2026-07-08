@@ -64,13 +64,18 @@ Future<PrintDocument> rasterizeTextDocument(
   ReceiptTextDirection? direction,
   int feedLines = 3,
 }) async {
-  final lines = textDoc.lines
-      .whereType<PrintTextLine>()
-      .map((l) => l.text)
-      .toList(growable: false);
+  final textLines = textDoc.lines.whereType<PrintTextLine>().toList(
+    growable: false,
+  );
+  final lines = textLines.map((l) => l.text).toList(growable: false);
+  // PRINT-RASTER-STYLE-001: carry each line's semantic style so the rasterizer
+  // can render large/centered headings, an emphasised total, indented sub-lines,
+  // etc. Lines with no style stay [PrintLineStyle.normal] (prior behavior).
+  final styles = textLines.map((l) => l.style).toList(growable: false);
   final image = await rasterizer.rasterize(
     ReceiptRasterRequest(
       lines: lines,
+      styles: styles,
       widthDots: widthDots,
       direction: direction ?? baseDirectionForLines(lines),
       localeTag: textDoc.localeTag ?? '',

@@ -6,6 +6,38 @@ enum PrintAlignment { left, center, right }
 /// Text emphasis (RF-070). Kept minimal — bold on/off only.
 enum TextEmphasis { normal, bold }
 
+/// PRINT-RASTER-STYLE-001: the semantic role of a text line, used ONLY by the
+/// raster renderer to pick a font size / weight / alignment for on-device
+/// Arabic/Hebrew printing. It is metadata: the ESC/POS text path and the
+/// loopback/web path IGNORE it (they use [PrintAlignment] + [TextEmphasis] as
+/// before), so it is fully backward-compatible — a line with no style stays
+/// [normal] and renders exactly as it did.
+enum PrintLineStyle {
+  /// Body text — the default.
+  normal,
+
+  /// A large, centered heading (the restaurant name / order number hero).
+  headingLarge,
+
+  /// A centered line (service details, thank-you footer).
+  centered,
+
+  /// A menu-item line — slightly stronger than body.
+  item,
+
+  /// An indented sub-line (a modifier under its item).
+  sub,
+
+  /// A note line — clear, with its marker preserved.
+  note,
+
+  /// The receipt TOTAL — emphasised. (Never used on the money-free KDS ticket.)
+  total,
+
+  /// A horizontal separator rule.
+  separator,
+}
+
 /// Optional text-direction metadata carried on a line (RF-070).
 ///
 /// RF-070 does NOT perform RTL layout or bidi — this is carried as a hint only;
@@ -28,6 +60,7 @@ class PrintTextLine extends PrintLine {
     this.alignment = PrintAlignment.left,
     this.emphasis = TextEmphasis.normal,
     this.direction = PrintTextDirection.ltr,
+    this.style = PrintLineStyle.normal,
   });
 
   /// Pre-formatted display text (the caller already formatted any money/qty).
@@ -37,6 +70,10 @@ class PrintTextLine extends PrintLine {
 
   /// Direction hint only (RF-070 does not lay out RTL — see RF-073).
   final PrintTextDirection direction;
+
+  /// PRINT-RASTER-STYLE-001: the semantic role for the raster renderer. Defaults
+  /// to [PrintLineStyle.normal]; the ESC/POS text + loopback paths ignore it.
+  final PrintLineStyle style;
 }
 
 /// Advance the paper by [lines] line-feeds (RF-070).

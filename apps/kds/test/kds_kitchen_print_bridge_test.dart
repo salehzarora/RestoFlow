@@ -180,4 +180,26 @@ void main() {
     expect(text.contains(r'$'), isFalse);
     expect(text.toLowerCase().contains('minor'), isFalse);
   });
+
+  // PRINT-RASTER-STYLE-001: the ticket carries raster styles (a large order
+  // heading, item lines, indented sub-lines) — and NEVER a `total` style, since
+  // the kitchen ticket is money-free (T-003).
+  test('the ticket is tagged with a large heading + item styles, never a total '
+      'style (money-free)', () async {
+    final l10n = await _en();
+    final escpos = kitchenTicketToEscPosDocument(
+      buildKdsTicketDocument(l10n, _ticket()),
+    );
+    final styles = escpos.lines
+        .whereType<pp.PrintTextLine>()
+        .map((l) => l.style)
+        .toList();
+    // The order-number hero is a large heading.
+    expect(styles.first, pp.PrintLineStyle.headingLarge);
+    // Item + indented sub-lines are present…
+    expect(styles.contains(pp.PrintLineStyle.item), isTrue);
+    expect(styles.contains(pp.PrintLineStyle.sub), isTrue);
+    // …but NO money total style ever appears on the kitchen ticket.
+    expect(styles.contains(pp.PrintLineStyle.total), isFalse);
+  });
 }

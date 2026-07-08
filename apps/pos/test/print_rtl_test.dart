@@ -45,7 +45,7 @@ app.PrintDocument _arabicReceipt() => app.PrintDocument(
     app.PrintLine.kv('العميل', 'محمد عبد الله'),
     app.PrintLine.rule(),
     app.PrintLine.item('برجر كلاسيك', '2×'),
-    app.PrintLine.kv('الإجمالي', '₪48.00'),
+    app.PrintLine.kv('الإجمالي', '₪48.00', emphasised: true),
   ],
 );
 
@@ -86,6 +86,25 @@ void main() {
     // Money is passed through as its already-formatted string (D-007/D-008).
     expect(rasterized.contains('₪48.00'), isTrue);
   });
+
+  test(
+    'PRINT-RASTER-STYLE-001: each line reaches the rasterizer tagged with its '
+    'raster style (large heading, item, emphasised total, separator)',
+    () async {
+      final fake = pp.FakeReceiptRasterizer();
+      await NativeTransportPrintBridge(
+        transportFactory: () => _RecordingTransport(),
+        rasterizer: fake,
+      ).submit(_arabicReceipt());
+      final req = fake.requests.single;
+      pp.PrintLineStyle styleOf(String needle) =>
+          req.styles[req.lines.indexWhere((l) => l.contains(needle))];
+      expect(styleOf('إيصال'), pp.PrintLineStyle.headingLarge); // big heading
+      expect(styleOf('برجر كلاسيك'), pp.PrintLineStyle.item); // item
+      expect(styleOf('₪48.00'), pp.PrintLineStyle.total); // emphasised total
+      expect(req.styles.contains(pp.PrintLineStyle.separator), isTrue); // rule
+    },
+  );
 
   test('no rasterizer -> ESC/POS TEXT fallback (no raster command)', () async {
     final transport = _RecordingTransport();

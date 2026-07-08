@@ -23,6 +23,9 @@ pp.PrintDocument receiptToEscPosDocument(
 }) {
   final lines = <pp.PrintLine>[];
   for (final line in doc.lines) {
+    // PRINT-RASTER-STYLE-001: tag each ESC/POS line with its semantic style so
+    // the raster renderer can size/center/emphasise it. The ESC/POS text +
+    // loopback paths ignore `style` (they use alignment + emphasis as before).
     switch (line.kind) {
       case app.PrintLineKind.title:
         lines.add(
@@ -30,6 +33,7 @@ pp.PrintDocument receiptToEscPosDocument(
             line.left ?? '',
             alignment: pp.PrintAlignment.center,
             emphasis: pp.TextEmphasis.bold,
+            style: pp.PrintLineStyle.headingLarge,
           ),
         );
       case app.PrintLineKind.center:
@@ -37,9 +41,22 @@ pp.PrintDocument receiptToEscPosDocument(
           pp.PrintTextLine(
             line.left ?? '',
             alignment: pp.PrintAlignment.center,
+            style: pp.PrintLineStyle.centered,
           ),
         );
       case app.PrintLineKind.keyValue:
+        lines.add(
+          pp.PrintTextLine(
+            _twoColumn(line.left, line.right, columns),
+            emphasis: line.emphasised
+                ? pp.TextEmphasis.bold
+                : pp.TextEmphasis.normal,
+            // An emphasised money row is the receipt TOTAL.
+            style: line.emphasised
+                ? pp.PrintLineStyle.total
+                : pp.PrintLineStyle.normal,
+          ),
+        );
       case app.PrintLineKind.item:
         lines.add(
           pp.PrintTextLine(
@@ -47,19 +64,28 @@ pp.PrintDocument receiptToEscPosDocument(
             emphasis: line.emphasised
                 ? pp.TextEmphasis.bold
                 : pp.TextEmphasis.normal,
+            style: pp.PrintLineStyle.item,
           ),
         );
       case app.PrintLineKind.sub:
-        lines.add(pp.PrintTextLine('  ${line.left ?? ''}'));
+        lines.add(
+          pp.PrintTextLine(
+            '  ${line.left ?? ''}',
+            style: pp.PrintLineStyle.sub,
+          ),
+        );
       case app.PrintLineKind.note:
         lines.add(
           pp.PrintTextLine(
             line.left ?? '',
             alignment: pp.PrintAlignment.center,
+            style: pp.PrintLineStyle.note,
           ),
         );
       case app.PrintLineKind.rule:
-        lines.add(pp.PrintTextLine('-' * columns));
+        lines.add(
+          pp.PrintTextLine('-' * columns, style: pp.PrintLineStyle.separator),
+        );
     }
   }
   lines.add(const pp.PrintFeedLine(3));

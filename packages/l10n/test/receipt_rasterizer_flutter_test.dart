@@ -71,6 +71,62 @@ void main() {
     expectValidBitmap(image, 384);
   });
 
+  // PRINT-RASTER-STYLE-001: styled lines change size/shape, not just count.
+  // Structural (D3) assertions only — height / non-blank, never exact bytes.
+  Future<ReceiptRasterImage> rasterStyled(
+    List<String> lines,
+    List<PrintLineStyle> styles, {
+    ReceiptTextDirection direction = ReceiptTextDirection.ltr,
+    String localeTag = 'en',
+  }) => rasterizer.rasterize(
+    ReceiptRasterRequest(
+      lines: lines,
+      styles: styles,
+      widthDots: 576,
+      direction: direction,
+      localeTag: localeTag,
+    ),
+  );
+
+  test(
+    'a headingLarge line renders taller than the same normal line',
+    () async {
+      final normal = await rasterStyled(
+        const ['Order #A1'],
+        const [PrintLineStyle.normal],
+      );
+      final heading = await rasterStyled(
+        const ['Order #A1'],
+        const [PrintLineStyle.headingLarge],
+      );
+      expect(heading.heightDots, greaterThan(normal.heightDots));
+      expectValidBitmap(heading, 576);
+    },
+  );
+
+  test('a separator style draws a rule (non-blank, no text needed)', () async {
+    final image = await rasterStyled(
+      const ['---'],
+      const [PrintLineStyle.separator],
+    );
+    // The rule painted black dots even though the "text" is ignored.
+    expect(image.data.any((b) => b != 0), isTrue);
+    expectValidBitmap(image, 576);
+  });
+
+  test(
+    'Arabic heading + total styles still rasterize (RTL preserved)',
+    () async {
+      final image = await rasterStyled(
+        const ['إيصال', 'المجموع ₪58.50'],
+        const [PrintLineStyle.headingLarge, PrintLineStyle.total],
+        direction: ReceiptTextDirection.rtl,
+        localeTag: 'ar',
+      );
+      expectValidBitmap(image, 576);
+    },
+  );
+
   test('more lines yield a taller bitmap (deterministic ordering)', () async {
     final short = await rasterizer.rasterize(
       request(
