@@ -34,6 +34,7 @@ class _FailingOptionStore extends InMemoryMenuStore {
     int priceDeltaMinor = 0,
     int displayOrder = 0,
     bool isActive = true,
+    Map<String, dynamic>? kitchenMeat,
   }) async {
     final call = optionCalls++;
     if (call == failAt) return const Failure(MenuServerFailure());
@@ -45,6 +46,7 @@ class _FailingOptionStore extends InMemoryMenuStore {
       priceDeltaMinor: priceDeltaMinor,
       displayOrder: displayOrder,
       isActive: isActive,
+      kitchenMeat: kitchenMeat,
     );
   }
 }

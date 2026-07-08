@@ -229,6 +229,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
                   modifierNameSnapshot: m.groupName,
                   priceMinorSnapshot: m.priceDeltaMinor,
                   quantity: m.quantity,
+                  // KITCHEN-MEAT-001: snapshot the option's meat contribution.
+                  meatSnapshot: m.kitchenMeat,
                 ),
             ],
           ),

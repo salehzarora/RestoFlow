@@ -89,6 +89,11 @@ class KdsTicketMapper {
     // above 1 the display string gets a '×N' suffix (name first, U+00D7 — the
     // same convention as the KDS item line). Never money.
     final modsByItem = <String, List<String>>{};
+    // KITCHEN-MEAT-001: each order item's meat contributions from its selected
+    // options, PRE-MULTIPLIED by the modifier units (× the item quantity is
+    // applied per item below). Money-free; only options carrying meat_snapshot
+    // contribute (nothing is inferred from a name/price).
+    final meatByItem = <String, List<KitchenMeat>>{};
     for (final m in modifiers) {
       if (m['deleted_at'] != null) continue;
       final itemId = m['order_item_id'];
@@ -99,10 +104,20 @@ class KdsTicketMapper {
       (modsByItem[itemId] ??= <String>[]).add(
         qty > 1 ? '$option ×$qty' : option,
       );
+      final meat = KitchenMeat.tryFromJson(m['meat_snapshot']);
+      if (meat != null && qty > 0) {
+        (meatByItem[itemId] ??= <KitchenMeat>[]).add(
+          KitchenMeat(quantity: meat.quantity * qty, unit: meat.unit),
+        );
+      }
     }
 
     // Group active items into (order, station) tickets.
     final grouped = <String, _TicketBuilder>{};
+    // KITCHEN-MEAT-001: WHOLE-ORDER meat contributions keyed by order id. Meat
+    // is aggregated across ALL of an order's items (not per station) so the
+    // top-of-ticket note is the total meat the kitchen needs for the order.
+    final meatContribsByOrder = <String, List<MeatContribution>>{};
     for (final it in orderItems) {
       if (it['deleted_at'] != null) continue;
       final itemId = it['id'];
@@ -150,7 +165,23 @@ class KdsTicketMapper {
           prepComponents: prepComponents,
         ),
       );
+      // KITCHEN-MEAT-001: this item's meat (already × modifier units) × the
+      // item quantity, accumulated for the whole order.
+      final itemMeat = meatByItem[itemId];
+      if (itemMeat != null && quantity > 0) {
+        final contribs = meatContribsByOrder[orderId] ??= <MeatContribution>[];
+        for (final meat in itemMeat) {
+          contribs.add(MeatContribution(meat: meat, factor: quantity));
+        }
+      }
     }
+
+    // KITCHEN-MEAT-001: the whole-order meat total per order (grouped by unit),
+    // attached to every ticket of that order below.
+    final meatTotalsByOrder = <String, List<KitchenMeat>>{
+      for (final entry in meatContribsByOrder.entries)
+        entry.key: aggregateMeatByUnit(entry.value),
+    };
 
     final tickets =
         grouped.values
@@ -178,6 +209,9 @@ class KdsTicketMapper {
                       quantity: item.quantity,
                     ),
                 ]),
+                // KITCHEN-MEAT-001: the whole-order meat total shown at the top.
+                meatTotals:
+                    meatTotalsByOrder[b.orderId] ?? const <KitchenMeat>[],
               ),
             )
             .toList()

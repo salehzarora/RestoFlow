@@ -118,6 +118,7 @@ class ScriptedMenuWriter implements MenuWriter {
     int priceDeltaMinor = 0,
     int displayOrder = 0,
     bool isActive = true,
+    Map<String, dynamic>? kitchenMeat,
   }) => _record('upsertModifierOption');
 
   @override

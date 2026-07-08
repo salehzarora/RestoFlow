@@ -295,6 +295,11 @@
   "@kdsTicketPrepHeading": {
     "description": "KITCHEN-PREP-001: heading printed above the aggregated prep component list on a kitchen ticket, before the item details. Non-money."
   },
+  "kdsMeatTotalLabel": "Meat total: {count} {unit}",
+  "@kdsMeatTotalLabel": {
+    "description": "KITCHEN-MEAT-001: the whole-order meat total shown at the top of the KDS card + kitchen ticket (one per unit group). count is a formatted count string, unit is free text (e.g. patties, g). Non-money.",
+    "placeholders": { "count": { "type": "String" }, "unit": { "type": "String" } }
+  },
   "kdsElapsedMinutes": "{minutes}m",
   "@kdsElapsedMinutes": {
     "description": "KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).",
@@ -1508,6 +1513,14 @@
   "@menuAddPrepComponent": { "description": "KITCHEN-PREP-001: action to add a new kitchen prep component row." },
   "menuRemovePrepComponent": "Remove component",
   "@menuRemovePrepComponent": { "description": "KITCHEN-PREP-001: tooltip/label for removing a kitchen prep component row." },
+  "menuKitchenMeatSection": "Kitchen meat summary",
+  "@menuKitchenMeatSection": { "description": "KITCHEN-MEAT-001: sub-heading for the optional meat-contribution section on a modifier option editor (counts into the KDS whole-order meat total)." },
+  "menuKitchenMeatEnabledLabel": "Count in meat total",
+  "@menuKitchenMeatEnabledLabel": { "description": "KITCHEN-MEAT-001: toggle label — whether this option contributes to the KDS meat total." },
+  "menuKitchenMeatQuantityLabel": "Meat quantity",
+  "@menuKitchenMeatQuantityLabel": { "description": "KITCHEN-MEAT-001: label for the per-selection meat quantity field (a count, never money)." },
+  "menuKitchenMeatUnitLabel": "Meat unit",
+  "@menuKitchenMeatUnitLabel": { "description": "KITCHEN-MEAT-001: label for the meat unit field (e.g. patties, g)." },
   "menuSkuLabel": "SKU (internal code)",
   "@menuSkuLabel": { "description": "Label for the internal stock/product code field (back-office only; never sent to devices)." },
   "menuPortionFieldLabel": "Portion label",

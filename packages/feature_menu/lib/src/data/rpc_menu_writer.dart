@@ -223,6 +223,7 @@ class RpcMenuWriter implements MenuWriter {
     int priceDeltaMinor = 0,
     int displayOrder = 0,
     bool isActive = true,
+    Map<String, dynamic>? kitchenMeat,
   }) {
     return _invoke(MenuRpcNames.upsertModifierOption, {
       'p_organization_id': scope.organizationId,
@@ -234,6 +235,11 @@ class RpcMenuWriter implements MenuWriter {
       'p_price_delta_minor': priceDeltaMinor,
       'p_display_order': displayOrder,
       'p_is_active': isActive,
+      // KITCHEN-MEAT-001: the server's 10th arg (p_kitchen_meat jsonb). Sent
+      // ONLY when meat is configured — a meat-less edit omits it, so it binds to
+      // the 10-arg function's null default (clears) on a migrated DB and still
+      // binds the legacy 9-arg function before the migration is applied.
+      if (kitchenMeat != null) 'p_kitchen_meat': kitchenMeat,
     }, MenuEntityType.modifierOption);
   }
 

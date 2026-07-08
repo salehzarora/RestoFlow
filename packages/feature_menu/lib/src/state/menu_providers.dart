@@ -254,6 +254,7 @@ class MenuWriteController {
     int priceDeltaMinor = 0,
     int displayOrder = 0,
     bool isActive = true,
+    Map<String, dynamic>? kitchenMeat,
   }) => _run(
     () => _repository.upsertModifierOption(
       scope: _scope,
@@ -263,6 +264,7 @@ class MenuWriteController {
       priceDeltaMinor: priceDeltaMinor,
       displayOrder: displayOrder,
       isActive: isActive,
+      kitchenMeat: kitchenMeat,
     ),
   );
 

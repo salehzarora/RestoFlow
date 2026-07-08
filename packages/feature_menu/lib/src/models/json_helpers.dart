@@ -76,6 +76,16 @@ Map<String, dynamic> optJsonMap(Map<String, dynamic> json, String key) {
   throw FormatException('$key not an object or null');
 }
 
+/// A GENUINELY-optional JSON object (`kitchen_meat`). Missing/null returns null
+/// (not an empty map — the field is absent, not empty); a non-object value
+/// throws (fail-closed — mirrors the server CHECK).
+Map<String, dynamic>? optJsonMapOrNull(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) return null;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  throw FormatException('$key not an object or null');
+}
+
 bool optBool(Map<String, dynamic> json, String key, bool fallback) {
   final value = json[key];
   if (value == null) return fallback;
