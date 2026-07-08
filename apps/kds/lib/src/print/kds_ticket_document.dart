@@ -32,29 +32,34 @@ PrintDocument buildKdsTicketDocument(
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
+      // PRINT-LAYOUT-001: the big order number is the hero, set off by a rule.
       PrintLine.title(header),
+      PrintLine.rule(),
+      // Service context grouped + centered so the chef reads it at a glance.
       if (dineIn || takeaway)
-        PrintLine.kv(
-          l10n.posOrderTypeLabel,
+        PrintLine.center(
           dineIn ? l10n.posOrderTypeDineIn : l10n.posOrderTypeTakeaway,
         ),
       if (ticket.tableLabel case final table?)
-        PrintLine.kv(l10n.posTableLabel, table),
-      // ORDER-CUSTOMER-001: the OPTIONAL customer name, near the order code /
-      // table / type. Absent => no row. Money-free display text (T-003).
+        PrintLine.center('${l10n.posTableLabel} $table'),
+      // ORDER-CUSTOMER-001: the OPTIONAL customer name. Absent => no row.
+      // Money-free display text (T-003).
       if (ticket.customerName case final customer?)
-        PrintLine.kv(l10n.customerNameKitchenLabel, customer),
-      if (showStation) PrintLine.kv(l10n.kdsStationLabel, ticket.stationId),
+        PrintLine.center('${l10n.customerNameKitchenLabel}: $customer'),
+      if (showStation)
+        PrintLine.center('${l10n.kdsStationLabel}: ${ticket.stationId}'),
       PrintLine.rule(),
+      // Items — bold, with a prominent quantity; modifiers + the note indented
+      // underneath. Notes carry a "»" marker so a chef never misses them.
       for (final item in ticket.items) ...[
         PrintLine.item(item.name, '${item.quantity}×', emphasised: true),
         for (final modifier in item.modifiers) PrintLine.sub('+ $modifier'),
         if (item.note case final note?)
-          PrintLine.sub('${l10n.kdsNoteLabel}: $note'),
+          PrintLine.sub('» ${l10n.kdsNoteLabel}: $note'),
       ],
       if (ticket.notes case final orderNote?) ...[
         PrintLine.rule(),
-        PrintLine.sub('${l10n.kdsNoteLabel}: $orderNote'),
+        PrintLine.sub('» ${l10n.kdsNoteLabel}: $orderNote'),
       ],
     ],
   );

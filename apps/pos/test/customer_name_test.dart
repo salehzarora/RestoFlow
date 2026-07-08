@@ -385,11 +385,20 @@ void main() {
           order(name: 'Sara Cohen'),
           payment(),
         );
+        // PRINT-LAYOUT-001: the customer name prints as a grouped, centered
+        // header line ("Customer: <name>").
+        expect(
+          doc.lines.any(
+            (l) =>
+                (l.left ?? '') ==
+                '${l10n.customerNameReceiptLabel}: Sara Cohen',
+          ),
+          isTrue,
+        );
+        // The total is still rendered (money untouched).
         final kv = doc.lines
             .map((l) => '${l.left ?? ''}=${l.right ?? ''}')
             .toList();
-        expect(kv, contains('${l10n.customerNameReceiptLabel}=Sara Cohen'));
-        // The total is still rendered (money untouched).
         expect(kv.any((s) => s.contains('₪10.00')), isTrue);
       },
     );
@@ -400,7 +409,7 @@ void main() {
         final l10n = await AppLocalizations.delegate.load(const Locale('en'));
         final doc = buildReceiptDocument(l10n, order(), payment());
         final hasCustomer = doc.lines.any(
-          (l) => (l.left ?? '') == l10n.customerNameReceiptLabel,
+          (l) => (l.left ?? '').startsWith('${l10n.customerNameReceiptLabel}:'),
         );
         expect(hasCustomer, isFalse);
       },

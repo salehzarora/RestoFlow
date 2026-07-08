@@ -99,34 +99,36 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               icon: Icons.check_circle,
                             ),
                           ),
-                          const SizedBox(height: RestoflowSpacing.md),
-                          _Line(
-                            label: l10n.posReceiptNumberLabel,
-                            value: payment.receiptNumber,
+                          const SizedBox(height: RestoflowSpacing.sm),
+                          const _Rule(),
+                          // PRINT-LAYOUT-001: the big, customer-facing ORDER
+                          // NUMBER is the hero; the internal receipt number is
+                          // no longer shown to the customer.
+                          Center(
+                            child: Text(
+                              l10n.posReceiptOrderHeading(order.orderNumber),
+                              key: const Key('preview-order-heading'),
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
-                          _Line(
-                            label: l10n.posOrderNumberLabel,
-                            value: order.orderNumber,
-                          ),
-                          _Line(
-                            label: l10n.posOrderTypeLabel,
-                            value: typeLabel,
-                          ),
+                          const _Rule(),
+                          // Grouped service details, centered.
+                          _Centered(text: typeLabel),
                           if (dineIn && order.tableLabel != null)
-                            _Line(
-                              label: l10n.posTableLabel,
-                              value: order.tableLabel!,
+                            _Centered(
+                              text: '${l10n.posTableLabel} ${order.tableLabel}',
                             ),
-                          // ORDER-CUSTOMER-001: mirror buildReceiptDocument so the
-                          // WYSIWYG preview matches the printed receipt.
+                          // ORDER-CUSTOMER-001: the optional customer name.
                           if (order.customerName case final customer?)
-                            _Line(
-                              label: l10n.customerNameReceiptLabel,
-                              value: customer,
+                            _Centered(
+                              text:
+                                  '${l10n.customerNameReceiptLabel}: $customer',
                             ),
-                          _Line(
-                            label: l10n.posPaidAtLabel,
-                            value: _formatReceiptTimestamp(payment.paidAt),
+                          _Centered(
+                            text: _formatReceiptTimestamp(payment.paidAt),
                           ),
                           const _Rule(),
                           for (final line in order.lines) ...[
@@ -212,6 +214,18 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             value: paymentMethodLabel(l10n, payment.method),
                           ),
                           const SizedBox(height: RestoflowSpacing.sm),
+                          // PRINT-LAYOUT-001: a short thank-you footer.
+                          Center(
+                            child: Text(
+                              l10n.posReceiptThankYou,
+                              key: const Key('preview-thank-you'),
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: RestoflowSpacing.sm),
                           if (isDemo) ...[
                             Center(
                               child: Text(
@@ -280,40 +294,44 @@ PrintDocument buildReceiptDocument(
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
+      // Header — restaurant brand + a PAID chip.
       PrintLine.title(
         isDemo ? l10n.receiptDemoRestaurantName : l10n.posReceiptTitle,
       ),
       PrintLine.center(l10n.posPaidChip),
       PrintLine.rule(),
-      PrintLine.kv(l10n.posReceiptNumberLabel, payment.receiptNumber),
-      PrintLine.kv(l10n.posOrderNumberLabel, order.orderNumber),
-      PrintLine.kv(
-        l10n.posOrderTypeLabel,
+      // Hero — the big, customer-facing ORDER NUMBER. PRINT-LAYOUT-001: the
+      // INTERNAL receipt number (payment.receiptNumber) is intentionally NOT
+      // printed on the customer receipt; it stays in the data for reporting/
+      // support and is unchanged.
+      PrintLine.title(l10n.posReceiptOrderHeading(order.orderNumber)),
+      PrintLine.rule(),
+      // Service details grouped + centered: type, table, customer, date/time.
+      PrintLine.center(
         dineIn ? l10n.posOrderTypeDineIn : l10n.posOrderTypeTakeaway,
       ),
       if (dineIn && order.tableLabel != null)
-        PrintLine.kv(l10n.posTableLabel, order.tableLabel!),
-      // ORDER-CUSTOMER-001: the OPTIONAL customer name, near the top. Absent =>
-      // no row. Header metadata only — money/tax lines below are untouched.
+        PrintLine.center('${l10n.posTableLabel} ${order.tableLabel}'),
+      // ORDER-CUSTOMER-001: the OPTIONAL customer name, clear near the top.
       if (order.customerName case final customer?)
-        PrintLine.kv(l10n.customerNameReceiptLabel, customer),
-      PrintLine.kv(
-        l10n.posPaidAtLabel,
-        _formatReceiptTimestamp(payment.paidAt),
-      ),
+        PrintLine.center('${l10n.customerNameReceiptLabel}: $customer'),
+      PrintLine.center(_formatReceiptTimestamp(payment.paidAt)),
       PrintLine.rule(),
+      // Items — quantity + name, line total on the right; modifiers and the note
+      // are indented underneath so they scan clearly and never get lost.
       for (final line in order.lines) ...[
         PrintLine.item(
-          '${line.quantity}× ${line.name}',
+          '${line.quantity} × ${line.name}',
           MoneyFormatter.formatMinor(line.lineTotalMinor, line.currencyCode),
         ),
         // Modifier snapshots arrive pre-formatted ('name ×N' for quantities).
-        for (final modifier in line.modifiers)
-          PrintLine.item('  + $modifier', ''),
+        for (final modifier in line.modifiers) PrintLine.sub('+ $modifier'),
         if (line.note != null)
           PrintLine.sub('${l10n.posItemNoteLabel}: ${line.note}'),
       ],
       PrintLine.rule(),
+      // Totals — money/tax formatting is UNCHANGED (MoneyFormatter); the TOTAL
+      // is emphasised so it reads stronger than the other money rows.
       // RF-117: subtotal/discount/tax breakout only when there's a discount or
       // tax; otherwise the single Total line keeps the plain receipt unchanged.
       if (order.discountTotalMinor > 0 || order.taxTotalMinor > 0) ...[
@@ -357,6 +375,8 @@ PrintDocument buildReceiptDocument(
         l10n.posPaymentMethodLabel,
         paymentMethodLabel(l10n, payment.method),
       ),
+      // Footer — a short thank-you, then the honest mode notes.
+      PrintLine.center(l10n.posReceiptThankYou),
       if (isDemo) ...[
         PrintLine.note(l10n.posReceiptProvisionalNote),
         PrintLine.note(l10n.posReceiptDemoNote),
@@ -450,6 +470,27 @@ class _PreviewActions extends StatelessWidget {
             label: Text(l10n.printPreviewPrint),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// PRINT-LAYOUT-001: a centered, grouped service-detail line (type / table /
+/// customer / date-time) for the receipt header.
+class _Centered extends StatelessWidget {
+  const _Centered({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodyMedium,
       ),
     );
   }

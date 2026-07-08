@@ -143,8 +143,10 @@ class KdsTicketCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       ticketHeader,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      // PRINT-LAYOUT-001: the order number reads from across the
+                      // pass — one step larger than before.
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -208,9 +210,10 @@ class KdsTicketCard extends StatelessWidget {
               if (ticket.notes case final note?) ...[
                 const SizedBox(height: RestoflowSpacing.xs),
                 Text(
-                  '${l10n.kdsNoteLabel}: $note',
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  '» ${l10n.kdsNoteLabel}: $note',
+                  style: theme.textTheme.bodyLarge?.copyWith(
                     fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
                     color: noteColor,
                   ),
                 ),
@@ -296,7 +299,8 @@ class _ItemLine extends StatelessWidget {
     // exact '{name} ×{quantity}' form (U+00D7) — readable, money-free.
     final line = '${item.name} ×${item.quantity}';
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
+      // PRINT-LAYOUT-001: more breathing room between items so the pass scans.
+      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -325,10 +329,13 @@ class _ItemLine extends StatelessWidget {
               padding: const EdgeInsetsDirectional.only(
                 start: RestoflowSpacing.md,
               ),
+              // PRINT-LAYOUT-001: a "»" marker + heavier weight so a kitchen
+              // instruction is never missed.
               child: Text(
-                '${l10n.kdsNoteLabel}: $note',
-                style: theme.textTheme.bodyMedium?.copyWith(
+                '» ${l10n.kdsNoteLabel}: $note',
+                style: theme.textTheme.bodyLarge?.copyWith(
                   fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w600,
                   color: noteColor,
                 ),
               ),
