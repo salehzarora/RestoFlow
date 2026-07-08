@@ -14,6 +14,10 @@ dependencies:
   # Result<S,F> seam (no exceptions across layer boundaries).
   restoflow_core:
     path: ../core
+  # KITCHEN-PREP-001: the shared KitchenPrepComponent value type + parser used to
+  # read/write menu_items.attributes.prep_components in the item editor.
+  restoflow_domain:
+    path: ../domain
   # The neutral SyncRpcTransport seam used to call the RF-109 public menu RPCs.
   restoflow_data_remote:
     path: ../data_remote

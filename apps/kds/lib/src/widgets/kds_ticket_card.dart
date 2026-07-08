@@ -205,6 +205,17 @@ class KdsTicketCard extends StatelessWidget {
               const SizedBox(height: RestoflowSpacing.sm),
               const Divider(height: 1),
               const SizedBox(height: RestoflowSpacing.sm),
+              // KITCHEN-PREP-001: the aggregated prep summary — placed after the
+              // order info and BEFORE the item details so the chef reads the
+              // counts first. Hidden entirely when no item carries configured
+              // prep (never clutters the card).
+              if (ticket.prepSummary.isNotEmpty) ...[
+                _PrepSummarySection(
+                  prepSummary: ticket.prepSummary,
+                  l10n: l10n,
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+              ],
               for (final item in ticket.items)
                 _ItemLine(item: item, l10n: l10n, noteColor: noteColor),
               if (ticket.notes case final note?) ...[
@@ -278,6 +289,65 @@ class KdsTicketCard extends StatelessWidget {
 
     if (!dimmed) return card;
     return Opacity(opacity: 0.62, child: card);
+  }
+}
+
+/// KITCHEN-PREP-001: the compact, money-free prep summary — a heading plus one
+/// pill per aggregated component ("Beef patty ×8 pcs"). Shown only when the
+/// ticket carries prep (the card hides the whole block otherwise).
+class _PrepSummarySection extends StatelessWidget {
+  const _PrepSummarySection({required this.prepSummary, required this.l10n});
+
+  final List<KitchenPrepComponent> prepSummary;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      key: const Key('kds-prep-summary'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.outdoor_grill_outlined,
+              size: RestoflowIconSizes.sm,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: RestoflowSpacing.xs),
+            Text(
+              l10n.kdsPrepSummaryLabel,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: RestoflowSpacing.xs),
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.xs,
+          children: [
+            for (final component in prepSummary)
+              RestoflowStatusPill(
+                icon: Icons.check_circle_outline,
+                label: _prepLabel(component),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// "name ×N" (or "name ×N unit" when a unit is set). All data + the U+00D7
+  /// symbol — money-free, no localized word (matches the modifier line style).
+  String _prepLabel(KitchenPrepComponent component) {
+    final quantity = formatPrepQuantity(component.quantity);
+    return component.unit.isEmpty
+        ? '${component.name} ×$quantity'
+        : '${component.name} ×$quantity ${component.unit}';
   }
 }
 

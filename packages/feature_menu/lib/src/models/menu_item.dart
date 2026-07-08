@@ -1,3 +1,5 @@
+import 'package:restoflow_domain/restoflow_domain.dart';
+
 import 'json_helpers.dart';
 
 /// The fixed menu item tag vocabulary (menu/media sprint). These are stable
@@ -15,6 +17,11 @@ const List<String> kMenuItemTypes = ['food', 'drink', 'side', 'combo', 'other'];
 const String kMenuAttrPortionLabel = 'portion_label';
 const String kMenuAttrPattyCount = 'patty_count';
 const String kMenuAttrPattyWeightGrams = 'patty_weight_grams';
+
+/// KITCHEN-PREP-001: the [MenuItem.attributes] key holding the configurable
+/// kitchen prep component list (`[{name, quantity, unit}]`). Non-money (D-007):
+/// quantity is a count, unit is text.
+const String kMenuAttrPrepComponents = 'prep_components';
 
 /// A sellable menu item (RF-109 `menu_items`). Money is integer minor units
 /// only ([basePriceMinor], DECISION D-007); never a floating-point type.
@@ -101,6 +108,12 @@ class MenuItem {
   /// Typed accessor over [attributes]: weight per patty/piece in GRAMS, or
   /// null. A weight, never money (D-007).
   int? get pattyWeightGrams => _attrInt(kMenuAttrPattyWeightGrams);
+
+  /// KITCHEN-PREP-001: the configured kitchen prep components (what the chef
+  /// assembles for ONE unit), parsed from [attributes]. Empty when unset.
+  /// Non-money ({name,quantity,unit}); shared parser drops blank/invalid rows.
+  List<KitchenPrepComponent> get prepComponents =>
+      parseKitchenPrepComponents(attributes[kMenuAttrPrepComponents]);
 
   String? _attrString(String key) {
     final value = attributes[key];

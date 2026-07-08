@@ -124,6 +124,10 @@ class KdsTicketMapper {
       final quantity = qty is int ? qty : int.tryParse('$qty') ?? 0;
       final noteRaw = it['notes'];
       final note = noteRaw is String && noteRaw.isNotEmpty ? noteRaw : null;
+      // KITCHEN-PREP-001: the item's PER-UNIT prep components (money-free
+      // {name,quantity,unit}) plucked from the order_items snapshot. Tolerant
+      // parse — a missing/bad value yields an empty list (no prep row).
+      final prepComponents = parseKitchenPrepComponents(it['prep_snapshot']);
 
       final key = '$orderId:$station';
       final builder = grouped.putIfAbsent(
@@ -143,6 +147,7 @@ class KdsTicketMapper {
           // Structured modifier lines (was: flattened into the name).
           modifiers: modsByItem[itemId] ?? const <String>[],
           note: note,
+          prepComponents: prepComponents,
         ),
       );
     }
@@ -163,6 +168,16 @@ class KdsTicketMapper {
                 customerName: b.info.customerName,
                 notes: b.info.notes,
                 submittedAt: b.info.submittedAt,
+                // KITCHEN-PREP-001: aggregate this ticket's prep across its
+                // items (each item's per-unit components × its quantity),
+                // grouped + stable-ordered. Money-free.
+                prepSummary: aggregateKitchenPrep([
+                  for (final item in b.items)
+                    KitchenPrepLine(
+                      components: item.prepComponents,
+                      quantity: item.quantity,
+                    ),
+                ]),
               ),
             )
             .toList()

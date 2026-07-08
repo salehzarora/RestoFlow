@@ -604,6 +604,18 @@ abstract class AppLocalizations {
   /// **'Note'**
   String get kdsNoteLabel;
 
+  /// KITCHEN-PREP-001: heading for the compact kitchen prep summary section on a KDS order card (aggregated components the chef assembles). Non-money.
+  ///
+  /// In en, this message translates to:
+  /// **'Prep'**
+  String get kdsPrepSummaryLabel;
+
+  /// KITCHEN-PREP-001: heading printed above the aggregated prep component list on a kitchen ticket, before the item details. Non-money.
+  ///
+  /// In en, this message translates to:
+  /// **'Order prep'**
+  String get kdsTicketPrepHeading;
+
   /// KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).
   ///
   /// In en, this message translates to:
@@ -2949,6 +2961,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Kitchen note'**
   String get menuKitchenNoteLabel;
+
+  /// KITCHEN-PREP-001: sub-heading for the optional kitchen prep components editor (what the chef assembles per one unit of the item). Non-money.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen prep'**
+  String get menuKitchenPrepSection;
+
+  /// KITCHEN-PREP-001: helper text under the kitchen prep components editor explaining it is optional per-unit assembly info.
+  ///
+  /// In en, this message translates to:
+  /// **'What the chef assembles for one item. Optional.'**
+  String get menuKitchenPrepHint;
+
+  /// KITCHEN-PREP-001: label for a prep component's name field (e.g. beef patty, bun).
+  ///
+  /// In en, this message translates to:
+  /// **'Component'**
+  String get menuPrepComponentNameLabel;
+
+  /// KITCHEN-PREP-001: label for a prep component's per-unit quantity field (a count, never money).
+  ///
+  /// In en, this message translates to:
+  /// **'Qty'**
+  String get menuPrepComponentQuantityLabel;
+
+  /// KITCHEN-PREP-001: label for a prep component's optional unit field (e.g. pcs, g).
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get menuPrepComponentUnitLabel;
+
+  /// KITCHEN-PREP-001: action to add a new kitchen prep component row.
+  ///
+  /// In en, this message translates to:
+  /// **'Add prep component'**
+  String get menuAddPrepComponent;
+
+  /// KITCHEN-PREP-001: tooltip/label for removing a kitchen prep component row.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove component'**
+  String get menuRemovePrepComponent;
 
   /// Label for the internal stock/product code field (back-office only; never sent to devices).
   ///

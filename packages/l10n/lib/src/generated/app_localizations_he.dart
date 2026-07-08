@@ -276,6 +276,12 @@ class AppLocalizationsHe extends AppLocalizations {
   String get kdsNoteLabel => 'הערה';
 
   @override
+  String get kdsPrepSummaryLabel => 'הכנה';
+
+  @override
+  String get kdsTicketPrepHeading => 'הכנת ההזמנה';
+
+  @override
   String kdsElapsedMinutes(int minutes) {
     return '$minutes ד׳';
   }
@@ -1525,6 +1531,27 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get menuKitchenNoteLabel => 'הערה למטבח';
+
+  @override
+  String get menuKitchenPrepSection => 'הכנת מטבח';
+
+  @override
+  String get menuKitchenPrepHint => 'מה שהטבח מרכיב לכל פריט. אופציונלי.';
+
+  @override
+  String get menuPrepComponentNameLabel => 'רכיב';
+
+  @override
+  String get menuPrepComponentQuantityLabel => 'כמות';
+
+  @override
+  String get menuPrepComponentUnitLabel => 'יחידה';
+
+  @override
+  String get menuAddPrepComponent => 'הוספת רכיב הכנה';
+
+  @override
+  String get menuRemovePrepComponent => 'הסרת רכיב';
 
   @override
   String get menuSkuLabel => 'מק\"ט (קוד פנימי)';

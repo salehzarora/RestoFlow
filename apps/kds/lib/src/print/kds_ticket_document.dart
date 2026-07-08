@@ -1,3 +1,4 @@
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -49,6 +50,16 @@ PrintDocument buildKdsTicketDocument(
       if (showStation)
         PrintLine.center('${l10n.kdsStationLabel}: ${ticket.stationId}'),
       PrintLine.rule(),
+      // KITCHEN-PREP-001: the aggregated prep summary near the top — after the
+      // order info, before item details — so the chef preps by count. Each line
+      // is "name ×N unit" (data + U+00D7, money-free); a trailing rule fences it
+      // off from the items. Emitted only when the ticket carries prep.
+      if (ticket.prepSummary.isNotEmpty) ...[
+        PrintLine.center(l10n.kdsTicketPrepHeading),
+        for (final component in ticket.prepSummary)
+          PrintLine.sub(_prepLine(component)),
+        PrintLine.rule(),
+      ],
       // Items — bold, with a prominent quantity; modifiers + the note indented
       // underneath. Notes carry a "»" marker so a chef never misses them.
       for (final item in ticket.items) ...[
@@ -63,4 +74,14 @@ PrintDocument buildKdsTicketDocument(
       ],
     ],
   );
+}
+
+/// KITCHEN-PREP-001: one aggregated prep line — "name ×N" (or "name ×N unit").
+/// Data + the U+00D7 multiplier only; money-free, no localized word (matches
+/// the item/modifier line convention).
+String _prepLine(KitchenPrepComponent component) {
+  final quantity = formatPrepQuantity(component.quantity);
+  return component.unit.isEmpty
+      ? '${component.name} ×$quantity'
+      : '${component.name} ×$quantity ${component.unit}';
 }

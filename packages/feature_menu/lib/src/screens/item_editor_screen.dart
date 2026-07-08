@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
@@ -97,6 +98,20 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   late final TextEditingController _pattyWeight = TextEditingController(
     text: _item?.pattyWeightGrams?.toString() ?? '',
   );
+
+  /// KITCHEN-PREP-001: the editable kitchen prep component rows, seeded from the
+  /// item's configured `attributes.prep_components`. Inline-editable (mirrors how
+  /// `_tags` is edited then serialized on save) — an empty list means no prep.
+  late final List<_PrepRow> _prepRows = [
+    for (final component
+        in _item?.prepComponents ?? const <KitchenPrepComponent>[])
+      _PrepRow(
+        name: component.name,
+        quantity: formatPrepQuantity(component.quantity),
+        unit: component.unit,
+      ),
+  ];
+
   late String? _categoryId = _item?.menuCategoryId ?? widget.target.categoryId;
   late String? _itemType = _item?.itemType;
   late final Set<String> _tags = {...?_item?.tags};
@@ -123,6 +138,9 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     _portion.dispose();
     _pattyCount.dispose();
     _pattyWeight.dispose();
+    for (final row in _prepRows) {
+      row.dispose();
+    }
     super.dispose();
   }
 
@@ -168,11 +186,15 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   Map<String, dynamic> _builtAttributes({
     required int? pattyCount,
     required int? pattyWeightGrams,
+    required List<Map<String, Object?>> prepComponents,
   }) {
     final attributes = <String, dynamic>{...?_freshItem?.attributes}
       ..remove(kMenuAttrPortionLabel)
       ..remove(kMenuAttrPattyCount)
       ..remove(kMenuAttrPattyWeightGrams)
+      // KITCHEN-PREP-001: full-state — drop then re-add so clearing every row
+      // clears the stored list; other (future) attribute keys are preserved.
+      ..remove(kMenuAttrPrepComponents)
       ..addAll(
         MenuItem.buildAttributes(
           portionLabel: _portion.text,
@@ -180,7 +202,50 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
           pattyWeightGrams: pattyWeightGrams,
         ),
       );
+    if (prepComponents.isNotEmpty) {
+      attributes[kMenuAttrPrepComponents] = prepComponents;
+    }
     return attributes;
+  }
+
+  /// KITCHEN-PREP-001: validates + serializes the prep rows. A FULLY-blank row
+  /// is dropped; a partially-filled row must have a non-blank name AND a
+  /// positive integer quantity, else its fields are flagged. Returns the wire
+  /// list (`[{name, quantity, unit}]`) and whether any row is in error.
+  ({List<Map<String, Object?>> components, bool hasError}) _collectPrepRows() {
+    final components = <Map<String, Object?>>[];
+    var hasError = false;
+    for (final row in _prepRows) {
+      row.nameError = null;
+      row.quantityError = null;
+      final name = row.name.text.trim();
+      final quantityText = row.quantity.text.trim();
+      final unit = row.unit.text.trim();
+      if (name.isEmpty && quantityText.isEmpty && unit.isEmpty) {
+        continue; // an untouched/blank row is simply ignored
+      }
+      // A prep quantity is a positive COUNT that MAY be fractional (the domain
+      // types it as num for a genuine half-portion) — parse as num so a stored
+      // "0.5" the editor seeds stays saveable. num.tryParse('2') stays an int,
+      // so a whole count still serializes as 2, not 2.0.
+      final quantity = num.tryParse(quantityText);
+      if (name.isEmpty) {
+        row.nameError = MenuFieldError.blank;
+        hasError = true;
+      }
+      if (quantity == null || quantity <= 0) {
+        row.quantityError = MenuFieldError.notAnInteger;
+        hasError = true;
+      }
+      if (name.isNotEmpty && quantity != null && quantity > 0) {
+        components.add(<String, Object?>{
+          'name': name,
+          'quantity': quantity,
+          'unit': unit,
+        });
+      }
+    }
+    return (components: components, hasError: hasError);
   }
 
   Future<void> _saveFields() async {
@@ -198,6 +263,9 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     final (pattyWeight, pattyWeightError) = _parseOptionalNonNegativeInt(
       _pattyWeight.text,
     );
+    // KITCHEN-PREP-001: validate + serialize the prep rows (mutates per-row
+    // errors, read back in build via the setState below).
+    final prep = _collectPrepRows();
     final categoryId = _categoryId;
     setState(() {
       _nameError = nameError;
@@ -213,6 +281,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
         prepError != null ||
         pattyCountError != null ||
         pattyWeightError != null ||
+        prep.hasError ||
         categoryId == null) {
       return;
     }
@@ -245,6 +314,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
           attributes: _builtAttributes(
             pattyCount: pattyCount,
             pattyWeightGrams: pattyWeight,
+            prepComponents: prep.components,
           ),
         );
     if (!mounted) return;
@@ -568,6 +638,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   /// 4. Preparation: prep time + the standing kitchen note (both pass through
   /// to kitchen sessions server-side — a KDS needs prep info).
   Widget _preparationCard(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
     return MenuSectionCard(
       title: l10n.menuPreparationSection,
       icon: Icons.timer_outlined,
@@ -595,6 +666,107 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               labelText: l10n.menuKitchenNoteLabel,
               border: const OutlineInputBorder(),
             ),
+          ),
+          // KITCHEN-PREP-001: the OPTIONAL kitchen prep components editor — what
+          // the chef assembles for ONE unit of the item, aggregated on the KDS.
+          const SizedBox(height: RestoflowSpacing.md),
+          const Divider(),
+          const SizedBox(height: RestoflowSpacing.sm),
+          Text(
+            l10n.menuKitchenPrepSection,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.xs),
+          Text(
+            l10n.menuKitchenPrepHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          for (var i = 0; i < _prepRows.length; i++) _prepRowField(i, l10n),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              key: const ValueKey('menu-item-add-prep-component'),
+              onPressed: () => setState(() => _prepRows.add(_PrepRow())),
+              icon: const Icon(Icons.add),
+              label: Text(l10n.menuAddPrepComponent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One editable prep-component row: name / quantity / unit + a remove button.
+  Widget _prepRowField(int index, AppLocalizations l10n) {
+    final row = _prepRows[index];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: RestoflowSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 4,
+            child: TextField(
+              key: ValueKey('menu-item-prep-name-$index'),
+              controller: row.name,
+              decoration: InputDecoration(
+                labelText: l10n.menuPrepComponentNameLabel,
+                border: const OutlineInputBorder(),
+                isDense: true,
+                errorText: row.nameError == null
+                    ? null
+                    : l10n.menuFieldErrorText(row.nameError!),
+              ),
+            ),
+          ),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            flex: 2,
+            child: TextField(
+              key: ValueKey('menu-item-prep-qty-$index'),
+              controller: row.quantity,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: l10n.menuPrepComponentQuantityLabel,
+                border: const OutlineInputBorder(),
+                isDense: true,
+                errorText: row.quantityError == null
+                    ? null
+                    : l10n.menuFieldErrorText(row.quantityError!),
+              ),
+            ),
+          ),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            flex: 2,
+            child: TextField(
+              key: ValueKey('menu-item-prep-unit-$index'),
+              controller: row.unit,
+              decoration: InputDecoration(
+                labelText: l10n.menuPrepComponentUnitLabel,
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+          IconButton(
+            key: ValueKey('menu-item-prep-remove-$index'),
+            tooltip: l10n.menuRemovePrepComponent,
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              final removed = _prepRows[index];
+              setState(() => _prepRows.removeAt(index));
+              // Dispose AFTER the frame so the removed row's TextFields are gone
+              // from the tree first (no use-after-dispose).
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => removed.dispose(),
+              );
+            },
           ),
         ],
       ),
@@ -1242,5 +1414,28 @@ class _ModifierCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// KITCHEN-PREP-001: one editable kitchen prep component row (name / quantity /
+/// unit) held by the item editor. Owns its controllers; the editor disposes it.
+class _PrepRow {
+  _PrepRow({String name = '', String quantity = '', String unit = ''})
+    : name = TextEditingController(text: name),
+      quantity = TextEditingController(text: quantity),
+      unit = TextEditingController(text: unit);
+
+  final TextEditingController name;
+  final TextEditingController quantity;
+  final TextEditingController unit;
+
+  /// Inline validation errors surfaced on save (blank name / non-positive qty).
+  MenuFieldError? nameError;
+  MenuFieldError? quantityError;
+
+  void dispose() {
+    name.dispose();
+    quantity.dispose();
+    unit.dispose();
   }
 }

@@ -11,6 +11,7 @@ import '../data/order_submission.dart';
 import '../data/outbox_repository.dart';
 import 'cart_controller.dart';
 import 'pos_device_context.dart';
+import 'pos_menu_provider.dart';
 import 'pos_session.dart';
 
 /// Demo tenant/device scope for submitted orders (DECISION D-001/D-002/D-022).
@@ -194,6 +195,18 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         : (ctx?.restaurantId ?? kDemoRestaurantId);
     final branchId = isDemo ? kDemoBranchId : (ctx?.branchId ?? kDemoBranchId);
 
+    // KITCHEN-PREP-001: the ORDER-TIME (D-008) prep snapshot. Each line carries
+    // its menu item's configured PER-UNIT prep components, looked up by
+    // menuItemId from the live menu the POS is selling from. Non-money; empty
+    // for unconfigured items. Snapshotted into the payload so the outbox
+    // preserves it and the KDS can aggregate a prep summary offline.
+    final menuData = ref.read(posMenuProvider).valueOrNull;
+    final prepByItemId = <String, List<KitchenPrepComponent>>{
+      if (menuData != null)
+        for (final item in menuData.items)
+          if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
+    };
+
     final items = lines
         .map(
           (l) => OrderSubmissionItem(
@@ -206,6 +219,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
             // qty×unit + Σ(delta × modifier_qty) and must match.
             lineTotalMinor: l.lineTotalMinor,
             notes: l.note,
+            prepComponents:
+                prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
             modifiers: [
               for (final m in l.modifiers)
                 OrderSubmissionModifier(

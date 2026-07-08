@@ -287,6 +287,14 @@
   "@kdsNoteLabel": {
     "description": "KDS label preceding a kitchen note on an order item."
   },
+  "kdsPrepSummaryLabel": "Prep",
+  "@kdsPrepSummaryLabel": {
+    "description": "KITCHEN-PREP-001: heading for the compact kitchen prep summary section on a KDS order card (aggregated components the chef assembles). Non-money."
+  },
+  "kdsTicketPrepHeading": "Order prep",
+  "@kdsTicketPrepHeading": {
+    "description": "KITCHEN-PREP-001: heading printed above the aggregated prep component list on a kitchen ticket, before the item details. Non-money."
+  },
   "kdsElapsedMinutes": "{minutes}m",
   "@kdsElapsedMinutes": {
     "description": "KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).",
@@ -1486,6 +1494,20 @@
   "@menuPrepMinutesLabel": { "description": "Label for the expected preparation time field (whole minutes; time, never money)." },
   "menuKitchenNoteLabel": "Kitchen note",
   "@menuKitchenNoteLabel": { "description": "Label for the standing kitchen preparation note field (shown to the KDS)." },
+  "menuKitchenPrepSection": "Kitchen prep",
+  "@menuKitchenPrepSection": { "description": "KITCHEN-PREP-001: sub-heading for the optional kitchen prep components editor (what the chef assembles per one unit of the item). Non-money." },
+  "menuKitchenPrepHint": "What the chef assembles for one item. Optional.",
+  "@menuKitchenPrepHint": { "description": "KITCHEN-PREP-001: helper text under the kitchen prep components editor explaining it is optional per-unit assembly info." },
+  "menuPrepComponentNameLabel": "Component",
+  "@menuPrepComponentNameLabel": { "description": "KITCHEN-PREP-001: label for a prep component's name field (e.g. beef patty, bun)." },
+  "menuPrepComponentQuantityLabel": "Qty",
+  "@menuPrepComponentQuantityLabel": { "description": "KITCHEN-PREP-001: label for a prep component's per-unit quantity field (a count, never money)." },
+  "menuPrepComponentUnitLabel": "Unit",
+  "@menuPrepComponentUnitLabel": { "description": "KITCHEN-PREP-001: label for a prep component's optional unit field (e.g. pcs, g)." },
+  "menuAddPrepComponent": "Add prep component",
+  "@menuAddPrepComponent": { "description": "KITCHEN-PREP-001: action to add a new kitchen prep component row." },
+  "menuRemovePrepComponent": "Remove component",
+  "@menuRemovePrepComponent": { "description": "KITCHEN-PREP-001: tooltip/label for removing a kitchen prep component row." },
   "menuSkuLabel": "SKU (internal code)",
   "@menuSkuLabel": { "description": "Label for the internal stock/product code field (back-office only; never sent to devices)." },
   "menuPortionFieldLabel": "Portion label",
