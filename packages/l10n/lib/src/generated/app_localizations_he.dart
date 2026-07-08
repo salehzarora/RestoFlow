@@ -693,6 +693,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get printRetryAction => 'נסה שוב';
 
   @override
+  String get printReprintAction => 'הדפסה חוזרת';
+
+  @override
   String get deviceSettingsBridgeConnected => 'גשר הדפסה: מחובר';
 
   @override
@@ -2903,6 +2906,12 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posPrinterRemoveAction => 'הסרת מדפסת';
+
+  @override
+  String get posReprintLastReceiptAction => 'הדפסה חוזרת של הקבלה האחרונה';
+
+  @override
+  String get posReprintStartedSnack => 'מדפיס מחדש את הקבלה האחרונה…';
 
   @override
   String get posPrinterRemovedSnack => 'המדפסת הוסרה';

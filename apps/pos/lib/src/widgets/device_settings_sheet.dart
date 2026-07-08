@@ -8,6 +8,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrinterAssignmentsSection, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
 import '../print/print_bridge.dart';
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_device_context.dart';
@@ -15,6 +16,7 @@ import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/pos_session.dart';
 import '../state/pos_printer_transport.dart';
+import '../state/receipt_print_controller.dart';
 import 'printer_settings_section.dart';
 
 /// The POS operational device-settings sheet (device settings sprint).
@@ -95,6 +97,11 @@ class PosDeviceSettingsSheet extends ConsumerWidget {
                     // whatever the pairing state so a pilot can test hardware.
                     if (nativeAvailable) ...[
                       const PrinterSettingsSection(),
+                      const SizedBox(height: RestoflowSpacing.sm),
+                      // PRINT-STABILITY-001: reprint the last receipt through the
+                      // current printer (raster path preserved). Disabled until a
+                      // receipt has been built this session.
+                      const _ReprintLastReceiptButton(),
                       const SizedBox(height: RestoflowSpacing.md),
                       const Divider(height: 1),
                       const SizedBox(height: RestoflowSpacing.md),
@@ -420,6 +427,43 @@ class DeviceSettingsRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// PRINT-STABILITY-001: "Reprint last receipt". Re-submits the last BUILT receipt
+/// document through the CURRENT selected printer (native Wi-Fi/Bluetooth, raster
+/// path preserved). Never creates a new order or payment. Disabled until a
+/// receipt has been built this session (nothing to reprint).
+class _ReprintLastReceiptButton extends ConsumerWidget {
+  const _ReprintLastReceiptButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final last = ref.watch(lastReceiptOrderNumberProvider);
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        key: const Key('reprint-last-receipt'),
+        onPressed: last == null
+            ? null
+            : () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final bridge = ref.read(posActivePrintBridgeProvider);
+                await ref
+                    .read(receiptPrintControllerProvider.notifier)
+                    .reprint(
+                      orderNumber: last,
+                      submitToBridge: bridge == null ? null : bridge.submit,
+                    );
+                messenger.showSnackBar(
+                  SnackBar(content: Text(l10n.posReprintStartedSnack)),
+                );
+              },
+        icon: const Icon(Icons.receipt_long_outlined),
+        label: Text(l10n.posReprintLastReceiptAction),
       ),
     );
   }

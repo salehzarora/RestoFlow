@@ -698,6 +698,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printRetryAction => 'إعادة المحاولة';
 
   @override
+  String get printReprintAction => 'إعادة الطباعة';
+
+  @override
   String get deviceSettingsBridgeConnected => 'جسر الطباعة: متصل';
 
   @override
@@ -2923,6 +2926,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posPrinterRemoveAction => 'إزالة الطابعة';
+
+  @override
+  String get posReprintLastReceiptAction => 'إعادة طباعة آخر إيصال';
+
+  @override
+  String get posReprintStartedSnack => 'جارٍ إعادة طباعة آخر إيصال…';
 
   @override
   String get posPrinterRemovedSnack => 'تمت إزالة الطابعة';

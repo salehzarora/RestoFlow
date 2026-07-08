@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,6 +77,191 @@ abstract class BluetoothPrinterConnector {
     required Uint8List bytes,
     Duration timeout,
   });
+}
+
+/// PRINT-STABILITY-001: the conservative Bluetooth write chunk size (bytes). A
+/// raster receipt/ticket is large; many SPP printers drop or truncate a single
+/// huge `writeBytes`, so the bytes are streamed in small chunks. Easy to tune.
+const int kBluetoothChunkBytes = 512;
+
+/// PRINT-STABILITY-001: a small pause between chunks to let the printer's SPP
+/// buffer drain (prevents overrun under pressure printing). Set to zero to disable.
+const Duration kBluetoothChunkDelay = Duration(milliseconds: 20);
+
+/// PRINT-STABILITY-001: the low-level Bluetooth Classic (SPP) operations the
+/// reliability logic drives, behind a seam so the reconnect/retry/chunked-write
+/// behaviour is unit-testable WITHOUT a device or the platform plugin. The real
+/// implementation (plugin-backed) lives in `bluetooth_connector_native.dart`
+/// (behind the conditional import, so the web build never links it); tests inject
+/// a fake. Every method is best-effort and must not throw for control flow.
+abstract class BluetoothThermalApi {
+  /// Ensures the Android 12+ runtime BLUETOOTH_CONNECT/SCAN permissions.
+  Future<bool> ensurePermissions();
+
+  /// Whether the Bluetooth adapter is currently on.
+  Future<bool> get isEnabled;
+
+  /// Whether the plugin currently holds an open connection (used to detect + drop
+  /// a stale/half-open socket left by a prior job before reconnecting).
+  Future<bool> get isConnected;
+
+  /// The bonded/paired devices.
+  Future<List<BluetoothDeviceInfo>> pairedDevices();
+
+  /// Opens a connection to the bonded printer at [address]. Returns success.
+  Future<bool> connect(String address);
+
+  /// Writes one chunk of bytes to the open connection. Returns success.
+  Future<bool> writeBytes(List<int> bytes);
+
+  /// Closes the current connection (best-effort).
+  Future<bool> disconnect();
+}
+
+/// PRINT-STABILITY-001: the reliability-hardened Bluetooth connector. Plugin-free
+/// (drives a [BluetoothThermalApi] seam) so its behaviour is fully testable:
+///
+///  * **Fresh-socket connect** — a stale/half-open connection from a prior job is
+///    the usual cause of "printer is connected but the write fails"; before every
+///    connect it drops any existing connection so it never writes to a dead socket.
+///  * **Chunked writes** — a large raster image is streamed in [chunkBytes]-sized
+///    chunks with a [chunkDelay] pause, so it is not dropped by the SPP buffer.
+///  * **One automatic reconnect + retry** — if the first attempt fails it force-
+///    resets the connection and retries once, so the operator recovers without
+///    restarting the app.
+///  * **Bounded + typed** — connect + each chunk are bounded by the caller's
+///    timeout; every failure maps to an honest [pp.PrintResult] and NEVER throws.
+class BluetoothThermalConnector implements BluetoothPrinterConnector {
+  BluetoothThermalConnector({
+    required this.api,
+    this.chunkBytes = kBluetoothChunkBytes,
+    this.chunkDelay = kBluetoothChunkDelay,
+  });
+
+  final BluetoothThermalApi api;
+  final int chunkBytes;
+  final Duration chunkDelay;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<bool> ensurePermissions() => api.ensurePermissions();
+
+  @override
+  Future<BluetoothPairedResult> pairedDevices() async {
+    if (!await api.ensurePermissions()) {
+      return const BluetoothPairedResult.failed(
+        BluetoothPrinterError.permissionDenied,
+      );
+    }
+    try {
+      if (!await api.isEnabled) {
+        return const BluetoothPairedResult.failed(
+          BluetoothPrinterError.bluetoothOff,
+        );
+      }
+      return BluetoothPairedResult.ok(await api.pairedDevices());
+    } catch (_) {
+      return const BluetoothPairedResult.failed(
+        BluetoothPrinterError.connectFailed,
+      );
+    }
+  }
+
+  @override
+  Future<pp.PrintResult> send({
+    required String address,
+    required Uint8List bytes,
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    if (!await api.ensurePermissions()) {
+      return const pp.PrintResult.failure(
+        pp.PrinterErrorCategory.unsupported,
+        'bluetooth permission denied',
+      );
+    }
+    // First attempt; on ANY failure do ONE clean reconnect + retry — this
+    // recovers a stale/half-open SPP socket without the operator closing the app.
+    final first = await _attempt(address, bytes, timeout, forceReset: false);
+    if (first.ok) return first;
+    return _attempt(address, bytes, timeout, forceReset: true);
+  }
+
+  Future<pp.PrintResult> _attempt(
+    String address,
+    Uint8List bytes,
+    Duration timeout, {
+    required bool forceReset,
+  }) async {
+    try {
+      // Always start from a clean socket: on a retry (forceReset) or when the
+      // plugin reports a lingering connection, drop it first.
+      if (forceReset || await _isConnectedQuietly()) {
+        await _disconnectQuietly();
+      }
+      final connected = await api.connect(address).timeout(timeout);
+      if (!connected) {
+        return const pp.PrintResult.failure(
+          pp.PrinterErrorCategory.unreachable,
+          'bluetooth connect failed (printer off / out of range / not bonded)',
+        );
+      }
+      try {
+        final wrote = await _writeChunked(bytes, timeout);
+        if (!wrote) {
+          return const pp.PrintResult.failure(
+            pp.PrinterErrorCategory.unknown,
+            'bluetooth write failed',
+          );
+        }
+        return const pp.PrintResult.success();
+      } finally {
+        await _disconnectQuietly();
+      }
+    } on TimeoutException {
+      await _disconnectQuietly();
+      return pp.PrintResult.failure(
+        pp.PrinterErrorCategory.unreachable,
+        'timed out after ${timeout.inMilliseconds}ms',
+      );
+    } catch (e) {
+      await _disconnectQuietly();
+      return pp.PrintResult.failure(pp.PrinterErrorCategory.unknown, '$e');
+    }
+  }
+
+  /// Streams [bytes] in [chunkBytes]-sized chunks, each bounded by [timeout],
+  /// with a [chunkDelay] pause between them. Returns false on the first failed
+  /// chunk. An empty document is a trivial success.
+  Future<bool> _writeChunked(Uint8List bytes, Duration timeout) async {
+    if (bytes.isEmpty) return true;
+    for (var i = 0; i < bytes.length; i += chunkBytes) {
+      final end = i + chunkBytes < bytes.length ? i + chunkBytes : bytes.length;
+      final ok = await api.writeBytes(bytes.sublist(i, end)).timeout(timeout);
+      if (!ok) return false;
+      if (end < bytes.length && chunkDelay > Duration.zero) {
+        await Future<void>.delayed(chunkDelay);
+      }
+    }
+    return true;
+  }
+
+  Future<bool> _isConnectedQuietly() async {
+    try {
+      return await api.isConnected;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _disconnectQuietly() async {
+    try {
+      await api.disconnect().timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // best-effort cleanup
+    }
+  }
 }
 
 /// A [pp.PrintTransport] that delivers ESC/POS bytes to a bonded Bluetooth
