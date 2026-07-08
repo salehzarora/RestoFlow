@@ -12,6 +12,7 @@ class KdsItemView {
     required this.quantity,
     this.modifiers = const <String>[],
     this.note,
+    this.prepComponents = const <KitchenPrepComponent>[],
   });
 
   /// Display name snapshot (data — rendered as-is, not a localized string).
@@ -26,6 +27,12 @@ class KdsItemView {
 
   /// The per-item kitchen note (order_items.notes), if any.
   final String? note;
+
+  /// KITCHEN-PREP-001: the item's configured PER-UNIT kitchen prep components
+  /// (from `order_items.prep_snapshot`). Non-money ({name,quantity,unit}); rolled
+  /// up × [quantity] into the ticket's [KdsTicketView.prepSummary]. Empty when
+  /// the item has no configured prep.
+  final List<KitchenPrepComponent> prepComponents;
 }
 
 /// A KDS-local, mutable view model for one kitchen ticket.
@@ -48,6 +55,7 @@ class KdsTicketView {
     this.customerName,
     this.notes,
     this.submittedAt,
+    this.prepSummary = const <KitchenPrepComponent>[],
   });
 
   final String kitchenTicketId;
@@ -86,6 +94,13 @@ class KdsTicketView {
   /// no elapsed pill — never a fabricated age). NOT a money field and not used
   /// for any business decision.
   final DateTime? submittedAt;
+
+  /// KITCHEN-PREP-001: the aggregated kitchen prep summary for THIS ticket —
+  /// every item's per-unit [KdsItemView.prepComponents] × its quantity, summed
+  /// and grouped (see `aggregateKitchenPrep`). Non-money; empty when no item on
+  /// the ticket carries configured prep. Shown on the card + printed ticket so
+  /// the chef sees "how many patties / buns / …" at a glance.
+  final List<KitchenPrepComponent> prepSummary;
 
   /// The current local status; mutated by bump/recall on the screen.
   KitchenTicketStatus status;

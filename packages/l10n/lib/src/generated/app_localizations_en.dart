@@ -280,6 +280,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kdsNoteLabel => 'Note';
 
   @override
+  String get kdsPrepSummaryLabel => 'Prep';
+
+  @override
+  String get kdsTicketPrepHeading => 'Order prep';
+
+  @override
   String kdsElapsedMinutes(int minutes) {
     return '${minutes}m';
   }
@@ -1544,6 +1550,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuKitchenNoteLabel => 'Kitchen note';
+
+  @override
+  String get menuKitchenPrepSection => 'Kitchen prep';
+
+  @override
+  String get menuKitchenPrepHint =>
+      'What the chef assembles for one item. Optional.';
+
+  @override
+  String get menuPrepComponentNameLabel => 'Component';
+
+  @override
+  String get menuPrepComponentQuantityLabel => 'Qty';
+
+  @override
+  String get menuPrepComponentUnitLabel => 'Unit';
+
+  @override
+  String get menuAddPrepComponent => 'Add prep component';
+
+  @override
+  String get menuRemovePrepComponent => 'Remove component';
 
   @override
   String get menuSkuLabel => 'SKU (internal code)';

@@ -97,6 +97,7 @@ class OrderSubmissionItem {
     required this.lineTotalMinor,
     this.modifiers = const <OrderSubmissionModifier>[],
     this.notes,
+    this.prepComponents = const <KitchenPrepComponent>[],
   });
 
   final String menuItemId;
@@ -110,6 +111,12 @@ class OrderSubmissionItem {
   /// flows through to the kitchen display unredacted).
   final String? notes;
 
+  /// KITCHEN-PREP-001: the item's configured PER-UNIT kitchen prep components
+  /// (from `menu_items.attributes.prep_components`), snapshotted at order time
+  /// (D-008) into `order_items.prep_snapshot`. NON-money ({name,quantity,unit});
+  /// the KDS multiplies each by [quantity] and aggregates the whole order.
+  final List<KitchenPrepComponent> prepComponents;
+
   /// Mirrors an element of the `submit_order` RPC `order_items[]` (RF-052).
   Map<String, Object?> toJson() => <String, Object?>{
     'menu_item_id': menuItemId,
@@ -120,6 +127,11 @@ class OrderSubmissionItem {
     if (notes != null && notes!.isNotEmpty) 'notes': notes,
     if (modifiers.isNotEmpty)
       'modifiers': modifiers.map((m) => m.toJson()).toList(growable: false),
+    // Emitted ONLY when present so the pre-feature wire shape (and the server's
+    // md5(op_type||payload) idempotency fingerprint) is unchanged for items
+    // with no prep — same conditional-emit rule as notes/modifiers.
+    if (prepComponents.isNotEmpty)
+      'prep_snapshot': [for (final c in prepComponents) c.toJson()],
   };
 }
 

@@ -111,6 +111,43 @@ _RecordingStore _seededStore() => _RecordingStore(
   ],
 );
 
+/// A store whose seeded item already carries configured prep components (in the
+/// attributes bag) — for the editor-initialization tests.
+_RecordingStore _seededStoreWithPrep({
+  List<Map<String, Object?>> prep = const [
+    {'name': 'Beef patty', 'quantity': 2, 'unit': 'pcs'},
+  ],
+}) => _RecordingStore(
+  categories: const [
+    MenuCategory(
+      id: 'cat-1',
+      organizationId: demoOrganizationId,
+      restaurantId: demoRestaurantId,
+      branchId: demoBranchId,
+      name: 'Grill',
+      displayOrder: 0,
+      isActive: true,
+    ),
+  ],
+  items: [
+    MenuItem(
+      id: 'item-1',
+      organizationId: demoOrganizationId,
+      restaurantId: demoRestaurantId,
+      branchId: demoBranchId,
+      menuCategoryId: 'cat-1',
+      name: 'House Burger',
+      description: null,
+      basePriceMinor: 4800,
+      currencyCode: demoCurrencyCode,
+      defaultStationId: null,
+      displayOrder: 0,
+      isActive: true,
+      attributes: {'prep_components': prep},
+    ),
+  ],
+);
+
 Future<AppLocalizations> _pump(
   WidgetTester tester,
   _RecordingStore store,
@@ -361,6 +398,169 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('menu-item-summary')), findsNothing);
   });
+
+  // KITCHEN-PREP-001 ----------------------------------------------------------
+  testWidgets('the preparation section shows the kitchen prep editor', (
+    tester,
+  ) async {
+    final store = _seededStore();
+    final l10n = await _pump(tester, store);
+    await _openItem(tester, 'House Burger');
+
+    expect(find.text(l10n.menuKitchenPrepSection), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('menu-item-add-prep-component')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'adding a prep component saves it into attributes.prep_components',
+    (tester) async {
+      final store = _seededStore();
+      await _pump(tester, store);
+      await _openItem(tester, 'House Burger');
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('menu-item-add-prep-component')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('menu-item-add-prep-component')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('menu-item-prep-name-0')),
+        'Beef patty',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('menu-item-prep-qty-0')),
+        '2',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('menu-item-prep-unit-0')),
+        'pcs',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('menu-item-save')));
+      await tester.pumpAndSettle();
+
+      expect(store.upsertItemCalls, 1);
+      expect(store.lastAttributes!['prep_components'], [
+        {'name': 'Beef patty', 'quantity': 2, 'unit': 'pcs'},
+      ]);
+    },
+  );
+
+  testWidgets('an item with configured prep initializes its rows', (
+    tester,
+  ) async {
+    final store = _seededStoreWithPrep();
+    await _pump(tester, store);
+    await _openItem(tester, 'House Burger');
+
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('menu-item-prep-name-0')),
+          )
+          .controller!
+          .text,
+      'Beef patty',
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('menu-item-prep-qty-0')))
+          .controller!
+          .text,
+      '2',
+    );
+  });
+
+  testWidgets('a fractional prep quantity round-trips (saveable — num, not int)', (
+    tester,
+  ) async {
+    // The domain types prep quantity as num (a genuine half-portion). A stored
+    // fraction must seed AND save through the editor, not lock the whole item.
+    final store = _seededStoreWithPrep(
+      prep: const [
+        {'name': 'Dough', 'quantity': 0.5, 'unit': 'ball'},
+      ],
+    );
+    await _pump(tester, store);
+    await _openItem(tester, 'House Burger');
+
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('menu-item-prep-qty-0')))
+          .controller!
+          .text,
+      '0.5',
+    );
+
+    // Saving without touching prep must succeed (not blocked by a bad-int error).
+    await tester.tap(find.byKey(const ValueKey('menu-item-save')));
+    await tester.pumpAndSettle();
+    expect(store.upsertItemCalls, 1);
+    expect(store.lastAttributes!['prep_components'], [
+      {'name': 'Dough', 'quantity': 0.5, 'unit': 'ball'},
+    ]);
+  });
+
+  testWidgets('removing a prep row drops it (and empty prep saves cleanly)', (
+    tester,
+  ) async {
+    final store = _seededStoreWithPrep();
+    await _pump(tester, store);
+    await _openItem(tester, 'House Burger');
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('menu-item-prep-remove-0')),
+    );
+    await tester.tap(find.byKey(const ValueKey('menu-item-prep-remove-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menu-item-prep-name-0')), findsNothing);
+
+    // Saving with no prep rows succeeds and stores NO prep_components key.
+    await tester.tap(find.byKey(const ValueKey('menu-item-save')));
+    await tester.pumpAndSettle();
+    expect(store.upsertItemCalls, 1);
+    expect(store.lastAttributes!.containsKey('prep_components'), isFalse);
+  });
+
+  testWidgets(
+    'a prep row with a blank name and a bad quantity blocks the save',
+    (tester) async {
+      final store = _seededStore();
+      final l10n = await _pump(tester, store);
+      await _openItem(tester, 'House Burger');
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('menu-item-add-prep-component')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('menu-item-add-prep-component')),
+      );
+      await tester.pumpAndSettle();
+
+      // A unit but no name and a non-positive quantity — a half-filled row.
+      await tester.enterText(
+        find.byKey(const ValueKey('menu-item-prep-qty-0')),
+        '0',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('menu-item-prep-unit-0')),
+        'pcs',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('menu-item-save')));
+      await tester.pumpAndSettle();
+
+      expect(store.upsertItemCalls, 0);
+      // The blank-name error surfaces (shared "required" message).
+      expect(find.text(l10n.menuErrorRequired), findsWidgets);
+    },
+  );
 
   testWidgets('the editor initializes its fields from the stored rich '
       'attributes', (tester) async {

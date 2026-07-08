@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 
 /// In-memory demo menu data for the RF-100 POS demo screen.
@@ -88,6 +89,13 @@ class DemoMenuItem {
   final int? prepMinutes;
   final String? kitchenNote;
   final Map<String, dynamic> attributes;
+
+  /// KITCHEN-PREP-001: the item's configured PER-UNIT kitchen prep components,
+  /// parsed from the generic [attributes] bag (`prep_components`). Non-money;
+  /// empty when unconfigured. Snapshotted into the order at submit time so the
+  /// KDS can aggregate a prep summary for the chef.
+  List<KitchenPrepComponent> get prepComponents =>
+      parseKitchenPrepComponents(attributes['prep_components']);
 }
 
 /// The demo categories (order drives the filter-chip order).
@@ -159,6 +167,14 @@ const List<DemoMenuItem> kDemoMenu = <DemoMenuItem>[
       'portion_label': 'Single',
       'patty_count': 1,
       'patty_weight_grams': 160,
+      // KITCHEN-PREP-001 demo: what the chef assembles for ONE cheeseburger.
+      // Names/units are demo DATA (a real restaurant configures its own, in any
+      // language). Counts, never money (D-007).
+      'prep_components': <Map<String, dynamic>>[
+        {'name': 'Beef patty', 'quantity': 1, 'unit': 'pcs'},
+        {'name': 'Burger bun', 'quantity': 1, 'unit': ''},
+        {'name': 'Cheese slice', 'quantity': 1, 'unit': ''},
+      ],
     },
   ),
   DemoMenuItem(

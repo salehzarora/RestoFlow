@@ -14,11 +14,25 @@ List<KdsTicketView> demoKdsTickets() => [
   KdsTicketView(
     kitchenTicketId: 'order-101:grill',
     stationId: 'grill',
+    // KITCHEN-PREP-001 showcase: each item carries its PER-UNIT prep components;
+    // [prepSummary] is the aggregate across the ticket (2 burgers => 2 patties,
+    // 2 buns). Names/units are demo DATA — money-free.
     items: const [
-      KdsItemView(name: 'Classic Burger', quantity: 2),
+      KdsItemView(
+        name: 'Classic Burger',
+        quantity: 2,
+        prepComponents: [
+          KitchenPrepComponent(name: 'Beef patty', quantity: 1, unit: 'pcs'),
+          KitchenPrepComponent(name: 'Burger bun', quantity: 1),
+        ],
+      ),
       KdsItemView(name: 'Grilled Chicken', quantity: 1),
     ],
     status: KitchenTicketStatus.newTicket,
+    prepSummary: const [
+      KitchenPrepComponent(name: 'Beef patty', quantity: 2, unit: 'pcs'),
+      KitchenPrepComponent(name: 'Burger bun', quantity: 2),
+    ],
   ),
   KdsTicketView(
     kitchenTicketId: 'order-102:grill',
