@@ -90,4 +90,55 @@ void main() {
     );
     expect(tall.heightDots, greaterThan(short.heightDots));
   });
+
+  // PRINT-RTL-001: the full live path — an already-laid-out ESC/POS TEXT document
+  // rasterized by the REAL dart:ui renderer, then encoded to ESC/POS raster
+  // bytes. Proves ar/he go out as a GS v 0 image, never codepage text.
+  group('text document -> real raster -> ESC/POS GS v 0 bytes', () {
+    PrintDocument textDoc(List<String> lines) =>
+        PrintDocument([for (final l in lines) PrintTextLine(l)]);
+
+    test(
+      'Arabic (80mm) encodes to a raster image, no text lines survive',
+      () async {
+        final doc = await rasterizeTextDocument(
+          textDoc(const ['إيصال: R-1001', 'العميل: محمد', 'الإجمالي ₪58.50']),
+          rasterizer: rasterizer,
+        );
+        expect(doc.lines.whereType<PrintTextLine>(), isEmpty);
+        final bytes = const EscPosPrintAdapter().encode(
+          doc,
+          PrinterProfile.escPos80mm,
+        );
+        expect(_containsSeq(bytes, const [0x1D, 0x76, 0x30]), isTrue);
+      },
+    );
+
+    test('Hebrew (58mm) encodes to a raster image', () async {
+      final doc = await rasterizeTextDocument(
+        textDoc(const ['קבלה: R-1001', 'לקוח: דוד', 'סה"כ ₪58.50']),
+        rasterizer: rasterizer,
+        widthDots: 384,
+      );
+      final bytes = const EscPosPrintAdapter().encode(
+        doc,
+        PrinterProfile.escPos58mm,
+      );
+      expect(_containsSeq(bytes, const [0x1D, 0x76, 0x30]), isTrue);
+    });
+  });
+}
+
+bool _containsSeq(List<int> haystack, List<int> needle) {
+  for (var i = 0; i + needle.length <= haystack.length; i++) {
+    var ok = true;
+    for (var j = 0; j < needle.length; j++) {
+      if (haystack[i + j] != needle[j]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+  }
+  return false;
 }

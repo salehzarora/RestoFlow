@@ -8,7 +8,10 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
-    show nativePrinterDeviceIdProvider, nativePrinterNamespaceProvider;
+    show
+        nativePrintRasterizerProvider,
+        nativePrinterDeviceIdProvider,
+        nativePrinterNamespaceProvider;
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:restoflow_sync/restoflow_sync.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -233,6 +236,12 @@ class KdsApp extends StatelessWidget {
         nativePrinterNamespaceProvider.overrideWithValue('kds'),
         nativePrinterDeviceIdProvider.overrideWith(
           (ref) => ref.watch(kdsDeviceContextProvider)?.deviceId,
+        ),
+        // PRINT-RTL-001: render Arabic/Hebrew (+ ×) kitchen tickets as a raster
+        // image on the native Android printer path so they print correctly
+        // instead of "?????". Money-free; web/loopback stays ESC/POS text.
+        nativePrintRasterizerProvider.overrideWithValue(
+          const FlutterReceiptRasterizer(),
         ),
         // RF-118: durable client PIN-attempt lockout store when provided.
         if (pinAttemptStore case final store?)

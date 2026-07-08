@@ -48,6 +48,17 @@ class NativeEscPosSender {
   }
 }
 
+/// PRINT-RTL-001 seam: the raster text renderer for on-device Arabic/Hebrew (and
+/// non-ASCII ₪/× ) printing. Null (the DEFAULT) => native prints stay ESC/POS
+/// TEXT (web, and tests that don't override it). Each Android app overrides it in
+/// main.dart with the real dart:ui `FlutterReceiptRasterizer` (restoflow_l10n) so
+/// ar/he render as a bitmap instead of "?????". Tests inject a
+/// `FakeReceiptRasterizer`. Keeping it a nullable seam here avoids a
+/// native_printing -> l10n dependency (the concrete impl is injected by the app).
+final nativePrintRasterizerProvider = Provider<pp.ReceiptRasterizer?>(
+  (ref) => null,
+);
+
 /// The active native transport factory for THIS device (ANDROID-004 resolver),
 /// or null when native printing is unavailable (web) or nothing is configured
 /// for the selected transport. Reads the shared device-local config store, so an
