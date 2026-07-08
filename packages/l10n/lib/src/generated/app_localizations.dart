@@ -1384,6 +1384,12 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get printRetryAction;
 
+  /// PRINT-STABILITY-001: button that re-sends an already-printed job (an extra money-free copy) — used on a sent KDS kitchen ticket.
+  ///
+  /// In en, this message translates to:
+  /// **'Reprint'**
+  String get printReprintAction;
+
   /// Device-settings bridge row: a local print bridge answered its health check.
   ///
   /// In en, this message translates to:
@@ -5523,6 +5529,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove printer'**
   String get posPrinterRemoveAction;
+
+  /// PRINT-STABILITY-001: POS device-settings action to reprint the last built receipt through the current printer; disabled until one exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Reprint last receipt'**
+  String get posReprintLastReceiptAction;
+
+  /// PRINT-STABILITY-001: POS confirmation shown when a last-receipt reprint is dispatched to the printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Reprinting the last receipt…'**
+  String get posReprintStartedSnack;
 
   /// POS confirmation shown after the saved printer is removed (ANDROID-003).
   ///

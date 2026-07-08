@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart'
@@ -9,22 +8,23 @@ import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import 'bluetooth_printer.dart';
 
-/// Native (`dart:io`) Bluetooth connector (ANDROID-003). Android uses the
-/// plugin-backed connector; other native platforms (iOS/desktop) report
-/// unsupported for this Android-focused MVP. Web never links this file.
+/// Native (`dart:io`) Bluetooth connector (ANDROID-003 / PRINT-STABILITY-001).
+/// Android drives the reliability-hardened [BluetoothThermalConnector] over the
+/// plugin-backed [BluetoothThermalApi] (reconnect + chunked writes + one retry);
+/// other native platforms (iOS/desktop) report unsupported for this
+/// Android-focused MVP. Web never links this file.
 BluetoothPrinterConnector createBluetoothPrinterConnector() =>
     defaultTargetPlatform == TargetPlatform.android
-    ? const PluginBluetoothPrinterConnector()
+    ? BluetoothThermalConnector(api: const _PluginBluetoothThermalApi())
     : const _UnsupportedNativeConnector();
 
-/// Talks to a bonded Bluetooth Classic (SPP) thermal printer via
-/// `print_bluetooth_thermal` + `permission_handler`. Best-effort - every path
-/// maps to a typed result and NEVER throws / hangs (bounded by the timeout).
-class PluginBluetoothPrinterConnector implements BluetoothPrinterConnector {
-  const PluginBluetoothPrinterConnector();
-
-  @override
-  bool get isSupported => true;
+/// The `print_bluetooth_thermal` + `permission_handler` backing for
+/// [BluetoothThermalApi]. Thin pass-through: NO reconnect/retry/chunking logic
+/// lives here (that is the plugin-free [BluetoothThermalConnector], so it stays
+/// unit-testable). Every method is best-effort and swallows plugin errors into a
+/// false/typed result so control flow never depends on an exception.
+class _PluginBluetoothThermalApi implements BluetoothThermalApi {
+  const _PluginBluetoothThermalApi();
 
   @override
   Future<bool> ensurePermissions() async {
@@ -40,88 +40,42 @@ class PluginBluetoothPrinterConnector implements BluetoothPrinterConnector {
   }
 
   @override
-  Future<BluetoothPairedResult> pairedDevices() async {
-    if (!await ensurePermissions()) {
-      return const BluetoothPairedResult.failed(
-        BluetoothPrinterError.permissionDenied,
-      );
-    }
+  Future<bool> get isEnabled async {
     try {
-      final enabled = await PrintBluetoothThermal.bluetoothEnabled;
-      if (!enabled) {
-        return const BluetoothPairedResult.failed(
-          BluetoothPrinterError.bluetoothOff,
-        );
-      }
-      final paired = await PrintBluetoothThermal.pairedBluetooths;
-      return BluetoothPairedResult.ok([
-        for (final d in paired)
-          BluetoothDeviceInfo(address: d.macAdress, name: d.name),
-      ]);
+      return await PrintBluetoothThermal.bluetoothEnabled;
     } catch (_) {
-      return const BluetoothPairedResult.failed(
-        BluetoothPrinterError.connectFailed,
-      );
+      return false;
     }
   }
 
   @override
-  Future<pp.PrintResult> send({
-    required String address,
-    required Uint8List bytes,
-    Duration timeout = const Duration(seconds: 8),
-  }) async {
-    if (!await ensurePermissions()) {
-      return const pp.PrintResult.failure(
-        pp.PrinterErrorCategory.unsupported,
-        'bluetooth permission denied',
-      );
-    }
+  Future<bool> get isConnected async {
     try {
-      final connected = await PrintBluetoothThermal.connect(
-        macPrinterAddress: address,
-      ).timeout(timeout);
-      if (!connected) {
-        return const pp.PrintResult.failure(
-          pp.PrinterErrorCategory.unreachable,
-          'bluetooth connect failed (printer off / out of range / not bonded)',
-        );
-      }
-      try {
-        final wrote = await PrintBluetoothThermal.writeBytes(
-          bytes.toList(),
-        ).timeout(timeout);
-        if (!wrote) {
-          return const pp.PrintResult.failure(
-            pp.PrinterErrorCategory.unknown,
-            'bluetooth write failed',
-          );
-        }
-        return const pp.PrintResult.success();
-      } finally {
-        await _disconnectQuietly();
-      }
-    } on TimeoutException {
-      await _disconnectQuietly();
-      return pp.PrintResult.failure(
-        pp.PrinterErrorCategory.unreachable,
-        'timed out after ${timeout.inMilliseconds}ms',
-      );
-    } catch (e) {
-      await _disconnectQuietly();
-      return pp.PrintResult.failure(pp.PrinterErrorCategory.unknown, '$e');
+      return await PrintBluetoothThermal.connectionStatus;
+    } catch (_) {
+      return false;
     }
   }
 
-  Future<void> _disconnectQuietly() async {
-    try {
-      await PrintBluetoothThermal.disconnect.timeout(
-        const Duration(seconds: 2),
-      );
-    } catch (_) {
-      // ignore - best-effort cleanup.
-    }
+  @override
+  Future<List<BluetoothDeviceInfo>> pairedDevices() async {
+    final paired = await PrintBluetoothThermal.pairedBluetooths;
+    return [
+      for (final d in paired)
+        BluetoothDeviceInfo(address: d.macAdress, name: d.name),
+    ];
   }
+
+  @override
+  Future<bool> connect(String address) =>
+      PrintBluetoothThermal.connect(macPrinterAddress: address);
+
+  @override
+  Future<bool> writeBytes(List<int> bytes) =>
+      PrintBluetoothThermal.writeBytes(bytes);
+
+  @override
+  Future<bool> disconnect() => PrintBluetoothThermal.disconnect;
 }
 
 /// iOS / desktop native: Bluetooth Classic printing is not offered in this

@@ -167,23 +167,38 @@ class KdsSyncedHome extends ConsumerWidget {
     KdsPrintJob? job,
   ) {
     if (job == null) return null;
-    final (label, canRetry) = switch (job.status) {
-      KdsPrintJobStatus.prepared => (l10n.printStatusPrepared, false),
-      KdsPrintJobStatus.sentToPrinter => (l10n.printStatusSentToPrinter, false),
+    // (label, isError, isReprint): error states show a danger-tone Retry;
+    // PRINT-STABILITY-001 adds a quiet Reprint on an already-SENT ticket so staff
+    // can print another money-free copy (paper jam / extra copy) without changing
+    // any order state. `printed` is unreachable-by-design and offers no action.
+    final (label, isError, isReprint) = switch (job.status) {
+      KdsPrintJobStatus.prepared => (l10n.printStatusPrepared, false, false),
+      KdsPrintJobStatus.sentToPrinter => (
+        l10n.printStatusSentToPrinter,
+        false,
+        true,
+      ),
       KdsPrintJobStatus.bridgeUnavailable => (
         l10n.printStatusBridgeUnavailable,
         true,
+        false,
       ),
-      KdsPrintJobStatus.printed => (l10n.printStatusPrinted, false),
-      KdsPrintJobStatus.failed => (l10n.printStatusFailed, true),
-      KdsPrintJobStatus.notConfigured => (l10n.printStatusNotConfigured, true),
+      KdsPrintJobStatus.printed => (l10n.printStatusPrinted, false, false),
+      KdsPrintJobStatus.failed => (l10n.printStatusFailed, true, false),
+      KdsPrintJobStatus.notConfigured => (
+        l10n.printStatusNotConfigured,
+        true,
+        false,
+      ),
     };
+    final hasAction = isError || isReprint;
     return KdsTicketPrintStatus(
       label: label,
-      onRetry: canRetry ? () => _retryPrint(ref, l10n, ticket) : null,
+      onRetry: hasAction ? () => _retryPrint(ref, l10n, ticket) : null,
       // The recoverable states ARE the attention states — render them in the
-      // danger tone on the card (DESIGN-001).
-      isError: canRetry,
+      // danger tone on the card (DESIGN-001). A reprint is a quiet action.
+      isError: isError,
+      actionLabel: isReprint ? l10n.printReprintAction : null,
     );
   }
 

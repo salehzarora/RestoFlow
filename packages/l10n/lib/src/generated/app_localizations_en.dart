@@ -701,6 +701,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get printRetryAction => 'Retry';
 
   @override
+  String get printReprintAction => 'Reprint';
+
+  @override
   String get deviceSettingsBridgeConnected => 'Print bridge: connected';
 
   @override
@@ -2943,6 +2946,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posPrinterRemoveAction => 'Remove printer';
+
+  @override
+  String get posReprintLastReceiptAction => 'Reprint last receipt';
+
+  @override
+  String get posReprintStartedSnack => 'Reprinting the last receipt…';
 
   @override
   String get posPrinterRemovedSnack => 'Printer removed';

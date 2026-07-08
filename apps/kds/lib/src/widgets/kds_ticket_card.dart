@@ -14,12 +14,19 @@ class KdsTicketPrintStatus {
     required this.label,
     this.onRetry,
     this.isError = false,
+    this.actionLabel,
   });
 
   final String label;
 
-  /// Non-null => a Retry button is shown, wired to re-run the job.
+  /// Non-null => an action button is shown, wired to re-run the job (Retry for a
+  /// failed job, Reprint for an already-sent one — see [actionLabel]).
   final VoidCallback? onRetry;
+
+  /// PRINT-STABILITY-001: the action-button label. Null => "Retry" (the default,
+  /// for failure states); a sent ticket passes the "Reprint" label so staff can
+  /// print another money-free copy without changing any order state.
+  final String? actionLabel;
 
   /// True for attention states (failed / bridge unavailable / not
   /// configured): the status line renders in the danger tone instead of the
@@ -246,7 +253,9 @@ class KdsTicketCard extends StatelessWidget {
                         key: const Key('ticket-print-retry'),
                         onPressed: onRetry,
                         icon: const Icon(Icons.refresh, size: 16),
-                        label: Text(l10n.printRetryAction),
+                        label: Text(
+                          status.actionLabel ?? l10n.printRetryAction,
+                        ),
                       ),
                     ],
                   ],

@@ -155,6 +155,28 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
     );
   }
 
+  /// PRINT-STABILITY-001: reprints the ALREADY-BUILT receipt for [orderNumber] —
+  /// re-submits the STORED [ReceiptPrintJob.document] through the bridge WITHOUT
+  /// rebuilding it. It never creates a new order or payment and never recomputes
+  /// money (the document is a snapshot). A no-op when there is no stored document
+  /// or no bridge. Used by "Reprint last receipt" after a failed/lost print.
+  Future<void> reprint({
+    required String orderNumber,
+    ReceiptBridgeSubmit? submitToBridge,
+  }) async {
+    final document = state[orderNumber]?.document;
+    if (document == null || submitToBridge == null) return;
+    // Reset to prepared (KEEP the same document) so _dispatch re-sends it.
+    state = {
+      ...state,
+      orderNumber: ReceiptPrintJob(
+        status: PrintJobStatus.prepared,
+        document: document,
+      ),
+    };
+    await _dispatch(orderNumber, submitToBridge);
+  }
+
   Future<void> _dispatch(
     String orderNumber,
     ReceiptBridgeSubmit? submitToBridge,
@@ -252,3 +274,16 @@ final receiptPrintControllerProvider =
     NotifierProvider<ReceiptPrintController, Map<String, ReceiptPrintJob>>(
       ReceiptPrintController.new,
     );
+
+/// PRINT-STABILITY-001: the most-recent order number that has a BUILT receipt
+/// document (map insertion order — the last one wins), or null when none has
+/// been prepared this session. Drives the "Reprint last receipt" action's
+/// enabled/hidden state. In-memory only (a receipt is a transient print artifact).
+final lastReceiptOrderNumberProvider = Provider<String?>((ref) {
+  final jobs = ref.watch(receiptPrintControllerProvider);
+  String? last;
+  for (final entry in jobs.entries) {
+    if (entry.value.document != null) last = entry.key;
+  }
+  return last;
+});
