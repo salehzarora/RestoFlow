@@ -1538,13 +1538,14 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuKitchenNoteLabel => 'הערה למטבח';
 
   @override
-  String get menuKitchenPrepSection => 'הכנת מטבח';
+  String get menuKitchenPrepSection => 'ספירות מטבח';
 
   @override
-  String get menuKitchenPrepHint => 'מה שהטבח מרכיב לכל פריט. אופציונלי.';
+  String get menuKitchenPrepHint =>
+      'המשאבים שפריט אחד משתמש בהם (למשל לחמנייה אחת) — נוספים לסיכום ספירות המטבח. אופציונלי.';
 
   @override
-  String get menuPrepComponentNameLabel => 'רכיב';
+  String get menuPrepComponentNameLabel => 'משאב';
 
   @override
   String get menuPrepComponentQuantityLabel => 'כמות';
@@ -1553,7 +1554,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuPrepComponentUnitLabel => 'יחידה';
 
   @override
-  String get menuAddPrepComponent => 'הוספת רכיב הכנה';
+  String get menuAddPrepComponent => 'הוספת משאב';
 
   @override
   String get menuRemovePrepComponent => 'הסרת רכיב';
@@ -1568,7 +1569,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuKitchenMeatQuantityLabel => 'כמות';
 
   @override
-  String get menuKitchenMeatUnitLabel => 'יחידה';
+  String get menuKitchenMeatUnitLabel => 'משאב';
 
   @override
   String get menuSkuLabel => 'מק\"ט (קוד פנימי)';

@@ -11,15 +11,15 @@ import 'package:restoflow_kds/src/widgets/kds_ticket_card.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
-/// KITCHEN-MEAT-001: the whole-order meat total is the primary top chef note on
-/// the KDS card + printed ticket (above the generic prep summary), while normal
-/// item details stay below. Money-free; Arabic raster preserved.
+/// KDS-ALERTS-AND-KITCHEN-COUNTS-002 (B): the unified whole-order kitchen count
+/// summary — MULTIPLE resources at the top of the card + printed ticket, generic
+/// "إجمالي التجهيز: {count} {label}" copy, item details below, money-free,
+/// Arabic raster preserved.
 Future<AppLocalizations> _l10n(String locale) =>
     AppLocalizations.delegate.load(Locale(locale));
 
 KdsTicketView _ticket({
-  List<KitchenMeat> meatTotals = const <KitchenMeat>[],
-  List<KitchenPrepComponent> prepSummary = const <KitchenPrepComponent>[],
+  List<KitchenCount> kitchenCounts = const <KitchenCount>[],
   String item = 'Burger',
 }) => KdsTicketView(
   kitchenTicketId: 'o1:grill',
@@ -31,8 +31,7 @@ KdsTicketView _ticket({
   items: [
     KdsItemView(name: item, quantity: 2, modifiers: const ['Double']),
   ],
-  prepSummary: prepSummary,
-  meatTotals: meatTotals,
+  kitchenCounts: kitchenCounts,
 );
 
 Widget _harness(
@@ -59,8 +58,8 @@ Widget _harness(
 );
 
 void main() {
-  group('KDS card', () {
-    testWidgets('shows the meat total at the top; item details stay below', (
+  group('KDS card kitchen counts', () {
+    testWidgets('shows MULTIPLE resource totals at the top; items stay below', (
       tester,
     ) async {
       final l10n = await _l10n('en');
@@ -68,168 +67,125 @@ void main() {
         _harness(
           l10n,
           _ticket(
-            meatTotals: const [KitchenMeat(quantity: 9, unit: 'patties')],
+            kitchenCounts: const [
+              KitchenCount(quantity: 19, label: 'patties'),
+              KitchenCount(quantity: 7, label: 'buns'),
+            ],
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('kds-meat-total')), findsOneWidget);
-      expect(find.text(l10n.kdsMeatTotalLabel('9', 'patties')), findsOneWidget);
+      expect(find.byKey(const Key('kds-kitchen-counts')), findsOneWidget);
+      expect(
+        find.text(l10n.kdsMeatTotalLabel('19', 'patties')),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.kdsMeatTotalLabel('7', 'buns')), findsOneWidget);
       // Normal item + modifier still rendered underneath.
       expect(find.textContaining('Burger'), findsWidgets);
       expect(find.text('+ Double'), findsOneWidget);
     });
 
-    testWidgets('hides the meat block when there is no meat total', (
+    testWidgets('hides the summary when there is no configured count', (
       tester,
     ) async {
       final l10n = await _l10n('en');
       await tester.pumpWidget(_harness(l10n, _ticket()));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('kds-meat-total')), findsNothing);
+      expect(find.byKey(const Key('kds-kitchen-counts')), findsNothing);
     });
 
-    testWidgets('meat is primary: the generic prep summary is hidden from the '
-        'top when a meat total exists', (tester) async {
+    testWidgets('the kitchen count summary is money-free (no ₪)', (
+      tester,
+    ) async {
       final l10n = await _l10n('en');
       await tester.pumpWidget(
         _harness(
           l10n,
           _ticket(
-            meatTotals: const [KitchenMeat(quantity: 9, unit: 'patties')],
-            prepSummary: const [KitchenPrepComponent(name: 'Bun', quantity: 5)],
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('kds-meat-total')), findsOneWidget);
-      expect(find.byKey(const Key('kds-prep-summary')), findsNothing);
-    });
-
-    testWidgets('the meat total is money-free (no ₪)', (tester) async {
-      final l10n = await _l10n('en');
-      await tester.pumpWidget(
-        _harness(
-          l10n,
-          _ticket(
-            meatTotals: const [KitchenMeat(quantity: 9, unit: 'patties')],
+            kitchenCounts: const [KitchenCount(quantity: 19, label: 'patties')],
           ),
         ),
       );
       await tester.pumpAndSettle();
       expect(find.textContaining('₪'), findsNothing);
     });
+
+    testWidgets('uses the generic إجمالي التجهيز copy with any resource', (
+      tester,
+    ) async {
+      final l10n = await _l10n('ar');
+      await tester.pumpWidget(
+        _harness(
+          l10n,
+          _ticket(
+            item: 'برجر',
+            kitchenCounts: const [KitchenCount(quantity: 9, label: 'قطع لحم')],
+          ),
+          locale: 'ar',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('إجمالي التجهيز: 9 قطع لحم'), findsOneWidget);
+      expect(find.textContaining('إجمالي اللحم'), findsNothing);
+    });
   });
 
-  group('printed kitchen ticket', () {
+  group('printed kitchen ticket kitchen counts', () {
     test(
-      'the meat total prints near the top, above the items; money-free',
+      'the counts print near the top, above the items; money-free',
       () async {
         final l10n = await _l10n('en');
         final doc = buildKdsTicketDocument(
           l10n,
           _ticket(
-            meatTotals: const [KitchenMeat(quantity: 9, unit: 'patties')],
+            kitchenCounts: const [
+              KitchenCount(quantity: 19, label: 'patties'),
+              KitchenCount(quantity: 7, label: 'buns'),
+            ],
           ),
         );
-        final meatIdx = doc.lines.indexWhere(
+        final pattiesIdx = doc.lines.indexWhere(
           (l) =>
               l.kind == PrintLineKind.title &&
-              l.left == l10n.kdsMeatTotalLabel('9', 'patties'),
+              l.left == l10n.kdsMeatTotalLabel('19', 'patties'),
         );
-        expect(meatIdx, greaterThanOrEqualTo(0));
+        final bunsIdx = doc.lines.indexWhere(
+          (l) =>
+              l.kind == PrintLineKind.title &&
+              l.left == l10n.kdsMeatTotalLabel('7', 'buns'),
+        );
+        expect(pattiesIdx, greaterThanOrEqualTo(0));
+        expect(bunsIdx, greaterThanOrEqualTo(0));
         final firstItemIdx = doc.lines.indexWhere(
           (l) => l.kind == PrintLineKind.item,
         );
-        expect(meatIdx, lessThan(firstItemIdx));
+        expect(pattiesIdx, lessThan(firstItemIdx));
+        expect(bunsIdx, lessThan(firstItemIdx));
         final html = documentToHtml(doc);
         expect(html.contains('₪'), isFalse);
         expect(html.toLowerCase().contains('minor'), isFalse);
       },
     );
 
-    test('a meat total hides the generic prep block on the ticket', () async {
-      final l10n = await _l10n('en');
+    test('an Arabic count reaches the raster bitmap, money-free', () async {
+      final l10n = await _l10n('ar');
       final doc = buildKdsTicketDocument(
         l10n,
         _ticket(
-          meatTotals: const [KitchenMeat(quantity: 9, unit: 'patties')],
-          prepSummary: const [KitchenPrepComponent(name: 'Bun', quantity: 5)],
+          item: 'برجر',
+          kitchenCounts: const [KitchenCount(quantity: 9, label: 'قطع لحم')],
         ),
       );
-      expect(
-        doc.lines.any((l) => l.left == l10n.kdsTicketPrepHeading),
-        isFalse,
-      );
+      final escpos = kitchenTicketToEscPosDocument(doc);
+      final fake = pp.FakeReceiptRasterizer();
+      final raster = await pp.maybeRasterizeForRtl(escpos, rasterizer: fake);
+
+      expect(raster.lines.whereType<pp.PrintRasterImageLine>(), isNotEmpty);
+      final lines = fake.requests.single.lines.join('\n');
+      expect(lines.contains(l10n.kdsMeatTotalLabel('9', 'قطع لحم')), isTrue);
+      expect(lines.contains('₪'), isFalse);
     });
-
-    test(
-      'an Arabic meat total reaches the raster bitmap, money-free',
-      () async {
-        final l10n = await _l10n('ar');
-        final doc = buildKdsTicketDocument(
-          l10n,
-          _ticket(
-            item: 'برجر',
-            meatTotals: const [KitchenMeat(quantity: 9, unit: 'قطع')],
-          ),
-        );
-        final escpos = kitchenTicketToEscPosDocument(doc);
-        final fake = pp.FakeReceiptRasterizer();
-        final raster = await pp.maybeRasterizeForRtl(escpos, rasterizer: fake);
-
-        expect(raster.lines.whereType<pp.PrintRasterImageLine>(), isNotEmpty);
-        final lines = fake.requests.single.lines.join('\n');
-        expect(lines.contains(l10n.kdsMeatTotalLabel('9', 'قطع')), isTrue);
-        expect(lines.contains('₪'), isFalse);
-      },
-    );
-  });
-
-  // KITCHEN-COUNT-001: the KDS surface uses the GENERIC kitchen-count heading,
-  // not meat-specific wording, and any owner-written unit renders.
-  group('KITCHEN-COUNT-001 generic heading', () {
-    testWidgets(
-      'the card shows إجمالي التجهيز (not إجمالي اللحم) with any unit',
-      (tester) async {
-        final l10n = await _l10n('ar');
-        await tester.pumpWidget(
-          _harness(
-            l10n,
-            _ticket(
-              item: 'برجر',
-              meatTotals: const [KitchenMeat(quantity: 9, unit: 'قطع لحم')],
-            ),
-            locale: 'ar',
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('إجمالي التجهيز: 9 قطع لحم'), findsOneWidget);
-        expect(find.textContaining('إجمالي اللحم'), findsNothing);
-      },
-    );
-
-    test(
-      'the printed ticket uses the generic heading (fish example)',
-      () async {
-        final l10n = await _l10n('ar');
-        final doc = buildKdsTicketDocument(
-          l10n,
-          _ticket(
-            item: 'سمك',
-            meatTotals: const [KitchenMeat(quantity: 6, unit: 'حبات سمك')],
-          ),
-        );
-        expect(
-          doc.lines.any((l) => l.left == 'إجمالي التجهيز: 6 حبات سمك'),
-          isTrue,
-        );
-        expect(
-          doc.lines.any((l) => (l.left ?? '').contains('إجمالي اللحم')),
-          isFalse,
-        );
-      },
-    );
   });
 }

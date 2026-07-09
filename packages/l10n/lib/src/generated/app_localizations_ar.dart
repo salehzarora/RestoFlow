@@ -1545,13 +1545,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuKitchenNoteLabel => 'ملاحظة للمطبخ';
 
   @override
-  String get menuKitchenPrepSection => 'تحضير المطبخ';
+  String get menuKitchenPrepSection => 'أعداد المطبخ';
 
   @override
-  String get menuKitchenPrepHint => 'ما يجهّزه الطاهي لكل صنف. اختياري.';
+  String get menuKitchenPrepHint =>
+      'الموارد التي يستخدمها الصنف الواحد (مثل خبزة واحدة) — تُضاف إلى ملخص أعداد المطبخ. اختياري.';
 
   @override
-  String get menuPrepComponentNameLabel => 'المكوّن';
+  String get menuPrepComponentNameLabel => 'المورد';
 
   @override
   String get menuPrepComponentQuantityLabel => 'الكمية';
@@ -1560,7 +1561,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuPrepComponentUnitLabel => 'الوحدة';
 
   @override
-  String get menuAddPrepComponent => 'إضافة مكوّن تحضير';
+  String get menuAddPrepComponent => 'إضافة مورد';
 
   @override
   String get menuRemovePrepComponent => 'إزالة المكوّن';
@@ -1575,7 +1576,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get menuKitchenMeatQuantityLabel => 'الكمية';
 
   @override
-  String get menuKitchenMeatUnitLabel => 'الوحدة';
+  String get menuKitchenMeatUnitLabel => 'المورد';
 
   @override
   String get menuSkuLabel => 'SKU (رمز داخلي)';

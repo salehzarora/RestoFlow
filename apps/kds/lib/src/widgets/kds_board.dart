@@ -25,6 +25,9 @@ class KdsBoard extends StatelessWidget {
     required this.onAdvance,
     required this.onRecall,
     this.printStatusFor,
+    this.onReprint,
+    this.newArrivalIds = const <String>{},
+    this.newArrivalWindow = const Duration(seconds: 60),
     super.key,
   });
 
@@ -40,6 +43,15 @@ class KdsBoard extends StatelessWidget {
 
   /// Optional per-ticket kitchen print-status (RF-115); null = none.
   final KdsTicketPrintStatus? Function(KdsTicketView ticket)? printStatusFor;
+
+  /// A2/A1: an always-visible per-card reprint action (LIVE board); null hides it.
+  final void Function(KdsTicketView ticket)? onReprint;
+
+  /// A2: ticket ids that should show the new-arrival attention glow.
+  final Set<String> newArrivalIds;
+
+  /// A2: how long the new-arrival glow runs before it self-stops.
+  final Duration newArrivalWindow;
 
   /// Buckets a status into its workflow column key.
   static String _bucket(KitchenTicketStatus status) => switch (status) {
@@ -109,6 +121,9 @@ class KdsBoard extends StatelessWidget {
                         onAdvance: onAdvance,
                         onRecall: onRecall,
                         printStatusFor: printStatusFor,
+                        onReprint: onReprint,
+                        newArrivalIds: newArrivalIds,
+                        newArrivalWindow: newArrivalWindow,
                       ),
                     ),
                   ],
@@ -136,6 +151,9 @@ class KdsBoard extends StatelessWidget {
                         onAdvance: onAdvance,
                         onRecall: onRecall,
                         printStatusFor: printStatusFor,
+                        onReprint: onReprint,
+                        newArrivalIds: newArrivalIds,
+                        newArrivalWindow: newArrivalWindow,
                       ),
                     ),
                   ),
@@ -165,10 +183,18 @@ class KdsBoard extends StatelessWidget {
                   else
                     for (final ticket in column.tickets)
                       KdsTicketCard(
+                        key: ValueKey('kds-card-${ticket.kitchenTicketId}'),
                         ticket: ticket,
                         l10n: l10n,
                         now: now,
                         printStatus: printStatusFor?.call(ticket),
+                        onReprint: onReprint == null
+                            ? null
+                            : () => onReprint!(ticket),
+                        highlightNew: newArrivalIds.contains(
+                          ticket.kitchenTicketId,
+                        ),
+                        newArrivalWindow: newArrivalWindow,
                         onAdvance: (to) => onAdvance(ticket, to),
                         onRecall: onRecall == null
                             ? null
@@ -192,6 +218,9 @@ class _StatusColumn extends StatelessWidget {
     required this.onAdvance,
     required this.onRecall,
     this.printStatusFor,
+    this.onReprint,
+    this.newArrivalIds = const <String>{},
+    this.newArrivalWindow = const Duration(seconds: 60),
   });
 
   final _BoardColumn column;
@@ -203,6 +232,9 @@ class _StatusColumn extends StatelessWidget {
   final void Function(KdsTicketView ticket, KitchenTicketStatus to) onAdvance;
   final void Function(KdsTicketView ticket)? onRecall;
   final KdsTicketPrintStatus? Function(KdsTicketView ticket)? printStatusFor;
+  final void Function(KdsTicketView ticket)? onReprint;
+  final Set<String> newArrivalIds;
+  final Duration newArrivalWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -226,10 +258,18 @@ class _StatusColumn extends StatelessWidget {
                   children: [
                     for (final ticket in column.tickets)
                       KdsTicketCard(
+                        key: ValueKey('kds-card-${ticket.kitchenTicketId}'),
                         ticket: ticket,
                         l10n: l10n,
                         now: now,
                         printStatus: printStatusFor?.call(ticket),
+                        onReprint: onReprint == null
+                            ? null
+                            : () => onReprint!(ticket),
+                        highlightNew: newArrivalIds.contains(
+                          ticket.kitchenTicketId,
+                        ),
+                        newArrivalWindow: newArrivalWindow,
                         onAdvance: (to) => onAdvance(ticket, to),
                         onRecall: onRecall == null
                             ? null

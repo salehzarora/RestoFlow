@@ -107,12 +107,19 @@ class KdsSyncedHome extends ConsumerWidget {
           // board too; stale (last good pull) data is visibly flagged.
           appBarActions: const [LanguageSelector(), DeviceSettingsMenu()],
           showStaleBanner: vs.isStale,
+          // A2: subtle new-arrival attention glow on the LIVE board (tickets that
+          // ARRIVE during this session; not the ones already present on load).
+          enableNewArrivalAlert: true,
           printStatusFor: (ticket) => _printStatusFor(
             ref,
             l10n,
             ticket,
             printJobs[KdsKitchenPrintController.keyFor(ticket)],
           ),
+          // A1: the always-visible per-card Reprint runs the SAME money-free
+          // kitchen print pipeline — it creates no order and changes no status,
+          // and preserves the native Wi-Fi/Bluetooth + Arabic/Hebrew raster path.
+          onReprint: (ticket) => _retryPrint(ref, l10n, ticket),
           onAdvanced: pusher == null
               ? null
               : (ticket, to) async {

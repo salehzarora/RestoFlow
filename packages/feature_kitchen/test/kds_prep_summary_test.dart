@@ -2,9 +2,11 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// KITCHEN-PREP-001: the mapper reads each order item's `prep_snapshot` and
-/// aggregates a money-free prep summary across the whole ticket. Nothing is
-/// derived from a name/price — only the configured snapshot is rolled up.
+/// KDS-ALERTS-AND-KITCHEN-COUNTS-002: the mapper unifies the item-base counts
+/// (`order_items.prep_snapshot`) AND the modifier-option counts
+/// (`order_item_modifiers.meat_snapshot`) into ONE whole-order [kitchenCounts]
+/// summary, grouped by resource label. Nothing is derived from a name/price —
+/// only the explicit owner-configured snapshot is rolled up. Money-free.
 void main() {
   Map<String, dynamic> order(String id) => <String, dynamic>{
     'id': id,
@@ -26,61 +28,147 @@ void main() {
     if (prepSnapshot != null) 'prep_snapshot': prepSnapshot,
   };
 
-  test(
-    'aggregates prep across the ticket (× item quantity), Arabic preserved',
-    () {
-      final tickets = KdsTicketMapper.map(
-        orders: [order('o1')],
-        orderItems: [
-          item(
-            'i1',
-            'o1',
-            quantity: 3,
-            name: 'Double Burger',
-            prepSnapshot: [
-              {'name': 'لحم برجر', 'quantity': 2, 'unit': 'قطع'},
-              {'name': 'خبز برجر', 'quantity': 1, 'unit': 'حبة'},
-            ],
-          ),
-          item(
-            'i2',
-            'o1',
-            quantity: 2,
-            name: 'Fries',
-            prepSnapshot: [
-              {'name': 'بطاطا', 'quantity': 1, 'unit': ''},
-            ],
-          ),
-        ],
-        modifiers: const [],
-      );
+  Map<String, dynamic> mod(
+    String orderItemId,
+    String option, {
+    int quantity = 1,
+    Object? meat,
+  }) => <String, dynamic>{
+    'order_item_id': orderItemId,
+    'option_name_snapshot': option,
+    'quantity': quantity,
+    if (meat != null) 'meat_snapshot': meat,
+  };
 
-      final ticket = tickets.single;
-      expect(ticket.prepSummary, [
-        const KitchenPrepComponent(name: 'لحم برجر', quantity: 6, unit: 'قطع'),
-        const KitchenPrepComponent(name: 'خبز برجر', quantity: 3, unit: 'حبة'),
-        const KitchenPrepComponent(name: 'بطاطا', quantity: 2),
+  test('aggregates item-base counts across the ticket (× item quantity), '
+      'Arabic preserved', () {
+    final tickets = KdsTicketMapper.map(
+      orders: [order('o1')],
+      orderItems: [
+        item(
+          'i1',
+          'o1',
+          quantity: 3,
+          name: 'Double Burger',
+          prepSnapshot: [
+            {'name': 'لحم برجر', 'quantity': 2, 'unit': 'قطع'},
+            {'name': 'خبز برجر', 'quantity': 1, 'unit': 'حبة'},
+          ],
+        ),
+        item(
+          'i2',
+          'o1',
+          quantity: 2,
+          name: 'Fries',
+          prepSnapshot: [
+            {'name': 'بطاطا', 'quantity': 1, 'unit': ''},
+          ],
+        ),
+      ],
+      modifiers: const [],
+    );
+
+    // Labels combine name + unit; quantities are × the item quantity.
+    expect(tickets.single.kitchenCounts, [
+      const KitchenCount(quantity: 6, label: 'لحم برجر قطع'),
+      const KitchenCount(quantity: 3, label: 'خبز برجر حبة'),
+      const KitchenCount(quantity: 2, label: 'بطاطا'),
+    ]);
+    // Per-item snapshot is carried too (the summary is derived from it).
+    expect(tickets.single.items.first.prepComponents.length, 2);
+  });
+
+  test('UNIFIED: modifier-option counts (patties) + item-base counts (buns) '
+      'roll up together — 2 double + 5 triple = 19 patties + 7 buns', () {
+    final tickets = KdsTicketMapper.map(
+      orders: [order('o1')],
+      orderItems: [
+        item(
+          'i1',
+          'o1',
+          quantity: 2, // 2 double burgers
+          name: 'Burger',
+          prepSnapshot: [
+            {'name': 'خبز', 'quantity': 1},
+          ],
+        ),
+        item(
+          'i2',
+          'o1',
+          quantity: 5, // 5 triple burgers
+          name: 'Burger',
+          prepSnapshot: [
+            {'name': 'خبز', 'quantity': 1},
+          ],
+        ),
+      ],
+      modifiers: [
+        mod('i1', 'Double', meat: {'quantity': 2, 'unit': 'قطع لحم'}),
+        mod('i2', 'Triple', meat: {'quantity': 3, 'unit': 'قطع لحم'}),
+      ],
+    );
+
+    expect(tickets.single.kitchenCounts, [
+      // 2×1×2 (double) + 3×1×5 (triple) = 19 patties.
+      const KitchenCount(quantity: 19, label: 'قطع لحم'),
+      // 1×2 + 1×5 = 7 buns.
+      const KitchenCount(quantity: 7, label: 'خبز'),
+    ]);
+    // Item details remain (money-free).
+    expect(tickets.single.items.length, 2);
+  });
+
+  test('the whole-order counts show on EVERY station ticket of the order', () {
+    final tickets = KdsTicketMapper.map(
+      orders: [order('o1')],
+      orderItems: [
+        {
+          'id': 'i1',
+          'order_id': 'o1',
+          'station_id': 'grill',
+          'quantity': 2,
+          'menu_item_name_snapshot': 'Burger',
+          'prep_snapshot': [
+            {'name': 'خبز', 'quantity': 1},
+          ],
+        },
+        {
+          'id': 'i2',
+          'order_id': 'o1',
+          'station_id': 'fryer',
+          'quantity': 1,
+          'menu_item_name_snapshot': 'Fries',
+        },
+      ],
+      modifiers: [
+        mod('i1', 'Double', meat: {'quantity': 2, 'unit': 'قطع لحم'}),
+      ],
+    );
+    // Two tickets (grill + fryer); each carries the whole-order counts.
+    expect(tickets.length, 2);
+    for (final t in tickets) {
+      expect(t.kitchenCounts, [
+        const KitchenCount(quantity: 4, label: 'قطع لحم'), // 2×1×2
+        const KitchenCount(quantity: 2, label: 'خبز'), // 1×2
       ]);
-      // Per-item snapshot is carried too (the summary is derived from it).
-      expect(ticket.items.first.prepComponents.length, 2);
-    },
-  );
+    }
+  });
 
   test(
-    'no prep_snapshot anywhere -> an empty summary (card/ticket hide it)',
+    'no configured count anywhere -> an empty summary (card/ticket hide it)',
     () {
       final tickets = KdsTicketMapper.map(
         orders: [order('o1')],
         orderItems: [item('i1', 'o1', quantity: 1, name: 'Plain Soda')],
         modifiers: const [],
       );
-      expect(tickets.single.prepSummary, isEmpty);
+      expect(tickets.single.kitchenCounts, isEmpty);
       expect(tickets.single.items.single.prepComponents, isEmpty);
     },
   );
 
   test(
-    'prep summary is MONEY-FREE — components carry only name/quantity/unit',
+    'the count summary is MONEY-FREE — entries carry only quantity/label',
     () {
       final tickets = KdsTicketMapper.map(
         orders: [order('o1')],
@@ -90,8 +178,6 @@ void main() {
             'o1',
             quantity: 1,
             name: 'Burger',
-            // Even if a bad client smuggled a money key, the mapper's plucked
-            // KitchenPrepComponent has no money field to surface.
             prepSnapshot: [
               {'name': 'Patty', 'quantity': 1, 'unit': 'pcs'},
             ],
@@ -99,9 +185,9 @@ void main() {
         ],
         modifiers: const [],
       );
-      for (final component in tickets.single.prepSummary) {
-        final json = component.toJson();
-        expect(json.keys, containsAll(<String>['name', 'quantity', 'unit']));
+      for (final count in tickets.single.kitchenCounts) {
+        final json = count.toJson();
+        expect(json.keys, containsAll(<String>['quantity', 'label']));
         expect(
           json.keys.any((k) => k.toLowerCase().contains('minor')),
           isFalse,
@@ -110,7 +196,7 @@ void main() {
     },
   );
 
-  test('bad prep_snapshot shapes degrade to no prep (never throws)', () {
+  test('bad prep_snapshot shapes degrade to no count (never throws)', () {
     final tickets = KdsTicketMapper.map(
       orders: [order('o1')],
       orderItems: [
@@ -119,6 +205,6 @@ void main() {
       ],
       modifiers: const [],
     );
-    expect(tickets.single.prepSummary, isEmpty);
+    expect(tickets.single.kitchenCounts, isEmpty);
   });
 }

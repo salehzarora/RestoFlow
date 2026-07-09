@@ -14,9 +14,9 @@ List<KdsTicketView> demoKdsTickets() => [
   KdsTicketView(
     kitchenTicketId: 'order-101:grill',
     stationId: 'grill',
-    // KITCHEN-PREP-001 showcase: each item carries its PER-UNIT prep components;
-    // [prepSummary] is the aggregate across the ticket (2 burgers => 2 patties,
-    // 2 buns). Names/units are demo DATA — money-free.
+    // KDS-ALERTS-AND-KITCHEN-COUNTS-002 showcase: each item carries its PER-UNIT
+    // prep components (money-free demo DATA); the unified [kitchenCounts] shows
+    // MULTIPLE whole-order resource totals together at the top.
     items: const [
       KdsItemView(
         name: 'Classic Burger',
@@ -29,14 +29,12 @@ List<KdsTicketView> demoKdsTickets() => [
       KdsItemView(name: 'Grilled Chicken', quantity: 1),
     ],
     status: KitchenTicketStatus.newTicket,
-    prepSummary: const [
-      KitchenPrepComponent(name: 'Beef patty', quantity: 2, unit: 'pcs'),
-      KitchenPrepComponent(name: 'Burger bun', quantity: 2),
+    // The unified whole-order count summary — several resources at once (patties
+    // from the option counts + buns from the item-base counts). Money-free DATA.
+    kitchenCounts: const [
+      KitchenCount(quantity: 3, label: 'patties'),
+      KitchenCount(quantity: 2, label: 'buns'),
     ],
-    // KITCHEN-MEAT-001 showcase: the whole-order meat total is the primary top
-    // chef note (a Single + a Double = 3 patties). When present it takes the top
-    // and the generic prep summary is de-emphasised. Money-free demo DATA.
-    meatTotals: const [KitchenMeat(quantity: 3, unit: 'patties')],
   ),
   KdsTicketView(
     kitchenTicketId: 'order-102:grill',

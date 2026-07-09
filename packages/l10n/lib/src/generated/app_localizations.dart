@@ -2968,22 +2968,22 @@ abstract class AppLocalizations {
   /// **'Kitchen note'**
   String get menuKitchenNoteLabel;
 
-  /// KITCHEN-PREP-001: sub-heading for the optional kitchen prep components editor (what the chef assembles per one unit of the item). Non-money.
+  /// KDS-ALERTS-AND-KITCHEN-COUNTS-002: sub-heading for the optional per-ITEM counted-resource editor (buns, wraps, trays, …) that adds to the KDS kitchen count summary. Non-money.
   ///
   /// In en, this message translates to:
-  /// **'Kitchen prep'**
+  /// **'Kitchen counts'**
   String get menuKitchenPrepSection;
 
-  /// KITCHEN-PREP-001: helper text under the kitchen prep components editor explaining it is optional per-unit assembly info.
+  /// KDS-ALERTS-AND-KITCHEN-COUNTS-002: helper text under the per-item counted-resource editor; explains it is optional per-unit count info that feeds the KDS kitchen total.
   ///
   /// In en, this message translates to:
-  /// **'What the chef assembles for one item. Optional.'**
+  /// **'Kitchen resources one of this item uses (e.g. 1 bun) — added to the kitchen count summary. Optional.'**
   String get menuKitchenPrepHint;
 
   /// KITCHEN-PREP-001: label for a prep component's name field (e.g. beef patty, bun).
   ///
   /// In en, this message translates to:
-  /// **'Component'**
+  /// **'Resource'**
   String get menuPrepComponentNameLabel;
 
   /// KITCHEN-PREP-001: label for a prep component's per-unit quantity field (a count, never money).
@@ -3001,7 +3001,7 @@ abstract class AppLocalizations {
   /// KITCHEN-PREP-001: action to add a new kitchen prep component row.
   ///
   /// In en, this message translates to:
-  /// **'Add prep component'**
+  /// **'Add resource'**
   String get menuAddPrepComponent;
 
   /// KITCHEN-PREP-001: tooltip/label for removing a kitchen prep component row.
@@ -3031,7 +3031,7 @@ abstract class AppLocalizations {
   /// KITCHEN-COUNT-001: label for the owner-written unit field (e.g. patties, fish pieces, buns, skewers). Internal key kept as *Meat* for compatibility.
   ///
   /// In en, this message translates to:
-  /// **'Unit'**
+  /// **'Resource'**
   String get menuKitchenMeatUnitLabel;
 
   /// Label for the internal stock/product code field (back-office only; never sent to devices).

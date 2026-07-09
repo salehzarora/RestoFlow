@@ -28,10 +28,10 @@ class KdsItemView {
   /// The per-item kitchen note (order_items.notes), if any.
   final String? note;
 
-  /// KITCHEN-PREP-001: the item's configured PER-UNIT kitchen prep components
-  /// (from `order_items.prep_snapshot`). Non-money ({name,quantity,unit}); rolled
-  /// up × [quantity] into the ticket's [KdsTicketView.prepSummary]. Empty when
-  /// the item has no configured prep.
+  /// KITCHEN-PREP-001: the item's configured PER-UNIT kitchen count components
+  /// (from `order_items.prep_snapshot`). Non-money ({name,quantity,unit}); the
+  /// mapper rolls them up × [quantity] into the ticket's whole-order
+  /// [KdsTicketView.kitchenCounts]. Empty when the item has no configured count.
   final List<KitchenPrepComponent> prepComponents;
 }
 
@@ -55,8 +55,7 @@ class KdsTicketView {
     this.customerName,
     this.notes,
     this.submittedAt,
-    this.prepSummary = const <KitchenPrepComponent>[],
-    this.meatTotals = const <KitchenMeat>[],
+    this.kitchenCounts = const <KitchenCount>[],
   });
 
   final String kitchenTicketId;
@@ -96,19 +95,17 @@ class KdsTicketView {
   /// for any business decision.
   final DateTime? submittedAt;
 
-  /// KITCHEN-PREP-001: the aggregated kitchen prep summary for THIS ticket —
-  /// every item's per-unit [KdsItemView.prepComponents] × its quantity, summed
-  /// and grouped (see `aggregateKitchenPrep`). Non-money; empty when no item on
-  /// the ticket carries configured prep. Shown on the card + printed ticket so
-  /// the chef sees "how many patties / buns / …" at a glance.
-  final List<KitchenPrepComponent> prepSummary;
-
-  /// KITCHEN-MEAT-001: the WHOLE-ORDER meat total (grouped by unit) from the
-  /// selected modifier options' meat metadata — the quick chef note shown at the
-  /// TOP, above [prepSummary]. Non-money ({quantity,unit}); empty when no
-  /// selected option on the order carries meat. When non-empty the generic
-  /// [prepSummary] is de-emphasised so the top note stays uncluttered.
-  final List<KitchenMeat> meatTotals;
+  /// KDS-ALERTS-AND-KITCHEN-COUNTS-002: the unified WHOLE-ORDER kitchen count
+  /// totals — one entry per owner-configured counted resource (patties, buns,
+  /// fish pieces, …), aggregated across the ENTIRE order from BOTH the selected
+  /// modifier options' counts (per-option, e.g. Double → 2 قطع لحم) AND the
+  /// items' base counts (per-item, e.g. every burger → 1 خبز), grouped by
+  /// resource label. Multiple totals can appear together at the top of the
+  /// ticket. Non-money; empty when the order carries no configured count. The
+  /// same whole-order totals are attached to every station ticket of the order.
+  /// (Generalizes the earlier meat/prep summaries; only explicit owner config
+  /// contributes — nothing is inferred from names or prices.)
+  final List<KitchenCount> kitchenCounts;
 
   /// The current local status; mutated by bump/recall on the screen.
   KitchenTicketStatus status;
