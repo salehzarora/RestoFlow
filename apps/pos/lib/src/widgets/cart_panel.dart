@@ -14,6 +14,7 @@ import '../state/cart_controller.dart';
 import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_branch_tax.dart';
+import '../state/recent_orders_controller.dart';
 import 'order_confirmation.dart';
 import 'order_setup_section.dart';
 import 'shift_context_bar.dart';
@@ -267,6 +268,15 @@ Future<void> _submitOrder({
       taxTotalMinor: taxTotalMinor,
       taxRateBp: taxRateBp,
     );
+    // POS-ORDERS-AND-PAYMENT-001: record the just-submitted order in the local
+    // recent/unpaid-orders list (UNPAID — no payment yet). Best-effort: this
+    // never affects the submit/outbox result above.
+    final submitted = ref.read(cartControllerProvider).submittedOrder;
+    if (submitted != null) {
+      ref
+          .read(posRecentOrdersControllerProvider.notifier)
+          .recordSubmitted(submitted);
+    }
     setupController.reset();
   } on OrderSubmissionException {
     messenger.showSnackBar(SnackBar(content: Text(l10n.posSubmitFailed)));

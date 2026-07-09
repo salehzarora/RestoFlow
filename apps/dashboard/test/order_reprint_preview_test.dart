@@ -81,8 +81,10 @@ void main() {
       // Stored grand total ₪84.00 is present; customer name shown.
       expect(html.contains('₪84.00'), isTrue);
       expect(html.contains('Layla'), isTrue);
-      // The cash payment line renders the stored amount.
-      expect(html.contains('R-1001'), isTrue);
+      // POS-ORDERS-AND-PAYMENT-001: the customer receipt no longer prints the
+      // internal receipt number or the cashier/staff name.
+      expect(html.contains('R-1001'), isFalse);
+      expect(html.contains('Amira'), isFalse);
     },
   );
 

@@ -53,6 +53,32 @@ void main() {
     },
   );
 
+  test(
+    'POS-ORDERS-AND-PAYMENT-001: reprint(document:) seeds + re-sends a snapshot '
+    'with NO prior job (recent-orders reprint of a prior-session order)',
+    () async {
+      final c = container();
+      final controller = c.read(receiptPrintControllerProvider.notifier);
+      final sent = <PrintDocument>[];
+      Future<pp.BridgeSubmitResult> record(PrintDocument d) async {
+        sent.add(d);
+        return const pp.BridgeSubmitResult.sentToPrinter(mode: 'x');
+      }
+
+      final snapshot = doc();
+      // The order was settled in a PRIOR session: no in-memory print job exists.
+      expect(controller.jobFor('#Z'), isNull);
+      await controller.reprint(
+        orderNumber: '#Z',
+        document: snapshot,
+        submitToBridge: record,
+      );
+      expect(sent, hasLength(1));
+      expect(identical(sent.first, snapshot), isTrue); // the supplied snapshot
+      expect(controller.jobFor('#Z')!.status, PrintJobStatus.sentToPrinter);
+    },
+  );
+
   test('reprint is a no-op with no stored receipt or no bridge', () async {
     final c = container();
     final controller = c.read(receiptPrintControllerProvider.notifier);

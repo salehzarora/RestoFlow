@@ -992,5 +992,22 @@
   "ordersReprintFromPosHint": "להדפסה במדפסת קופה, הדפס מחדש ממכשיר POS",
   "ordersReprintFromKdsHint": "להדפסת כרטיס מטבח פיזי, השתמש בהדפסה חוזרת במסך המטבח (KDS)",
   "ordersDemoNotice": "הזמנות הדגמה — לא נטענו משרת.",
-  "ordersUnavailable": "לא זמין"
+  "ordersUnavailable": "לא זמין",
+  "posReceiptOrderTotal": "סך ההזמנה",
+  "posReceiptPaid": "שולם",
+  "posReceiptChange": "עודף",
+  "posPayLaterAction": "לתשלום מאוחר יותר",
+  "posPayLaterSavedSnack": "נשמר כלא שולם — ניתן למצוא בהזמנות אחרונות",
+  "posRecentOrdersTitle": "הזמנות אחרונות",
+  "posRecentOrdersWindow": "היום ואתמול",
+  "posRecentFilterAll": "הכול",
+  "posRecentFilterUnpaid": "לא שולם",
+  "posRecentFilterPaid": "שולם",
+  "posRecentEmpty": "אין הזמנות אחרונות",
+  "posRecentEmptyHint": "הזמנות שתיצור יופיעו כאן.",
+  "posRecentReprintAction": "הדפס קבלה מחדש",
+  "posRecentReprintStarted": "מדפיס קבלה מחדש…",
+  "posUnpaidChip": "לא שולם",
+  "posRecentSyncPending": "מסנכרן…",
+  "posRecentSyncFailed": "לא סונכרן"
 }

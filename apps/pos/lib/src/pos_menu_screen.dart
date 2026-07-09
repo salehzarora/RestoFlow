@@ -15,6 +15,7 @@ import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
 import 'widgets/outbox_status_indicator.dart';
 import 'widgets/pos_bottom_bar.dart';
+import 'widgets/recent_orders_sheet.dart';
 
 /// The RestoFlow POS cashier screen (DESIGN-004 Warm/Bento): a warm-canvas
 /// menu grid + search beside a live cart. Responsive from the ACTUAL available
@@ -70,6 +71,7 @@ class PosMenuScreen extends StatelessWidget {
           ],
         ),
         actions: const [
+          RecentOrdersButton(),
           OutboxStatusIndicator(),
           LanguageSelector(),
           DeviceSettingsMenu(),

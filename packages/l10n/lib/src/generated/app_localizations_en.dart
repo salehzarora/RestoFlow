@@ -3206,4 +3206,56 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ordersUnavailable => 'Unavailable';
+
+  @override
+  String get posReceiptOrderTotal => 'Order total';
+
+  @override
+  String get posReceiptPaid => 'Paid';
+
+  @override
+  String get posReceiptChange => 'Change';
+
+  @override
+  String get posPayLaterAction => 'Pay later';
+
+  @override
+  String get posPayLaterSavedSnack =>
+      'Saved as unpaid — find it in Recent orders';
+
+  @override
+  String get posRecentOrdersTitle => 'Recent orders';
+
+  @override
+  String get posRecentOrdersWindow => 'Today and yesterday';
+
+  @override
+  String get posRecentFilterAll => 'All';
+
+  @override
+  String get posRecentFilterUnpaid => 'Unpaid';
+
+  @override
+  String get posRecentFilterPaid => 'Paid';
+
+  @override
+  String get posRecentEmpty => 'No recent orders';
+
+  @override
+  String get posRecentEmptyHint => 'Orders you take will appear here.';
+
+  @override
+  String get posRecentReprintAction => 'Reprint receipt';
+
+  @override
+  String get posRecentReprintStarted => 'Reprinting receipt…';
+
+  @override
+  String get posUnpaidChip => 'Unpaid';
+
+  @override
+  String get posRecentSyncPending => 'Syncing…';
+
+  @override
+  String get posRecentSyncFailed => 'Not synced';
 }

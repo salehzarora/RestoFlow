@@ -155,23 +155,30 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
     );
   }
 
-  /// PRINT-STABILITY-001: reprints the ALREADY-BUILT receipt for [orderNumber] —
-  /// re-submits the STORED [ReceiptPrintJob.document] through the bridge WITHOUT
-  /// rebuilding it. It never creates a new order or payment and never recomputes
-  /// money (the document is a snapshot). A no-op when there is no stored document
-  /// or no bridge. Used by "Reprint last receipt" after a failed/lost print.
+  /// PRINT-STABILITY-001 / POS-ORDERS-AND-PAYMENT-001: reprints the receipt for
+  /// [orderNumber] — re-submits a receipt [PrintDocument] snapshot through the
+  /// bridge WITHOUT rebuilding it from live data. It never creates a new order or
+  /// payment and never recomputes money (the document is a snapshot). A no-op
+  /// when there is no document (stored or supplied) or no bridge.
+  ///
+  /// Used by "Reprint last receipt" (stored, same-session) AND the recent-orders
+  /// surface's per-order reprint — which supplies [document] (freshly built from
+  /// the STORED order+payment) so an order settled in a PRIOR session, whose
+  /// print job is no longer in memory, can still be reprinted.
   Future<void> reprint({
     required String orderNumber,
     ReceiptBridgeSubmit? submitToBridge,
+    PrintDocument? document,
   }) async {
-    final document = state[orderNumber]?.document;
-    if (document == null || submitToBridge == null) return;
-    // Reset to prepared (KEEP the same document) so _dispatch re-sends it.
+    final doc = document ?? state[orderNumber]?.document;
+    if (doc == null || submitToBridge == null) return;
+    // Reset to prepared with the (stored or supplied) document so _dispatch
+    // re-sends it.
     state = {
       ...state,
       orderNumber: ReceiptPrintJob(
         status: PrintJobStatus.prepared,
-        document: document,
+        document: doc,
       ),
     };
     await _dispatch(orderNumber, submitToBridge);

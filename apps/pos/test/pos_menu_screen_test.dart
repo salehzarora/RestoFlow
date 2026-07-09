@@ -106,7 +106,9 @@ void main() {
     // Confirmation replaces the cart.
     expect(find.text('Order sent'), findsOneWidget);
     expect(find.text('Submitted'), findsOneWidget);
-    expect(find.text('New order'), findsOneWidget);
+    // POS-ORDERS-AND-PAYMENT-001: the unpaid-branch reset action is now the
+    // explicit "Pay later" (leaves the order unpaid + starts the next order).
+    expect(find.text('Pay later'), findsOneWidget);
     expect(find.text('Send Order'), findsNothing);
 
     final orderNumber = tester.widget<Text>(
@@ -125,7 +127,7 @@ void main() {
     );
   });
 
-  testWidgets('New order returns to the empty cart', (tester) async {
+  testWidgets('Pay later returns to the empty cart', (tester) async {
     _useWideSurface(tester);
     await tester.pumpWidget(_wrap(const Locale('en')));
     await tester.pumpAndSettle();
@@ -135,7 +137,7 @@ void main() {
     await tester.tap(find.text('Send Order'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('New order'));
+    await tester.tap(find.byKey(const Key('pay-later-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('Order sent'), findsNothing);

@@ -178,11 +178,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               ),
                           ],
                           _Line(
-                            label:
-                                (order.discountTotalMinor > 0 ||
-                                    order.taxTotalMinor > 0)
-                                ? l10n.posGrandTotal
-                                : l10n.posReceiptTotal,
+                            label: l10n.posReceiptOrderTotal,
                             value: MoneyFormatter.formatMinor(
                               order.grandTotalMinor,
                               currency,
@@ -192,7 +188,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                           ),
                           if (payment.method.isCash) ...[
                             _Line(
-                              label: l10n.posCashReceived,
+                              label: l10n.posReceiptPaid,
                               value: MoneyFormatter.formatMinor(
                                 payment.tenderedMinor,
                                 currency,
@@ -200,7 +196,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               valueKey: const Key('preview-cash'),
                             ),
                             _Line(
-                              label: l10n.posChangeDue,
+                              label: l10n.posReceiptChange,
                               value: MoneyFormatter.formatMinor(
                                 payment.changeMinor,
                                 currency,
@@ -353,20 +349,22 @@ PrintDocument buildReceiptDocument(
             MoneyFormatter.formatMinor(order.taxTotalMinor, currency),
           ),
       ],
+      // POS-ORDERS-AND-PAYMENT-001: customer-friendly money summary — a single
+      // "Order total" (no confusing subtotal/total duplication when they match),
+      // then "Paid" (cash tendered) and "Change" for cash. The subtotal/discount/
+      // tax breakout above still appears only when a discount or tax is present.
       PrintLine.kv(
-        (order.discountTotalMinor > 0 || order.taxTotalMinor > 0)
-            ? l10n.posGrandTotal
-            : l10n.posReceiptTotal,
+        l10n.posReceiptOrderTotal,
         MoneyFormatter.formatMinor(order.grandTotalMinor, currency),
         emphasised: true,
       ),
       if (payment.method.isCash) ...[
         PrintLine.kv(
-          l10n.posCashReceived,
+          l10n.posReceiptPaid,
           MoneyFormatter.formatMinor(payment.tenderedMinor, currency),
         ),
         PrintLine.kv(
-          l10n.posChangeDue,
+          l10n.posReceiptChange,
           MoneyFormatter.formatMinor(payment.changeMinor, currency),
         ),
       ],

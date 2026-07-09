@@ -3162,4 +3162,56 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get ordersUnavailable => 'לא זמין';
+
+  @override
+  String get posReceiptOrderTotal => 'סך ההזמנה';
+
+  @override
+  String get posReceiptPaid => 'שולם';
+
+  @override
+  String get posReceiptChange => 'עודף';
+
+  @override
+  String get posPayLaterAction => 'לתשלום מאוחר יותר';
+
+  @override
+  String get posPayLaterSavedSnack =>
+      'נשמר כלא שולם — ניתן למצוא בהזמנות אחרונות';
+
+  @override
+  String get posRecentOrdersTitle => 'הזמנות אחרונות';
+
+  @override
+  String get posRecentOrdersWindow => 'היום ואתמול';
+
+  @override
+  String get posRecentFilterAll => 'הכול';
+
+  @override
+  String get posRecentFilterUnpaid => 'לא שולם';
+
+  @override
+  String get posRecentFilterPaid => 'שולם';
+
+  @override
+  String get posRecentEmpty => 'אין הזמנות אחרונות';
+
+  @override
+  String get posRecentEmptyHint => 'הזמנות שתיצור יופיעו כאן.';
+
+  @override
+  String get posRecentReprintAction => 'הדפס קבלה מחדש';
+
+  @override
+  String get posRecentReprintStarted => 'מדפיס קבלה מחדש…';
+
+  @override
+  String get posUnpaidChip => 'לא שולם';
+
+  @override
+  String get posRecentSyncPending => 'מסנכרן…';
+
+  @override
+  String get posRecentSyncFailed => 'לא סונכרן';
 }

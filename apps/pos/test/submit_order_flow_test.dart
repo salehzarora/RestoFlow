@@ -168,7 +168,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
 
-    await tester.tap(find.text(l10n.posNewOrder));
+    // POS-ORDERS-AND-PAYMENT-001: the unpaid confirmation's reset action is
+    // "Pay later" (order stays unpaid, findable in Recent orders).
+    await tester.tap(find.text(l10n.posPayLaterAction));
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.posOrderSubmittedTitle), findsNothing);
