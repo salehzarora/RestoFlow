@@ -992,5 +992,22 @@
   "ordersReprintFromPosHint": "لاستخدام طابعة الكاشير، أعد الطباعة من جهاز POS",
   "ordersReprintFromKdsHint": "لتذكرة مطبخ ورقية، استخدم إعادة الطباعة على جهاز KDS في المطبخ",
   "ordersDemoNotice": "طلبات تجريبية — غير محمّلة من الخادم.",
-  "ordersUnavailable": "غير متوفر"
+  "ordersUnavailable": "غير متوفر",
+  "posReceiptOrderTotal": "مجموع الطلب",
+  "posReceiptPaid": "المدفوع",
+  "posReceiptChange": "الباقي",
+  "posPayLaterAction": "الدفع لاحقًا",
+  "posPayLaterSavedSnack": "حُفظ كغير مدفوع — تجده في الطلبات الأخيرة",
+  "posRecentOrdersTitle": "الطلبات الأخيرة",
+  "posRecentOrdersWindow": "اليوم والأمس",
+  "posRecentFilterAll": "الكل",
+  "posRecentFilterUnpaid": "غير مدفوع",
+  "posRecentFilterPaid": "مدفوع",
+  "posRecentEmpty": "لا توجد طلبات حديثة",
+  "posRecentEmptyHint": "ستظهر هنا الطلبات التي تسجّلها.",
+  "posRecentReprintAction": "إعادة طباعة الإيصال",
+  "posRecentReprintStarted": "جارٍ إعادة طباعة الإيصال…",
+  "posUnpaidChip": "غير مدفوع",
+  "posRecentSyncPending": "جارٍ المزامنة…",
+  "posRecentSyncFailed": "لم تتم المزامنة"
 }

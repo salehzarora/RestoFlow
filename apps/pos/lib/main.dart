@@ -12,6 +12,7 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/durable_outbox_store.dart';
+import 'src/data/recent_orders_store.dart';
 import 'src/print/print_bridge.dart';
 import 'src/pos_menu_screen.dart';
 import 'src/pos_pairing_gate.dart';
@@ -23,6 +24,7 @@ import 'src/state/pos_device_context.dart';
 import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_session.dart';
 import 'src/state/pos_shift_close_policy.dart';
+import 'src/state/recent_orders_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +55,12 @@ Future<void> main() async {
         ),
         outboxAutoSweepIntervalProvider.overrideWithValue(
           const Duration(seconds: 25),
+        ),
+        // POS-ORDERS-AND-PAYMENT-001: the recent/unpaid-orders list persists to
+        // shared_preferences too, so a "today + yesterday" window + each order's
+        // paid/unpaid state survive a refresh / restart (per-device key).
+        posRecentOrdersStoreProvider.overrideWithValue(
+          SharedPrefsRecentOrdersStore(prefs),
         ),
         // RF-118: the client PIN-attempt lockout counter persists to
         // shared_preferences too, so a too-many-attempts cooldown survives a

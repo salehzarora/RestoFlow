@@ -271,12 +271,24 @@ class OrderConfirmation extends ConsumerWidget {
                           ),
                         if (order.discountTotalMinor == 0)
                           const SizedBox(height: RestoflowSpacing.sm),
+                        // POS-ORDERS-AND-PAYMENT-001: "Pay later" leaves the order
+                        // UNPAID (already recorded in Recent orders at submit) and
+                        // starts the next order — no fake payment, no cash
+                        // movement. The order still goes to the kitchen normally.
                         SizedBox(
                           width: double.infinity,
                           child: TextButton.icon(
-                            onPressed: onNewOrder,
-                            icon: const Icon(Icons.add),
-                            label: Text(l10n.posNewOrder),
+                            key: const Key('pay-later-button'),
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.posPayLaterSavedSnack),
+                                ),
+                              );
+                              onNewOrder();
+                            },
+                            icon: const Icon(Icons.schedule),
+                            label: Text(l10n.posPayLaterAction),
                           ),
                         ),
                       ],

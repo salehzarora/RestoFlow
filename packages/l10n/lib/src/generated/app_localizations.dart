@@ -6021,6 +6021,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unavailable'**
   String get ordersUnavailable;
+
+  /// POS customer receipt: the single order total line (POS-ORDERS-AND-PAYMENT-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Order total'**
+  String get posReceiptOrderTotal;
+
+  /// POS customer receipt: the amount the customer paid (cash tendered).
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get posReceiptPaid;
+
+  /// POS customer receipt: the change returned to the customer.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get posReceiptChange;
+
+  /// POS confirmation action: leave the order unpaid and start the next order.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay later'**
+  String get posPayLaterAction;
+
+  /// POS snackbar confirming a pay-later order is saved and findable in Recent orders.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved as unpaid — find it in Recent orders'**
+  String get posPayLaterSavedSnack;
+
+  /// POS recent/unpaid orders surface title + app-bar tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent orders'**
+  String get posRecentOrdersTitle;
+
+  /// POS recent orders subtitle: the visible window.
+  ///
+  /// In en, this message translates to:
+  /// **'Today and yesterday'**
+  String get posRecentOrdersWindow;
+
+  /// POS recent orders filter: all recent.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get posRecentFilterAll;
+
+  /// POS recent orders filter: unpaid only.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid'**
+  String get posRecentFilterUnpaid;
+
+  /// POS recent orders filter: paid only.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get posRecentFilterPaid;
+
+  /// POS recent orders empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No recent orders'**
+  String get posRecentEmpty;
+
+  /// POS recent orders empty state hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders you take will appear here.'**
+  String get posRecentEmptyHint;
+
+  /// POS recent orders: reprint a paid order's receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Reprint receipt'**
+  String get posRecentReprintAction;
+
+  /// POS snackbar when a recent-order receipt reprint is dispatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Reprinting receipt…'**
+  String get posRecentReprintStarted;
+
+  /// POS status chip for an unpaid order.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid'**
+  String get posUnpaidChip;
+
+  /// POS recent orders: the order is still syncing to the backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing…'**
+  String get posRecentSyncPending;
+
+  /// POS recent orders: the order has not synced to the backend.
+  ///
+  /// In en, this message translates to:
+  /// **'Not synced'**
+  String get posRecentSyncFailed;
 }
 
 class _AppLocalizationsDelegate

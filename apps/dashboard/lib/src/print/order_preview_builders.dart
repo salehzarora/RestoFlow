@@ -58,8 +58,8 @@ PrintDocument buildOrderReceiptPreview(
       PrintLine.kv(l10n.posTableLabel, detail.tableLabel!),
     if (detail.customerName != null && detail.customerName!.isNotEmpty)
       PrintLine.kv(l10n.ordersCustomerLabel, detail.customerName!),
-    if (detail.staffName != null && detail.staffName!.isNotEmpty)
-      PrintLine.kv(l10n.ordersStaffLabel, detail.staffName!),
+    // POS-ORDERS-AND-PAYMENT-001: the customer receipt omits the cashier/staff
+    // name (owner/internal only) — staffName is NOT printed here.
     PrintLine.rule(),
   ];
 
@@ -95,10 +95,11 @@ PrintDocument buildOrderReceiptPreview(
   if (detail.taxTotalMinor > 0) {
     lines.add(PrintLine.kv(l10n.ordersTaxLabel, money(detail.taxTotalMinor)));
   }
+  // POS-ORDERS-AND-PAYMENT-001: a single customer-friendly "Order total".
   lines
     ..add(
       PrintLine.kv(
-        l10n.posReceiptTotal,
+        l10n.posReceiptOrderTotal,
         money(detail.grandTotalMinor),
         emphasised: true,
       ),
@@ -107,18 +108,23 @@ PrintDocument buildOrderReceiptPreview(
 
   final pay = detail.completedPayment;
   if (pay != null) {
-    lines.add(
-      PrintLine.kv(
-        _paymentMethodLabel(l10n, pay.method),
-        money(pay.amountMinor),
-      ),
-    );
-    if (pay.changeMinor > 0) {
-      lines.add(PrintLine.kv(l10n.ordersChangeLabel, money(pay.changeMinor)));
-    }
-    final receipt = pay.receiptNumber ?? detail.receiptNumber;
-    if (receipt != null && receipt.isNotEmpty) {
-      lines.add(PrintLine.kv(l10n.posReceiptNumberLabel, receipt));
+    if (pay.method == 'cash') {
+      // Cash: show "Paid" (tendered) + "Change". The internal receipt number is
+      // NOT printed on the customer receipt (stays in stored data).
+      final tendered = pay.tenderedMinor > 0
+          ? pay.tenderedMinor
+          : pay.amountMinor;
+      lines.add(PrintLine.kv(l10n.posReceiptPaid, money(tendered)));
+      if (pay.changeMinor > 0) {
+        lines.add(PrintLine.kv(l10n.posReceiptChange, money(pay.changeMinor)));
+      }
+    } else {
+      lines.add(
+        PrintLine.kv(
+          _paymentMethodLabel(l10n, pay.method),
+          money(pay.amountMinor),
+        ),
+      );
     }
   } else {
     lines.add(PrintLine.center(l10n.dashboardUnpaid));

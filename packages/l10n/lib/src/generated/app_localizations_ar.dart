@@ -3184,4 +3184,56 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get ordersUnavailable => 'غير متوفر';
+
+  @override
+  String get posReceiptOrderTotal => 'مجموع الطلب';
+
+  @override
+  String get posReceiptPaid => 'المدفوع';
+
+  @override
+  String get posReceiptChange => 'الباقي';
+
+  @override
+  String get posPayLaterAction => 'الدفع لاحقًا';
+
+  @override
+  String get posPayLaterSavedSnack =>
+      'حُفظ كغير مدفوع — تجده في الطلبات الأخيرة';
+
+  @override
+  String get posRecentOrdersTitle => 'الطلبات الأخيرة';
+
+  @override
+  String get posRecentOrdersWindow => 'اليوم والأمس';
+
+  @override
+  String get posRecentFilterAll => 'الكل';
+
+  @override
+  String get posRecentFilterUnpaid => 'غير مدفوع';
+
+  @override
+  String get posRecentFilterPaid => 'مدفوع';
+
+  @override
+  String get posRecentEmpty => 'لا توجد طلبات حديثة';
+
+  @override
+  String get posRecentEmptyHint => 'ستظهر هنا الطلبات التي تسجّلها.';
+
+  @override
+  String get posRecentReprintAction => 'إعادة طباعة الإيصال';
+
+  @override
+  String get posRecentReprintStarted => 'جارٍ إعادة طباعة الإيصال…';
+
+  @override
+  String get posUnpaidChip => 'غير مدفوع';
+
+  @override
+  String get posRecentSyncPending => 'جارٍ المزامنة…';
+
+  @override
+  String get posRecentSyncFailed => 'لم تتم المزامنة';
 }

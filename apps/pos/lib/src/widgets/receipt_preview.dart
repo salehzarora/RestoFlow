@@ -135,10 +135,11 @@ class ReceiptPreview extends ConsumerWidget {
                   valueKey: const Key('receipt-tax'),
                 ),
             ],
+            // POS-ORDERS-AND-PAYMENT-001: a single customer-friendly "Order
+            // total" (no subtotal/total duplication when they match), then
+            // "Paid"/"Change" for cash — consistent with the printed receipt.
             _ReceiptLine(
-              label: (order.discountTotalMinor > 0 || order.taxTotalMinor > 0)
-                  ? l10n.posGrandTotal
-                  : l10n.posReceiptTotal,
+              label: l10n.posReceiptOrderTotal,
               value: MoneyFormatter.formatMinor(
                 order.grandTotalMinor,
                 currency,
@@ -150,7 +151,7 @@ class ReceiptPreview extends ConsumerWidget {
             if (payment.method.isCash) ...[
               const SizedBox(height: RestoflowSpacing.xs),
               _ReceiptLine(
-                label: l10n.posCashReceived,
+                label: l10n.posReceiptPaid,
                 value: MoneyFormatter.formatMinor(
                   payment.tenderedMinor,
                   currency,
@@ -158,7 +159,7 @@ class ReceiptPreview extends ConsumerWidget {
                 valueKey: const Key('receipt-cash'),
               ),
               _ReceiptLine(
-                label: l10n.posChangeDue,
+                label: l10n.posReceiptChange,
                 value: MoneyFormatter.formatMinor(
                   payment.changeMinor,
                   currency,
