@@ -136,4 +136,28 @@ void main() {
       expect(json.keys.any((k) => k.toLowerCase().contains('minor')), isFalse);
     }
   });
+
+  test(
+    'KITCHEN-COUNT-001: aggregates ANY owner-written unit (قطع لحم / حبات سمك)',
+    () {
+      // Generic kitchen count: the aggregation is unit-agnostic (not meat-only).
+      final tickets = KdsTicketMapper.map(
+        orders: [order('o1')],
+        orderItems: [
+          item('i1', 'o1', quantity: 4), // 4 double burgers
+          item('i2', 'o1', quantity: 1), // 1 single burger
+          item('i3', 'o1', quantity: 6), // 6 fish
+        ],
+        modifiers: [
+          mod('i1', 'Double', meat: {'quantity': 2, 'unit': 'قطع لحم'}),
+          mod('i2', 'Single', meat: {'quantity': 1, 'unit': 'قطع لحم'}),
+          mod('i3', 'Fish', meat: {'quantity': 1, 'unit': 'حبات سمك'}),
+        ],
+      );
+      expect(tickets.single.meatTotals, [
+        const KitchenMeat(quantity: 9, unit: 'قطع لحم'), // 2×1×4 + 1×1×1
+        const KitchenMeat(quantity: 6, unit: 'حبات سمك'), // 1×1×6
+      ]);
+    },
+  );
 }

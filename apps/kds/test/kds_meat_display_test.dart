@@ -186,4 +186,50 @@ void main() {
       },
     );
   });
+
+  // KITCHEN-COUNT-001: the KDS surface uses the GENERIC kitchen-count heading,
+  // not meat-specific wording, and any owner-written unit renders.
+  group('KITCHEN-COUNT-001 generic heading', () {
+    testWidgets(
+      'the card shows إجمالي التجهيز (not إجمالي اللحم) with any unit',
+      (tester) async {
+        final l10n = await _l10n('ar');
+        await tester.pumpWidget(
+          _harness(
+            l10n,
+            _ticket(
+              item: 'برجر',
+              meatTotals: const [KitchenMeat(quantity: 9, unit: 'قطع لحم')],
+            ),
+            locale: 'ar',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('إجمالي التجهيز: 9 قطع لحم'), findsOneWidget);
+        expect(find.textContaining('إجمالي اللحم'), findsNothing);
+      },
+    );
+
+    test(
+      'the printed ticket uses the generic heading (fish example)',
+      () async {
+        final l10n = await _l10n('ar');
+        final doc = buildKdsTicketDocument(
+          l10n,
+          _ticket(
+            item: 'سمك',
+            meatTotals: const [KitchenMeat(quantity: 6, unit: 'حبات سمك')],
+          ),
+        );
+        expect(
+          doc.lines.any((l) => l.left == 'إجمالي التجهيز: 6 حبات سمك'),
+          isTrue,
+        );
+        expect(
+          doc.lines.any((l) => (l.left ?? '').contains('إجمالي اللحم')),
+          isFalse,
+        );
+      },
+    );
+  });
 }

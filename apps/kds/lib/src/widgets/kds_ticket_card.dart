@@ -359,9 +359,11 @@ class _PrepSummarySection extends StatelessWidget {
   }
 }
 
-/// KITCHEN-MEAT-001: the WHOLE-ORDER meat total — the prominent top chef note.
-/// One clean line per unit-group ("Meat total: 9 patties"). Money-free; shown
-/// only when a selected option on the order carries configured meat.
+/// KITCHEN-MEAT-001 / KITCHEN-COUNT-001: the WHOLE-ORDER kitchen count total —
+/// the prominent top chef note. One clean line per unit-group, using the generic
+/// "Kitchen total: {count} {unit}" copy (l10n `kdsMeatTotalLabel`; the unit is
+/// owner-written, e.g. "9 قطع لحم" / "6 حبات سمك"). Money-free; shown only when a
+/// selected option carries a configured count. (Internal name kept as *Meat*.)
 class _MeatTotalSection extends StatelessWidget {
   const _MeatTotalSection({required this.meatTotals, required this.l10n});
 

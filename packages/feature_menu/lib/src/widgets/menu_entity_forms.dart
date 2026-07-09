@@ -505,9 +505,12 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
           value: _active,
           onChanged: (value) => setState(() => _active = value),
         ),
-        // KITCHEN-MEAT-001: the optional meat-summary section — ONLY on modifier
+        // KITCHEN-MEAT-001 / KITCHEN-COUNT-001: the optional GENERIC kitchen
+        // COUNT section (user-facing copy: "Kitchen count summary"; the owner
+        // writes any unit — قطع لحم / حبات سمك / خبز / سيخ / …) — ONLY on modifier
         // options (size/variant dialogs share this form but never show it). When
-        // enabled, this option counts toward the KDS whole-order meat total.
+        // enabled, this option counts toward the KDS whole-order count total.
+        // (Internal state/field names kept as *Meat* for compatibility.)
         if (_showMeat) ...[
           const Divider(),
           Text(

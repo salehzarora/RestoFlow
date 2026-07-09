@@ -283,7 +283,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String kdsMeatTotalLabel(String count, String unit) {
-    return 'סה\"כ בשר: $count $unit';
+    return 'סיכום הכנה: $count $unit';
   }
 
   @override
@@ -1559,16 +1559,16 @@ class AppLocalizationsHe extends AppLocalizations {
   String get menuRemovePrepComponent => 'הסרת רכיב';
 
   @override
-  String get menuKitchenMeatSection => 'סיכום בשר למטבח';
+  String get menuKitchenMeatSection => 'סיכום הכנה למטבח';
 
   @override
-  String get menuKitchenMeatEnabledLabel => 'נכלל בסך הבשר';
+  String get menuKitchenMeatEnabledLabel => 'נכלל בסיכום ההכנה';
 
   @override
-  String get menuKitchenMeatQuantityLabel => 'כמות בשר';
+  String get menuKitchenMeatQuantityLabel => 'כמות';
 
   @override
-  String get menuKitchenMeatUnitLabel => 'יחידת בשר';
+  String get menuKitchenMeatUnitLabel => 'יחידה';
 
   @override
   String get menuSkuLabel => 'מק\"ט (קוד פנימי)';

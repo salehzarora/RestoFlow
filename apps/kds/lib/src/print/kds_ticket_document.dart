@@ -50,9 +50,11 @@ PrintDocument buildKdsTicketDocument(
       if (showStation)
         PrintLine.center('${l10n.kdsStationLabel}: ${ticket.stationId}'),
       PrintLine.rule(),
-      // KITCHEN-MEAT-001: the WHOLE-ORDER meat total is the primary top chef
-      // note — one clean, prominent line per unit ("Meat total: 9 patties"),
-      // fenced off by a rule. Money-free; only when the order carries meat.
+      // KITCHEN-MEAT-001 / KITCHEN-COUNT-001: the WHOLE-ORDER kitchen count total
+      // is the primary top chef note — one clean, prominent line per unit using
+      // the generic "Kitchen total: {count} {unit}" copy ("إجمالي التجهيز: 9 قطع
+      // لحم"), fenced off by a rule. Money-free; only when the order carries a
+      // configured count. (Internal name kept as *Meat*.)
       if (ticket.meatTotals.isNotEmpty) ...[
         for (final meat in ticket.meatTotals)
           PrintLine.title(
