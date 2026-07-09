@@ -1557,14 +1557,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuKitchenNoteLabel => 'Kitchen note';
 
   @override
-  String get menuKitchenPrepSection => 'Kitchen prep';
+  String get menuKitchenPrepSection => 'Kitchen counts';
 
   @override
   String get menuKitchenPrepHint =>
-      'What the chef assembles for one item. Optional.';
+      'Kitchen resources one of this item uses (e.g. 1 bun) — added to the kitchen count summary. Optional.';
 
   @override
-  String get menuPrepComponentNameLabel => 'Component';
+  String get menuPrepComponentNameLabel => 'Resource';
 
   @override
   String get menuPrepComponentQuantityLabel => 'Qty';
@@ -1573,7 +1573,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuPrepComponentUnitLabel => 'Unit';
 
   @override
-  String get menuAddPrepComponent => 'Add prep component';
+  String get menuAddPrepComponent => 'Add resource';
 
   @override
   String get menuRemovePrepComponent => 'Remove component';
@@ -1588,7 +1588,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuKitchenMeatQuantityLabel => 'Quantity';
 
   @override
-  String get menuKitchenMeatUnitLabel => 'Unit';
+  String get menuKitchenMeatUnitLabel => 'Resource';
 
   @override
   String get menuSkuLabel => 'SKU (internal code)';

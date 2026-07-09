@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
@@ -55,12 +57,33 @@ class KdsTicketCard extends StatelessWidget {
     required this.onAdvance,
     required this.onRecall,
     this.printStatus,
+    this.onReprint,
+    this.highlightNew = false,
+    this.newArrivalWindow = const Duration(seconds: 60),
     this.now,
     super.key,
   });
 
   final KdsTicketView ticket;
   final AppLocalizations l10n;
+
+  /// KDS-ALERTS-AND-KITCHEN-COUNTS-002 (A1): an always-visible per-card reprint
+  /// action. Non-null (the LIVE board) shows a compact Reprint control in the
+  /// header that re-runs the money-free kitchen print for this ticket through
+  /// the existing printer routing — it never creates an order or changes status.
+  /// Null (demo / bare tests) hides it.
+  final VoidCallback? onReprint;
+
+  /// KDS-ALERTS-AND-KITCHEN-COUNTS-002 (A2): when true, the card shows a subtle,
+  /// self-terminating attention glow so kitchen staff notice a newly-arrived
+  /// order. The live board sets this only while the ticket is freshly in the
+  /// "new" column and within [newArrivalWindow]; it stops on acknowledge (the
+  /// card rebuilds with this false) or when the window elapses.
+  final bool highlightNew;
+
+  /// How long the new-arrival glow runs before it self-stops (A2). The animation
+  /// fades out over this window, so it also stops even without a parent rebuild.
+  final Duration newArrivalWindow;
 
   /// Reference clock for the elapsed pill (DESIGN-001). The board passes ONE
   /// build-time value so every card agrees; null falls back to
@@ -158,6 +181,19 @@ class KdsTicketCard extends StatelessWidget {
                   ],
                   const SizedBox(width: RestoflowSpacing.sm),
                   KdsStatusChip(status: ticket.status),
+                  // A1: the always-visible per-card Reprint control (LIVE board).
+                  // Money-free; re-runs the existing kitchen print, never an
+                  // order/status change.
+                  if (onReprint != null) ...[
+                    const SizedBox(width: RestoflowSpacing.xs),
+                    IconButton(
+                      key: Key('kds-reprint-${ticket.kitchenTicketId}'),
+                      tooltip: l10n.printReprintAction,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.print_outlined),
+                      onPressed: onReprint,
+                    ),
+                  ],
                 ],
               ),
               if (dineIn ||
@@ -205,23 +241,13 @@ class KdsTicketCard extends StatelessWidget {
               const SizedBox(height: RestoflowSpacing.sm),
               const Divider(height: 1),
               const SizedBox(height: RestoflowSpacing.sm),
-              // KITCHEN-MEAT-001: the WHOLE-ORDER meat total is the primary top
-              // chef note — shown first + prominently when any selected option
-              // carries meat.
-              if (ticket.meatTotals.isNotEmpty) ...[
-                _MeatTotalSection(meatTotals: ticket.meatTotals, l10n: l10n),
-                const SizedBox(height: RestoflowSpacing.sm),
-              ],
-              // KITCHEN-PREP-001: the generic prep summary — placed after the
-              // order info and BEFORE the item details. Hidden when no item
-              // carries prep, AND de-emphasised (hidden from the top) when a meat
-              // total exists so the top note stays uncluttered (KITCHEN-MEAT-001).
-              if (ticket.prepSummary.isNotEmpty &&
-                  ticket.meatTotals.isEmpty) ...[
-                _PrepSummarySection(
-                  prepSummary: ticket.prepSummary,
-                  l10n: l10n,
-                ),
+              // KDS-ALERTS-AND-KITCHEN-COUNTS-002: the unified WHOLE-ORDER kitchen
+              // count summary — one prominent line PER RESOURCE (patties, buns,
+              // …), combining the modifier-option and item-base counts. Shown
+              // above the item details; hidden when the order carries no
+              // configured count. Money-free.
+              if (ticket.kitchenCounts.isNotEmpty) ...[
+                _KitchenCountsSection(counts: ticket.kitchenCounts, l10n: l10n),
                 const SizedBox(height: RestoflowSpacing.sm),
               ],
               for (final item in ticket.items)
@@ -295,86 +321,136 @@ class KdsTicketCard extends StatelessWidget {
       ),
     );
 
-    if (!dimmed) return card;
-    return Opacity(opacity: 0.62, child: card);
+    Widget result = card;
+    // A2: a subtle, self-terminating attention glow for a freshly-arrived
+    // ticket (readable on the dark board; never a harsh blink).
+    if (highlightNew) {
+      result = _NewArrivalHighlight(
+        key: Key('kds-new-arrival-${ticket.kitchenTicketId}'),
+        window: newArrivalWindow,
+        color: theme.colorScheme.primary,
+        child: result,
+      );
+    }
+    // Cleared work steps back visually (a bumped ticket dims).
+    if (dimmed) result = Opacity(opacity: 0.62, child: result);
+    return result;
   }
 }
 
-/// KITCHEN-PREP-001: the compact, money-free prep summary — a heading plus one
-/// pill per aggregated component ("Beef patty ×8 pcs"). Shown only when the
-/// ticket carries prep (the card hides the whole block otherwise).
-class _PrepSummarySection extends StatelessWidget {
-  const _PrepSummarySection({required this.prepSummary, required this.l10n});
+/// KDS-ALERTS-AND-KITCHEN-COUNTS-002 (A2): a subtle, ACCESSIBILITY-aware
+/// new-arrival attention glow. A single finite animation over [window] drives a
+/// gentle breathing glow (≈0.7 Hz — well below any seizure threshold) that FADES
+/// OUT over the window, so it self-stops even without a parent rebuild and never
+/// flashes harshly. Under "reduce motion" it renders a static soft outline
+/// instead. Money-free chrome.
+class _NewArrivalHighlight extends StatefulWidget {
+  const _NewArrivalHighlight({
+    required this.child,
+    required this.window,
+    required this.color,
+    super.key,
+  });
 
-  final List<KitchenPrepComponent> prepSummary;
-  final AppLocalizations l10n;
+  final Widget child;
+  final Duration window;
+  final Color color;
+
+  @override
+  State<_NewArrivalHighlight> createState() => _NewArrivalHighlightState();
+}
+
+class _NewArrivalHighlightState extends State<_NewArrivalHighlight>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  /// The breathing period; the number of oscillations = window / this.
+  static const Duration _pulsePeriod = Duration(milliseconds: 1400);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.window)
+      // FINITE: forward once over the whole window, then stop (self-terminating,
+      // pumpAndSettle-safe). No .repeat() — an infinite animation would neither
+      // settle in tests nor stop on the board.
+      ..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      key: const Key('kds-prep-summary'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              Icons.outdoor_grill_outlined,
-              size: RestoflowIconSizes.sm,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(width: RestoflowSpacing.xs),
-            Text(
-              l10n.kdsPrepSummaryLabel,
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: theme.colorScheme.primary,
-              ),
+    // Accessibility: honor the platform "reduce motion" setting — a static soft
+    // outline still draws the eye without any animation.
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          boxShadow: [
+            BoxShadow(
+              color: widget.color.withValues(alpha: 0.45),
+              blurRadius: 10,
+              spreadRadius: 1,
             ),
           ],
         ),
-        const SizedBox(height: RestoflowSpacing.xs),
-        Wrap(
-          spacing: RestoflowSpacing.sm,
-          runSpacing: RestoflowSpacing.xs,
-          children: [
-            for (final component in prepSummary)
-              RestoflowStatusPill(
-                icon: Icons.check_circle_outline,
-                label: _prepLabel(component),
-              ),
-          ],
-        ),
-      ],
+        child: widget.child,
+      );
+    }
+    final cycles = (widget.window.inMilliseconds / _pulsePeriod.inMilliseconds)
+        .clamp(1, 120)
+        .toDouble();
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value; // 0 -> 1 over the window
+        // A breathing 0..1 oscillation that ATTENUATES to 0 as the window ends.
+        final osc = (0.5 + 0.5 * math.sin(t * cycles * 2 * math.pi)) * (1 - t);
+        final glow = osc.clamp(0.0, 1.0);
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+            boxShadow: glow <= 0.02
+                ? null
+                : [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.18 + 0.42 * glow),
+                      blurRadius: 6 + 16 * glow,
+                      spreadRadius: 1 + 2 * glow,
+                    ),
+                  ],
+          ),
+          child: child,
+        );
+      },
+      child: widget.child,
     );
-  }
-
-  /// "name ×N" (or "name ×N unit" when a unit is set). All data + the U+00D7
-  /// symbol — money-free, no localized word (matches the modifier line style).
-  String _prepLabel(KitchenPrepComponent component) {
-    final quantity = formatPrepQuantity(component.quantity);
-    return component.unit.isEmpty
-        ? '${component.name} ×$quantity'
-        : '${component.name} ×$quantity ${component.unit}';
   }
 }
 
-/// KITCHEN-MEAT-001 / KITCHEN-COUNT-001: the WHOLE-ORDER kitchen count total —
-/// the prominent top chef note. One clean line per unit-group, using the generic
-/// "Kitchen total: {count} {unit}" copy (l10n `kdsMeatTotalLabel`; the unit is
-/// owner-written, e.g. "9 قطع لحم" / "6 حبات سمك"). Money-free; shown only when a
-/// selected option carries a configured count. (Internal name kept as *Meat*.)
-class _MeatTotalSection extends StatelessWidget {
-  const _MeatTotalSection({required this.meatTotals, required this.l10n});
+/// KDS-ALERTS-AND-KITCHEN-COUNTS-002: the unified WHOLE-ORDER kitchen count
+/// summary — the prominent top chef note. One clean, bold line PER RESOURCE,
+/// using the generic "Kitchen total: {count} {label}" copy (l10n
+/// `kdsMeatTotalLabel`; the label is owner-written, e.g. "19 قطع لحم" / "7 خبز").
+/// Multiple resources (patties, buns, fish pieces, …) appear together, each
+/// aggregated over the whole order. Money-free; shown only when the order
+/// carries an explicit owner-configured count.
+class _KitchenCountsSection extends StatelessWidget {
+  const _KitchenCountsSection({required this.counts, required this.l10n});
 
-  final List<KitchenMeat> meatTotals;
+  final List<KitchenCount> counts;
   final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      key: const Key('kds-meat-total'),
+      key: const Key('kds-kitchen-counts'),
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
         horizontal: RestoflowSpacing.md,
@@ -388,7 +464,7 @@ class _MeatTotalSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.kebab_dining,
+            Icons.summarize_outlined,
             size: RestoflowIconSizes.md,
             color: theme.colorScheme.onPrimaryContainer,
           ),
@@ -397,11 +473,11 @@ class _MeatTotalSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final meat in meatTotals)
+                for (final count in counts)
                   Text(
                     l10n.kdsMeatTotalLabel(
-                      formatPrepQuantity(meat.quantity),
-                      meat.unit,
+                      formatPrepQuantity(count.quantity),
+                      count.label,
                     ),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w900,

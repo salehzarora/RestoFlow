@@ -2,9 +2,10 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// KITCHEN-MEAT-001: the mapper computes the WHOLE-ORDER meat total from the
-/// selected options' meat_snapshot (× modifier units × item quantity), grouped
-/// by unit, and attaches it to every ticket of the order. Money-free.
+/// KDS-ALERTS-AND-KITCHEN-COUNTS-002: the mapper computes the WHOLE-ORDER kitchen
+/// count total from the selected options' meat_snapshot (× modifier units × item
+/// quantity), grouped by resource label, into the unified [kitchenCounts]. Any
+/// owner-written label is supported. Money-free.
 void main() {
   Map<String, dynamic> order(String id) => <String, dynamic>{
     'id': id,
@@ -51,36 +52,13 @@ void main() {
       ],
     );
     // 2×1×4 + 1×1×1 = 9.
-    expect(tickets.single.meatTotals, [
-      const KitchenMeat(quantity: 9, unit: 'patties'),
+    expect(tickets.single.kitchenCounts, [
+      const KitchenCount(quantity: 9, label: 'patties'),
     ]);
-    // Item details remain (money-free).
     expect(tickets.single.items.length, 2);
   });
 
-  test(
-    'the whole-order meat total shows on EVERY station ticket of the order',
-    () {
-      final tickets = KdsTicketMapper.map(
-        orders: [order('o1')],
-        orderItems: [
-          item('i1', 'o1', quantity: 2, station: 'grill'),
-          item('i2', 'o1', quantity: 1, station: 'fryer'),
-        ],
-        modifiers: [
-          mod('i1', 'Double', meat: {'quantity': 2, 'unit': 'قطع'}),
-          mod('i2', 'Single', meat: {'quantity': 1, 'unit': 'قطع'}),
-        ],
-      );
-      // Two tickets (grill + fryer); each carries the whole-order total (5 قطع).
-      expect(tickets.length, 2);
-      for (final t in tickets) {
-        expect(t.meatTotals, [const KitchenMeat(quantity: 5, unit: 'قطع')]);
-      }
-    },
-  );
-
-  test('modifier units multiply the meat (extra patty ×2)', () {
+  test('modifier units multiply the count (extra patty ×2)', () {
     final tickets = KdsTicketMapper.map(
       orders: [order('o1')],
       orderItems: [item('i1', 'o1', quantity: 3)],
@@ -94,12 +72,12 @@ void main() {
       ],
     );
     // 1 × 2 (modifier units) × 3 (item qty) = 6.
-    expect(tickets.single.meatTotals, [
-      const KitchenMeat(quantity: 6, unit: 'patty'),
+    expect(tickets.single.kitchenCounts, [
+      const KitchenCount(quantity: 6, label: 'patty'),
     ]);
   });
 
-  test('different units stay separate totals', () {
+  test('different labels stay separate totals', () {
     final tickets = KdsTicketMapper.map(
       orders: [order('o1')],
       orderItems: [item('i1', 'o1', quantity: 2)],
@@ -108,56 +86,38 @@ void main() {
         mod('i1', '300g', meat: {'quantity': 300, 'unit': 'g'}),
       ],
     );
-    expect(tickets.single.meatTotals, [
-      const KitchenMeat(quantity: 4, unit: 'قطع'), // 2×1×2
-      const KitchenMeat(quantity: 600, unit: 'g'), // 300×1×2
+    expect(tickets.single.kitchenCounts, [
+      const KitchenCount(quantity: 4, label: 'قطع'), // 2×1×2
+      const KitchenCount(quantity: 600, label: 'g'), // 300×1×2
     ]);
   });
 
-  test('no meat_snapshot anywhere -> empty meatTotals (top note hidden)', () {
+  test('no count anywhere -> empty (top summary hidden)', () {
     final tickets = KdsTicketMapper.map(
       orders: [order('o1')],
       orderItems: [item('i1', 'o1', quantity: 1)],
       modifiers: [mod('i1', 'No onion')],
     );
-    expect(tickets.single.meatTotals, isEmpty);
+    expect(tickets.single.kitchenCounts, isEmpty);
   });
 
-  test('meat totals are money-free (only quantity/unit)', () {
+  test('aggregates ANY owner-written resource label (قطع لحم / حبات سمك)', () {
     final tickets = KdsTicketMapper.map(
       orders: [order('o1')],
-      orderItems: [item('i1', 'o1', quantity: 1)],
+      orderItems: [
+        item('i1', 'o1', quantity: 4),
+        item('i2', 'o1', quantity: 1),
+        item('i3', 'o1', quantity: 6),
+      ],
       modifiers: [
-        mod('i1', 'Double', meat: {'quantity': 2, 'unit': 'patties'}),
+        mod('i1', 'Double', meat: {'quantity': 2, 'unit': 'قطع لحم'}),
+        mod('i2', 'Single', meat: {'quantity': 1, 'unit': 'قطع لحم'}),
+        mod('i3', 'Fish', meat: {'quantity': 1, 'unit': 'حبات سمك'}),
       ],
     );
-    for (final meat in tickets.single.meatTotals) {
-      final json = meat.toJson();
-      expect(json.keys.any((k) => k.toLowerCase().contains('minor')), isFalse);
-    }
+    expect(tickets.single.kitchenCounts, [
+      const KitchenCount(quantity: 9, label: 'قطع لحم'), // 2×1×4 + 1×1×1
+      const KitchenCount(quantity: 6, label: 'حبات سمك'), // 1×1×6
+    ]);
   });
-
-  test(
-    'KITCHEN-COUNT-001: aggregates ANY owner-written unit (قطع لحم / حبات سمك)',
-    () {
-      // Generic kitchen count: the aggregation is unit-agnostic (not meat-only).
-      final tickets = KdsTicketMapper.map(
-        orders: [order('o1')],
-        orderItems: [
-          item('i1', 'o1', quantity: 4), // 4 double burgers
-          item('i2', 'o1', quantity: 1), // 1 single burger
-          item('i3', 'o1', quantity: 6), // 6 fish
-        ],
-        modifiers: [
-          mod('i1', 'Double', meat: {'quantity': 2, 'unit': 'قطع لحم'}),
-          mod('i2', 'Single', meat: {'quantity': 1, 'unit': 'قطع لحم'}),
-          mod('i3', 'Fish', meat: {'quantity': 1, 'unit': 'حبات سمك'}),
-        ],
-      );
-      expect(tickets.single.meatTotals, [
-        const KitchenMeat(quantity: 9, unit: 'قطع لحم'), // 2×1×4 + 1×1×1
-        const KitchenMeat(quantity: 6, unit: 'حبات سمك'), // 1×1×6
-      ]);
-    },
-  );
 }

@@ -22,6 +22,9 @@ class KdsScreen extends StatefulWidget {
     this.appBarActions = const <Widget>[],
     this.showStaleBanner = false,
     this.printStatusFor,
+    this.onReprint,
+    this.enableNewArrivalAlert = false,
+    this.newArrivalWindow = const Duration(seconds: 60),
     super.key,
   });
 
@@ -58,6 +61,20 @@ class KdsScreen extends StatefulWidget {
   /// mode (local-only board, nothing to persist).
   final void Function(KdsTicketView ticket, KitchenTicketStatus to)? onAdvanced;
 
+  /// KDS-ALERTS-AND-KITCHEN-COUNTS-002 (A1): the always-visible per-card reprint
+  /// action (LIVE board); null (demo / bare tests) hides it.
+  final void Function(KdsTicketView ticket)? onReprint;
+
+  /// A2: when true, tickets that ARRIVE in the "new" column DURING this screen's
+  /// life get a subtle attention glow. Off by default so bare test harnesses and
+  /// the demo board never animate; the LIVE board turns it on. Tickets already
+  /// present on the FIRST build are NOT highlighted (no blinking on page load).
+  final bool enableNewArrivalAlert;
+
+  /// A2: how long a new ticket keeps its glow before it self-stops (also stops
+  /// immediately on acknowledge).
+  final Duration newArrivalWindow;
+
   @override
   State<KdsScreen> createState() => _KdsScreenState();
 }
@@ -70,6 +87,40 @@ class _KdsScreenState extends State<KdsScreen> {
 
   /// Last recall audit placeholder produced on this screen (test-accessible).
   RecallAuditEvent? lastRecallEvent;
+
+  /// A2: first-seen time of each ticket while it is in the "new" column. A
+  /// ticket present on the FIRST build is seeded in the PAST (never highlighted,
+  /// so the column does not blink on page load); a ticket that ARRIVES later is
+  /// seeded at now() and highlighted until the window elapses. Pruned when the
+  /// ticket leaves "new" (acknowledged).
+  final Map<String, DateTime> _firstSeenNew = <String, DateTime>{};
+  bool _newArrivalInitialized = false;
+  static final DateTime _seenInThePast = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Computes the ticket ids to highlight this build, updating [_firstSeenNew].
+  Set<String> _computeNewArrivalIds() {
+    if (!widget.enableNewArrivalAlert) return const <String>{};
+    final now = DateTime.now();
+    final currentNewIds = <String>{
+      for (final t in widget.tickets)
+        if (t.status == KitchenTicketStatus.newTicket) t.kitchenTicketId,
+    };
+    if (!_newArrivalInitialized) {
+      for (final id in currentNewIds) {
+        _firstSeenNew[id] = _seenInThePast;
+      }
+      _newArrivalInitialized = true;
+    } else {
+      for (final id in currentNewIds) {
+        _firstSeenNew.putIfAbsent(id, () => now);
+      }
+    }
+    _firstSeenNew.removeWhere((id, _) => !currentNewIds.contains(id));
+    return <String>{
+      for (final entry in _firstSeenNew.entries)
+        if (now.difference(entry.value) < widget.newArrivalWindow) entry.key,
+    };
+  }
 
   /// Advance [ticket] to [to] via the existing forward state-machine edges
   /// (acknowledge / start / mark-ready / bump). Mutates the local view first
@@ -100,6 +151,7 @@ class _KdsScreenState extends State<KdsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
+    final newArrivalIds = _computeNewArrivalIds();
     final body = widget.tickets.isEmpty
         ? KdsStateMessage(
             icon: Icons.restaurant_outlined,
@@ -111,6 +163,9 @@ class _KdsScreenState extends State<KdsScreen> {
             onAdvance: _advance,
             onRecall: widget.allowRecall ? _recall : null,
             printStatusFor: widget.printStatusFor,
+            onReprint: widget.onReprint,
+            newArrivalIds: newArrivalIds,
+            newArrivalWindow: widget.newArrivalWindow,
           );
 
     return Scaffold(

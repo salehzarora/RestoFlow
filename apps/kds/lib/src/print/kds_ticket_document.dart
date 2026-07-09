@@ -50,29 +50,20 @@ PrintDocument buildKdsTicketDocument(
       if (showStation)
         PrintLine.center('${l10n.kdsStationLabel}: ${ticket.stationId}'),
       PrintLine.rule(),
-      // KITCHEN-MEAT-001 / KITCHEN-COUNT-001: the WHOLE-ORDER kitchen count total
-      // is the primary top chef note — one clean, prominent line per unit using
-      // the generic "Kitchen total: {count} {unit}" copy ("إجمالي التجهيز: 9 قطع
-      // لحم"), fenced off by a rule. Money-free; only when the order carries a
-      // configured count. (Internal name kept as *Meat*.)
-      if (ticket.meatTotals.isNotEmpty) ...[
-        for (final meat in ticket.meatTotals)
+      // KDS-ALERTS-AND-KITCHEN-COUNTS-002: the WHOLE-ORDER kitchen count totals
+      // are the primary top chef note — one clean, prominent line PER RESOURCE
+      // using the generic "Kitchen total: {count} {label}" copy ("إجمالي
+      // التجهيز: 19 قطع لحم" / "إجمالي التجهيز: 7 خبز"), fenced off by a rule.
+      // Multiple resources (patties, buns, …) print together. Money-free; only
+      // when the order carries an explicit owner-configured count.
+      if (ticket.kitchenCounts.isNotEmpty) ...[
+        for (final count in ticket.kitchenCounts)
           PrintLine.title(
             l10n.kdsMeatTotalLabel(
-              formatPrepQuantity(meat.quantity),
-              meat.unit,
+              formatPrepQuantity(count.quantity),
+              count.label,
             ),
           ),
-        PrintLine.rule(),
-      ],
-      // KITCHEN-PREP-001: the generic prep summary — after the order info,
-      // before item details. Emitted only when the ticket carries prep AND no
-      // meat total exists (de-emphasised so the top note stays uncluttered —
-      // KITCHEN-MEAT-001). Each line is "name ×N unit" (money-free).
-      if (ticket.prepSummary.isNotEmpty && ticket.meatTotals.isEmpty) ...[
-        PrintLine.center(l10n.kdsTicketPrepHeading),
-        for (final component in ticket.prepSummary)
-          PrintLine.sub(_prepLine(component)),
         PrintLine.rule(),
       ],
       // Items — bold, with a prominent quantity; modifiers + the note indented
@@ -89,14 +80,4 @@ PrintDocument buildKdsTicketDocument(
       ],
     ],
   );
-}
-
-/// KITCHEN-PREP-001: one aggregated prep line — "name ×N" (or "name ×N unit").
-/// Data + the U+00D7 multiplier only; money-free, no localized word (matches
-/// the item/modifier line convention).
-String _prepLine(KitchenPrepComponent component) {
-  final quantity = formatPrepQuantity(component.quantity);
-  return component.unit.isEmpty
-      ? '${component.name} ×$quantity'
-      : '${component.name} ×$quantity ${component.unit}';
 }

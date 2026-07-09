@@ -21,7 +21,7 @@ KdsTicketView _ticket({
   String? customerName,
   String? note,
   String? item,
-  List<KitchenPrepComponent> prepSummary = const <KitchenPrepComponent>[],
+  List<KitchenCount> kitchenCounts = const <KitchenCount>[],
 }) => KdsTicketView(
   kitchenTicketId: 'o1:grill',
   stationId: 'grill',
@@ -39,7 +39,7 @@ KdsTicketView _ticket({
       note: note,
     ),
   ],
-  prepSummary: prepSummary,
+  kitchenCounts: kitchenCounts,
 );
 
 void main() {
@@ -99,71 +99,6 @@ void main() {
       expect(html.contains('₪'), isFalse);
       expect(html.toLowerCase().contains('minor'), isFalse);
     });
-
-    // KITCHEN-PREP-001 --------------------------------------------------------
-    test(
-      'a prep summary prints near the top: a heading + "name ×N unit" lines',
-      () async {
-        final l10n = await _l10n('en');
-        final doc = buildKdsTicketDocument(
-          l10n,
-          _ticket(
-            prepSummary: const [
-              KitchenPrepComponent(
-                name: 'Beef patty',
-                quantity: 8,
-                unit: 'pcs',
-              ),
-              KitchenPrepComponent(name: 'Bun', quantity: 4),
-            ],
-          ),
-        );
-        // The prep heading is a centered line…
-        final headingIdx = doc.lines.indexWhere(
-          (l) =>
-              l.kind == PrintLineKind.center &&
-              l.left == l10n.kdsTicketPrepHeading,
-        );
-        expect(headingIdx, greaterThanOrEqualTo(0));
-        // …and it sits BEFORE the first item line (after order info).
-        final firstItemIdx = doc.lines.indexWhere(
-          (l) => l.kind == PrintLineKind.item,
-        );
-        expect(headingIdx, lessThan(firstItemIdx));
-        // Component lines carry the count inline (money-free, no right column).
-        final prepLines = doc.lines
-            .where((l) => l.kind == PrintLineKind.sub)
-            .map((l) => l.left)
-            .toList();
-        expect(prepLines, contains('Beef patty ×8 pcs'));
-        expect(prepLines, contains('Bun ×4'));
-      },
-    );
-
-    test('no prep summary -> nothing about prep is printed', () async {
-      final l10n = await _l10n('en');
-      final doc = buildKdsTicketDocument(l10n, _ticket());
-      expect(
-        doc.lines.any((l) => l.left == l10n.kdsTicketPrepHeading),
-        isFalse,
-      );
-    });
-
-    test('the prep summary is MONEY-FREE (T-003)', () async {
-      final l10n = await _l10n('en');
-      final doc = buildKdsTicketDocument(
-        l10n,
-        _ticket(
-          prepSummary: const [
-            KitchenPrepComponent(name: 'Beef patty', quantity: 8, unit: 'pcs'),
-          ],
-        ),
-      );
-      final html = documentToHtml(doc);
-      expect(html.contains('₪'), isFalse);
-      expect(html.contains(r'$'), isFalse);
-      expect(html.toLowerCase().contains('minor'), isFalse);
-    });
   });
 
   group('raster Arabic kitchen ticket', () {
@@ -185,33 +120,5 @@ void main() {
       // Money-free: no shekel sign anywhere in the kitchen raster (T-003).
       expect(lines.contains('₪'), isFalse);
     });
-
-    test(
-      'an Arabic prep summary reaches the raster bitmap, money-free',
-      () async {
-        final l10n = await _l10n('ar');
-        final doc = buildKdsTicketDocument(
-          l10n,
-          _ticket(
-            item: 'برجر',
-            prepSummary: const [
-              KitchenPrepComponent(name: 'لحم برجر', quantity: 8, unit: 'قطع'),
-            ],
-          ),
-        );
-        final escpos = kitchenTicketToEscPosDocument(doc);
-        final fake = pp.FakeReceiptRasterizer();
-        final raster = await pp.maybeRasterizeForRtl(escpos, rasterizer: fake);
-
-        expect(raster.lines.whereType<pp.PrintRasterImageLine>(), isNotEmpty);
-        final lines = fake.requests.single.lines.join('\n');
-        expect(
-          lines.contains(l10n.kdsTicketPrepHeading),
-          isTrue,
-        ); // تحضير الطلب
-        expect(lines.contains('لحم برجر ×8 قطع'), isTrue);
-        expect(lines.contains('₪'), isFalse);
-      },
-    );
   });
 }

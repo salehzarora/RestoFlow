@@ -15,7 +15,7 @@ void main() {
     expect(l.menuKitchenMeatSection, 'Kitchen count summary');
     expect(l.menuKitchenMeatEnabledLabel, 'Count in kitchen total');
     expect(l.menuKitchenMeatQuantityLabel, 'Quantity');
-    expect(l.menuKitchenMeatUnitLabel, 'Unit');
+    expect(l.menuKitchenMeatUnitLabel, 'Resource');
     // No user-facing "meat" wording survives.
     for (final s in [
       l.menuKitchenMeatSection,
@@ -41,7 +41,7 @@ void main() {
       expect(l.menuKitchenMeatSection, 'ملخص التجهيز للمطبخ');
       expect(l.menuKitchenMeatEnabledLabel, 'يُحسب في إجمالي التجهيز');
       expect(l.menuKitchenMeatQuantityLabel, 'الكمية');
-      expect(l.menuKitchenMeatUnitLabel, 'الوحدة');
+      expect(l.menuKitchenMeatUnitLabel, 'المورد');
       // The LABELS (no data interpolated) carry no meat word.
       for (final s in [
         l.menuKitchenMeatSection,
@@ -61,7 +61,7 @@ void main() {
     expect(l.menuKitchenMeatSection, 'סיכום הכנה למטבח');
     expect(l.menuKitchenMeatEnabledLabel, 'נכלל בסיכום ההכנה');
     expect(l.menuKitchenMeatQuantityLabel, 'כמות');
-    expect(l.menuKitchenMeatUnitLabel, 'יחידה');
+    expect(l.menuKitchenMeatUnitLabel, 'משאב');
     // No meat word (בשר) in the labels.
     for (final s in [
       l.menuKitchenMeatSection,

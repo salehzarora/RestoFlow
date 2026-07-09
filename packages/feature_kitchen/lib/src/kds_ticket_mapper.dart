@@ -114,10 +114,12 @@ class KdsTicketMapper {
 
     // Group active items into (order, station) tickets.
     final grouped = <String, _TicketBuilder>{};
-    // KITCHEN-MEAT-001: WHOLE-ORDER meat contributions keyed by order id. Meat
-    // is aggregated across ALL of an order's items (not per station) so the
-    // top-of-ticket note is the total meat the kitchen needs for the order.
-    final meatContribsByOrder = <String, List<MeatContribution>>{};
+    // KDS-ALERTS-AND-KITCHEN-COUNTS-002: WHOLE-ORDER count contributions keyed by
+    // order id, unified across BOTH the modifier-option counts (patties, …) AND
+    // the item-base counts (buns, …). Aggregated across ALL of an order's items
+    // (not per station) so the top-of-ticket summary is the total the kitchen
+    // needs for the whole order. Money-free; only explicit owner config feeds it.
+    final countContribsByOrder = <String, List<KitchenCountContribution>>{};
     for (final it in orderItems) {
       if (it['deleted_at'] != null) continue;
       final itemId = it['id'];
@@ -165,22 +167,44 @@ class KdsTicketMapper {
           prepComponents: prepComponents,
         ),
       );
-      // KITCHEN-MEAT-001: this item's meat (already × modifier units) × the
-      // item quantity, accumulated for the whole order.
-      final itemMeat = meatByItem[itemId];
-      if (itemMeat != null && quantity > 0) {
-        final contribs = meatContribsByOrder[orderId] ??= <MeatContribution>[];
-        for (final meat in itemMeat) {
-          contribs.add(MeatContribution(meat: meat, factor: quantity));
+      // KDS-ALERTS-AND-KITCHEN-COUNTS-002: accumulate this item's counted-resource
+      // contributions for the whole order — factor = the ordered item quantity.
+      if (quantity > 0) {
+        final contribs = countContribsByOrder[orderId] ??=
+            <KitchenCountContribution>[];
+        // Per-OPTION counts (already × modifier units): label = the resource the
+        // owner typed as the option's count unit (e.g. "قطع لحم").
+        final itemMeat = meatByItem[itemId];
+        if (itemMeat != null) {
+          for (final meat in itemMeat) {
+            contribs.add(
+              KitchenCountContribution(
+                quantity: meat.quantity,
+                label: meat.unit,
+                factor: quantity,
+              ),
+            );
+          }
+        }
+        // Per-ITEM base counts (buns, wraps, trays, …): label = the prep
+        // component's resource name (+ unit when the owner set one).
+        for (final prep in prepComponents) {
+          contribs.add(
+            KitchenCountContribution(
+              quantity: prep.quantity,
+              label: _countLabel(prep),
+              factor: quantity,
+            ),
+          );
         }
       }
     }
 
-    // KITCHEN-MEAT-001: the whole-order meat total per order (grouped by unit),
-    // attached to every ticket of that order below.
-    final meatTotalsByOrder = <String, List<KitchenMeat>>{
-      for (final entry in meatContribsByOrder.entries)
-        entry.key: aggregateMeatByUnit(entry.value),
+    // KDS-ALERTS-AND-KITCHEN-COUNTS-002: the whole-order count totals per order
+    // (grouped by resource label), attached to every ticket of that order below.
+    final kitchenCountsByOrder = <String, List<KitchenCount>>{
+      for (final entry in countContribsByOrder.entries)
+        entry.key: aggregateKitchenCounts(entry.value),
     };
 
     final tickets =
@@ -199,19 +223,10 @@ class KdsTicketMapper {
                 customerName: b.info.customerName,
                 notes: b.info.notes,
                 submittedAt: b.info.submittedAt,
-                // KITCHEN-PREP-001: aggregate this ticket's prep across its
-                // items (each item's per-unit components × its quantity),
-                // grouped + stable-ordered. Money-free.
-                prepSummary: aggregateKitchenPrep([
-                  for (final item in b.items)
-                    KitchenPrepLine(
-                      components: item.prepComponents,
-                      quantity: item.quantity,
-                    ),
-                ]),
-                // KITCHEN-MEAT-001: the whole-order meat total shown at the top.
-                meatTotals:
-                    meatTotalsByOrder[b.orderId] ?? const <KitchenMeat>[],
+                // KDS-ALERTS-AND-KITCHEN-COUNTS-002: the unified whole-order
+                // count totals (patties + buns + …) shown at the top. Money-free.
+                kitchenCounts:
+                    kitchenCountsByOrder[b.orderId] ?? const <KitchenCount>[],
               ),
             )
             .toList()
@@ -230,6 +245,15 @@ class KdsTicketMapper {
     }
     if (clientCreatedAt is String) return DateTime.tryParse(clientCreatedAt);
     return null;
+  }
+
+  /// The resource label for an item-base prep component: its [name], plus the
+  /// [unit] when the owner set one (e.g. "خبز" / "Fish pcs"). This is the key the
+  /// whole-order counts group by, so item-base counts and modifier-option counts
+  /// with the same label merge into one total.
+  static String _countLabel(KitchenPrepComponent component) {
+    final unit = component.unit.trim();
+    return unit.isEmpty ? component.name : '${component.name} $unit';
   }
 
   /// Minimal order-status -> kitchen-ticket-status projection.
