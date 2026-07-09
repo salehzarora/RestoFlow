@@ -3258,4 +3258,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posRecentSyncFailed => 'Not synced';
+
+  @override
+  String get posCartEditItem => 'Edit';
+
+  @override
+  String get posEditSaveChanges => 'Save changes';
+
+  @override
+  String get kdsNewOrderBadge => 'New order';
+
+  @override
+  String get posReceiptPrintedNote => 'Printed';
 }

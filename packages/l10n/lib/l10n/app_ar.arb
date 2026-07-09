@@ -1009,5 +1009,9 @@
   "posRecentReprintStarted": "جارٍ إعادة طباعة الإيصال…",
   "posUnpaidChip": "غير مدفوع",
   "posRecentSyncPending": "جارٍ المزامنة…",
-  "posRecentSyncFailed": "لم تتم المزامنة"
+  "posRecentSyncFailed": "لم تتم المزامنة",
+  "posCartEditItem": "تعديل",
+  "posEditSaveChanges": "حفظ التعديلات",
+  "kdsNewOrderBadge": "طلب جديد",
+  "posReceiptPrintedNote": "تمت الطباعة"
 }

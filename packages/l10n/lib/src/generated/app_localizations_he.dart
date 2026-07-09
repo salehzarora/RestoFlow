@@ -3215,4 +3215,16 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posRecentSyncFailed => 'לא סונכרן';
+
+  @override
+  String get posCartEditItem => 'עריכה';
+
+  @override
+  String get posEditSaveChanges => 'שמירת שינויים';
+
+  @override
+  String get kdsNewOrderBadge => 'הזמנה חדשה';
+
+  @override
+  String get posReceiptPrintedNote => 'הודפס';
 }

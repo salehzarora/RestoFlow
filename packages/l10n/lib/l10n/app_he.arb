@@ -1009,5 +1009,9 @@
   "posRecentReprintStarted": "מדפיס קבלה מחדש…",
   "posUnpaidChip": "לא שולם",
   "posRecentSyncPending": "מסנכרן…",
-  "posRecentSyncFailed": "לא סונכרן"
+  "posRecentSyncFailed": "לא סונכרן",
+  "posCartEditItem": "עריכה",
+  "posEditSaveChanges": "שמירת שינויים",
+  "kdsNewOrderBadge": "הזמנה חדשה",
+  "posReceiptPrintedNote": "הודפס"
 }

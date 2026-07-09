@@ -9,6 +9,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/payment.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
+import '../state/receipt_print_controller.dart';
 import '../state/submitted_order_view.dart';
 import 'receipt_print_preview.dart';
 
@@ -28,6 +29,14 @@ class ReceiptPreview extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+    // TABLET-UX-001 (E): the receipt footer note must reflect the ACTUAL print
+    // result, not a static "printer not connected" line that contradicts a
+    // successful print. Watch this order's receipt print job.
+    final printStatus = ref.watch(
+      receiptPrintControllerProvider.select(
+        (jobs) => jobs[order.orderNumber]?.status,
+      ),
+    );
     final theme = Theme.of(context);
     final currency = payment.currencyCode;
     final dineIn = order.orderType == OrderType.dineIn;
@@ -177,9 +186,15 @@ class ReceiptPreview extends ConsumerWidget {
             if (isDemo) ...[
               _Note(message: l10n.posReceiptProvisionalNote),
               _Note(message: l10n.posReceiptDemoNote),
-            ] else
-              // Real mode: the number above IS the server receipt; the only
-              // honest caveat left is that no hardware printer is connected.
+            ] else if (printStatus == PrintJobStatus.sentToPrinter ||
+                printStatus == PrintJobStatus.printed)
+              // TABLET-UX-001 (E): the print actually succeeded — say so, and
+              // never leave the stale "printer not connected" note behind.
+              _Note(message: l10n.posReceiptPrintedNote)
+            else if (printStatus == PrintJobStatus.notConfigured)
+              // Honest ONLY when there is genuinely no printer configured; a
+              // failed/pending job is surfaced (with Retry) by the print-status
+              // line under the receipt, so this note stays quiet then.
               _Note(message: l10n.posReceiptNoPrinterNote),
             const SizedBox(height: RestoflowSpacing.sm),
             OutlinedButton.icon(

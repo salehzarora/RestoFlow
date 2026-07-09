@@ -3237,4 +3237,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posRecentSyncFailed => 'لم تتم المزامنة';
+
+  @override
+  String get posCartEditItem => 'تعديل';
+
+  @override
+  String get posEditSaveChanges => 'حفظ التعديلات';
+
+  @override
+  String get kdsNewOrderBadge => 'طلب جديد';
+
+  @override
+  String get posReceiptPrintedNote => 'تمت الطباعة';
 }

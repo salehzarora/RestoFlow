@@ -116,6 +116,23 @@ void main() {
     expect(gotPin, '1234');
   });
 
+  testWidgets('TABLET-UX-001 (D): the PIN field suppresses the soft keyboard '
+      '(TextInputType.none) while staying editable', (tester) async {
+    await _pump(
+      tester,
+      staff: _FakeStaff(const Success(_staff)),
+      onStart: (_, _) async => null,
+    );
+    await tester.tap(find.byKey(const Key('pin-staff-emp-1')));
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(find.byKey(const Key('pin-input')));
+    // No system keyboard is requested — the app's on-screen keypad is used —
+    // but the field stays editable (hardware keyboard + enterText still work).
+    expect(field.keyboardType, TextInputType.none);
+    expect(field.readOnly, isFalse);
+  });
+
   testWidgets('a wrong PIN shows the safe error and stays on the pad', (
     tester,
   ) async {

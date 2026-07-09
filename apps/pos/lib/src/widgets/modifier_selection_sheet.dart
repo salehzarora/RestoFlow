@@ -36,6 +36,9 @@ class ModifierSelectionSheet extends StatefulWidget {
     required this.currencyCode,
     required this.onConfirm,
     this.category,
+    this.initialSelections = const <SelectedModifier>[],
+    this.initialNote,
+    this.isEdit = false,
     super.key,
   });
 
@@ -53,6 +56,18 @@ class ModifierSelectionSheet extends StatefulWidget {
   /// to the demo lookup, mirroring [MenuItemCard].
   final DemoCategory? category;
 
+  /// TABLET-UX-001 (A): when EDITING an existing cart line, its current selected
+  /// modifiers (matched back to [groups] by option id) prefill the sheet. Empty
+  /// (the default) is the normal add flow — nothing preselected.
+  final List<SelectedModifier> initialSelections;
+
+  /// TABLET-UX-001 (A): the cart line's current per-item note to prefill (edit).
+  final String? initialNote;
+
+  /// TABLET-UX-001 (A): true when reopened to EDIT a cart line — the confirm
+  /// button reads "Save changes" (saving REPLACES the line, never duplicates it).
+  final bool isEdit;
+
   static Future<void> show(
     BuildContext context, {
     required DemoMenuItem item,
@@ -61,6 +76,9 @@ class ModifierSelectionSheet extends StatefulWidget {
     required void Function(List<SelectedModifier> selections, String? note)
     onConfirm,
     DemoCategory? category,
+    List<SelectedModifier> initialSelections = const <SelectedModifier>[],
+    String? initialNote,
+    bool isEdit = false,
   }) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -71,6 +89,9 @@ class ModifierSelectionSheet extends StatefulWidget {
       currencyCode: currencyCode,
       onConfirm: onConfirm,
       category: category,
+      initialSelections: initialSelections,
+      initialNote: initialNote,
+      isEdit: isEdit,
     ),
   );
 
@@ -85,6 +106,27 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
 
   /// The optional per-item cashier note ("بدون بصل").
   final TextEditingController _noteController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // TABLET-UX-001 (A): prefill from the cart line being edited. Each initial
+    // selection is matched back to its group by option id (a SelectedModifier
+    // snapshot carries the option id + its taken quantity), so re-picking works
+    // against the live groups. The note is restored verbatim.
+    for (final selection in widget.initialSelections) {
+      for (final group in widget.groups) {
+        if (group.options.any((o) => o.id == selection.optionId)) {
+          (_selected[group.id] ??= <String, int>{})[selection.optionId] =
+              selection.quantity;
+          break;
+        }
+      }
+    }
+    if (widget.initialNote != null) {
+      _noteController.text = widget.initialNote!;
+    }
+  }
 
   @override
   void dispose() {
@@ -399,8 +441,16 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                           Navigator.of(context).pop();
                         }
                       : null,
-                  icon: const Icon(Icons.add_shopping_cart),
-                  label: Text(l10n.posAddToCartWithTotal(totalText)),
+                  // TABLET-UX-001 (A): "Save changes" when editing an existing
+                  // cart line (it replaces the line); the add flow is unchanged.
+                  icon: Icon(
+                    widget.isEdit ? Icons.check : Icons.add_shopping_cart,
+                  ),
+                  label: Text(
+                    widget.isEdit
+                        ? l10n.posEditSaveChanges
+                        : l10n.posAddToCartWithTotal(totalText),
+                  ),
                   style: RestoflowButtonStyles.big(context),
                 ),
               ),
