@@ -3054,4 +3054,156 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get kdsPrinterBluetoothPermissionRequired =>
       'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.';
+
+  @override
+  String get dashboardNavOrders => 'Orders';
+
+  @override
+  String get ordersHistoryTitle => 'Order history';
+
+  @override
+  String get ordersHistorySubtitle => 'Review completed and in-progress orders';
+
+  @override
+  String get ordersSearchHint => 'Search order #, customer, or table';
+
+  @override
+  String get ordersRangeToday => 'Today';
+
+  @override
+  String get ordersRangeYesterday => 'Yesterday';
+
+  @override
+  String get ordersRangeLast7 => 'Last 7 days';
+
+  @override
+  String get ordersRangeLast30 => 'Last 30 days';
+
+  @override
+  String get ordersFilterStatus => 'Status';
+
+  @override
+  String get ordersFilterType => 'Type';
+
+  @override
+  String get ordersFilterPayment => 'Payment';
+
+  @override
+  String get ordersStatusAll => 'All statuses';
+
+  @override
+  String get ordersStatusDraft => 'Draft';
+
+  @override
+  String get ordersStatusSubmitted => 'Submitted';
+
+  @override
+  String get ordersStatusAccepted => 'Accepted';
+
+  @override
+  String get ordersStatusPreparing => 'Preparing';
+
+  @override
+  String get ordersStatusReady => 'Ready';
+
+  @override
+  String get ordersStatusServed => 'Served';
+
+  @override
+  String get ordersStatusCompleted => 'Completed';
+
+  @override
+  String get ordersStatusCancelled => 'Cancelled';
+
+  @override
+  String get ordersStatusVoided => 'Voided';
+
+  @override
+  String get ordersTypeAll => 'All types';
+
+  @override
+  String get ordersPaymentAll => 'All payments';
+
+  @override
+  String get ordersEmpty => 'No orders found';
+
+  @override
+  String get ordersEmptyHint =>
+      'Try a different date range or clear the filters.';
+
+  @override
+  String get ordersError => 'Couldn\'t load orders';
+
+  @override
+  String get ordersErrorHint => 'Check your connection and try again.';
+
+  @override
+  String get ordersLoadMore => 'Load more';
+
+  @override
+  String get ordersRefresh => 'Refresh';
+
+  @override
+  String ordersItemsCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get ordersCustomerLabel => 'Customer';
+
+  @override
+  String get ordersTimeLabel => 'Time';
+
+  @override
+  String get ordersStaffLabel => 'Served by';
+
+  @override
+  String get ordersBranchLabel => 'Branch';
+
+  @override
+  String get ordersSubtotalLabel => 'Subtotal';
+
+  @override
+  String get ordersDiscountLabel => 'Discount';
+
+  @override
+  String get ordersTaxLabel => 'Tax';
+
+  @override
+  String get ordersChangeLabel => 'Change';
+
+  @override
+  String get ordersDetailItems => 'Items';
+
+  @override
+  String get ordersDetailPayment => 'Payment';
+
+  @override
+  String get ordersDetailKitchen => 'Kitchen';
+
+  @override
+  String get ordersDetailInfo => 'Order';
+
+  @override
+  String get ordersCopyCode => 'Copy order number';
+
+  @override
+  String get ordersCopied => 'Copied';
+
+  @override
+  String get ordersPrintFromBrowser => 'Print from browser';
+
+  @override
+  String get ordersReprintFromPosHint =>
+      'To use the cashier printer, reprint from the POS device';
+
+  @override
+  String get ordersReprintFromKdsHint =>
+      'For a hardware kitchen ticket, use KDS reprint on the kitchen device';
+
+  @override
+  String get ordersDemoNotice => 'Demo orders — not loaded from a backend.';
+
+  @override
+  String get ordersUnavailable => 'Unavailable';
 }

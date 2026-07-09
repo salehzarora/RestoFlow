@@ -5727,6 +5727,300 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bluetooth permission is required. Allow it for RestoFlow in Android settings, then refresh.'**
   String get kdsPrinterBluetoothPermissionRequired;
+
+  /// Dashboard left-nav label for the order-history surface (ORDERS-HISTORY-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Orders'**
+  String get dashboardNavOrders;
+
+  /// ORDERS-HISTORY-001 order-history page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Order history'**
+  String get ordersHistoryTitle;
+
+  /// ORDERS-HISTORY-001 order-history page subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review completed and in-progress orders'**
+  String get ordersHistorySubtitle;
+
+  /// ORDERS-HISTORY-001 search box hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search order #, customer, or table'**
+  String get ordersSearchHint;
+
+  /// Order-history date range: today.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get ordersRangeToday;
+
+  /// Order-history date range: yesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get ordersRangeYesterday;
+
+  /// Order-history date range: last 7 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get ordersRangeLast7;
+
+  /// Order-history date range: last 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 30 days'**
+  String get ordersRangeLast30;
+
+  /// Order-history status filter label.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get ordersFilterStatus;
+
+  /// Order-history order-type filter label.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get ordersFilterType;
+
+  /// Order-history payment filter label.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get ordersFilterPayment;
+
+  /// Order-history status filter: all.
+  ///
+  /// In en, this message translates to:
+  /// **'All statuses'**
+  String get ordersStatusAll;
+
+  /// Order status: draft.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get ordersStatusDraft;
+
+  /// Order status: submitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted'**
+  String get ordersStatusSubmitted;
+
+  /// Order status: accepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted'**
+  String get ordersStatusAccepted;
+
+  /// Order status: preparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing'**
+  String get ordersStatusPreparing;
+
+  /// Order status: ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get ordersStatusReady;
+
+  /// Order status: served.
+  ///
+  /// In en, this message translates to:
+  /// **'Served'**
+  String get ordersStatusServed;
+
+  /// Order status: completed.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get ordersStatusCompleted;
+
+  /// Order status: cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get ordersStatusCancelled;
+
+  /// Order status: voided.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get ordersStatusVoided;
+
+  /// Order-history order-type filter: all.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get ordersTypeAll;
+
+  /// Order-history payment filter: all.
+  ///
+  /// In en, this message translates to:
+  /// **'All payments'**
+  String get ordersPaymentAll;
+
+  /// Order-history empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders found'**
+  String get ordersEmpty;
+
+  /// Order-history empty state hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Try a different date range or clear the filters.'**
+  String get ordersEmptyHint;
+
+  /// Order-history error state title.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load orders'**
+  String get ordersError;
+
+  /// Order-history error state hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get ordersErrorHint;
+
+  /// Order-history load-more button.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get ordersLoadMore;
+
+  /// Order-history refresh action.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get ordersRefresh;
+
+  /// Order-history line count for a row.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String ordersItemsCount(int count);
+
+  /// Order detail/receipt: customer name label.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get ordersCustomerLabel;
+
+  /// Order detail: time label.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get ordersTimeLabel;
+
+  /// Order detail/receipt: staff who took the order.
+  ///
+  /// In en, this message translates to:
+  /// **'Served by'**
+  String get ordersStaffLabel;
+
+  /// Order detail: branch label.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch'**
+  String get ordersBranchLabel;
+
+  /// Receipt/detail subtotal label.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtotal'**
+  String get ordersSubtotalLabel;
+
+  /// Receipt/detail discount label.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount'**
+  String get ordersDiscountLabel;
+
+  /// Receipt/detail tax label.
+  ///
+  /// In en, this message translates to:
+  /// **'Tax'**
+  String get ordersTaxLabel;
+
+  /// Receipt change-due label.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get ordersChangeLabel;
+
+  /// Order detail: items section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get ordersDetailItems;
+
+  /// Order detail: payment section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get ordersDetailPayment;
+
+  /// Order detail: money-free kitchen section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen'**
+  String get ordersDetailKitchen;
+
+  /// Order detail: order-info section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Order'**
+  String get ordersDetailInfo;
+
+  /// Order detail: copy the order code to the clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy order number'**
+  String get ordersCopyCode;
+
+  /// Order detail: copied-to-clipboard confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get ordersCopied;
+
+  /// Reprint center: print the preview from the browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Print from browser'**
+  String get ordersPrintFromBrowser;
+
+  /// Reprint center: honest note that a hardware receipt reprint happens on the paired POS device.
+  ///
+  /// In en, this message translates to:
+  /// **'To use the cashier printer, reprint from the POS device'**
+  String get ordersReprintFromPosHint;
+
+  /// Reprint center: honest note that a hardware kitchen-ticket reprint happens on the paired KDS device.
+  ///
+  /// In en, this message translates to:
+  /// **'For a hardware kitchen ticket, use KDS reprint on the kitchen device'**
+  String get ordersReprintFromKdsHint;
+
+  /// Order-history demo-mode banner.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo orders — not loaded from a backend.'**
+  String get ordersDemoNotice;
+
+  /// Order detail: a value that is not available.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get ordersUnavailable;
 }
 
 class _AppLocalizationsDelegate

@@ -3033,4 +3033,155 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get kdsPrinterBluetoothPermissionRequired =>
       'إذن البلوتوث مطلوب. اسمح به لتطبيق RestoFlow في إعدادات أندرويد ثم حدّث.';
+
+  @override
+  String get dashboardNavOrders => 'الطلبات';
+
+  @override
+  String get ordersHistoryTitle => 'سجل الطلبات';
+
+  @override
+  String get ordersHistorySubtitle => 'مراجعة الطلبات المكتملة والجارية';
+
+  @override
+  String get ordersSearchHint => 'ابحث برقم الطلب أو العميل أو الطاولة';
+
+  @override
+  String get ordersRangeToday => 'اليوم';
+
+  @override
+  String get ordersRangeYesterday => 'أمس';
+
+  @override
+  String get ordersRangeLast7 => 'آخر ٧ أيام';
+
+  @override
+  String get ordersRangeLast30 => 'آخر ٣٠ يومًا';
+
+  @override
+  String get ordersFilterStatus => 'الحالة';
+
+  @override
+  String get ordersFilterType => 'النوع';
+
+  @override
+  String get ordersFilterPayment => 'الدفع';
+
+  @override
+  String get ordersStatusAll => 'كل الحالات';
+
+  @override
+  String get ordersStatusDraft => 'مسودة';
+
+  @override
+  String get ordersStatusSubmitted => 'مُرسَل';
+
+  @override
+  String get ordersStatusAccepted => 'مقبول';
+
+  @override
+  String get ordersStatusPreparing => 'قيد التحضير';
+
+  @override
+  String get ordersStatusReady => 'جاهز';
+
+  @override
+  String get ordersStatusServed => 'تم التقديم';
+
+  @override
+  String get ordersStatusCompleted => 'مكتمل';
+
+  @override
+  String get ordersStatusCancelled => 'ملغى';
+
+  @override
+  String get ordersStatusVoided => 'مُبطَل';
+
+  @override
+  String get ordersTypeAll => 'كل الأنواع';
+
+  @override
+  String get ordersPaymentAll => 'كل المدفوعات';
+
+  @override
+  String get ordersEmpty => 'لا توجد طلبات';
+
+  @override
+  String get ordersEmptyHint => 'جرّب نطاقًا زمنيًا آخر أو امسح عوامل التصفية.';
+
+  @override
+  String get ordersError => 'تعذّر تحميل الطلبات';
+
+  @override
+  String get ordersErrorHint => 'تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
+  String get ordersLoadMore => 'تحميل المزيد';
+
+  @override
+  String get ordersRefresh => 'تحديث';
+
+  @override
+  String ordersItemsCount(int count) {
+    return '$count عناصر';
+  }
+
+  @override
+  String get ordersCustomerLabel => 'العميل';
+
+  @override
+  String get ordersTimeLabel => 'الوقت';
+
+  @override
+  String get ordersStaffLabel => 'بواسطة';
+
+  @override
+  String get ordersBranchLabel => 'الفرع';
+
+  @override
+  String get ordersSubtotalLabel => 'المجموع الفرعي';
+
+  @override
+  String get ordersDiscountLabel => 'الخصم';
+
+  @override
+  String get ordersTaxLabel => 'الضريبة';
+
+  @override
+  String get ordersChangeLabel => 'الباقي';
+
+  @override
+  String get ordersDetailItems => 'الأصناف';
+
+  @override
+  String get ordersDetailPayment => 'الدفع';
+
+  @override
+  String get ordersDetailKitchen => 'المطبخ';
+
+  @override
+  String get ordersDetailInfo => 'الطلب';
+
+  @override
+  String get ordersCopyCode => 'نسخ رقم الطلب';
+
+  @override
+  String get ordersCopied => 'تم النسخ';
+
+  @override
+  String get ordersPrintFromBrowser => 'طباعة من المتصفح';
+
+  @override
+  String get ordersReprintFromPosHint =>
+      'لاستخدام طابعة الكاشير، أعد الطباعة من جهاز POS';
+
+  @override
+  String get ordersReprintFromKdsHint =>
+      'لتذكرة مطبخ ورقية، استخدم إعادة الطباعة على جهاز KDS في المطبخ';
+
+  @override
+  String get ordersDemoNotice => 'طلبات تجريبية — غير محمّلة من الخادم.';
+
+  @override
+  String get ordersUnavailable => 'غير متوفر';
 }

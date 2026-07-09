@@ -13,6 +13,7 @@ import 'admin/real_admin_views.dart';
 import 'admin/supabase_settings_repository.dart';
 import 'dashboard_home_screen.dart';
 import 'devices/device_pairing_panel.dart';
+import 'orders/order_history_screen.dart';
 import 'printers/printers_repository.dart';
 import 'printers/printers_screen.dart';
 import 'setup/setup_center.dart';
@@ -286,6 +287,7 @@ class _DashboardShellState extends State<DashboardShell> {
         // real membership WITHOUT it falls back to the honest not-connected
         // state. Demo mode keeps the labelled demo surface.
         6 => _usersSurface(),
+        7 => _ordersSurface(),
         _ =>
           widget.membership == null
               ? _adminSurface(
@@ -411,6 +413,23 @@ class _DashboardShellState extends State<DashboardShell> {
           ),
         Expanded(child: report),
       ],
+    );
+  }
+
+  /// Orders: the order-history + reprint-center surface (ORDERS-HISTORY-001).
+  /// Reads the real `owner_order_history` / `owner_order_detail` RPCs through the
+  /// scoped membership + authenticated transport (real mode); demo mode shows the
+  /// computed demo dataset with an honest banner. Same ProviderScope wiring as
+  /// the Overview so the order-history seam picks up the scope + transport.
+  Widget _ordersSurface() {
+    return ProviderScope(
+      overrides: [
+        dashboardMembershipProvider.overrideWithValue(widget.membership),
+        dashboardAuthTransportProvider.overrideWithValue(
+          widget.reportsTransport,
+        ),
+      ],
+      child: const OrderHistoryScreen(),
     );
   }
 
@@ -595,6 +614,11 @@ class _DashboardShellState extends State<DashboardShell> {
       icon: Icons.group_outlined,
       selectedIcon: Icons.group,
       label: l10n.dashboardNavUsers,
+    ),
+    _NavItem(
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long,
+      label: l10n.dashboardNavOrders,
     ),
     _NavItem(
       icon: Icons.tune_outlined,
