@@ -3011,4 +3011,155 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get kdsPrinterBluetoothPermissionRequired =>
       'נדרשת הרשאת Bluetooth. אפשר אותה עבור RestoFlow בהגדרות Android ואז רענן.';
+
+  @override
+  String get dashboardNavOrders => 'הזמנות';
+
+  @override
+  String get ordersHistoryTitle => 'היסטוריית הזמנות';
+
+  @override
+  String get ordersHistorySubtitle => 'עיון בהזמנות שהושלמו ובביצוע';
+
+  @override
+  String get ordersSearchHint => 'חיפוש לפי מספר הזמנה, לקוח או שולחן';
+
+  @override
+  String get ordersRangeToday => 'היום';
+
+  @override
+  String get ordersRangeYesterday => 'אתמול';
+
+  @override
+  String get ordersRangeLast7 => '7 הימים האחרונים';
+
+  @override
+  String get ordersRangeLast30 => '30 הימים האחרונים';
+
+  @override
+  String get ordersFilterStatus => 'סטטוס';
+
+  @override
+  String get ordersFilterType => 'סוג';
+
+  @override
+  String get ordersFilterPayment => 'תשלום';
+
+  @override
+  String get ordersStatusAll => 'כל הסטטוסים';
+
+  @override
+  String get ordersStatusDraft => 'טיוטה';
+
+  @override
+  String get ordersStatusSubmitted => 'נשלח';
+
+  @override
+  String get ordersStatusAccepted => 'התקבל';
+
+  @override
+  String get ordersStatusPreparing => 'בהכנה';
+
+  @override
+  String get ordersStatusReady => 'מוכן';
+
+  @override
+  String get ordersStatusServed => 'הוגש';
+
+  @override
+  String get ordersStatusCompleted => 'הושלם';
+
+  @override
+  String get ordersStatusCancelled => 'בוטל';
+
+  @override
+  String get ordersStatusVoided => 'בוטל (ביטול)';
+
+  @override
+  String get ordersTypeAll => 'כל הסוגים';
+
+  @override
+  String get ordersPaymentAll => 'כל התשלומים';
+
+  @override
+  String get ordersEmpty => 'לא נמצאו הזמנות';
+
+  @override
+  String get ordersEmptyHint => 'נסה טווח תאריכים אחר או נקה את המסננים.';
+
+  @override
+  String get ordersError => 'לא ניתן לטעון הזמנות';
+
+  @override
+  String get ordersErrorHint => 'בדוק את החיבור ונסה שוב.';
+
+  @override
+  String get ordersLoadMore => 'טען עוד';
+
+  @override
+  String get ordersRefresh => 'רענן';
+
+  @override
+  String ordersItemsCount(int count) {
+    return '$count פריטים';
+  }
+
+  @override
+  String get ordersCustomerLabel => 'לקוח';
+
+  @override
+  String get ordersTimeLabel => 'שעה';
+
+  @override
+  String get ordersStaffLabel => 'טופל על ידי';
+
+  @override
+  String get ordersBranchLabel => 'סניף';
+
+  @override
+  String get ordersSubtotalLabel => 'סכום ביניים';
+
+  @override
+  String get ordersDiscountLabel => 'הנחה';
+
+  @override
+  String get ordersTaxLabel => 'מס';
+
+  @override
+  String get ordersChangeLabel => 'עודף';
+
+  @override
+  String get ordersDetailItems => 'פריטים';
+
+  @override
+  String get ordersDetailPayment => 'תשלום';
+
+  @override
+  String get ordersDetailKitchen => 'מטבח';
+
+  @override
+  String get ordersDetailInfo => 'הזמנה';
+
+  @override
+  String get ordersCopyCode => 'העתק מספר הזמנה';
+
+  @override
+  String get ordersCopied => 'הועתק';
+
+  @override
+  String get ordersPrintFromBrowser => 'הדפסה מהדפדפן';
+
+  @override
+  String get ordersReprintFromPosHint =>
+      'להדפסה במדפסת קופה, הדפס מחדש ממכשיר POS';
+
+  @override
+  String get ordersReprintFromKdsHint =>
+      'להדפסת כרטיס מטבח פיזי, השתמש בהדפסה חוזרת במסך המטבח (KDS)';
+
+  @override
+  String get ordersDemoNotice => 'הזמנות הדגמה — לא נטענו משרת.';
+
+  @override
+  String get ordersUnavailable => 'לא זמין';
 }
