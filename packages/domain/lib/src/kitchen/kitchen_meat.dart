@@ -1,19 +1,26 @@
-/// KITCHEN-MEAT-001 — the owner-configured MEAT contribution of a modifier
-/// option + the whole-order meat rollup shown at the top of the KDS.
+/// KITCHEN-MEAT-001 — the owner-configured kitchen-COUNT contribution of a
+/// modifier option + the whole-order count rollup shown at the top of the KDS.
+///
+/// KITCHEN-COUNT-001: the INTERNAL names ([KitchenMeat], `kitchen_meat`,
+/// `meat_snapshot`) are kept for backwards compatibility, but the feature is a
+/// GENERIC kitchen count — the owner writes any unit (قطع لحم / حبات سمك / خبز /
+/// سيخ / patties / buns / skewers …) and the USER-FACING copy is "Kitchen total"
+/// (l10n `kdsMeatTotalLabel`), not meat-specific.
 ///
 /// A restaurant configures, per modifier option (e.g. a Size group's Single /
-/// Double, or an "extra patty" add), how much meat ONE selection contributes
+/// Double, or an "extra patty" add), how much ONE selection contributes
 /// ([KitchenMeat] = {quantity, unit}). The KDS then shows a compact WHOLE-ORDER
-/// meat total ("Meat total: 9 patties") as a quick chef note — distinct from the
-/// generic [KitchenPrepComponent] prep summary (KITCHEN-PREP-001).
+/// count total ("Kitchen total: 9 قطع لحم") as a quick chef note — distinct from
+/// the generic [KitchenPrepComponent] prep summary (KITCHEN-PREP-001).
 ///
 /// DISPLAY / PREP metadata only — NEVER money (DECISION D-007): [quantity] is a
 /// COUNT and [unit] is free text. Nothing is derived from an option NAME or a
 /// PRICE — only what the owner explicitly configured. No burger logic is
-/// hardcoded; the unit ("قطع", "g", …) is per-restaurant data.
+/// hardcoded; the unit ("قطع لحم", "حبات سمك", "g", …) is per-restaurant data.
 library;
 
-/// The configured meat contribution of ONE selection of a modifier option.
+/// The configured kitchen-count contribution of ONE selection of a modifier
+/// option (internal name kept as *Meat*; user-facing copy is a generic count).
 class KitchenMeat {
   const KitchenMeat({required this.quantity, this.unit = ''});
 

@@ -616,10 +616,10 @@ abstract class AppLocalizations {
   /// **'Order prep'**
   String get kdsTicketPrepHeading;
 
-  /// KITCHEN-MEAT-001: the whole-order meat total shown at the top of the KDS card + kitchen ticket (one per unit group). count is a formatted count string, unit is free text (e.g. patties, g). Non-money.
+  /// KITCHEN-COUNT-001: the whole-order kitchen count total shown at the top of the KDS card + kitchen ticket (one per unit group). count is a formatted count string, unit is owner-written free text (e.g. patties, fish pieces, buns, skewers). Non-money. (Internal key kept as *Meat* for backwards compatibility; user-facing copy is a generic kitchen count.)
   ///
   /// In en, this message translates to:
-  /// **'Meat total: {count} {unit}'**
+  /// **'Kitchen total: {count} {unit}'**
   String kdsMeatTotalLabel(String count, String unit);
 
   /// KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).
@@ -3010,28 +3010,28 @@ abstract class AppLocalizations {
   /// **'Remove component'**
   String get menuRemovePrepComponent;
 
-  /// KITCHEN-MEAT-001: sub-heading for the optional meat-contribution section on a modifier option editor (counts into the KDS whole-order meat total).
+  /// KITCHEN-COUNT-001: sub-heading for the optional kitchen-count section on a modifier option editor (counts into the KDS whole-order kitchen total; the owner writes any unit — patties/fish pieces/buns/…). Internal key kept as *Meat* for backwards compatibility.
   ///
   /// In en, this message translates to:
-  /// **'Kitchen meat summary'**
+  /// **'Kitchen count summary'**
   String get menuKitchenMeatSection;
 
-  /// KITCHEN-MEAT-001: toggle label — whether this option contributes to the KDS meat total.
+  /// KITCHEN-COUNT-001: toggle label — whether this option contributes to the KDS kitchen count total. Internal key kept as *Meat* for compatibility.
   ///
   /// In en, this message translates to:
-  /// **'Count in meat total'**
+  /// **'Count in kitchen total'**
   String get menuKitchenMeatEnabledLabel;
 
-  /// KITCHEN-MEAT-001: label for the per-selection meat quantity field (a count, never money).
+  /// KITCHEN-COUNT-001: label for the per-selection count quantity field (a count, never money). Internal key kept as *Meat* for compatibility.
   ///
   /// In en, this message translates to:
-  /// **'Meat quantity'**
+  /// **'Quantity'**
   String get menuKitchenMeatQuantityLabel;
 
-  /// KITCHEN-MEAT-001: label for the meat unit field (e.g. patties, g).
+  /// KITCHEN-COUNT-001: label for the owner-written unit field (e.g. patties, fish pieces, buns, skewers). Internal key kept as *Meat* for compatibility.
   ///
   /// In en, this message translates to:
-  /// **'Meat unit'**
+  /// **'Unit'**
   String get menuKitchenMeatUnitLabel;
 
   /// Label for the internal stock/product code field (back-office only; never sent to devices).
