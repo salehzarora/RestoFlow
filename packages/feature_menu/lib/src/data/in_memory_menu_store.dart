@@ -317,6 +317,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     int priceDeltaMinor = 0,
     int displayOrder = 0,
     bool isActive = true,
+    Map<String, dynamic>? kitchenMeat,
   }) async {
     if (readOnly) return _denied(MenuEntityType.modifierOption);
     final created = id == null;
@@ -333,6 +334,8 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       displayOrder: displayOrder,
       isActive: isActive,
       deletedAt: existing?.deletedAt,
+      // KITCHEN-MEAT-001: round-trip the meat metadata for demo/widget saves.
+      kitchenMeat: kitchenMeat,
     );
     _upsert(_options, row, (o) => o.id);
     return _ok(MenuEntityType.modifierOption, rowId, created);

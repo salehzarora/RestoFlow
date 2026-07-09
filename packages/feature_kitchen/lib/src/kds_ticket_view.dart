@@ -56,6 +56,7 @@ class KdsTicketView {
     this.notes,
     this.submittedAt,
     this.prepSummary = const <KitchenPrepComponent>[],
+    this.meatTotals = const <KitchenMeat>[],
   });
 
   final String kitchenTicketId;
@@ -101,6 +102,13 @@ class KdsTicketView {
   /// the ticket carries configured prep. Shown on the card + printed ticket so
   /// the chef sees "how many patties / buns / …" at a glance.
   final List<KitchenPrepComponent> prepSummary;
+
+  /// KITCHEN-MEAT-001: the WHOLE-ORDER meat total (grouped by unit) from the
+  /// selected modifier options' meat metadata — the quick chef note shown at the
+  /// TOP, above [prepSummary]. Non-money ({quantity,unit}); empty when no
+  /// selected option on the order carries meat. When non-empty the generic
+  /// [prepSummary] is de-emphasised so the top note stays uncluttered.
+  final List<KitchenMeat> meatTotals;
 
   /// The current local status; mutated by bump/recall on the screen.
   KitchenTicketStatus status;

@@ -154,6 +154,7 @@ class MenuManagementRepository implements MenuWriter {
     int priceDeltaMinor = 0,
     int displayOrder = 0,
     bool isActive = true,
+    Map<String, dynamic>? kitchenMeat,
   }) => _writer.upsertModifierOption(
     scope: scope,
     id: id,
@@ -162,6 +163,7 @@ class MenuManagementRepository implements MenuWriter {
     priceDeltaMinor: priceDeltaMinor,
     displayOrder: displayOrder,
     isActive: isActive,
+    kitchenMeat: kitchenMeat,
   );
 
   @override

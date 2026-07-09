@@ -616,6 +616,12 @@ abstract class AppLocalizations {
   /// **'Order prep'**
   String get kdsTicketPrepHeading;
 
+  /// KITCHEN-MEAT-001: the whole-order meat total shown at the top of the KDS card + kitchen ticket (one per unit group). count is a formatted count string, unit is free text (e.g. patties, g). Non-money.
+  ///
+  /// In en, this message translates to:
+  /// **'Meat total: {count} {unit}'**
+  String kdsMeatTotalLabel(String count, String unit);
+
   /// KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).
   ///
   /// In en, this message translates to:
@@ -3003,6 +3009,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove component'**
   String get menuRemovePrepComponent;
+
+  /// KITCHEN-MEAT-001: sub-heading for the optional meat-contribution section on a modifier option editor (counts into the KDS whole-order meat total).
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen meat summary'**
+  String get menuKitchenMeatSection;
+
+  /// KITCHEN-MEAT-001: toggle label — whether this option contributes to the KDS meat total.
+  ///
+  /// In en, this message translates to:
+  /// **'Count in meat total'**
+  String get menuKitchenMeatEnabledLabel;
+
+  /// KITCHEN-MEAT-001: label for the per-selection meat quantity field (a count, never money).
+  ///
+  /// In en, this message translates to:
+  /// **'Meat quantity'**
+  String get menuKitchenMeatQuantityLabel;
+
+  /// KITCHEN-MEAT-001: label for the meat unit field (e.g. patties, g).
+  ///
+  /// In en, this message translates to:
+  /// **'Meat unit'**
+  String get menuKitchenMeatUnitLabel;
 
   /// Label for the internal stock/product code field (back-office only; never sent to devices).
   ///

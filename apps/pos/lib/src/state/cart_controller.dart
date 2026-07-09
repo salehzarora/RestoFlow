@@ -20,6 +20,7 @@ class SelectedModifier {
     required this.optionName,
     required this.priceDeltaMinor,
     this.quantity = 1,
+    this.kitchenMeat,
   });
 
   final String optionId;
@@ -31,6 +32,12 @@ class SelectedModifier {
 
   /// Units of this option (>= 1; quantity-enabled groups may exceed 1).
   final int quantity;
+
+  /// KITCHEN-MEAT-001: the option's per-selection meat contribution (carried
+  /// from its [PosModifierOption]), snapshotted into the order so the KDS can
+  /// compute the whole-order meat total. Non-money; null when the option has no
+  /// configured meat.
+  final KitchenMeat? kitchenMeat;
 
   /// The delta this selection contributes to the line total (unit × units).
   int get totalDeltaMinor => priceDeltaMinor * quantity;

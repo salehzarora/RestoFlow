@@ -49,6 +49,7 @@ export 'src/cart/cart_exceptions.dart';
 export 'src/cart/cart_line.dart';
 export 'src/cart/cart_snapshots.dart';
 export 'src/entity.dart';
+export 'src/kitchen/kitchen_meat.dart';
 export 'src/kitchen/kitchen_prep.dart';
 export 'src/kitchen/kitchen_router.dart';
 export 'src/kitchen/kitchen_routing_result.dart';

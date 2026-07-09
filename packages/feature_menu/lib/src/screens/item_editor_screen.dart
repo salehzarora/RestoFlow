@@ -997,6 +997,9 @@ class _PricedChildVm {
     required this.deltaMinor,
     required this.isActive,
     required this.branchId,
+    this.kitchenMeatEnabled = false,
+    this.kitchenMeatQuantity,
+    this.kitchenMeatUnit = '',
   });
 
   final String id;
@@ -1004,6 +1007,12 @@ class _PricedChildVm {
   final int deltaMinor;
   final bool isActive;
   final String? branchId;
+
+  /// KITCHEN-MEAT-001: the option's current meat metadata (options only;
+  /// size/variant rows leave these at their defaults).
+  final bool kitchenMeatEnabled;
+  final num? kitchenMeatQuantity;
+  final String kitchenMeatUnit;
 }
 
 MenuEntityType _entityForKind(PricedChildKind kind) => switch (kind) {
@@ -1097,6 +1106,10 @@ class _PricedChildSection extends ConsumerWidget {
                     initialName: rows[i].name,
                     initialDeltaMinor: rows[i].deltaMinor,
                     initialActive: rows[i].isActive,
+                    // KITCHEN-MEAT-001: carry the option's current meat metadata.
+                    initialKitchenMeatEnabled: rows[i].kitchenMeatEnabled,
+                    initialKitchenMeatQuantity: rows[i].kitchenMeatQuantity,
+                    initialKitchenMeatUnit: rows[i].kitchenMeatUnit,
                   ),
                   onDelete: () => _delete(context, ref, rows[i].id),
                 ),
@@ -1407,6 +1420,11 @@ class _ModifierCard extends StatelessWidget {
                     deltaMinor: o.priceDeltaMinor,
                     isActive: o.isActive,
                     branchId: o.branchId,
+                    // KITCHEN-MEAT-001: pre-fill the option's meat metadata so the
+                    // edit dialog shows the current values.
+                    kitchenMeatEnabled: o.hasKitchenMeat,
+                    kitchenMeatQuantity: o.kitchenMeatQuantity,
+                    kitchenMeatUnit: o.kitchenMeatUnit,
                   ),
                 )
                 .toList(),

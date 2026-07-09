@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/menu_validation.dart';
@@ -81,6 +82,9 @@ Future<bool> showPricedChildFormDialog(
   int initialDeltaMinor = 0,
   int initialDisplayOrder = 0,
   bool initialActive = true,
+  bool initialKitchenMeatEnabled = false,
+  num? initialKitchenMeatQuantity,
+  String initialKitchenMeatUnit = '',
 }) async {
   final controller = _controllerOf(context);
   final saved = await showDialog<bool>(
@@ -95,6 +99,9 @@ Future<bool> showPricedChildFormDialog(
       initialDeltaMinor: initialDeltaMinor,
       initialDisplayOrder: initialDisplayOrder,
       initialActive: initialActive,
+      initialKitchenMeatEnabled: initialKitchenMeatEnabled,
+      initialKitchenMeatQuantity: initialKitchenMeatQuantity,
+      initialKitchenMeatUnit: initialKitchenMeatUnit,
     ),
   );
   return saved ?? false;
@@ -307,6 +314,9 @@ class _PricedChildFormDialog extends StatefulWidget {
     required this.initialDeltaMinor,
     required this.initialDisplayOrder,
     required this.initialActive,
+    required this.initialKitchenMeatEnabled,
+    required this.initialKitchenMeatQuantity,
+    required this.initialKitchenMeatUnit,
   });
 
   /// The CALLER's scoped write controller (see [_controllerOf]).
@@ -319,6 +329,12 @@ class _PricedChildFormDialog extends StatefulWidget {
   final int initialDeltaMinor;
   final int initialDisplayOrder;
   final bool initialActive;
+
+  /// KITCHEN-MEAT-001: the option's current meat metadata (only meaningful when
+  /// [kind] is [PricedChildKind.option]).
+  final bool initialKitchenMeatEnabled;
+  final num? initialKitchenMeatQuantity;
+  final String initialKitchenMeatUnit;
 
   @override
   State<_PricedChildFormDialog> createState() => _PricedChildFormDialogState();
@@ -335,16 +351,31 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
     text: widget.initialDisplayOrder.toString(),
   );
   late bool _active = widget.initialActive;
+  // KITCHEN-MEAT-001 (option kind only): the meat-summary section state.
+  late bool _meatEnabled = widget.initialKitchenMeatEnabled;
+  late final TextEditingController _meatQuantity = TextEditingController(
+    text: widget.initialKitchenMeatQuantity == null
+        ? ''
+        : formatPrepQuantity(widget.initialKitchenMeatQuantity!),
+  );
+  late final TextEditingController _meatUnit = TextEditingController(
+    text: widget.initialKitchenMeatUnit,
+  );
+  MenuFieldError? _meatQuantityError;
   MenuFieldError? _nameError;
   MenuFieldError? _deltaError;
   MenuWriteFailure? _writeError;
   bool _submitting = false;
+
+  bool get _showMeat => widget.kind == PricedChildKind.option;
 
   @override
   void dispose() {
     _name.dispose();
     _delta.dispose();
     _order.dispose();
+    _meatQuantity.dispose();
+    _meatUnit.dispose();
     super.dispose();
   }
 
@@ -361,17 +392,36 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
     final nameError = validateName(_name.text);
     final deltaMinor = parseMajorToMinor(_delta.text, widget.currencyCode);
     final deltaError = validatePriceDeltaMinor(deltaMinor);
+    // KITCHEN-MEAT-001: the meat quantity is a positive count, validated only
+    // when the meat toggle is on (option kind). A count, never money (D-007).
+    num? meatQuantity;
+    MenuFieldError? meatError;
+    if (_showMeat && _meatEnabled) {
+      meatQuantity = num.tryParse(_meatQuantity.text.trim());
+      if (meatQuantity == null || meatQuantity <= 0) {
+        meatError = MenuFieldError.notAnInteger;
+      }
+    }
     setState(() {
       _nameError = nameError;
       _deltaError = deltaError;
+      _meatQuantityError = meatError;
       _writeError = null;
     });
-    if (nameError != null || deltaError != null) return;
+    if (nameError != null || deltaError != null || meatError != null) return;
 
     setState(() => _submitting = true);
     final controller = widget.controller;
     final name = _name.text.trim();
     final order = int.tryParse(_order.text.trim()) ?? 0;
+    // Full-state: an enabled toggle sends {quantity,unit}; disabled sends null
+    // (clears any previously-configured meat on the option).
+    final kitchenMeat = (_showMeat && _meatEnabled)
+        ? <String, dynamic>{
+            'quantity': meatQuantity,
+            'unit': _meatUnit.text.trim(),
+          }
+        : null;
     final outcome = await switch (widget.kind) {
       PricedChildKind.size => controller.upsertSize(
         id: widget.id,
@@ -396,6 +446,7 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
         priceDeltaMinor: deltaMinor!,
         displayOrder: order,
         isActive: _active,
+        kitchenMeat: kitchenMeat,
       ),
     };
     if (!mounted) return;
@@ -411,6 +462,7 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return _DialogShell(
       title: _title(l10n),
       submitting: _submitting,
@@ -453,6 +505,45 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
           value: _active,
           onChanged: (value) => setState(() => _active = value),
         ),
+        // KITCHEN-MEAT-001: the optional meat-summary section — ONLY on modifier
+        // options (size/variant dialogs share this form but never show it). When
+        // enabled, this option counts toward the KDS whole-order meat total.
+        if (_showMeat) ...[
+          const Divider(),
+          Text(
+            l10n.menuKitchenMeatSection,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SwitchListTile(
+            key: const ValueKey('menu-option-meat-enabled'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.menuKitchenMeatEnabledLabel),
+            value: _meatEnabled,
+            onChanged: (value) => setState(() => _meatEnabled = value),
+          ),
+          if (_meatEnabled) ...[
+            TextField(
+              key: const ValueKey('menu-option-meat-quantity'),
+              controller: _meatQuantity,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: l10n.menuKitchenMeatQuantityLabel,
+                errorText: _meatQuantityError == null
+                    ? null
+                    : l10n.menuFieldErrorText(_meatQuantityError!),
+              ),
+            ),
+            TextField(
+              key: const ValueKey('menu-option-meat-unit'),
+              controller: _meatUnit,
+              decoration: InputDecoration(
+                labelText: l10n.menuKitchenMeatUnitLabel,
+              ),
+            ),
+          ],
+        ],
       ],
     );
   }

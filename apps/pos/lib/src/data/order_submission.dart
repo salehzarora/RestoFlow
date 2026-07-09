@@ -64,6 +64,7 @@ class OrderSubmissionModifier {
     this.modifierNameSnapshot,
     required this.priceMinorSnapshot,
     this.quantity = 1,
+    this.meatSnapshot,
   });
 
   final String modifierOptionId;
@@ -74,12 +75,22 @@ class OrderSubmissionModifier {
   /// Units of this option (>= 1) — `order_item_modifiers.quantity`.
   final int quantity;
 
+  /// KITCHEN-MEAT-001: the ORDER-TIME (D-008) snapshot of the option's meat
+  /// contribution (`order_item_modifiers.meat_snapshot`). Non-money
+  /// ({quantity,unit}); the KDS multiplies it by this modifier's [quantity] and
+  /// the item quantity to build the whole-order meat total. Null when the option
+  /// carries no meat.
+  final KitchenMeat? meatSnapshot;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'modifier_option_id': modifierOptionId,
     'option_name_snapshot': optionNameSnapshot,
     'modifier_name_snapshot': modifierNameSnapshot,
     'price_minor_snapshot': priceMinorSnapshot,
     'quantity': quantity,
+    // Emitted ONLY when present so the pre-feature wire shape (+ the server's
+    // idempotency fingerprint) is unchanged for meat-less options.
+    if (meatSnapshot != null) 'meat_snapshot': meatSnapshot!.toJson(),
   };
 }
 

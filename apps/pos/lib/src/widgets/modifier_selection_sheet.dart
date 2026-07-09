@@ -173,6 +173,9 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
             optionName: option.name,
             priceDeltaMinor: option.priceDeltaMinor,
             quantity: _groupSelection(group.id)[option.id] ?? 1,
+            // KITCHEN-MEAT-001: carry the option's meat contribution into the
+            // order-time snapshot (money-free; null when unconfigured).
+            kitchenMeat: option.kitchenMeat,
           ),
   ];
 

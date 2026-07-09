@@ -100,6 +100,9 @@ abstract class MenuWriter {
     int priceDeltaMinor = 0,
     int displayOrder = 0,
     bool isActive = true,
+    // KITCHEN-MEAT-001: the option's meat contribution ({quantity, unit}) or
+    // null (clears it / no meat). Rides the p_kitchen_meat RPC arg.
+    Map<String, dynamic>? kitchenMeat,
   });
 
   Future<MenuWriteOutcome> softDelete({

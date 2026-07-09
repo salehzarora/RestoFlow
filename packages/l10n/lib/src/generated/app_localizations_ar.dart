@@ -282,6 +282,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kdsTicketPrepHeading => 'تحضير الطلب';
 
   @override
+  String kdsMeatTotalLabel(String count, String unit) {
+    return 'إجمالي اللحم: $count $unit';
+  }
+
+  @override
   String kdsElapsedMinutes(int minutes) {
     return '$minutes د';
   }
@@ -1559,6 +1564,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get menuRemovePrepComponent => 'إزالة المكوّن';
+
+  @override
+  String get menuKitchenMeatSection => 'ملخص اللحم للمطبخ';
+
+  @override
+  String get menuKitchenMeatEnabledLabel => 'يُحسب في إجمالي اللحم';
+
+  @override
+  String get menuKitchenMeatQuantityLabel => 'كمية اللحم';
+
+  @override
+  String get menuKitchenMeatUnitLabel => 'وحدة اللحم';
 
   @override
   String get menuSkuLabel => 'SKU (رمز داخلي)';

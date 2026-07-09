@@ -50,11 +50,24 @@ PrintDocument buildKdsTicketDocument(
       if (showStation)
         PrintLine.center('${l10n.kdsStationLabel}: ${ticket.stationId}'),
       PrintLine.rule(),
-      // KITCHEN-PREP-001: the aggregated prep summary near the top — after the
-      // order info, before item details — so the chef preps by count. Each line
-      // is "name ×N unit" (data + U+00D7, money-free); a trailing rule fences it
-      // off from the items. Emitted only when the ticket carries prep.
-      if (ticket.prepSummary.isNotEmpty) ...[
+      // KITCHEN-MEAT-001: the WHOLE-ORDER meat total is the primary top chef
+      // note — one clean, prominent line per unit ("Meat total: 9 patties"),
+      // fenced off by a rule. Money-free; only when the order carries meat.
+      if (ticket.meatTotals.isNotEmpty) ...[
+        for (final meat in ticket.meatTotals)
+          PrintLine.title(
+            l10n.kdsMeatTotalLabel(
+              formatPrepQuantity(meat.quantity),
+              meat.unit,
+            ),
+          ),
+        PrintLine.rule(),
+      ],
+      // KITCHEN-PREP-001: the generic prep summary — after the order info,
+      // before item details. Emitted only when the ticket carries prep AND no
+      // meat total exists (de-emphasised so the top note stays uncluttered —
+      // KITCHEN-MEAT-001). Each line is "name ×N unit" (money-free).
+      if (ticket.prepSummary.isNotEmpty && ticket.meatTotals.isEmpty) ...[
         PrintLine.center(l10n.kdsTicketPrepHeading),
         for (final component in ticket.prepSummary)
           PrintLine.sub(_prepLine(component)),

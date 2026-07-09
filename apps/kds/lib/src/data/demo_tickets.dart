@@ -33,6 +33,10 @@ List<KdsTicketView> demoKdsTickets() => [
       KitchenPrepComponent(name: 'Beef patty', quantity: 2, unit: 'pcs'),
       KitchenPrepComponent(name: 'Burger bun', quantity: 2),
     ],
+    // KITCHEN-MEAT-001 showcase: the whole-order meat total is the primary top
+    // chef note (a Single + a Double = 3 patties). When present it takes the top
+    // and the generic prep summary is de-emphasised. Money-free demo DATA.
+    meatTotals: const [KitchenMeat(quantity: 3, unit: 'patties')],
   ),
   KdsTicketView(
     kitchenTicketId: 'order-102:grill',

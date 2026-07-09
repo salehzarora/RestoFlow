@@ -205,11 +205,19 @@ class KdsTicketCard extends StatelessWidget {
               const SizedBox(height: RestoflowSpacing.sm),
               const Divider(height: 1),
               const SizedBox(height: RestoflowSpacing.sm),
-              // KITCHEN-PREP-001: the aggregated prep summary — placed after the
-              // order info and BEFORE the item details so the chef reads the
-              // counts first. Hidden entirely when no item carries configured
-              // prep (never clutters the card).
-              if (ticket.prepSummary.isNotEmpty) ...[
+              // KITCHEN-MEAT-001: the WHOLE-ORDER meat total is the primary top
+              // chef note — shown first + prominently when any selected option
+              // carries meat.
+              if (ticket.meatTotals.isNotEmpty) ...[
+                _MeatTotalSection(meatTotals: ticket.meatTotals, l10n: l10n),
+                const SizedBox(height: RestoflowSpacing.sm),
+              ],
+              // KITCHEN-PREP-001: the generic prep summary — placed after the
+              // order info and BEFORE the item details. Hidden when no item
+              // carries prep, AND de-emphasised (hidden from the top) when a meat
+              // total exists so the top note stays uncluttered (KITCHEN-MEAT-001).
+              if (ticket.prepSummary.isNotEmpty &&
+                  ticket.meatTotals.isEmpty) ...[
                 _PrepSummarySection(
                   prepSummary: ticket.prepSummary,
                   l10n: l10n,
@@ -348,6 +356,62 @@ class _PrepSummarySection extends StatelessWidget {
     return component.unit.isEmpty
         ? '${component.name} ×$quantity'
         : '${component.name} ×$quantity ${component.unit}';
+  }
+}
+
+/// KITCHEN-MEAT-001: the WHOLE-ORDER meat total — the prominent top chef note.
+/// One clean line per unit-group ("Meat total: 9 patties"). Money-free; shown
+/// only when a selected option on the order carries configured meat.
+class _MeatTotalSection extends StatelessWidget {
+  const _MeatTotalSection({required this.meatTotals, required this.l10n});
+
+  final List<KitchenMeat> meatTotals;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const Key('kds-meat-total'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.md,
+        vertical: RestoflowSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.kebab_dining,
+            size: RestoflowIconSizes.md,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final meat in meatTotals)
+                  Text(
+                    l10n.kdsMeatTotalLabel(
+                      formatPrepQuantity(meat.quantity),
+                      meat.unit,
+                    ),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

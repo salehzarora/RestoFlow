@@ -14,6 +14,7 @@ class ModifierOption {
     required this.displayOrder,
     required this.isActive,
     this.deletedAt,
+    this.kitchenMeat,
   });
 
   final String id;
@@ -29,7 +30,24 @@ class ModifierOption {
   final bool isActive;
   final DateTime? deletedAt;
 
+  /// KITCHEN-MEAT-001: the OPTIONAL configured meat contribution of one
+  /// selection (`modifier_options.kitchen_meat` = `{quantity, unit}`). Non-money
+  /// (D-007); null when the option contributes no meat.
+  final Map<String, dynamic>? kitchenMeat;
+
   bool get isDeleted => deletedAt != null;
+
+  /// KITCHEN-MEAT-001: true when this option counts toward the KDS meat total.
+  bool get hasKitchenMeat => kitchenMeat != null;
+
+  /// The configured meat quantity, or null. A count, never money.
+  num? get kitchenMeatQuantity {
+    final value = kitchenMeat?['quantity'];
+    return value is num ? value : num.tryParse('${value ?? ''}');
+  }
+
+  /// The configured meat unit (e.g. "patties", "g"), or '' when unset.
+  String get kitchenMeatUnit => (kitchenMeat?['unit'] ?? '').toString();
 
   factory ModifierOption.fromJson(Map<String, dynamic> json) => ModifierOption(
     id: requireString(json, 'id'),
@@ -42,6 +60,7 @@ class ModifierOption {
     displayOrder: optInt(json, 'display_order', 0),
     isActive: optBool(json, 'is_active', true),
     deletedAt: parseTimestamp(json['deleted_at']),
+    kitchenMeat: optJsonMapOrNull(json, 'kitchen_meat'),
   );
 
   ModifierOption copyWith({DateTime? deletedAt}) => ModifierOption(
@@ -55,5 +74,7 @@ class ModifierOption {
     displayOrder: displayOrder,
     isActive: isActive,
     deletedAt: deletedAt ?? this.deletedAt,
+    // Preserve meat across a soft-delete tombstone copyWith.
+    kitchenMeat: kitchenMeat,
   );
 }

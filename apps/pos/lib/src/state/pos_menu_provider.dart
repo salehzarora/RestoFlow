@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/demo_menu.dart';
@@ -52,11 +53,18 @@ class PosModifierOption {
     required this.id,
     required this.name,
     required this.priceDeltaMinor,
+    this.kitchenMeat,
   });
 
   final String id;
   final String name;
   final int priceDeltaMinor;
+
+  /// KITCHEN-MEAT-001: the owner-configured meat contribution of ONE selection
+  /// of this option (from `modifier_options.kitchen_meat`). Non-money; null when
+  /// the option contributes no meat. Snapshotted into the order at selection so
+  /// the KDS can compute the whole-order meat total.
+  final KitchenMeat? kitchenMeat;
 }
 
 /// A modifier group on a menu item (mirrors the RF-109 `modifiers` +
@@ -183,6 +191,9 @@ const List<PosModifierGroup> kDemoModifierGroups = <PosModifierGroup>[
         id: 'demo-opt-extra-patty',
         name: 'Extra patty',
         priceDeltaMinor: 900,
+        // KITCHEN-MEAT-001 demo: an extra patty adds 1 to the meat total. Unit
+        // is demo DATA (a real restaurant configures its own). Money-free.
+        kitchenMeat: KitchenMeat(quantity: 1, unit: 'patty'),
       ),
     ],
   ),
@@ -343,6 +354,9 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         id: (row['id'] ?? '').toString(),
         name: (row['name'] ?? '').toString(),
         priceDeltaMinor: delta,
+        // KITCHEN-MEAT-001: tolerant parse of the option's meat metadata
+        // (money-free {quantity,unit}); null when unset/disabled.
+        kitchenMeat: KitchenMeat.tryFromJson(row['kitchen_meat']),
       ),
     );
   }
