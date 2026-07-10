@@ -115,6 +115,9 @@ class _StaffScreenState extends State<StaffScreen> {
             child: _StaffCard(
               member: member,
               onSetPin: () => _showPinDialog(context, member),
+              onEditCapabilities: member.isCashier
+                  ? () => _showCapabilitiesDialog(context, member)
+                  : null,
             ),
           ),
       ],
@@ -124,16 +127,48 @@ class _StaffScreenState extends State<StaffScreen> {
   Future<void> _showCreateDialog(BuildContext context) => showDialog<void>(
     context: context,
     builder: (_) => _CreateStaffDialog(
-      onCreate: (name, role) async {
+      onCreate: (name, role, capabilities, clientRequestId) async {
         final l10n = AppLocalizations.of(context);
         final messenger = ScaffoldMessenger.of(context);
+        // STAFF-CASHIER-PERMISSIONS-001: a SINGLE atomic backend call creates the
+        // cashier AND persists any initial deny overrides in one transaction, keyed
+        // by the UI-owned stable clientRequestId (an ambiguous retry replays rather
+        // than creating a second employee). On success -> null (the dialog pops);
+        // on failure -> a localized message (the dialog stays open, values kept).
         final result = await widget.repository.create(
           displayName: name,
           role: role,
+          capabilities: capabilities,
+          clientRequestId: clientRequestId,
+        );
+        return result.fold((_) {
+          messenger.showSnackBar(SnackBar(content: Text(l10n.staffCreated)));
+          _reload();
+          return null;
+        }, (failure) => adminFailureMessage(l10n, failure));
+      },
+    ),
+  );
+
+  Future<void> _showCapabilitiesDialog(
+    BuildContext context,
+    StaffMember member,
+  ) => showDialog<void>(
+    context: context,
+    builder: (_) => _CapabilitiesDialog(
+      member: member,
+      onSave: (capabilities) async {
+        final l10n = AppLocalizations.of(context);
+        final messenger = ScaffoldMessenger.of(context);
+        final result = await widget.repository.setCapabilities(
+          employeeProfileId: member.employeeProfileId,
+          capabilities: capabilities,
         );
         result.fold(
           (_) {
-            messenger.showSnackBar(SnackBar(content: Text(l10n.staffCreated)));
+            messenger.showSnackBar(
+              SnackBar(content: Text(l10n.staffCapabilitiesSaved)),
+            );
             _reload();
           },
           (failure) => messenger.showSnackBar(
@@ -173,10 +208,18 @@ class _StaffScreenState extends State<StaffScreen> {
 }
 
 class _StaffCard extends StatelessWidget {
-  const _StaffCard({required this.member, required this.onSetPin});
+  const _StaffCard({
+    required this.member,
+    required this.onSetPin,
+    this.onEditCapabilities,
+  });
 
   final StaffMember member;
   final VoidCallback onSetPin;
+
+  /// STAFF-CASHIER-PERMISSIONS-001: opens the cashier capability switches. Null
+  /// for non-cashier roles (the toggles apply only to cashiers).
+  final VoidCallback? onEditCapabilities;
 
   @override
   Widget build(BuildContext context) {
@@ -242,6 +285,15 @@ class _StaffCard extends StatelessWidget {
                   : RestoflowTone.danger,
               icon: member.hasPin ? Icons.pin_outlined : Icons.priority_high,
             ),
+            if (onEditCapabilities != null) ...[
+              const SizedBox(width: RestoflowSpacing.xs),
+              OutlinedButton.icon(
+                key: Key('staff-capabilities-${member.employeeProfileId}'),
+                onPressed: member.isActive ? onEditCapabilities : null,
+                icon: const Icon(Icons.tune, size: RestoflowIconSizes.sm),
+                label: Text(l10n.staffCapabilitiesAction),
+              ),
+            ],
             const SizedBox(width: RestoflowSpacing.sm),
             FilledButton.tonalIcon(
               onPressed: member.isActive ? onSetPin : null,
@@ -263,7 +315,16 @@ class _StaffCard extends StatelessWidget {
 class _CreateStaffDialog extends StatefulWidget {
   const _CreateStaffDialog({required this.onCreate});
 
-  final Future<void> Function(String displayName, MembershipRole role) onCreate;
+  /// Returns null on success (the dialog pops); a localized error message on
+  /// failure (the dialog stays open with inputs preserved). [clientRequestId] is
+  /// the stable per-intent idempotency key.
+  final Future<String?> Function(
+    String displayName,
+    MembershipRole role,
+    StaffCapabilities capabilities,
+    String clientRequestId,
+  )
+  onCreate;
 
   @override
   State<_CreateStaffDialog> createState() => _CreateStaffDialogState();
@@ -273,7 +334,17 @@ class _CreateStaffDialogState extends State<_CreateStaffDialog> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   MembershipRole _role = MembershipRole.cashier;
+  // STAFF-CASHIER-PERMISSIONS-001: all three cashier capabilities ON by default.
+  StaffCapabilities _caps = const StaffCapabilities();
   bool _busy = false;
+
+  // One stable client_request_id per create INTENT: reused across an ambiguous
+  // retry of the SAME inputs (idempotent replay -> no duplicate employee); a NEW
+  // id is minted when the inputs change so an old id is never reused with
+  // different input.
+  String? _requestId;
+  String? _signature;
+  String? _error;
 
   @override
   void dispose() {
@@ -281,11 +352,34 @@ class _CreateStaffDialogState extends State<_CreateStaffDialog> {
     super.dispose();
   }
 
+  String _sig() =>
+      '${_name.text.trim()}|${_role.name}|${_caps.applyDiscount},'
+      '${_caps.voidOrder},${_caps.closeShift}';
+
   Future<void> _submit() async {
+    if (_busy) return; // synchronous double-tap guard
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() => _busy = true);
-    await widget.onCreate(_name.text, _role);
-    if (mounted) Navigator.of(context).pop();
+    final sig = _sig();
+    if (_requestId == null || sig != _signature) {
+      _requestId = SupabaseStaffRepository.newClientRequestId();
+      _signature = sig;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final error = await widget.onCreate(_name.text, _role, _caps, _requestId!);
+    if (!mounted) return;
+    if (error == null) {
+      Navigator.of(context).pop(); // success
+    } else {
+      // Failure: keep the dialog OPEN, preserve inputs + switch states, show the
+      // localized error, and KEEP _requestId so an unchanged retry replays.
+      setState(() {
+        _busy = false;
+        _error = error;
+      });
+    }
   }
 
   @override
@@ -325,6 +419,26 @@ class _CreateStaffDialogState extends State<_CreateStaffDialog> {
               ],
               onChanged: (v) => setState(() => _role = v ?? _role),
             ),
+            // STAFF-CASHIER-PERMISSIONS-001: cashiers get three capabilities ON
+            // by default; the owner can turn any off here. Shown only for the
+            // cashier role (other roles are provisioned via the role dropdown).
+            if (_role == MembershipRole.cashier) ...[
+              const SizedBox(height: RestoflowSpacing.md),
+              _CapabilitiesSwitches(
+                value: _caps,
+                enabled: !_busy,
+                onChanged: (c) => setState(() => _caps = c),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: RestoflowSpacing.md),
+              RestoflowNoticeBanner(
+                key: const Key('create-staff-error'),
+                tone: RestoflowTone.danger,
+                icon: Icons.error_outline,
+                body: _error!,
+              ),
+            ],
           ],
         ),
       ),
@@ -336,6 +450,134 @@ class _CreateStaffDialogState extends State<_CreateStaffDialog> {
         FilledButton(
           onPressed: _busy ? null : _submit,
           child: Text(l10n.adminCreate),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared cashier-capabilities switches (STAFF-CASHIER-PERMISSIONS-001).
+// Three localized switches, ON = capability enabled (role default). Presentation
+// only; the backend is the authoritative gate.
+// ---------------------------------------------------------------------------
+class _CapabilitiesSwitches extends StatelessWidget {
+  const _CapabilitiesSwitches({
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final StaffCapabilities value;
+  final ValueChanged<StaffCapabilities> onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.staffCapabilitiesTitle, style: theme.textTheme.titleSmall),
+        const SizedBox(height: RestoflowSpacing.xxs),
+        Text(
+          l10n.staffCapabilitiesHint,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: RestoflowSpacing.xs),
+        SwitchListTile(
+          key: const Key('cap-apply-discount'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(l10n.staffCapApplyDiscount),
+          value: value.applyDiscount,
+          onChanged: enabled
+              ? (v) => onChanged(value.copyWith(applyDiscount: v))
+              : null,
+        ),
+        SwitchListTile(
+          key: const Key('cap-void-order'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(l10n.staffCapVoidOrder),
+          value: value.voidOrder,
+          onChanged: enabled
+              ? (v) => onChanged(value.copyWith(voidOrder: v))
+              : null,
+        ),
+        SwitchListTile(
+          key: const Key('cap-close-shift'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(l10n.staffCapCloseShift),
+          value: value.closeShift,
+          onChanged: enabled
+              ? (v) => onChanged(value.copyWith(closeShift: v))
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Edit-capabilities dialog for an existing cashier (shows effective values).
+// ---------------------------------------------------------------------------
+class _CapabilitiesDialog extends StatefulWidget {
+  const _CapabilitiesDialog({required this.member, required this.onSave});
+
+  final StaffMember member;
+  final Future<void> Function(StaffCapabilities capabilities) onSave;
+
+  @override
+  State<_CapabilitiesDialog> createState() => _CapabilitiesDialogState();
+}
+
+class _CapabilitiesDialogState extends State<_CapabilitiesDialog> {
+  late StaffCapabilities _caps =
+      widget.member.capabilities ?? const StaffCapabilities();
+  bool _busy = false;
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    await widget.onSave(_caps);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(l10n.staffCapabilitiesTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.member.displayName,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          _CapabilitiesSwitches(
+            value: _caps,
+            enabled: !_busy,
+            onChanged: (c) => setState(() => _caps = c),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: Text(l10n.adminCancel),
+        ),
+        FilledButton(
+          key: const Key('capabilities-save-button'),
+          onPressed: _busy ? null : _submit,
+          child: Text(l10n.adminSave),
         ),
       ],
     );

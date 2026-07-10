@@ -63,13 +63,13 @@ Each transition row carries these columns. The legend applies to all 10 machines
 | ready → served | cashier / manager / server | dine-in order (NOT takeaway) | No | Always | Yes-provisional | No |
 | ready → completed | cashier / manager / server | **takeaway order only** (skips served); payment in `completed` or settlement rules met (see [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md)) | No | Always | Yes-provisional | No |
 | served → completed | cashier / manager / server | dine-in; payment settled per money spec | No | Always | Yes-provisional | No |
-| submitted → voided | manager / restaurant_owner / org_owner (NOT plain cashier unless granted) | post-submission termination | **Reason + authorization REQUIRED** | Yes(sensitive) | No-online-only by default (see ASSUMPTION below) | Terminal |
+| submitted → voided | manager / restaurant_owner / org_owner, **and a cashier by default** (STAFF-CASHIER-PERMISSIONS-001; UNPAID orders only; disableable per-cashier via `permissions.void_order='false'`) | post-submission termination; **no `completed` payment** (paid-order void is REJECTED, D-023/D-024) | **Reason + authorization REQUIRED** | Yes(sensitive) | No-online-only by default (see ASSUMPTION below) | Terminal |
 | accepted → voided | manager / restaurant_owner / org_owner | post-submission termination | **Reason + authorization REQUIRED** | Yes(sensitive) | No-online-only | Terminal |
 | preparing → voided | manager / restaurant_owner / org_owner | post-submission termination; kitchen tickets cancelled as side-effect | **Reason + authorization REQUIRED** | Yes(sensitive) | No-online-only | Terminal |
 | ready → voided | manager / restaurant_owner / org_owner | post-submission termination | **Reason + authorization REQUIRED** | Yes(sensitive) | No-online-only | Terminal |
 | served → voided | manager / restaurant_owner / org_owner | allowed only when **no `completed` payment exists**; if any `payment` is `completed`, the void is **REJECTED in MVP** (would require the deferred refund flow, **D-024**) | **Reason + authorization REQUIRED** | Yes(sensitive) | No-online-only | Terminal |
 
-> **SECURITY REQUIREMENT (paid-order void):** In MVP a **paid** order (any associated `payments` row in `completed`) MUST NOT be voided at all — the void is **REJECTED** because reversing the completed payment would require the deferred refund flow (**D-024**; `completed → voided` is FORBIDDEN on the payment, **D-023**). The canonical isolation/permission test "a cashier cannot void a paid order without permission" still holds a fortiori: a plain cashier without permission CANNOT trigger any `* → voided` transition, and even a privileged role cannot void a *paid* order in MVP. (Where no completed payment exists, the standard authorized-actor + reason + audit void path of §1.1 applies.) See [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md).
+> **SECURITY REQUIREMENT (paid-order void):** In MVP a **paid** order (any associated `payments` row in `completed`) MUST NOT be voided at all — the void is **REJECTED** because reversing the completed payment would require the deferred refund flow (**D-024**; `completed → voided` is FORBIDDEN on the payment, **D-023**). Under **STAFF-CASHIER-PERMISSIONS-001** a cashier voids an **UNPAID** order **by default** (disableable per-cashier via `permissions.void_order='false'`); a cashier carrying that explicit deny CANNOT void. The canonical test's protected invariant (**T-006**) is preserved and strengthened: **no role — not even a privileged one — may void a PAID order in MVP** (`completed` payment ⇒ REJECTED). (Where no completed payment exists, the standard authorized-actor + reason + audit void path of §1.1 applies.) See [SECURITY_AND_THREAT_MODEL.md](SECURITY_AND_THREAT_MODEL.md).
 
 > **DECISION D-024 (order terminal + pre-completion cancel/void):** `completed` is **TERMINAL**: `completed → voided` and `completed → cancelled` are **FORBIDDEN**. Pre-completion `cancel`/`void` is allowed **only** when it is valid for the current state (per §1.1) **AND no `completed` payment exists** for the order. If a `completed` payment exists, any pre-completion `cancel`/`void` MUST be **REJECTED in MVP** — undoing it would require the deferred refund flow (refunds **DEFERRED**, see [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md)). Historical completed records are never rewritten to simulate a refund.
 
@@ -88,7 +88,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 - `served → preparing` (dine-in "back to kitchen") — **FORBIDDEN at order level**; achieved only via kitchen recall of a ticket (**§3**), which may pull the order back to `preparing` through the ticket machine.
 - `ready → served` for a **takeaway** order — **FORBIDDEN** (takeaway skips served).
 - `completed → voided` / `completed → cancelled` — **FORBIDDEN** (`completed` is TERMINAL, **DECISION D-024**); post-completion correction is a refund, which is **DEFERRED** (payment `refunded`, **Q-011** tips aside) — see [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md). Historical completed order records are never rewritten to simulate a refund.
-- Any cashier-initiated `* → voided` without the void permission — **FORBIDDEN** (SECURITY REQUIREMENT above).
+- A cashier-initiated `* → voided` when the cashier carries an explicit `permissions.void_order='false'` deny — **FORBIDDEN**; and **any** `* → voided` of a **PAID** order (regardless of role) — **FORBIDDEN** (SECURITY REQUIREMENT above). A default cashier voiding an UNPAID order is **permitted** (STAFF-CASHIER-PERMISSIONS-001).
 - `cancelled` after any order_item reached `preparing` — **FORBIDDEN**; once production has started the only termination is `voided`. This is the canonical **cancelled (pre-production) vs voided (post-submission/post-production)** boundary.
 
 ---
@@ -121,7 +121,7 @@ Each transition row carries these columns. The legend applies to all 10 machines
 - `preparing → cancelled` / `ready → cancelled` / `served → cancelled` — **FORBIDDEN**; once an item entered production the only removal is `voided` (mirrors order-level cancel-vs-void boundary).
 - `served → ready`, `ready → preparing`, `preparing → queued` without a recall event — **FORBIDDEN**; backward movement is exclusively a kitchen recall (§4) that the order_item follows.
 - `pending → preparing` (skipping `queued`) — **FORBIDDEN**.
-- Cashier-initiated `* → voided` without void permission — **FORBIDDEN** (SECURITY REQUIREMENT, §1).
+- Cashier-initiated `* → voided` when the cashier carries an explicit `void_order='false'` deny, or **any** void of a PAID order — **FORBIDDEN** (SECURITY REQUIREMENT, §1). A default cashier voiding an UNPAID order is permitted (STAFF-CASHIER-PERMISSIONS-001).
 
 ---
 

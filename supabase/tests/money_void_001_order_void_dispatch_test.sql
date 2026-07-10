@@ -43,8 +43,8 @@ insert into app_users (id, email) values
   ('b0000000-0000-0000-0000-0000000be001', 'vb-mgr@example.test');
 insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
   ('a0000000-0000-0000-0000-0000000ab001', 'a0000000-0000-0000-0000-0000000ae001', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', 'a0000000-0000-0000-0000-000000000a03', 'manager', '{}'::jsonb),
-  ('a0000000-0000-0000-0000-0000000ab002', 'a0000000-0000-0000-0000-0000000ae002', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', 'a0000000-0000-0000-0000-000000000a03', 'cashier', '{}'::jsonb),
-  ('a0000000-0000-0000-0000-0000000ab003', 'a0000000-0000-0000-0000-0000000ae003', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', 'a0000000-0000-0000-0000-000000000a03', 'cashier', '{"void_order": "true"}'::jsonb),
+  ('a0000000-0000-0000-0000-0000000ab002', 'a0000000-0000-0000-0000-0000000ae002', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', 'a0000000-0000-0000-0000-000000000a03', 'cashier', '{"void_order":"false"}'::jsonb),
+  ('a0000000-0000-0000-0000-0000000ab003', 'a0000000-0000-0000-0000-0000000ae003', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', 'a0000000-0000-0000-0000-000000000a03', 'cashier', '{}'::jsonb),
   ('a0000000-0000-0000-0000-0000000ab004', 'a0000000-0000-0000-0000-0000000ae004', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', 'a0000000-0000-0000-0000-000000000a03', 'kitchen_staff', '{}'::jsonb),
   ('b0000000-0000-0000-0000-0000000bb001', 'b0000000-0000-0000-0000-0000000be001', 'b0000000-0000-0000-0000-000000000b01', 'b0000000-0000-0000-0000-000000000b02', 'b0000000-0000-0000-0000-000000000b03', 'manager', '{}'::jsonb);
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
@@ -122,15 +122,18 @@ select is(
   (select status from orders where id = 'a0000000-0000-0000-0000-00000000a0d2'),
   'submitted', 'a denied void makes NO state change (order stays submitted)');
 
--- ===== (8) plain cashier (no permission) is DENIED ===========================
+-- ===== (8) explicit-deny cashier (void_order='false') is DENIED ==============
+-- STAFF-CASHIER-PERMISSIONS-001: a plain default cashier is now ALLOWED to void an
+-- unpaid order (covered by staff_cashier_permissions_001_test.sql); the denial
+-- path is now driven by an explicit deny override.
 select is(
   (pg_temp.vvoid('a0000000-0000-0000-0000-0000000ad002', 'a0000000-0000-0000-0000-0000000000d1', 'void-o3', 'a0000000-0000-0000-0000-00000000a0d3', 'x') -> 'results' -> 0 ->> 'error'),
-  'permission_denied', 'a cashier WITHOUT the void_order permission is denied');
+  'permission_denied', 'a cashier with an explicit void_order=false deny is denied');
 
--- ===== (9) cashier WITH permissions.void_order=true is ALLOWED ================
+-- ===== (9) DEFAULT cashier (no void deny) is ALLOWED =========================
 select is(
   (pg_temp.vvoid('a0000000-0000-0000-0000-0000000ad003', 'a0000000-0000-0000-0000-0000000000d1', 'void-o4', 'a0000000-0000-0000-0000-00000000a0d4', 'wrong table') -> 'results' -> 0 ->> 'status'),
-  'applied', 'a cashier WITH the void_order permission may void');
+  'applied', 'a default cashier (no void_order deny) may void');
 
 -- ===== (10-11) a PAID order is rejected (unpaid-only MVP) =====================
 select is(

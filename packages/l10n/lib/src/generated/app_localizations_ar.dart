@@ -2627,6 +2627,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get staffInactive => 'غير نشط';
 
   @override
+  String get staffCapabilitiesTitle => 'صلاحيات الكاشير';
+
+  @override
+  String get staffCapabilitiesHint =>
+      'مفعّلة تلقائياً. أطفئ المفتاح لإزالة تلك الصلاحية عن هذا الكاشير.';
+
+  @override
+  String get staffCapApplyDiscount => 'يمكنه تطبيق الخصومات';
+
+  @override
+  String get staffCapVoidOrder => 'يمكنه إلغاء الطلبات غير المدفوعة';
+
+  @override
+  String get staffCapCloseShift => 'يمكنه إغلاق ورديته';
+
+  @override
+  String get staffCapabilitiesAction => 'الصلاحيات';
+
+  @override
+  String get staffCapabilitiesSaved => 'تم تحديث الصلاحيات';
+
+  @override
   String get tablesTitle => 'الطاولات';
 
   @override

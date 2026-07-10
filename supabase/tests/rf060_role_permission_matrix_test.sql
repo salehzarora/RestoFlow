@@ -2,8 +2,10 @@
 -- RF-060 — CANONICAL gate: role permission matrix (T-003, T-006 full, T-011)
 -- ============================================================================
 -- T-003 kitchen_staff cannot read financials (direct rows + no money keys via sync_pull);
--- T-006 (FULL, now that RF-062 is merged): a cashier without void permission is denied,
---   and a manager OR an authorized cashier CANNOT void an order with a live completed
+-- T-006 (FULL, RF-062 + STAFF-CASHIER-PERMISSIONS-001): a cashier with an explicit
+--   void deny (permissions.void_order='false') is denied — a plain default cashier is
+--   now ALLOWED to void an unpaid order (staff_cashier_permissions_001_test.sql);
+--   and a manager OR a default cashier CANNOT void an order with a live completed
 --   payment (permission_denied + detail=order_has_completed_payment + order.void_denied
 --   audit + no mutation + no success ledger), while an unpaid eligible order still voids;
 -- T-011 accountant is strictly read-only (every mutating RPC denied).
@@ -37,9 +39,9 @@ insert into app_users (id, email) values
   ('00000000-0000-0000-0000-00000000ee04', 'rf060rpm-kitchen@example.test'),
   ('00000000-0000-0000-0000-00000000ee05', 'rf060rpm-accountant@example.test');
 insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
-  ('00000000-0000-0000-0000-00000000ab01', '00000000-0000-0000-0000-00000000ee01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{}'::jsonb),
+  ('00000000-0000-0000-0000-00000000ab01', '00000000-0000-0000-0000-00000000ee01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{"void_order":"false"}'::jsonb),
   ('00000000-0000-0000-0000-00000000ab02', '00000000-0000-0000-0000-00000000ee02', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'manager', '{}'::jsonb),
-  ('00000000-0000-0000-0000-00000000ab03', '00000000-0000-0000-0000-00000000ee03', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{"void_order":"true"}'::jsonb),
+  ('00000000-0000-0000-0000-00000000ab03', '00000000-0000-0000-0000-00000000ee03', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{}'::jsonb),
   ('00000000-0000-0000-0000-00000000ab04', '00000000-0000-0000-0000-00000000ee04', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'kitchen_staff', '{}'::jsonb),
   ('00000000-0000-0000-0000-00000000ab05', '00000000-0000-0000-0000-00000000ee05', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'accountant', '{}'::jsonb);
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
@@ -92,15 +94,15 @@ reset role;
 
 -- ===== T-006 cashier-no-permission + paid-order void (RF-062 canonical) ====== 6-16
 select ok((app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v0','noperm',null) ->> 'detail') is null,
-  'T-006: a plain cashier (no void permission) hits the AUTHORIZATION denial (no payment detail)');
+  'T-006: an explicit-deny cashier (void_order=false) hits the AUTHORIZATION denial (no payment detail)');
 select is((app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v0b','noperm',null) ->> 'error'), 'permission_denied',
-  'T-006: the plain-cashier void returns permission_denied');
+  'T-006: the explicit-deny cashier void returns permission_denied');
 select is((app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v1','manager paid void',null) ->> 'error'), 'permission_denied',
   'T-006: a MANAGER cannot void an order with a live completed payment (RF-062)');
 select is((app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v1b','manager paid void',null) ->> 'detail'), 'order_has_completed_payment',
   'T-006: the paid-order void denial carries detail=order_has_completed_payment');
 select is((app.void_order('00000000-0000-0000-0000-00000000c503','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v2','perm cashier paid void',null) ->> 'detail'), 'order_has_completed_payment',
-  'T-006: an AUTHORIZED cashier (void_order=true) is also blocked by the completed payment');
+  'T-006: a DEFAULT cashier (no void deny) is also blocked by the completed payment');
 -- RF060-B1: the authorized-cashier paid-order denial also carries error=permission_denied (not just detail)
 select is((app.void_order('00000000-0000-0000-0000-00000000c503','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v2b','perm cashier paid void',null) ->> 'error'), 'permission_denied',
   'T-006: the authorized-cashier paid-order void returns error=permission_denied');

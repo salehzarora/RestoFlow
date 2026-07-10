@@ -6,10 +6,11 @@
 -- record_payment, leaving the order at 'submitted' with a `completed` payment — D-025
 -- does not advance status), plus an unpaid order and a 'completed'-STATUS order.
 --   * manager/owner cannot void the paid order (permission_denied + detail) — no mutation;
---   * an authorized cashier (permissions.void_order=true) is likewise blocked by the payment;
+--   * a default cashier (no void deny) is likewise blocked by the payment;
 --   * an UNPAID eligible order still voids (happy path, items cascade, audit + ledger);
---   * a plain cashier (no void permission) still hits the AUTHORIZATION denial first
---     (the payment guard does not change existing behavior);
+--   * an EXPLICITLY-DENIED cashier (permissions.void_order='false',
+--     STAFF-CASHIER-PERMISSIONS-001) still hits the AUTHORIZATION denial first
+--     (the payment guard runs AFTER authorization — no payment-state leak);
 --   * a 'completed'-STATUS order is still rejected by state legality (42501);
 --   * idempotency: a prior successful void replays; a paid-order denial writes no ledger.
 -- Fixtures inserted as the BYPASSRLS connection role; RPCs derive actor/role from the
@@ -39,8 +40,8 @@ insert into app_users (id, email) values
   ('00000000-0000-0000-0000-00000000ee03', 'rf062a-cashier-perm@example.test');
 insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
   ('00000000-0000-0000-0000-00000000ab01', '00000000-0000-0000-0000-00000000ee01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'manager', '{}'::jsonb),
-  ('00000000-0000-0000-0000-00000000ab02', '00000000-0000-0000-0000-00000000ee02', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{}'::jsonb),
-  ('00000000-0000-0000-0000-00000000ab03', '00000000-0000-0000-0000-00000000ee03', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{"void_order":"true"}'::jsonb);
+  ('00000000-0000-0000-0000-00000000ab02', '00000000-0000-0000-0000-00000000ee02', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{"void_order":"false"}'::jsonb),
+  ('00000000-0000-0000-0000-00000000ab03', '00000000-0000-0000-0000-00000000ee03', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier', '{}'::jsonb);
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
   ('00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee01', '00000000-0000-0000-0000-00000000ab01'),
   ('00000000-0000-0000-0000-0000000ef002', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee02', '00000000-0000-0000-0000-00000000ab02'),
@@ -75,9 +76,9 @@ select ok(exists(select 1 from audit_events where action='order.void_denied'
 select is((select count(*) from order_operations where action='void_order' and order_id='00000000-0000-0000-0000-00000000a0d1')::int, 0,
   'NO order_operations void ledger row was written for the denied paid order');
 
--- ===== T2: authorized cashier (void_order permission) is ALSO blocked ======== 7-8
+-- ===== T2: a DEFAULT cashier (no void deny) is ALSO blocked ================== 7-8
 select is((app.void_order('00000000-0000-0000-0000-00000000c503','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v2','perm void',null) ->> 'detail'), 'order_has_completed_payment',
-  'an authorized cashier (permissions.void_order=true) is blocked by the completed payment');
+  'a default cashier (no void deny) is blocked by the completed payment');
 select is((select status from orders where id='00000000-0000-0000-0000-00000000a0d1')::text, 'submitted', 'paid order still unchanged after the authorized-cashier denial');
 
 -- ===== T3: UNPAID eligible order still voids (happy path preserved) =========== 9-13
@@ -91,9 +92,9 @@ select ok(exists(select 1 from audit_events where action='order.voided' and (new
 select is((select count(*) from order_operations where action='void_order' and order_id='00000000-0000-0000-0000-00000000a0d2')::int, 1,
   'a void_order ledger row was written for the successful void');
 
--- ===== T4: plain cashier (no void permission) still hits AUTH denial first ==== 14-16
+-- ===== T4: explicit-deny cashier still hits AUTH denial first ================ 14-16
 select is((app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v4','noperm',null) ->> 'error'), 'permission_denied',
-  'a plain cashier (no void permission) is denied (existing authorization behavior preserved)');
+  'a cashier with an explicit void_order=false deny is denied (authorization runs first)');
 select ok((app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-v4b','noperm',null) ->> 'detail') is null,
   'the plain-cashier denial is the AUTHORIZATION denial (no payment detail) — guard runs after authorization');
 select is((select status from orders where id='00000000-0000-0000-0000-00000000a0d1')::text, 'submitted', 'paid order still unchanged after the cashier authorization denial');
