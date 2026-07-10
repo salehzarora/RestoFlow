@@ -113,8 +113,7 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
         },
       );
     } else {
-      final canSend =
-          !cart.isEmpty && setup.isReadyToSubmit && !_submitting;
+      final canSend = !cart.isEmpty && setup.isReadyToSubmit && !_submitting;
       final pendingSync = ref
           .watch(outboxControllerProvider)
           .where((e) => e.syncState.isPending)

@@ -174,11 +174,9 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // order can go; clear only if a newer submit has not already replaced it.
     // `.ignore()` (not the returned original `future`, which the caller handles)
     // keeps a rejected submit from surfacing as an unhandled async error here.
-    future
-        .whenComplete(() {
-          if (identical(_inFlightSubmit, future)) _inFlightSubmit = null;
-        })
-        .ignore();
+    future.whenComplete(() {
+      if (identical(_inFlightSubmit, future)) _inFlightSubmit = null;
+    }).ignore();
     return future;
   }
 
