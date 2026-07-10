@@ -38,14 +38,11 @@ dependencies:
   # the real outbox uses to POST order.submit ops to public.sync_push (RF-126).
   restoflow_data_remote:
     path: ../../packages/data_remote
-  # ANDROID-003: Bluetooth Classic (SPP) thermal printing on the native Android
-  # POS app. Both are Android/iOS plugins — the web build skips them (no web
-  # platform impl) and the POS references them ONLY behind a conditional import
-  # (bluetooth_connector_native.dart), so web never links native Bluetooth code.
-  # print_bluetooth_thermal: bonded-device listing + connect + writeBytes (SPP,
-  # NOT BLE-only). permission_handler: the Android 12+ runtime BLUETOOTH_CONNECT/
-  # BLUETOOTH_SCAN requests.
-  print_bluetooth_thermal: ^1.1.1
+  # PRINT-BLUETOOTH-RECOVERY-001: Bluetooth Classic (SPP) printing runs over the
+  # in-house `restoflow.native_printing/bluetooth` MethodChannel implemented by
+  # this app's MainActivity (the broken `print_bluetooth_thermal` plugin was
+  # removed). permission_handler: the Android 12+ runtime BLUETOOTH_CONNECT
+  # request (connect only — the app never scans; bonded devices only).
   permission_handler: ^11.3.1
 dev_dependencies:
   flutter_test:

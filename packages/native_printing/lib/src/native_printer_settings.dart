@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import 'bluetooth_printer.dart';
 import 'native_printer_store.dart';
@@ -44,6 +45,9 @@ class NativePrinterStrings {
     required this.removeAction,
     required this.removedSnack,
     required this.bluetoothSavedSnack,
+    required this.btConnectFailed,
+    required this.btWriteFailed,
+    required this.btNotPaired,
   });
 
   final String transportHeading;
@@ -76,6 +80,13 @@ class NativePrinterStrings {
   final String removeAction;
   final String removedSnack;
   final String bluetoothSavedSnack;
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: category-specific Bluetooth TEST-PRINT
+  /// failure messages, so a connect failure, a mid-write failure, and a
+  /// not-paired device each read differently (and differently from Wi-Fi).
+  final String btConnectFailed;
+  final String btWriteFailed;
+  final String btNotPaired;
 }
 
 /// The on-device printer setup for a native app (ANDROID-003/004): a transport
@@ -482,6 +493,12 @@ class _BluetoothPrinterSectionState
   String? _selectedAddress;
   String? _selectedName;
 
+  /// PRINT-BLUETOOTH-RECOVERY-001: what KIND of failure the last test hit
+  /// (drives the category-specific message) + the developer diagnostic detail
+  /// (adapter/permission/attempt breakdown — shown small, never printed).
+  pp.PrinterErrorCategory? _failCategory;
+  String? _failDetail;
+
   NativePrinterStrings get _s => widget.strings;
 
   @override
@@ -528,7 +545,11 @@ class _BluetoothPrinterSectionState
   Future<void> _testPrint() async {
     final address = _selectedAddress;
     if (address == null) return;
-    setState(() => _status = _BtStatus.testing);
+    setState(() {
+      _status = _BtStatus.testing;
+      _failCategory = null;
+      _failDetail = null;
+    });
     final result = await ref
         .read(bluetoothPrinterTesterProvider)
         .testPrint(
@@ -536,7 +557,13 @@ class _BluetoothPrinterSectionState
           deviceLabel: widget.deviceLabel,
         );
     if (!mounted) return;
-    setState(() => _status = result.ok ? _BtStatus.success : _BtStatus.failure);
+    setState(() {
+      _status = result.ok ? _BtStatus.success : _BtStatus.failure;
+      // PRINT-BLUETOOTH-RECOVERY-001: keep the failure KIND (category-specific
+      // message) + the raw diagnostic so the operator sees exactly what failed.
+      _failCategory = result.ok ? null : result.category;
+      _failDetail = result.ok ? null : result.message;
+    });
   }
 
   @override
@@ -635,6 +662,8 @@ class _BluetoothPrinterSectionState
           status: _status,
           saved: saved,
           selectedAddress: selectedAddress,
+          failCategory: _failCategory,
+          failDetail: _failDetail,
         ),
       ],
     );
@@ -746,12 +775,31 @@ class _BtStatusRow extends StatelessWidget {
     required this.status,
     required this.saved,
     required this.selectedAddress,
+    this.failCategory,
+    this.failDetail,
   });
 
   final NativePrinterStrings strings;
   final _BtStatus status;
   final BluetoothPrinterConfig? saved;
   final String? selectedAddress;
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: the last test failure's category (drives
+  /// the specific message) and diagnostic detail (small secondary line).
+  final pp.PrinterErrorCategory? failCategory;
+  final String? failDetail;
+
+  /// The category-specific failure message — permission / adapter-off /
+  /// not-paired / connect / write each read differently; anything else keeps
+  /// the generic failure copy.
+  String get _failureLabel => switch (failCategory) {
+    pp.PrinterErrorCategory.permissionDenied => strings.permissionRequired,
+    pp.PrinterErrorCategory.bluetoothOff => strings.bluetoothOff,
+    pp.PrinterErrorCategory.notPaired => strings.btNotPaired,
+    pp.PrinterErrorCategory.unreachable => strings.btConnectFailed,
+    pp.PrinterErrorCategory.writeFailed => strings.btWriteFailed,
+    _ => strings.testFailure,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -768,7 +816,7 @@ class _BtStatusRow extends StatelessWidget {
         Icons.check_circle_outline,
       ),
       _BtStatus.failure => (
-        strings.testFailure,
+        _failureLabel,
         RestoflowTone.danger,
         Icons.error_outline,
       ),
@@ -784,18 +832,43 @@ class _BtStatusRow extends StatelessWidget {
               ),
     };
     final style = tone.styleOf(theme);
-    return Row(
-      key: const Key('bluetooth-status'),
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: RestoflowIconSizes.sm, color: style.accent),
-        const SizedBox(width: RestoflowSpacing.xs),
-        Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(color: style.accent),
-          ),
+        Row(
+          key: const Key('bluetooth-status'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: RestoflowIconSizes.sm, color: style.accent),
+            const SizedBox(width: RestoflowSpacing.xs),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(color: style.accent),
+              ),
+            ),
+          ],
         ),
+        // The raw diagnostic (attempt breakdown / byte counts) — technical
+        // DATA, deliberately small and LTR; shown only on a failure, never
+        // printed on paper, never sent anywhere.
+        if (status == _BtStatus.failure && failDetail != null)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(
+              start: RestoflowSpacing.lg,
+              top: RestoflowSpacing.xxs,
+            ),
+            child: Text(
+              failDetail!,
+              key: const Key('bluetooth-failure-detail'),
+              textDirection: TextDirection.ltr,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
       ],
     );
   }

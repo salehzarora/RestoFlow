@@ -83,7 +83,9 @@ final activeNativeTransportFactoryProvider =
             return () => BluetoothClassicPrintTransport(
               connector: connector,
               address: bt.address,
-              timeout: kNativePrintTimeout,
+              // PRINT-BLUETOOTH-RECOVERY-001: a cold SPP connect needs more
+              // than the 5s Wi-Fi budget; the native watchdog enforces this.
+              timeout: kBluetoothPrintTimeout,
             );
           }
         case PrinterTransportKind.network:

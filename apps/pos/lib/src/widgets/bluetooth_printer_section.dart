@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../print/bluetooth_printer.dart';
 import '../print/bluetooth_printer_tester.dart';
@@ -29,6 +30,13 @@ class _BluetoothPrinterSectionState
   _BtStatus _status = _BtStatus.idle;
   String? _selectedAddress;
   String? _selectedName;
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: the last test failure's category (drives a
+  /// specific message: permission / bluetooth-off / not-paired / connect /
+  /// write) + the developer diagnostic detail (small secondary line — never
+  /// printed on paper, never sent anywhere).
+  pp.PrinterErrorCategory? _failCategory;
+  String? _failDetail;
 
   @override
   void initState() {
@@ -78,7 +86,11 @@ class _BluetoothPrinterSectionState
   Future<void> _testPrint(AppLocalizations l10n) async {
     final address = _selectedAddress;
     if (address == null) return;
-    setState(() => _status = _BtStatus.testing);
+    setState(() {
+      _status = _BtStatus.testing;
+      _failCategory = null;
+      _failDetail = null;
+    });
     final deviceLabel = ref.read(posDeviceContextProvider)?.displayName;
     final result = await ref
         .read(bluetoothPrinterTesterProvider)
@@ -87,7 +99,13 @@ class _BluetoothPrinterSectionState
           deviceLabel: deviceLabel,
         );
     if (!mounted) return;
-    setState(() => _status = result.ok ? _BtStatus.success : _BtStatus.failure);
+    setState(() {
+      _status = result.ok ? _BtStatus.success : _BtStatus.failure;
+      // PRINT-BLUETOOTH-RECOVERY-001: keep the failure KIND + diagnostic so
+      // the status row says exactly what failed (not one generic message).
+      _failCategory = result.ok ? null : result.category;
+      _failDetail = result.ok ? null : result.message;
+    });
   }
 
   @override
@@ -190,6 +208,8 @@ class _BluetoothPrinterSectionState
           status: _status,
           saved: saved,
           selectedAddress: selectedAddress,
+          failCategory: _failCategory,
+          failDetail: _failDetail,
         ),
       ],
     );
@@ -302,12 +322,32 @@ class _StatusRow extends StatelessWidget {
     required this.status,
     required this.saved,
     required this.selectedAddress,
+    this.failCategory,
+    this.failDetail,
   });
 
   final AppLocalizations l10n;
   final _BtStatus status;
   final PosBluetoothPrinterConfig? saved;
   final String? selectedAddress;
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: the last test failure's category + raw
+  /// diagnostic detail — see [_failureLabel].
+  final pp.PrinterErrorCategory? failCategory;
+  final String? failDetail;
+
+  /// The category-specific failure message — permission / adapter-off /
+  /// not-paired / connect / write each read differently (and differently from
+  /// the Wi-Fi failure copy); anything else keeps the generic failure copy.
+  String get _failureLabel => switch (failCategory) {
+    pp.PrinterErrorCategory.permissionDenied =>
+      l10n.posBluetoothPermissionRequired,
+    pp.PrinterErrorCategory.bluetoothOff => l10n.posBluetoothOff,
+    pp.PrinterErrorCategory.notPaired => l10n.posBluetoothNotPaired,
+    pp.PrinterErrorCategory.unreachable => l10n.posBluetoothConnectFailed,
+    pp.PrinterErrorCategory.writeFailed => l10n.posBluetoothWriteFailed,
+    _ => l10n.posNetworkPrinterTestFailure,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +364,7 @@ class _StatusRow extends StatelessWidget {
         Icons.check_circle_outline,
       ),
       _BtStatus.failure => (
-        l10n.posNetworkPrinterTestFailure,
+        _failureLabel,
         RestoflowTone.danger,
         Icons.error_outline,
       ),
@@ -348,18 +388,43 @@ class _StatusRow extends StatelessWidget {
               ),
     };
     final style = tone.styleOf(theme);
-    return Row(
-      key: const Key('bluetooth-status'),
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: RestoflowIconSizes.sm, color: style.accent),
-        const SizedBox(width: RestoflowSpacing.xs),
-        Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(color: style.accent),
-          ),
+        Row(
+          key: const Key('bluetooth-status'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: RestoflowIconSizes.sm, color: style.accent),
+            const SizedBox(width: RestoflowSpacing.xs),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(color: style.accent),
+              ),
+            ),
+          ],
         ),
+        // The raw diagnostic (attempt breakdown / byte counts) — technical
+        // DATA, small and LTR, shown only on a failure. Never printed on
+        // paper, never sent anywhere (a MAC address stays on this device).
+        if (status == _BtStatus.failure && failDetail != null)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(
+              start: RestoflowSpacing.lg,
+              top: RestoflowSpacing.xxs,
+            ),
+            child: Text(
+              failDetail!,
+              key: const Key('bluetooth-failure-detail'),
+              textDirection: TextDirection.ltr,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
       ],
     );
   }

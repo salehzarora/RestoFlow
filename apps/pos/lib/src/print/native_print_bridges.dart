@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
-    show nativePrintRasterizerProvider;
+    show kBluetoothPrintTimeout, nativePrintRasterizerProvider;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../state/pos_bluetooth_printer_config.dart';
@@ -111,7 +111,10 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
           transportFactory: () => BluetoothClassicPrintTransport(
             connector: connector,
             address: bt.address,
-            timeout: kPosNativePrintTimeout,
+            // PRINT-BLUETOOTH-RECOVERY-001: BT gets its own budget — a cold
+            // SPP connect regularly exceeds the 5s Wi-Fi budget, and the
+            // native watchdog enforces the bound for real.
+            timeout: kBluetoothPrintTimeout,
           ),
         );
       }

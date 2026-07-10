@@ -2486,5 +2486,11 @@
   "kdsNewOrderBadge": "New order",
   "@kdsNewOrderBadge": {"description": "TABLET-UX-001: a small attention badge shown on a KDS card while a freshly-arrived order is still new, so the chef notices it. Money-free chrome."},
   "posReceiptPrintedNote": "Printed",
-  "@posReceiptPrintedNote": {"description": "TABLET-UX-001: honest cashier-facing note on the paid receipt card confirming the receipt was sent to and printed by the configured printer (shown only on a successful print, replacing the stale not-connected note)."}
+  "@posReceiptPrintedNote": {"description": "TABLET-UX-001: honest cashier-facing note on the paid receipt card confirming the receipt was sent to and printed by the configured printer (shown only on a successful print, replacing the stale not-connected note)."},
+  "posBluetoothConnectFailed": "Could not connect to the Bluetooth printer. Check it is on and in range, then try again.",
+  "@posBluetoothConnectFailed": {"description": "PRINT-BLUETOOTH-RECOVERY-001: Bluetooth test/print failure — both the secure and insecure connect attempts failed (printer off / out of range / busy)."},
+  "posBluetoothWriteFailed": "Failed to send the print data — the printer dropped the connection mid-print. Try again.",
+  "@posBluetoothWriteFailed": {"description": "PRINT-BLUETOOTH-RECOVERY-001: Bluetooth test/print failure — the connection opened but writing the bytes failed mid-stream."},
+  "posBluetoothNotPaired": "This printer is not paired. Pair it in Android Bluetooth settings, then try again.",
+  "@posBluetoothNotPaired": {"description": "PRINT-BLUETOOTH-RECOVERY-001: Bluetooth test/print failure — the selected device is no longer bonded/paired in the OS settings."}
 }

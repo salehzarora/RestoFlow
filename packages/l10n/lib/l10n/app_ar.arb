@@ -1013,5 +1013,8 @@
   "posCartEditItem": "تعديل",
   "posEditSaveChanges": "حفظ التعديلات",
   "kdsNewOrderBadge": "طلب جديد",
-  "posReceiptPrintedNote": "تمت الطباعة"
+  "posReceiptPrintedNote": "تمت الطباعة",
+  "posBluetoothConnectFailed": "تعذر الاتصال بالطابعة عبر البلوتوث. تأكد أنها مشغّلة وضمن النطاق ثم حاول مجددًا.",
+  "posBluetoothWriteFailed": "فشل إرسال بيانات الطباعة — انقطع الاتصال أثناء الطباعة. حاول مجددًا.",
+  "posBluetoothNotPaired": "هذه الطابعة غير مقترنة. أعد إقران الطابعة من إعدادات البلوتوث ثم حاول مجددًا."
 }

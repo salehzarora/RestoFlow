@@ -7,7 +7,7 @@ import 'bluetooth_printer.dart';
 /// Web / non-`dart:io` Bluetooth connector (ANDROID-003): Bluetooth Classic
 /// printing is not available in a browser, so every call fails clearly. The
 /// native (`dart:io`) connector in `bluetooth_connector_native.dart` is selected
-/// by a conditional import on Android; web never links the Bluetooth plugin.
+/// by a conditional import on Android; web never links the native channel.
 BluetoothPrinterConnector createBluetoothPrinterConnector() =>
     const _UnsupportedBluetoothConnector();
 
@@ -28,7 +28,7 @@ class _UnsupportedBluetoothConnector implements BluetoothPrinterConnector {
   Future<pp.PrintResult> send({
     required String address,
     required Uint8List bytes,
-    Duration timeout = const Duration(seconds: 8),
+    Duration timeout = kBluetoothPrintTimeout,
   }) async => const pp.PrintResult.failure(
     pp.PrinterErrorCategory.unsupported,
     'Bluetooth printing is not available on this platform.',

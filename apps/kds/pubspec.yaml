@@ -32,11 +32,11 @@ dependencies:
   # KDS prints MONEY-FREE kitchen tickets over the selected local transport.
   restoflow_native_printing:
     path: ../../packages/native_printing
-  # ANDROID-004: Bluetooth Classic (SPP) thermal printing on native Android. Both
-  # are Android/iOS plugins - the web build skips them (no web platform impl) and
-  # the KDS references them ONLY transitively via restoflow_native_printing behind
-  # its conditional import, so web never links native Bluetooth code.
-  print_bluetooth_thermal: ^1.1.1
+  # PRINT-BLUETOOTH-RECOVERY-001: Bluetooth Classic (SPP) printing runs over the
+  # in-house `restoflow.native_printing/bluetooth` MethodChannel implemented by
+  # this app's MainActivity (the broken `print_bluetooth_thermal` plugin was
+  # removed). permission_handler: the Android 12+ runtime BLUETOOTH_CONNECT
+  # request, referenced transitively via restoflow_native_printing.
   permission_handler: ^11.3.1
   # RF-108 Stage 4: the auth gate (demo-mode fallback / role-based entry).
   restoflow_auth_identity:
