@@ -56,7 +56,7 @@ class CartPanel extends StatelessWidget {
 /// The shared cart content (DESIGN-004): everything below the shift bar. Reads
 /// the same providers whether it is embedded in the [CartPanel] side panel or
 /// the phone slide-up sheet — no cart logic is duplicated.
-class CartPanelContent extends ConsumerWidget {
+class CartPanelContent extends ConsumerStatefulWidget {
   const CartPanelContent({
     this.isSheet = false,
     this.compact = false,
@@ -74,7 +74,19 @@ class CartPanelContent extends ConsumerWidget {
   final VoidCallback? onClose;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CartPanelContent> createState() => _CartPanelContentState();
+}
+
+class _CartPanelContentState extends ConsumerState<CartPanelContent> {
+  // POS-SUBMIT-GUARD-001: true while an order submit is in flight (the enqueue
+  // and, in real mode, the awaited sync_push round-trip). While set, the Send
+  // button is disabled AND shows an inline spinner, so a double-tap on slow
+  // Wi-Fi cannot enqueue a SECOND order — each submit mints fresh
+  // order/operation UUIDs that server idempotency (D-022) cannot dedupe.
+  bool _submitting = false;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cart = ref.watch(cartControllerProvider);
     final controller = ref.read(cartControllerProvider.notifier);
@@ -87,7 +99,7 @@ class CartPanelContent extends ConsumerWidget {
     // TABLET-UX-001 (B): the side cart (two-pane tablet/landscape) uses compact,
     // denser line rows so more of the order is visible at once; the phone
     // slide-up sheet keeps its roomier rows.
-    final dense = !isSheet;
+    final dense = !widget.isSheet;
 
     final submittedOrder = cart.submittedOrder;
     final Widget body;
@@ -101,7 +113,7 @@ class CartPanelContent extends ConsumerWidget {
         },
       );
     } else {
-      final canSend = !cart.isEmpty && setup.isReadyToSubmit;
+      final canSend = !cart.isEmpty && setup.isReadyToSubmit && !_submitting;
       final pendingSync = ref
           .watch(outboxControllerProvider)
           .where((e) => e.syncState.isPending)
@@ -172,10 +184,11 @@ class CartPanelContent extends ConsumerWidget {
               orderType: setup.orderType,
               tableLabel: setup.assignedTable?.label,
               showNeedsTableHint: cart.isNotEmpty && setup.needsTableWarning,
+              // POS-SUBMIT-GUARD-001: the spinner + disabled state while a submit
+              // is in flight.
+              submitting: _submitting,
               onSend: canSend
-                  ? () => _submitOrder(
-                      ref: ref,
-                      context: context,
+                  ? () => _handleSend(
                       cart: cart,
                       setup: setup,
                       cartController: controller,
@@ -199,13 +212,47 @@ class CartPanelContent extends ConsumerWidget {
       child: body,
     );
 
-    if (!isSheet) return swapped;
+    if (!widget.isSheet) return swapped;
     return Column(
       children: [
-        _SheetGrip(l10n: l10n, onClose: onClose),
+        _SheetGrip(l10n: l10n, onClose: widget.onClose),
         Expanded(child: swapped),
       ],
     );
+  }
+
+  /// POS-SUBMIT-GUARD-001: the guarded Send handler. A second tap while a submit
+  /// is already running is ignored two ways — the `_submitting` re-entry gate
+  /// below and the disabled Send button (`canSend` clears while submitting) — so
+  /// no duplicate order can be enqueued. The spinner stays until the enqueue
+  /// (and, in real mode, the push) settles, then Send re-enables only if the
+  /// submit failed and left the cart intact.
+  Future<void> _handleSend({
+    required CartViewState cart,
+    required OrderSetupState setup,
+    required CartController cartController,
+    required OrderSetupController setupController,
+    required AppLocalizations l10n,
+    required int taxTotalMinor,
+    required int taxRateBp,
+  }) async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    try {
+      await _submitOrder(
+        ref: ref,
+        context: context,
+        cart: cart,
+        setup: setup,
+        cartController: cartController,
+        setupController: setupController,
+        l10n: l10n,
+        taxTotalMinor: taxTotalMinor,
+        taxRateBp: taxRateBp,
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 }
 
@@ -843,6 +890,7 @@ class _CartFooter extends StatelessWidget {
     required this.tableLabel,
     required this.onSend,
     this.showNeedsTableHint = false,
+    this.submitting = false,
   });
 
   final AppLocalizations l10n;
@@ -854,6 +902,10 @@ class _CartFooter extends StatelessWidget {
   final String? tableLabel;
   final VoidCallback? onSend;
   final bool showNeedsTableHint;
+
+  /// POS-SUBMIT-GUARD-001: a submit is in flight — swap the Send icon for an
+  /// inline spinner (the button is also disabled via a null [onSend]).
+  final bool submitting;
 
   @override
   Widget build(BuildContext context) {
@@ -938,7 +990,12 @@ class _CartFooter extends StatelessWidget {
                 ),
                 child: FilledButton.icon(
                   onPressed: onSend,
-                  icon: const Icon(Icons.send),
+                  // POS-SUBMIT-GUARD-001: an explicit primary-tinted spinner (the
+                  // disabled foreground would otherwise wash it out) marks the
+                  // in-flight submit until the confirmation replaces the cart.
+                  icon: submitting
+                      ? RestoflowInlineSpinner(color: theme.colorScheme.primary)
+                      : const Icon(Icons.send),
                   label: Text(l10n.posSendOrder),
                   style: RestoflowButtonStyles.big(context),
                 ),

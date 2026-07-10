@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,34 @@ import 'package:restoflow_pos/src/data/order_submission.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
+
+/// POS-SUBMIT-GUARD-001 harness: an outbox repo whose [enqueue] blocks on [_gate]
+/// so a submit can be held in flight while a second submit is issued, and which
+/// counts enqueue CALLS (a duplicate order would mint a fresh local_operation_id,
+/// so this counter — not idempotency — proves the controller-level lock).
+class _GatedEnqueueStore implements OutboxRepository {
+  _GatedEnqueueStore(this._gate);
+
+  final Future<void> _gate;
+  final DemoOutboxStore _inner = DemoOutboxStore(delay: (_) async {});
+  int enqueueCount = 0;
+
+  @override
+  Future<OutboxEntry> enqueue(OutboxEntry entry) async {
+    enqueueCount++;
+    await _gate;
+    return _inner.enqueue(entry);
+  }
+
+  @override
+  Future<List<OutboxEntry>> recentEntries() => _inner.recentEntries();
+
+  @override
+  Future<OutboxEntry> push(String entryId) => _inner.push(entryId);
+
+  @override
+  Future<OutboxEntry> retry(String entryId) => _inner.retry(entryId);
+}
 
 CartLineView _line(String id, String name, int qty, int unit) => CartLineView(
   lineId: 'l-$id',
@@ -142,6 +171,51 @@ void main() {
       final json = jsonDecode(result.entry.payloadJson) as Map<String, dynamic>;
       expect(json['order_type'], 'takeaway');
       expect(json['table_id'], isNull);
+    });
+
+    test('POS-SUBMIT-GUARD-001: a concurrent submit joins the in-flight one — '
+        'one order enqueued, not two', () async {
+      final gate = Completer<void>();
+      final gated = _GatedEnqueueStore(gate.future);
+      final c = ProviderContainer(
+        overrides: [outboxRepositoryProvider.overrideWithValue(gated)],
+      );
+      addTearDown(c.dispose);
+      final ctrl = c.read(outboxControllerProvider.notifier);
+
+      // First submit starts and blocks in enqueue (in flight). A second submit
+      // issued before it settles must JOIN it — the same future, not a new order
+      // (this is what survives a phone cart-sheet dismiss/reopen that drops the
+      // widget-local guard).
+      final f1 = ctrl.submit(
+        lines: [_line('cola', 'Cola', 1, 900)],
+        subtotalMinor: 900,
+        currencyCode: 'ILS',
+        orderType: OrderType.takeaway,
+      );
+      final f2 = ctrl.submit(
+        lines: [_line('cola', 'Cola', 1, 900)],
+        subtotalMinor: 900,
+        currencyCode: 'ILS',
+        orderType: OrderType.takeaway,
+      );
+      expect(identical(f1, f2), isTrue);
+
+      gate.complete();
+      final r1 = await f1;
+      final r2 = await f2;
+      expect(r1.entry.id, r2.entry.id);
+      expect(gated.enqueueCount, 1);
+
+      // Once it settles the lock releases, so a genuinely new order can submit.
+      final r3 = await ctrl.submit(
+        lines: [_line('cola', 'Cola', 1, 900)],
+        subtotalMinor: 900,
+        currencyCode: 'ILS',
+        orderType: OrderType.takeaway,
+      );
+      expect(r3.entry.id, isNot(r1.entry.id));
+      expect(gated.enqueueCount, 2);
     });
   });
 
