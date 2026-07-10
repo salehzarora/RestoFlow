@@ -67,8 +67,12 @@ class KdsBoard extends StatelessWidget {
     for (final ticket in tickets) {
       (byBucket[_bucket(ticket.status)] ??= <KdsTicketView>[]).add(ticket);
     }
+    // KDS-FIFO-001: within every status column, oldest submitted order first
+    // (stable id tie-break) — the top card is the next ticket to handle. A
+    // status change re-buckets the ticket, which then takes its age-order place
+    // in the new column; a newer ticket never jumps above an older one.
     for (final list in byBucket.values) {
-      list.sort((a, b) => a.kitchenTicketId.compareTo(b.kitchenTicketId));
+      list.sort(KdsTicketView.compareByOldestFirst);
     }
     return [
       _BoardColumn('new', l10n.kdsColNew, byBucket['new'] ?? const []),
