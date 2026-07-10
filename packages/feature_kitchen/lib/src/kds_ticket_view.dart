@@ -109,4 +109,25 @@ class KdsTicketView {
 
   /// The current local status; mutated by bump/recall on the screen.
   KitchenTicketStatus status;
+
+  /// KDS-FIFO-001: the canonical KDS column ordering — OLDEST submitted order
+  /// first, so the top of every column is the next ticket the kitchen should
+  /// handle. Primary key is [submittedAt] ascending; a ticket with no timestamp
+  /// sorts AFTER any dated ticket (it never jumps above a known-older one);
+  /// equal timestamps — and two undated tickets — break on the stable, unique
+  /// [kitchenTicketId] so the result is fully deterministic and a re-pull never
+  /// reshuffles same-time tickets. Never sorts by the id as the PRIMARY key.
+  static int compareByOldestFirst(KdsTicketView a, KdsTicketView b) {
+    final at = a.submittedAt;
+    final bt = b.submittedAt;
+    if (at != null && bt != null) {
+      final byTime = at.compareTo(bt);
+      if (byTime != 0) return byTime;
+    } else if (at == null && bt != null) {
+      return 1; // a (undated) after b (dated)
+    } else if (at != null && bt == null) {
+      return -1; // a (dated) before b (undated)
+    }
+    return a.kitchenTicketId.compareTo(b.kitchenTicketId);
+  }
 }

@@ -32,10 +32,13 @@ class KitchenBoard extends StatelessWidget {
   static const double _wideBreakpoint = RestoflowBreakpoints.wide;
   static const double _columnWidth = RestoflowPanelWidths.kdsColumn;
 
+  // KDS-FIFO-001: each status column ordered oldest submitted first (stable
+  // ticketId tie-break) so the demo board reads FIFO like the live board — the
+  // top card is the next ticket to handle.
   List<KitchenOrderTicket> _bucket(Set<KitchenTicketStatus> statuses) => [
     for (final t in tickets)
       if (statuses.contains(t.status)) t,
-  ];
+  ]..sort(KitchenOrderTicket.compareByOldestFirst);
 
   KitchenOrderCard _card(KitchenOrderTicket t) => KitchenOrderCard(
     ticket: t,

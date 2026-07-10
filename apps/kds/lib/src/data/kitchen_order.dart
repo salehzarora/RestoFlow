@@ -67,4 +67,13 @@ class KitchenOrderTicket {
         items: items,
         status: status ?? this.status,
       );
+
+  /// KDS-FIFO-001: demo-board column ordering — OLDEST submitted first so the
+  /// top of each column is the next ticket to handle, matching the live board.
+  /// [submittedAt] is non-null here; the stable [ticketId] is the deterministic
+  /// tie-break for equal times.
+  static int compareByOldestFirst(KitchenOrderTicket a, KitchenOrderTicket b) {
+    final byTime = a.submittedAt.compareTo(b.submittedAt);
+    return byTime != 0 ? byTime : a.ticketId.compareTo(b.ticketId);
+  }
 }

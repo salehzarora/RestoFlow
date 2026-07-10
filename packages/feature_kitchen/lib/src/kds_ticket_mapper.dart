@@ -230,7 +230,9 @@ class KdsTicketMapper {
               ),
             )
             .toList()
-          ..sort((a, b) => a.kitchenTicketId.compareTo(b.kitchenTicketId));
+          // KDS-FIFO-001: oldest submitted order first (stable id tie-break) so
+          // the kitchen can trust the top of each column is the next to make.
+          ..sort(KdsTicketView.compareByOldestFirst);
     return tickets;
   }
 
