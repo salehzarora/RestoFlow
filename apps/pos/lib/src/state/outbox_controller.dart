@@ -132,10 +132,57 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     }
   }
 
+  /// POS-SUBMIT-GUARD-001: a submit already running on THIS controller. The
+  /// controller (a Notifier) outlives any cart widget, so this lock holds even
+  /// when the phone cart sheet is dismissed and reopened mid-submit — the case
+  /// that would otherwise drop [CartPanelContent]'s widget-local guard and let a
+  /// second Send tap mint a duplicate order with fresh idempotency keys.
+  Future<OrderSubmitResult>? _inFlightSubmit;
+
   /// Builds + enqueues an order submission from the current cart snapshot.
   /// Throws [OrderSubmissionException] for an empty cart or a dine-in order
   /// without a table (defence-in-depth — the Send button is also gated).
+  ///
+  /// POS-SUBMIT-GUARD-001: while a submit is in flight, a repeat call JOINS it
+  /// (returns the same future / the same order) instead of enqueuing a second
+  /// `order.submit` op. This is the correctness boundary; the Send-button
+  /// spinner is the UX layer on top.
   Future<OrderSubmitResult> submit({
+    required List<CartLineView> lines,
+    required int subtotalMinor,
+    required String currencyCode,
+    required OrderType orderType,
+    String? tableId,
+    String? tableLabel,
+    int taxTotalMinor = 0,
+    String? customerName,
+  }) {
+    final existing = _inFlightSubmit;
+    if (existing != null) return existing;
+    final future = _runSubmit(
+      lines: lines,
+      subtotalMinor: subtotalMinor,
+      currencyCode: currencyCode,
+      orderType: orderType,
+      tableId: tableId,
+      tableLabel: tableLabel,
+      taxTotalMinor: taxTotalMinor,
+      customerName: customerName,
+    );
+    _inFlightSubmit = future;
+    // Release the lock once the submit settles (success OR failure) so the next
+    // order can go; clear only if a newer submit has not already replaced it.
+    // `.ignore()` (not the returned original `future`, which the caller handles)
+    // keeps a rejected submit from surfacing as an unhandled async error here.
+    future
+        .whenComplete(() {
+          if (identical(_inFlightSubmit, future)) _inFlightSubmit = null;
+        })
+        .ignore();
+    return future;
+  }
+
+  Future<OrderSubmitResult> _runSubmit({
     required List<CartLineView> lines,
     required int subtotalMinor,
     required String currencyCode,

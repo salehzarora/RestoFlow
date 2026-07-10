@@ -1,11 +1,43 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_pos/src/data/order_submission.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
+
+/// POS-SUBMIT-GUARD-001 harness: an outbox repo whose [enqueue] blocks on [_gate]
+/// so a submit can be held "in flight" while the test fires a second Send tap.
+/// It counts every enqueue CALL (a duplicate submit would mint a fresh
+/// local_operation_id, so this counter — not idempotency — is what proves the
+/// guard). Everything else delegates to a plain in-memory demo store.
+class _GatedOutboxStore implements OutboxRepository {
+  _GatedOutboxStore(this._gate);
+
+  final Future<void> _gate;
+  final DemoOutboxStore _inner = DemoOutboxStore(delay: (_) async {});
+  int enqueueCount = 0;
+
+  @override
+  Future<OutboxEntry> enqueue(OutboxEntry entry) async {
+    enqueueCount++;
+    await _gate;
+    return _inner.enqueue(entry);
+  }
+
+  @override
+  Future<List<OutboxEntry>> recentEntries() => _inner.recentEntries();
+
+  @override
+  Future<OutboxEntry> push(String entryId) => _inner.push(entryId);
+
+  @override
+  Future<OutboxEntry> retry(String entryId) => _inner.retry(entryId);
+}
 
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
@@ -155,6 +187,36 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.posSyncStateSynced), findsOneWidget);
+  });
+
+  testWidgets('POS-SUBMIT-GUARD-001: a double-tap on Send while the submit is '
+      'in flight enqueues exactly one order', (tester) async {
+    final l10n = await _en();
+    final gate = Completer<void>();
+    final repo = _GatedOutboxStore(gate.future);
+    await _pump(tester, repo: repo);
+
+    await _addItem(tester);
+
+    // First tap: the enqueue starts and blocks on the gate, so the submit is
+    // held in flight — Send shows a spinner and is disabled.
+    await tester.tap(find.text(l10n.posSendOrder));
+    await tester.pump(); // apply setState(_submitting = true)
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(repo.enqueueCount, 1);
+
+    // Second (impatient) tap while still in flight must NOT enqueue a second
+    // order — the button is disabled and the re-entry guard also short-circuits.
+    await tester.tap(find.text(l10n.posSendOrder), warnIfMissed: false);
+    await tester.pump();
+    expect(repo.enqueueCount, 1);
+
+    // Releasing the gate lets the single order settle into a confirmation.
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(repo.enqueueCount, 1);
+    expect(find.text(l10n.posOrderSubmittedTitle), findsOneWidget);
+    expect(find.text(l10n.posSendOrder), findsNothing);
   });
 
   testWidgets('starting a new order returns to an empty cart after submit', (
