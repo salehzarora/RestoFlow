@@ -27,7 +27,12 @@ class RecentOrdersButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final orders = ref.watch(posRecentOrdersControllerProvider);
-    final unpaid = orders.where((o) => !o.isPaid).length;
+    // MONEY-VOID-001: mirror PosRecentOrdersController.unpaidCount — a cancelled
+    // (voided) order is no longer active work, so it must not count toward the
+    // unpaid badge (a voided order carries no payment, so !isPaid alone would
+    // still count it). Watching the list state above keeps this reactive: the
+    // badge updates the instant an order is cancelled, no restart needed.
+    final unpaid = orders.where((o) => !o.isPaid && !o.isVoided).length;
     final icon = IconButton(
       key: const Key('recent-orders-button'),
       tooltip: l10n.posRecentOrdersTitle,
