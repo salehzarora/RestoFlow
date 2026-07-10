@@ -27,10 +27,19 @@ Widget _card(
   KdsTicketView ticket, {
   VoidCallback? onReprint,
   bool highlightNew = false,
+  bool disableAnimations = false,
 }) => MaterialApp(
   localizationsDelegates: restoflowLocalizationsDelegates,
   supportedLocales: kSupportedLocales,
   theme: restoflowBaseTheme(brightness: Brightness.dark),
+  // Inject the reduce-motion flag BELOW the app's MediaQuery so the alert's
+  // accessibility branch (static outline, no animation) is exercised.
+  builder: (context, child) => disableAnimations
+      ? MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        )
+      : child!,
   home: Scaffold(
     body: SizedBox(
       width: 460,
@@ -160,6 +169,60 @@ void main() {
       await tester.pumpWidget(_screen([_ticket('o4')], window: Duration.zero));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('kds-new-arrival-o4')), findsNothing);
+    });
+  });
+
+  // ---- TABLET-UX-001 (C): the STRONGER, more noticeable new-order alert. ----
+  group('C stronger new-order alert', () {
+    testWidgets('a highlighted card shows a loud "New order" badge; a '
+        'non-highlighted one does not — and it stays readable + money-free', (
+      tester,
+    ) async {
+      final l10n = await _en();
+      await tester.pumpWidget(_card(l10n, _ticket('o1'), highlightNew: true));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('kds-new-badge-o1')), findsOneWidget);
+      expect(find.text(l10n.kdsNewOrderBadge), findsOneWidget);
+      // The order content stays present/readable, and no money leaks (T-003).
+      expect(find.text('Burger ×1'), findsOneWidget);
+      expect(find.textContaining('₪'), findsNothing);
+
+      await tester.pumpWidget(_card(l10n, _ticket('o1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('kds-new-badge-o1')), findsNothing);
+      expect(find.text(l10n.kdsNewOrderBadge), findsNothing);
+    });
+
+    testWidgets('reduce-motion still shows a static, visible alert (highlight '
+        'wrapper + badge), with no animation exception', (tester) async {
+      final l10n = await _en();
+      await tester.pumpWidget(
+        _card(l10n, _ticket('o1'), highlightNew: true, disableAnimations: true),
+      );
+      await tester.pumpAndSettle();
+
+      // The alert is still present (the accessibility branch renders a static
+      // outline) and unmistakable via the badge — no infinite animation hang.
+      expect(find.byKey(const Key('kds-new-arrival-o1')), findsOneWidget);
+      expect(find.byKey(const Key('kds-new-badge-o1')), findsOneWidget);
+      expect(find.text('Burger ×1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('on the board the badge appears on arrival and clears on '
+        'acknowledge', (tester) async {
+      _wide(tester);
+      final l10n = await _en();
+      await tester.pumpWidget(_screen(const []));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(_screen([_ticket('o5')]));
+      await tester.pump();
+      expect(find.byKey(const Key('kds-new-badge-o5')), findsOneWidget);
+
+      await tester.tap(find.text(l10n.kdsAcknowledgeAction));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('kds-new-badge-o5')), findsNothing);
     });
   });
 }

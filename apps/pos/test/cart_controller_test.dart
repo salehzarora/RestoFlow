@@ -147,4 +147,69 @@ void main() {
     expect(state().lines.single.name, 'Cola');
     expect(state().subtotalMinor, 900);
   });
+
+  // ---- TABLET-UX-001 (A): editing a cart line in place. ----
+
+  const cheese = SelectedModifier(
+    optionId: 'opt-cheese',
+    groupName: 'Toppings',
+    optionName: 'Cheese',
+    priceDeltaMinor: 300,
+  );
+  const extraPatty = SelectedModifier(
+    optionId: 'opt-patty',
+    groupName: 'Extras',
+    optionName: 'Extra patty',
+    priceDeltaMinor: 900,
+  );
+
+  test('updateLineModifiers replaces the line in place (no duplicate) and '
+      'recomputes the total', () {
+    controller().addItemWithModifiers(burger, const [cheese]);
+    expect(state().lines.length, 1);
+    final lineId = state().lines.single.lineId;
+    expect(state().subtotalMinor, 4500); // 4200 + 300
+
+    // Edit: swap Cheese -> Extra patty. Same line, price recomputes.
+    controller().updateLineModifiers(lineId, const [extraPatty]);
+    expect(state().lines.length, 1); // NOT a duplicate
+    expect(state().lines.single.lineId, lineId); // same line
+    expect(state().lines.single.modifiers.single.optionName, 'Extra patty');
+    expect(state().subtotalMinor, 5100); // 4200 + 900
+  });
+
+  test('updateLineModifiers preserves the line quantity', () {
+    controller().addItemWithModifiers(burger, const [cheese]);
+    final lineId = state().lines.single.lineId;
+    controller().increaseQuantity(lineId); // qty 2
+    expect(state().lines.single.quantity, 2);
+
+    controller().updateLineModifiers(lineId, const [extraPatty]);
+    expect(state().lines.single.quantity, 2); // preserved
+    // 2 × 4200 + 900 (one patty, once per line) = 9300.
+    expect(state().subtotalMinor, 9300);
+  });
+
+  test('updateLineModifiers can clear modifiers + set/clear a note', () {
+    controller().addItemWithModifiers(burger, const [cheese], note: 'no salt');
+    final lineId = state().lines.single.lineId;
+    expect(state().lines.single.note, 'no salt');
+
+    // Clear the modifier, change the note.
+    controller().updateLineModifiers(lineId, const [], note: '  extra hot  ');
+    expect(state().lines.single.modifiers, isEmpty);
+    expect(state().lines.single.note, 'extra hot'); // trimmed
+    expect(state().subtotalMinor, 4200); // base only
+
+    // Clear the note too (blank).
+    controller().updateLineModifiers(lineId, const [], note: '   ');
+    expect(state().lines.single.note, isNull);
+  });
+
+  test('updateLineModifiers is a no-op for an unknown line', () {
+    controller().addItem(burger);
+    controller().updateLineModifiers('nope', const [cheese]);
+    expect(state().lines.single.modifiers, isEmpty);
+    expect(state().subtotalMinor, 4200);
+  });
 }

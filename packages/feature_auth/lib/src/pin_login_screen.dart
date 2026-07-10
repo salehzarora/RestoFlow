@@ -433,7 +433,12 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
             autofocus: true,
             enabled: !locked,
             obscureText: true,
-            keyboardType: TextInputType.number,
+            // TABLET-UX-001 (D): the app has its own numeric keypad, so the
+            // device soft keyboard must NOT pop up over it. TextInputType.none
+            // suppresses the on-screen keyboard while keeping the field focused
+            // and editable — a paired hardware keyboard (and `enterText` in
+            // tests) still works, and the custom keypad remains the input.
+            keyboardType: TextInputType.none,
             maxLength: _maxPinLength,
             textAlign: TextAlign.center,
             // Bigger obscured dots; no letterSpacing (Arabic-safe).

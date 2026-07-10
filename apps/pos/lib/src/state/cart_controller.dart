@@ -255,6 +255,32 @@ class CartController extends Notifier<CartViewState> {
     _emit();
   }
 
+  /// TABLET-UX-001 (A): replaces the selected [modifiers] and optional [note] on
+  /// an EXISTING cart line, in place — never a new/duplicate line. Preserves the
+  /// line's position, quantity, base price snapshot, and currency; only its
+  /// modifier snapshots + note change, so the line total recomputes through the
+  /// same RF-052 formula. No-op when [lineId] is gone. Used by the cart's Edit
+  /// action, which reopens the customization sheet prefilled with this line.
+  void updateLineModifiers(
+    String lineId,
+    List<SelectedModifier> modifiers, {
+    String? note,
+  }) {
+    if (_lineById(lineId) == null) return;
+    if (modifiers.isEmpty) {
+      _lineModifiers.remove(lineId);
+    } else {
+      _lineModifiers[lineId] = List.unmodifiable(modifiers);
+    }
+    final trimmedNote = note?.trim();
+    if (trimmedNote != null && trimmedNote.isNotEmpty) {
+      _lineNotes[lineId] = trimmedNote;
+    } else {
+      _lineNotes.remove(lineId);
+    }
+    _emit();
+  }
+
   /// Increases the quantity of [lineId] by one.
   void increaseQuantity(String lineId) {
     final line = _lineById(lineId);

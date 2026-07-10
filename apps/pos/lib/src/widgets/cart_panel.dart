@@ -5,6 +5,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/demo_menu.dart';
 import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
@@ -14,7 +15,9 @@ import '../state/cart_controller.dart';
 import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_branch_tax.dart';
+import '../state/pos_menu_provider.dart';
 import '../state/recent_orders_controller.dart';
+import 'modifier_selection_sheet.dart';
 import 'order_confirmation.dart';
 import 'order_setup_section.dart';
 import 'shift_context_bar.dart';
@@ -77,6 +80,14 @@ class CartPanelContent extends ConsumerWidget {
     final controller = ref.read(cartControllerProvider.notifier);
     final setup = ref.watch(orderSetupControllerProvider);
     final setupController = ref.read(orderSetupControllerProvider.notifier);
+    // TABLET-UX-001 (A): the ACTIVE menu resolves the item + its modifier groups
+    // when the cashier edits a cart line. Null (still loading) falls back to a
+    // note-only edit built from the line itself.
+    final menu = ref.watch(posMenuProvider).valueOrNull;
+    // TABLET-UX-001 (B): the side cart (two-pane tablet/landscape) uses compact,
+    // denser line rows so more of the order is visible at once; the phone
+    // slide-up sheet keeps its roomier rows.
+    final dense = !isSheet;
 
     final submittedOrder = cart.submittedOrder;
     final Widget body;
@@ -123,23 +134,31 @@ class CartPanelContent extends ConsumerWidget {
               child: cart.isEmpty
                   ? _EmptyCart(message: l10n.posCartEmpty)
                   : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: RestoflowSpacing.sm,
+                      padding: EdgeInsets.symmetric(
+                        vertical: dense
+                            ? RestoflowSpacing.xs
+                            : RestoflowSpacing.sm,
                         horizontal: RestoflowSpacing.sm,
                       ),
                       itemCount: cart.lines.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: RestoflowSpacing.sm),
+                      separatorBuilder: (_, _) => SizedBox(
+                        height: dense
+                            ? RestoflowSpacing.xs
+                            : RestoflowSpacing.sm,
+                      ),
                       itemBuilder: (context, index) {
                         final line = cart.lines[index];
                         return _CartLineTile(
                           line: line,
                           l10n: l10n,
+                          dense: dense,
                           onIncrease: () =>
                               controller.increaseQuantity(line.lineId),
                           onDecrease: () =>
                               controller.decreaseQuantity(line.lineId),
                           onRemove: () => controller.removeLine(line.lineId),
+                          onEdit: () =>
+                              _editLine(context, menu, line, controller),
                         );
                       },
                     ),
@@ -283,6 +302,59 @@ Future<void> _submitOrder({
   }
 }
 
+/// TABLET-UX-001 (A): opens the SAME customization sheet used when adding an
+/// item, prefilled with [line]'s current modifiers + note, to EDIT it in place.
+/// Saving calls [CartController.updateLineModifiers] — it replaces the existing
+/// line (never a duplicate) and the total recomputes through the live cart
+/// pricing. Cancel (dismiss) leaves the cart unchanged. The item + its groups
+/// come from the ACTIVE [menu]; if unavailable, a note-only edit is built from
+/// the cart line so the action still works.
+void _editLine(
+  BuildContext context,
+  PosMenuData? menu,
+  CartLineView line,
+  CartController controller,
+) {
+  DemoMenuItem? item;
+  var groups = const <PosModifierGroup>[];
+  DemoCategory? category;
+  var currency = line.currencyCode;
+  if (menu != null) {
+    for (final candidate in menu.items) {
+      if (candidate.id == line.menuItemId) {
+        item = candidate;
+        break;
+      }
+    }
+    if (item != null) {
+      groups = menu.groupsForItem(item.id);
+      category = menu.categoryOf(item.categoryId);
+      currency = menu.currencyCode;
+    }
+  }
+  // Fallback item from the cart line (menu still loading / item not found):
+  // the sheet then edits the note only, never inventing a price.
+  item ??= DemoMenuItem(
+    id: line.menuItemId,
+    name: line.name,
+    priceMinor: line.unitPriceMinor,
+    categoryId: '',
+    categoryName: '',
+  );
+  ModifierSelectionSheet.show(
+    context,
+    item: item,
+    groups: groups,
+    currencyCode: currency,
+    category: category,
+    initialSelections: line.modifiers,
+    initialNote: line.note,
+    isEdit: true,
+    onConfirm: (selections, note) =>
+        controller.updateLineModifiers(line.lineId, selections, note: note),
+  );
+}
+
 class _CartHeader extends StatelessWidget {
   const _CartHeader({
     required this.l10n,
@@ -399,6 +471,12 @@ class _EmptyCart extends StatelessWidget {
 }
 
 /// A warm inner-surface line card (DESIGN-004 §6.5).
+///
+/// TABLET-UX-001: an Edit action reopens the customization sheet prefilled with
+/// this line's modifiers/note (Part A), and a [dense] variant (Part B) packs the
+/// meta + controls onto fewer rows so more of the order fits in the landscape
+/// side cart. The item name stays a standalone exact-match Text, and the
+/// '× qty · unit' composite keeps its OWN Text (frozen widget-test contracts).
 class _CartLineTile extends StatelessWidget {
   const _CartLineTile({
     required this.line,
@@ -406,6 +484,8 @@ class _CartLineTile extends StatelessWidget {
     required this.onIncrease,
     required this.onDecrease,
     required this.onRemove,
+    required this.onEdit,
+    this.dense = false,
   });
 
   final CartLineView line;
@@ -413,6 +493,11 @@ class _CartLineTile extends StatelessWidget {
   final VoidCallback onIncrease;
   final VoidCallback onDecrease;
   final VoidCallback onRemove;
+  final VoidCallback onEdit;
+
+  /// TABLET-UX-001 (B): tighter paddings + the '× qty · unit' meta folded into
+  /// the controls row, so the landscape side cart shows several lines at once.
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -420,18 +505,38 @@ class _CartLineTile extends StatelessWidget {
     final unitPriceText = MoneyFormatter.format(line.unitPrice);
     final lineTotalText = MoneyFormatter.format(line.lineTotal);
 
+    // '× qty · unit price' — its OWN Text (the name stays an exact-match
+    // standalone string per the test contract). In dense mode it rides the
+    // controls row; otherwise it keeps its own line under the name.
+    final qtyUnit = Text(
+      l10n.posCartQtyUnit(line.quantity, unitPriceText),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: kRestoflowInk3,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+
     return Container(
       decoration: BoxDecoration(
         color: kPosInnerSurface,
         borderRadius: BorderRadius.circular(RestoflowRadii.md + 2),
         border: Border.all(color: kRestoflowHairline),
       ),
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        RestoflowSpacing.md,
-        RestoflowSpacing.sm,
-        RestoflowSpacing.sm,
-        RestoflowSpacing.sm,
-      ),
+      padding: dense
+          ? const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.sm,
+              RestoflowSpacing.xs,
+              RestoflowSpacing.xs,
+              RestoflowSpacing.xs,
+            )
+          : const EdgeInsetsDirectional.fromSTEB(
+              RestoflowSpacing.md,
+              RestoflowSpacing.sm,
+              RestoflowSpacing.sm,
+              RestoflowSpacing.sm,
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -460,15 +565,8 @@ class _CartLineTile extends StatelessWidget {
               ),
             ],
           ),
-          // '× qty · unit price' — its OWN Text (the name above stays an
-          // exact-match standalone string per the test contract).
-          Text(
-            l10n.posCartQtyUnit(line.quantity, unitPriceText),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: kRestoflowInk3,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
+          // Roomy: the meta on its own line. Dense: folded into the controls row.
+          if (!dense) qtyUnit,
           // Selected modifiers (order-time snapshots) as compact sub-lines.
           for (final modifier in line.modifiers)
             Row(
@@ -508,31 +606,79 @@ class _CartLineTile extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-          const SizedBox(height: RestoflowSpacing.xs),
+          SizedBox(height: dense ? RestoflowSpacing.xxs : RestoflowSpacing.xs),
           Row(
             children: [
               _QuantityStepper(
                 quantity: line.quantity,
                 l10n: l10n,
+                dense: dense,
                 onIncrease: onIncrease,
                 onDecrease: onDecrease,
               ),
-              const Spacer(),
-              IconButton(
-                onPressed: onRemove,
-                icon: const Icon(
-                  Icons.delete_outline,
-                  size: RestoflowIconSizes.md,
-                ),
+              // Dense folds the '× qty · unit' meta into this row (Expanded so
+              // it uses all free width and ellipsises only when truly cramped);
+              // roomy keeps it on its own line above and just spaces the actions.
+              if (dense) ...[
+                const SizedBox(width: RestoflowSpacing.sm),
+                Expanded(child: qtyUnit),
+              ] else
+                const Spacer(),
+              _LineActionButton(
+                buttonKey: Key('cart-edit-${line.lineId}'),
+                icon: Icons.edit_outlined,
+                tooltip: l10n.posCartEditItem,
+                color: theme.colorScheme.primary,
+                dense: dense,
+                onPressed: onEdit,
+              ),
+              _LineActionButton(
+                buttonKey: Key('cart-remove-${line.lineId}'),
+                icon: Icons.delete_outline,
                 tooltip: l10n.posRemoveItem,
                 color: RestoflowTone.danger.styleOf(theme).accent,
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                padding: EdgeInsets.zero,
+                dense: dense,
+                onPressed: onRemove,
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A compact >=40/44dp cart-line action (edit / remove). Dense trims the tap
+/// target to 40dp so the controls row stays tidy in the narrow side cart.
+class _LineActionButton extends StatelessWidget {
+  const _LineActionButton({
+    required this.buttonKey,
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.onPressed,
+    this.dense = false,
+  });
+
+  final Key buttonKey;
+  final IconData icon;
+  final String tooltip;
+  final Color color;
+  final VoidCallback onPressed;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final side = dense ? 40.0 : 44.0;
+    return IconButton(
+      key: buttonKey,
+      onPressed: onPressed,
+      icon: Icon(icon, size: RestoflowIconSizes.md),
+      tooltip: tooltip,
+      color: color,
+      visualDensity: VisualDensity.compact,
+      constraints: BoxConstraints(minWidth: side, minHeight: side),
+      padding: EdgeInsets.zero,
     );
   }
 }
@@ -544,12 +690,14 @@ class _QuantityStepper extends StatelessWidget {
     required this.l10n,
     required this.onIncrease,
     required this.onDecrease,
+    this.dense = false,
   });
 
   final int quantity;
   final AppLocalizations l10n;
   final VoidCallback onIncrease;
   final VoidCallback onDecrease;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -562,10 +710,11 @@ class _QuantityStepper extends StatelessWidget {
           icon: Icons.remove,
           tooltip: l10n.posDecreaseQuantity,
           filled: false,
+          dense: dense,
           onPressed: onDecrease,
         ),
         SizedBox(
-          width: 40,
+          width: dense ? 30 : 40,
           child: Text(
             quantity.toString(),
             textAlign: TextAlign.center,
@@ -579,6 +728,7 @@ class _QuantityStepper extends StatelessWidget {
           icon: Icons.add,
           tooltip: l10n.posIncreaseQuantity,
           filled: true,
+          dense: dense,
           onPressed: onIncrease,
         ),
       ],
@@ -592,29 +742,34 @@ class _StepButton extends StatelessWidget {
     required this.tooltip,
     required this.filled,
     required this.onPressed,
+    this.dense = false,
   });
 
   final IconData icon;
   final String tooltip;
   final bool filled;
   final VoidCallback onPressed;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // A 38px control inside a >=44dp tap target (fast, gloved cashier fingers).
+    // A control inside a >=40/44dp tap target (fast, gloved cashier fingers);
+    // dense trims it a touch so the landscape side cart packs more lines.
+    final tap = dense ? 40.0 : 44.0;
+    final inner = dense ? 34.0 : 38.0;
     return Tooltip(
       message: tooltip,
       child: InkResponse(
         onTap: onPressed,
-        radius: 26,
+        radius: dense ? 24 : 26,
         child: Container(
-          width: 44,
-          height: 44,
+          width: tap,
+          height: tap,
           alignment: Alignment.center,
           child: Container(
-            width: 38,
-            height: 38,
+            width: inner,
+            height: inner,
             decoration: BoxDecoration(
               color: filled ? theme.colorScheme.primary : Colors.white,
               borderRadius: BorderRadius.circular(RestoflowRadii.sm + 2),

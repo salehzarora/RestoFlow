@@ -252,9 +252,13 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                 key: const Key('cash-received-field'),
                 controller: _controller,
                 autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
+                // TABLET-UX-001 (D): the sheet has its own on-screen numeric
+                // keypad, so the device soft keyboard must NOT cover the screen.
+                // TextInputType.none suppresses the on-screen keyboard while the
+                // field stays focused/editable — the custom keypad appends into
+                // the same controller, a hardware keyboard still types, and
+                // `tester.enterText` keeps working.
+                keyboardType: TextInputType.none,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                 ],

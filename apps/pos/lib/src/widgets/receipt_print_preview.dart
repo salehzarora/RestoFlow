@@ -222,6 +222,11 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(height: RestoflowSpacing.sm),
+                          // TABLET-UX-001 (E): only demo mode carries its
+                          // provisional/demo caveats. A real receipt no longer
+                          // shows a stale "printer not connected" note here —
+                          // the honest print result lives on the receipt card's
+                          // status line, not in this browser-print preview.
                           if (isDemo) ...[
                             Center(
                               child: Text(
@@ -241,16 +246,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                                 ),
                               ),
                             ),
-                          ] else
-                            Center(
-                              child: Text(
-                                l10n.posReceiptNoPrinterNote,
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -373,13 +369,15 @@ PrintDocument buildReceiptDocument(
         l10n.posPaymentMethodLabel,
         paymentMethodLabel(l10n, payment.method),
       ),
-      // Footer — a short thank-you, then the honest mode notes.
+      // Footer — a short thank-you, then (demo only) the mode notes.
       PrintLine.center(l10n.posReceiptThankYou),
+      // TABLET-UX-001 (E): a printer-status message must NEVER be baked into the
+      // printed receipt — it would print "printing not connected" ON the paper
+      // even when the print succeeded. Printer status is UI-only feedback now.
       if (isDemo) ...[
         PrintLine.note(l10n.posReceiptProvisionalNote),
         PrintLine.note(l10n.posReceiptDemoNote),
-      ] else
-        PrintLine.note(l10n.posReceiptNoPrinterNote),
+      ],
     ],
   );
 }

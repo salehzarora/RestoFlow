@@ -6123,6 +6123,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not synced'**
   String get posRecentSyncFailed;
+
+  /// TABLET-UX-001: per-cart-line Edit action — reopens the item customization sheet prefilled with the line's current modifiers/note so the cashier can change it in place (no duplicate line).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get posCartEditItem;
+
+  /// TABLET-UX-001: the customization sheet's confirm button label when EDITING an existing cart line (vs adding a new one) — saving replaces the line.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get posEditSaveChanges;
+
+  /// TABLET-UX-001: a small attention badge shown on a KDS card while a freshly-arrived order is still new, so the chef notices it. Money-free chrome.
+  ///
+  /// In en, this message translates to:
+  /// **'New order'**
+  String get kdsNewOrderBadge;
+
+  /// TABLET-UX-001: honest cashier-facing note on the paid receipt card confirming the receipt was sent to and printed by the configured printer (shown only on a successful print, replacing the stale not-connected note).
+  ///
+  /// In en, this message translates to:
+  /// **'Printed'**
+  String get posReceiptPrintedNote;
 }
 
 class _AppLocalizationsDelegate

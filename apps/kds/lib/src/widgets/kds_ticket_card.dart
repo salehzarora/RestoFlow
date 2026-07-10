@@ -161,6 +161,16 @@ class KdsTicketCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // KDS-ALERTS (C): a loud, unmistakable "New order" badge while the
+              // ticket is freshly arrived, so the chef notices it from the pass —
+              // paired with the stronger pulsing glow. Money-free chrome.
+              if (highlightNew) ...[
+                _NewOrderBadge(
+                  key: Key('kds-new-badge-${ticket.kitchenTicketId}'),
+                  label: l10n.kdsNewOrderBadge,
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+              ],
               Row(
                 children: [
                   Expanded(
@@ -385,17 +395,23 @@ class _NewArrivalHighlightState extends State<_NewArrivalHighlight>
 
   @override
   Widget build(BuildContext context) {
-    // Accessibility: honor the platform "reduce motion" setting — a static soft
-    // outline still draws the eye without any animation.
+    // Accessibility: honor the platform "reduce motion" setting — a static, but
+    // now BOLD, ring + soft glow still draws the eye without any animation.
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
       return DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(RestoflowRadii.md),
           boxShadow: [
+            // A bold bright ring (reads as a glowing border) + a soft halo.
             BoxShadow(
-              color: widget.color.withValues(alpha: 0.45),
-              blurRadius: 10,
-              spreadRadius: 1,
+              color: widget.color.withValues(alpha: 0.70),
+              blurRadius: 4,
+              spreadRadius: 2.5,
+            ),
+            BoxShadow(
+              color: widget.color.withValues(alpha: 0.40),
+              blurRadius: 16,
+              spreadRadius: 2,
             ),
           ],
         ),
@@ -412,16 +428,27 @@ class _NewArrivalHighlightState extends State<_NewArrivalHighlight>
         // A breathing 0..1 oscillation that ATTENUATES to 0 as the window ends.
         final osc = (0.5 + 0.5 * math.sin(t * cycles * 2 * math.pi)) * (1 - t);
         final glow = osc.clamp(0.0, 1.0);
+        // KDS-ALERTS (C): a STRONGER, more noticeable alert — a pulsing bright
+        // ring (tight shadow) reads as a glowing border, over a wider soft glow.
+        // Still a gentle ≈0.7 Hz breath that self-attenuates (never a harsh
+        // flash), and readable on the dark board.
         return DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(RestoflowRadii.md),
             boxShadow: glow <= 0.02
                 ? null
                 : [
+                    // A tight bright ring — the pulsing "border" glow.
                     BoxShadow(
-                      color: widget.color.withValues(alpha: 0.18 + 0.42 * glow),
-                      blurRadius: 6 + 16 * glow,
-                      spreadRadius: 1 + 2 * glow,
+                      color: widget.color.withValues(alpha: 0.30 + 0.55 * glow),
+                      blurRadius: 3 + 5 * glow,
+                      spreadRadius: 1 + 1.5 * glow,
+                    ),
+                    // A wider soft halo behind it.
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.12 + 0.30 * glow),
+                      blurRadius: 10 + 22 * glow,
+                      spreadRadius: 1 + 3 * glow,
                     ),
                   ],
           ),
@@ -429,6 +456,51 @@ class _NewArrivalHighlightState extends State<_NewArrivalHighlight>
         );
       },
       child: widget.child,
+    );
+  }
+}
+
+/// KDS-ALERTS (C): the loud "New order" badge shown at the top of a freshly-
+/// arrived ticket card. A small filled pill (brand-primary → high contrast on
+/// the dark board) with a bell icon. Static (the pulsing glow carries the
+/// motion), so it never breaks `pumpAndSettle`. Money-free chrome.
+class _NewOrderBadge extends StatelessWidget {
+  const _NewOrderBadge({required this.label, super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        RestoflowSpacing.sm,
+        RestoflowSpacing.xxs,
+        RestoflowSpacing.md,
+        RestoflowSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(RestoflowRadii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.notifications_active,
+            size: RestoflowIconSizes.sm,
+            color: theme.colorScheme.onPrimary,
+          ),
+          const SizedBox(width: RestoflowSpacing.xs),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -221,6 +221,41 @@ void main() {
     expect(find.byKey(const Key('sync-status-card')), findsOneWidget);
   });
 
+  testWidgets('TABLET-UX-001 (D): the cash field suppresses the soft keyboard '
+      '(TextInputType.none) but the custom keypad + confirm still work', (
+    tester,
+  ) async {
+    final l10n = await _en();
+    await _pump(tester);
+    await _submitTakeaway(tester, l10n);
+    await _openPaySheet(tester);
+
+    // The field asks for NO system keyboard, yet stays editable (so a hardware
+    // keyboard and tester.enterText keep working).
+    final field = tester.widget<TextField>(
+      find.byKey(const Key('cash-received-field')),
+    );
+    expect(field.keyboardType, TextInputType.none);
+    expect(field.readOnly, isFalse);
+
+    // The on-screen numeric keypad enters digits into the same field.
+    await tester.tap(find.byKey(const Key('keypad-5')));
+    await tester.tap(find.byKey(const Key('keypad-0')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('cash-received-field')))
+          .controller!
+          .text,
+      '50',
+    );
+
+    // Confirm still records the payment (₪50 tendered for a ₪42 order).
+    await tester.tap(find.byKey(const Key('confirm-payment-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('receipt-preview-card')), findsOneWidget);
+  });
+
   testWidgets('New order resets the payment UI back to an empty cart', (
     tester,
   ) async {
