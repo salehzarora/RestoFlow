@@ -1161,6 +1161,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authDeviceSignInUnavailableTitle => 'Device sign-in unavailable';
 
   @override
+  String get offlineBootTitle => 'No connection';
+
+  @override
+  String get offlineBootMessage => 'Check Wi-Fi and try again';
+
+  @override
+  String get offlineBootRetry => 'Retry';
+
+  @override
+  String get offlineBootAutoReconnect =>
+      'Keep this screen open — it will reconnect automatically.';
+
+  @override
   String get authDeviceSignInUnavailableBody =>
       'Anonymous device sign-in is disabled or Supabase auth is not configured.';
 

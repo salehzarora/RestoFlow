@@ -1212,6 +1212,22 @@
     "description": "Body of the production-demo-blocked help page explaining the misconfiguration and how to fix it."
   },
   "authDeviceSignInUnavailableTitle": "Device sign-in unavailable",
+  "offlineBootTitle": "No connection",
+  "@offlineBootTitle": {
+    "description": "PILOT-OFFLINE-BOOT-001: title of the friendly offline screen shown when POS/KDS launch without network."
+  },
+  "offlineBootMessage": "Check Wi-Fi and try again",
+  "@offlineBootMessage": {
+    "description": "PILOT-OFFLINE-BOOT-001: body line of the offline boot screen."
+  },
+  "offlineBootRetry": "Retry",
+  "@offlineBootRetry": {
+    "description": "PILOT-OFFLINE-BOOT-001: retry button on the offline boot screen (re-runs device-auth bootstrap)."
+  },
+  "offlineBootAutoReconnect": "Keep this screen open — it will reconnect automatically.",
+  "@offlineBootAutoReconnect": {
+    "description": "PILOT-OFFLINE-BOOT-001: reassurance line shown while the boot gate auto-retries."
+  },
   "@authDeviceSignInUnavailableTitle": {
     "description": "Title of the help page shown when POS/KDS device bootstrap fails because anonymous sign-in is rejected by the backend."
   },

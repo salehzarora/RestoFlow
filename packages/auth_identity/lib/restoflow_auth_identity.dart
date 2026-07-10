@@ -11,6 +11,9 @@ library;
 export 'src/app_surface.dart';
 export 'src/app_user_context.dart';
 export 'src/auth_context_repository.dart';
+// PILOT-OFFLINE-BOOT-001: classifies a device-auth bootstrap failure as a
+// network/offline problem vs a real auth/config rejection.
+export 'src/device_auth_network_error.dart';
 // RF-153: shared device/station pairing context + repository seam (reused by
 // dashboard/POS/KDS).
 export 'src/device_context.dart';

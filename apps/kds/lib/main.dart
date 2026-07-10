@@ -34,17 +34,31 @@ Future<void> main() async {
   // RF-118: durable client PIN-attempt lockout counter (survives refresh — a
   // count + timestamp only, never a PIN; the server RF-051 lockout is authority).
   final prefs = await SharedPreferences.getInstance();
-  final real = await _realDeviceAuth(prefs);
-  final seams = real.seams;
+  final locale = persistedLocale ?? const Locale('ar');
+  // PILOT-OFFLINE-BOOT-001: run the real device-auth bootstrap behind a
+  // retryable boot gate (dark kitchen theme). If the venue Wi‑Fi / Supabase is
+  // unreachable at launch (or after a tablet reboot) the gate shows a friendly,
+  // localized offline screen with a working Retry that re-runs the bootstrap in
+  // place — no restart. Non-offline results flow straight to [KdsApp] as before.
   runApp(
-    KdsApp(
-      devicePairingRepository: seams?.pairing,
-      deviceStaffRepository: seams?.staff,
-      authTransport: seams?.transport,
-      printerAssignmentsReader: seams?.printerAssignments,
-      realAuthProblem: real.problem,
-      initialLocale: persistedLocale ?? const Locale('ar'),
-      pinAttemptStore: SharedPreferencesPinAttemptStore(prefs),
+    DeviceBootGate(
+      locale: locale,
+      brightness: Brightness.dark,
+      autoRetryInterval: const Duration(seconds: 6),
+      bootstrap: () => _realDeviceAuth(prefs),
+      isOffline: (real) => real.problem == RealDeviceAuthProblem.offline,
+      builder: (real) {
+        final seams = real.seams;
+        return KdsApp(
+          devicePairingRepository: seams?.pairing,
+          deviceStaffRepository: seams?.staff,
+          authTransport: seams?.transport,
+          printerAssignmentsReader: seams?.printerAssignments,
+          realAuthProblem: real.problem,
+          initialLocale: locale,
+          pinAttemptStore: SharedPreferencesPinAttemptStore(prefs),
+        );
+      },
     ),
   );
 }
@@ -111,10 +125,18 @@ _realDeviceAuth(SharedPreferences prefs) async {
       ),
       problem: null,
     );
-  } catch (_) {
-    // Fail closed (e.g. anonymous sign-ins disabled on the project): no fake
-    // pairing — the app renders DeviceSignInUnavailableView with the fix.
-    return (seams: null, problem: RealDeviceAuthProblem.signInUnavailable);
+  } catch (e) {
+    // PILOT-OFFLINE-BOOT-001: distinguish a NETWORK/offline failure (venue
+    // Wi‑Fi down/slow — the retryable OfflineBootView) from a genuine auth
+    // rejection like anonymous sign-ins disabled (a config the operator must
+    // fix — keep the honest DeviceSignInUnavailableView). Never mask a real
+    // config problem as "just offline". Fail closed either way: no fake pairing.
+    return (
+      seams: null,
+      problem: isDeviceAuthNetworkError(e)
+          ? RealDeviceAuthProblem.offline
+          : RealDeviceAuthProblem.signInUnavailable,
+    );
   }
 }
 
@@ -363,6 +385,10 @@ class _KdsMaterialApp extends ConsumerWidget {
               const RealModeUnconfiguredView(),
             RealDeviceAuthProblem.signInUnavailable =>
               const DeviceSignInUnavailableView(),
+            // PILOT-OFFLINE-BOOT-001: the boot gate (main) intercepts `offline`
+            // and shows the RETRYABLE OfflineBootView; this is only a defensive
+            // fallback if it ever reaches here (no in-place retry available).
+            RealDeviceAuthProblem.offline => const OfflineBootView(),
           }
         : gate;
 
