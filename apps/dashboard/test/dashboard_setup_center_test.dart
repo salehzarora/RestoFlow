@@ -60,12 +60,20 @@ class _StaffStub implements StaffRepository {
   Future<AdminResult<StaffMember>> create({
     required String displayName,
     required MembershipRole role,
+    StaffCapabilities? capabilities,
+    String? clientRequestId,
   }) async => throw UnimplementedError();
 
   @override
   Future<AdminResult<void>> setPin({
     required String employeeProfileId,
     required String pin,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<AdminResult<void>> setCapabilities({
+    required String employeeProfileId,
+    required StaffCapabilities capabilities,
   }) async => throw UnimplementedError();
 }
 

@@ -2099,6 +2099,34 @@
   "staffNoPinWarning": "Staff without a PIN can't sign in on POS/KDS.",
   "@staffNoPinWarning": {"description": "Warning banner when active staff lack PINs."},
   "staffInactive": "Inactive",
+  "staffCapabilitiesTitle": "Cashier capabilities",
+  "@staffCapabilitiesTitle": {
+    "description": "STAFF-CASHIER-PERMISSIONS-001: heading for the cashier capability switches (create + edit)."
+  },
+  "staffCapabilitiesHint": "On by default. Turn a switch off to remove that capability for this cashier.",
+  "@staffCapabilitiesHint": {
+    "description": "STAFF-CASHIER-PERMISSIONS-001: sub-hint under the capability switches (default-on + deny override)."
+  },
+  "staffCapApplyDiscount": "Can apply discounts",
+  "@staffCapApplyDiscount": {
+    "description": "STAFF-CASHIER-PERMISSIONS-001: switch label - the cashier may apply order/item discounts."
+  },
+  "staffCapVoidOrder": "Can cancel unpaid orders",
+  "@staffCapVoidOrder": {
+    "description": "STAFF-CASHIER-PERMISSIONS-001: switch label - the cashier may cancel/void an UNPAID order (paid stays blocked)."
+  },
+  "staffCapCloseShift": "Can close own shift",
+  "@staffCapCloseShift": {
+    "description": "STAFF-CASHIER-PERMISSIONS-001: switch label - the cashier may close their OWN/current shift."
+  },
+  "staffCapabilitiesAction": "Capabilities",
+  "@staffCapabilitiesAction": {
+    "description": "STAFF-CASHIER-PERMISSIONS-001: staff card button that opens the cashier capability switches."
+  },
+  "staffCapabilitiesSaved": "Capabilities updated",
+  "@staffCapabilitiesSaved": {
+    "description": "STAFF-CASHIER-PERMISSIONS-001: success snackbar after saving cashier capabilities."
+  },
   "@staffInactive": {"description": "Pill for a suspended/terminated staff member."},
   "tablesTitle": "Tables",
   "@tablesTitle": {"description": "Tables page title."},

@@ -4972,6 +4972,48 @@ abstract class AppLocalizations {
   /// **'Inactive'**
   String get staffInactive;
 
+  /// STAFF-CASHIER-PERMISSIONS-001: heading for the cashier capability switches (create + edit).
+  ///
+  /// In en, this message translates to:
+  /// **'Cashier capabilities'**
+  String get staffCapabilitiesTitle;
+
+  /// STAFF-CASHIER-PERMISSIONS-001: sub-hint under the capability switches (default-on + deny override).
+  ///
+  /// In en, this message translates to:
+  /// **'On by default. Turn a switch off to remove that capability for this cashier.'**
+  String get staffCapabilitiesHint;
+
+  /// STAFF-CASHIER-PERMISSIONS-001: switch label - the cashier may apply order/item discounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Can apply discounts'**
+  String get staffCapApplyDiscount;
+
+  /// STAFF-CASHIER-PERMISSIONS-001: switch label - the cashier may cancel/void an UNPAID order (paid stays blocked).
+  ///
+  /// In en, this message translates to:
+  /// **'Can cancel unpaid orders'**
+  String get staffCapVoidOrder;
+
+  /// STAFF-CASHIER-PERMISSIONS-001: switch label - the cashier may close their OWN/current shift.
+  ///
+  /// In en, this message translates to:
+  /// **'Can close own shift'**
+  String get staffCapCloseShift;
+
+  /// STAFF-CASHIER-PERMISSIONS-001: staff card button that opens the cashier capability switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Capabilities'**
+  String get staffCapabilitiesAction;
+
+  /// STAFF-CASHIER-PERMISSIONS-001: success snackbar after saving cashier capabilities.
+  ///
+  /// In en, this message translates to:
+  /// **'Capabilities updated'**
+  String get staffCapabilitiesSaved;
+
   /// Tables page title.
   ///
   /// In en, this message translates to:

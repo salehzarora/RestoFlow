@@ -2607,6 +2607,28 @@ class AppLocalizationsHe extends AppLocalizations {
   String get staffInactive => 'לא פעיל';
 
   @override
+  String get staffCapabilitiesTitle => 'הרשאות קופאי';
+
+  @override
+  String get staffCapabilitiesHint =>
+      'מופעל כברירת מחדל. כבה מתג כדי להסיר את ההרשאה מקופאי זה.';
+
+  @override
+  String get staffCapApplyDiscount => 'יכול להחיל הנחות';
+
+  @override
+  String get staffCapVoidOrder => 'יכול לבטל הזמנות שלא שולמו';
+
+  @override
+  String get staffCapCloseShift => 'יכול לסגור את המשמרת שלו';
+
+  @override
+  String get staffCapabilitiesAction => 'הרשאות';
+
+  @override
+  String get staffCapabilitiesSaved => 'ההרשאות עודכנו';
+
+  @override
   String get tablesTitle => 'שולחנות';
 
   @override

@@ -2645,6 +2645,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get staffInactive => 'Inactive';
 
   @override
+  String get staffCapabilitiesTitle => 'Cashier capabilities';
+
+  @override
+  String get staffCapabilitiesHint =>
+      'On by default. Turn a switch off to remove that capability for this cashier.';
+
+  @override
+  String get staffCapApplyDiscount => 'Can apply discounts';
+
+  @override
+  String get staffCapVoidOrder => 'Can cancel unpaid orders';
+
+  @override
+  String get staffCapCloseShift => 'Can close own shift';
+
+  @override
+  String get staffCapabilitiesAction => 'Capabilities';
+
+  @override
+  String get staffCapabilitiesSaved => 'Capabilities updated';
+
+  @override
   String get tablesTitle => 'Tables';
 
   @override

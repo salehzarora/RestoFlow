@@ -27,15 +27,33 @@ abstract class StaffRepository {
 
   /// Creates a PIN-only staff member (no login account): server-side app_user
   /// (synthetic identifier) + membership (role, this branch) + employee profile.
+  ///
+  /// STAFF-CASHIER-PERMISSIONS-001: for a cashier, [capabilities] deny overrides
+  /// are persisted in the SAME backend transaction as the membership (atomic —
+  /// there is never a restricted cashier created with broader default
+  /// permissions than requested). Ignored for non-cashier roles.
+  /// [clientRequestId] is the STABLE idempotency key owned by one create intent
+  /// (the UI reuses it on an ambiguous retry so a lost response replays instead
+  /// of creating a second employee, and mints a new one when inputs change).
   Future<AdminResult<StaffMember>> create({
     required String displayName,
     required MembershipRole role,
+    StaffCapabilities? capabilities,
+    String? clientRequestId,
   });
 
   /// Sets/resets the 4–8 digit PIN; the backend stores a bcrypt hash only.
   Future<AdminResult<void>> setPin({
     required String employeeProfileId,
     required String pin,
+  });
+
+  /// STAFF-CASHIER-PERMISSIONS-001: sets a CASHIER's capability deny overrides
+  /// (owner/manager only — enforced server-side). An enabled switch clears the
+  /// override (role default ON); a disabled switch persists an explicit deny.
+  Future<AdminResult<void>> setCapabilities({
+    required String employeeProfileId,
+    required StaffCapabilities capabilities,
   });
 }
 
@@ -49,6 +67,7 @@ class InMemoryStaffStore implements StaffRepository {
           role: MembershipRole.cashier,
           hasPin: true,
           employmentStatus: 'active',
+          capabilities: StaffCapabilities(),
         ),
         const StaffMember(
           employeeProfileId: 'demo-staff-2',
@@ -70,6 +89,8 @@ class InMemoryStaffStore implements StaffRepository {
   Future<AdminResult<StaffMember>> create({
     required String displayName,
     required MembershipRole role,
+    StaffCapabilities? capabilities,
+    String? clientRequestId,
   }) async {
     final name = displayName.trim();
     if (name.isEmpty) return const Failure(AdminValidation('name'));
@@ -79,6 +100,9 @@ class InMemoryStaffStore implements StaffRepository {
       role: role,
       hasPin: false,
       employmentStatus: 'active',
+      capabilities: role == MembershipRole.cashier
+          ? (capabilities ?? const StaffCapabilities())
+          : null,
     );
     _staff.add(member);
     return Success(member);
@@ -104,6 +128,32 @@ class InMemoryStaffStore implements StaffRepository {
       hasPin: true, // the demo stores NO pin value — only the flag.
       employmentStatus: s.employmentStatus,
       employeeNumber: s.employeeNumber,
+      capabilities: s.capabilities,
+    );
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> setCapabilities({
+    required String employeeProfileId,
+    required StaffCapabilities capabilities,
+  }) async {
+    final index = _staff.indexWhere(
+      (s) => s.employeeProfileId == employeeProfileId,
+    );
+    if (index < 0) return const Failure(AdminTransient());
+    final s = _staff[index];
+    if (s.role != MembershipRole.cashier) {
+      return const Failure(AdminValidation('role'));
+    }
+    _staff[index] = StaffMember(
+      employeeProfileId: s.employeeProfileId,
+      displayName: s.displayName,
+      role: s.role,
+      hasPin: s.hasPin,
+      employmentStatus: s.employmentStatus,
+      employeeNumber: s.employeeNumber,
+      capabilities: capabilities,
     );
     return const Success(null);
   }
@@ -150,6 +200,7 @@ class SupabaseStaffRepository implements StaffRepository {
       if (row is! Map) continue;
       final role = _roleOf(row['role']?.toString());
       if (role == null) continue;
+      final capsRaw = row['capabilities'];
       staff.add(
         StaffMember(
           employeeProfileId: (row['employee_profile_id'] ?? '').toString(),
@@ -158,6 +209,9 @@ class SupabaseStaffRepository implements StaffRepository {
           hasPin: row['has_pin'] == true,
           employmentStatus: (row['employment_status'] ?? 'active').toString(),
           employeeNumber: row['employee_number']?.toString(),
+          capabilities: capsRaw is Map
+              ? StaffCapabilities.fromJson(capsRaw)
+              : null,
         ),
       );
     }
@@ -168,6 +222,8 @@ class SupabaseStaffRepository implements StaffRepository {
   Future<AdminResult<StaffMember>> create({
     required String displayName,
     required MembershipRole role,
+    StaffCapabilities? capabilities,
+    String? clientRequestId,
   }) async {
     final name = displayName.trim();
     if (name.isEmpty) return const Failure(AdminValidation('name'));
@@ -181,16 +237,34 @@ class SupabaseStaffRepository implements StaffRepository {
     if (restaurantId == null || branchId == null) {
       return const Failure(AdminValidation('scope'));
     }
+    // STAFF-CASHIER-PERMISSIONS-001: for a cashier, send the initial DENY-ONLY
+    // overrides (only the switches turned OFF) so create_staff_member persists
+    // them ATOMICALLY with the membership. Absent keys = role default ON; never
+    // sent for a non-cashier (the RPC would reject it).
+    final denies = <String, String>{
+      if (role == MembershipRole.cashier && capabilities != null) ...{
+        if (!capabilities.applyDiscount) 'apply_discount': 'false',
+        if (!capabilities.voidOrder) 'void_order': 'false',
+        if (!capabilities.closeShift) 'close_shift': 'false',
+      },
+    };
+    final params = <String, dynamic>{
+      // A UI-owned STABLE key per create intent (idempotent retry); fall back to
+      // a fresh per-call id only when the caller does not supply one.
+      'p_client_request_id':
+          clientRequestId ?? _requestId('create', [role.name, name]),
+      'p_organization_id': _scope.organizationId,
+      'p_restaurant_id': restaurantId,
+      'p_branch_id': branchId,
+      'p_display_name': name,
+      'p_role': _wireRole(role),
+      // OMIT p_capabilities entirely when there are no denies -> the RPC uses its
+      // default null -> the exact LEGACY idempotency fingerprint (backward compat).
+      if (denies.isNotEmpty) 'p_capabilities': denies,
+    };
     final Object? raw;
     try {
-      raw = await _t.invoke('create_staff_member', <String, dynamic>{
-        'p_client_request_id': _requestId('create', [role.name, name]),
-        'p_organization_id': _scope.organizationId,
-        'p_restaurant_id': restaurantId,
-        'p_branch_id': branchId,
-        'p_display_name': name,
-        'p_role': _wireRole(role),
-      });
+      raw = await _t.invoke('create_staff_member', params);
     } on SyncTransportException catch (e) {
       return Failure(_mapTransport(e));
     } catch (_) {
@@ -204,6 +278,9 @@ class SupabaseStaffRepository implements StaffRepository {
         role: role,
         hasPin: false,
         employmentStatus: 'active',
+        capabilities: role == MembershipRole.cashier
+            ? (capabilities ?? const StaffCapabilities())
+            : null,
       ),
     );
   }
@@ -226,6 +303,36 @@ class SupabaseStaffRepository implements StaffRepository {
         'p_client_request_id': _requestId('set-pin', [employeeProfileId]),
         'p_employee_profile_id': employeeProfileId,
         'p_pin': pin,
+      });
+    } on SyncTransportException catch (e) {
+      return Failure(_mapTransport(e));
+    } catch (_) {
+      return const Failure(AdminTransient());
+    }
+    if (raw is! Map || raw['ok'] != true) return Failure(_mapError(raw));
+    return const Success(null);
+  }
+
+  @override
+  Future<AdminResult<void>> setCapabilities({
+    required String employeeProfileId,
+    required StaffCapabilities capabilities,
+  }) async {
+    final Object? raw;
+    try {
+      raw = await _t.invoke('set_staff_capabilities', <String, dynamic>{
+        // A FRESH request id per submission — states are the fingerprint, so
+        // toggling back-and-forth is not a stale replay no-op.
+        'p_client_request_id': _requestId('set-caps', [
+          employeeProfileId,
+          '${capabilities.applyDiscount}',
+          '${capabilities.voidOrder}',
+          '${capabilities.closeShift}',
+        ]),
+        'p_employee_profile_id': employeeProfileId,
+        'p_apply_discount': capabilities.applyDiscount,
+        'p_void_order': capabilities.voidOrder,
+        'p_close_shift': capabilities.closeShift,
       });
     } on SyncTransportException catch (e) {
       return Failure(_mapTransport(e));
@@ -289,6 +396,27 @@ class SupabaseStaffRepository implements StaffRepository {
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     String hx(int start, int end) => bytes
         .sublist(start, end)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '${hx(0, 4)}-${hx(4, 6)}-${hx(6, 8)}-${hx(8, 10)}-${hx(10, 16)}';
+  }
+
+  static int _intentSeq = 0;
+
+  /// A fresh, opaque, UUID-shaped `client_request_id` owned by ONE create intent.
+  /// The UI mints one per intent and REUSES it across ambiguous retries (so a lost
+  /// response replays rather than creating a second employee), minting a new one
+  /// only when the form inputs change.
+  static String newClientRequestId() {
+    final seed = '${DateTime.now().microsecondsSinceEpoch}:${_intentSeq++}';
+    final bytes = sha256
+        .convert(utf8.encode('mvp:staff:intent:$seed'))
+        .bytes
+        .sublist(0, 16);
+    bytes[6] = (bytes[6] & 0x0f) | 0x50;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    String hx(int s, int e) => bytes
+        .sublist(s, e)
         .map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join();
     return '${hx(0, 4)}-${hx(4, 6)}-${hx(6, 8)}-${hx(8, 10)}-${hx(10, 16)}';
