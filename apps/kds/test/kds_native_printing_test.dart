@@ -230,5 +230,115 @@ void main() {
       );
       expect(find.byKey(const Key('network-printer-section')), findsNothing);
     });
+
+    // PRINT-BLUETOOTH-RECOVERY-001: a failed KDS Bluetooth test print reports
+    // WHAT failed — not one generic "print failed" for everything — and shows
+    // the raw diagnostic on a small secondary line. Success stays success.
+    testWidgets('Bluetooth test-print failures map to category-specific '
+        'messages; success clears them (money-free)', (tester) async {
+      final l10n = await _en();
+      tester.view.physicalSize = const Size(1000, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final flaky = _ScriptedBtTester([
+        const pp.PrintResult.failure(
+          pp.PrinterErrorCategory.notPaired,
+          'device AA is not paired/bonded',
+        ),
+        const pp.PrintResult.failure(
+          pp.PrinterErrorCategory.unreachable,
+          'secure: timed out; insecure: timed out',
+        ),
+        const pp.PrintResult.success(),
+      ]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            bluetoothPrinterConnectorProvider.overrideWithValue(
+              _PairedBtConnector(),
+            ),
+            bluetoothPrinterTesterProvider.overrideWithValue(flaky),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: NativePrinterSettingsSection(
+                  strings: kdsNativePrinterStrings(l10n),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.kdsPrinterTransportBluetooth));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('bluetooth-device-AA:BB:CC:DD:EE:FF')),
+      );
+      await tester.pumpAndSettle();
+
+      // 1st: not paired -> the pair-again guidance (NOT the generic failure).
+      await tester.tap(find.byKey(const Key('bluetooth-test')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.posBluetoothNotPaired), findsOneWidget);
+      expect(find.text(l10n.kdsPrinterPrintFailed), findsNothing);
+      expect(find.byKey(const Key('bluetooth-failure-detail')), findsOneWidget);
+
+      // 2nd: connect failure -> the Bluetooth connect copy (distinct from the
+      // Wi-Fi failure copy).
+      await tester.tap(find.byKey(const Key('bluetooth-test')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.posBluetoothConnectFailed), findsOneWidget);
+
+      // 3rd: success -> success copy; every stale failure/message is gone.
+      await tester.tap(find.byKey(const Key('bluetooth-test')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.kdsPrinterTicketSent), findsOneWidget);
+      expect(find.text(l10n.posBluetoothConnectFailed), findsNothing);
+      expect(find.byKey(const Key('bluetooth-failure-detail')), findsNothing);
+      // The KDS settings surface stays money-free (T-003).
+      expect(find.textContaining('₪'), findsNothing);
+    });
   });
+}
+
+/// A connector with one bonded printer (for selecting in the shared section).
+class _PairedBtConnector implements BluetoothPrinterConnector {
+  @override
+  bool get isSupported => true;
+  @override
+  Future<bool> ensurePermissions() async => true;
+  @override
+  Future<BluetoothPairedResult> pairedDevices() async =>
+      const BluetoothPairedResult.ok([
+        BluetoothDeviceInfo(address: 'AA:BB:CC:DD:EE:FF', name: 'Printer001'),
+      ]);
+  @override
+  Future<pp.PrintResult> send({
+    required String address,
+    required Uint8List bytes,
+    Duration timeout = const Duration(seconds: 8),
+  }) async => const pp.PrintResult.success();
+}
+
+/// Returns scripted results in order (the last repeats).
+class _ScriptedBtTester implements BluetoothPrinterTester {
+  _ScriptedBtTester(this.results);
+  final List<pp.PrintResult> results;
+  int calls = 0;
+  @override
+  Future<pp.PrintResult> testPrint(
+    BluetoothPrinterConfig config, {
+    String? deviceLabel,
+  }) async {
+    final result = results[calls < results.length ? calls : results.length - 1];
+    calls++;
+    return result;
+  }
 }

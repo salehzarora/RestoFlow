@@ -8,7 +8,8 @@ enum PrinterErrorCategory {
   /// in RF-070, or a profile lacking cut/drawer/raster).
   unsupported,
 
-  /// The printer could not be reached (network down, cable unplugged).
+  /// The printer could not be reached (network down, cable unplugged, or a
+  /// Bluetooth connect failure/timeout — printer off / out of range).
   unreachable,
 
   /// The printer is out of paper.
@@ -16,6 +17,22 @@ enum PrinterErrorCategory {
 
   /// The printer cover/lid is open.
   coverOpen,
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: the runtime permission the transport needs
+  /// (Android 12+ BLUETOOTH_CONNECT) is not granted — the operator must grant
+  /// it; retrying without it can never succeed.
+  permissionDenied,
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: the device's Bluetooth adapter is off.
+  bluetoothOff,
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: the target Bluetooth device is not
+  /// paired/bonded in the OS settings — pair it there first.
+  notPaired,
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: the connection opened but sending the
+  /// print data failed mid-write (printer dropped the link / buffer error).
+  writeFailed,
 
   /// An unclassified failure.
   unknown,

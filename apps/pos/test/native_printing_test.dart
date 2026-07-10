@@ -83,6 +83,25 @@ class _FakeBtTester implements BluetoothPrinterTester {
   }
 }
 
+/// First test fails to connect, every later one succeeds — proves a stale
+/// failure message never survives a subsequent success.
+class _FlakyBtTester implements BluetoothPrinterTester {
+  int calls = 0;
+  @override
+  Future<pp.PrintResult> testPrint(
+    PosBluetoothPrinterConfig config, {
+    String? deviceLabel,
+  }) async {
+    calls++;
+    return calls == 1
+        ? const pp.PrintResult.failure(
+            pp.PrinterErrorCategory.unreachable,
+            'secure: timed out; insecure: timed out',
+          )
+        : const pp.PrintResult.success();
+  }
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(const {}));
 
@@ -321,6 +340,114 @@ void main() {
         connector: _FakeBtConnector(paired: const BluetoothPairedResult.ok([])),
       );
       expect(find.text(l10n.posBluetoothNoDevices), findsOneWidget);
+    });
+
+    // PRINT-BLUETOOTH-RECOVERY-001: a failed test print reports WHAT failed —
+    // permission / adapter-off / not-paired / connect / write each get their
+    // own message (distinct from the Wi-Fi failure copy), plus the raw
+    // diagnostic detail on a small secondary line.
+    testWidgets('test-print failures map to category-specific messages with '
+        'the diagnostic detail', (tester) async {
+      final l10n = await _en();
+      final cases = <(pp.PrinterErrorCategory, String)>[
+        (
+          pp.PrinterErrorCategory.permissionDenied,
+          l10n.posBluetoothPermissionRequired,
+        ),
+        (pp.PrinterErrorCategory.bluetoothOff, l10n.posBluetoothOff),
+        (pp.PrinterErrorCategory.notPaired, l10n.posBluetoothNotPaired),
+        (pp.PrinterErrorCategory.unreachable, l10n.posBluetoothConnectFailed),
+        (pp.PrinterErrorCategory.writeFailed, l10n.posBluetoothWriteFailed),
+        // Anything else keeps the generic failure copy.
+        (pp.PrinterErrorCategory.unknown, l10n.posNetworkPrinterTestFailure),
+      ];
+      for (final (category, expected) in cases) {
+        final connector = _FakeBtConnector(
+          paired: const BluetoothPairedResult.ok([
+            BluetoothDeviceInfo(address: 'AA:BB:CC:DD:EE:FF', name: 'Printer'),
+          ]),
+        );
+        await pump(
+          tester,
+          connector: connector,
+          tester_: _FakeBtTester(
+            pp.PrintResult.failure(category, 'diag: $category'),
+          ),
+        );
+        await tester.tap(
+          find.byKey(const Key('bluetooth-device-AA:BB:CC:DD:EE:FF')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('bluetooth-test')));
+        await tester.pumpAndSettle();
+
+        expect(find.text(expected), findsOneWidget, reason: '$category');
+        // The raw diagnostic rides a small secondary line (data, LTR).
+        expect(
+          find.byKey(const Key('bluetooth-failure-detail')),
+          findsOneWidget,
+          reason: '$category',
+        );
+        expect(
+          find.text('diag: $category'),
+          findsOneWidget,
+          reason: '$category',
+        );
+      }
+    });
+
+    testWidgets('a SUCCESSFUL test print shows the success status and NO '
+        'failure detail', (tester) async {
+      final l10n = await _en();
+      final connector = _FakeBtConnector(
+        paired: const BluetoothPairedResult.ok([
+          BluetoothDeviceInfo(address: 'AA:BB:CC:DD:EE:FF', name: 'Printer'),
+        ]),
+      );
+      await pump(
+        tester,
+        connector: connector,
+        tester_: _FakeBtTester(const pp.PrintResult.success()),
+      );
+      await tester.tap(
+        find.byKey(const Key('bluetooth-device-AA:BB:CC:DD:EE:FF')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('bluetooth-test')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.posNetworkPrinterTestSuccess), findsOneWidget);
+      expect(find.byKey(const Key('bluetooth-failure-detail')), findsNothing);
+      // A later SUCCESS clears any stale failure state: run a failing test,
+      // then a passing one — no failure message survives.
+    });
+
+    testWidgets('a reprint-style SECOND test after a failure clears the stale '
+        'failure message on success', (tester) async {
+      final l10n = await _en();
+      final connector = _FakeBtConnector(
+        paired: const BluetoothPairedResult.ok([
+          BluetoothDeviceInfo(address: 'AA:BB:CC:DD:EE:FF', name: 'Printer'),
+        ]),
+      );
+      final flaky = _FlakyBtTester();
+      await pump(tester, connector: connector, tester_: flaky);
+      await tester.tap(
+        find.byKey(const Key('bluetooth-device-AA:BB:CC:DD:EE:FF')),
+      );
+      await tester.pumpAndSettle();
+
+      // First test fails (connect).
+      await tester.tap(find.byKey(const Key('bluetooth-test')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.posBluetoothConnectFailed), findsOneWidget);
+
+      // Second test succeeds — the stale failure + detail are GONE.
+      await tester.tap(find.byKey(const Key('bluetooth-test')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.posNetworkPrinterTestSuccess), findsOneWidget);
+      expect(find.text(l10n.posBluetoothConnectFailed), findsNothing);
+      expect(find.byKey(const Key('bluetooth-failure-detail')), findsNothing);
     });
   });
 

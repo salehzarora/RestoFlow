@@ -6147,6 +6147,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Printed'**
   String get posReceiptPrintedNote;
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: Bluetooth test/print failure — both the secure and insecure connect attempts failed (printer off / out of range / busy).
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect to the Bluetooth printer. Check it is on and in range, then try again.'**
+  String get posBluetoothConnectFailed;
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: Bluetooth test/print failure — the connection opened but writing the bytes failed mid-stream.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to send the print data — the printer dropped the connection mid-print. Try again.'**
+  String get posBluetoothWriteFailed;
+
+  /// PRINT-BLUETOOTH-RECOVERY-001: Bluetooth test/print failure — the selected device is no longer bonded/paired in the OS settings.
+  ///
+  /// In en, this message translates to:
+  /// **'This printer is not paired. Pair it in Android Bluetooth settings, then try again.'**
+  String get posBluetoothNotPaired;
 }
 
 class _AppLocalizationsDelegate

@@ -3270,4 +3270,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posReceiptPrintedNote => 'Printed';
+
+  @override
+  String get posBluetoothConnectFailed =>
+      'Could not connect to the Bluetooth printer. Check it is on and in range, then try again.';
+
+  @override
+  String get posBluetoothWriteFailed =>
+      'Failed to send the print data — the printer dropped the connection mid-print. Try again.';
+
+  @override
+  String get posBluetoothNotPaired =>
+      'This printer is not paired. Pair it in Android Bluetooth settings, then try again.';
 }

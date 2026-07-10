@@ -96,7 +96,9 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
     final transport = BluetoothClassicPrintTransport(
       connector: connector,
       address: config.address,
-      timeout: kNativePrintTimeout,
+      // PRINT-BLUETOOTH-RECOVERY-001: BT connects get the Bluetooth budget
+      // (a cold SPP connect regularly exceeds the 5s Wi-Fi budget).
+      timeout: kBluetoothPrintTimeout,
     );
     try {
       return await transport.send(bytes);

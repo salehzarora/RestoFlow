@@ -3249,4 +3249,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posReceiptPrintedNote => 'تمت الطباعة';
+
+  @override
+  String get posBluetoothConnectFailed =>
+      'تعذر الاتصال بالطابعة عبر البلوتوث. تأكد أنها مشغّلة وضمن النطاق ثم حاول مجددًا.';
+
+  @override
+  String get posBluetoothWriteFailed =>
+      'فشل إرسال بيانات الطباعة — انقطع الاتصال أثناء الطباعة. حاول مجددًا.';
+
+  @override
+  String get posBluetoothNotPaired =>
+      'هذه الطابعة غير مقترنة. أعد إقران الطابعة من إعدادات البلوتوث ثم حاول مجددًا.';
 }

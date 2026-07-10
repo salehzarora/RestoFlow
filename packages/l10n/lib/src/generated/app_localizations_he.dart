@@ -3227,4 +3227,16 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posReceiptPrintedNote => 'הודפס';
+
+  @override
+  String get posBluetoothConnectFailed =>
+      'לא ניתן להתחבר למדפסת ה‑Bluetooth. ודא שהיא דולקת ובטווח ונסה שוב.';
+
+  @override
+  String get posBluetoothWriteFailed =>
+      'שליחת נתוני ההדפסה נכשלה — החיבור נותק באמצע ההדפסה. נסה שוב.';
+
+  @override
+  String get posBluetoothNotPaired =>
+      'המדפסת אינה מותאמת. התאם אותה בהגדרות ה‑Bluetooth של אנדרואיד ונסה שוב.';
 }

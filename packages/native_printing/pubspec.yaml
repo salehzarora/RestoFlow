@@ -21,11 +21,12 @@ dependencies:
   # notice banner, inline spinner, icon sizes).
   restoflow_design_system:
     path: ../design_system
-  # ANDROID-003/004: Bluetooth Classic (SPP) thermal printing on native Android.
-  # Both are Android/iOS plugins - the web build skips them (no web platform
-  # impl) and this package references them ONLY behind a conditional import
+  # PRINT-BLUETOOTH-RECOVERY-001: Bluetooth Classic (SPP) printing is served by
+  # the HOST APP's in-house `restoflow.native_printing/bluetooth` MethodChannel
+  # (POS/KDS MainActivity) — the broken `print_bluetooth_thermal` plugin was
+  # removed. permission_handler stays for the Android 12+ runtime
+  # BLUETOOTH_CONNECT request, referenced ONLY behind the conditional import
   # (bluetooth_connector_native.dart), so web never links native Bluetooth code.
-  print_bluetooth_thermal: ^1.1.1
   permission_handler: ^11.3.1
 dev_dependencies:
   flutter_test:

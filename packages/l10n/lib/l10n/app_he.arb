@@ -1013,5 +1013,8 @@
   "posCartEditItem": "עריכה",
   "posEditSaveChanges": "שמירת שינויים",
   "kdsNewOrderBadge": "הזמנה חדשה",
-  "posReceiptPrintedNote": "הודפס"
+  "posReceiptPrintedNote": "הודפס",
+  "posBluetoothConnectFailed": "לא ניתן להתחבר למדפסת ה‑Bluetooth. ודא שהיא דולקת ובטווח ונסה שוב.",
+  "posBluetoothWriteFailed": "שליחת נתוני ההדפסה נכשלה — החיבור נותק באמצע ההדפסה. נסה שוב.",
+  "posBluetoothNotPaired": "המדפסת אינה מותאמת. התאם אותה בהגדרות ה‑Bluetooth של אנדרואיד ונסה שוב."
 }
