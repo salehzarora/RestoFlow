@@ -2831,6 +2831,40 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posDiscountReasonLabel => 'סיבה';
 
   @override
+  String get posCancelOrderAction => 'ביטול הזמנה';
+
+  @override
+  String get posCancelOrderConfirm => 'אישור ביטול';
+
+  @override
+  String get posCancellationReasonLabel => 'סיבת ביטול';
+
+  @override
+  String get posCancellationReasonRequired => 'נדרשת סיבת ביטול';
+
+  @override
+  String get posCancelOrderWarning => 'ההזמנה תבוטל ולא יירשם תשלום.';
+
+  @override
+  String get posOrderCancelledSnack => 'ההזמנה בוטלה';
+
+  @override
+  String get posOrderCancelledChip => 'בוטלה';
+
+  @override
+  String get posCancelPermissionDenied =>
+      'רק מנהל יכול לבטל הזמנה זו - פנה למנהל.';
+
+  @override
+  String get posCancelPaidOrderError => 'לא ניתן לבטל הזמנה ששולמה.';
+
+  @override
+  String get posCancelOrderFailed => 'הביטול נכשל. נסה שוב.';
+
+  @override
+  String get posCancelDemoNote => 'מצב הדגמה - לא מבוטלת הזמנה אמיתית.';
+
+  @override
   String get posDiscountValueInvalid => 'הזינו הנחה תקינה';
 
   @override
@@ -3088,6 +3122,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get ordersStatusVoided => 'בוטל (ביטול)';
+
+  @override
+  String get ordersReprintCancelledBanner => 'מבוטל - לא חשבונית תקפה';
 
   @override
   String get ordersTypeAll => 'כל הסוגים';

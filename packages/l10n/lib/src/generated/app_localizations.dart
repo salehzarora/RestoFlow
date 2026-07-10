@@ -5386,6 +5386,72 @@ abstract class AppLocalizations {
   /// **'Reason'**
   String get posDiscountReasonLabel;
 
+  /// POS recent-orders: destructive Cancel action on an unpaid order + the cancel-sheet title.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel order'**
+  String get posCancelOrderAction;
+
+  /// POS cancel sheet: the confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm cancellation'**
+  String get posCancelOrderConfirm;
+
+  /// POS cancel sheet: the reason text field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation reason'**
+  String get posCancellationReasonLabel;
+
+  /// POS cancel sheet: inline error when the reason is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'A cancellation reason is required'**
+  String get posCancellationReasonRequired;
+
+  /// POS cancel sheet: the danger warning banner.
+  ///
+  /// In en, this message translates to:
+  /// **'This will cancel the order and no payment will be recorded.'**
+  String get posCancelOrderWarning;
+
+  /// POS cancel sheet: success snackbar after the server confirms the void.
+  ///
+  /// In en, this message translates to:
+  /// **'Order cancelled'**
+  String get posOrderCancelledSnack;
+
+  /// POS recent-orders: the status pill on a cancelled (voided) order.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get posOrderCancelledChip;
+
+  /// POS cancel sheet: honest error when the server role gate denies the cashier (permission_denied).
+  ///
+  /// In en, this message translates to:
+  /// **'Only a manager can cancel this order - ask a manager.'**
+  String get posCancelPermissionDenied;
+
+  /// POS cancel sheet: honest error when the server refuses because the order has a completed payment.
+  ///
+  /// In en, this message translates to:
+  /// **'A paid order cannot be cancelled.'**
+  String get posCancelPaidOrderError;
+
+  /// POS cancel sheet: generic failure error.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation failed. Please try again.'**
+  String get posCancelOrderFailed;
+
+  /// POS cancel sheet: demo-mode notice banner.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo mode - no real order is cancelled.'**
+  String get posCancelDemoNote;
+
   /// POS validation message when the typed discount value is empty or malformed.
   ///
   /// In en, this message translates to:
@@ -5877,6 +5943,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Voided'**
   String get ordersStatusVoided;
+
+  /// MONEY-VOID-001: banner stamped on the dashboard reprint preview of a voided/cancelled order so it is never mistaken for a valid receipt/ticket.
+  ///
+  /// In en, this message translates to:
+  /// **'CANCELLED - not a valid receipt'**
+  String get ordersReprintCancelledBanner;
 
   /// Order-history order-type filter: all.
   ///

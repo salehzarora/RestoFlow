@@ -2871,6 +2871,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posDiscountReasonLabel => 'Reason';
 
   @override
+  String get posCancelOrderAction => 'Cancel order';
+
+  @override
+  String get posCancelOrderConfirm => 'Confirm cancellation';
+
+  @override
+  String get posCancellationReasonLabel => 'Cancellation reason';
+
+  @override
+  String get posCancellationReasonRequired =>
+      'A cancellation reason is required';
+
+  @override
+  String get posCancelOrderWarning =>
+      'This will cancel the order and no payment will be recorded.';
+
+  @override
+  String get posOrderCancelledSnack => 'Order cancelled';
+
+  @override
+  String get posOrderCancelledChip => 'Cancelled';
+
+  @override
+  String get posCancelPermissionDenied =>
+      'Only a manager can cancel this order - ask a manager.';
+
+  @override
+  String get posCancelPaidOrderError => 'A paid order cannot be cancelled.';
+
+  @override
+  String get posCancelOrderFailed => 'Cancellation failed. Please try again.';
+
+  @override
+  String get posCancelDemoNote => 'Demo mode - no real order is cancelled.';
+
+  @override
   String get posDiscountValueInvalid => 'Enter a valid discount';
 
   @override
@@ -3130,6 +3166,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ordersStatusVoided => 'Voided';
+
+  @override
+  String get ordersReprintCancelledBanner => 'CANCELLED - not a valid receipt';
 
   @override
   String get ordersTypeAll => 'All types';

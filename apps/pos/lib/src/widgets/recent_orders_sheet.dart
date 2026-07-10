@@ -13,6 +13,7 @@ import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
 import '../state/outbox_controller.dart';
 import '../state/receipt_print_controller.dart';
 import '../state/recent_orders_controller.dart';
+import 'cancel_order_sheet.dart';
 import 'cash_payment_sheet.dart';
 import 'receipt_print_preview.dart';
 
@@ -74,7 +75,9 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
       for (final o in orders)
         if (switch (_filter) {
           _RecentFilter.all => true,
-          _RecentFilter.unpaid => !o.isPaid,
+          // MONEY-VOID-001: a cancelled (voided) order is no longer active work,
+          // so it drops out of the "unpaid" filter (still visible under "all").
+          _RecentFilter.unpaid => !o.isPaid && !o.isVoided,
           _RecentFilter.paid => o.isPaid,
         })
           o,
@@ -262,68 +265,104 @@ class _RecentOrderCard extends ConsumerWidget {
             spacing: RestoflowSpacing.xs,
             runSpacing: RestoflowSpacing.xs,
             children: [
-              RestoflowStatusPill(
-                label: paid ? l10n.posPaidChip : l10n.posUnpaidChip,
-                tone: paid ? RestoflowTone.success : RestoflowTone.warning,
-                icon: paid ? Icons.check_circle_outline : Icons.schedule,
-              ),
-              if (syncState != null && syncState!.isFailed)
+              // MONEY-VOID-001: a cancelled order shows a single danger
+              // "Cancelled" pill instead of the paid/unpaid + sync pills (the
+              // void is terminal; the submit sync state is no longer relevant).
+              if (order.isVoided)
                 RestoflowStatusPill(
-                  label: l10n.posRecentSyncFailed,
+                  key: Key('recent-cancelled-${order.orderNumber}'),
+                  label: l10n.posOrderCancelledChip,
                   tone: RestoflowTone.danger,
-                  icon: Icons.sync_problem,
-                )
-              else if (syncState != null && syncState!.isPending)
-                RestoflowStatusPill(
-                  label: l10n.posRecentSyncPending,
-                  tone: RestoflowTone.info,
-                  icon: Icons.sync,
-                ),
-            ],
-          ),
-          const SizedBox(height: RestoflowSpacing.sm),
-          Row(
-            children: [
-              if (!paid)
-                Expanded(
-                  child: FilledButton.icon(
-                    key: Key('recent-pay-${order.orderNumber}'),
-                    onPressed: () => CashPaymentSheet.show(
-                      context,
-                      orderId: o.orderId,
-                      orderNumber: o.orderNumber,
-                      amountMinor: o.grandTotalMinor,
-                      currencyCode: o.currencyCode,
-                    ),
-                    icon: const Icon(Icons.payments_outlined, size: 18),
-                    label: Text(l10n.posTakePayment),
-                  ),
+                  icon: Icons.block,
                 )
               else ...[
-                Expanded(
-                  child: OutlinedButton.icon(
-                    key: Key('recent-reprint-${order.orderNumber}'),
-                    onPressed: () => _reprint(context, ref),
-                    icon: const Icon(Icons.print_outlined, size: 18),
-                    label: Text(l10n.posRecentReprintAction),
-                  ),
+                RestoflowStatusPill(
+                  label: paid ? l10n.posPaidChip : l10n.posUnpaidChip,
+                  tone: paid ? RestoflowTone.success : RestoflowTone.warning,
+                  icon: paid ? Icons.check_circle_outline : Icons.schedule,
                 ),
-                const SizedBox(width: RestoflowSpacing.sm),
-                Expanded(
-                  child: TextButton.icon(
-                    key: Key('recent-view-${order.orderNumber}'),
-                    onPressed: () => ReceiptPrintPreview.show(
-                      context,
-                      order: o,
-                      payment: order.payment!,
-                    ),
-                    icon: const Icon(Icons.visibility_outlined, size: 18),
-                    label: Text(l10n.receiptPreviewTitle),
+                if (syncState != null && syncState!.isFailed)
+                  RestoflowStatusPill(
+                    label: l10n.posRecentSyncFailed,
+                    tone: RestoflowTone.danger,
+                    icon: Icons.sync_problem,
+                  )
+                else if (syncState != null && syncState!.isPending)
+                  RestoflowStatusPill(
+                    label: l10n.posRecentSyncPending,
+                    tone: RestoflowTone.info,
+                    icon: Icons.sync,
                   ),
-                ),
               ],
             ],
           ),
+          // MONEY-VOID-001: a cancelled (voided) order is terminal + money-free
+          // — no Take payment, no receipt reprint. The action row is omitted.
+          if (!order.isVoided) ...[
+            const SizedBox(height: RestoflowSpacing.sm),
+            Row(
+              children: [
+                if (!paid) ...[
+                  Expanded(
+                    child: FilledButton.icon(
+                      key: Key('recent-pay-${order.orderNumber}'),
+                      onPressed: () => CashPaymentSheet.show(
+                        context,
+                        orderId: o.orderId,
+                        orderNumber: o.orderNumber,
+                        amountMinor: o.grandTotalMinor,
+                        currencyCode: o.currencyCode,
+                      ),
+                      icon: const Icon(Icons.payments_outlined, size: 18),
+                      label: Text(l10n.posTakePayment),
+                    ),
+                  ),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  // A deliberate, distinct destructive action to CANCEL a wrong
+                  // unpaid order (danger outline; opens a reason+confirm sheet,
+                  // never a one-tap cancel). The server enforces the
+                  // manager/owner role gate.
+                  OutlinedButton.icon(
+                    key: Key('recent-cancel-${order.orderNumber}'),
+                    onPressed: () =>
+                        CancelOrderSheet.show(context, order: order),
+                    icon: const Icon(Icons.block, size: 18),
+                    label: Text(l10n.posCancelOrderAction),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: RestoflowTone.danger
+                          .styleOf(theme)
+                          .accent,
+                      side: BorderSide(
+                        color: RestoflowTone.danger.styleOf(theme).accent,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: Key('recent-reprint-${order.orderNumber}'),
+                      onPressed: () => _reprint(context, ref),
+                      icon: const Icon(Icons.print_outlined, size: 18),
+                      label: Text(l10n.posRecentReprintAction),
+                    ),
+                  ),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  Expanded(
+                    child: TextButton.icon(
+                      key: Key('recent-view-${order.orderNumber}'),
+                      onPressed: () => ReceiptPrintPreview.show(
+                        context,
+                        order: o,
+                        payment: order.payment!,
+                      ),
+                      icon: const Icon(Icons.visibility_outlined, size: 18),
+                      label: Text(l10n.receiptPreviewTitle),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );

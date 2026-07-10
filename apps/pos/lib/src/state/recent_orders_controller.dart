@@ -94,13 +94,36 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     _apply(<PosRecentOrder>[order, ...existing]);
   }
 
-  /// Attaches [payment] to a stored unpaid order (no-op if unknown/already paid).
+  /// Attaches [payment] to a stored unpaid order (no-op if unknown/already paid,
+  /// or MONEY-VOID-001 already cancelled — a voided order is terminal and can
+  /// never be marked paid).
   void recordPayment(String orderNumber, CashPayment payment) {
     var changed = false;
     final next = <PosRecentOrder>[];
     for (final o in state) {
-      if (o.orderNumber == orderNumber && o.payment == null) {
+      if (o.orderNumber == orderNumber && o.payment == null && !o.isVoided) {
         next.add(o.copyWith(payment: payment));
+        changed = true;
+      } else {
+        next.add(o);
+      }
+    }
+    if (!changed) return;
+    _apply(next);
+  }
+
+  /// MONEY-VOID-001: marks a stored order CANCELLED (voided) after the server
+  /// confirms the void. No-op if the order is unknown, already paid, or already
+  /// voided (a paid order cannot be voided in the MVP — the server rejects it,
+  /// so this never runs for one). The order stays in the list under a
+  /// "Cancelled" pill (auditable) but drops out of the unpaid count and can no
+  /// longer be paid or reprinted as a receipt.
+  void markVoided(String orderNumber, String reason) {
+    var changed = false;
+    final next = <PosRecentOrder>[];
+    for (final o in state) {
+      if (o.orderNumber == orderNumber && !o.isVoided && !o.isPaid) {
+        next.add(o.copyWith(voidedAt: DateTime.now(), voidReason: reason));
         changed = true;
       } else {
         next.add(o);
@@ -119,13 +142,16 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   }
 
   /// Count of currently-unpaid recent orders (drives the app-bar badge).
-  int get unpaidCount => state.where((o) => !o.isPaid).length;
+  /// MONEY-VOID-001: a cancelled (voided) order is no longer active work, so it
+  /// is excluded from the unpaid count.
+  int get unpaidCount => state.where((o) => !o.isPaid && !o.isVoided).length;
 
   void _syncPayments(PaymentState ps) {
     var changed = false;
     final next = <PosRecentOrder>[];
     for (final o in state) {
-      if (o.payment == null) {
+      // MONEY-VOID-001: never reactively attach a payment to a cancelled order.
+      if (o.payment == null && !o.isVoided) {
         final p = ps.paymentFor(o.orderNumber);
         if (p != null) {
           next.add(o.copyWith(payment: p));
@@ -152,11 +178,16 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     final byNumber = <String, PosRecentOrder>{};
     for (final o in orders) {
       final prev = byNumber[o.orderNumber];
-      // Prefer the copy that carries a payment (paid state must not be lost).
-      byNumber[o.orderNumber] =
-          (prev != null && prev.payment != null && o.payment == null)
-          ? prev
-          : o;
+      if (prev == null) {
+        byNumber[o.orderNumber] = o;
+        continue;
+      }
+      // A TERMINAL marker (paid OR MONEY-VOID-001 voided) must never be lost to
+      // a plain copy on an orderNumber collision (e.g. a payment-less voided
+      // copy meeting an older non-voided copy on reload/merge).
+      final prevTerminal = prev.payment != null || prev.isVoided;
+      final oTerminal = o.payment != null || o.isVoided;
+      byNumber[o.orderNumber] = (prevTerminal && !oTerminal) ? prev : o;
     }
     final list = byNumber.values.toList()
       ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
