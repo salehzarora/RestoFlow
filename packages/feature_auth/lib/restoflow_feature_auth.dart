@@ -33,6 +33,10 @@ export 'src/pin_login_screen.dart';
 // RF-118: durable (shared_preferences) client PIN-attempt lockout store.
 export 'src/shared_preferences_pin_attempt_store.dart';
 export 'src/real_mode_unconfigured_view.dart';
+// PILOT-OFFLINE-BOOT-001: the retryable device-auth boot gate + the friendly
+// offline "no connection" screen (POS/KDS launch resilience).
+export 'src/device_boot_gate.dart';
+export 'src/offline_boot_view.dart';
 export 'src/real_repo_not_wired.dart';
 export 'src/supabase_device_staff_repository.dart';
 export 'src/role_label.dart';

@@ -1146,6 +1146,19 @@ class AppLocalizationsHe extends AppLocalizations {
   String get authDeviceSignInUnavailableTitle => 'כניסת המכשיר אינה זמינה';
 
   @override
+  String get offlineBootTitle => 'אין חיבור';
+
+  @override
+  String get offlineBootMessage => 'בדוק את חיבור ה-Wi-Fi ונסה שוב';
+
+  @override
+  String get offlineBootRetry => 'נסה שוב';
+
+  @override
+  String get offlineBootAutoReconnect =>
+      'השאירו מסך זה פתוח — הוא יתחבר מחדש אוטומטית.';
+
+  @override
   String get authDeviceSignInUnavailableBody =>
       'כניסת מכשירים אנונימית מושבתת או שאימות Supabase אינו מוגדר.';
 

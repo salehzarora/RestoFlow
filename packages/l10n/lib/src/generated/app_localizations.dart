@@ -2218,6 +2218,30 @@ abstract class AppLocalizations {
   /// **'Device sign-in unavailable'**
   String get authDeviceSignInUnavailableTitle;
 
+  /// PILOT-OFFLINE-BOOT-001: title of the friendly offline screen shown when POS/KDS launch without network.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection'**
+  String get offlineBootTitle;
+
+  /// PILOT-OFFLINE-BOOT-001: body line of the offline boot screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Check Wi-Fi and try again'**
+  String get offlineBootMessage;
+
+  /// PILOT-OFFLINE-BOOT-001: retry button on the offline boot screen (re-runs device-auth bootstrap).
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get offlineBootRetry;
+
+  /// PILOT-OFFLINE-BOOT-001: reassurance line shown while the boot gate auto-retries.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this screen open — it will reconnect automatically.'**
+  String get offlineBootAutoReconnect;
+
   /// Body of the device-sign-in-unavailable help page: the exact reason pairing cannot start.
   ///
   /// In en, this message translates to:

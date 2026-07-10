@@ -1155,6 +1155,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get authDeviceSignInUnavailableTitle => 'تسجيل دخول الجهاز غير متاح';
 
   @override
+  String get offlineBootTitle => 'لا يوجد اتصال';
+
+  @override
+  String get offlineBootMessage => 'تحقق من شبكة Wi-Fi ثم حاول مرة أخرى';
+
+  @override
+  String get offlineBootRetry => 'إعادة المحاولة';
+
+  @override
+  String get offlineBootAutoReconnect =>
+      'أبقِ هذه الشاشة مفتوحة — ستُعيد الاتصال تلقائيًا.';
+
+  @override
   String get authDeviceSignInUnavailableBody =>
       'تسجيل الدخول المجهول للأجهزة معطَّل أو أن مصادقة Supabase غير مهيأة.';
 

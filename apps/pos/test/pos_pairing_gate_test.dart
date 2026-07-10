@@ -101,6 +101,22 @@ void main() {
     expect(find.byType(DevicePairingScreen), findsNothing);
   });
 
+  testWidgets('PILOT-OFFLINE-BOOT-001: real mode with an offline problem shows '
+      'the friendly offline screen, not the dev help page or the menu', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      const PosApp(
+        demoMode: false,
+        realAuthProblem: RealDeviceAuthProblem.offline,
+      ),
+    );
+    expect(find.byType(OfflineBootView), findsOneWidget);
+    expect(find.byType(DeviceSignInUnavailableView), findsNothing);
+    expect(find.byType(PosMenuScreen), findsNothing);
+  });
+
   testWidgets('real mode with a pairing repo + no device shows the pairing '
       'screen (not the POS menu)', (tester) async {
     await _pump(

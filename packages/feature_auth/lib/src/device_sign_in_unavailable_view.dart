@@ -18,6 +18,13 @@ enum RealDeviceAuthProblem {
   /// anonymous sign-ins disabled on the project) ->
   /// [DeviceSignInUnavailableView].
   signInUnavailable,
+
+  /// PILOT-OFFLINE-BOOT-001: config is present but the network/Supabase was
+  /// UNREACHABLE at launch (the venue Wi‑Fi is down or slow) -> the retryable
+  /// [OfflineBootView]. The composition root's boot gate intercepts this and
+  /// shows the offline screen with a working Retry (no app restart); the app
+  /// widgets map it defensively to a non-retry offline view.
+  offline,
 }
 
 /// An honest, actionable "device sign-in unavailable" page for POS/KDS.
