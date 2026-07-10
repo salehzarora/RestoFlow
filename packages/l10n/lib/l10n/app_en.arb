@@ -2240,6 +2240,50 @@
   "posDiscountValueLabel": "Discount value",
   "@posDiscountValueLabel": {"description": "POS label for the discount value input (money amount for fixed, or percent for percentage)."},
   "posDiscountReasonLabel": "Reason",
+  "posCancelOrderAction": "Cancel order",
+  "@posCancelOrderAction": {
+    "description": "POS recent-orders: destructive Cancel action on an unpaid order + the cancel-sheet title."
+  },
+  "posCancelOrderConfirm": "Confirm cancellation",
+  "@posCancelOrderConfirm": {
+    "description": "POS cancel sheet: the confirm button."
+  },
+  "posCancellationReasonLabel": "Cancellation reason",
+  "@posCancellationReasonLabel": {
+    "description": "POS cancel sheet: the reason text field label."
+  },
+  "posCancellationReasonRequired": "A cancellation reason is required",
+  "@posCancellationReasonRequired": {
+    "description": "POS cancel sheet: inline error when the reason is empty."
+  },
+  "posCancelOrderWarning": "This will cancel the order and no payment will be recorded.",
+  "@posCancelOrderWarning": {
+    "description": "POS cancel sheet: the danger warning banner."
+  },
+  "posOrderCancelledSnack": "Order cancelled",
+  "@posOrderCancelledSnack": {
+    "description": "POS cancel sheet: success snackbar after the server confirms the void."
+  },
+  "posOrderCancelledChip": "Cancelled",
+  "@posOrderCancelledChip": {
+    "description": "POS recent-orders: the status pill on a cancelled (voided) order."
+  },
+  "posCancelPermissionDenied": "Only a manager can cancel this order - ask a manager.",
+  "@posCancelPermissionDenied": {
+    "description": "POS cancel sheet: honest error when the server role gate denies the cashier (permission_denied)."
+  },
+  "posCancelPaidOrderError": "A paid order cannot be cancelled.",
+  "@posCancelPaidOrderError": {
+    "description": "POS cancel sheet: honest error when the server refuses because the order has a completed payment."
+  },
+  "posCancelOrderFailed": "Cancellation failed. Please try again.",
+  "@posCancelOrderFailed": {
+    "description": "POS cancel sheet: generic failure error."
+  },
+  "posCancelDemoNote": "Demo mode - no real order is cancelled.",
+  "@posCancelDemoNote": {
+    "description": "POS cancel sheet: demo-mode notice banner."
+  },
   "@posDiscountReasonLabel": {"description": "POS label for the required discount reason input."},
   "posDiscountValueInvalid": "Enter a valid discount",
   "@posDiscountValueInvalid": {"description": "POS validation message when the typed discount value is empty or malformed."},
@@ -2404,6 +2448,10 @@
   "ordersStatusCancelled": "Cancelled",
   "@ordersStatusCancelled": {"description": "Order status: cancelled."},
   "ordersStatusVoided": "Voided",
+  "ordersReprintCancelledBanner": "CANCELLED - not a valid receipt",
+  "@ordersReprintCancelledBanner": {
+    "description": "MONEY-VOID-001: banner stamped on the dashboard reprint preview of a voided/cancelled order so it is never mistaken for a valid receipt/ticket."
+  },
   "@ordersStatusVoided": {"description": "Order status: voided."},
   "ordersTypeAll": "All types",
   "@ordersTypeAll": {"description": "Order-history order-type filter: all."},

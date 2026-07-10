@@ -18,6 +18,8 @@ class PosRecentOrder {
     required this.order,
     required this.submittedAt,
     this.payment,
+    this.voidedAt,
+    this.voidReason,
   });
 
   final SubmittedOrderView order;
@@ -29,25 +31,46 @@ class PosRecentOrder {
   /// newest-first ordering).
   final DateTime submittedAt;
 
+  /// MONEY-VOID-001: when this order was CANCELLED (voided), or null. Set once
+  /// the server confirms the void; persisted so a cancelled order stays
+  /// cancelled across a restart. A cancelled order carries no payment and cannot
+  /// be paid or reprinted as a receipt.
+  final DateTime? voidedAt;
+
+  /// MONEY-VOID-001: the cancellation reason (as entered by the cashier), or
+  /// null. Display only — never money.
+  final String? voidReason;
+
   String get orderNumber => order.orderNumber;
   String? get orderId => order.orderId;
 
   /// True once a COMPLETED payment is attached (the paid/unpaid axis).
   bool get isPaid => payment != null && payment!.status.isPaid;
 
+  /// MONEY-VOID-001: true once the order has been cancelled (voided).
+  bool get isVoided => voidedAt != null;
+
   int get grandTotalMinor => order.grandTotalMinor;
   String get currencyCode => order.currencyCode;
 
-  PosRecentOrder copyWith({CashPayment? payment}) => PosRecentOrder(
+  PosRecentOrder copyWith({
+    CashPayment? payment,
+    DateTime? voidedAt,
+    String? voidReason,
+  }) => PosRecentOrder(
     order: order,
     submittedAt: submittedAt,
     payment: payment ?? this.payment,
+    voidedAt: voidedAt ?? this.voidedAt,
+    voidReason: voidReason ?? this.voidReason,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
     'submitted_at': submittedAt.toIso8601String(),
     'order': _orderToJson(order),
     if (payment != null) 'payment': _paymentToJson(payment!),
+    if (voidedAt != null) 'voided_at': voidedAt!.toIso8601String(),
+    if (voidReason != null) 'void_reason': voidReason,
   };
 
   /// Parses a persisted recent order. Throws [FormatException] on a
@@ -64,12 +87,16 @@ class PosRecentOrder {
       throw const FormatException('recent order: bad submitted_at');
     }
     final paymentRaw = json['payment'];
+    final voidedAtRaw = json['voided_at'];
+    final voidReasonRaw = json['void_reason'];
     return PosRecentOrder(
       order: _orderFromJson(orderRaw.cast<String, Object?>()),
       submittedAt: submittedAt,
       payment: paymentRaw is Map
           ? _paymentFromJson(paymentRaw.cast<String, Object?>())
           : null,
+      voidedAt: voidedAtRaw is String ? DateTime.tryParse(voidedAtRaw) : null,
+      voidReason: _strOrNull(voidReasonRaw),
     );
   }
 }

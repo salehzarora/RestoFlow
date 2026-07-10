@@ -36,6 +36,13 @@ String _paymentMethodLabel(AppLocalizations l10n, String method) =>
 /// A compact "×N" suffix for a repeated modifier/item (N>1 only).
 String _timesSuffix(int quantity) => quantity > 1 ? ' ×$quantity' : '';
 
+/// MONEY-VOID-001: a voided/cancelled order's stored total is NOT a live bill.
+/// A reprinted preview of such an order is stamped with a prominent banner so it
+/// can never be mistaken for a valid receipt/ticket. Text only (no money — the
+/// kitchen ticket stays money-free, T-003).
+bool _isCancelled(OrderDetail detail) =>
+    detail.status == 'voided' || detail.status == 'cancelled';
+
 /// Builds a customer-receipt [PrintDocument] from [detail]'s STORED values.
 /// Money is formatted (never recomputed) with the order's own currency.
 PrintDocument buildOrderReceiptPreview(
@@ -45,6 +52,8 @@ PrintDocument buildOrderReceiptPreview(
   String money(int minor) =>
       MoneyFormatter.formatMinor(minor, detail.currencyCode);
   final lines = <PrintLine>[
+    if (_isCancelled(detail))
+      PrintLine.title(l10n.ordersReprintCancelledBanner),
     PrintLine.title(detail.branchName ?? l10n.dashboardAppTitle),
     PrintLine.center(detail.orderCode),
     if (detail.createdAtLabel != null && detail.createdAtLabel!.isNotEmpty)
@@ -145,6 +154,8 @@ PrintDocument buildOrderKitchenTicketPreview(
   OrderDetail detail,
 ) {
   final lines = <PrintLine>[
+    if (_isCancelled(detail))
+      PrintLine.title(l10n.ordersReprintCancelledBanner),
     PrintLine.title(detail.orderCode),
     PrintLine.kv(
       l10n.posOrderTypeLabel,

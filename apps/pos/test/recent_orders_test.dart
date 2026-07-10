@@ -158,6 +158,92 @@ void main() {
     },
   );
 
+  // ---- MONEY-VOID-001: cancelled (voided) orders ----
+
+  test('a voided order round-trips (voidedAt + reason) with no payment', () {
+    final order = PosRecentOrder(
+      order: _view('#V1'),
+      submittedAt: DateTime.utc(2026, 7, 9, 12, 30),
+      voidedAt: DateTime.utc(2026, 7, 9, 12, 45),
+      voidReason: 'wrong table',
+    );
+    final restored = PosRecentOrder.fromJson(order.toJson());
+    expect(restored.isVoided, isTrue);
+    expect(restored.voidReason, 'wrong table');
+    expect(restored.payment, isNull);
+    expect(restored.isPaid, isFalse);
+  });
+
+  test(
+    'markVoided cancels an unpaid order; it leaves the unpaid count',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          posRecentOrdersStoreProvider.overrideWithValue(
+            InMemoryRecentOrdersStore(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        posRecentOrdersControllerProvider.notifier,
+      );
+
+      notifier.recordSubmitted(_view('#V2'));
+      expect(notifier.unpaidCount, 1);
+
+      notifier.markVoided('#V2', 'duplicate order');
+      final state = container.read(posRecentOrdersControllerProvider);
+      expect(state.single.isVoided, isTrue);
+      expect(state.single.voidReason, 'duplicate order');
+      // A voided order is no longer "unpaid" (drops off the pay-later list).
+      expect(notifier.unpaidCount, 0);
+    },
+  );
+
+  test('a paid order cannot be voided locally (no money is unwound)', () async {
+    final container = ProviderContainer(
+      overrides: [
+        posRecentOrdersStoreProvider.overrideWithValue(
+          InMemoryRecentOrdersStore(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(posRecentOrdersControllerProvider.notifier);
+    notifier.recordSubmitted(_view('#V3'));
+    notifier.recordPayment('#V3', _payment('#V3'));
+
+    notifier.markVoided('#V3', 'too late');
+    final state = container.read(posRecentOrdersControllerProvider);
+    expect(state.single.isPaid, isTrue);
+    expect(state.single.isVoided, isFalse);
+  });
+
+  test(
+    'a voided order cannot then be paid (terminal state wins on merge)',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          posRecentOrdersStoreProvider.overrideWithValue(
+            InMemoryRecentOrdersStore(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        posRecentOrdersControllerProvider.notifier,
+      );
+      notifier.recordSubmitted(_view('#V4'));
+      notifier.markVoided('#V4', 'wrong');
+
+      notifier.recordPayment('#V4', _payment('#V4'));
+      final state = container.read(posRecentOrdersControllerProvider);
+      expect(state.single.isVoided, isTrue);
+      expect(state.single.isPaid, isFalse);
+    },
+  );
+
   test(
     'recovery loads persisted orders and prunes older than yesterday',
     () async {

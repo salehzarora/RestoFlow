@@ -330,6 +330,38 @@ void main() {
       },
     );
 
+    test('MONEY-VOID-001: voiding a previously-active order drops its whole '
+        'ticket off the KDS (money-free)', () {
+      // Same order + items, once active and once voided.
+      final items = [
+        {
+          'id': 'i1',
+          'order_id': 'oX',
+          'station_id': 'grill',
+          'status': 'preparing',
+          'quantity': 2,
+          'menu_item_name_snapshot': 'Steak',
+        },
+      ];
+      final active = KdsTicketMapper.map(
+        orders: [
+          {'id': 'oX', 'status': 'preparing'},
+        ],
+        orderItems: items,
+        modifiers: const [],
+      );
+      expect(active.length, 1, reason: 'active order shows a ticket');
+
+      final voided = KdsTicketMapper.map(
+        orders: [
+          {'id': 'oX', 'status': 'voided'},
+        ],
+        orderItems: items,
+        modifiers: const [],
+      );
+      expect(voided, isEmpty, reason: 'a voided order shows no KDS work');
+    });
+
     test('items with no station_id fall into the unassigned bucket', () {
       final tickets = KdsTicketMapper.map(
         orders: [

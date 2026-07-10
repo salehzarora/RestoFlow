@@ -150,4 +150,46 @@ void main() {
       expect(html.contains('₪36.00'), isTrue);
     },
   );
+
+  // ---- MONEY-VOID-001: a voided/cancelled order's preview is banner-stamped ----
+
+  OrderDetail voided() => OrderDetail(
+    orderId: 'oV',
+    orderCode: '#1003CC',
+    status: 'voided',
+    orderType: 'takeaway',
+    currencyCode: 'ILS',
+    subtotalMinor: 3600,
+    discountTotalMinor: 0,
+    taxTotalMinor: 0,
+    grandTotalMinor: 3600,
+    items: const [
+      OrderDetailItem(name: 'Wrap', quantity: 1, lineTotalMinor: 3600),
+    ],
+  );
+
+  test('a voided order receipt preview is stamped CANCELLED', () async {
+    final l10n = await _l10n('en');
+    final html = documentToHtml(buildOrderReceiptPreview(l10n, voided()));
+    expect(html.contains(l10n.ordersReprintCancelledBanner), isTrue);
+  });
+
+  test(
+    'a voided order kitchen preview is stamped CANCELLED and stays money-free',
+    () async {
+      final l10n = await _l10n('en');
+      final html = documentToHtml(
+        buildOrderKitchenTicketPreview(l10n, voided()),
+      );
+      expect(html.contains(l10n.ordersReprintCancelledBanner), isTrue);
+      expect(html.contains('₪'), isFalse);
+      expect(html.contains('36.00'), isFalse);
+    },
+  );
+
+  test('a normal (completed) order preview is NOT banner-stamped', () async {
+    final l10n = await _l10n('en');
+    final html = documentToHtml(buildOrderReceiptPreview(l10n, _order()));
+    expect(html.contains(l10n.ordersReprintCancelledBanner), isFalse);
+  });
 }

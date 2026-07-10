@@ -2851,6 +2851,40 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posDiscountReasonLabel => 'السبب';
 
   @override
+  String get posCancelOrderAction => 'إلغاء الطلب';
+
+  @override
+  String get posCancelOrderConfirm => 'تأكيد الإلغاء';
+
+  @override
+  String get posCancellationReasonLabel => 'سبب الإلغاء';
+
+  @override
+  String get posCancellationReasonRequired => 'سبب الإلغاء مطلوب';
+
+  @override
+  String get posCancelOrderWarning => 'سيتم إلغاء الطلب ولن يتم تسجيل أي دفعة.';
+
+  @override
+  String get posOrderCancelledSnack => 'تم إلغاء الطلب';
+
+  @override
+  String get posOrderCancelledChip => 'ملغى';
+
+  @override
+  String get posCancelPermissionDenied =>
+      'لا يمكن إلغاء الطلب إلا بواسطة مدير - اطلب المدير.';
+
+  @override
+  String get posCancelPaidOrderError => 'لا يمكن إلغاء طلب مدفوع.';
+
+  @override
+  String get posCancelOrderFailed => 'فشل الإلغاء. حاول مرة أخرى.';
+
+  @override
+  String get posCancelDemoNote => 'الوضع التجريبي - لا يتم إلغاء أي طلب فعلي.';
+
+  @override
   String get posDiscountValueInvalid => 'أدخل خصمًا صالحًا';
 
   @override
@@ -3110,6 +3144,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get ordersStatusVoided => 'مُبطَل';
+
+  @override
+  String get ordersReprintCancelledBanner => 'ملغى - ليست فاتورة صالحة';
 
   @override
   String get ordersTypeAll => 'كل الأنواع';
