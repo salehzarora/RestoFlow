@@ -9,6 +9,277 @@ class AppLocalizationsAr extends AppLocalizations {
   AppLocalizationsAr([String locale = 'ar']) : super(locale);
 
   @override
+  String get dashboardNavActivity => 'سجل النشاط';
+
+  @override
+  String get activityLogTitle => 'سجل النشاط';
+
+  @override
+  String get activityLogSubtitle =>
+      'سجل للقراءة فقط لأهم الإجراءات — من فعل ماذا ومتى وأين.';
+
+  @override
+  String get activityLogRefresh => 'تحديث';
+
+  @override
+  String get activityLogDemoNotice =>
+      'بيانات تجريبية — نشاط نموذجي لاستكشاف السجل قبل ربط الخادم.';
+
+  @override
+  String get activityLogFilterCategory => 'الفئة';
+
+  @override
+  String get activityLogFilterBranch => 'الفرع';
+
+  @override
+  String get activityLogBranchAll => 'كل الفروع المسموح بها';
+
+  @override
+  String get activityLogFilterActor => 'الموظف';
+
+  @override
+  String get activityLogActorAll => 'كل الموظفين';
+
+  @override
+  String get activityLogSensitiveOnly => 'الحساسة فقط';
+
+  @override
+  String get activityLogError => 'تعذّر تحميل سجل النشاط';
+
+  @override
+  String get activityLogErrorHint =>
+      'تحقق من الاتصال أو الصلاحيات وحاول مرة أخرى.';
+
+  @override
+  String get activityLogEmpty => 'لا يوجد نشاط بعد';
+
+  @override
+  String get activityLogEmptyHint => 'ستظهر الإجراءات ضمن هذه الفترة هنا.';
+
+  @override
+  String get activityLogLoadMore => 'تحميل المزيد';
+
+  @override
+  String get activityLogDenied => 'مرفوض';
+
+  @override
+  String get activityLogClose => 'إغلاق';
+
+  @override
+  String get activityLogActorUnknown => 'غير متاح';
+
+  @override
+  String get activityLogEnabled => 'مُفعّل';
+
+  @override
+  String get activityLogDisabled => 'مُعطّل';
+
+  @override
+  String get activityLogChangesHeading => 'ما الذي تغيّر';
+
+  @override
+  String get activityLogGenericNote =>
+      'تم تسجيل هذا النشاط دون تفاصيل إضافية قابلة للعرض.';
+
+  @override
+  String get activityLogCategoryAll => 'كل الفئات';
+
+  @override
+  String get activityLogCategoryOrders => 'الطلبات';
+
+  @override
+  String get activityLogCategoryVoids => 'الإلغاءات';
+
+  @override
+  String get activityLogCategoryDiscounts => 'الخصومات';
+
+  @override
+  String get activityLogCategoryPayments => 'المدفوعات';
+
+  @override
+  String get activityLogCategoryShifts => 'الورديات والنقد';
+
+  @override
+  String get activityLogCategoryStaff => 'الموظفون';
+
+  @override
+  String get activityLogCategoryAccess => 'الوصول';
+
+  @override
+  String get activityLogCategoryDevices => 'الأجهزة';
+
+  @override
+  String get activityLogCategoryMenu => 'القائمة';
+
+  @override
+  String get activityLogCategoryTables => 'الطاولات';
+
+  @override
+  String get activityLogCategoryOrganization => 'المنشأة';
+
+  @override
+  String get activityLogCategorySync => 'المزامنة';
+
+  @override
+  String get activityLogCategoryOther => 'أخرى';
+
+  @override
+  String get activityLogTitleOrderVoided => 'تم إلغاء الطلب';
+
+  @override
+  String get activityLogTitleDiscountApplied => 'تم تطبيق خصم';
+
+  @override
+  String get activityLogTitleOrderSubmitted => 'تم إرسال الطلب';
+
+  @override
+  String get activityLogTitleOrderStatusUpdated => 'تم تحديث حالة الطلب';
+
+  @override
+  String get activityLogTitleStaffCreated => 'تمت إضافة موظف';
+
+  @override
+  String get activityLogTitleStaffCapabilities => 'تم تحديث صلاحيات الموظف';
+
+  @override
+  String get activityLogTitleStaffPinSet => 'تم تعيين رمز PIN للموظف';
+
+  @override
+  String get activityLogTitleMembershipGranted => 'تم منح الوصول';
+
+  @override
+  String get activityLogTitleMembershipRevoked => 'تم إلغاء الوصول';
+
+  @override
+  String get activityLogTitleRoleUpdated => 'تم تغيير الدور';
+
+  @override
+  String get activityLogTitleShiftOpened => 'تم فتح وردية';
+
+  @override
+  String get activityLogTitleShiftClosed => 'تم إغلاق وردية';
+
+  @override
+  String get activityLogTitleShiftReconciled => 'تمت تسوية الوردية';
+
+  @override
+  String get activityLogTitleDeviceAdded => 'تمت إضافة جهاز';
+
+  @override
+  String get activityLogTitleDeviceRevoked => 'تمت إزالة جهاز';
+
+  @override
+  String get activityLogTitleDeviceSignedIn => 'سجّل الجهاز الدخول';
+
+  @override
+  String get activityLogTitleEmployeeRevoked => 'تم إلغاء وصول الموظف';
+
+  @override
+  String get activityLogTitlePaymentRecorded => 'تم تسجيل دفعة';
+
+  @override
+  String get activityLogTitleOrganizationCreated => 'تم إنشاء المنشأة';
+
+  @override
+  String get activityLogFieldWhen => 'الوقت';
+
+  @override
+  String get activityLogFieldActor => 'بواسطة';
+
+  @override
+  String get activityLogFieldScopeLocation => 'الموقع';
+
+  @override
+  String get activityLogFieldDevice => 'الجهاز';
+
+  @override
+  String get activityLogFieldReason => 'السبب';
+
+  @override
+  String get activityLogFieldStatus => 'الحالة';
+
+  @override
+  String get activityLogFieldScope => 'النطاق';
+
+  @override
+  String get activityLogFieldDiscountType => 'نوع الخصم';
+
+  @override
+  String get activityLogFieldValue => 'القيمة';
+
+  @override
+  String get activityLogFieldAttemptedAction => 'الإجراء المحاوَل';
+
+  @override
+  String get activityLogFieldOrderType => 'نوع الطلب';
+
+  @override
+  String get activityLogFieldRole => 'الدور';
+
+  @override
+  String get activityLogFieldFromRole => 'من الدور';
+
+  @override
+  String get activityLogFieldToRole => 'إلى الدور';
+
+  @override
+  String get activityLogFieldDiscountTotal => 'إجمالي الخصم';
+
+  @override
+  String get activityLogFieldOrderTotal => 'إجمالي الطلب';
+
+  @override
+  String get activityLogFieldSubtotal => 'المجموع الفرعي';
+
+  @override
+  String get activityLogFieldLineTotal => 'إجمالي البند';
+
+  @override
+  String get activityLogFieldLineDiscount => 'خصم البند';
+
+  @override
+  String get activityLogFieldAmount => 'المبلغ';
+
+  @override
+  String get activityLogFieldTendered => 'المبلغ المدفوع';
+
+  @override
+  String get activityLogFieldChange => 'الباقي';
+
+  @override
+  String get activityLogFieldOpeningFloat => 'الرصيد الافتتاحي';
+
+  @override
+  String get activityLogFieldExpectedCash => 'النقد المتوقّع';
+
+  @override
+  String get activityLogFieldCountedCash => 'النقد المعدود';
+
+  @override
+  String get activityLogFieldVariance => 'الفرق';
+
+  @override
+  String get activityLogFieldItemCount => 'الأصناف';
+
+  @override
+  String get activityLogFieldFailedAttempts => 'المحاولات الفاشلة';
+
+  @override
+  String get activityLogFieldPinSet => 'تعيين PIN';
+
+  @override
+  String get activityLogFieldLocked => 'مقفل';
+
+  @override
+  String get activityLogCapApplyDiscount => 'تطبيق خصم';
+
+  @override
+  String get activityLogCapVoidOrder => 'إلغاء الطلب';
+
+  @override
+  String get activityLogCapCloseShift => 'إغلاق الوردية';
+
+  @override
   String get appName => 'ريستوفلو';
 
   @override

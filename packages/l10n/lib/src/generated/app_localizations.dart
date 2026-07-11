@@ -100,6 +100,540 @@ abstract class AppLocalizations {
     Locale('he'),
   ];
 
+  /// No description provided for @dashboardNavActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity log'**
+  String get dashboardNavActivity;
+
+  /// No description provided for @activityLogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity log'**
+  String get activityLogTitle;
+
+  /// No description provided for @activityLogSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A read-only record of key actions — who did what, when, and where.'**
+  String get activityLogSubtitle;
+
+  /// No description provided for @activityLogRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get activityLogRefresh;
+
+  /// No description provided for @activityLogDemoNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo data — sample activity so you can explore the timeline before connecting a backend.'**
+  String get activityLogDemoNotice;
+
+  /// No description provided for @activityLogFilterCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get activityLogFilterCategory;
+
+  /// No description provided for @activityLogFilterBranch.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch'**
+  String get activityLogFilterBranch;
+
+  /// No description provided for @activityLogBranchAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All permitted branches'**
+  String get activityLogBranchAll;
+
+  /// No description provided for @activityLogFilterActor.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff member'**
+  String get activityLogFilterActor;
+
+  /// No description provided for @activityLogActorAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All staff'**
+  String get activityLogActorAll;
+
+  /// No description provided for @activityLogSensitiveOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Sensitive only'**
+  String get activityLogSensitiveOnly;
+
+  /// No description provided for @activityLogError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the activity log'**
+  String get activityLogError;
+
+  /// No description provided for @activityLogErrorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection or permissions and try again.'**
+  String get activityLogErrorHint;
+
+  /// No description provided for @activityLogEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No activity yet'**
+  String get activityLogEmpty;
+
+  /// No description provided for @activityLogEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions in this range will appear here.'**
+  String get activityLogEmptyHint;
+
+  /// No description provided for @activityLogLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get activityLogLoadMore;
+
+  /// No description provided for @activityLogDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Denied'**
+  String get activityLogDenied;
+
+  /// No description provided for @activityLogClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get activityLogClose;
+
+  /// No description provided for @activityLogActorUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get activityLogActorUnknown;
+
+  /// No description provided for @activityLogEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get activityLogEnabled;
+
+  /// No description provided for @activityLogDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get activityLogDisabled;
+
+  /// No description provided for @activityLogChangesHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'What changed'**
+  String get activityLogChangesHeading;
+
+  /// No description provided for @activityLogGenericNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This activity was recorded without additional shareable detail.'**
+  String get activityLogGenericNote;
+
+  /// No description provided for @activityLogCategoryAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All categories'**
+  String get activityLogCategoryAll;
+
+  /// No description provided for @activityLogCategoryOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders'**
+  String get activityLogCategoryOrders;
+
+  /// No description provided for @activityLogCategoryVoids.
+  ///
+  /// In en, this message translates to:
+  /// **'Voids'**
+  String get activityLogCategoryVoids;
+
+  /// No description provided for @activityLogCategoryDiscounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Discounts'**
+  String get activityLogCategoryDiscounts;
+
+  /// No description provided for @activityLogCategoryPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get activityLogCategoryPayments;
+
+  /// No description provided for @activityLogCategoryShifts.
+  ///
+  /// In en, this message translates to:
+  /// **'Shifts & cash'**
+  String get activityLogCategoryShifts;
+
+  /// No description provided for @activityLogCategoryStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff'**
+  String get activityLogCategoryStaff;
+
+  /// No description provided for @activityLogCategoryAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Access'**
+  String get activityLogCategoryAccess;
+
+  /// No description provided for @activityLogCategoryDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get activityLogCategoryDevices;
+
+  /// No description provided for @activityLogCategoryMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get activityLogCategoryMenu;
+
+  /// No description provided for @activityLogCategoryTables.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables'**
+  String get activityLogCategoryTables;
+
+  /// No description provided for @activityLogCategoryOrganization.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization'**
+  String get activityLogCategoryOrganization;
+
+  /// No description provided for @activityLogCategorySync.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync'**
+  String get activityLogCategorySync;
+
+  /// No description provided for @activityLogCategoryOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get activityLogCategoryOther;
+
+  /// No description provided for @activityLogTitleOrderVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'Order voided'**
+  String get activityLogTitleOrderVoided;
+
+  /// No description provided for @activityLogTitleDiscountApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount applied'**
+  String get activityLogTitleDiscountApplied;
+
+  /// No description provided for @activityLogTitleOrderSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Order submitted'**
+  String get activityLogTitleOrderSubmitted;
+
+  /// No description provided for @activityLogTitleOrderStatusUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Order status updated'**
+  String get activityLogTitleOrderStatusUpdated;
+
+  /// No description provided for @activityLogTitleStaffCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff member added'**
+  String get activityLogTitleStaffCreated;
+
+  /// No description provided for @activityLogTitleStaffCapabilities.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff permissions updated'**
+  String get activityLogTitleStaffCapabilities;
+
+  /// No description provided for @activityLogTitleStaffPinSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff PIN set'**
+  String get activityLogTitleStaffPinSet;
+
+  /// No description provided for @activityLogTitleMembershipGranted.
+  ///
+  /// In en, this message translates to:
+  /// **'Access granted'**
+  String get activityLogTitleMembershipGranted;
+
+  /// No description provided for @activityLogTitleMembershipRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Access revoked'**
+  String get activityLogTitleMembershipRevoked;
+
+  /// No description provided for @activityLogTitleRoleUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Role changed'**
+  String get activityLogTitleRoleUpdated;
+
+  /// No description provided for @activityLogTitleShiftOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift opened'**
+  String get activityLogTitleShiftOpened;
+
+  /// No description provided for @activityLogTitleShiftClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift closed'**
+  String get activityLogTitleShiftClosed;
+
+  /// No description provided for @activityLogTitleShiftReconciled.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift reconciled'**
+  String get activityLogTitleShiftReconciled;
+
+  /// No description provided for @activityLogTitleDeviceAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Device added'**
+  String get activityLogTitleDeviceAdded;
+
+  /// No description provided for @activityLogTitleDeviceRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Device removed'**
+  String get activityLogTitleDeviceRevoked;
+
+  /// No description provided for @activityLogTitleDeviceSignedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Device signed in'**
+  String get activityLogTitleDeviceSignedIn;
+
+  /// No description provided for @activityLogTitleEmployeeRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee access revoked'**
+  String get activityLogTitleEmployeeRevoked;
+
+  /// No description provided for @activityLogTitlePaymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded'**
+  String get activityLogTitlePaymentRecorded;
+
+  /// No description provided for @activityLogTitleOrganizationCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization created'**
+  String get activityLogTitleOrganizationCreated;
+
+  /// No description provided for @activityLogFieldWhen.
+  ///
+  /// In en, this message translates to:
+  /// **'When'**
+  String get activityLogFieldWhen;
+
+  /// No description provided for @activityLogFieldActor.
+  ///
+  /// In en, this message translates to:
+  /// **'By'**
+  String get activityLogFieldActor;
+
+  /// No description provided for @activityLogFieldScopeLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get activityLogFieldScopeLocation;
+
+  /// No description provided for @activityLogFieldDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get activityLogFieldDevice;
+
+  /// No description provided for @activityLogFieldReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get activityLogFieldReason;
+
+  /// No description provided for @activityLogFieldStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get activityLogFieldStatus;
+
+  /// No description provided for @activityLogFieldScope.
+  ///
+  /// In en, this message translates to:
+  /// **'Scope'**
+  String get activityLogFieldScope;
+
+  /// No description provided for @activityLogFieldDiscountType.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount type'**
+  String get activityLogFieldDiscountType;
+
+  /// No description provided for @activityLogFieldValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Value'**
+  String get activityLogFieldValue;
+
+  /// No description provided for @activityLogFieldAttemptedAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Attempted action'**
+  String get activityLogFieldAttemptedAction;
+
+  /// No description provided for @activityLogFieldOrderType.
+  ///
+  /// In en, this message translates to:
+  /// **'Order type'**
+  String get activityLogFieldOrderType;
+
+  /// No description provided for @activityLogFieldRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get activityLogFieldRole;
+
+  /// No description provided for @activityLogFieldFromRole.
+  ///
+  /// In en, this message translates to:
+  /// **'From role'**
+  String get activityLogFieldFromRole;
+
+  /// No description provided for @activityLogFieldToRole.
+  ///
+  /// In en, this message translates to:
+  /// **'To role'**
+  String get activityLogFieldToRole;
+
+  /// No description provided for @activityLogFieldDiscountTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount total'**
+  String get activityLogFieldDiscountTotal;
+
+  /// No description provided for @activityLogFieldOrderTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Order total'**
+  String get activityLogFieldOrderTotal;
+
+  /// No description provided for @activityLogFieldSubtotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtotal'**
+  String get activityLogFieldSubtotal;
+
+  /// No description provided for @activityLogFieldLineTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Line total'**
+  String get activityLogFieldLineTotal;
+
+  /// No description provided for @activityLogFieldLineDiscount.
+  ///
+  /// In en, this message translates to:
+  /// **'Line discount'**
+  String get activityLogFieldLineDiscount;
+
+  /// No description provided for @activityLogFieldAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get activityLogFieldAmount;
+
+  /// No description provided for @activityLogFieldTendered.
+  ///
+  /// In en, this message translates to:
+  /// **'Tendered'**
+  String get activityLogFieldTendered;
+
+  /// No description provided for @activityLogFieldChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get activityLogFieldChange;
+
+  /// No description provided for @activityLogFieldOpeningFloat.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening float'**
+  String get activityLogFieldOpeningFloat;
+
+  /// No description provided for @activityLogFieldExpectedCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected cash'**
+  String get activityLogFieldExpectedCash;
+
+  /// No description provided for @activityLogFieldCountedCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Counted cash'**
+  String get activityLogFieldCountedCash;
+
+  /// No description provided for @activityLogFieldVariance.
+  ///
+  /// In en, this message translates to:
+  /// **'Variance'**
+  String get activityLogFieldVariance;
+
+  /// No description provided for @activityLogFieldItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get activityLogFieldItemCount;
+
+  /// No description provided for @activityLogFieldFailedAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed attempts'**
+  String get activityLogFieldFailedAttempts;
+
+  /// No description provided for @activityLogFieldPinSet.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN set'**
+  String get activityLogFieldPinSet;
+
+  /// No description provided for @activityLogFieldLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Locked'**
+  String get activityLogFieldLocked;
+
+  /// No description provided for @activityLogCapApplyDiscount.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply discount'**
+  String get activityLogCapApplyDiscount;
+
+  /// No description provided for @activityLogCapVoidOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Void order'**
+  String get activityLogCapVoidOrder;
+
+  /// No description provided for @activityLogCapCloseShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Close shift'**
+  String get activityLogCapCloseShift;
+
   /// The product name, shown across all surfaces.
   ///
   /// In en, this message translates to:

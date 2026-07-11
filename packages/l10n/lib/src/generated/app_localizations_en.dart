@@ -9,6 +9,277 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get dashboardNavActivity => 'Activity log';
+
+  @override
+  String get activityLogTitle => 'Activity log';
+
+  @override
+  String get activityLogSubtitle =>
+      'A read-only record of key actions — who did what, when, and where.';
+
+  @override
+  String get activityLogRefresh => 'Refresh';
+
+  @override
+  String get activityLogDemoNotice =>
+      'Demo data — sample activity so you can explore the timeline before connecting a backend.';
+
+  @override
+  String get activityLogFilterCategory => 'Category';
+
+  @override
+  String get activityLogFilterBranch => 'Branch';
+
+  @override
+  String get activityLogBranchAll => 'All permitted branches';
+
+  @override
+  String get activityLogFilterActor => 'Staff member';
+
+  @override
+  String get activityLogActorAll => 'All staff';
+
+  @override
+  String get activityLogSensitiveOnly => 'Sensitive only';
+
+  @override
+  String get activityLogError => 'Couldn\'t load the activity log';
+
+  @override
+  String get activityLogErrorHint =>
+      'Check your connection or permissions and try again.';
+
+  @override
+  String get activityLogEmpty => 'No activity yet';
+
+  @override
+  String get activityLogEmptyHint => 'Actions in this range will appear here.';
+
+  @override
+  String get activityLogLoadMore => 'Load more';
+
+  @override
+  String get activityLogDenied => 'Denied';
+
+  @override
+  String get activityLogClose => 'Close';
+
+  @override
+  String get activityLogActorUnknown => 'Unavailable';
+
+  @override
+  String get activityLogEnabled => 'Enabled';
+
+  @override
+  String get activityLogDisabled => 'Disabled';
+
+  @override
+  String get activityLogChangesHeading => 'What changed';
+
+  @override
+  String get activityLogGenericNote =>
+      'This activity was recorded without additional shareable detail.';
+
+  @override
+  String get activityLogCategoryAll => 'All categories';
+
+  @override
+  String get activityLogCategoryOrders => 'Orders';
+
+  @override
+  String get activityLogCategoryVoids => 'Voids';
+
+  @override
+  String get activityLogCategoryDiscounts => 'Discounts';
+
+  @override
+  String get activityLogCategoryPayments => 'Payments';
+
+  @override
+  String get activityLogCategoryShifts => 'Shifts & cash';
+
+  @override
+  String get activityLogCategoryStaff => 'Staff';
+
+  @override
+  String get activityLogCategoryAccess => 'Access';
+
+  @override
+  String get activityLogCategoryDevices => 'Devices';
+
+  @override
+  String get activityLogCategoryMenu => 'Menu';
+
+  @override
+  String get activityLogCategoryTables => 'Tables';
+
+  @override
+  String get activityLogCategoryOrganization => 'Organization';
+
+  @override
+  String get activityLogCategorySync => 'Sync';
+
+  @override
+  String get activityLogCategoryOther => 'Other';
+
+  @override
+  String get activityLogTitleOrderVoided => 'Order voided';
+
+  @override
+  String get activityLogTitleDiscountApplied => 'Discount applied';
+
+  @override
+  String get activityLogTitleOrderSubmitted => 'Order submitted';
+
+  @override
+  String get activityLogTitleOrderStatusUpdated => 'Order status updated';
+
+  @override
+  String get activityLogTitleStaffCreated => 'Staff member added';
+
+  @override
+  String get activityLogTitleStaffCapabilities => 'Staff permissions updated';
+
+  @override
+  String get activityLogTitleStaffPinSet => 'Staff PIN set';
+
+  @override
+  String get activityLogTitleMembershipGranted => 'Access granted';
+
+  @override
+  String get activityLogTitleMembershipRevoked => 'Access revoked';
+
+  @override
+  String get activityLogTitleRoleUpdated => 'Role changed';
+
+  @override
+  String get activityLogTitleShiftOpened => 'Shift opened';
+
+  @override
+  String get activityLogTitleShiftClosed => 'Shift closed';
+
+  @override
+  String get activityLogTitleShiftReconciled => 'Shift reconciled';
+
+  @override
+  String get activityLogTitleDeviceAdded => 'Device added';
+
+  @override
+  String get activityLogTitleDeviceRevoked => 'Device removed';
+
+  @override
+  String get activityLogTitleDeviceSignedIn => 'Device signed in';
+
+  @override
+  String get activityLogTitleEmployeeRevoked => 'Employee access revoked';
+
+  @override
+  String get activityLogTitlePaymentRecorded => 'Payment recorded';
+
+  @override
+  String get activityLogTitleOrganizationCreated => 'Organization created';
+
+  @override
+  String get activityLogFieldWhen => 'When';
+
+  @override
+  String get activityLogFieldActor => 'By';
+
+  @override
+  String get activityLogFieldScopeLocation => 'Location';
+
+  @override
+  String get activityLogFieldDevice => 'Device';
+
+  @override
+  String get activityLogFieldReason => 'Reason';
+
+  @override
+  String get activityLogFieldStatus => 'Status';
+
+  @override
+  String get activityLogFieldScope => 'Scope';
+
+  @override
+  String get activityLogFieldDiscountType => 'Discount type';
+
+  @override
+  String get activityLogFieldValue => 'Value';
+
+  @override
+  String get activityLogFieldAttemptedAction => 'Attempted action';
+
+  @override
+  String get activityLogFieldOrderType => 'Order type';
+
+  @override
+  String get activityLogFieldRole => 'Role';
+
+  @override
+  String get activityLogFieldFromRole => 'From role';
+
+  @override
+  String get activityLogFieldToRole => 'To role';
+
+  @override
+  String get activityLogFieldDiscountTotal => 'Discount total';
+
+  @override
+  String get activityLogFieldOrderTotal => 'Order total';
+
+  @override
+  String get activityLogFieldSubtotal => 'Subtotal';
+
+  @override
+  String get activityLogFieldLineTotal => 'Line total';
+
+  @override
+  String get activityLogFieldLineDiscount => 'Line discount';
+
+  @override
+  String get activityLogFieldAmount => 'Amount';
+
+  @override
+  String get activityLogFieldTendered => 'Tendered';
+
+  @override
+  String get activityLogFieldChange => 'Change';
+
+  @override
+  String get activityLogFieldOpeningFloat => 'Opening float';
+
+  @override
+  String get activityLogFieldExpectedCash => 'Expected cash';
+
+  @override
+  String get activityLogFieldCountedCash => 'Counted cash';
+
+  @override
+  String get activityLogFieldVariance => 'Variance';
+
+  @override
+  String get activityLogFieldItemCount => 'Items';
+
+  @override
+  String get activityLogFieldFailedAttempts => 'Failed attempts';
+
+  @override
+  String get activityLogFieldPinSet => 'PIN set';
+
+  @override
+  String get activityLogFieldLocked => 'Locked';
+
+  @override
+  String get activityLogCapApplyDiscount => 'Apply discount';
+
+  @override
+  String get activityLogCapVoidOrder => 'Void order';
+
+  @override
+  String get activityLogCapCloseShift => 'Close shift';
+
+  @override
   String get appName => 'RestoFlow';
 
   @override

@@ -13,6 +13,7 @@ import 'admin/real_admin_views.dart';
 import 'admin/supabase_settings_repository.dart';
 import 'dashboard_home_screen.dart';
 import 'devices/device_pairing_panel.dart';
+import 'activity/activity_log_screen.dart';
 import 'orders/order_history_screen.dart';
 import 'printers/printers_repository.dart';
 import 'printers/printers_screen.dart';
@@ -288,6 +289,7 @@ class _DashboardShellState extends State<DashboardShell> {
         // state. Demo mode keeps the labelled demo surface.
         6 => _usersSurface(),
         7 => _ordersSurface(),
+        8 => _activityLogSurface(),
         _ =>
           widget.membership == null
               ? _adminSurface(
@@ -430,6 +432,22 @@ class _DashboardShellState extends State<DashboardShell> {
         ),
       ],
       child: const OrderHistoryScreen(),
+    );
+  }
+
+  /// The Activity-log tab (AUDIT-LOG-DASHBOARD-001). Reads the read-only
+  /// `owner_audit_events` RPC through the scoped membership + authenticated
+  /// transport (real mode); demo mode shows the in-memory timeline with an
+  /// honest banner. Same ProviderScope wiring as the Orders surface.
+  Widget _activityLogSurface() {
+    return ProviderScope(
+      overrides: [
+        dashboardMembershipProvider.overrideWithValue(widget.membership),
+        dashboardAuthTransportProvider.overrideWithValue(
+          widget.reportsTransport,
+        ),
+      ],
+      child: const ActivityLogScreen(),
     );
   }
 
@@ -619,6 +637,11 @@ class _DashboardShellState extends State<DashboardShell> {
       icon: Icons.receipt_long_outlined,
       selectedIcon: Icons.receipt_long,
       label: l10n.dashboardNavOrders,
+    ),
+    _NavItem(
+      icon: Icons.history_outlined,
+      selectedIcon: Icons.history,
+      label: l10n.dashboardNavActivity,
     ),
     _NavItem(
       icon: Icons.tune_outlined,

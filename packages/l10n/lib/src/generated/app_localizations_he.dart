@@ -9,6 +9,276 @@ class AppLocalizationsHe extends AppLocalizations {
   AppLocalizationsHe([String locale = 'he']) : super(locale);
 
   @override
+  String get dashboardNavActivity => 'יומן פעילות';
+
+  @override
+  String get activityLogTitle => 'יומן פעילות';
+
+  @override
+  String get activityLogSubtitle =>
+      'רישום לקריאה בלבד של פעולות מרכזיות — מי עשה מה, מתי והיכן.';
+
+  @override
+  String get activityLogRefresh => 'רענון';
+
+  @override
+  String get activityLogDemoNotice =>
+      'נתוני הדגמה — פעילות לדוגמה לחקירת היומן לפני חיבור לשרת.';
+
+  @override
+  String get activityLogFilterCategory => 'קטגוריה';
+
+  @override
+  String get activityLogFilterBranch => 'סניף';
+
+  @override
+  String get activityLogBranchAll => 'כל הסניפים המורשים';
+
+  @override
+  String get activityLogFilterActor => 'איש צוות';
+
+  @override
+  String get activityLogActorAll => 'כל הצוות';
+
+  @override
+  String get activityLogSensitiveOnly => 'רגישות בלבד';
+
+  @override
+  String get activityLogError => 'טעינת יומן הפעילות נכשלה';
+
+  @override
+  String get activityLogErrorHint => 'בדוק את החיבור או ההרשאות ונסה שוב.';
+
+  @override
+  String get activityLogEmpty => 'אין פעילות עדיין';
+
+  @override
+  String get activityLogEmptyHint => 'פעולות בטווח זה יופיעו כאן.';
+
+  @override
+  String get activityLogLoadMore => 'טען עוד';
+
+  @override
+  String get activityLogDenied => 'נדחה';
+
+  @override
+  String get activityLogClose => 'סגור';
+
+  @override
+  String get activityLogActorUnknown => 'לא זמין';
+
+  @override
+  String get activityLogEnabled => 'מופעל';
+
+  @override
+  String get activityLogDisabled => 'מושבת';
+
+  @override
+  String get activityLogChangesHeading => 'מה השתנה';
+
+  @override
+  String get activityLogGenericNote =>
+      'פעילות זו נרשמה ללא פרטים נוספים הניתנים להצגה.';
+
+  @override
+  String get activityLogCategoryAll => 'כל הקטגוריות';
+
+  @override
+  String get activityLogCategoryOrders => 'הזמנות';
+
+  @override
+  String get activityLogCategoryVoids => 'ביטולים';
+
+  @override
+  String get activityLogCategoryDiscounts => 'הנחות';
+
+  @override
+  String get activityLogCategoryPayments => 'תשלומים';
+
+  @override
+  String get activityLogCategoryShifts => 'משמרות ומזומן';
+
+  @override
+  String get activityLogCategoryStaff => 'צוות';
+
+  @override
+  String get activityLogCategoryAccess => 'גישה';
+
+  @override
+  String get activityLogCategoryDevices => 'מכשירים';
+
+  @override
+  String get activityLogCategoryMenu => 'תפריט';
+
+  @override
+  String get activityLogCategoryTables => 'שולחנות';
+
+  @override
+  String get activityLogCategoryOrganization => 'ארגון';
+
+  @override
+  String get activityLogCategorySync => 'סנכרון';
+
+  @override
+  String get activityLogCategoryOther => 'אחר';
+
+  @override
+  String get activityLogTitleOrderVoided => 'הזמנה בוטלה';
+
+  @override
+  String get activityLogTitleDiscountApplied => 'הנחה הוחלה';
+
+  @override
+  String get activityLogTitleOrderSubmitted => 'הזמנה נשלחה';
+
+  @override
+  String get activityLogTitleOrderStatusUpdated => 'סטטוס ההזמנה עודכן';
+
+  @override
+  String get activityLogTitleStaffCreated => 'נוסף איש צוות';
+
+  @override
+  String get activityLogTitleStaffCapabilities => 'הרשאות הצוות עודכנו';
+
+  @override
+  String get activityLogTitleStaffPinSet => 'נקבע קוד PIN לצוות';
+
+  @override
+  String get activityLogTitleMembershipGranted => 'הוענקה גישה';
+
+  @override
+  String get activityLogTitleMembershipRevoked => 'הגישה בוטלה';
+
+  @override
+  String get activityLogTitleRoleUpdated => 'התפקיד שונה';
+
+  @override
+  String get activityLogTitleShiftOpened => 'משמרת נפתחה';
+
+  @override
+  String get activityLogTitleShiftClosed => 'משמרת נסגרה';
+
+  @override
+  String get activityLogTitleShiftReconciled => 'המשמרת יושבה';
+
+  @override
+  String get activityLogTitleDeviceAdded => 'נוסף מכשיר';
+
+  @override
+  String get activityLogTitleDeviceRevoked => 'מכשיר הוסר';
+
+  @override
+  String get activityLogTitleDeviceSignedIn => 'המכשיר התחבר';
+
+  @override
+  String get activityLogTitleEmployeeRevoked => 'גישת העובד בוטלה';
+
+  @override
+  String get activityLogTitlePaymentRecorded => 'תשלום נרשם';
+
+  @override
+  String get activityLogTitleOrganizationCreated => 'הארגון נוצר';
+
+  @override
+  String get activityLogFieldWhen => 'מתי';
+
+  @override
+  String get activityLogFieldActor => 'על ידי';
+
+  @override
+  String get activityLogFieldScopeLocation => 'מיקום';
+
+  @override
+  String get activityLogFieldDevice => 'מכשיר';
+
+  @override
+  String get activityLogFieldReason => 'סיבה';
+
+  @override
+  String get activityLogFieldStatus => 'סטטוס';
+
+  @override
+  String get activityLogFieldScope => 'היקף';
+
+  @override
+  String get activityLogFieldDiscountType => 'סוג הנחה';
+
+  @override
+  String get activityLogFieldValue => 'ערך';
+
+  @override
+  String get activityLogFieldAttemptedAction => 'פעולה שנוסתה';
+
+  @override
+  String get activityLogFieldOrderType => 'סוג הזמנה';
+
+  @override
+  String get activityLogFieldRole => 'תפקיד';
+
+  @override
+  String get activityLogFieldFromRole => 'מתפקיד';
+
+  @override
+  String get activityLogFieldToRole => 'לתפקיד';
+
+  @override
+  String get activityLogFieldDiscountTotal => 'סך הנחה';
+
+  @override
+  String get activityLogFieldOrderTotal => 'סך ההזמנה';
+
+  @override
+  String get activityLogFieldSubtotal => 'סכום ביניים';
+
+  @override
+  String get activityLogFieldLineTotal => 'סך שורה';
+
+  @override
+  String get activityLogFieldLineDiscount => 'הנחת שורה';
+
+  @override
+  String get activityLogFieldAmount => 'סכום';
+
+  @override
+  String get activityLogFieldTendered => 'שולם';
+
+  @override
+  String get activityLogFieldChange => 'עודף';
+
+  @override
+  String get activityLogFieldOpeningFloat => 'קופה פותחת';
+
+  @override
+  String get activityLogFieldExpectedCash => 'מזומן צפוי';
+
+  @override
+  String get activityLogFieldCountedCash => 'מזומן שנספר';
+
+  @override
+  String get activityLogFieldVariance => 'פער';
+
+  @override
+  String get activityLogFieldItemCount => 'פריטים';
+
+  @override
+  String get activityLogFieldFailedAttempts => 'ניסיונות כושלים';
+
+  @override
+  String get activityLogFieldPinSet => 'PIN נקבע';
+
+  @override
+  String get activityLogFieldLocked => 'נעול';
+
+  @override
+  String get activityLogCapApplyDiscount => 'החלת הנחה';
+
+  @override
+  String get activityLogCapVoidOrder => 'ביטול הזמנה';
+
+  @override
+  String get activityLogCapCloseShift => 'סגירת משמרת';
+
+  @override
   String get appName => 'רסטופלו';
 
   @override
