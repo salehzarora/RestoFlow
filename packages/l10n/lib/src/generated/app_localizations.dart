@@ -4726,6 +4726,12 @@ abstract class AppLocalizations {
   /// **'Sales by hour'**
   String get dashboardSalesByHour;
 
+  /// RF-127: accessible screen-reader summary of the Overview sales-by-hour area chart. hour is the peak hour label (e.g. 19:00) and amount is the formatted peak sales value; both are pre-built strings.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales by hour. Peak at {hour}: {amount}'**
+  String dashboardSalesByHourSemantics(String hour, String amount);
+
   /// DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.
   ///
   /// In en, this message translates to:

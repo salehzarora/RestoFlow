@@ -256,9 +256,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('reports-heading')), findsOneWidget);
-    expect(find.text('Owner reports'), findsOneWidget);
+    expect(find.text('Overview'), findsOneWidget);
     expect(find.text('Report day: 2026-06-28'), findsOneWidget);
-    expect(find.text('Demo day'), findsOneWidget);
+    // RF-127: the duplicate header mode pill was removed; the demo/live data
+    // source stays honest via the report banner + the shell's persistent pill.
     expect(find.byKey(const Key('reports-refresh-button')), findsOneWidget);
   });
 
@@ -280,8 +281,6 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Live · limited'), findsOneWidget);
-    expect(find.text('Demo day'), findsNothing);
   });
 
   testWidgets('KPI cards show the values computed from the demo dataset', (
@@ -435,9 +434,9 @@ void main() {
       await tester.pumpWidget(_wrapHourly());
       await tester.pumpAndSettle();
 
-      // Real hourly data -> the data-gated chart card + the DESIGN-002 bar chart.
+      // Real hourly data -> the data-gated chart card + the RF-127 area chart.
       expect(find.byKey(const Key('sales-by-hour-card')), findsOneWidget);
-      expect(find.byType(RestoflowBarChart), findsOneWidget);
+      expect(find.byType(RestoflowAreaChart), findsOneWidget);
       // Guard the showLimitedNote gate: with a real chart present the "more
       // analytics coming" note must NOT render (it would contradict the chart).
       // A refactor dropping the hourly term from the gate would fail HERE.

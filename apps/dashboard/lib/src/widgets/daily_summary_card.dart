@@ -40,20 +40,28 @@ class _SummaryRowTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            row.label,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          // RF-127: the label flexes (and wraps) so a long label + value never
+          // overflows horizontally at narrow widths; the value stays at natural
+          // size at the reading-end.
+          Expanded(
+            child: Text(
+              row.label,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+          const SizedBox(width: RestoflowSpacing.md),
           row.trailing ??
               Text(
                 row.value ?? '',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
+                textAlign: TextAlign.end,
               ),
         ],
       ),

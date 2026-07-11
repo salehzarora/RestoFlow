@@ -370,52 +370,47 @@ class _DashboardShellState extends State<DashboardShell> {
   }
 
   /// Overview: in real mode, the setup center (live readiness from the SAME real
-  /// repositories the tabs use) above the reports screen — which reads the REAL
-  /// `sales_summary` through the scoped membership + authenticated transport.
+  /// repositories the tabs use) sits high in the reports screen — which reads the
+  /// REAL `sales_summary` through the scoped membership + authenticated transport.
+  ///
+  /// RF-127: the setup center is passed into [DashboardHomeScreen] via its
+  /// presentation-only `setupPanel` slot (so it renders right after the calm page
+  /// chrome), instead of a wrapping Column. Repository ownership, the menu params,
+  /// the `_select` navigation callbacks, and the report ProviderScope overrides
+  /// are all unchanged.
   Widget _overview() {
     final devices = _realDeviceRepo;
-    final showSetup =
-        devices != null &&
+    // The direct null-check promotes `devices` to non-null inside the branch.
+    final Widget? setupPanel;
+    if (devices != null &&
         widget.printersRepository != null &&
-        widget.staffRepository != null;
+        widget.staffRepository != null) {
+      setupPanel = DashboardSetupCenter(
+        devicesRepository: devices,
+        printersRepository: _printersRepo,
+        staffRepository: _staffRepo,
+        // The guided checklist counts the REAL menu when its seams are
+        // wired (sprint); a null scope/read source just omits the card.
+        menuReadSource: widget.menuReadSource,
+        menuScope: _menuScope,
+        onOpenMenu: () => _select(1),
+        onOpenDevices: () => _select(2),
+        onOpenPrinters: () => _select(3),
+        onOpenStaff: () => _select(4),
+      );
+    } else {
+      setupPanel = null;
+    }
     // Scope the report seam to the active membership + the session-carrying
     // transport (real mode). Demo mode keeps the defaults (demo repository).
-    final report = ProviderScope(
+    return ProviderScope(
       overrides: [
         dashboardMembershipProvider.overrideWithValue(widget.membership),
         dashboardAuthTransportProvider.overrideWithValue(
           widget.reportsTransport,
         ),
       ],
-      child: const DashboardHomeScreen(),
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showSetup)
-          Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(
-              RestoflowSpacing.lg,
-              RestoflowSpacing.md,
-              RestoflowSpacing.lg,
-              0,
-            ),
-            child: DashboardSetupCenter(
-              devicesRepository: devices,
-              printersRepository: _printersRepo,
-              staffRepository: _staffRepo,
-              // The guided checklist counts the REAL menu when its seams are
-              // wired (sprint); a null scope/read source just omits the card.
-              menuReadSource: widget.menuReadSource,
-              menuScope: _menuScope,
-              onOpenMenu: () => _select(1),
-              onOpenDevices: () => _select(2),
-              onOpenPrinters: () => _select(3),
-              onOpenStaff: () => _select(4),
-            ),
-          ),
-        Expanded(child: report),
-      ],
+      child: DashboardHomeScreen(setupPanel: setupPanel),
     );
   }
 

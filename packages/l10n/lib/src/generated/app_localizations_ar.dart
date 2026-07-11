@@ -2457,6 +2457,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardSalesByHour => 'المبيعات حسب الساعة';
 
   @override
+  String dashboardSalesByHourSemantics(String hour, String amount) {
+    return 'المبيعات حسب الساعة. الذروة عند $hour: $amount';
+  }
+
+  @override
   String dashboardDeltaVsYesterday(int percent) {
     return '$percent٪ مقارنةً بالأمس';
   }
