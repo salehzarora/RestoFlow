@@ -19,9 +19,11 @@ bool menuFilterAllows(MenuActiveFilter filter, bool isActive) =>
     };
 
 /// A page header: a strong title, a muted subtitle, and optional trailing
-/// content (e.g. a scope badge). Dashboard "1c": the full-bleed brand-gradient
-/// [RestoflowGradientHeader], matching every other dashboard screen; the
-/// trailing badge rides the header's action slot.
+/// content (e.g. a scope badge). RF-125: the shared calm [RestoflowPageHeader]
+/// with the menu icon, matching every other dashboard screen instead of the
+/// former full-bleed brand-gradient hero; the trailing badge rides the header's
+/// action slot. Unbordered — the menu toolbar directly below already provides
+/// the visual boundary, so an extra hairline would be redundant chrome.
 class MenuPageHeader extends StatelessWidget {
   const MenuPageHeader({
     required this.title,
@@ -36,7 +38,7 @@ class MenuPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RestoflowGradientHeader(
+    return RestoflowPageHeader(
       icon: Icons.restaurant_menu,
       title: title,
       subtitle: subtitle,

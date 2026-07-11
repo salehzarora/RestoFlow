@@ -344,6 +344,7 @@ class _DashboardShellState extends State<DashboardShell> {
                   children: [
                     Expanded(child: content),
                     NavigationBar(
+                      key: const Key('dashboard-bottom-nav'),
                       selectedIndex: _index,
                       onDestinationSelected: _select,
                       labelBehavior:
@@ -705,10 +706,16 @@ class _ShellHeaderBar extends StatelessWidget {
           ),
           const SizedBox(width: RestoflowSpacing.sm),
           Expanded(
-            child: Text(
-              contextLabel,
-              style: theme.textTheme.titleSmall,
-              overflow: TextOverflow.ellipsis,
+            // Long organization / branch names truncate safely to one line; the
+            // tooltip reveals the full active-context label (no new string).
+            child: Tooltip(
+              message: contextLabel,
+              child: Text(
+                contextLabel,
+                style: theme.textTheme.titleSmall,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
             ),
           ),
           const SizedBox(width: RestoflowSpacing.sm),
@@ -789,6 +796,7 @@ class _SideNav extends StatelessWidget {
     final member = membership;
     final side = compact ? RestoflowSpacing.sm : RestoflowSpacing.lg;
     return Container(
+      key: const Key('dashboard-side-rail'),
       width: width,
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -838,6 +846,13 @@ class _SideNav extends StatelessWidget {
 /// muted ink otherwise, with a warm hover on inactive rows. Icon-only when
 /// [compact] (label moves to a tooltip). The Row fills the rail width so the
 /// active fill spans it and the icon centres in compact mode.
+///
+/// Accessibility (RF-125): each tile is one merged semantic node — a selectable
+/// button carrying the destination [item.label] even when the visual is
+/// icon-only ([compact]) — so selection is announced (not conveyed by colour
+/// alone; the icon also switches to its filled variant) and screen readers read
+/// a label for every destination. Keyboard focus is visible via [InkWell]'s
+/// focus highlight.
 class _SideNavTile extends StatelessWidget {
   const _SideNavTile({
     required this.item,
@@ -898,16 +913,34 @@ class _SideNavTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.xs),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: radius,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: radius,
-          // Inactive rows show a warm hover; the active row's opaque green fill
-          // sits above the ink so it stays solid.
-          hoverColor: kRestoflowCanvas,
-          child: compact ? Tooltip(message: item.label, child: tile) : tile,
+      // One merged, selectable button node with an explicit label — so compact
+      // icon-only tiles still expose their destination name and the selected
+      // state is announced (never colour-only). The visual subtree's own
+      // semantics are excluded to avoid a duplicate/empty node.
+      child: MergeSemantics(
+        child: Semantics(
+          selected: selected,
+          button: true,
+          label: item.label,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: radius,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: radius,
+              // Inactive rows show a warm hover; the active row's opaque green
+              // fill sits above the ink so it stays solid.
+              hoverColor: kRestoflowCanvas,
+              // Visible keyboard focus on the white rail — a light brand tint,
+              // distinct from the warm hover.
+              focusColor: kRestoflowSeedColor.withValues(alpha: 0.12),
+              child: ExcludeSemantics(
+                child: compact
+                    ? Tooltip(message: item.label, child: tile)
+                    : tile,
+              ),
+            ),
+          ),
         ),
       ),
     );

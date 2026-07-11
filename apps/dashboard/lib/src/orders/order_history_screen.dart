@@ -49,27 +49,28 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
+        // RF-125: the shared calm page header as a full-width band with a warm
+        // hairline boundary above the scrolling list.
+        RestoflowPageHeader(
+          bordered: true,
           padding: const EdgeInsetsDirectional.fromSTEB(
             RestoflowSpacing.lg,
             RestoflowSpacing.md,
             RestoflowSpacing.lg,
-            0,
+            RestoflowSpacing.md,
           ),
-          child: RestoflowPageHeader(
-            icon: Icons.receipt_long_outlined,
-            title: l10n.ordersHistoryTitle,
-            subtitle: l10n.ordersHistorySubtitle,
-            actions: [
-              IconButton(
-                key: const Key('orders-refresh'),
-                tooltip: l10n.ordersRefresh,
-                onPressed: () =>
-                    ref.read(orderHistoryControllerProvider.notifier).refresh(),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          ),
+          icon: Icons.receipt_long_outlined,
+          title: l10n.ordersHistoryTitle,
+          subtitle: l10n.ordersHistorySubtitle,
+          actions: [
+            IconButton(
+              key: const Key('orders-refresh'),
+              tooltip: l10n.ordersRefresh,
+              onPressed: () =>
+                  ref.read(orderHistoryControllerProvider.notifier).refresh(),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
         ),
         Expanded(
           child: ListView(
