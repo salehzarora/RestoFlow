@@ -123,6 +123,27 @@ class AppLocalizationsHe extends AppLocalizations {
   String get activityLogCategoryOther => 'אחר';
 
   @override
+  String get activityLogCategorySettings => 'הגדרות ותצורה';
+
+  @override
+  String get activityLogTitleBranchSettings => 'הגדרות הסניף עודכנו';
+
+  @override
+  String get activityLogTitleRestaurantSettings => 'הגדרות המסעדה עודכנו';
+
+  @override
+  String get activityLogTitleOrganizationSettings => 'הגדרות הארגון עודכנו';
+
+  @override
+  String get activityLogFieldTimezone => 'אזור זמן';
+
+  @override
+  String get activityLogFieldName => 'שם';
+
+  @override
+  String get activityLogFieldReceiptPrefix => 'קידומת קבלה';
+
+  @override
   String get activityLogTitleOrderVoided => 'הזמנה בוטלה';
 
   @override

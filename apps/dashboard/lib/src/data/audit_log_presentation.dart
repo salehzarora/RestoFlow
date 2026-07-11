@@ -108,6 +108,50 @@ const Map<String, _Kind> _displayableKeys = {
   'failed_attempt_count': _Kind.count,
   'pin_set': _Kind.boolean,
   'locked': _Kind.boolean,
+  // Settings/configuration (AUDIT-COVERAGE-002) — safe scalar fields only; the
+  // server already drops internal ids / address / timestamps.
+  'timezone': _Kind.text,
+  'name': _Kind.text,
+  'receipt_prefix': _Kind.text,
+};
+
+/// The payload keys the presenter may ever render, exposed so the audit-coverage
+/// guard can assert every one has a localized field label.
+List<String> auditDisplayableFieldKeys() => _displayableKeys.keys.toList();
+
+/// The localized label for a safe detail-field key. Public so the audit-coverage
+/// guard can assert every displayable key has a real label (an unmapped key
+/// returns the raw key, which the guard treats as a violation).
+String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
+  'status' || 'order_status' => l10n.activityLogFieldStatus,
+  'scope' => l10n.activityLogFieldScope,
+  'discount_type' => l10n.activityLogFieldDiscountType,
+  'value' => l10n.activityLogFieldValue,
+  'attempted_action' => l10n.activityLogFieldAttemptedAction,
+  'order_type' => l10n.activityLogFieldOrderType,
+  'role' || 'target_role' => l10n.activityLogFieldRole,
+  'from_role' => l10n.activityLogFieldFromRole,
+  'to_role' => l10n.activityLogFieldToRole,
+  'discount_total_minor' => l10n.activityLogFieldDiscountTotal,
+  'grand_total_minor' => l10n.activityLogFieldOrderTotal,
+  'subtotal_minor' => l10n.activityLogFieldSubtotal,
+  'line_total_minor' => l10n.activityLogFieldLineTotal,
+  'line_discount_minor' => l10n.activityLogFieldLineDiscount,
+  'amount_minor' => l10n.activityLogFieldAmount,
+  'tendered_minor' => l10n.activityLogFieldTendered,
+  'change_minor' => l10n.activityLogFieldChange,
+  'opening_float_minor' => l10n.activityLogFieldOpeningFloat,
+  'expected_cash_minor' => l10n.activityLogFieldExpectedCash,
+  'counted_cash_minor' => l10n.activityLogFieldCountedCash,
+  'cash_variance_minor' || 'variance_minor' => l10n.activityLogFieldVariance,
+  'voided_item_count' => l10n.activityLogFieldItemCount,
+  'failed_attempt_count' => l10n.activityLogFieldFailedAttempts,
+  'pin_set' => l10n.activityLogFieldPinSet,
+  'locked' => l10n.activityLogFieldLocked,
+  'timezone' => l10n.activityLogFieldTimezone,
+  'name' => l10n.activityLogFieldName,
+  'receipt_prefix' => l10n.activityLogFieldReceiptPrefix,
+  _ => key,
 };
 
 /// The three cashier capability keys (nested under `capabilities`) rendered as
@@ -145,6 +189,47 @@ bool _looksSensitive(String key) {
   }
   return false;
 }
+
+/// The localized label for a server-derived category. Public so the
+/// audit-coverage guard (AUDIT-COVERAGE-002) can assert every registered
+/// category has a localized label; an unrecognized category falls back to
+/// "Other" (safe, for genuinely unknown/legacy actions only).
+String auditCategoryLabel(AppLocalizations l10n, String category) =>
+    switch (category) {
+      'orders' => l10n.activityLogCategoryOrders,
+      'voids' => l10n.activityLogCategoryVoids,
+      'discounts' => l10n.activityLogCategoryDiscounts,
+      'payments' => l10n.activityLogCategoryPayments,
+      'shifts' => l10n.activityLogCategoryShifts,
+      'staff' => l10n.activityLogCategoryStaff,
+      'access' => l10n.activityLogCategoryAccess,
+      'devices' => l10n.activityLogCategoryDevices,
+      'settings' => l10n.activityLogCategorySettings,
+      'menu' => l10n.activityLogCategoryMenu,
+      'tables' => l10n.activityLogCategoryTables,
+      'organization' => l10n.activityLogCategoryOrganization,
+      'sync' => l10n.activityLogCategorySync,
+      _ => l10n.activityLogCategoryOther,
+    };
+
+/// The categories that have an explicit localized label (i.e. NOT the generic
+/// "other" bucket). The coverage guard asserts every known action maps to one
+/// of these.
+const List<String> kAuditLabeledCategories = [
+  'orders',
+  'voids',
+  'discounts',
+  'payments',
+  'shifts',
+  'staff',
+  'access',
+  'devices',
+  'settings',
+  'menu',
+  'tables',
+  'organization',
+  'sync',
+];
 
 /// Converts audit events into safe view models. Stateless; pure.
 class AuditEventPresenter {
@@ -184,22 +269,9 @@ class AuditEventPresenter {
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
-  /// The localized category label.
-  String _categoryLabel(String category) => switch (category) {
-    'orders' => l10n.activityLogCategoryOrders,
-    'voids' => l10n.activityLogCategoryVoids,
-    'discounts' => l10n.activityLogCategoryDiscounts,
-    'payments' => l10n.activityLogCategoryPayments,
-    'shifts' => l10n.activityLogCategoryShifts,
-    'staff' => l10n.activityLogCategoryStaff,
-    'access' => l10n.activityLogCategoryAccess,
-    'devices' => l10n.activityLogCategoryDevices,
-    'menu' => l10n.activityLogCategoryMenu,
-    'tables' => l10n.activityLogCategoryTables,
-    'organization' => l10n.activityLogCategoryOrganization,
-    'sync' => l10n.activityLogCategorySync,
-    _ => l10n.activityLogCategoryOther,
-  };
+  /// The localized category label (delegates to the public helper so the
+  /// audit-coverage guard can verify every category has a label).
+  String _categoryLabel(String category) => auditCategoryLabel(l10n, category);
 
   /// A specific localized title for the known operational actions; null when the
   /// action is unmapped (the caller falls back to the category label).
@@ -224,6 +296,10 @@ class AuditEventPresenter {
     'employee.revoked' => l10n.activityLogTitleEmployeeRevoked,
     'payment.recorded' => l10n.activityLogTitlePaymentRecorded,
     'organization.created' => l10n.activityLogTitleOrganizationCreated,
+    'settings.branch.updated' => l10n.activityLogTitleBranchSettings,
+    'settings.restaurant.updated' => l10n.activityLogTitleRestaurantSettings,
+    'settings.organization.updated' =>
+      l10n.activityLogTitleOrganizationSettings,
     _ => null,
   };
 
@@ -239,6 +315,7 @@ class AuditEventPresenter {
       'staff' => (RestoflowTone.info, Icons.badge_outlined),
       'access' => (RestoflowTone.warning, Icons.key_outlined),
       'devices' => (RestoflowTone.info, Icons.devices_outlined),
+      'settings' => (RestoflowTone.info, Icons.tune_outlined),
       'menu' => (RestoflowTone.neutral, Icons.restaurant_menu_outlined),
       'tables' => (RestoflowTone.neutral, Icons.table_restaurant_outlined),
       'organization' => (RestoflowTone.neutral, Icons.apartment_outlined),
@@ -323,34 +400,7 @@ class AuditEventPresenter {
     _ => role,
   };
 
-  String _fieldLabel(String key) => switch (key) {
-    'status' || 'order_status' => l10n.activityLogFieldStatus,
-    'scope' => l10n.activityLogFieldScope,
-    'discount_type' => l10n.activityLogFieldDiscountType,
-    'value' => l10n.activityLogFieldValue,
-    'attempted_action' => l10n.activityLogFieldAttemptedAction,
-    'order_type' => l10n.activityLogFieldOrderType,
-    'role' || 'target_role' => l10n.activityLogFieldRole,
-    'from_role' => l10n.activityLogFieldFromRole,
-    'to_role' => l10n.activityLogFieldToRole,
-    'discount_total_minor' => l10n.activityLogFieldDiscountTotal,
-    'grand_total_minor' => l10n.activityLogFieldOrderTotal,
-    'subtotal_minor' => l10n.activityLogFieldSubtotal,
-    'line_total_minor' => l10n.activityLogFieldLineTotal,
-    'line_discount_minor' => l10n.activityLogFieldLineDiscount,
-    'amount_minor' => l10n.activityLogFieldAmount,
-    'tendered_minor' => l10n.activityLogFieldTendered,
-    'change_minor' => l10n.activityLogFieldChange,
-    'opening_float_minor' => l10n.activityLogFieldOpeningFloat,
-    'expected_cash_minor' => l10n.activityLogFieldExpectedCash,
-    'counted_cash_minor' => l10n.activityLogFieldCountedCash,
-    'cash_variance_minor' || 'variance_minor' => l10n.activityLogFieldVariance,
-    'voided_item_count' => l10n.activityLogFieldItemCount,
-    'failed_attempt_count' => l10n.activityLogFieldFailedAttempts,
-    'pin_set' => l10n.activityLogFieldPinSet,
-    'locked' => l10n.activityLogFieldLocked,
-    _ => key,
-  };
+  String _fieldLabel(String key) => auditFieldLabel(l10n, key);
 
   String _capabilityLabel(String cap) => switch (cap) {
     'apply_discount' => l10n.activityLogCapApplyDiscount,

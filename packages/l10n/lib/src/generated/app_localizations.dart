@@ -322,6 +322,48 @@ abstract class AppLocalizations {
   /// **'Other'**
   String get activityLogCategoryOther;
 
+  /// No description provided for @activityLogCategorySettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings & configuration'**
+  String get activityLogCategorySettings;
+
+  /// No description provided for @activityLogTitleBranchSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch settings updated'**
+  String get activityLogTitleBranchSettings;
+
+  /// No description provided for @activityLogTitleRestaurantSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant settings updated'**
+  String get activityLogTitleRestaurantSettings;
+
+  /// No description provided for @activityLogTitleOrganizationSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization settings updated'**
+  String get activityLogTitleOrganizationSettings;
+
+  /// No description provided for @activityLogFieldTimezone.
+  ///
+  /// In en, this message translates to:
+  /// **'Timezone'**
+  String get activityLogFieldTimezone;
+
+  /// No description provided for @activityLogFieldName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get activityLogFieldName;
+
+  /// No description provided for @activityLogFieldReceiptPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt prefix'**
+  String get activityLogFieldReceiptPrefix;
+
   /// No description provided for @activityLogTitleOrderVoided.
   ///
   /// In en, this message translates to:

@@ -454,6 +454,19 @@ The global picker needs **no** new validation — `update_branch_settings` alrea
 validates against `pg_timezone_names`, so the former 3-zone limit was purely the
 client dropdown. **NOT applied to hosted by the ticket branch.**
 
+**AUDIT-COVERAGE-002 rollout (DB-first).** Migration
+`20260711120000_audit_coverage_002_settings_classification.sql` is **additive /
+forward-only** (`NEW app.audit_category` classifier + `CREATE OR REPLACE`
+`audit_action_has_detail` / `audit_safe_detail` / `owner_audit_events`; **no
+table / CHECK / RLS / index / writer / audit-data change**, and it does **not**
+edit any applied migration). Order: (1) apply to hosted; (2) verify
+`owner_audit_events` returns `category:'settings'` for a settings change and the
+`settings` filter works; (3) **only then** deploy the Dashboard (adds the
+"Settings & configuration" filter + labels). No writer/data change is needed —
+the settings writers already record the timezone before/after; this migration
+only classifies + safely projects it. **NOT applied to hosted by the ticket
+branch.**
+
 **Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).
 - **Yesterday / Last 7 days / Last 30 days** load with real current + comparison

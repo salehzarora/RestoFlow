@@ -41,6 +41,7 @@ enum AuditCategory {
   staff('staff'),
   access('access'),
   devices('devices'),
+  settings('settings'),
   menu('menu'),
   tables('tables'),
   organization('organization');
