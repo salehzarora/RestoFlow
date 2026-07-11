@@ -2539,6 +2539,52 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardSettingsTimezoneKeep => 'دون تغيير';
 
   @override
+  String get timezonePickerNotSet => 'غير محدَّد';
+
+  @override
+  String get timezonePickerWillChange => 'سيتغيّر عند الحفظ';
+
+  @override
+  String get timezonePickerTitle => 'اختر المنطقة الزمنية';
+
+  @override
+  String get timezonePickerSearchHint =>
+      'ابحث حسب الدولة أو المدينة أو معرّف IANA';
+
+  @override
+  String get timezonePickerNoResults => 'لا توجد مناطق زمنية مطابقة';
+
+  @override
+  String get timezoneLabelAsiaJerusalem => 'إسرائيل — القدس';
+
+  @override
+  String get timezoneLabelAsiaGaza => 'فلسطين — غزة';
+
+  @override
+  String get timezoneLabelAsiaHebron => 'فلسطين — الخليل';
+
+  @override
+  String get timezoneLabelEuropeLondon => 'المملكة المتحدة — لندن';
+
+  @override
+  String get timezoneLabelEuropeBerlin => 'ألمانيا — برلين';
+
+  @override
+  String get timezoneLabelAmericaNewYork => 'الولايات المتحدة — نيويورك';
+
+  @override
+  String get timezoneLabelAmericaLosAngeles => 'الولايات المتحدة — لوس أنجلوس';
+
+  @override
+  String get timezoneLabelAsiaTokyo => 'اليابان — طوكيو';
+
+  @override
+  String get timezoneLabelAustraliaSydney => 'أستراليا — سيدني';
+
+  @override
+  String get timezoneLabelAfricaCairo => 'مصر — القاهرة';
+
+  @override
   String get dashboardSettingsCurrencyLocked =>
       'العملة مثبّتة على ₪ (شيكل) للتجربة ولا يمكن تغييرها من هنا.';
 

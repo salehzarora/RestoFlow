@@ -7,6 +7,8 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'branch_shift_close_policy_repository.dart';
 import 'supabase_settings_repository.dart';
+import 'timezone_catalog.dart';
+import 'timezone_picker.dart';
 
 /// Honest REAL-mode replacements for the demo-backed Users/Settings tabs
 /// (sprint). The demo store must never render fabricated people or values as
@@ -88,21 +90,14 @@ class _RealSettingsViewState extends State<RealSettingsView> {
   bool _savingBranch = false;
   bool _savingRestaurant = false;
 
-  /// RF-REPORT-004: the branch timezone to APPLY on the next save, or null to
-  /// leave it unchanged. `list_org_structure` does not expose the current zone,
-  /// so this starts unset (the owner explicitly picks one to correct it) — a
-  /// pilot org onboarded before the Asia/Jerusalem default needs this to fix the
-  /// sales-by-hour offset.
+  /// TIMEZONE-GLOBAL-001: the branch timezone to APPLY on the next save, or null
+  /// to leave it unchanged. The picker now SHOWS the current zone (from prefill)
+  /// so an unset/UTC pilot branch is visible; the owner explicitly picks the
+  /// correct IANA zone (e.g. Asia/Jerusalem) to fix branch-local timestamps.
   String? _branchTimezone;
 
-  /// A small curated zone list for the pilot market (ILS / Israel-Palestine),
-  /// plus UTC. IANA identifiers are data, shown verbatim.
-  static const List<String> _timezoneOptions = <String>[
-    'Asia/Jerusalem',
-    'Asia/Hebron',
-    'Asia/Gaza',
-    'UTC',
-  ];
+  /// The global IANA catalog for the picker (loaded from `list_timezones`).
+  List<TimezoneOption> _timezones = const [];
 
   /// Only a full owner (org/restaurant) may change branch settings — this
   /// mirrors the server gate (`set_branch_pos_shift_close_enabled` requires
@@ -138,6 +133,7 @@ class _RealSettingsViewState extends State<RealSettingsView> {
     final settings = widget.settingsRepository;
     if (_showEditable && settings != null) {
       _loadPrefill(settings);
+      _loadTimezones(settings);
     }
   }
 
@@ -170,6 +166,12 @@ class _RealSettingsViewState extends State<RealSettingsView> {
         _restaurantName.text = prefill.restaurantName!;
       }
     });
+  }
+
+  Future<void> _loadTimezones(SettingsRepository repo) async {
+    final zones = await repo.loadTimezones();
+    if (!mounted || zones.isEmpty) return;
+    setState(() => _timezones = zones);
   }
 
   String _writeMessage(
@@ -381,27 +383,16 @@ class _RealSettingsViewState extends State<RealSettingsView> {
           ),
         ),
         const SizedBox(height: RestoflowSpacing.md),
-        // RF-REPORT-004: branch timezone picker — correcting it fixes reporting's
-        // branch-local hour/day bucketing (a UTC-onboarded pilot showed sales an
-        // hour-offset early). Null = leave unchanged; IANA ids are shown verbatim.
-        DropdownButtonFormField<String?>(
-          key: const Key('settings-branch-timezone'),
-          initialValue: _branchTimezone,
-          isExpanded: true,
-          decoration: InputDecoration(
-            labelText: l10n.dashboardSettingsTimezoneLabel,
-            helperText: l10n.dashboardSettingsTimezoneHint,
-            border: const OutlineInputBorder(),
-            isDense: true,
-          ),
-          items: [
-            DropdownMenuItem<String?>(
-              value: null,
-              child: Text(l10n.dashboardSettingsTimezoneKeep),
-            ),
-            for (final zone in _timezoneOptions)
-              DropdownMenuItem<String?>(value: zone, child: Text(zone)),
-          ],
+        // TIMEZONE-GLOBAL-001: searchable GLOBAL IANA timezone picker. Shows the
+        // branch's CURRENT zone (so an unset/UTC pilot branch is visible), lets
+        // the owner search the full catalog by country/city/IANA id, and stores
+        // the canonical IANA id. Null pick = leave unchanged. Correcting it fixes
+        // branch-local timestamps (Activity log + reporting).
+        TimezonePickerField(
+          l10n: l10n,
+          options: _timezones,
+          currentTimezone: _prefill?.branchTimezone,
+          selected: _branchTimezone,
           onChanged: (value) => setState(() => _branchTimezone = value),
         ),
         const SizedBox(height: RestoflowSpacing.md),

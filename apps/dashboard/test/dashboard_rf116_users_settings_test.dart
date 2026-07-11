@@ -6,6 +6,7 @@ import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_dashboard/src/admin/real_admin_views.dart';
 import 'package:restoflow_dashboard/src/admin/supabase_settings_repository.dart';
 import 'package:restoflow_dashboard/src/admin/supabase_users_repository.dart';
+import 'package:restoflow_dashboard/src/admin/timezone_catalog.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_admin/restoflow_feature_admin.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -132,6 +133,10 @@ class _FakeSettingsRepo implements SettingsRepository {
   final SettingsPrefill? prefill;
   final SettingsWrite branchResult;
   final SettingsWrite restaurantResult;
+  final List<TimezoneOption> timezones = const [
+    TimezoneOption(id: 'Asia/Jerusalem', offsetMinutes: 180),
+    TimezoneOption(id: 'Europe/London', offsetMinutes: 60),
+  ];
   int branchSaves = 0;
   int restaurantSaves = 0;
   String? lastBranchName;
@@ -142,6 +147,9 @@ class _FakeSettingsRepo implements SettingsRepository {
 
   @override
   Future<SettingsPrefill?> readPrefill() async => prefill;
+
+  @override
+  Future<List<TimezoneOption>> loadTimezones() async => timezones;
 
   @override
   Future<SettingsWrite> saveBranch({

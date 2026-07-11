@@ -431,13 +431,28 @@ hosted commands without explicit human approval):
   range-unavailable / `owner_daily_report` path to `owner_report_range` once the
   function resolves.
 
-**Branch timezone operational note (no migration required).** The production
-**pilot branch was onboarded with `UTC`** (the old client default), which shifted
-the sales-by-hour chart by the Israel offset. To fix it, set the branch to
-**`Asia/Jerusalem`** in **Settings → Branch timezone** (the already-deployed
-`update_branch_settings(p_timezone)`, IANA/DB-validated) — **no DB migration is
-required just to correct that branch setting.** New organizations now default to
-`Asia/Jerusalem`.
+**Branch timezone operational note (no data migration required).** The production
+**pilot branch was onboarded with `UTC`/NULL** (the old client default), which
+shifted both the sales-by-hour chart AND the **Activity-log timestamps** (~3h
+behind Israel) by the Israel offset. To fix it, set the branch to
+**`Asia/Jerusalem`** in **Settings → Branch timezone** (the always-IANA-validated
+`update_branch_settings(p_timezone)`) — **no data migration and no automatic
+conversion**; the owner explicitly selects the zone (existing `Asia/Gaza` /
+`Asia/Hebron` values are never reinterpreted). Changing a branch's timezone
+affects display/query boundaries only, never the stored historical UTC instants.
+
+**TIMEZONE-GLOBAL-001 rollout (DB-first).** Migration
+`20260711110000_timezone_global_001_audit_tz_and_catalog.sql` is **additive /
+forward-only** (`CREATE OR REPLACE app.owner_audit_events` for PER-EVENT
+branch-local time + `NEW app.list_timezones` catalog RPC + grants; **no table /
+CHECK / RLS / index / audit-data change**, and it does **not** edit the applied
+`20260711090000` / `100000`). Order: (1) apply the migration to hosted; (2) verify
+`public.list_timezones` is live in PostgREST and `owner_audit_events` returns the
+`timezone` field; (3) **only then** deploy the Dashboard (the picker calls
+`list_timezones`); (4) the owner corrects the pilot branch's zone in Settings.
+The global picker needs **no** new validation — `update_branch_settings` already
+validates against `pg_timezone_names`, so the former 3-zone limit was purely the
+client dropdown. **NOT applied to hosted by the ticket branch.**
 
 **Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).
