@@ -4846,6 +4846,96 @@ abstract class AppLocalizations {
   /// **'Leave unchanged'**
   String get dashboardSettingsTimezoneKeep;
 
+  /// No description provided for @timezonePickerNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get timezonePickerNotSet;
+
+  /// No description provided for @timezonePickerWillChange.
+  ///
+  /// In en, this message translates to:
+  /// **'will change on save'**
+  String get timezonePickerWillChange;
+
+  /// No description provided for @timezonePickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select timezone'**
+  String get timezonePickerTitle;
+
+  /// No description provided for @timezonePickerSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by country, city, or IANA id'**
+  String get timezonePickerSearchHint;
+
+  /// No description provided for @timezonePickerNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching timezones'**
+  String get timezonePickerNoResults;
+
+  /// No description provided for @timezoneLabelAsiaJerusalem.
+  ///
+  /// In en, this message translates to:
+  /// **'Israel — Jerusalem'**
+  String get timezoneLabelAsiaJerusalem;
+
+  /// No description provided for @timezoneLabelAsiaGaza.
+  ///
+  /// In en, this message translates to:
+  /// **'Palestine — Gaza'**
+  String get timezoneLabelAsiaGaza;
+
+  /// No description provided for @timezoneLabelAsiaHebron.
+  ///
+  /// In en, this message translates to:
+  /// **'Palestine — Hebron'**
+  String get timezoneLabelAsiaHebron;
+
+  /// No description provided for @timezoneLabelEuropeLondon.
+  ///
+  /// In en, this message translates to:
+  /// **'United Kingdom — London'**
+  String get timezoneLabelEuropeLondon;
+
+  /// No description provided for @timezoneLabelEuropeBerlin.
+  ///
+  /// In en, this message translates to:
+  /// **'Germany — Berlin'**
+  String get timezoneLabelEuropeBerlin;
+
+  /// No description provided for @timezoneLabelAmericaNewYork.
+  ///
+  /// In en, this message translates to:
+  /// **'United States — New York'**
+  String get timezoneLabelAmericaNewYork;
+
+  /// No description provided for @timezoneLabelAmericaLosAngeles.
+  ///
+  /// In en, this message translates to:
+  /// **'United States — Los Angeles'**
+  String get timezoneLabelAmericaLosAngeles;
+
+  /// No description provided for @timezoneLabelAsiaTokyo.
+  ///
+  /// In en, this message translates to:
+  /// **'Japan — Tokyo'**
+  String get timezoneLabelAsiaTokyo;
+
+  /// No description provided for @timezoneLabelAustraliaSydney.
+  ///
+  /// In en, this message translates to:
+  /// **'Australia — Sydney'**
+  String get timezoneLabelAustraliaSydney;
+
+  /// No description provided for @timezoneLabelAfricaCairo.
+  ///
+  /// In en, this message translates to:
+  /// **'Egypt — Cairo'**
+  String get timezoneLabelAfricaCairo;
+
   /// RF-116: note that currency stays locked to ILS and is not editable.
   ///
   /// In en, this message translates to:

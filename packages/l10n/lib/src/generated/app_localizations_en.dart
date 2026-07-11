@@ -2557,6 +2557,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardSettingsTimezoneKeep => 'Leave unchanged';
 
   @override
+  String get timezonePickerNotSet => 'Not set';
+
+  @override
+  String get timezonePickerWillChange => 'will change on save';
+
+  @override
+  String get timezonePickerTitle => 'Select timezone';
+
+  @override
+  String get timezonePickerSearchHint => 'Search by country, city, or IANA id';
+
+  @override
+  String get timezonePickerNoResults => 'No matching timezones';
+
+  @override
+  String get timezoneLabelAsiaJerusalem => 'Israel — Jerusalem';
+
+  @override
+  String get timezoneLabelAsiaGaza => 'Palestine — Gaza';
+
+  @override
+  String get timezoneLabelAsiaHebron => 'Palestine — Hebron';
+
+  @override
+  String get timezoneLabelEuropeLondon => 'United Kingdom — London';
+
+  @override
+  String get timezoneLabelEuropeBerlin => 'Germany — Berlin';
+
+  @override
+  String get timezoneLabelAmericaNewYork => 'United States — New York';
+
+  @override
+  String get timezoneLabelAmericaLosAngeles => 'United States — Los Angeles';
+
+  @override
+  String get timezoneLabelAsiaTokyo => 'Japan — Tokyo';
+
+  @override
+  String get timezoneLabelAustraliaSydney => 'Australia — Sydney';
+
+  @override
+  String get timezoneLabelAfricaCairo => 'Egypt — Cairo';
+
+  @override
   String get dashboardSettingsCurrencyLocked =>
       'Currency is fixed to ₪ (ILS) for the pilot and can’t be changed here.';
 

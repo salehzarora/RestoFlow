@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
+import 'timezone_catalog.dart';
+
 /// The outcome of a settings write (RF-116).
 enum SettingsWrite {
   /// The owner's change was applied.
@@ -24,6 +26,7 @@ class SettingsPrefill {
   const SettingsPrefill({
     this.branchName,
     this.branchStatus,
+    this.branchTimezone,
     this.restaurantName,
     this.restaurantStatus,
   });
@@ -33,6 +36,11 @@ class SettingsPrefill {
   /// The branch's current status, preserved on save (the write RPC requires a
   /// status; we never silently flip it).
   final String? branchStatus;
+
+  /// The branch's CURRENT IANA timezone (from `list_org_structure`), so the
+  /// picker can SHOW what is set (e.g. an unset/`UTC` pilot branch) — not just
+  /// let the owner blindly change it. Null when the branch has no timezone.
+  final String? branchTimezone;
 
   final String? restaurantName;
 
@@ -50,6 +58,10 @@ abstract interface class SettingsRepository {
   /// The current readable values, or null when they cannot be read (fail-soft —
   /// the caller then falls back to the membership names, never a fabricated one).
   Future<SettingsPrefill?> readPrefill();
+
+  /// The global IANA timezone catalog for the picker (from `list_timezones`),
+  /// or an empty list on failure (fail-soft — the picker degrades gracefully).
+  Future<List<TimezoneOption>> loadTimezones();
 
   /// Writes the branch display name (+ optional receipt prefix; blank = leave
   /// unchanged). [status] preserves the branch's current status. [timezone] is an
@@ -112,15 +124,45 @@ class SupabaseSettingsRepository implements SettingsRepository {
         branchStatus = _nonEmpty(b['status']);
         break;
       }
+      String? branchTimezone;
+      for (final b in (r['branches'] as List?) ?? const []) {
+        if (b is! Map || (b['id'] ?? '').toString() != branchId) continue;
+        branchTimezone = _nonEmpty(b['timezone']);
+        break;
+      }
       return SettingsPrefill(
         branchName: branchName,
         branchStatus: branchStatus,
+        branchTimezone: branchTimezone,
         restaurantName: _nonEmpty(r['name']),
         restaurantStatus: _nonEmpty(r['status']),
       );
     }
     return null;
   }
+
+  @override
+  Future<List<TimezoneOption>> loadTimezones() async {
+    final Object? raw;
+    try {
+      raw = await _t.invoke('list_timezones', const <String, dynamic>{});
+    } catch (_) {
+      return const [];
+    }
+    if (raw is! Map || raw['ok'] != true) return const [];
+    final zones = raw['zones'];
+    if (zones is! List) return const [];
+    final out = <TimezoneOption>[];
+    for (final z in zones) {
+      if (z is! Map) continue;
+      final id = (z['id'] ?? '').toString();
+      if (id.isEmpty) continue;
+      out.add(TimezoneOption(id: id, offsetMinutes: _int(z['offset_minutes'])));
+    }
+    return out;
+  }
+
+  static int _int(Object? v) => v is int ? v : int.tryParse('$v') ?? 0;
 
   static String? _nonEmpty(Object? v) {
     final s = (v ?? '').toString();

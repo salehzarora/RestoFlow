@@ -2523,6 +2523,51 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardSettingsTimezoneKeep => 'ללא שינוי';
 
   @override
+  String get timezonePickerNotSet => 'לא הוגדר';
+
+  @override
+  String get timezonePickerWillChange => 'ישתנה בשמירה';
+
+  @override
+  String get timezonePickerTitle => 'בחר אזור זמן';
+
+  @override
+  String get timezonePickerSearchHint => 'חפש לפי מדינה, עיר או מזהה IANA';
+
+  @override
+  String get timezonePickerNoResults => 'אין אזורי זמן תואמים';
+
+  @override
+  String get timezoneLabelAsiaJerusalem => 'ישראל — ירושלים';
+
+  @override
+  String get timezoneLabelAsiaGaza => 'פלסטין — עזה';
+
+  @override
+  String get timezoneLabelAsiaHebron => 'פלסטין — חברון';
+
+  @override
+  String get timezoneLabelEuropeLondon => 'בריטניה — לונדון';
+
+  @override
+  String get timezoneLabelEuropeBerlin => 'גרמניה — ברלין';
+
+  @override
+  String get timezoneLabelAmericaNewYork => 'ארצות הברית — ניו יורק';
+
+  @override
+  String get timezoneLabelAmericaLosAngeles => 'ארצות הברית — לוס אנג׳לס';
+
+  @override
+  String get timezoneLabelAsiaTokyo => 'יפן — טוקיו';
+
+  @override
+  String get timezoneLabelAustraliaSydney => 'אוסטרליה — סידני';
+
+  @override
+  String get timezoneLabelAfricaCairo => 'מצרים — קהיר';
+
+  @override
   String get dashboardSettingsCurrencyLocked =>
       'המטבע קבוע ל-₪ (ILS) עבור הפיילוט ולא ניתן לשנותו כאן.';
 
