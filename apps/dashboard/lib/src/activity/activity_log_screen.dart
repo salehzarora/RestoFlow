@@ -38,27 +38,28 @@ class ActivityLogScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
+        // RF-125: the shared calm page header as a full-width band with a warm
+        // hairline boundary above the scrolling timeline.
+        RestoflowPageHeader(
+          bordered: true,
           padding: const EdgeInsetsDirectional.fromSTEB(
             RestoflowSpacing.lg,
             RestoflowSpacing.md,
             RestoflowSpacing.lg,
-            0,
+            RestoflowSpacing.md,
           ),
-          child: RestoflowPageHeader(
-            icon: Icons.history_outlined,
-            title: l10n.activityLogTitle,
-            subtitle: l10n.activityLogSubtitle,
-            actions: [
-              IconButton(
-                key: const Key('activity-refresh'),
-                tooltip: l10n.activityLogRefresh,
-                onPressed: () =>
-                    ref.read(auditLogControllerProvider.notifier).refresh(),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          ),
+          icon: Icons.history_outlined,
+          title: l10n.activityLogTitle,
+          subtitle: l10n.activityLogSubtitle,
+          actions: [
+            IconButton(
+              key: const Key('activity-refresh'),
+              tooltip: l10n.activityLogRefresh,
+              onPressed: () =>
+                  ref.read(auditLogControllerProvider.notifier).refresh(),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
         ),
         Expanded(
           child: ListView(
