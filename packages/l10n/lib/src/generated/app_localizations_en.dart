@@ -124,6 +124,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get activityLogCategoryOther => 'Other';
 
   @override
+  String get activityLogCategorySettings => 'Settings & configuration';
+
+  @override
+  String get activityLogTitleBranchSettings => 'Branch settings updated';
+
+  @override
+  String get activityLogTitleRestaurantSettings =>
+      'Restaurant settings updated';
+
+  @override
+  String get activityLogTitleOrganizationSettings =>
+      'Organization settings updated';
+
+  @override
+  String get activityLogFieldTimezone => 'Timezone';
+
+  @override
+  String get activityLogFieldName => 'Name';
+
+  @override
+  String get activityLogFieldReceiptPrefix => 'Receipt prefix';
+
+  @override
   String get activityLogTitleOrderVoided => 'Order voided';
 
   @override

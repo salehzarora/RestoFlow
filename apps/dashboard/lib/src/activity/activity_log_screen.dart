@@ -452,6 +452,7 @@ String _categoryFilterLabel(AppLocalizations l10n, AuditCategory c) =>
       AuditCategory.staff => l10n.activityLogCategoryStaff,
       AuditCategory.access => l10n.activityLogCategoryAccess,
       AuditCategory.devices => l10n.activityLogCategoryDevices,
+      AuditCategory.settings => l10n.activityLogCategorySettings,
       AuditCategory.menu => l10n.activityLogCategoryMenu,
       AuditCategory.tables => l10n.activityLogCategoryTables,
       AuditCategory.organization => l10n.activityLogCategoryOrganization,

@@ -124,6 +124,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogCategoryOther => 'أخرى';
 
   @override
+  String get activityLogCategorySettings => 'الإعدادات والتهيئة';
+
+  @override
+  String get activityLogTitleBranchSettings => 'تم تحديث إعدادات الفرع';
+
+  @override
+  String get activityLogTitleRestaurantSettings => 'تم تحديث إعدادات المطعم';
+
+  @override
+  String get activityLogTitleOrganizationSettings => 'تم تحديث إعدادات المنشأة';
+
+  @override
+  String get activityLogFieldTimezone => 'المنطقة الزمنية';
+
+  @override
+  String get activityLogFieldName => 'الاسم';
+
+  @override
+  String get activityLogFieldReceiptPrefix => 'بادئة الإيصال';
+
+  @override
   String get activityLogTitleOrderVoided => 'تم إلغاء الطلب';
 
   @override
