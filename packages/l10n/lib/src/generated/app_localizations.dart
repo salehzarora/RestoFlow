@@ -5212,6 +5212,18 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 more setup step} other{{count} more setup steps}}'**
   String setupMoreSteps(int count);
 
+  /// Dashboard V2: caption under the Overview device readiness card's active/configured count (lifecycle readiness, NOT an online/offline heartbeat claim).
+  ///
+  /// In en, this message translates to:
+  /// **'Active of configured devices'**
+  String get dashboardDevicesActiveOfConfigured;
+
+  /// Dashboard V2: caption on the Overview device readiness card when the device list could not be loaded — an honest unavailable state, never a fake zero count.
+  ///
+  /// In en, this message translates to:
+  /// **'Device status unavailable'**
+  String get dashboardDevicesUnavailable;
+
   /// Printers page title.
   ///
   /// In en, this message translates to:

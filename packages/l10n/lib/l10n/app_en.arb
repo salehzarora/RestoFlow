@@ -2078,6 +2078,14 @@
     "description": "RF-132: title of the compact disclosure holding the pending setup steps beyond the first, naming their exact count.",
     "placeholders": {"count": {"type": "int"}}
   },
+  "dashboardDevicesActiveOfConfigured": "Active of configured devices",
+  "@dashboardDevicesActiveOfConfigured": {
+    "description": "Dashboard V2: caption under the Overview device readiness card's active/configured count (lifecycle readiness, NOT an online/offline heartbeat claim)."
+  },
+  "dashboardDevicesUnavailable": "Device status unavailable",
+  "@dashboardDevicesUnavailable": {
+    "description": "Dashboard V2: caption on the Overview device readiness card when the device list could not be loaded — an honest unavailable state, never a fake zero count."
+  },
   "@setupReady": {"description": "Setup success banner when the readiness checks pass."},
   "printersTitle": "Printers",
   "@printersTitle": {"description": "Printers page title."},

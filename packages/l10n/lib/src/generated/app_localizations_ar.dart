@@ -2750,6 +2750,12 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get dashboardDevicesActiveOfConfigured => 'النشطة من الأجهزة المُهيأة';
+
+  @override
+  String get dashboardDevicesUnavailable => 'حالة الأجهزة غير متوفرة';
+
+  @override
   String get printersTitle => 'الطابعات';
 
   @override

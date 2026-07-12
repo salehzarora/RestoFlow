@@ -17,6 +17,7 @@ import 'activity/activity_log_screen.dart';
 import 'orders/order_history_screen.dart';
 import 'printers/printers_repository.dart';
 import 'printers/printers_screen.dart';
+import 'setup/device_summary_card.dart';
 import 'setup/setup_center.dart';
 import 'staff/staff_repository.dart';
 import 'staff/staff_screen.dart';
@@ -306,73 +307,80 @@ class _DashboardShellState extends State<DashboardShell> {
       },
     );
 
+    // Dashboard V2: the persistent header bar lives INSIDE the content column
+    // so the side rail runs the full viewport height (reference composition).
+    // Everything on the bar (context, mode pill, language, sign-out) is
+    // unchanged and stays visible on every tab at every width.
+    final header = _ShellHeaderBar(
+      membership: widget.membership,
+      onSignOut: widget.onSignOut,
+    );
+
     return Scaffold(
-      body: Column(
-        children: [
-          _ShellHeaderBar(
-            membership: widget.membership,
-            onSignOut: widget.onSignOut,
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Dashboard "1c" responsive rules (§9): the labelled/icon rail
-                // stays on the reading-start side (right in RTL) for every
-                // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
-                final width = constraints.maxWidth;
-                if (width >= DashboardShell._railBreakpoint) {
-                  final compact = width < DashboardShell._fullRailBreakpoint;
-                  final railWidth = width >= DashboardShell._desktopBreakpoint
-                      ? 232.0
-                      : (compact ? 72.0 : 212.0);
-                  return Row(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Dashboard "1c" responsive rules (§9): the labelled/icon rail
+          // stays on the reading-start side (right in RTL) for every
+          // tablet+desktop width; the bottom nav is for phones (<560) ONLY.
+          final width = constraints.maxWidth;
+          if (width >= DashboardShell._railBreakpoint) {
+            final compact = width < DashboardShell._fullRailBreakpoint;
+            final railWidth = width >= DashboardShell._desktopBreakpoint
+                ? 232.0
+                : (compact ? 72.0 : 212.0);
+            return Row(
+              children: [
+                _SideNav(
+                  destinations: _destinations(l10n),
+                  selectedIndex: _index,
+                  onSelected: _select,
+                  membership: widget.membership,
+                  width: railWidth,
+                  compact: compact,
+                ),
+                Expanded(
+                  child: Column(
                     children: [
-                      _SideNav(
-                        destinations: _destinations(l10n),
-                        selectedIndex: _index,
-                        onSelected: _select,
-                        membership: widget.membership,
-                        width: railWidth,
-                        compact: compact,
-                      ),
+                      header,
+                      const Divider(height: 1),
                       Expanded(child: content),
                     ],
-                  );
-                }
-                return Column(
-                  children: [
-                    Expanded(child: content),
-                    NavigationBar(
-                      key: const Key('dashboard-bottom-nav'),
-                      selectedIndex: _index,
-                      onDestinationSelected: _select,
-                      // RF-132 (Codex review): ten destinations at phone width
-                      // leave no room to render any label unclipped, so the bar
-                      // is deliberately ICON-ONLY. NavigationBar keeps each
-                      // destination's label + selected state in its semantics
-                      // ("<label>, Tab N of 10") even with the label hidden,
-                      // and the tooltip covers hover/long-press; selection
-                      // stays visible via the filled icon + indicator pill.
-                      labelBehavior:
-                          NavigationDestinationLabelBehavior.alwaysHide,
-                      destinations: _destinations(l10n)
-                          .map(
-                            (d) => NavigationDestination(
-                              icon: Icon(d.icon),
-                              selectedIcon: Icon(d.selectedIcon),
-                              label: d.label,
-                              tooltip: d.label,
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+                  ),
+                ),
+              ],
+            );
+          }
+          return Column(
+            children: [
+              header,
+              const Divider(height: 1),
+              Expanded(child: content),
+              NavigationBar(
+                key: const Key('dashboard-bottom-nav'),
+                selectedIndex: _index,
+                onDestinationSelected: _select,
+                // RF-132 (Codex review): ten destinations at phone width
+                // leave no room to render any label unclipped, so the bar
+                // is deliberately ICON-ONLY. NavigationBar keeps each
+                // destination's label + selected state in its semantics
+                // ("<label>, Tab N of 10") even with the label hidden,
+                // and the tooltip covers hover/long-press; selection
+                // stays visible via the filled icon + indicator pill.
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+                destinations: _destinations(l10n)
+                    .map(
+                      (d) => NavigationDestination(
+                        icon: Icon(d.icon),
+                        selectedIcon: Icon(d.selectedIcon),
+                        label: d.label,
+                        tooltip: d.label,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -409,6 +417,15 @@ class _DashboardShellState extends State<DashboardShell> {
     } else {
       setupPanel = null;
     }
+    // Dashboard V2: the honest device readiness card for the operational row
+    // — real devices repository only (same source as the Devices tab), with
+    // the existing tab-navigation callback. Demo mode / tests: no card.
+    final Widget? deviceSummary = devices == null
+        ? null
+        : DashboardDeviceSummaryCard(
+            repository: devices,
+            onOpenDevices: () => _select(2),
+          );
     // Scope the report seam to the active membership + the session-carrying
     // transport (real mode). Demo mode keeps the defaults (demo repository).
     return ProviderScope(
@@ -418,7 +435,10 @@ class _DashboardShellState extends State<DashboardShell> {
           widget.reportsTransport,
         ),
       ],
-      child: DashboardHomeScreen(setupPanel: setupPanel),
+      child: DashboardHomeScreen(
+        setupPanel: setupPanel,
+        deviceSummary: deviceSummary,
+      ),
     );
   }
 
@@ -798,12 +818,23 @@ class _SideNav extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final member = membership;
     final side = compact ? RestoflowSpacing.sm : RestoflowSpacing.lg;
+    // Dashboard V2: the rail is a full-height floating panel (rounded, hairline
+    // outline, soft shadow) on the warm canvas rather than a flush column.
     return Container(
       key: const Key('dashboard-side-rail'),
       width: width,
-      decoration: const BoxDecoration(
+      margin: const EdgeInsetsDirectional.fromSTEB(
+        RestoflowSpacing.md,
+        RestoflowSpacing.md,
+        0,
+        RestoflowSpacing.md,
+      ),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
         color: Colors.white,
-        border: BorderDirectional(end: BorderSide(color: kRestoflowHairline)),
+        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+        border: Border.all(color: kRestoflowHairline),
+        boxShadow: RestoflowShadows.xs,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
