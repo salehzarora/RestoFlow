@@ -467,6 +467,23 @@ the settings writers already record the timezone before/after; this migration
 only classifies + safely projects it. **NOT applied to hosted by the ticket
 branch.**
 
+**ACTIVE-ORDERS-001 rollout (DB-first — MANDATORY).** Migration
+`20260712090000_active_orders_001_owner_active_orders.sql` is **additive /
+forward-only**: ONE new read-only function `app.owner_active_orders` (`stable`
+`SECURITY DEFINER`, `search_path=''`) + its `public` `SECURITY INVOKER` wrapper
+(`authenticated` only; **`anon` and `PUBLIC` explicitly revoked** on both) + ONE
+**partial** index `orders_active_ops_idx`. **No table / column / CHECK / RLS /
+trigger / writer change; no existing order row is touched; no new audit action.**
+It does **not** edit any applied migration.
+
+The Dashboard's Orders tab **lands on the Active-orders view**, which calls this
+RPC — so a Dashboard deploy without the migration would show the Orders tab's
+error state in real mode. Order: (1) apply to hosted; (2) verify
+`owner_active_orders` returns the active board for a branch (and that
+`kitchen_staff` gets `permission_denied`, and `anon` cannot execute it); (3)
+**only then** deploy the Dashboard. **No POS/KDS APK rebuild is required** — POS
+and KDS are untouched. **NOT applied to hosted by the ticket branch.**
+
 **Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).
 - **Yesterday / Last 7 days / Last 30 days** load with real current + comparison

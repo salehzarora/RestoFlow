@@ -14,7 +14,7 @@ import 'admin/supabase_settings_repository.dart';
 import 'dashboard_home_screen.dart';
 import 'devices/device_pairing_panel.dart';
 import 'activity/activity_log_screen.dart';
-import 'orders/order_history_screen.dart';
+import 'orders/orders_screen.dart';
 import 'printers/printers_repository.dart';
 import 'printers/printers_screen.dart';
 import 'setup/device_summary_card.dart';
@@ -442,11 +442,13 @@ class _DashboardShellState extends State<DashboardShell> {
     );
   }
 
-  /// Orders: the order-history + reprint-center surface (ORDERS-HISTORY-001).
-  /// Reads the real `owner_order_history` / `owner_order_detail` RPCs through the
-  /// scoped membership + authenticated transport (real mode); demo mode shows the
-  /// computed demo dataset with an honest banner. Same ProviderScope wiring as
-  /// the Overview so the order-history seam picks up the scope + transport.
+  /// Orders: ONE destination holding the read-only ACTIVE-ORDERS operations
+  /// centre (ACTIVE-ORDERS-001, `owner_active_orders`) and the order-history +
+  /// reprint centre (ORDERS-HISTORY-001, `owner_order_history` /
+  /// `owner_order_detail`). All three RPCs read through the scoped membership +
+  /// authenticated transport (real mode); demo mode shows the computed demo
+  /// dataset with an honest banner. Same ProviderScope wiring as the Overview so
+  /// both order seams pick up the scope + transport.
   Widget _ordersSurface() {
     return ProviderScope(
       overrides: [
@@ -455,7 +457,7 @@ class _DashboardShellState extends State<DashboardShell> {
           widget.reportsTransport,
         ),
       ],
-      child: const OrderHistoryScreen(),
+      child: const OrdersScreen(),
     );
   }
 

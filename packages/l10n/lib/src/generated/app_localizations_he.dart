@@ -3680,4 +3680,68 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posBluetoothNotPaired =>
       'המדפסת אינה מותאמת. התאם אותה בהגדרות ה‑Bluetooth של אנדרואיד ונסה שוב.';
+
+  @override
+  String get ordersTabActive => 'הזמנות פעילות';
+
+  @override
+  String get ordersTabHistory => 'היסטוריה';
+
+  @override
+  String get ordersActiveTitle => 'הזמנות פעילות';
+
+  @override
+  String get ordersActiveSubtitle => 'הזמנות שעדיין פתוחות כעת';
+
+  @override
+  String get ordersActiveEmpty => 'אין הזמנות פעילות';
+
+  @override
+  String get ordersActiveEmptyHint =>
+      'הזמנות מופיעות כאן מיד עם שליחתן, ונשארות עד לסגירתן.';
+
+  @override
+  String get ordersActiveDemoNotice => 'הזמנות פעילות לדוגמה — לא נטענו משרת.';
+
+  @override
+  String get ordersActiveSummaryTotal => 'פעילות כעת';
+
+  @override
+  String get ordersActiveSummaryAwaitingClose => 'ממתינות לסגירה';
+
+  @override
+  String get ordersActiveStageAll => 'כל השלבים';
+
+  @override
+  String get ordersActiveAgeLabel => 'פתוחה כבר';
+
+  @override
+  String ordersActiveAgeMinutes(int minutes) {
+    return '$minutes דק׳';
+  }
+
+  @override
+  String ordersActiveAgeHours(int hours, int minutes) {
+    return '$hours שע׳ $minutes דק׳';
+  }
+
+  @override
+  String get ordersActiveNoDueTimeNotice =>
+      'לא הוגדר זמן הבטחה, ולכן הזמנות לעולם אינן מסומנות כמאחרות — מוצג רק משך הזמן שהן פתוחות.';
+
+  @override
+  String get ordersActiveAutoRefresh => 'רענון אוטומטי';
+
+  @override
+  String ordersActiveLastUpdated(String time) {
+    return 'עודכן $time';
+  }
+
+  @override
+  String ordersActiveTruncated(int shown, int total) {
+    return 'מוצגות $shown ההזמנות הוותיקות ביותר מתוך $total הזמנות פעילות.';
+  }
+
+  @override
+  String get ordersBranchAll => 'כל הסניפים המורשים';
 }

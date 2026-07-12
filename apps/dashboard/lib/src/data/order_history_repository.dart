@@ -35,11 +35,32 @@ class OrderHistoryException implements Exception {
 }
 
 /// One demo order + how many days ago it happened (for range filtering).
+///
+/// [minutesAgo] and [branchId] are used by the ACTIVE-ORDERS-001 board, which
+/// serves the SAME dataset — so opening an active demo row and loading its
+/// detail resolves through this one repository. History rows may leave
+/// [minutesAgo] null (their age is derived from [daysAgo]).
 class DemoOrder {
-  const DemoOrder({required this.daysAgo, required this.detail});
+  const DemoOrder({
+    required this.daysAgo,
+    required this.detail,
+    this.minutesAgo,
+    this.branchId = 'demo-branch-downtown',
+  });
 
   final int daysAgo;
   final OrderDetail detail;
+
+  /// How long the order has been OPEN, in minutes — the deterministic stand-in
+  /// for the server's absolute `created_at`. The demo active board turns this
+  /// into an instant against an injected clock, so ages never depend on the
+  /// wall clock and tests stay stable.
+  final int? minutesAgo;
+
+  /// The demo branch this order belongs to (matches the ids
+  /// [DemoAuditFilterOptionsRepository] offers, so the branch filter really
+  /// filters).
+  final String branchId;
 }
 
 /// Serves order history from a deterministic in-memory dataset — honest demo
@@ -155,10 +176,18 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
   }
 }
 
-/// The standard demo order-history dataset (ILS): a handful of orders across
-/// today / yesterday / this week with variety — dine-in & takeaway, paid & open,
-/// a named customer & an anonymous one, a table, item notes, and a whole-order
-/// kitchen count (KITCHEN-COUNT-001) so the money-free kitchen preview has data.
+/// The standard demo order dataset (ILS): a handful of orders across today /
+/// yesterday / this week with variety — dine-in & takeaway, paid & open, a named
+/// customer & an anonymous one, a table, item notes, and a whole-order kitchen
+/// count (KITCHEN-COUNT-001) so the money-free kitchen preview has data.
+///
+/// It ALSO carries a representative ACTIVE set for the operations board
+/// (ACTIVE-ORDERS-001) — one order at every canonical active stage
+/// (submitted / accepted / preparing / ready / served), paid AND unpaid examples
+/// (including a SERVED-but-UNPAID order, the board's most valuable signal), an
+/// order on a second branch, and one still open from two days ago (which proves
+/// the board has no date window). Ages come from `minutesAgo` against an injected
+/// clock, so nothing here depends on the wall clock.
 List<DemoOrder> demoOrderHistory() {
   OrderDetail order({
     required String id,
@@ -172,6 +201,7 @@ List<DemoOrder> demoOrderHistory() {
     String? staff,
     String? receipt,
     String? createdAt,
+    String branch = 'Downtown',
     List<OrderDetailItem> items = const [],
     List<OrderPayment> payments = const [],
   }) => OrderDetail(
@@ -187,7 +217,7 @@ List<DemoOrder> demoOrderHistory() {
     createdAtLabel: createdAt,
     customerName: customer,
     tableLabel: table,
-    branchName: 'Downtown',
+    branchName: branch,
     staffName: staff,
     receiptNumber: receipt,
     items: items,
@@ -248,6 +278,7 @@ List<DemoOrder> demoOrderHistory() {
     ),
     DemoOrder(
       daysAgo: 0,
+      minutesAgo: 31,
       detail: order(
         id: 'demo-ord-1002',
         code: '#1002BB',
@@ -341,6 +372,157 @@ List<DemoOrder> demoOrderHistory() {
             quantity: 1,
             unitPriceMinor: 4500,
             lineTotalMinor: 4500,
+          ),
+        ],
+      ),
+    ),
+
+    // ---- the ACTIVE set (ACTIVE-ORDERS-001) --------------------------------
+    // One order at each canonical active stage. #1002BB above is the `preparing`
+    // example; #1007GG is SERVED but UNPAID; #1008HH sits on a second branch;
+    // #0940JJ is still open from two days ago (no date window on the board).
+    DemoOrder(
+      daysAgo: 0,
+      minutesAgo: 4,
+      detail: order(
+        id: 'demo-ord-1004',
+        code: '#1004DD',
+        status: 'submitted',
+        type: 'dine_in',
+        subtotal: 5200,
+        total: 5200,
+        customer: 'Yara',
+        table: 'T5',
+        staff: 'Sami',
+        createdAt: '13:34',
+        items: [
+          const OrderDetailItem(
+            name: 'Mezze Platter',
+            quantity: 1,
+            unitPriceMinor: 5200,
+            lineTotalMinor: 5200,
+          ),
+        ],
+      ),
+    ),
+    DemoOrder(
+      daysAgo: 0,
+      minutesAgo: 13,
+      detail: order(
+        id: 'demo-ord-1005',
+        code: '#1005EE',
+        status: 'accepted',
+        type: 'takeaway',
+        subtotal: 2800,
+        total: 2800,
+        staff: 'Amira',
+        receipt: 'R-1005',
+        createdAt: '13:25',
+        items: [
+          const OrderDetailItem(
+            name: 'Hummus Bowl',
+            quantity: 2,
+            unitPriceMinor: 1400,
+            lineTotalMinor: 2800,
+          ),
+        ],
+        payments: [cash(2800, receipt: 'R-1005', at: '13:26')],
+      ),
+    ),
+    DemoOrder(
+      daysAgo: 0,
+      minutesAgo: 22,
+      detail: order(
+        id: 'demo-ord-1006',
+        code: '#1006FF',
+        status: 'ready',
+        type: 'dine_in',
+        subtotal: 6100,
+        total: 6100,
+        customer: 'Omar',
+        table: 'T1',
+        staff: 'Sami',
+        createdAt: '13:16',
+        items: [
+          const OrderDetailItem(
+            name: 'Grilled Sea Bass',
+            quantity: 1,
+            unitPriceMinor: 6100,
+            lineTotalMinor: 6100,
+            notes: 'No lemon',
+          ),
+        ],
+      ),
+    ),
+    DemoOrder(
+      daysAgo: 0,
+      minutesAgo: 47,
+      detail: order(
+        id: 'demo-ord-1007',
+        code: '#1007GG',
+        status: 'served',
+        type: 'takeaway',
+        subtotal: 3900,
+        total: 3900,
+        staff: 'Amira',
+        createdAt: '12:51',
+        items: [
+          const OrderDetailItem(
+            name: 'Lamb Kebab',
+            quantity: 1,
+            unitPriceMinor: 3900,
+            lineTotalMinor: 3900,
+          ),
+        ],
+      ),
+    ),
+    DemoOrder(
+      daysAgo: 0,
+      minutesAgo: 8,
+      branchId: 'demo-branch-harbor',
+      detail: order(
+        id: 'demo-ord-1008',
+        code: '#1008HH',
+        status: 'preparing',
+        type: 'dine_in',
+        subtotal: 7400,
+        total: 7400,
+        customer: 'Dana',
+        table: 'H2',
+        staff: 'Nadia',
+        receipt: 'R-1008',
+        createdAt: '13:30',
+        branch: 'Harbor',
+        items: [
+          const OrderDetailItem(
+            name: 'Seafood Pasta',
+            quantity: 2,
+            unitPriceMinor: 3700,
+            lineTotalMinor: 7400,
+          ),
+        ],
+        payments: [cash(7400, receipt: 'R-1008', at: '13:31')],
+      ),
+    ),
+    DemoOrder(
+      daysAgo: 2,
+      minutesAgo: 2 * 24 * 60 + 35,
+      detail: order(
+        id: 'demo-ord-0940',
+        code: '#0940JJ',
+        status: 'preparing',
+        type: 'dine_in',
+        subtotal: 3100,
+        total: 3100,
+        table: 'T8',
+        staff: 'Sami',
+        createdAt: '2 days ago 19:03',
+        items: [
+          const OrderDetailItem(
+            name: 'Mixed Salad',
+            quantity: 1,
+            unitPriceMinor: 3100,
+            lineTotalMinor: 3100,
           ),
         ],
       ),
