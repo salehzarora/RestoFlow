@@ -377,6 +377,7 @@
   "posReceiptNoPrinterNote": "الطباعة غير متصلة على هذا الجهاز بعد",
   "posModifierRequired": "إلزامي",
   "posModifierOptional": "اختياري",
+  "posModifierChooseOne": "اختر خيارًا واحدًا",
   "posModifierSelectedCount": "{selected}/{max}",
   "posModifierSelectedCountOpen": "{selected}",
   "posModifierFree": "مجاني",

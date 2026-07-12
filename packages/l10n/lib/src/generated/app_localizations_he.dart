@@ -1194,6 +1194,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posModifierOptional => 'אופציונלי';
 
   @override
+  String get posModifierChooseOne => 'בחרו אפשרות אחת';
+
+  @override
   String posModifierSelectedCount(int selected, int max) {
     return '$selected/$max';
   }

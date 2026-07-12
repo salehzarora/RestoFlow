@@ -377,6 +377,7 @@
   "posReceiptNoPrinterNote": "הדפסה עדיין אינה מחוברת במכשיר זה",
   "posModifierRequired": "חובה",
   "posModifierOptional": "אופציונלי",
+  "posModifierChooseOne": "בחרו אפשרות אחת",
   "posModifierSelectedCount": "{selected}/{max}",
   "posModifierSelectedCountOpen": "{selected}",
   "posModifierFree": "חינם",

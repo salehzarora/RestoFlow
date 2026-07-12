@@ -8,6 +8,15 @@ import '../pos_palette.dart';
 import '../state/cart_controller.dart';
 import '../state/pos_menu_provider.dart';
 
+/// Wraps a formatted money run in Unicode LTR ISOLATES (LRI...PDI) so bidi
+/// reordering inside an RTL phrase can never split the sign, currency symbol
+/// and digits (`+₪3.00` stays exactly that, never `₪3.00+`). Applied ONLY to
+/// the money run embedded in a localized phrase - the surrounding Arabic or
+/// Hebrew text keeps its natural direction, and MoneyFormatter output itself
+/// is unchanged. Standalone money [Text]s force `textDirection: ltr` instead,
+/// so their strings stay byte-identical.
+String ltrIsolate(String money) => '\u2066$money\u2069';
+
 /// The modifier/option picker shown when an item with modifier groups is added
 /// (demo-readiness sprint): one section per group — radios for single-select,
 /// checkboxes for multi-select with min/max enforcement — with live SIGNED
@@ -39,6 +48,7 @@ class ModifierSelectionSheet extends StatefulWidget {
     this.initialSelections = const <SelectedModifier>[],
     this.initialNote,
     this.isEdit = false,
+    this.asDialog = false,
     super.key,
   });
 
@@ -68,6 +78,17 @@ class ModifierSelectionSheet extends StatefulWidget {
   /// button reads "Save changes" (saving REPLACES the line, never duplicates it).
   final bool isEdit;
 
+  /// POS customization V2: true when presented as the CENTERED wide-layout
+  /// dialog — adds the explicit close button and drops the sheet-only chrome
+  /// (keyboard inset handling; the dialog shifts itself above the keyboard).
+  /// False keeps the phone bottom-sheet presentation unchanged. The static
+  /// [show] picks by width; direct construction defaults to the sheet layout.
+  final bool asDialog;
+
+  /// Presents the picker: a CENTERED dialog over the dimmed POS on wide
+  /// layouts (the two-pane POS breakpoint and up — the cashier desktop), the
+  /// existing modal bottom sheet on narrow/phone layouts. Same widget, same
+  /// behavior, same keys either way.
   static Future<void> show(
     BuildContext context, {
     required DemoMenuItem item,
@@ -79,21 +100,49 @@ class ModifierSelectionSheet extends StatefulWidget {
     List<SelectedModifier> initialSelections = const <SelectedModifier>[],
     String? initialNote,
     bool isEdit = false,
-  }) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => ModifierSelectionSheet(
-      item: item,
-      groups: groups,
-      currencyCode: currencyCode,
-      onConfirm: onConfirm,
-      category: category,
-      initialSelections: initialSelections,
-      initialNote: initialNote,
-      isEdit: isEdit,
-    ),
-  );
+  }) {
+    final wide =
+        MediaQuery.sizeOf(context).width >= RestoflowBreakpoints.posTwoPane;
+    if (wide) {
+      return showDialog<void>(
+        context: context,
+        builder: (_) => Dialog(
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            // Balanced cashier-desktop width; the dialog's inset padding keeps
+            // comfortable page margins on smaller wide layouts.
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: ModifierSelectionSheet(
+              item: item,
+              groups: groups,
+              currencyCode: currencyCode,
+              onConfirm: onConfirm,
+              category: category,
+              initialSelections: initialSelections,
+              initialNote: initialNote,
+              isEdit: isEdit,
+              asDialog: true,
+            ),
+          ),
+        ),
+      );
+    }
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => ModifierSelectionSheet(
+        item: item,
+        groups: groups,
+        currencyCode: currencyCode,
+        onConfirm: onConfirm,
+        category: category,
+        initialSelections: initialSelections,
+        initialNote: initialNote,
+        isEdit: isEdit,
+      ),
+    );
+  }
 
   @override
   State<ModifierSelectionSheet> createState() => _ModifierSelectionSheetState();
@@ -110,10 +159,80 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   @override
   void initState() {
     super.initState();
-    // TABLET-UX-001 (A): prefill from the cart line being edited. Each initial
-    // selection is matched back to its group by option id (a SelectedModifier
-    // snapshot carries the option id + its taken quantity), so re-picking works
-    // against the live groups. The note is restored verbatim.
+    _applyInitialState();
+  }
+
+  @override
+  void didUpdateWidget(ModifierSelectionSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // POS customization V2 (Codex review): when the SAME widget position is
+    // reused for a genuinely different product / modifier configuration, the
+    // previous selections and note are stale - rebuild from the NEW widget's
+    // initial payload. Ordinary rebuilds of the same product (locale, theme,
+    // MediaQuery, parent setState) keep the cashier's in-progress input: the
+    // item id and the group identities are unchanged there.
+    if (_configSignature(oldWidget) != _configSignature(widget)) {
+      _applyInitialState();
+    }
+  }
+
+  /// A deterministic signature of everything that makes a customization
+  /// CONFIGURATION distinct — i.e. every field that can change which
+  /// selections are valid, what they cost, or how the cashier interacts:
+  ///
+  ///  * the item id;
+  ///  * per group, IN ORDER: id, owning item, single-vs-multi, min/max
+  ///    selections, required-ness, quantity support and the per-option cap;
+  ///  * per option, IN ORDER: id and its SIGNED price delta.
+  ///
+  /// Deliberately EXCLUDED (they cannot make an in-progress selection stale,
+  /// so a change there must not throw the cashier's work away): the item's
+  /// price, the group/option display NAMES and the option's kitchen-meat
+  /// data. Those are read from the LIVE `widget.groups` at render time and
+  /// snapshotted at confirm time, so they can never go stale in [_selected].
+  ///
+  /// Equivalent-but-newly-allocated model objects (a parent rebuild handing
+  /// down fresh instances with the same configuration) produce the SAME
+  /// signature, so ordinary locale / theme / MediaQuery / parent rebuilds
+  /// preserve the in-progress selections and note.
+  static String _configSignature(ModifierSelectionSheet w) {
+    final buffer = StringBuffer(w.item.id);
+    for (final group in w.groups) {
+      buffer
+        ..write('|g:')
+        ..write(group.id)
+        ..write(':')
+        ..write(group.menuItemId)
+        ..write(':')
+        ..write(group.singleSelect)
+        ..write(':')
+        ..write(group.minSelect)
+        ..write(':')
+        ..write(group.maxSelect)
+        ..write(':')
+        ..write(group.isRequired)
+        ..write(':')
+        ..write(group.allowQuantity)
+        ..write(':')
+        ..write(group.maxQuantity);
+      for (final option in group.options) {
+        buffer
+          ..write('|o:')
+          ..write(option.id)
+          ..write(':')
+          ..write(option.priceDeltaMinor);
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// TABLET-UX-001 (A): prefill from the cart line being edited. Each initial
+  /// selection is matched back to its group by option id (a SelectedModifier
+  /// snapshot carries the option id + its taken quantity), so re-picking works
+  /// against the live groups. The note is restored verbatim. This is also the
+  /// reset path when the represented product genuinely changes.
+  void _applyInitialState() {
+    _selected.clear();
     for (final selection in widget.initialSelections) {
       for (final group in widget.groups) {
         if (group.options.any((o) => o.id == selection.optionId)) {
@@ -123,9 +242,7 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
         }
       }
     }
-    if (widget.initialNote != null) {
-      _noteController.text = widget.initialNote!;
-    }
+    _noteController.text = widget.initialNote ?? '';
   }
 
   @override
@@ -152,6 +269,17 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       }
     }
     return total;
+  }
+
+  /// Whether an option in [group] can be activated right now. A selected
+  /// option always can (deselecting is never blocked); a single-select choice
+  /// always can (it swaps); an unselected option in a multi-select group at
+  /// its distinct-option capacity cannot — the existing behaviour makes that
+  /// tap a no-op, and the semantics/affordance now say so truthfully.
+  bool _canActivate(PosModifierGroup group, bool selected) {
+    if (selected || group.singleSelect) return true;
+    final max = group.effectiveMax;
+    return max == null || _groupSelection(group.id).length < max;
   }
 
   void _toggle(PosModifierGroup group, PosModifierOption option) {
@@ -264,167 +392,191 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
       widget.currencyCode,
     );
 
-    return SafeArea(
-      // The on-screen keyboard (note field) pushes the sheet content up
-      // instead of covering it (isScrollControlled sheets don't auto-inset).
-      child: Padding(
-        padding: EdgeInsetsDirectional.fromSTEB(
-          RestoflowSpacing.lg,
-          0,
-          RestoflowSpacing.lg,
-          RestoflowSpacing.lg + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Part E header: thumbnail + name + BASE price, so the cashier
-              // reads base vs the running total at the bottom. NOTE: the base
-              // price is a DIFFERENT money string than the running total once
-              // any paid option is picked — tests pin the total's render count.
-              Row(
+    // POS customization V2 composition: a compact fixed header, the modifier
+    // body as the ONLY scrolling region, and a sticky hairline-topped footer
+    // (total + confirm) that never scrolls away.
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Part E header: thumbnail + name + BASE price, so the cashier
+        // reads base vs the running total at the bottom. NOTE: the base
+        // price is a DIFFERENT money string than the running total once
+        // any paid option is picked — tests pin the total's render count.
+        // (No description line: the menu item model carries no description
+        // field, and nothing is ever fabricated.)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _ItemThumbnail(item: widget.item, category: category),
+            const SizedBox(width: RestoflowSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _ItemThumbnail(item: widget.item, category: category),
-                  const SizedBox(width: RestoflowSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: RestoflowSpacing.xxs),
-                        Text(
-                          l10n.posModifierBasePrice(basePriceText),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    widget.item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: RestoflowSpacing.xxs),
+                  Text(
+                    // The money run rides inside the localized phrase as an
+                    // LTR isolate: stable under Arabic/Hebrew bidi.
+                    l10n.posModifierBasePrice(ltrIsolate(basePriceText)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: RestoflowSpacing.sm),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final group in widget.groups) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: RestoflowSpacing.md,
-                          bottom: RestoflowSpacing.xs,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                group.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: RestoflowSpacing.sm),
-                            // Live selected-count pill: n/m (or open-ended n).
-                            RestoflowStatusPill(
-                              label: _countLabel(
-                                l10n,
-                                group,
-                                _groupSelection(group.id).length,
-                              ),
-                              tone: _countTone(
-                                group,
-                                _groupSelection(group.id).length,
-                              ),
-                            ),
-                            const SizedBox(width: RestoflowSpacing.xs),
-                            if (group.effectiveMin > 0)
-                              RestoflowStatusPill(
-                                label: l10n.posModifierRequired,
-                                tone: RestoflowTone.warning,
-                                icon: Icons.priority_high,
-                              )
-                            else
-                              // Quiet counterpart so "no pill" never has to be
-                              // interpreted: this group may be skipped.
-                              RestoflowStatusPill(
-                                label: l10n.posModifierOptional,
-                              ),
-                          ],
-                        ),
-                      ),
-                      for (final option in group.options)
-                        _OptionTile(
-                          key: ValueKey('modifier-option-${option.id}'),
-                          group: group,
-                          option: option,
-                          currencyCode: widget.currencyCode,
-                          selected: _groupSelection(
-                            group.id,
-                          ).containsKey(option.id),
-                          quantity: _groupSelection(group.id)[option.id] ?? 0,
-                          onToggle: () => _toggle(group, option),
-                          onIncrement: group.hasQuantitySteppers
-                              ? () => _increment(group, option)
-                              : null,
-                          onDecrement: group.hasQuantitySteppers
-                              ? () => _decrement(group, option)
-                              : null,
-                        ),
-                    ],
-                    // Part F: the optional per-item note ("بدون بصل") — sent
-                    // with the order, shown under the cart line, on the KDS
-                    // ticket, and on the receipt/print. Data, never money.
-                    Padding(
-                      padding: const EdgeInsets.only(top: RestoflowSpacing.md),
-                      child: TextField(
-                        key: const Key('modifier-item-note'),
-                        controller: _noteController,
-                        maxLength: 140,
-                        textInputAction: TextInputAction.done,
-                        decoration: InputDecoration(
-                          labelText: l10n.posModifierItemNoteLabel,
-                          hintText: l10n.posModifierItemNoteHint,
-                          counterText: '',
-                          prefixIcon: const Icon(Icons.sticky_note_2_outlined),
-                        ),
+            ),
+            if (widget.asDialog) ...[
+              const SizedBox(width: RestoflowSpacing.sm),
+              // The dialog's explicit close: keyboard-reachable (Escape also
+              // dismisses via the dialog barrier), 48dp target, and localized
+              // for screen readers through the Material tooltip.
+              IconButton(
+                key: const Key('modifier-close-button'),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: RestoflowSpacing.sm),
+        Flexible(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final group in widget.groups) ...[
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: RestoflowSpacing.md,
+                    bottom: RestoflowSpacing.xs,
+                  ),
+                  child: _GroupHeader(
+                    title: Text(
+                      group.name,
+                      // Long group names may take a second line before
+                      // ellipsizing (large text scales / long strings).
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ],
+                    pills: [
+                      // Live selected-count pill: n/m (or open-ended n).
+                      RestoflowStatusPill(
+                        label: _countLabel(
+                          l10n,
+                          group,
+                          _groupSelection(group.id).length,
+                        ),
+                        tone: _countTone(
+                          group,
+                          _groupSelection(group.id).length,
+                        ),
+                      ),
+                      if (group.effectiveMin > 0)
+                        RestoflowStatusPill(
+                          label: l10n.posModifierRequired,
+                          tone: RestoflowTone.warning,
+                          icon: Icons.priority_high,
+                        )
+                      else
+                        // Quiet counterpart so "no pill" never has to be
+                        // interpreted: this group may be skipped.
+                        RestoflowStatusPill(label: l10n.posModifierOptional),
+                    ],
+                  ),
+                ),
+                // V2 helper line: required single-choice groups say what to do
+                // ("Choose one option") — derived from the group's real rules.
+                if (group.singleSelect && group.effectiveMin > 0)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      bottom: RestoflowSpacing.xs,
+                    ),
+                    child: Text(
+                      l10n.posModifierChooseOne,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                _groupOptions(group),
+              ],
+              // Part F: the optional per-item note ("بدون بصل") — sent
+              // with the order, shown under the cart line, on the KDS
+              // ticket, and on the receipt/print. Data, never money.
+              Padding(
+                padding: const EdgeInsets.only(top: RestoflowSpacing.md),
+                child: TextField(
+                  key: const Key('modifier-item-note'),
+                  controller: _noteController,
+                  maxLength: 140,
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    labelText: l10n.posModifierItemNoteLabel,
+                    hintText: l10n.posModifierItemNoteHint,
+                    counterText: '',
+                    prefixIcon: const Icon(Icons.sticky_note_2_outlined),
+                  ),
                 ),
               ),
-              const SizedBox(height: RestoflowSpacing.md),
+            ],
+          ),
+        ),
+        // Sticky footer: a hairline-topped strip holding the running total and
+        // the confirm action — visible however long the modifier body grows.
+        Container(
+          margin: const EdgeInsetsDirectional.only(top: RestoflowSpacing.md),
+          padding: const EdgeInsetsDirectional.only(top: RestoflowSpacing.md),
+          decoration: const BoxDecoration(
+            border: BorderDirectional(
+              top: BorderSide(color: kRestoflowHairline),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
               // Design-polish: a visible running total ABOVE the confirm
               // button, so the price consequence of each pick is readable
               // without parsing the button label.
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    l10n.posReceiptTotal,
-                    style: theme.textTheme.titleMedium,
+                  Flexible(
+                    child: Text(
+                      l10n.posReceiptTotal,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
                   ),
-                  Text(
-                    totalText,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.primary,
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      totalText,
+                      // Standalone money run: forced LTR so RTL locales never
+                      // reorder currency/digits (the string is unchanged).
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.end,
+                      maxLines: 1,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -449,7 +601,8 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                   label: Text(
                     widget.isEdit
                         ? l10n.posEditSaveChanges
-                        : l10n.posAddToCartWithTotal(totalText),
+                        // LTR-isolated money inside the localized phrase.
+                        : l10n.posAddToCartWithTotal(ltrIsolate(totalText)),
                   ),
                   style: RestoflowButtonStyles.big(context),
                 ),
@@ -457,7 +610,117 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
             ],
           ),
         ),
+      ],
+    );
+
+    if (widget.asDialog) {
+      // Centered dialog (wide layouts): the Dialog handles keyboard insets and
+      // Escape; comfortable inner padding + an 88%-viewport height cap.
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(RestoflowSpacing.lg),
+          child: content,
+        ),
+      );
+    }
+
+    return SafeArea(
+      // The on-screen keyboard (note field) pushes the sheet content up
+      // instead of covering it (isScrollControlled sheets don't auto-inset).
+      child: Padding(
+        padding: EdgeInsetsDirectional.fromSTEB(
+          RestoflowSpacing.lg,
+          0,
+          RestoflowSpacing.lg,
+          RestoflowSpacing.lg + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+          ),
+          child: content,
+        ),
       ),
+    );
+  }
+
+  /// The options of one group in their V2 responsive layout (real ordering,
+  /// selection rules, and keys unchanged):
+  ///  * single-choice groups: equal-width selectable CARDS — up to three per
+  ///    row on a wide modal, two on medium widths, a single column when
+  ///    narrow (never a horizontal scroller, never overflow);
+  ///  * multi-choice checkbox groups: compact tiles, two columns when the
+  ///    modal is wide enough, one otherwise;
+  ///  * quantity-stepper groups keep the full-width row so the −/+ pill and
+  ///    label never cramp.
+  Widget _groupOptions(PosModifierGroup group) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final int columns;
+        if (group.singleSelect) {
+          columns = width >= 520 ? 3 : (width >= 340 ? 2 : 1);
+        } else if (group.hasQuantitySteppers) {
+          columns = 1;
+        } else {
+          columns = width >= 560 ? 2 : 1;
+        }
+
+        Widget tile(PosModifierOption option, {required bool compactCard}) {
+          final picked = _groupSelection(group.id);
+          final selected = picked.containsKey(option.id);
+          // The ONLY real reason an option cannot be activated right now (the
+          // models carry no disabled/unavailable flag): a multi-select group
+          // already at its distinct-option capacity — tapping an unselected
+          // option there is, and stays, a no-op. A single-select group always
+          // activates (the tap SWAPS the choice), and an ALREADY-selected
+          // option always stays deselectable.
+          final canActivate = _canActivate(group, selected);
+          return _OptionTile(
+            key: ValueKey('modifier-option-${option.id}'),
+            group: group,
+            option: option,
+            currencyCode: widget.currencyCode,
+            selected: selected,
+            quantity: picked[option.id] ?? 0,
+            compactCard: compactCard,
+            canActivate: canActivate,
+            onToggle: canActivate ? () => _toggle(group, option) : null,
+            onIncrement: group.hasQuantitySteppers
+                ? () => _increment(group, option)
+                : null,
+            onDecrement: group.hasQuantitySteppers
+                ? () => _decrement(group, option)
+                : null,
+          );
+        }
+
+        if (columns == 1) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final option in group.options)
+                tile(option, compactCard: false),
+            ],
+          );
+        }
+        const gap = RestoflowSpacing.sm;
+        final itemWidth = (width - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: RestoflowSpacing.xs,
+          children: [
+            for (final option in group.options)
+              SizedBox(
+                width: itemWidth,
+                child: tile(option, compactCard: group.singleSelect),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -469,8 +732,9 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
 class _ItemThumbnail extends StatelessWidget {
   const _ItemThumbnail({required this.item, required this.category});
 
-  /// Thumbnail edge (56–72dp band; square, rounded).
-  static const double _size = 64;
+  /// Thumbnail edge (56–72dp band; square, rounded). V2: top of the band so
+  /// the product reads instantly.
+  static const double _size = 72;
 
   final DemoMenuItem item;
   final DemoCategory category;
@@ -505,6 +769,58 @@ class _ItemThumbnail extends StatelessWidget {
   }
 }
 
+/// A modifier-group header: the group title with its live count + required or
+/// optional pills at the reading end. When the modal is narrow or the OS text
+/// scale is large, the pills drop to their own wrapped line instead of being
+/// squeezed until they overflow.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.title, required this.pills});
+
+  final Widget title;
+  final List<Widget> pills;
+
+  @override
+  Widget build(BuildContext context) {
+    final pillCluster = Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: RestoflowSpacing.xs,
+      runSpacing: RestoflowSpacing.xs,
+      children: pills,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Measure the pills: when they need more than half of the header they
+        // get their own line (the title keeps the full width above them).
+        final scale = MediaQuery.textScalerOf(context).scale(1);
+        final roomy = constraints.maxWidth >= 360 * scale;
+        if (roomy) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: title),
+              const SizedBox(width: RestoflowSpacing.sm),
+              Flexible(child: pillCluster),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            title,
+            const SizedBox(height: RestoflowSpacing.xs),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: pillCluster,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _OptionTile extends StatelessWidget {
   const _OptionTile({
     required this.group,
@@ -515,6 +831,8 @@ class _OptionTile extends StatelessWidget {
     this.quantity = 0,
     this.onIncrement,
     this.onDecrement,
+    this.compactCard = false,
+    this.canActivate = true,
     super.key,
   });
 
@@ -522,7 +840,11 @@ class _OptionTile extends StatelessWidget {
   final PosModifierOption option;
   final String currencyCode;
   final bool selected;
-  final VoidCallback onToggle;
+
+  /// Toggles this option; NULL when it cannot be activated right now (a
+  /// multi-select group at capacity), which keeps the existing no-op
+  /// behaviour while removing the ink/keyboard affordance.
+  final VoidCallback? onToggle;
 
   /// Selected units of this option (0 = unselected; only ever > 1 on a
   /// quantity-enabled group).
@@ -531,6 +853,17 @@ class _OptionTile extends StatelessWidget {
   /// Non-null only on quantity-enabled groups — renders the −/+ stepper.
   final VoidCallback? onIncrement;
   final VoidCallback? onDecrement;
+
+  /// V2: true renders the single-choice CARD layout (radio + name over the
+  /// price delta, centred) used by the responsive card grid; false keeps the
+  /// full-width row layout. Same tap target, key, and states either way.
+  final bool compactCard;
+
+  /// Whether this option can be activated right now (see
+  /// `_ModifierSelectionSheetState._canActivate`). False only for an
+  /// unselected option in a multi-select group at its capacity: the tile is
+  /// then inert (as it already was) and announces itself as disabled.
+  final bool canActivate;
 
   @override
   Widget build(BuildContext context) {
@@ -556,96 +889,170 @@ class _OptionTile extends StatelessWidget {
             color: selected ? scheme.primary : scheme.onSurfaceVariant,
           );
 
+    final nameStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      color: selected ? scheme.onPrimaryContainer : scheme.onSurface,
+    );
+    final deltaStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+      color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+    );
+    final freeStyle = theme.textTheme.bodySmall?.copyWith(
+      color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+    );
+    // "free" stays the single localized zero-delta label (included at no
+    // charge) in BOTH layouts — one Text per zero-delta option, as pinned.
+    // A signed delta is a standalone money run: forced LTR so RTL locales
+    // never reorder it (the string itself is unchanged). A zero delta keeps
+    // the single localized 'free' label.
+    final priceLabel = deltaText != null
+        ? Text(deltaText, textDirection: TextDirection.ltr, style: deltaStyle)
+        : Text(l10n.posModifierFree, style: freeStyle);
+    final hasStepper = onIncrement != null && onDecrement != null;
+    // ONE useful semantic node per option (Codex review): the FULL option
+    // name + its real price/free label, whatever the visual text does.
+    final semanticLabel =
+        '${option.name}, ${deltaText ?? l10n.posModifierFree}';
+
+    // V2 card layout for single-choice grids: radio + name over the price
+    // delta, centred, taller touch target. The row layout below is unchanged.
+    final Widget body = compactCard
+        ? ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 64),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.md,
+                vertical: RestoflowSpacing.sm,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      control,
+                      const SizedBox(width: RestoflowSpacing.xs),
+                      Flexible(
+                        child: Text(
+                          option.name,
+                          // Long real option names WRAP (up to three lines)
+                          // instead of ellipsizing; the price sits on its own
+                          // line below, so they can never collide.
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: nameStyle,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: RestoflowSpacing.xxs),
+                  priceLabel,
+                ],
+              ),
+            ),
+          )
+        : ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.md,
+                vertical: RestoflowSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  // The decorative parts are excluded from semantics: the
+                  // tile's single node already carries name + price via its
+                  // label, so nothing announces twice. A live stepper keeps
+                  // its own actionable buttons (below).
+                  ExcludeSemantics(child: control),
+                  const SizedBox(width: RestoflowSpacing.md),
+                  Expanded(
+                    child: ExcludeSemantics(
+                      child: Text(option.name, style: nameStyle),
+                    ),
+                  ),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  ExcludeSemantics(child: priceLabel),
+                  if (hasStepper) ...[
+                    const SizedBox(width: RestoflowSpacing.sm),
+                    _OptionQuantityStepper(
+                      l10n: l10n,
+                      optionId: option.id,
+                      quantity: quantity,
+                      // + is disabled (an honest no-op) at the per-option cap
+                      // AND when adding this option at all is blocked by the
+                      // group's distinct-option capacity; − is disabled at 0.
+                      canIncrement: quantity == 0
+                          ? canActivate
+                          : (group.maxQuantity == null ||
+                                quantity < group.maxQuantity!),
+                      onIncrement: onIncrement!,
+                      onDecrement: onDecrement!,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+
     // Design-polish: options are >=48dp bordered tiles with an unmistakable
     // selected state (primary tint + accent border) instead of dense,
     // zero-padding ListTiles. The ValueKey stays on the tappable InkWell.
+    final tile = AnimatedContainer(
+      duration: RestoflowDurations.fast,
+      decoration: BoxDecoration(
+        // DESIGN-004: selected = warm mint tint + a 1.5px brand-green border.
+        color: selected ? kPosSelectedTint : scheme.surface,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        border: Border.all(
+          color: selected ? scheme.primary : kRestoflowHairline,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          // Null when the option cannot be activated: no ripple, no keyboard
+          // activation - matching the (already) inert behaviour.
+          onTap: onToggle,
+          // The ink/hover/keyboard-focus behaviour stays; its semantics do
+          // NOT, so the option's single annotated node below owns the tap
+          // action instead of a second, unlabelled node duplicating it.
+          excludeFromSemantics: true,
+          borderRadius: BorderRadius.circular(RestoflowRadii.md),
+          // The whole card/tile stays the tap target in both layouts. Compact
+          // cards exclude their whole visual subtree (the annotation's label
+          // carries it); stepper rows exclude per part, above, so the -/+
+          // buttons remain separately actionable semantic children.
+          child: compactCard ? ExcludeSemantics(child: body) : body,
+        ),
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xxs),
-      // Subtle interaction polish: selection tint/border fades (finite
-      // implicit animation; the ink ripple rides a transparent Material on
-      // top so it stays visible).
-      child: AnimatedContainer(
-        duration: RestoflowDurations.fast,
-        decoration: BoxDecoration(
-          // DESIGN-004: selected = warm mint tint + a 1.5px brand-green border.
-          color: selected ? kPosSelectedTint : scheme.surface,
-          borderRadius: BorderRadius.circular(RestoflowRadii.md),
-          border: Border.all(
-            color: selected ? scheme.primary : kRestoflowHairline,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(RestoflowRadii.md),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: RestoflowSpacing.md,
-                  vertical: RestoflowSpacing.sm,
-                ),
-                child: Row(
-                  children: [
-                    control,
-                    const SizedBox(width: RestoflowSpacing.md),
-                    Expanded(
-                      child: Text(
-                        option.name,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: selected
-                              ? scheme.onPrimaryContainer
-                              : scheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: RestoflowSpacing.sm),
-                    if (deltaText != null)
-                      Text(
-                        deltaText,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: selected
-                              ? scheme.onPrimaryContainer
-                              : scheme.onSurfaceVariant,
-                        ),
-                      )
-                    else
-                      // Quiet "free" label — lighter weight than a paid delta.
-                      Text(
-                        l10n.posModifierFree,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: selected
-                              ? scheme.onPrimaryContainer
-                              : scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    if (onIncrement != null && onDecrement != null) ...[
-                      const SizedBox(width: RestoflowSpacing.sm),
-                      _OptionQuantityStepper(
-                        l10n: l10n,
-                        optionId: option.id,
-                        quantity: quantity,
-                        // At the per-option cap the + is disabled (honest
-                        // no-op); − at 0 is disabled too.
-                        canIncrement:
-                            group.maxQuantity == null ||
-                            quantity < group.maxQuantity!,
-                        onIncrement: onIncrement!,
-                        onDecrement: onDecrement!,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+      // The option's semantics: full name + real price/free label, a
+      // checked state, and radio-group behaviour for single-choice groups.
+      // The InkWell's tap/focus folds into the SAME node (MergeSemantics),
+      // except where a live stepper must keep its own child buttons.
+      child: Semantics(
+        container: true,
+        // The REAL interactive state: an option that cannot be activated right
+        // now (multi-select group at capacity) announces itself disabled and
+        // exposes NO tap action. The checked state stays truthful either way,
+        // so an existing edit payload still reads as selected.
+        enabled: onToggle != null,
+        checked: selected,
+        inMutuallyExclusiveGroup: group.singleSelect,
+        label: semanticLabel,
+        // The option itself is the tap target (mirrors the full-tile InkWell).
+        // A quantity stepper's -/+ stay separate actionable children below.
+        onTap: onToggle,
+        child: tile,
       ),
     );
   }
@@ -682,6 +1089,11 @@ class _OptionQuantityStepper extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {},
+      // The swallow-guard is a HIT-TEST device, not an action: keep it out of
+      // the semantics tree so it cannot leak a phantom tap action (or merge
+      // the quantity text) into the OPTION's node — which would otherwise
+      // announce an available action on a blocked/disabled option.
+      excludeFromSemantics: true,
       child: Container(
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
