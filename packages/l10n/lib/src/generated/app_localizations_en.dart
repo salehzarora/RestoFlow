@@ -1213,6 +1213,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posModifierOptional => 'Optional';
 
   @override
+  String get posModifierChooseOne => 'Choose one option';
+
+  @override
   String posModifierSelectedCount(int selected, int max) {
     return '$selected/$max';
   }

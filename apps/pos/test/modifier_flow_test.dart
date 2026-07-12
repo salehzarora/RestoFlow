@@ -205,7 +205,10 @@ void main() {
     await _openBurgerSheet(tester);
 
     // Base ₪48.00 as a header subtitle (distinct string from the total pins).
-    expect(find.text(l10n.posModifierBasePrice('₪48.00')), findsOneWidget);
+    expect(
+      find.text(l10n.posModifierBasePrice('\u2066₪48.00\u2069')),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('modifier-option-demo-opt-cheese')),
@@ -214,7 +217,10 @@ void main() {
     // The total moved to ₪51.00 (summary row + Add label, the frozen 2-render
     // contract) but the base subtitle still reads ₪48.00.
     expect(find.textContaining('₪51.00'), findsNWidgets(2));
-    expect(find.text(l10n.posModifierBasePrice('₪48.00')), findsOneWidget);
+    expect(
+      find.text(l10n.posModifierBasePrice('\u2066₪48.00\u2069')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('group headers carry Required/Optional pills and live '
@@ -542,7 +548,10 @@ void main() {
       findsNWidgets(2),
     );
     expect(find.text(ar.posModifierFree), findsNWidgets(6));
-    expect(find.text(ar.posModifierBasePrice('₪48.00')), findsOneWidget);
+    expect(
+      find.text(ar.posModifierBasePrice('\u2066₪48.00\u2069')),
+      findsOneWidget,
+    );
 
     // Selecting still works mirrored; no layout exceptions surfaced.
     await tester.tap(

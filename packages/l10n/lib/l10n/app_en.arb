@@ -1000,6 +1000,10 @@
   "@posModifierOptional": {
     "description": "Quiet pill on a modifier group the cashier MAY skip (no minimum selection)."
   },
+  "posModifierChooseOne": "Choose one option",
+  "@posModifierChooseOne": {
+    "description": "POS customization V2: helper line under a REQUIRED single-choice modifier group's header telling the cashier exactly what to do."
+  },
   "posModifierSelectedCount": "{selected}/{max}",
   "@posModifierSelectedCount": {
     "description": "Live selected-count indicator on a modifier group with a maximum, e.g. 1/2 (selected of max).",

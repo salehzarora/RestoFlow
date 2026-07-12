@@ -1205,6 +1205,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posModifierOptional => 'اختياري';
 
   @override
+  String get posModifierChooseOne => 'اختر خيارًا واحدًا';
+
+  @override
   String posModifierSelectedCount(int selected, int max) {
     return '$selected/$max';
   }

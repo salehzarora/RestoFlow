@@ -2356,6 +2356,12 @@ abstract class AppLocalizations {
   /// **'Optional'**
   String get posModifierOptional;
 
+  /// POS customization V2: helper line under a REQUIRED single-choice modifier group's header telling the cashier exactly what to do.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose one option'**
+  String get posModifierChooseOne;
+
   /// Live selected-count indicator on a modifier group with a maximum, e.g. 1/2 (selected of max).
   ///
   /// In en, this message translates to:
