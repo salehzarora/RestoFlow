@@ -2729,6 +2729,13 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get dashboardDevicesActiveOfConfigured =>
+      'פעילים מתוך המכשירים המוגדרים';
+
+  @override
+  String get dashboardDevicesUnavailable => 'סטטוס המכשירים אינו זמין';
+
+  @override
   String get printersTitle => 'מדפסות';
 
   @override

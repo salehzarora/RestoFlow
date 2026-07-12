@@ -110,17 +110,23 @@ class RestoflowReadinessStrip extends StatelessWidget {
                 ],
               );
             }
+            // V2 proportions: the stat tiles take the reading-start side; the
+            // completion cluster (headline + big percent over a long bar)
+            // takes a generous fixed share at the reading end.
             return Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(child: statBoxes),
-                const SizedBox(width: RestoflowSpacing.lg),
-                _CompletionCluster(
-                  ready: ready,
-                  headline: ready ? readyLabel : pendingLabel,
-                  percent: clamped,
-                  trailing: trailing,
-                  barWidth: 170,
+                Expanded(flex: 5, child: statBoxes),
+                const SizedBox(width: RestoflowSpacing.xl),
+                Expanded(
+                  flex: 3,
+                  child: _CompletionCluster(
+                    ready: ready,
+                    headline: ready ? readyLabel : pendingLabel,
+                    percent: clamped,
+                    trailing: trailing,
+                    barWidth: null,
+                  ),
                 ),
               ],
             );
@@ -187,9 +193,10 @@ class _CompletionCluster extends StatelessWidget {
               ),
             ),
             const SizedBox(width: RestoflowSpacing.sm),
+            // V2: the completion percent is the cluster's hero figure.
             Text(
               '$percent%',
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: theme.textTheme.headlineSmall?.copyWith(
                 color: successStyle.accent,
                 fontWeight: FontWeight.w800,
               ),
@@ -235,16 +242,8 @@ class _StatBox extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: tileBg,
-              borderRadius: BorderRadius.circular(RestoflowRadii.sm),
-            ),
-            child: Icon(stat.icon, size: RestoflowIconSizes.sm, color: tileFg),
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
+          // V2: text leads at the reading start, the soft icon tile closes the
+          // box at the reading end.
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,6 +261,16 @@ class _StatBox extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(width: RestoflowSpacing.md),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: tileBg,
+              borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+            ),
+            child: Icon(stat.icon, size: RestoflowIconSizes.sm, color: tileFg),
           ),
         ],
       ),

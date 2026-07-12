@@ -26,7 +26,7 @@ import 'widgets/section_card.dart';
 /// presentation only — no data source, calculation, provider, or repository
 /// changed.
 class DashboardHomeScreen extends ConsumerWidget {
-  const DashboardHomeScreen({this.setupPanel, super.key});
+  const DashboardHomeScreen({this.setupPanel, this.deviceSummary, super.key});
 
   /// RF-127 presentation-only composition slot: the shell passes the existing
   /// [DashboardSetupCenter] widget here so the readiness/setup content sits
@@ -34,6 +34,13 @@ class DashboardHomeScreen extends ConsumerWidget {
   /// repository ownership, provider override, or callback. Null (demo mode /
   /// tests / no real repos) => no readiness panel, exactly as before.
   final Widget? setupPanel;
+
+  /// Dashboard V2 presentation-only slot: the shell passes an honest device
+  /// readiness card (active-of-configured counts from the SAME real devices
+  /// repository the tabs use) that joins the lower operational card row. Null
+  /// (demo mode / tests / no real repos) => the row keeps its three report
+  /// cards, exactly as before. Never fabricated: no repository, no card.
+  final Widget? deviceSummary;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -66,7 +73,11 @@ class DashboardHomeScreen extends ConsumerWidget {
             ),
           Expanded(
             child: reportAsync.when(
-              data: (report) => _ReportContent(report: report, isDemo: isDemo),
+              data: (report) => _ReportContent(
+                report: report,
+                isDemo: isDemo,
+                deviceSummary: deviceSummary,
+              ),
               loading: () => const _LoadingState(),
               error: (_, _) => _ErrorState(onRetry: refresh),
             ),
@@ -176,13 +187,21 @@ class _RangeFilterBar extends ConsumerWidget {
 
 /// The loaded report: a scrollable, responsive, data-forward layout (RF-127).
 class _ReportContent extends StatelessWidget {
-  const _ReportContent({required this.report, required this.isDemo});
+  const _ReportContent({
+    required this.report,
+    required this.isDemo,
+    this.deviceSummary,
+  });
 
   final DashboardReport report;
 
   /// Whether the report is demo data (computed locally) or real data. Drives the
   /// banner so the data source is labelled honestly (RF-140).
   final bool isDemo;
+
+  /// The shell-provided device readiness card for the operational row
+  /// (Dashboard V2); null hides it (demo mode / no real repositories).
+  final Widget? deviceSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -325,6 +344,9 @@ class _ReportContent extends StatelessWidget {
         value: report.unpaidOrderCount.toString(),
         icon: Icons.pending_actions_outlined,
       ),
+      // Dashboard V2: the honest device readiness card (real repositories
+      // only) completes the reference's four-card operational row.
+      if (deviceSummary case final device?) device,
     ];
 
     final summary = DailySummaryCard(
@@ -492,6 +514,11 @@ class _ReportContent extends StatelessWidget {
             peakValueLabel: peakLabel,
             yAxisTicks: _axisTicksFor(peakEntry.netSalesMinor),
             yAxisLabelBuilder: money,
+            // Dashboard V2: monotone smoothing (never overshoots the real
+            // points) + point selection with a tooltip built from the REAL
+            // datum — hour label + the MoneyFormatter-formatted value.
+            smooth: true,
+            tooltipBuilder: (d) => '${d.label}:00\n${money(d.value)}',
             // A meaningful, localized screen-reader summary naming the peak hour
             // and its formatted value (not conveyed by colour/shape alone).
             semanticsLabel: l10n.dashboardSalesByHourSemantics(
@@ -590,7 +617,7 @@ class _ReportContent extends StatelessWidget {
       _KpiGrid(cards: primaryKpis),
       if (analyticsStart != null || paymentMix != null)
         _AnalyticsRow(hourly: analyticsStart, mix: paymentMix),
-      _KpiGrid(cards: secondaryKpis, wideColumns: 3),
+      _KpiGrid(cards: secondaryKpis, wideColumns: secondaryKpis.length),
       if (strongPair.isNotEmpty) _PairRow(sections: strongPair),
       if (remaining.isNotEmpty) _TwoColumn(sections: remaining),
     ];
@@ -1182,8 +1209,9 @@ class _PaymentMixCard extends StatelessWidget {
       centerSub: label(top.method),
     );
 
-    // RF-132 reference legend: one quiet row per tender — dot + name at the
-    // reading start, the share + amount in a soft boxed value at the end.
+    // Dashboard V2 legend: one bordered row per tender — share% + dot + name
+    // at the reading start, the formatted amount at the reading end. Only real
+    // returned methods render (a cash-only day is one truthful row).
     final legend = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1193,54 +1221,59 @@ class _PaymentMixCard extends StatelessWidget {
             padding: const EdgeInsetsDirectional.only(
               bottom: RestoflowSpacing.sm,
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: colorFor(m.method),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: RestoflowSpacing.sm),
-                // Both sides flex (the value box gets the larger share) so a
-                // narrow card ellipsizes gracefully instead of overflowing.
-                Flexible(
-                  flex: 2,
-                  child: Text(
-                    label(m.method),
-                    style: theme.textTheme.bodyMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const Spacer(),
-                const SizedBox(width: RestoflowSpacing.sm),
-                Flexible(
-                  flex: 6,
-                  child: Container(
-                    padding: const EdgeInsetsDirectional.symmetric(
-                      horizontal: RestoflowSpacing.sm,
-                      vertical: RestoflowSpacing.xxs,
+            child: Container(
+              padding: const EdgeInsetsDirectional.symmetric(
+                horizontal: RestoflowSpacing.md,
+                vertical: RestoflowSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                border: Border.all(color: kRestoflowHairline),
+                borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    '${total == 0 ? 0 : (m.totalMinor * 100 / total).round()}%',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
+                  ),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  Container(
+                    width: 10,
+                    height: 10,
                     decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+                      color: colorFor(m.method),
+                      shape: BoxShape.circle,
                     ),
+                  ),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  Flexible(
+                    flex: 2,
                     child: Text(
-                      '${total == 0 ? 0 : (m.totalMinor * 100 / total).round()}% · '
-                      '${MoneyFormatter.formatMinor(m.totalMinor, currencyCode)}',
+                      label(m.method),
+                      style: theme.textTheme.bodyMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(width: RestoflowSpacing.sm),
+                  Flexible(
+                    flex: 6,
+                    child: Text(
+                      MoneyFormatter.formatMinor(m.totalMinor, currencyCode),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
       ],

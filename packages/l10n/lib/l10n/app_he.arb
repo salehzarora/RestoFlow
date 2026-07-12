@@ -858,6 +858,8 @@
   "setupAddPrinter": "הוספת מדפסת",
   "setupCreatePin": "יצירת קוד PIN לעובד",
   "setupMoreSteps": "{count, plural, =1{שלב הגדרה נוסף אחד} =2{שני שלבי הגדרה נוספים} other{{count} שלבי הגדרה נוספים}}",
+  "dashboardDevicesActiveOfConfigured": "פעילים מתוך המכשירים המוגדרים",
+  "dashboardDevicesUnavailable": "סטטוס המכשירים אינו זמין",
   "printersTitle": "מדפסות",
   "printersSubtitle": "מדפסות קבלות ומטבח לסניף זה",
   "printersAdd": "הוספת מדפסת",

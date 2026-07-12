@@ -858,6 +858,8 @@
   "setupAddPrinter": "إضافة طابعة",
   "setupCreatePin": "إنشاء رمز PIN للموظف",
   "setupMoreSteps": "{count, plural, =1{خطوة إعداد إضافية واحدة} =2{خطوتا إعداد إضافيتان} other{{count} خطوات إعداد إضافية}}",
+  "dashboardDevicesActiveOfConfigured": "النشطة من الأجهزة المُهيأة",
+  "dashboardDevicesUnavailable": "حالة الأجهزة غير متوفرة",
   "printersTitle": "الطابعات",
   "printersSubtitle": "طابعات الإيصالات والمطبخ لهذا الفرع",
   "printersAdd": "إضافة طابعة",
