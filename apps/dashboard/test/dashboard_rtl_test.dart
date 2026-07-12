@@ -8,7 +8,9 @@ Future<TextDirection> _pumpAndReadDirection(
   WidgetTester tester,
   Locale locale,
 ) async {
-  tester.view.physicalSize = const Size(1400, 1000);
+  // A tall surface so the redesigned (RF-127) Overview's lower "Daily summary"
+  // card is built by the lazy ListView (the assertions below are unchanged).
+  tester.view.physicalSize = const Size(1400, 2600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);

@@ -64,18 +64,18 @@ void main() {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
-    // The consolidated header still carries the pinned key + title.
+    // RF-127: the calm page-header carries the pinned key + the Overview title.
     expect(find.byKey(const Key('reports-heading')), findsOneWidget);
-    expect(find.text('Owner reports'), findsOneWidget);
+    expect(find.text('Overview'), findsOneWidget);
     expect(find.byKey(const Key('reports-refresh-button')), findsOneWidget);
 
-    // The sales-by-hour chart card + the chart.
+    // The sales-by-hour chart card + the RF-127 area chart.
     expect(find.byKey(const Key('sales-by-hour-card')), findsOneWidget);
-    expect(find.byType(RestoflowBarChart), findsOneWidget);
+    expect(find.byType(RestoflowAreaChart), findsOneWidget);
 
-    // Trend deltas: the four money/count KPIs + the "1c" hero net-sales delta —
-    // all up in the demo data.
-    expect(find.byIcon(Icons.arrow_upward), findsNWidgets(5));
+    // Trend deltas: the four money/count KPIs (gross, net, orders, cash) — all
+    // up in the demo data. (RF-127 removed the gradient hero and its delta.)
+    expect(find.byIcon(Icons.arrow_upward), findsNWidgets(4));
     expect(find.byIcon(Icons.arrow_downward), findsNothing);
     expect(find.textContaining('vs yesterday'), findsWidgets);
   });
@@ -98,7 +98,7 @@ void main() {
     expect(find.byKey(const Key('reports-heading')), findsOneWidget);
     // ... but nothing is fabricated: no chart, no deltas.
     expect(find.byKey(const Key('sales-by-hour-card')), findsNothing);
-    expect(find.byType(RestoflowBarChart), findsNothing);
+    expect(find.byType(RestoflowAreaChart), findsNothing);
     expect(find.byIcon(Icons.arrow_upward), findsNothing);
     expect(find.byIcon(Icons.arrow_downward), findsNothing);
   });

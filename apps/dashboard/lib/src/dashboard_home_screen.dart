@@ -11,18 +11,29 @@ import 'widgets/daily_summary_card.dart';
 import 'widgets/recent_order_tile.dart';
 import 'widgets/section_card.dart';
 
-/// The RF-104/RF-119 owner/manager reports dashboard: a demo-data banner, the
-/// report day context, daily KPI cards (gross/net sales, orders, average ticket,
-/// cash sales, completed, unpaid), a daily summary, a payment & cash summary,
-/// sales-by-branch, ranked top items and recent orders.
+/// The RF-104/RF-119 owner/manager reports dashboard, redesigned under RF-127
+/// into a calm, data-forward Overview: calm page chrome (title + period + range
+/// + refresh) over the RF-125 shell, the real readiness/setup content high up
+/// (via the [setupPanel] slot), four prioritized primary KPIs, a compact
+/// secondary operational summary, a dominant sales-by-hour area chart beside the
+/// payment-mix donut, then top sellers / recent orders and the remaining
+/// summaries in a clear responsive hierarchy.
 ///
-/// The report is loaded through the [dashboardReportProvider] seam (computed
-/// from a structured demo dataset — no Supabase, no report views, no backend),
-/// so the screen has honest loading / error / empty states and a refresh. Money
-/// is integer minor units (DECISION D-007); chrome is localized; layout is
-/// responsive and RTL/LTR-correct.
+/// The report is loaded through the [dashboardReportProvider] seam (unchanged),
+/// so the screen keeps its honest loading / error / empty / range-unavailable
+/// states and its refresh. Money is integer minor units (DECISION D-007); chrome
+/// is localized; layout is responsive and RTL/LTR-correct. RF-127 reorganizes
+/// presentation only — no data source, calculation, provider, or repository
+/// changed.
 class DashboardHomeScreen extends ConsumerWidget {
-  const DashboardHomeScreen({super.key});
+  const DashboardHomeScreen({this.setupPanel, super.key});
+
+  /// RF-127 presentation-only composition slot: the shell passes the existing
+  /// [DashboardSetupCenter] widget here so the readiness/setup content sits
+  /// immediately after the page chrome (high priority) without moving any
+  /// repository ownership, provider override, or callback. Null (demo mode /
+  /// tests / no real repos) => no readiness panel, exactly as before.
+  final Widget? setupPanel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,27 +45,79 @@ class DashboardHomeScreen extends ConsumerWidget {
 
     void refresh() => ref.invalidate(dashboardReportProvider);
 
-    // The former nested AppBar is flattened into the page header (the shell
-    // already provides the persistent chrome); the refresh action rides the
-    // report header so it stays on the page.
+    // Calm persistent chrome (RF-127): the page header + range chips stay above
+    // the loading/error/data states so the title, period, refresh, and range are
+    // available in every state (range switchable at any time, as before).
+    final panel = setupPanel;
     return Scaffold(
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _RangeFilterBar(),
+          _OverviewChrome(onRefresh: refresh),
+          if (panel != null)
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                RestoflowSpacing.lg,
+                RestoflowSpacing.md,
+                RestoflowSpacing.lg,
+                0,
+              ),
+              child: panel,
+            ),
           Expanded(
             child: reportAsync.when(
-              data: (report) => _ReportContent(
-                report: report,
-                isDemo: isDemo,
-                onRefresh: refresh,
-              ),
+              data: (report) => _ReportContent(report: report, isDemo: isDemo),
               loading: () => const _LoadingState(),
               error: (_, _) => _ErrorState(onRetry: refresh),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// RF-127 — the calm Overview page chrome: the shared [RestoflowPageHeader]
+/// (localized "Overview" title + the reporting-period subtitle + the refresh
+/// action) with the reporting-range chips beneath it. Persistent above the
+/// report states so the range is switchable at any time. The demo/live data
+/// source stays honest via the shell's mode pill + the report banner, so no
+/// duplicate mode pill is shown here.
+class _OverviewChrome extends ConsumerWidget {
+  const _OverviewChrome({required this.onRefresh});
+
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final range = ref.watch(reportRangeProvider);
+    final report = ref.watch(dashboardReportProvider).valueOrNull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowPageHeader(
+          key: const Key('reports-heading'),
+          icon: Icons.insights_outlined,
+          title: l10n.dashboardNavOverview,
+          subtitle: _subtitleFor(l10n, range, report),
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            RestoflowSpacing.lg,
+            RestoflowSpacing.md,
+            RestoflowSpacing.lg,
+            0,
+          ),
+          actions: [
+            IconButton(
+              key: const Key('reports-refresh-button'),
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh),
+              tooltip: l10n.dashboardRefresh,
+            ),
+          ],
+        ),
+        const _RangeFilterBar(),
+      ],
     );
   }
 }
@@ -71,12 +134,6 @@ class _RangeFilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final selected = ref.watch(reportRangeProvider);
-    String labelFor(ReportRange r) => switch (r) {
-      ReportRange.today => l10n.dashboardRangeToday,
-      ReportRange.yesterday => l10n.dashboardRangeYesterday,
-      ReportRange.last7 => l10n.dashboardRangeLast7,
-      ReportRange.last30 => l10n.dashboardRangeLast30,
-    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         RestoflowSpacing.lg,
@@ -92,7 +149,7 @@ class _RangeFilterBar extends ConsumerWidget {
           for (final r in ReportRange.values)
             ChoiceChip(
               key: Key('range-chip-${r.wire}'),
-              label: Text(labelFor(r)),
+              label: Text(_rangeLabel(l10n, r)),
               selected: selected == r,
               onSelected: (_) =>
                   ref.read(reportRangeProvider.notifier).state = r,
@@ -103,39 +160,19 @@ class _RangeFilterBar extends ConsumerWidget {
   }
 }
 
-/// The loaded report: a scrollable, responsive layout of all report sections.
+/// The loaded report: a scrollable, responsive, data-forward layout (RF-127).
 class _ReportContent extends StatelessWidget {
-  const _ReportContent({
-    required this.report,
-    required this.isDemo,
-    required this.onRefresh,
-  });
+  const _ReportContent({required this.report, required this.isDemo});
 
   final DashboardReport report;
 
   /// Whether the report is demo data (computed locally) or real data. Drives the
-  /// banner + header pill so the data source is labelled honestly (RF-140).
+  /// banner so the data source is labelled honestly (RF-140).
   final bool isDemo;
-
-  final VoidCallback onRefresh;
-
-  static const double _twoColBreakpoint = RestoflowBreakpoints.wide;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final semantic =
-        theme.extension<RestoflowSemanticColors>() ??
-        RestoflowSemanticColors.of(theme.brightness);
-    // The terracotta "accent" tile is a semantic colour, not one of the five
-    // RestoflowTones, so it is passed to the filled metric card as a fillStyle.
-    final accentFill = RestoflowToneStyle(
-      container: semantic.accentContainer,
-      onContainer: semantic.onAccentContainer,
-      accent: semantic.accent,
-      icon: Icons.account_balance_wallet_outlined,
-    );
 
     String money(int amountMinor) =>
         MoneyFormatter.formatMinor(amountMinor, report.currencyCode);
@@ -161,15 +198,9 @@ class _ReportContent extends StatelessWidget {
       );
     }
 
-    final header = _ReportHeader(
-      report: report,
-      isDemo: isDemo,
-      onRefresh: onRefresh,
-    );
     // RF-140: demo mode shows the demo-data notice; real mode shows a slim
     // "live · limited" caution notice — never a demo/deferred banner over real
-    // data. (Real mode currently fails closed before reaching this content; the
-    // mode-aware banner keeps the screen honest for when real data lands.)
+    // data.
     final banner = isDemo
         ? RestoflowNoticeBanner(
             key: const Key('reports-demo-banner'),
@@ -177,24 +208,19 @@ class _ReportContent extends StatelessWidget {
           )
         : RestoflowNoticeBanner(
             key: const Key('reports-realmode-banner'),
-            // LIVE-UX-001: a titled, iconed banner reads as an intentional
-            // "live but limited" state rather than a bare caution strip.
             title: l10n.dashboardLiveReportsTitle,
             body: l10n.dashboardRealModeNotice,
             icon: Icons.insights_outlined,
             tone: RestoflowTone.warning,
           );
 
-    // RF-REPORT-004: the selected range could not be served (owner_report_range
-    // not deployed yet and the range isn't today). Show an honest note — never
-    // today's data mislabelled, never fabricated figures.
+    // RF-REPORT-004: the selected range could not be served — honest note (never
+    // today's data mislabelled). Chrome (title + range chips) stays above.
     if (!report.rangeSupported) {
       return ListView(
         padding: const EdgeInsets.all(RestoflowSpacing.lg),
         children: [
           banner,
-          const SizedBox(height: RestoflowSpacing.lg),
-          header,
           const SizedBox(height: RestoflowSpacing.xl),
           const _RangeUnavailable(),
         ],
@@ -206,16 +232,14 @@ class _ReportContent extends StatelessWidget {
         padding: const EdgeInsets.all(RestoflowSpacing.lg),
         children: [
           banner,
-          const SizedBox(height: RestoflowSpacing.lg),
-          header,
           const SizedBox(height: RestoflowSpacing.xl),
           const _EmptyState(),
         ],
       );
     }
 
-    final openCaption = '${l10n.dashboardOpenOrders}: ${report.openOrderCount}';
-    final kpis = <Widget>[
+    // --- Primary KPIs (RF-127): the four headline figures, prioritized. ---
+    final primaryKpis = <Widget>[
       RestoflowMetricCard(
         key: const Key('kpi-gross-sales'),
         label: l10n.dashboardGrossSales,
@@ -239,8 +263,6 @@ class _ReportContent extends StatelessWidget {
         label: l10n.dashboardOrders,
         value: report.orderCount.toString(),
         icon: Icons.receipt_long_outlined,
-        filled: true,
-        tone: RestoflowTone.info,
         delta: deltaOf(report.orderCount, comparison?.orderCount),
       ),
       RestoflowMetricCard(
@@ -248,16 +270,18 @@ class _ReportContent extends StatelessWidget {
         label: l10n.dashboardAvgOrderValue,
         value: money(report.avgOrderValueMinor),
         icon: Icons.trending_up,
-        filled: true,
-        tone: RestoflowTone.success,
       ),
+    ];
+
+    // --- Secondary operational summary (RF-127): compact, not a wall of equal
+    // cards. Every previously-shown figure is preserved (none removed). ---
+    final openCaption = '${l10n.dashboardOpenOrders}: ${report.openOrderCount}';
+    final secondaryKpis = <Widget>[
       RestoflowMetricCard(
         key: const Key('kpi-cash-sales'),
         label: l10n.dashboardCashSales,
         value: money(report.cashSalesMinor),
         icon: Icons.account_balance_wallet_outlined,
-        filled: true,
-        fillStyle: accentFill,
         delta: deltaOf(report.cashSalesMinor, comparison?.cashSalesMinor),
       ),
       RestoflowMetricCard(
@@ -266,8 +290,6 @@ class _ReportContent extends StatelessWidget {
         value: report.completedOrderCount.toString(),
         caption: openCaption,
         icon: Icons.task_alt,
-        filled: true,
-        tone: RestoflowTone.neutral,
       ),
       RestoflowMetricCard(
         key: const Key('kpi-unpaid'),
@@ -405,38 +427,60 @@ class _ReportContent extends StatelessWidget {
       ],
     );
 
-    // DESIGN-002: the sales-by-hour chart. Renders only when the report carries
-    // hourly data (demo mode); real mode leaves it out, so nothing is
-    // fabricated. Money stays integer-minor: the chart takes raw ints and the
-    // peak label is formatted here.
+    // RF-127: the sales-by-hour curve is the DOMINANT visualization. It renders
+    // only when the report carries hourly data (demo mode / RF-REPORT-002); real
+    // mode without it leaves it out, so nothing is fabricated. Money stays
+    // integer-minor: the chart takes raw ints and the peak label is formatted
+    // here, plus an accessible textual summary.
     final hourly = report.hourlyNetSales;
-    final Widget? salesByHour = hourly.isEmpty
-        ? null
-        : RestoflowSectionCard(
-            key: const Key('sales-by-hour-card'),
-            title: l10n.dashboardSalesByHour,
-            children: [
-              const SizedBox(height: RestoflowSpacing.sm),
-              RestoflowBarChart(
-                bars: [
-                  for (final h in hourly)
-                    RestoflowBarDatum(
-                      label: h.hourLabel.split(':').first,
-                      value: h.netSalesMinor,
-                    ),
-                ],
-                peakValueLabel: money(
-                  hourly
-                      .map((h) => h.netSalesMinor)
-                      .reduce((a, b) => a > b ? a : b),
+    final Widget? salesByHour;
+    if (hourly.isEmpty) {
+      salesByHour = null;
+    } else {
+      // The peak hour drives both the chart's peak marker label and the
+      // accessible summary — real hourly data only, never fabricated.
+      var peakEntry = hourly.first;
+      for (final h in hourly) {
+        if (h.netSalesMinor > peakEntry.netSalesMinor) peakEntry = h;
+      }
+      final peakLabel = money(peakEntry.netSalesMinor);
+      salesByHour = RestoflowSectionCard(
+        key: const Key('sales-by-hour-card'),
+        title: l10n.dashboardSalesByHour,
+        children: [
+          const SizedBox(height: RestoflowSpacing.sm),
+          RestoflowAreaChart(
+            key: const Key('sales-by-hour-chart'),
+            height: 240,
+            points: [
+              for (final h in hourly)
+                RestoflowAreaDatum(
+                  label: h.hourLabel.split(':').first,
+                  value: h.netSalesMinor,
                 ),
-              ),
             ],
+            peakValueLabel: peakLabel,
+            // A meaningful, localized screen-reader summary naming the peak hour
+            // and its formatted value (not conveyed by colour/shape alone).
+            semanticsLabel: l10n.dashboardSalesByHourSemantics(
+              peakEntry.hourLabel,
+              peakLabel,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // "1c" payment-mix donut (real data only — from report.paymentMethods).
+    final Widget? paymentMix = report.paymentMethods.isEmpty
+        ? null
+        : _PaymentMixCard(
+            methods: report.paymentMethods,
+            currencyCode: report.currencyCode,
           );
 
-    // LIVE-UX-001: hide sections that carry NO rows (an empty card reads as
-    // broken/old) and, when the report is live-but-limited (real mode with none
-    // of the richer analytics sourced yet), show a calm "more analytics coming"
+    // LIVE-UX-001: when the report is live-but-limited (real mode with none of
+    // the richer analytics sourced yet), show a calm "more analytics coming"
     // note so the gap is clearly INTENTIONAL. Never shown in demo (full data).
     final showLimitedNote =
         !isDemo &&
@@ -449,81 +493,189 @@ class _ReportContent extends StatelessWidget {
       body: l10n.dashboardLiveReportsPending,
       icon: Icons.query_stats_outlined,
     );
-    // RF-REPORT-003: the real (or demo) shift/cash reconciliation card. Present
-    // whenever shiftCash is populated (demo + real owner_daily_report); in the
-    // sales_summary fallback it is null, so the card hides (never fabricated) —
-    // the live-limited note already explains the gap.
+
+    // RF-REPORT-003: the real (or demo) shift/cash reconciliation card — present
+    // whenever shiftCash is populated; null in the fallback so it hides (never
+    // fabricated).
     final shiftCash = report.shiftCash;
-    final leftSections = <Widget>[
-      summary,
-      payment,
-      // "1c" payment-mix donut (real data only — from report.paymentMethods).
-      if (report.paymentMethods.isNotEmpty)
-        _PaymentMixCard(
-          methods: report.paymentMethods,
-          currencyCode: report.currencyCode,
-        ),
-      if (shiftCash != null)
-        _ShiftCashCard(
-          shiftCash: shiftCash,
-          currencyCode: report.currencyCode,
-          range: report.range,
-        ),
-    ];
-    final rightSections = <Widget>[
-      if (report.branches.isNotEmpty) branches,
+    final Widget? shiftCashCard = shiftCash == null
+        ? null
+        : _ShiftCashCard(
+            shiftCash: shiftCash,
+            currencyCode: report.currencyCode,
+            range: report.range,
+          );
+
+    // RF-127 hierarchy: top sellers + recent orders form the strong secondary
+    // row; daily/payment/branch/shift summaries remain accessible below in a
+    // balanced two-column grid rather than a wall of equal cards.
+    final strongPair = <Widget>[
       if (report.topItems.isNotEmpty) topItems,
       if (report.recentOrders.isNotEmpty) recentOrders,
+    ];
+    final remaining = <Widget>[
+      summary,
+      payment,
+      if (report.branches.isNotEmpty) branches,
+      if (shiftCashCard != null) shiftCashCard,
       if (showLimitedNote) limitedNote,
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final twoColumn =
-            constraints.maxWidth >= _twoColBreakpoint &&
-            rightSections.isNotEmpty;
-        final sections = twoColumn
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(children: _verticallySpaced(leftSections)),
-                  ),
-                  const SizedBox(width: RestoflowSpacing.lg),
-                  Expanded(
-                    child: Column(children: _verticallySpaced(rightSections)),
-                  ),
-                ],
-              )
-            : Column(
-                children: _verticallySpaced([
-                  ...leftSections,
-                  ...rightSections,
-                ]),
-              );
+    final blocks = <Widget>[
+      banner,
+      _KpiGrid(cards: primaryKpis),
+      _KpiGrid(cards: secondaryKpis, wideColumns: 3),
+      if (salesByHour != null || paymentMix != null)
+        _AnalyticsRow(hourly: salesByHour, mix: paymentMix),
+      if (strongPair.isNotEmpty) _PairRow(sections: strongPair),
+      if (remaining.isNotEmpty) _TwoColumn(sections: remaining),
+    ];
 
-        return ListView(
-          padding: const EdgeInsets.all(RestoflowSpacing.lg),
-          children: [
-            banner,
-            const SizedBox(height: RestoflowSpacing.lg),
-            header,
-            const SizedBox(height: RestoflowSpacing.lg),
-            _KpiGrid(cards: kpis),
-            if (salesByHour != null) ...[
-              const SizedBox(height: RestoflowSpacing.lg),
-              salesByHour,
-            ],
-            const SizedBox(height: RestoflowSpacing.lg),
-            sections,
-          ],
-        );
-      },
+    return ListView(
+      padding: const EdgeInsets.all(RestoflowSpacing.lg),
+      children: _verticallySpaced(blocks),
     );
   }
 
   static String _methodLabel(AppLocalizations l10n, String method) =>
       method == 'cash' ? l10n.dashboardPaymentMethodCash : method;
+}
+
+/// RF-127 — the primary analytics row: the dominant sales-by-hour chart beside
+/// the payment-mix donut at wide widths (the chart gets the larger share), or
+/// stacked (chart first) on narrow widths. Renders whichever pieces exist.
+class _AnalyticsRow extends StatelessWidget {
+  const _AnalyticsRow({this.hourly, this.mix});
+
+  final Widget? hourly;
+  final Widget? mix;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = hourly;
+    final m = mix;
+    if (h == null && m == null) return const SizedBox.shrink();
+    if (h == null) return m!;
+    if (m == null) return h;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= RestoflowBreakpoints.wide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 3, child: h),
+              const SizedBox(width: RestoflowSpacing.lg),
+              Expanded(flex: 2, child: m),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            h,
+            const SizedBox(height: RestoflowSpacing.lg),
+            m,
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// RF-127 — a two-up row for the strong secondary pair (top sellers + recent
+/// orders): side by side at wide widths, stacked on narrow. With a single
+/// section it renders that section full width.
+class _PairRow extends StatelessWidget {
+  const _PairRow({required this.sections});
+
+  final List<Widget> sections;
+
+  @override
+  Widget build(BuildContext context) {
+    if (sections.length == 1) return sections.first;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= RestoflowBreakpoints.wide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: sections[0]),
+              const SizedBox(width: RestoflowSpacing.lg),
+              Expanded(child: sections[1]),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: _verticallySpaced(sections),
+        );
+      },
+    );
+  }
+}
+
+/// RF-127 — the remaining summaries in a balanced two-column grid at wide widths
+/// (alternating so both columns fill), or a single column when narrow. Keeps all
+/// summaries accessible without a wall of equal-weight cards.
+class _TwoColumn extends StatelessWidget {
+  const _TwoColumn({required this.sections});
+
+  final List<Widget> sections;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumn =
+            constraints.maxWidth >= RestoflowBreakpoints.wide &&
+            sections.length > 1;
+        if (!twoColumn) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _verticallySpaced(sections),
+          );
+        }
+        final left = <Widget>[];
+        final right = <Widget>[];
+        for (var i = 0; i < sections.length; i++) {
+          (i.isEven ? left : right).add(sections[i]);
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Column(children: _verticallySpaced(left))),
+            const SizedBox(width: RestoflowSpacing.lg),
+            Expanded(child: Column(children: _verticallySpaced(right))),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The localized label for a reporting range (shared by the chrome subtitle and
+/// the range chips).
+String _rangeLabel(AppLocalizations l10n, ReportRange r) => switch (r) {
+  ReportRange.today => l10n.dashboardRangeToday,
+  ReportRange.yesterday => l10n.dashboardRangeYesterday,
+  ReportRange.last7 => l10n.dashboardRangeLast7,
+  ReportRange.last30 => l10n.dashboardRangeLast30,
+};
+
+/// The chrome subtitle: for today, the business-date "Report day: …" context
+/// once the report is loaded; for other ranges, the range + branch-local window;
+/// while the report is still loading, just the range label. Never fabricated —
+/// only the loaded report's own labels are used.
+String _subtitleFor(
+  AppLocalizations l10n,
+  ReportRange range,
+  DashboardReport? report,
+) {
+  if (report == null) return _rangeLabel(l10n, range);
+  if (report.range == ReportRange.today) {
+    return '${l10n.dashboardReportDayLabel}: ${report.businessDateLabel}';
+  }
+  return _rangeSubtitle(l10n, report);
 }
 
 /// Joins [items] into a vertical run with a large gap between them. Gaps are only
@@ -885,12 +1037,7 @@ class _RangeUnavailable extends StatelessWidget {
 /// branch-local start→end window when known (single-day windows collapse to one
 /// date). Plain data strings — the range label is localized chrome.
 String _rangeSubtitle(AppLocalizations l10n, DashboardReport report) {
-  final label = switch (report.range) {
-    ReportRange.today => l10n.dashboardRangeToday,
-    ReportRange.yesterday => l10n.dashboardRangeYesterday,
-    ReportRange.last7 => l10n.dashboardRangeLast7,
-    ReportRange.last30 => l10n.dashboardRangeLast30,
-  };
+  final label = _rangeLabel(l10n, report.range);
   final start = report.rangeStartLabel;
   final end = report.rangeEndLabel;
   if (start != null && end != null && start.isNotEmpty && end.isNotEmpty) {
@@ -903,211 +1050,6 @@ String _rangeSubtitle(AppLocalizations l10n, DashboardReport report) {
 String _shiftDurationText(AppLocalizations l10n, int minutes) {
   final safe = minutes < 0 ? 0 : minutes;
   return l10n.dashboardShiftDurationValue(safe ~/ 60, safe % 60);
-}
-
-/// The Overview HERO header (Dashboard "1c"): the brand-gradient panel with the
-/// period's big net-sales value + a delta line + a sparkline, plus the pinned
-/// "Owner reports" heading, the "Report day: …" (or range) context, the
-/// demo/live pill, and the refresh action. Money is formatted via
-/// [MoneyFormatter]; the key/heading/day strings are preserved so the surface
-/// stays honest and testable. RTL-safe (Rows + directional layout).
-class _ReportHeader extends StatelessWidget {
-  const _ReportHeader({
-    required this.report,
-    required this.isDemo,
-    required this.onRefresh,
-  });
-
-  final DashboardReport report;
-  final bool isDemo;
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    String money(int m) => MoneyFormatter.formatMinor(m, report.currencyCode);
-    final white70 = Colors.white.withValues(alpha: 0.82);
-    final dayText = report.range == ReportRange.today
-        ? '${l10n.dashboardReportDayLabel}: ${report.businessDateLabel}'
-        : _rangeSubtitle(l10n, report);
-    final valueLabel = report.range == ReportRange.today
-        ? l10n.dashboardTodaySales
-        : l10n.dashboardNetSales;
-    final pct = deltaPercent(
-      report.netSalesMinor,
-      report.comparison?.netSalesMinor,
-    );
-    final spark = [for (final h in report.hourlyNetSales) h.netSalesMinor];
-
-    final hero = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Icon(
-              Icons.insights_outlined,
-              size: RestoflowIconSizes.md,
-              color: white70,
-            ),
-            const SizedBox(width: RestoflowSpacing.sm),
-            Expanded(
-              child: Text(
-                l10n.dashboardReportsHeading,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            RestoflowStatusPill(
-              label: isDemo ? l10n.dashboardDemoDay : l10n.dashboardLiveDataTag,
-              tone: RestoflowTone.info,
-            ),
-            IconButton(
-              key: const Key('reports-refresh-button'),
-              onPressed: onRefresh,
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              tooltip: l10n.dashboardRefresh,
-            ),
-          ],
-        ),
-        const SizedBox(height: RestoflowSpacing.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    valueLabel,
-                    style: theme.textTheme.labelLarge?.copyWith(color: white70),
-                  ),
-                  const SizedBox(height: RestoflowSpacing.xxs),
-                  Text(
-                    money(report.netSalesMinor),
-                    style: theme.textTheme.displaySmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: RestoflowSpacing.xs),
-                  Text(
-                    dayText,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: white70),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (pct != null) ...[
-                    const SizedBox(height: RestoflowSpacing.xs),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          pct >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
-                          size: RestoflowIconSizes.xs,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: RestoflowSpacing.xxs),
-                        Flexible(
-                          child: Text(
-                            _heroDeltaLabel(l10n, report.range, pct.abs()),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (spark.length > 1) ...[
-              const SizedBox(width: RestoflowSpacing.md),
-              _Sparkline(values: spark),
-            ],
-          ],
-        ),
-      ],
-    );
-
-    return ClipRRect(
-      key: const Key('reports-heading'),
-      borderRadius: BorderRadius.circular(RestoflowRadii.lg),
-      child: RestoflowGradientHeader(hero: hero),
-    );
-  }
-}
-
-/// The hero's range-aware "vs prior period" delta label.
-String _heroDeltaLabel(AppLocalizations l10n, ReportRange range, int pct) =>
-    switch (range) {
-      ReportRange.today => l10n.dashboardDeltaVsYesterday(pct),
-      ReportRange.yesterday => l10n.dashboardDeltaVsDayBefore(pct),
-      ReportRange.last7 => l10n.dashboardDeltaVsPrev7(pct),
-      ReportRange.last30 => l10n.dashboardDeltaVsPrev30(pct),
-    };
-
-/// A tiny white polyline sparkline of the period's hourly net sales, drawn in
-/// list (chronological) order — decorative, static, money-free.
-class _Sparkline extends StatelessWidget {
-  const _Sparkline({required this.values});
-
-  final List<int> values;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 120,
-    height: 44,
-    child: CustomPaint(painter: _SparkPainter(values: values)),
-  );
-}
-
-class _SparkPainter extends CustomPainter {
-  _SparkPainter({required this.values});
-
-  final List<int> values;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.length < 2) return;
-    final maxV = values.reduce((a, b) => a > b ? a : b);
-    final minV = values.reduce((a, b) => a < b ? a : b);
-    final span = (maxV - minV) == 0 ? 1 : (maxV - minV);
-    final dx = size.width / (values.length - 1);
-    final path = Path();
-    for (var i = 0; i < values.length; i++) {
-      final x = i * dx;
-      final y = size.height - ((values[i] - minV) / span) * size.height;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_SparkPainter old) => old.values != values;
 }
 
 /// The "1c" payment-mix donut card: a ring of the period's tenders (real data
@@ -1206,18 +1148,21 @@ class _PaymentMixCard extends StatelessWidget {
   }
 }
 
-/// Lays the KPI metric cards out in a responsive grid (4 / 2 / 1 columns).
+/// Lays the KPI metric cards out in a responsive grid. [wideColumns] columns at
+/// the wide breakpoint (4 for the primary row, 3 for the compact secondary
+/// summary), 2 on mid widths, 1 when compact.
 class _KpiGrid extends StatelessWidget {
-  const _KpiGrid({required this.cards});
+  const _KpiGrid({required this.cards, this.wideColumns = 4});
 
   final List<Widget> cards;
+  final int wideColumns;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= RestoflowBreakpoints.wide
-            ? 4
+            ? wideColumns
             : (constraints.maxWidth >= RestoflowBreakpoints.compact ? 2 : 1);
         const gap = RestoflowSpacing.md;
         final gutters = gap * (columns - 1);
@@ -1235,10 +1180,9 @@ class _KpiGrid extends StatelessWidget {
 }
 
 /// The loading state while the report is fetched. DESIGN-002: a static skeleton
-/// of the Overview (header + KPI grid + chart) instead of a lone spinner —
-/// deliberately spinner-free and non-animated (the shared [RestoflowSkeleton] is
-/// static, so it stays `pumpAndSettle`-safe). The localized caption remains for
-/// screen readers.
+/// of the Overview (KPI grid + chart) instead of a lone spinner — deliberately
+/// spinner-free and non-animated (the shared [RestoflowSkeleton] is static, so it
+/// stays `pumpAndSettle`-safe). The localized caption remains for screen readers.
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
@@ -1250,27 +1194,6 @@ class _LoadingState extends StatelessWidget {
       key: const Key('reports-loading'),
       padding: const EdgeInsets.all(RestoflowSpacing.lg),
       children: [
-        Row(
-          children: [
-            const RestoflowSkeleton(
-              width: 44,
-              height: 44,
-              radius: RestoflowRadii.md,
-            ),
-            const SizedBox(width: RestoflowSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  RestoflowSkeleton(width: 180, height: 22),
-                  SizedBox(height: RestoflowSpacing.sm),
-                  RestoflowSkeleton(width: 130, height: 14),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: RestoflowSpacing.lg),
         _KpiGrid(
           cards: const [
             _MetricSkeleton(),
@@ -1283,7 +1206,7 @@ class _LoadingState extends StatelessWidget {
         const Card(
           child: Padding(
             padding: EdgeInsets.all(RestoflowSpacing.lg),
-            child: RestoflowSkeleton(height: 168, radius: RestoflowRadii.md),
+            child: RestoflowSkeleton(height: 220, radius: RestoflowRadii.md),
           ),
         ),
         const SizedBox(height: RestoflowSpacing.md),

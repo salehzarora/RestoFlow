@@ -17,6 +17,7 @@ library;
 
 export 'src/buttons.dart';
 export 'src/category_palette.dart';
+export 'src/components/area_chart.dart';
 export 'src/components/bar_chart.dart';
 export 'src/components/brand_mark.dart';
 export 'src/components/code_block.dart';

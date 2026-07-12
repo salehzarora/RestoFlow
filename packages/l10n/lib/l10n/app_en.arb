@@ -1919,6 +1919,11 @@
   "@dashboardModeLiveData": {"description": "DESIGN-002: user-facing header data-source pill for real mode (replaces the developer 'Real' label)."},
   "dashboardSalesByHour": "Sales by hour",
   "@dashboardSalesByHour": {"description": "DESIGN-002: title of the Overview sales-by-hour chart card."},
+  "dashboardSalesByHourSemantics": "Sales by hour. Peak at {hour}: {amount}",
+  "@dashboardSalesByHourSemantics": {
+    "description": "RF-127: accessible screen-reader summary of the Overview sales-by-hour area chart. hour is the peak hour label (e.g. 19:00) and amount is the formatted peak sales value; both are pre-built strings.",
+    "placeholders": {"hour": {"type": "String"}, "amount": {"type": "String"}}
+  },
   "dashboardDeltaVsYesterday": "{percent}% vs yesterday",
   "@dashboardDeltaVsYesterday": {
     "description": "DESIGN-002: KPI trend delta suffix (the up/down arrow is added by the card). percent is the absolute integer percentage change vs the prior period.",

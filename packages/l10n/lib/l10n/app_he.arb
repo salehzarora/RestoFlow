@@ -777,6 +777,7 @@
   "dashboardModeDemoData": "נתוני דמו",
   "dashboardModeLiveData": "נתונים חיים",
   "dashboardSalesByHour": "מכירות לפי שעה",
+  "dashboardSalesByHourSemantics": "מכירות לפי שעה. שיא ב-{hour}: {amount}",
   "dashboardDeltaVsYesterday": "{percent}% לעומת אתמול",
   "dashboardRangeToday": "היום",
   "dashboardRangeYesterday": "אתמול",
