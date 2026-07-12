@@ -313,6 +313,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardAppTitle => 'ريستوفلو - لوحة التحكم';
 
   @override
+  String get dashboardBrandName => 'ريستوفلو';
+
+  @override
+  String get dashboardBrandTagline => 'لوحة التحكم';
+
+  @override
   String get adminAppTitle => 'ريستوفلو - الإدارة';
 
   @override
@@ -2730,6 +2736,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get setupCreatePin => 'إنشاء رمز PIN للموظف';
+
+  @override
+  String setupMoreSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count خطوات إعداد إضافية',
+      two: 'خطوتا إعداد إضافيتان',
+      one: 'خطوة إعداد إضافية واحدة',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get printersTitle => 'الطابعات';

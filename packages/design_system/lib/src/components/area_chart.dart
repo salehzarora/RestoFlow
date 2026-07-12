@@ -38,6 +38,8 @@ class RestoflowAreaChart extends StatelessWidget {
     this.semanticsLabel,
     this.lineColor,
     this.maxLabels = 7,
+    this.yAxisTicks,
+    this.yAxisLabelBuilder,
     super.key,
   });
 
@@ -62,6 +64,20 @@ class RestoflowAreaChart extends StatelessWidget {
   /// The maximum number of x-axis labels to draw (evenly subsampled) so dense
   /// series (e.g. 24 hours) stay readable and unclipped.
   final int maxLabels;
+
+  /// Optional ascending y-axis tick values, in the SAME units as
+  /// [RestoflowAreaDatum.value] (money callers pass integer minor units — the
+  /// chart still formats nothing). When set together with
+  /// [yAxisLabelBuilder], a faint horizontal gridline is drawn at each tick
+  /// with its label in a start-side gutter (RF-132), and the plot scales to at
+  /// least the last tick. Null (the default) keeps the original single
+  /// mid-gridline rendering, unchanged.
+  final List<int>? yAxisTicks;
+
+  /// Formats a [yAxisTicks] value into its axis label (the caller owns all
+  /// formatting — money stays integer-minor upstream). Ignored when
+  /// [yAxisTicks] is null.
+  final String Function(int value)? yAxisLabelBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +105,8 @@ class RestoflowAreaChart extends StatelessWidget {
               fill: line.withValues(alpha: 0.14),
               grid: scheme.outlineVariant,
               maxLabels: maxLabels < 2 ? 2 : maxLabels,
+              yAxisTicks: yAxisTicks,
+              yAxisLabelBuilder: yAxisLabelBuilder,
               labelStyle: theme.textTheme.bodySmall!.copyWith(
                 color: scheme.onSurfaceVariant,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -127,6 +145,8 @@ class _AreaChartPainter extends CustomPainter {
     required this.peakLabelStyle,
     required this.markerRing,
     required this.textScaler,
+    this.yAxisTicks,
+    this.yAxisLabelBuilder,
   });
 
   final List<RestoflowAreaDatum> points;
@@ -140,13 +160,43 @@ class _AreaChartPainter extends CustomPainter {
   final TextStyle peakLabelStyle;
   final Color markerRing;
   final TextScaler textScaler;
+  final List<int>? yAxisTicks;
+  final String Function(int value)? yAxisLabelBuilder;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0) return;
     final n = points.length;
     if (n == 0) return;
-    final maxValue = points.fold<int>(0, (m, p) => p.value > m ? p.value : m);
+    final dataMax = points.fold<int>(0, (m, p) => p.value > m ? p.value : m);
+
+    // RF-132 optional y-axis: measure the tick labels to reserve a start-side
+    // gutter. The axis only engages when it leaves a usable plot; otherwise
+    // (absurdly narrow canvas / extreme text scale) it is skipped rather than
+    // squeezing the plot out.
+    final ticks = yAxisTicks;
+    final tickBuilder = yAxisLabelBuilder;
+    var tickPainters = const <(int, TextPainter)>[];
+    var gutterW = 0.0;
+    if (ticks != null && ticks.isNotEmpty && tickBuilder != null) {
+      final measured = <(int, TextPainter)>[
+        for (final t in ticks)
+          (t, _layout(tickBuilder(t), labelStyle, size.width)),
+      ];
+      var widest = 0.0;
+      for (final (_, tp) in measured) {
+        if (tp.width > widest) widest = tp.width;
+      }
+      final candidate = widest + 8;
+      if (candidate < size.width * 0.5) {
+        tickPainters = measured;
+        gutterW = candidate;
+      }
+    }
+    final hasYAxis = gutterW > 0;
+    final maxValue = hasYAxis && tickPainters.last.$1 > dataMax
+        ? tickPainters.last.$1
+        : dataMax;
 
     // Scale-aware vertical reservations: measure the ACTUAL label heights at the
     // current text scale so labels never collide with the plot or escape the
@@ -172,20 +222,45 @@ class _AreaChartPainter extends CustomPainter {
     // Not enough room (extreme text scale): draw nothing rather than overflow.
     if (plotH <= 0) return;
     final baseY = topPad + plotH;
+    final plotLeft = gutterW;
+    final plotW = size.width - plotLeft;
 
-    // A single faint mid gridline (recessive) + the baseline.
     final gridPaint = Paint()
       ..color = grid
       ..strokeWidth = 1;
+    double yAt(int v) => maxValue == 0 ? baseY : baseY - (v / maxValue) * plotH;
+    if (hasYAxis) {
+      // One faint gridline + start-side label per tick (RF-132); the labels sit
+      // in the reserved gutter, right-aligned toward the axis, clamped so they
+      // never escape the canvas at any text scale.
+      for (final (value, tp) in tickPainters) {
+        final y = yAt(value);
+        canvas.drawLine(Offset(plotLeft, y), Offset(size.width, y), gridPaint);
+        final labelY = (y - tp.height / 2).clamp(
+          0.0,
+          (size.height - tp.height).clamp(0.0, size.height),
+        );
+        tp.paint(
+          canvas,
+          Offset((gutterW - 8 - tp.width).clamp(0.0, gutterW), labelY),
+        );
+      }
+    } else {
+      // Original rendering: a single faint mid gridline (recessive).
+      canvas.drawLine(
+        Offset(0, topPad + plotH / 2),
+        Offset(size.width, topPad + plotH / 2),
+        gridPaint,
+      );
+    }
     canvas.drawLine(
-      Offset(0, topPad + plotH / 2),
-      Offset(size.width, topPad + plotH / 2),
+      Offset(plotLeft, baseY),
+      Offset(size.width, baseY),
       gridPaint,
     );
-    canvas.drawLine(Offset(0, baseY), Offset(size.width, baseY), gridPaint);
 
-    double xAt(int i) => n == 1 ? size.width / 2 : i * (size.width / (n - 1));
-    double yAt(int v) => maxValue == 0 ? baseY : baseY - (v / maxValue) * plotH;
+    double xAt(int i) =>
+        n == 1 ? plotLeft + plotW / 2 : plotLeft + i * (plotW / (n - 1));
 
     final pts = [
       for (var i = 0; i < n; i++) Offset(xAt(i), yAt(points[i].value)),
@@ -301,5 +376,7 @@ class _AreaChartPainter extends CustomPainter {
       old.labelStyle != labelStyle ||
       old.peakLabelStyle != peakLabelStyle ||
       old.markerRing != markerRing ||
-      old.textScaler != textScaler;
+      old.textScaler != textScaler ||
+      old.yAxisTicks != yAxisTicks ||
+      old.yAxisLabelBuilder != yAxisLabelBuilder;
 }

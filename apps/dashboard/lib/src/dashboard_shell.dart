@@ -347,14 +347,22 @@ class _DashboardShellState extends State<DashboardShell> {
                       key: const Key('dashboard-bottom-nav'),
                       selectedIndex: _index,
                       onDestinationSelected: _select,
+                      // RF-132 (Codex review): ten destinations at phone width
+                      // leave no room to render any label unclipped, so the bar
+                      // is deliberately ICON-ONLY. NavigationBar keeps each
+                      // destination's label + selected state in its semantics
+                      // ("<label>, Tab N of 10") even with the label hidden,
+                      // and the tooltip covers hover/long-press; selection
+                      // stays visible via the filled icon + indicator pill.
                       labelBehavior:
-                          NavigationDestinationLabelBehavior.onlyShowSelected,
+                          NavigationDestinationLabelBehavior.alwaysHide,
                       destinations: _destinations(l10n)
                           .map(
                             (d) => NavigationDestination(
                               icon: Icon(d.icon),
                               selectedIcon: Icon(d.selectedIcon),
                               label: d.label,
+                              tooltip: d.label,
                             ),
                           )
                           .toList(),
@@ -800,16 +808,24 @@ class _SideNav extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // RF-132: a stronger, never-truncated brand area — the short product
+          // wordmark with the surface tagline beneath it (the previous long
+          // app title ellipsized inside the rail), and a touch more air above
+          // the navigation.
           Padding(
             padding: EdgeInsetsDirectional.fromSTEB(
               side,
               RestoflowSpacing.xl,
               side,
-              RestoflowSpacing.lg,
+              RestoflowSpacing.xl,
             ),
             child: compact
                 ? const Center(child: RestoflowBrandMark(size: 40))
-                : RestoflowBrandMark(size: 42, title: l10n.dashboardAppTitle),
+                : RestoflowBrandMark(
+                    size: 42,
+                    title: l10n.dashboardBrandName,
+                    tagline: l10n.dashboardBrandTagline,
+                  ),
           ),
           Expanded(
             child: ListView(
@@ -897,7 +913,17 @@ class _SideNavTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected ? kRestoflowSeedColor : Colors.transparent,
         borderRadius: radius,
-        boxShadow: selected ? RestoflowShadows.sm : null,
+        // RF-132: the active pill's soft shadow is brand-green tinted (the
+        // reference's restrained glow) rather than the neutral card shadow.
+        boxShadow: selected
+            ? const [
+                BoxShadow(
+                  color: Color(0x521B7A52),
+                  offset: Offset(0, 4),
+                  blurRadius: 12,
+                ),
+              ]
+            : null,
       ),
       padding: EdgeInsetsDirectional.symmetric(
         horizontal: compact ? RestoflowSpacing.sm : RestoflowSpacing.md,
@@ -987,11 +1013,14 @@ class _RailFooter extends StatelessWidget {
         RestoflowSpacing.md,
       ),
       padding: EdgeInsets.all(
-        compact ? RestoflowSpacing.xs : RestoflowSpacing.sm,
+        compact ? RestoflowSpacing.xs : RestoflowSpacing.md,
       ),
+      // RF-132: the reference's account card — the warm surface gains a
+      // hairline outline so it reads as a deliberate card, not a tint.
       decoration: BoxDecoration(
         color: kRestoflowCanvas,
         borderRadius: BorderRadius.circular(RestoflowRadii.md),
+        border: Border.all(color: kRestoflowHairline),
       ),
       child: compact
           ? Center(child: avatar)

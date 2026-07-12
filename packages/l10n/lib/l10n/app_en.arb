@@ -112,6 +112,14 @@
   "@dashboardAppTitle": {
     "description": "Window/app title for the owner/manager dashboard app."
   },
+  "dashboardBrandName": "RestoFlow",
+  "@dashboardBrandName": {
+    "description": "The short product wordmark shown in the dashboard side-rail brand lockup (RF-132)."
+  },
+  "dashboardBrandTagline": "Dashboard",
+  "@dashboardBrandTagline": {
+    "description": "The muted tagline under the side-rail wordmark identifying this surface (RF-132)."
+  },
   "adminAppTitle": "RestoFlow Admin",
   "@adminAppTitle": {
     "description": "Window/app title for the platform admin app."
@@ -2065,6 +2073,11 @@
   "@setupAddPrinter": {"description": "Checklist action that jumps to the Printers tab."},
   "setupCreatePin": "Create staff PIN",
   "@setupCreatePin": {"description": "Checklist action that jumps to the Staff tab."},
+  "setupMoreSteps": "{count, plural, =1{1 more setup step} other{{count} more setup steps}}",
+  "@setupMoreSteps": {
+    "description": "RF-132: title of the compact disclosure holding the pending setup steps beyond the first, naming their exact count.",
+    "placeholders": {"count": {"type": "int"}}
+  },
   "@setupReady": {"description": "Setup success banner when the readiness checks pass."},
   "printersTitle": "Printers",
   "@printersTitle": {"description": "Printers page title."},

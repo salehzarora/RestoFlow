@@ -315,6 +315,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardAppTitle => 'RestoFlow Dashboard';
 
   @override
+  String get dashboardBrandName => 'RestoFlow';
+
+  @override
+  String get dashboardBrandTagline => 'Dashboard';
+
+  @override
   String get adminAppTitle => 'RestoFlow Admin';
 
   @override
@@ -2748,6 +2754,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get setupCreatePin => 'Create staff PIN';
+
+  @override
+  String setupMoreSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more setup steps',
+      one: '1 more setup step',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get printersTitle => 'Printers';

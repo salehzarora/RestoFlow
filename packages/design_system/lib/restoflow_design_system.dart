@@ -31,6 +31,7 @@ export 'src/components/page_header.dart';
 export 'src/components/rank_row.dart';
 export 'src/components/readiness_strip.dart';
 export 'src/components/section_card.dart';
+export 'src/components/segmented_control.dart';
 export 'src/components/state_view.dart';
 export 'src/components/status_pill.dart';
 export 'src/components/step_tile.dart';
