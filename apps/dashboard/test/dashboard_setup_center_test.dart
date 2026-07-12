@@ -116,6 +116,7 @@ Future<void> _pump(
   List<MenuItem>? menuItems,
   PrintersSnapshot? printers,
   void Function(String)? onOpen,
+  Locale? locale,
 }) async {
   tester.view.physicalSize = const Size(1400, 2200);
   tester.view.devicePixelRatio = 1.0;
@@ -123,6 +124,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
+      locale: locale,
       localizationsDelegates: restoflowLocalizationsDelegates,
       supportedLocales: kSupportedLocales,
       home: Scaffold(
@@ -201,8 +203,12 @@ void main() {
     expect(find.text('Setup'), findsOneWidget);
     // Four readiness stat chips now: menu + devices + printers + staff PINs.
     expect(find.textContaining('0/0'), findsNWidgets(4));
+    // RF-132: the first step is the prominent warning; the rest live behind
+    // the compact disclosure — expand it to reach every remaining step.
     expect(find.textContaining('No menu items yet'), findsOneWidget);
     expect(find.text('Add your first menu item'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('setup-more-steps')));
+    await tester.pumpAndSettle();
     expect(find.textContaining('No POS device yet'), findsOneWidget);
     expect(find.text('Create POS device'), findsOneWidget);
     expect(find.textContaining('No kitchen display yet'), findsOneWidget);
@@ -226,6 +232,10 @@ void main() {
       ],
       staff: const [_staffWithPin],
     );
+    // The pairing step sits behind the disclosure (the missing kitchen
+    // display is the higher-priority prominent warning) — expand to it.
+    await tester.tap(find.byKey(const Key('setup-more-steps')));
+    await tester.pumpAndSettle();
     expect(find.textContaining('No device is paired yet'), findsOneWidget);
     // The concrete instruction the owner asked for.
     expect(
@@ -278,6 +288,10 @@ void main() {
       menuItems: const [],
       onOpen: opened.add,
     );
+    // RF-132: expand the disclosure so every remaining step's action is
+    // reachable, then verify each original callback still fires.
+    await tester.tap(find.byKey(const Key('setup-more-steps')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Add your first menu item'));
     await tester.tap(find.text('Create POS device'));
     await tester.tap(find.text('Create kitchen display'));
@@ -315,12 +329,127 @@ void main() {
         ),
       ],
     );
+    // The missing printers are the prominent warning; the staff-PIN step sits
+    // behind the disclosure — expand to it.
+    await tester.tap(find.byKey(const Key('setup-more-steps')));
+    await tester.pumpAndSettle();
     expect(
       find.textContaining('No staff member has a PIN yet'),
       findsOneWidget,
     );
     expect(find.text('Create staff PIN'), findsOneWidget);
   });
+
+  // ── RF-132 (Codex review): the pending-steps disclosure ────────────────────
+
+  testWidgets('RF-132: only the first pending step is prominent; the '
+      'disclosure names the exact remaining count', (tester) async {
+    // Empty workspace => 5 pending steps: menu, POS, KDS, printers, staff PIN.
+    await _pump(
+      tester,
+      devices: const [],
+      staff: const [],
+      menuItems: const [],
+    );
+    // Prominent: ONLY the first (menu) step.
+    expect(find.textContaining('No menu items yet'), findsOneWidget);
+    expect(find.textContaining('No POS device yet'), findsNothing);
+    expect(find.textContaining('No kitchen display yet'), findsNothing);
+    expect(find.textContaining('No printers configured yet'), findsNothing);
+    expect(find.textContaining('No staff member has a PIN yet'), findsNothing);
+    // The disclosure is present and its count is exact (4 remaining).
+    expect(find.byKey(const Key('setup-more-steps')), findsOneWidget);
+    expect(find.text('4 more setup steps'), findsOneWidget);
+  });
+
+  testWidgets('RF-132: expanding the disclosure exposes EVERY remaining step '
+      'in the original order and every callback still fires', (tester) async {
+    final opened = <String>[];
+    await _pump(
+      tester,
+      devices: const [],
+      staff: const [],
+      menuItems: const [],
+      onOpen: opened.add,
+    );
+    await tester.tap(find.byKey(const Key('setup-more-steps')));
+    await tester.pumpAndSettle();
+
+    // All four remaining steps are now exposed…
+    final remaining = <String>[
+      'No POS device yet',
+      'No kitchen display yet',
+      'No printers configured yet',
+      'No staff member has a PIN yet',
+    ];
+    for (final title in remaining) {
+      expect(find.textContaining(title), findsOneWidget);
+    }
+    // …in their original order (top to bottom).
+    double topOf(String title) =>
+        tester.getTopLeft(find.textContaining(title)).dy;
+    for (var i = 1; i < remaining.length; i++) {
+      expect(
+        topOf(remaining[i - 1]),
+        lessThan(topOf(remaining[i])),
+        reason: '"${remaining[i - 1]}" precedes "${remaining[i]}"',
+      );
+    }
+    // Every original action still navigates (prominent + all disclosed).
+    await tester.tap(find.text('Add your first menu item'));
+    await tester.tap(find.text('Create POS device'));
+    await tester.tap(find.text('Create kitchen display'));
+    await tester.tap(find.text('Add printer'));
+    await tester.ensureVisible(find.text('Create staff PIN'));
+    await tester.tap(find.text('Create staff PIN'));
+    expect(opened, ['menu', 'devices', 'devices', 'printers', 'staff']);
+  });
+
+  testWidgets('RF-132: a single pending step shows only its warning — no '
+      'disclosure', (tester) async {
+    // Only the menu step is pending (everything else is satisfied).
+    await _pump(
+      tester,
+      devices: const [_activeDevice, _activeKds],
+      staff: const [_staffWithPin],
+      menuItems: [_menuItem(isActive: false)],
+      printers: _onePrinter,
+    );
+    expect(find.textContaining('No menu items yet'), findsOneWidget);
+    expect(find.byKey(const Key('setup-more-steps')), findsNothing);
+  });
+
+  testWidgets('RF-132: a fully ready branch shows no warnings and no '
+      'disclosure', (tester) async {
+    await _pump(
+      tester,
+      devices: const [_activeDevice, _activeKds],
+      staff: const [_staffWithPin],
+      menuItems: [_menuItem(isActive: true)],
+      printers: _onePrinter,
+    );
+    expect(find.text('Branch ready for service'), findsOneWidget);
+    expect(find.byKey(const Key('setup-more-steps')), findsNothing);
+    expect(find.textContaining('No menu items yet'), findsNothing);
+  });
+
+  for (final locale in const [Locale('ar'), Locale('he'), Locale('en')]) {
+    testWidgets('RF-132: the prominent warning + expanded disclosure render in '
+        '${locale.languageCode} without overflow', (tester) async {
+      await _pump(
+        tester,
+        devices: const [],
+        staff: const [],
+        menuItems: const [],
+        locale: locale,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const Key('setup-more-steps')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('setup-more-steps')), findsOneWidget);
+    });
+  }
 
   testWidgets('LIVE-UX-001: a REVOKED-only POS does not satisfy setup — it '
       'still prompts to create a POS (revoked is not counted)', (tester) async {

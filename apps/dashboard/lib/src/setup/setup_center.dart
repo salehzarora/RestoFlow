@@ -242,11 +242,17 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
 
   /// The guided checklist, in the order a fresh workspace should follow:
   /// menu -> POS device -> kitchen display -> pair them -> printer -> PIN.
-  /// Each pending step is a numbered tile carrying the button that opens the
-  /// fixing tab; a fully ready branch shows the success banner instead.
+  /// RF-132 (Codex review): only the HIGHEST-priority pending step renders as
+  /// the prominent full-width warning row; any remaining steps live in a
+  /// compact expandable disclosure that names their exact count and, when
+  /// opened, exposes every remaining step in its original order with its
+  /// original action/callback. Conditions, order, wording, and navigation
+  /// callbacks are unchanged; a single pending step shows just its warning
+  /// (no disclosure); a fully ready branch shows no rows. Expanding is a
+  /// purely local presentation toggle — it reads and mutates no data.
   List<Widget> _nextSteps(AppLocalizations l10n, _Counts c, bool loading) {
     if (loading) return const [];
-    final steps = <Widget>[];
+    final steps = <_SetupStepData>[];
     void add(
       String title, {
       String? description,
@@ -254,13 +260,11 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
       VoidCallback? onAction,
     }) {
       steps.add(
-        RestoflowStepTile(
-          index: steps.length + 1,
+        _SetupStepData(
           title: title,
           description: description,
-          action: (actionLabel == null || onAction == null)
-              ? null
-              : TextButton(onPressed: onAction, child: Text(actionLabel)),
+          actionLabel: actionLabel,
+          onAction: onAction,
         ),
       );
     }
@@ -312,6 +316,127 @@ class _DashboardSetupCenterState extends State<DashboardSetupCenter> {
     // A fully-ready branch shows no steps — the readiness strip's "Branch ready
     // for service" headline is the single ready indicator (no redundant banner).
     if (steps.isEmpty) return const [];
-    return [const SizedBox(height: RestoflowSpacing.md), ...steps];
+    final rest = steps.sublist(1);
+    return [
+      const SizedBox(height: RestoflowSpacing.md),
+      _SetupWarningRow(step: steps.first),
+      if (rest.isNotEmpty) ...[
+        const SizedBox(height: RestoflowSpacing.sm),
+        _MoreStepsDisclosure(steps: rest),
+      ],
+    ];
+  }
+}
+
+/// The data of one pending setup step (RF-132): the existing message,
+/// optional how-to description, and the fixing action + navigation callback.
+class _SetupStepData {
+  const _SetupStepData({
+    required this.title,
+    required this.description,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String title;
+  final String? description;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+}
+
+/// RF-132 — one compact setup warning row: the warning-toned container with
+/// the step message (plus its optional how-to description) and the outlined
+/// action button that jumps to the fixing tab. Pure presentation over the
+/// setup center's existing step data; RTL-safe (Row mirrors, directional
+/// padding via the shared banner).
+class _SetupWarningRow extends StatelessWidget {
+  const _SetupWarningRow({required this.step});
+
+  final _SetupStepData step;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final warning = RestoflowTone.warning.styleOf(theme);
+    final label = step.actionLabel;
+    final onTap = step.onAction;
+    final desc = step.description;
+    return RestoflowNoticeBanner(
+      tone: RestoflowTone.warning,
+      // With a description the message becomes the bold lead line and the
+      // description the body; a description-less step is a single body line.
+      title: desc == null ? null : step.title,
+      body: desc ?? step.title,
+      action: (label == null || onTap == null)
+          ? null
+          : OutlinedButton(
+              onPressed: onTap,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: warning.onContainer,
+                side: BorderSide(color: warning.accent),
+              ),
+              child: Text(label),
+            ),
+    );
+  }
+}
+
+/// RF-132 (Codex review) — the compact disclosure holding every pending step
+/// beyond the first: a quiet bordered row naming the exact remaining-step
+/// count that expands to the full remaining list (original order, original
+/// actions). Purely local presentation state — expanding/collapsing touches
+/// no repository or readiness data and needs no audit event.
+class _MoreStepsDisclosure extends StatelessWidget {
+  const _MoreStepsDisclosure({required this.steps});
+
+  /// The pending steps beyond the prominent first one, in original order.
+  final List<_SetupStepData> steps;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final warning = RestoflowTone.warning.styleOf(theme);
+    // Material (not a decorated Container) so the tile's ink renders on the
+    // card surface.
+    return Material(
+      color: theme.colorScheme.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: kRestoflowHairline),
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: Theme(
+        // Drop the default ExpansionTile dividers so it reads as one card.
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: const Key('setup-more-steps'),
+          leading: Icon(
+            Icons.warning_amber_outlined,
+            size: RestoflowIconSizes.md,
+            color: warning.accent,
+          ),
+          title: Text(
+            l10n.setupMoreSteps(steps.length),
+            style: theme.textTheme.titleSmall,
+          ),
+          tilePadding: const EdgeInsetsDirectional.symmetric(
+            horizontal: RestoflowSpacing.md,
+          ),
+          childrenPadding: const EdgeInsetsDirectional.fromSTEB(
+            RestoflowSpacing.md,
+            0,
+            RestoflowSpacing.md,
+            RestoflowSpacing.md,
+          ),
+          children: [
+            for (var i = 0; i < steps.length; i++) ...[
+              if (i > 0) const SizedBox(height: RestoflowSpacing.sm),
+              _SetupWarningRow(step: steps[i]),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -700,6 +700,18 @@ abstract class AppLocalizations {
   /// **'RestoFlow Dashboard'**
   String get dashboardAppTitle;
 
+  /// The short product wordmark shown in the dashboard side-rail brand lockup (RF-132).
+  ///
+  /// In en, this message translates to:
+  /// **'RestoFlow'**
+  String get dashboardBrandName;
+
+  /// The muted tagline under the side-rail wordmark identifying this surface (RF-132).
+  ///
+  /// In en, this message translates to:
+  /// **'Dashboard'**
+  String get dashboardBrandTagline;
+
   /// Window/app title for the platform admin app.
   ///
   /// In en, this message translates to:
@@ -5193,6 +5205,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create staff PIN'**
   String get setupCreatePin;
+
+  /// RF-132: title of the compact disclosure holding the pending setup steps beyond the first, naming their exact count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more setup step} other{{count} more setup steps}}'**
+  String setupMoreSteps(int count);
 
   /// Printers page title.
   ///

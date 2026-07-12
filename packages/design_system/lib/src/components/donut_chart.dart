@@ -74,25 +74,34 @@ class RestoflowDonutChart extends StatelessWidget {
             ),
           ),
           if (centerLabel != null || centerSub != null)
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (centerLabel case final c?)
-                  Text(
-                    c,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: kRestoflowInk,
-                    ),
-                  ),
-                if (centerSub case final s?)
-                  Text(
-                    s,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
+            // The centre text lives INSIDE the ring: cap it to the hole and
+            // scale down gracefully (RF-132) so large OS text scales can never
+            // overflow the chart.
+            SizedBox.square(
+              dimension: (size - ringWidth * 2 - 8).clamp(0.0, size),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (centerLabel case final c?)
+                      Text(
+                        c,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: kRestoflowInk,
+                        ),
+                      ),
+                    if (centerSub case final s?)
+                      Text(
+                        s,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
         ],
       ),

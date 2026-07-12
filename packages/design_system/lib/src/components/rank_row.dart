@@ -86,10 +86,17 @@ class RestoflowRankRow extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: RestoflowSpacing.sm),
-                    Text(
-                      meta,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                    // Flexible + ellipsis (RF-132): at large OS text scales
+                    // the meta run must give way instead of overflowing the
+                    // row horizontally.
+                    Flexible(
+                      child: Text(
+                        meta,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

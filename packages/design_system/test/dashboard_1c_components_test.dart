@@ -168,8 +168,12 @@ void main() {
       expect(find.text('Branch ready for service'), findsOneWidget);
       expect(find.text('Finishing setup'), findsOneWidget);
       expect(find.text('100%'), findsOneWidget);
-      expect(find.text('Menu 4/4'), findsOneWidget);
-      expect(find.text('Devices 9/10'), findsOneWidget);
+      // RF-132: each stat box renders the label over its own done/total count
+      // (previously one concatenated 'Menu 4/4' chip text).
+      expect(find.text('Menu'), findsOneWidget);
+      expect(find.text('4/4'), findsOneWidget);
+      expect(find.text('Devices'), findsOneWidget);
+      expect(find.text('9/10'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

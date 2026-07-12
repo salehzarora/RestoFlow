@@ -312,6 +312,12 @@ class AppLocalizationsHe extends AppLocalizations {
   String get dashboardAppTitle => 'רסטופלו - לוח בקרה';
 
   @override
+  String get dashboardBrandName => 'רסטופלו';
+
+  @override
+  String get dashboardBrandTagline => 'לוח בקרה';
+
+  @override
   String get adminAppTitle => 'רסטופלו - ניהול';
 
   @override
@@ -2709,6 +2715,18 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get setupCreatePin => 'יצירת קוד PIN לעובד';
+
+  @override
+  String setupMoreSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count שלבי הגדרה נוספים',
+      two: 'שני שלבי הגדרה נוספים',
+      one: 'שלב הגדרה נוסף אחד',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get printersTitle => 'מדפסות';
