@@ -130,8 +130,14 @@ void main() {
     final l10n = await _l10n(const Locale('en'));
     await _pump(tester, size: const Size(1320, 1600));
 
-    // Orders (index 7) opens the order-history surface.
+    // Orders (index 7) opens the Orders area, landing on the ACTIVE-ORDERS
+    // operations centre (ACTIVE-ORDERS-001); the History view is one tab away
+    // in the SAME destination (no duplicate nav entry).
     await tester.tap(_railLabel(l10n.dashboardNavOrders));
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.ordersActiveTitle), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('orders-tab-history')));
     await tester.pumpAndSettle();
     expect(find.text(l10n.ordersHistoryTitle), findsWidgets);
 

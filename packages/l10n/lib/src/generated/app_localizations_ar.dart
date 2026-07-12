@@ -3703,4 +3703,69 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posBluetoothNotPaired =>
       'هذه الطابعة غير مقترنة. أعد إقران الطابعة من إعدادات البلوتوث ثم حاول مجددًا.';
+
+  @override
+  String get ordersTabActive => 'الطلبات النشطة';
+
+  @override
+  String get ordersTabHistory => 'السجل';
+
+  @override
+  String get ordersActiveTitle => 'الطلبات النشطة';
+
+  @override
+  String get ordersActiveSubtitle => 'الطلبات المفتوحة الآن';
+
+  @override
+  String get ordersActiveEmpty => 'لا توجد طلبات نشطة';
+
+  @override
+  String get ordersActiveEmptyHint =>
+      'تظهر الطلبات هنا فور إرسالها، وتبقى حتى إغلاقها.';
+
+  @override
+  String get ordersActiveDemoNotice =>
+      'طلبات نشطة تجريبية — غير محمّلة من الخادم.';
+
+  @override
+  String get ordersActiveSummaryTotal => 'نشطة الآن';
+
+  @override
+  String get ordersActiveSummaryAwaitingClose => 'بانتظار الإغلاق';
+
+  @override
+  String get ordersActiveStageAll => 'كل المراحل';
+
+  @override
+  String get ordersActiveAgeLabel => 'مفتوح منذ';
+
+  @override
+  String ordersActiveAgeMinutes(int minutes) {
+    return '$minutes د';
+  }
+
+  @override
+  String ordersActiveAgeHours(int hours, int minutes) {
+    return '$hours س $minutes د';
+  }
+
+  @override
+  String get ordersActiveNoDueTimeNotice =>
+      'لا يوجد وقت تسليم مُعرَّف، لذلك لا يُوسم أي طلب بالتأخير — تُعرض مدة فتح الطلب فقط.';
+
+  @override
+  String get ordersActiveAutoRefresh => 'تحديث تلقائي';
+
+  @override
+  String ordersActiveLastUpdated(String time) {
+    return 'آخر تحديث $time';
+  }
+
+  @override
+  String ordersActiveTruncated(int shown, int total) {
+    return 'يتم عرض أقدم $shown من أصل $total طلبًا نشطًا.';
+  }
+
+  @override
+  String get ordersBranchAll => 'كل الفروع المسموح بها';
 }

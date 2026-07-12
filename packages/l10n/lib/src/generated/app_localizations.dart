@@ -7011,6 +7011,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This printer is not paired. Pair it in Android Bluetooth settings, then try again.'**
   String get posBluetoothNotPaired;
+
+  /// ACTIVE-ORDERS-001: the Orders area tab showing orders that are still open.
+  ///
+  /// In en, this message translates to:
+  /// **'Active orders'**
+  String get ordersTabActive;
+
+  /// ACTIVE-ORDERS-001: the Orders area tab showing the completed-order history.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get ordersTabHistory;
+
+  /// ACTIVE-ORDERS-001 active-orders page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Active orders'**
+  String get ordersActiveTitle;
+
+  /// ACTIVE-ORDERS-001 active-orders page subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders that are still open right now'**
+  String get ordersActiveSubtitle;
+
+  /// ACTIVE-ORDERS-001 empty state title — nothing is currently open.
+  ///
+  /// In en, this message translates to:
+  /// **'No active orders'**
+  String get ordersActiveEmpty;
+
+  /// ACTIVE-ORDERS-001 empty state body.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders appear here as soon as they are submitted, and stay until they are closed.'**
+  String get ordersActiveEmptyHint;
+
+  /// ACTIVE-ORDERS-001 demo-mode banner.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo active orders — not loaded from a backend.'**
+  String get ordersActiveDemoNotice;
+
+  /// ACTIVE-ORDERS-001 summary tile: total orders currently active in scope.
+  ///
+  /// In en, this message translates to:
+  /// **'Active now'**
+  String get ordersActiveSummaryTotal;
+
+  /// ACTIVE-ORDERS-001 summary tile: orders that are served but not yet closed by the lifecycle.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting close'**
+  String get ordersActiveSummaryAwaitingClose;
+
+  /// ACTIVE-ORDERS-001 stage filter: no stage filter.
+  ///
+  /// In en, this message translates to:
+  /// **'All stages'**
+  String get ordersActiveStageAll;
+
+  /// ACTIVE-ORDERS-001 label above the elapsed time an order has been open.
+  ///
+  /// In en, this message translates to:
+  /// **'Open for'**
+  String get ordersActiveAgeLabel;
+
+  /// ACTIVE-ORDERS-001 elapsed age under one hour.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String ordersActiveAgeMinutes(int minutes);
+
+  /// ACTIVE-ORDERS-001 elapsed age of an hour or more.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h {minutes} min'**
+  String ordersActiveAgeHours(int hours, int minutes);
+
+  /// ACTIVE-ORDERS-001 honest notice: the schema has no promised/due timestamp, so lateness cannot be reported and elapsed time is shown instead.
+  ///
+  /// In en, this message translates to:
+  /// **'No promised time is set up, so orders are never marked late — only how long they have been open.'**
+  String get ordersActiveNoDueTimeNotice;
+
+  /// ACTIVE-ORDERS-001 toggle that turns the opt-in 30-second refresh on or off.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-refresh'**
+  String get ordersActiveAutoRefresh;
+
+  /// ACTIVE-ORDERS-001 stamp showing when the board was last read.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {time}'**
+  String ordersActiveLastUpdated(String time);
+
+  /// ACTIVE-ORDERS-001 honest notice when the server page cap bites.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the oldest {shown} of {total} active orders.'**
+  String ordersActiveTruncated(int shown, int total);
+
+  /// ACTIVE-ORDERS-001 branch filter: every branch the caller is permitted to see.
+  ///
+  /// In en, this message translates to:
+  /// **'All permitted branches'**
+  String get ordersBranchAll;
 }
 
 class _AppLocalizationsDelegate

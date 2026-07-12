@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_dashboard/main.dart';
+import 'package:restoflow_dashboard/src/orders/active_orders_screen.dart';
 import 'package:restoflow_dashboard/src/orders/order_history_screen.dart';
+import 'package:restoflow_dashboard/src/orders/orders_screen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-/// ORDERS-HISTORY-001 — the Orders tab is wired into the dashboard nav and opens
-/// the order-history surface (demo mode).
+/// ORDERS-HISTORY-001 + ACTIVE-ORDERS-001 — the Orders tab is wired into the
+/// dashboard nav as ONE destination holding both views: it lands on the active
+/// operations centre, and the order-history surface is one tab away (demo mode).
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
 
@@ -23,19 +26,39 @@ Future<void> _pump(WidgetTester tester) async {
 
 void main() {
   testWidgets(
-    'the dashboard nav exposes Orders and opens the history surface',
+    'the dashboard nav exposes Orders and opens the active operations centre',
     (tester) async {
       final l10n = await _en();
       await _pump(tester);
 
       expect(find.text(l10n.dashboardNavOrders), findsWidgets);
-      expect(find.byType(OrderHistoryScreen), findsNothing);
+      expect(find.byType(OrdersScreen), findsNothing);
 
       await tester.tap(find.text(l10n.dashboardNavOrders).first);
       await tester.pumpAndSettle();
 
-      expect(find.byType(OrderHistoryScreen), findsOneWidget);
-      expect(find.text(l10n.ordersHistoryTitle), findsWidgets);
+      expect(find.byType(OrdersScreen), findsOneWidget);
+      expect(find.byType(ActiveOrdersView), findsOneWidget);
+      expect(find.text(l10n.ordersActiveTitle), findsWidgets);
     },
   );
+
+  testWidgets('the History tab of the SAME destination opens order history', (
+    tester,
+  ) async {
+    final l10n = await _en();
+    await _pump(tester);
+
+    await tester.tap(find.text(l10n.dashboardNavOrders).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('orders-tab-history')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OrderHistoryView), findsOneWidget);
+    expect(find.byType(ActiveOrdersView), findsNothing);
+    expect(find.text(l10n.ordersHistoryTitle), findsWidgets);
+    // Existing history behaviour is intact: the filters and the demo rows.
+    expect(find.byKey(const Key('orders-range-today')), findsOneWidget);
+    expect(find.byKey(const Key('order-card-demo-ord-1001')), findsOneWidget);
+  });
 }

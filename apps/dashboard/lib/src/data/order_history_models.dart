@@ -118,6 +118,8 @@ class OrderHistoryRow {
     this.staffName,
     this.paymentMethod,
     this.paidAmountMinor,
+    this.createdAtUtc,
+    this.branchName,
   });
 
   final String orderId;
@@ -126,6 +128,9 @@ class OrderHistoryRow {
   final String orderCode;
   final String status;
   final String orderType;
+
+  /// The BRANCH-LOCAL display string the backend already formatted (the order's
+  /// own branch timezone, not the viewer's device zone).
   final String createdAtLabel;
   final int itemCount;
   final int grandTotalMinor;
@@ -139,6 +144,18 @@ class OrderHistoryRow {
   final String? staffName;
   final String? paymentMethod;
   final int? paidAmountMinor;
+
+  /// The ABSOLUTE instant the order was created (server insert time, UTC) —
+  /// the only sound input for an elapsed "open for N minutes" age, and the
+  /// authoritative age timestamp (`orders.created_at`; there is no
+  /// submitted_at/ready_at column, and `updated_at` bumps on every status push).
+  ///
+  /// ONLY the active-orders board (ACTIVE-ORDERS-001) receives it; the history
+  /// list leaves it null, and a null age is NEVER rendered as a fabricated 0.
+  final DateTime? createdAtUtc;
+
+  /// The order's branch, for the all-branches board. Null on the history list.
+  final String? branchName;
 }
 
 /// One page of history rows + the keyset continuation.

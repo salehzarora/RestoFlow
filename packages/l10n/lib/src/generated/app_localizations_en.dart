@@ -3727,4 +3727,69 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posBluetoothNotPaired =>
       'This printer is not paired. Pair it in Android Bluetooth settings, then try again.';
+
+  @override
+  String get ordersTabActive => 'Active orders';
+
+  @override
+  String get ordersTabHistory => 'History';
+
+  @override
+  String get ordersActiveTitle => 'Active orders';
+
+  @override
+  String get ordersActiveSubtitle => 'Orders that are still open right now';
+
+  @override
+  String get ordersActiveEmpty => 'No active orders';
+
+  @override
+  String get ordersActiveEmptyHint =>
+      'Orders appear here as soon as they are submitted, and stay until they are closed.';
+
+  @override
+  String get ordersActiveDemoNotice =>
+      'Demo active orders — not loaded from a backend.';
+
+  @override
+  String get ordersActiveSummaryTotal => 'Active now';
+
+  @override
+  String get ordersActiveSummaryAwaitingClose => 'Awaiting close';
+
+  @override
+  String get ordersActiveStageAll => 'All stages';
+
+  @override
+  String get ordersActiveAgeLabel => 'Open for';
+
+  @override
+  String ordersActiveAgeMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String ordersActiveAgeHours(int hours, int minutes) {
+    return '$hours h $minutes min';
+  }
+
+  @override
+  String get ordersActiveNoDueTimeNotice =>
+      'No promised time is set up, so orders are never marked late — only how long they have been open.';
+
+  @override
+  String get ordersActiveAutoRefresh => 'Auto-refresh';
+
+  @override
+  String ordersActiveLastUpdated(String time) {
+    return 'Updated $time';
+  }
+
+  @override
+  String ordersActiveTruncated(int shown, int total) {
+    return 'Showing the oldest $shown of $total active orders.';
+  }
+
+  @override
+  String get ordersBranchAll => 'All permitted branches';
 }

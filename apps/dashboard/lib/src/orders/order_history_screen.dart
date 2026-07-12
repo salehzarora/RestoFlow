@@ -18,34 +18,16 @@ import '../format/money_format.dart';
 import '../state/order_history_providers.dart';
 import 'order_detail_sheet.dart';
 
-class OrderHistoryScreen extends ConsumerStatefulWidget {
+/// The standalone Order-history surface: the page header + the [OrderHistoryView]
+/// body. Kept intact so it can be mounted on its own; the tabbed Orders area
+/// ([OrdersScreen]) mounts the header once and reuses [OrderHistoryView] instead,
+/// so the chrome is never duplicated.
+class OrderHistoryScreen extends ConsumerWidget {
   const OrderHistoryScreen({super.key});
 
   @override
-  ConsumerState<OrderHistoryScreen> createState() => _OrderHistoryScreenState();
-}
-
-class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
-  final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _apply(OrderHistoryQuery Function(OrderHistoryQuery) update) {
-    final notifier = ref.read(orderHistoryQueryProvider.notifier);
-    notifier.state = update(notifier.state);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
-    final query = ref.watch(orderHistoryQueryProvider);
-    final state = ref.watch(orderHistoryControllerProvider);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -72,31 +54,64 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
             ),
           ],
         ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(RestoflowSpacing.lg),
-            children: [
-              if (isDemo)
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(
-                    bottom: RestoflowSpacing.md,
-                  ),
-                  child: RestoflowNoticeBanner(
-                    icon: Icons.science_outlined,
-                    body: l10n.ordersDemoNotice,
-                  ),
-                ),
-              _FilterBar(
-                query: query,
-                searchController: _searchController,
-                onApply: _apply,
-                l10n: l10n,
-              ),
-              const SizedBox(height: RestoflowSpacing.lg),
-              _Body(state: state, l10n: l10n),
-            ],
+        const Expanded(child: OrderHistoryView()),
+      ],
+    );
+  }
+}
+
+/// The order-history BODY (no page header): demo banner + filters + the
+/// paginated list. Mounted by [OrderHistoryScreen] and by the Orders area's
+/// History tab.
+class OrderHistoryView extends ConsumerStatefulWidget {
+  const OrderHistoryView({super.key});
+
+  @override
+  ConsumerState<OrderHistoryView> createState() => _OrderHistoryViewState();
+}
+
+class _OrderHistoryViewState extends ConsumerState<OrderHistoryView> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _apply(OrderHistoryQuery Function(OrderHistoryQuery) update) {
+    final notifier = ref.read(orderHistoryQueryProvider.notifier);
+    notifier.state = update(notifier.state);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+    final query = ref.watch(orderHistoryQueryProvider);
+    final state = ref.watch(orderHistoryControllerProvider);
+
+    return ListView(
+      padding: const EdgeInsets.all(RestoflowSpacing.lg),
+      children: [
+        if (isDemo)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(
+              bottom: RestoflowSpacing.md,
+            ),
+            child: RestoflowNoticeBanner(
+              icon: Icons.science_outlined,
+              body: l10n.ordersDemoNotice,
+            ),
           ),
+        _FilterBar(
+          query: query,
+          searchController: _searchController,
+          onApply: _apply,
+          l10n: l10n,
         ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        _Body(state: state, l10n: l10n),
       ],
     );
   }
