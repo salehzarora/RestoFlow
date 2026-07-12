@@ -92,7 +92,9 @@ Widget _wrap(
   Widget home = const Scaffold(body: ActiveOrdersView()),
 }) => ProviderScope(
   overrides: [
-    runtimeConfigProvider.overrideWithValue(RuntimeConfig.test(isDemoMode: demo)),
+    runtimeConfigProvider.overrideWithValue(
+      RuntimeConfig.test(isDemoMode: demo),
+    ),
     activeOrdersRepositoryProvider.overrideWithValue(repo),
     activeOrdersClockProvider.overrideWithValue(_clock),
     // The detail sheet loads through the history seam — point it at the same
@@ -144,41 +146,47 @@ class _GatedRepo implements ActiveOrdersRepository {
 
 void main() {
   // ===== A. canonical classification ========================================
-  test('A1 the canonical active/terminal partition matches the state machine', () {
-    expect(kActiveOrderStatuses, [
-      'submitted',
-      'accepted',
-      'preparing',
-      'ready',
-      'served',
-    ]);
-    expect(kTerminalOrderStatuses, ['completed', 'cancelled', 'voided']);
-    for (final s in kActiveOrderStatuses) {
-      expect(isActiveOrderStatus(s), isTrue);
-      expect(isTerminalOrderStatus(s), isFalse);
-    }
-    for (final s in kTerminalOrderStatuses) {
-      expect(isTerminalOrderStatus(s), isTrue);
-      expect(isActiveOrderStatus(s), isFalse);
-    }
-    // `draft` is a LOCAL-ONLY pre-state: never active, never terminal.
-    expect(isActiveOrderStatus('draft'), isFalse);
-  });
+  test(
+    'A1 the canonical active/terminal partition matches the state machine',
+    () {
+      expect(kActiveOrderStatuses, [
+        'submitted',
+        'accepted',
+        'preparing',
+        'ready',
+        'served',
+      ]);
+      expect(kTerminalOrderStatuses, ['completed', 'cancelled', 'voided']);
+      for (final s in kActiveOrderStatuses) {
+        expect(isActiveOrderStatus(s), isTrue);
+        expect(isTerminalOrderStatus(s), isFalse);
+      }
+      for (final s in kTerminalOrderStatuses) {
+        expect(isTerminalOrderStatus(s), isTrue);
+        expect(isActiveOrderStatus(s), isFalse);
+      }
+      // `draft` is a LOCAL-ONLY pre-state: never active, never terminal.
+      expect(isActiveOrderStatus('draft'), isFalse);
+    },
+  );
 
-  test('A2 terminal orders are excluded and paid active orders are kept', () async {
-    final snap = await _repo().loadActive(const ActiveOrdersQuery());
-    final codes = snap.rows.map((r) => r.orderId).toList();
-    expect(codes, isNot(contains('t-completed')));
-    expect(codes, isNot(contains('t-voided')));
-    expect(codes, isNot(contains('t-cancelled')));
-    expect(codes, isNot(contains('t-draft')));
-    // A PAID order stays active (payment is a separate axis — D-025).
-    expect(codes, contains('a-ready'));
-    expect(snap.rows.firstWhere((r) => r.orderId == 'a-ready').paid, isTrue);
-    // A SERVED order stays active until the lifecycle closes it.
-    expect(codes, contains('a-served'));
-    expect(snap.rows.length, 5);
-  });
+  test(
+    'A2 terminal orders are excluded and paid active orders are kept',
+    () async {
+      final snap = await _repo().loadActive(const ActiveOrdersQuery());
+      final codes = snap.rows.map((r) => r.orderId).toList();
+      expect(codes, isNot(contains('t-completed')));
+      expect(codes, isNot(contains('t-voided')));
+      expect(codes, isNot(contains('t-cancelled')));
+      expect(codes, isNot(contains('t-draft')));
+      // A PAID order stays active (payment is a separate axis — D-025).
+      expect(codes, contains('a-ready'));
+      expect(snap.rows.firstWhere((r) => r.orderId == 'a-ready').paid, isTrue);
+      // A SERVED order stays active until the lifecycle closes it.
+      expect(codes, contains('a-served'));
+      expect(snap.rows.length, 5);
+    },
+  );
 
   test('A3 rows are FIFO (oldest first)', () async {
     final snap = await _repo().loadActive(const ActiveOrdersQuery());
@@ -288,7 +296,9 @@ void main() {
       await ids(const ActiveOrdersQuery(orderType: OrderTypeFilter.takeaway)),
       ['a-served'],
     );
-    expect(await ids(const ActiveOrdersQuery(search: 'Layla')), ['a-preparing']);
+    expect(await ids(const ActiveOrdersQuery(search: 'Layla')), [
+      'a-preparing',
+    ]);
     expect(
       await ids(
         const ActiveOrdersQuery(
@@ -336,7 +346,9 @@ void main() {
     expect(find.byKey(const Key('active-summary-unpaid')), findsOneWidget);
   });
 
-  testWidgets('C2 elapsed age renders; "late" is never claimed', (tester) async {
+  testWidgets('C2 elapsed age renders; "late" is never claimed', (
+    tester,
+  ) async {
     _sized(tester, 1320);
     final l10n = await _l('en');
     await tester.pumpWidget(_wrap(_repo()));
@@ -348,7 +360,10 @@ void main() {
     // The honest notice is on the surface. The ONLY place the word "late"
     // appears is that notice, saying lateness is NOT reported — there is no
     // late/overdue badge anywhere on a row.
-    expect(find.byKey(const Key('active-orders-no-due-notice')), findsOneWidget);
+    expect(
+      find.byKey(const Key('active-orders-no-due-notice')),
+      findsOneWidget,
+    );
     expect(find.text(l10n.ordersActiveNoDueTimeNotice), findsOneWidget);
     expect(find.textContaining('late'), findsOneWidget); // the notice, only
     expect(find.textContaining('Late'), findsNothing);
@@ -362,7 +377,9 @@ void main() {
     _sized(tester, 1320);
     final l10n = await _l('en');
     await tester.pumpWidget(
-      _wrap(_repo(orders: [_order('a-old', status: 'preparing', minutesAgo: 95)])),
+      _wrap(
+        _repo(orders: [_order('a-old', status: 'preparing', minutesAgo: 95)]),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text(l10n.ordersActiveAgeHours(1, 35)), findsOneWidget);
@@ -558,7 +575,9 @@ void main() {
     );
   });
 
-  testWidgets('F2 the board itself exposes NO mutating control', (tester) async {
+  testWidgets('F2 the board itself exposes NO mutating control', (
+    tester,
+  ) async {
     _sized(tester, 1320);
     final l10n = await _l('en');
     await tester.pumpWidget(_wrap(_repo()));
@@ -588,7 +607,10 @@ void main() {
       await tester.pumpWidget(_wrap(_repo()));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byKey(const Key('active-order-card-a-ready')), findsOneWidget);
+      expect(
+        find.byKey(const Key('active-order-card-a-ready')),
+        findsOneWidget,
+      );
     });
   }
 
@@ -601,9 +623,7 @@ void main() {
       await tester.pumpWidget(_wrap(_repo(), locale: locale));
       await tester.pumpAndSettle();
 
-      final expected = locale == 'en'
-          ? TextDirection.ltr
-          : TextDirection.rtl;
+      final expected = locale == 'en' ? TextDirection.ltr : TextDirection.rtl;
       final direction = Directionality.of(
         tester.element(find.byKey(const Key('active-order-card-a-ready'))),
       );

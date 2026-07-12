@@ -147,68 +147,74 @@ void main() {
     expect(second.paidAmountMinor, 1000);
   });
 
-  test('R2 sends the ROLE-covered scope and the validated filter tokens', () async {
-    final transport = _FakeTransport(_okBody());
+  test(
+    'R2 sends the ROLE-covered scope and the validated filter tokens',
+    () async {
+      final transport = _FakeTransport(_okBody());
 
-    // An org_owner covers the WHOLE org: no restaurant/branch is pinned.
-    await RealActiveOrdersRepository(
-      null,
-      scope: _membership(MembershipRole.orgOwner),
-      transport: transport,
-    ).loadActive(const ActiveOrdersQuery());
-    expect(transport.lastArgs!['p_organization_id'], 'org-1');
-    expect(transport.lastArgs!['p_restaurant_id'], isNull);
-    expect(transport.lastArgs!['p_branch_id'], isNull);
+      // An org_owner covers the WHOLE org: no restaurant/branch is pinned.
+      await RealActiveOrdersRepository(
+        null,
+        scope: _membership(MembershipRole.orgOwner),
+        transport: transport,
+      ).loadActive(const ActiveOrdersQuery());
+      expect(transport.lastArgs!['p_organization_id'], 'org-1');
+      expect(transport.lastArgs!['p_restaurant_id'], isNull);
+      expect(transport.lastArgs!['p_branch_id'], isNull);
 
-    // A manager covers exactly ONE branch — it is pinned, so a sibling branch is
-    // never even requested.
-    await RealActiveOrdersRepository(
-      null,
-      scope: _membership(MembershipRole.manager),
-      transport: transport,
-    ).loadActive(const ActiveOrdersQuery());
-    expect(transport.lastArgs!['p_restaurant_id'], 'rest-1');
-    expect(transport.lastArgs!['p_branch_id'], 'branch-1');
+      // A manager covers exactly ONE branch — it is pinned, so a sibling branch is
+      // never even requested.
+      await RealActiveOrdersRepository(
+        null,
+        scope: _membership(MembershipRole.manager),
+        transport: transport,
+      ).loadActive(const ActiveOrdersQuery());
+      expect(transport.lastArgs!['p_restaurant_id'], 'rest-1');
+      expect(transport.lastArgs!['p_branch_id'], 'branch-1');
 
-    // A picked branch comes from the scope-safe option list.
-    await RealActiveOrdersRepository(
-      null,
-      scope: _membership(MembershipRole.orgOwner),
-      transport: transport,
-    ).loadActive(
-      const ActiveOrdersQuery(
-        branch: AuditBranchOption(
-          branchId: 'branch-9',
-          restaurantId: 'rest-9',
-          label: 'Harbor',
+      // A picked branch comes from the scope-safe option list.
+      await RealActiveOrdersRepository(
+        null,
+        scope: _membership(MembershipRole.orgOwner),
+        transport: transport,
+      ).loadActive(
+        const ActiveOrdersQuery(
+          branch: AuditBranchOption(
+            branchId: 'branch-9',
+            restaurantId: 'rest-9',
+            label: 'Harbor',
+          ),
+          stage: ActiveOrderStageFilter.ready,
+          payment: PaymentFilter.unpaid,
+          orderType: OrderTypeFilter.takeaway,
+          search: '  #02A001  ',
         ),
-        stage: ActiveOrderStageFilter.ready,
-        payment: PaymentFilter.unpaid,
-        orderType: OrderTypeFilter.takeaway,
-        search: '  #02A001  ',
-      ),
-    );
-    expect(transport.lastArgs!['p_restaurant_id'], 'rest-9');
-    expect(transport.lastArgs!['p_branch_id'], 'branch-9');
-    expect(transport.lastArgs!['p_status'], 'ready');
-    expect(transport.lastArgs!['p_payment'], 'unpaid');
-    expect(transport.lastArgs!['p_order_type'], 'takeaway');
-    expect(transport.lastArgs!['p_search'], '#02A001');
-    expect(transport.lastArgs!['p_limit'], 100);
-  });
+      );
+      expect(transport.lastArgs!['p_restaurant_id'], 'rest-9');
+      expect(transport.lastArgs!['p_branch_id'], 'branch-9');
+      expect(transport.lastArgs!['p_status'], 'ready');
+      expect(transport.lastArgs!['p_payment'], 'unpaid');
+      expect(transport.lastArgs!['p_order_type'], 'takeaway');
+      expect(transport.lastArgs!['p_search'], '#02A001');
+      expect(transport.lastArgs!['p_limit'], 100);
+    },
+  );
 
-  test('R3 an unfiltered query sends NULL tokens (never a made-up default)', () async {
-    final transport = _FakeTransport(_okBody());
-    await RealActiveOrdersRepository(
-      null,
-      scope: _membership(MembershipRole.orgOwner),
-      transport: transport,
-    ).loadActive(const ActiveOrdersQuery());
-    expect(transport.lastArgs!['p_status'], isNull);
-    expect(transport.lastArgs!['p_payment'], isNull);
-    expect(transport.lastArgs!['p_order_type'], isNull);
-    expect(transport.lastArgs!['p_search'], isNull);
-  });
+  test(
+    'R3 an unfiltered query sends NULL tokens (never a made-up default)',
+    () async {
+      final transport = _FakeTransport(_okBody());
+      await RealActiveOrdersRepository(
+        null,
+        scope: _membership(MembershipRole.orgOwner),
+        transport: transport,
+      ).loadActive(const ActiveOrdersQuery());
+      expect(transport.lastArgs!['p_status'], isNull);
+      expect(transport.lastArgs!['p_payment'], isNull);
+      expect(transport.lastArgs!['p_order_type'], isNull);
+      expect(transport.lastArgs!['p_search'], isNull);
+    },
+  );
 
   test('R4 FAILS CLOSED with no transport / no scope', () async {
     expect(
@@ -221,30 +227,33 @@ void main() {
     );
   });
 
-  test('R5 a rejected body or a transport failure throws (no demo fallback)', () async {
-    final denied = _FakeTransport(<String, Object?>{
-      'ok': false,
-      'error': 'permission_denied',
-    });
-    await expectLater(
-      RealActiveOrdersRepository(
-        null,
-        scope: _membership(MembershipRole.cashier),
-        transport: denied,
-      ).loadActive(const ActiveOrdersQuery()),
-      throwsA(isA<ActiveOrdersException>()),
-    );
+  test(
+    'R5 a rejected body or a transport failure throws (no demo fallback)',
+    () async {
+      final denied = _FakeTransport(<String, Object?>{
+        'ok': false,
+        'error': 'permission_denied',
+      });
+      await expectLater(
+        RealActiveOrdersRepository(
+          null,
+          scope: _membership(MembershipRole.cashier),
+          transport: denied,
+        ).loadActive(const ActiveOrdersQuery()),
+        throwsA(isA<ActiveOrdersException>()),
+      );
 
-    final broken = _FakeTransport(null, throwOnInvoke: true);
-    await expectLater(
-      RealActiveOrdersRepository(
-        null,
-        scope: _membership(MembershipRole.orgOwner),
-        transport: broken,
-      ).loadActive(const ActiveOrdersQuery()),
-      throwsA(isA<ActiveOrdersException>()),
-    );
-  });
+      final broken = _FakeTransport(null, throwOnInvoke: true);
+      await expectLater(
+        RealActiveOrdersRepository(
+          null,
+          scope: _membership(MembershipRole.orgOwner),
+          transport: broken,
+        ).loadActive(const ActiveOrdersQuery()),
+        throwsA(isA<ActiveOrdersException>()),
+      );
+    },
+  );
 
   test('R6 a malformed row degrades safely (no age fabricated)', () async {
     final transport = _FakeTransport(<String, Object?>{
