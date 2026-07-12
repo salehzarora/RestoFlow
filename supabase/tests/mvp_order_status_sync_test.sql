@@ -20,7 +20,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(32);
+select plan(34);
 
 -- ===== fixtures: org A (POS + cashier session, KDS + kitchen session) ========
 insert into organizations (id, name, slug, default_currency) values
@@ -147,11 +147,30 @@ select ok(
             and new_values ->> 'order_id' = '10000000-0000-0000-0000-00000000a0d1'),
   'the kitchen complete denial is audited (order.status_update_denied)');
 
--- ===== (14-15) cashier served->completed applies =============================
+-- ===== (14-15) D-025 PAYMENT GATE (ORDER-COMPLETION-001): an UNPAID served =====
+--       order CANNOT be completed, even by an authorized cashier. A1 has no
+--       payment yet, so the settlement step is rejected with the stable domain
+--       error order_not_paid and NOTHING is written. (This is the deliberate,
+--       human-approved enforcement of the frozen D-025 rule — the writer
+--       previously completed unpaid orders in violation of it.)
+select ok(
+  (select r ->> 'ok' = 'false' and r ->> 'error' = 'order_not_paid'
+   from app.update_order_status('10000000-0000-0000-0000-00000000c501', '10000000-0000-0000-0000-00000000da11',
+     '10000000-0000-0000-0000-00000000a0d1', 'completed', 'los-st-5b') as r),
+  'D-025: cashier served->completed on an UNPAID order is REJECTED (order_not_paid)');
+select ok(
+  (select o.status = 'served' and o.revision = 5 from orders o where o.id = '10000000-0000-0000-0000-00000000a0d1'),
+  'the unpaid completion attempt wrote NO state change (still served, revision 5)');
+
+-- ---- settle A1: a completed cash payment (D-025 now satisfied). ---------------
+insert into payments (id, organization_id, restaurant_id, branch_id, order_id, device_id, taken_by_employee_profile_id, resolved_membership_id, method, status, amount_minor, tendered_minor, change_minor, currency_code, local_operation_id) values
+  ('10000000-0000-0000-0000-00000000ba01', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-00000000a1b1', '10000000-0000-0000-0000-00000000a0d1', '10000000-0000-0000-0000-00000000da11', '10000000-0000-0000-0000-0000000ef001', '10000000-0000-0000-0000-00000000ab01', 'cash', 'completed', 1000, 1000, 0, 'USD', 'los-pay-1');
+
+-- ===== (16-17) cashier served->completed applies (PAID) =======================
 select is(
   (app.update_order_status('10000000-0000-0000-0000-00000000c501', '10000000-0000-0000-0000-00000000da11',
     '10000000-0000-0000-0000-00000000a0d1', 'completed', 'los-st-6') ->> 'status'),
-  'completed', 'cashier served->completed applies');
+  'completed', 'cashier served->completed applies once the order is PAID');
 select ok(
   (select o.status = 'completed' and o.revision = 6 from orders o where o.id = '10000000-0000-0000-0000-00000000a0d1'),
   'order A1 is persisted at completed with revision 6 across the full lifecycle');

@@ -7119,6 +7119,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All permitted branches'**
   String get ordersBranchAll;
+
+  /// ORDER-COMPLETION-001: the action that closes an eligible served order (moves it to the terminal `completed` state). NOT a payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete order'**
+  String get ordersCompleteAction;
+
+  /// ORDER-COMPLETION-001 confirmation dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete this order?'**
+  String get ordersCompleteConfirmTitle;
+
+  /// ORDER-COMPLETION-001 confirmation body. Shows the safe order reference and states plainly that completion is not a payment.
+  ///
+  /// In en, this message translates to:
+  /// **'This closes {orderCode} and moves it to order history. It does not record a payment.'**
+  String ordersCompleteConfirmBody(String orderCode);
+
+  /// ORDER-COMPLETION-001 confirmation label above the order's current payment state.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get ordersCompletePaymentLabel;
+
+  /// ORDER-COMPLETION-001: why the action is unavailable for an unpaid order (DECISION D-025 — fulfillment closes only once payment is completed).
+  ///
+  /// In en, this message translates to:
+  /// **'This order is unpaid. Record the payment before completing it.'**
+  String get ordersCompleteBlockedUnpaid;
+
+  /// ORDER-COMPLETION-001 success confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Order completed'**
+  String get ordersCompleteSuccess;
+
+  /// ORDER-COMPLETION-001 server refusal: order_not_paid (D-025).
+  ///
+  /// In en, this message translates to:
+  /// **'This order cannot be completed until its payment is recorded.'**
+  String get ordersCompleteErrorNotPaid;
+
+  /// ORDER-COMPLETION-001 server refusal: invalid_transition (not served, or already terminal).
+  ///
+  /// In en, this message translates to:
+  /// **'This order is no longer ready to be completed. Refresh and try again.'**
+  String get ordersCompleteErrorInvalidState;
+
+  /// ORDER-COMPLETION-001 server refusal: permission_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to complete this order.'**
+  String get ordersCompleteErrorDenied;
+
+  /// ORDER-COMPLETION-001 server refusal: revision_mismatch (a stale client).
+  ///
+  /// In en, this message translates to:
+  /// **'Someone else updated this order. Refresh to see the latest state.'**
+  String get ordersCompleteErrorConflict;
+
+  /// ORDER-COMPLETION-001 server refusal: not_found.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is no longer available.'**
+  String get ordersCompleteErrorNotFound;
+
+  /// ORDER-COMPLETION-001 transport failure — the only safely retryable outcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach the server. The order was not changed.'**
+  String get ordersCompleteErrorTransient;
+
+  /// ORDER-COMPLETION-001 retry action, offered ONLY after a transport failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get ordersCompleteRetry;
+
+  /// ORDER-COMPLETION-001 Activity-log safe detail field: the human order reference (#XXXXXX), never the order UUID.
+  ///
+  /// In en, this message translates to:
+  /// **'Order'**
+  String get activityLogFieldOrderCode;
+
+  /// ORDER-COMPLETION-001 Activity-log safe detail field: the order's payment state at completion (paid/unpaid). A state, not a money figure.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get activityLogFieldPaymentStatus;
 }
 
 class _AppLocalizationsDelegate

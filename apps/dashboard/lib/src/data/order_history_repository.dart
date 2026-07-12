@@ -9,6 +9,7 @@
 /// honest loading / error / empty states.
 library;
 
+import 'demo_order_store.dart';
 import 'order_history_models.dart';
 
 /// Loads order-history pages and single-order details for a scope.
@@ -67,13 +68,20 @@ class DemoOrder {
 /// data, no backend. Filters/searches/paginates in memory so the UI behaves
 /// exactly as it will against the real RPCs.
 class DemoOrderHistoryRepository implements OrderHistoryRepository {
+  /// Pass [store] to share ONE mutable dataset with the demo active-orders and
+  /// completion repositories (so a demo completion really moves an order out of
+  /// Active and into History — ORDER-COMPLETION-001). [orders] remains supported
+  /// for tests that want an isolated fixture list.
   DemoOrderHistoryRepository({
+    DemoOrderStore? store,
     List<DemoOrder>? orders,
     this.failureMessage,
     this.pageSize = 25,
-  }) : _orders = orders ?? demoOrderHistory();
+  }) : _store = store ?? DemoOrderStore(orders);
 
-  final List<DemoOrder> _orders;
+  final DemoOrderStore _store;
+
+  List<DemoOrder> get _orders => _store.orders;
 
   /// When non-null, both loads throw an [OrderHistoryException] with this
   /// message (drives/tests the error state).
@@ -502,6 +510,35 @@ List<DemoOrder> demoOrderHistory() {
           ),
         ],
         payments: [cash(7400, receipt: 'R-1008', at: '13:31')],
+      ),
+    ),
+    // SERVED and PAID -> the COMPLETABLE one (D-025 satisfied). Its sibling
+    // #1007GG is served but UNPAID, so completing it is refused — the two make the
+    // ORDER-COMPLETION-001 policy visible in demo mode.
+    DemoOrder(
+      daysAgo: 0,
+      minutesAgo: 55,
+      detail: order(
+        id: 'demo-ord-1009',
+        code: '#1009KK',
+        status: 'served',
+        type: 'dine_in',
+        subtotal: 4600,
+        total: 4600,
+        customer: 'Rami',
+        table: 'T4',
+        staff: 'Sami',
+        receipt: 'R-1009',
+        createdAt: '12:43',
+        items: [
+          const OrderDetailItem(
+            name: 'Lamb Chops',
+            quantity: 1,
+            unitPriceMinor: 4600,
+            lineTotalMinor: 4600,
+          ),
+        ],
+        payments: [cash(4600, receipt: 'R-1009', at: '12:44')],
       ),
     ),
     DemoOrder(

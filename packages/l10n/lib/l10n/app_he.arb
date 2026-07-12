@@ -1175,5 +1175,20 @@
   "ordersActiveAutoRefresh": "רענון אוטומטי",
   "ordersActiveLastUpdated": "עודכן {time}",
   "ordersActiveTruncated": "מוצגות {shown} ההזמנות הוותיקות ביותר מתוך {total} הזמנות פעילות.",
-  "ordersBranchAll": "כל הסניפים המורשים"
+  "ordersBranchAll": "כל הסניפים המורשים",
+  "ordersCompleteAction": "סגירת הזמנה",
+  "ordersCompleteConfirmTitle": "לסגור את ההזמנה?",
+  "ordersCompleteConfirmBody": "פעולה זו סוגרת את הזמנה {orderCode} ומעבירה אותה להיסטוריית ההזמנות. היא אינה רושמת תשלום.",
+  "ordersCompletePaymentLabel": "תשלום",
+  "ordersCompleteBlockedUnpaid": "ההזמנה אינה משולמת. יש לרשום את התשלום לפני סגירתה.",
+  "ordersCompleteSuccess": "ההזמנה נסגרה",
+  "ordersCompleteErrorNotPaid": "לא ניתן לסגור את ההזמנה לפני שנרשם התשלום.",
+  "ordersCompleteErrorInvalidState": "ההזמנה כבר אינה מוכנה לסגירה. רענן ונסה שוב.",
+  "ordersCompleteErrorDenied": "אין לך הרשאה לסגור הזמנה זו.",
+  "ordersCompleteErrorConflict": "מישהו אחר עדכן את ההזמנה. רענן כדי לראות את המצב העדכני.",
+  "ordersCompleteErrorNotFound": "ההזמנה כבר אינה זמינה.",
+  "ordersCompleteErrorTransient": "לא ניתן להגיע לשרת. ההזמנה לא שונתה.",
+  "ordersCompleteRetry": "נסה שוב",
+  "activityLogFieldOrderCode": "הזמנה",
+  "activityLogFieldPaymentStatus": "תשלום"
 }

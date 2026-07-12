@@ -3768,4 +3768,56 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get ordersBranchAll => 'كل الفروع المسموح بها';
+
+  @override
+  String get ordersCompleteAction => 'إتمام الطلب';
+
+  @override
+  String get ordersCompleteConfirmTitle => 'هل تريد إتمام هذا الطلب؟';
+
+  @override
+  String ordersCompleteConfirmBody(String orderCode) {
+    return 'سيؤدي هذا إلى إغلاق الطلب $orderCode ونقله إلى سجل الطلبات. ولا يُسجّل أي دفعة.';
+  }
+
+  @override
+  String get ordersCompletePaymentLabel => 'الدفع';
+
+  @override
+  String get ordersCompleteBlockedUnpaid =>
+      'هذا الطلب غير مدفوع. سجّل الدفعة قبل إتمامه.';
+
+  @override
+  String get ordersCompleteSuccess => 'تم إتمام الطلب';
+
+  @override
+  String get ordersCompleteErrorNotPaid =>
+      'لا يمكن إتمام هذا الطلب قبل تسجيل دفعته.';
+
+  @override
+  String get ordersCompleteErrorInvalidState =>
+      'لم يعد هذا الطلب جاهزًا للإتمام. حدّث الصفحة ثم حاول مجددًا.';
+
+  @override
+  String get ordersCompleteErrorDenied => 'لا تملك صلاحية إتمام هذا الطلب.';
+
+  @override
+  String get ordersCompleteErrorConflict =>
+      'قام شخص آخر بتحديث هذا الطلب. حدّث الصفحة لعرض أحدث حالة.';
+
+  @override
+  String get ordersCompleteErrorNotFound => 'لم يعد هذا الطلب متاحًا.';
+
+  @override
+  String get ordersCompleteErrorTransient =>
+      'تعذّر الوصول إلى الخادم. لم يتم تغيير الطلب.';
+
+  @override
+  String get ordersCompleteRetry => 'حاول مجددًا';
+
+  @override
+  String get activityLogFieldOrderCode => 'الطلب';
+
+  @override
+  String get activityLogFieldPaymentStatus => 'الدفع';
 }

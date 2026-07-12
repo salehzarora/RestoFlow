@@ -1175,5 +1175,20 @@
   "ordersActiveAutoRefresh": "تحديث تلقائي",
   "ordersActiveLastUpdated": "آخر تحديث {time}",
   "ordersActiveTruncated": "يتم عرض أقدم {shown} من أصل {total} طلبًا نشطًا.",
-  "ordersBranchAll": "كل الفروع المسموح بها"
+  "ordersBranchAll": "كل الفروع المسموح بها",
+  "ordersCompleteAction": "إتمام الطلب",
+  "ordersCompleteConfirmTitle": "هل تريد إتمام هذا الطلب؟",
+  "ordersCompleteConfirmBody": "سيؤدي هذا إلى إغلاق الطلب {orderCode} ونقله إلى سجل الطلبات. ولا يُسجّل أي دفعة.",
+  "ordersCompletePaymentLabel": "الدفع",
+  "ordersCompleteBlockedUnpaid": "هذا الطلب غير مدفوع. سجّل الدفعة قبل إتمامه.",
+  "ordersCompleteSuccess": "تم إتمام الطلب",
+  "ordersCompleteErrorNotPaid": "لا يمكن إتمام هذا الطلب قبل تسجيل دفعته.",
+  "ordersCompleteErrorInvalidState": "لم يعد هذا الطلب جاهزًا للإتمام. حدّث الصفحة ثم حاول مجددًا.",
+  "ordersCompleteErrorDenied": "لا تملك صلاحية إتمام هذا الطلب.",
+  "ordersCompleteErrorConflict": "قام شخص آخر بتحديث هذا الطلب. حدّث الصفحة لعرض أحدث حالة.",
+  "ordersCompleteErrorNotFound": "لم يعد هذا الطلب متاحًا.",
+  "ordersCompleteErrorTransient": "تعذّر الوصول إلى الخادم. لم يتم تغيير الطلب.",
+  "ordersCompleteRetry": "حاول مجددًا",
+  "activityLogFieldOrderCode": "الطلب",
+  "activityLogFieldPaymentStatus": "الدفع"
 }

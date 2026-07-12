@@ -484,6 +484,33 @@ error state in real mode. Order: (1) apply to hosted; (2) verify
 **only then** deploy the Dashboard. **No POS/KDS APK rebuild is required** — POS
 and KDS are untouched. **NOT applied to hosted by the ticket branch.**
 
+**ORDER-COMPLETION-001 rollout (DB-first — MANDATORY).** Migration
+`20260713090000_order_completion_001_complete_order.sql` is **additive /
+forward-only**: a NEW internal core `app.apply_order_status_transition` (granted to
+NO client role), a **behaviour-preserving** `CREATE OR REPLACE` of
+`app.update_order_status` (same signature/gates/errors/audit; it now delegates to
+the core), a NEW `app.owner_complete_order` + `public` `SECURITY INVOKER` wrapper
+(`authenticated` only; **`anon` and `PUBLIC` explicitly revoked**), and a
+`CREATE OR REPLACE` of `app.audit_safe_detail` adding two safe keys
+(`order_code`, `payment_status`). **No table / column / CHECK / RLS / trigger /
+index change; no historical order or audit row is rewritten; no new audit action
+key.**
+
+**It carries ONE deliberate behaviour change: the D-025 payment gate.** Completing
+an order with no `completed` payment is now refused (`order_not_paid`). This
+affects only the `→ completed` transition, which **no live client performs today**
+(the KDS stops at `served`), so nothing in production regresses — but it IS a
+money-rule change and must be understood before applying.
+
+The Dashboard's Complete-order action calls the new RPC, so a Dashboard deploy
+without the migration would surface its error state in real mode. Order:
+(1) apply to hosted; (2) verify `owner_complete_order` completes a PAID served
+order, REFUSES an unpaid one with `order_not_paid`, denies `kitchen_staff`, and
+that `anon` cannot execute it; (3) **only then** deploy the Dashboard. **No
+POS/KDS APK rebuild is required** — the POS/KDS code is untouched and the PIN
+front's signature and behaviour are unchanged. **NOT applied to hosted by the
+ticket branch.**
+
 **Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).
 - **Yesterday / Last 7 days / Last 30 days** load with real current + comparison

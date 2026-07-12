@@ -113,6 +113,11 @@ const Map<String, _Kind> _displayableKeys = {
   'timezone': _Kind.text,
   'name': _Kind.text,
   'receipt_prefix': _Kind.text,
+  // Order completion (ORDER-COMPLETION-001). `order_code` is the SAFE '#XXXXXX'
+  // reference (never the order UUID); `payment_status` is a STATE (paid/unpaid),
+  // not a money figure — T-003 still holds.
+  'order_code': _Kind.text,
+  'payment_status': _Kind.text,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -151,6 +156,8 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'timezone' => l10n.activityLogFieldTimezone,
   'name' => l10n.activityLogFieldName,
   'receipt_prefix' => l10n.activityLogFieldReceiptPrefix,
+  'order_code' => l10n.activityLogFieldOrderCode,
+  'payment_status' => l10n.activityLogFieldPaymentStatus,
   _ => key,
 };
 
