@@ -9,14 +9,14 @@ import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/widgets/modifier_selection_sheet.dart';
 
-/// POS customization V2 — the redesigned item-customization overlay:
-/// a CENTERED dialog on wide (two-pane) layouts with the phone bottom sheet
-/// preserved below the breakpoint; required single-choice groups as a
-/// responsive horizontal card row; optional checkbox groups as a two-column
-/// tile grid; a sticky footer that never scrolls away. Selection rules,
-/// pricing, notes, keys, and add/edit flows are the existing ones — these
-/// tests pin the new LAYOUT contract on top of the frozen behavior corpus in
-/// modifier_flow_test.dart / cart_edit_test.dart.
+/// POS customization V2 — the redesigned item-customization overlay, presented
+/// as a MODAL BOTTOM SHEET at every width (the follow-up refinement: the wide
+/// layout is a large sheet attached to the bottom edge, NOT a centered dialog).
+/// Required single-choice groups render as a responsive card row; optional
+/// checkbox groups as a two-column tile grid; a sticky footer never scrolls
+/// away. Selection rules, pricing, notes, keys, and add/edit flows are the
+/// existing ones — these tests pin the LAYOUT + PRESENTATION contract on top of
+/// the frozen behavior corpus in modifier_flow_test.dart / cart_edit_test.dart.
 
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
@@ -105,7 +105,10 @@ PosModifierGroup _multiGroup({
 
 /// Pumps the customization widget DIRECTLY inside a bounded host of [size] —
 /// used where a bespoke item/modifier fixture is needed (long labels, widget
-/// reuse). The dialog layout ([asDialog]) is the reviewed wide presentation.
+/// reuse). The widget has ONE layout (the sheet layout) at every width, so a
+/// direct pump exercises exactly what the modal bottom sheet renders, minus
+/// the Material sheet chrome (drag handle, scrim, rounded corners) that
+/// [ModifierSelectionSheet.show] adds around it.
 Future<void> _pumpDirect(
   WidgetTester tester, {
   required DemoMenuItem item,
@@ -137,7 +140,6 @@ Future<void> _pumpDirect(
             item: item,
             groups: groups,
             currencyCode: 'ILS',
-            asDialog: true,
             initialSelections: initialSelections,
             initialNote: initialNote,
             isEdit: isEdit,
@@ -155,28 +157,178 @@ Future<void> _pumpDirect(
 String _isolated(String money) => '\u2066$money\u2069';
 
 void main() {
-  testWidgets('wide layout: the customization overlay is a CENTERED dialog '
-      '(not a bottom sheet) over the dimmed POS', (tester) async {
-    await _pump(tester);
+  // ── Presentation: a bottom sheet at EVERY width ─────────────────────────
+
+  testWidgets('ADD flow, wide layout: the customization overlay is a BOTTOM '
+      'SHEET attached to the bottom edge (never a centered dialog), using most '
+      'of the width and horizontally centered', (tester) async {
+    const size = Size(1400, 1800);
+    await _pump(tester, size: size);
     await _openBurgerSheet(tester);
 
-    expect(find.byType(Dialog), findsOneWidget);
-    expect(find.byType(BottomSheet), findsNothing);
-    // Centered: the dialog's horizontal center matches the screen's.
-    final dialogRect = tester.getRect(find.byType(Dialog));
-    expect(dialogRect.center.dx, moreOrLessEquals(700, epsilon: 1));
-    // Background stays present (dimmed, not replaced): the POS screen is
-    // still in the tree behind the barrier.
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+
+    // Attached to the BOTTOM edge: the sheet's own bottom sits on the
+    // viewport's bottom, and it does NOT float in the middle.
+    final sheetRect = tester.getRect(find.byType(ModifierSelectionSheet));
+    expect(sheetRect.bottom, moreOrLessEquals(size.height, epsilon: 1));
+    // Horizontally centered…
+    expect(sheetRect.center.dx, moreOrLessEquals(size.width / 2, epsilon: 1));
+    // …taking MOST of the available width — decisively more than Material's
+    // 640dp default, and here capped at the sheet's 1200dp maximum so a wide
+    // cashier screen keeps a readable option row.
+    expect(sheetRect.width, greaterThan(size.width * 0.7));
+    expect(sheetRect.width, moreOrLessEquals(1200, epsilon: 1));
+
+    // Sheet chrome: a drag handle near the top, rounded TOP corners only
+    // (a square bottom = attached to the edge).
+    final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+    expect(sheet.showDragHandle, isTrue);
+    expect(sheet.enableDrag, isTrue);
+    final shape = sheet.shape! as RoundedRectangleBorder;
+    final radius = shape.borderRadius as BorderRadius;
+    expect(radius.topLeft.y, greaterThan(0));
+    expect(radius.topRight.y, greaterThan(0));
+    expect(radius.bottomLeft, Radius.zero);
+    expect(radius.bottomRight, Radius.zero);
+
+    // Dimmed background (scrim), with the POS still in the tree behind it.
+    expect(find.byType(ModalBarrier), findsWidgets);
     expect(find.byType(PosMenuScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the sheet SLIDES UP from the bottom edge (it is not there at '
+      'rest, enters from below, and settles bottom-attached)', (tester) async {
+    const size = Size(1400, 1800);
+    await _pump(tester, size: size);
+
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(Card, 'Cheeseburger').first,
+        matching: find.byIcon(Icons.add_shopping_cart),
+      ),
+    );
+    // First frame of the route's entry animation: the sheet is mounted but
+    // still below its resting place (it travels bottom → top).
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    final entering = tester.getRect(find.byType(ModifierSelectionSheet));
+
+    await tester.pumpAndSettle();
+    final settled = tester.getRect(find.byType(ModifierSelectionSheet));
+
+    expect(entering.top, greaterThan(settled.top));
+    expect(entering.bottom, greaterThan(settled.bottom));
+    expect(settled.bottom, moreOrLessEquals(size.height, epsilon: 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('EDIT flow (reopening a cart line) is the same bottom sheet, '
+      'prefilled — not a centered dialog', (tester) async {
+    final l10n = await _en();
+    await _pump(tester);
+
+    // Add a configured burger (Medium + Cheese), then reopen it for edit.
+    await _openBurgerSheet(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-medium')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('modifier-option-demo-opt-cheese')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('modifier-add-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip(l10n.posCartEditItem));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ModifierSelectionSheet), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    final sheetRect = tester.getRect(find.byType(ModifierSelectionSheet));
+    expect(sheetRect.bottom, moreOrLessEquals(1800, epsilon: 1));
+    // Still the EDIT payload: the save label and the prefilled ₪51.00 total.
+    expect(find.text(l10n.posEditSaveChanges), findsOneWidget);
+    expect(_sheetTextContaining('₪51.00'), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('narrow layout keeps the existing bottom-sheet presentation', (
     tester,
   ) async {
-    await _pump(tester, size: const Size(600, 1000));
+    const size = Size(600, 1000);
+    await _pump(tester, size: size);
     await _openBurgerSheet(tester);
     expect(find.byType(BottomSheet), findsOneWidget);
     expect(find.byType(Dialog), findsNothing);
+    // Phone: the sheet spans the width and hugs the bottom edge, unchanged.
+    final sheetRect = tester.getRect(find.byType(ModifierSelectionSheet));
+    expect(sheetRect.width, moreOrLessEquals(size.width, epsilon: 1));
+    expect(sheetRect.bottom, moreOrLessEquals(size.height, epsilon: 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the width cap holds on a very wide screen: 1200dp, centered and '
+      'bottom-attached (not stretched across 1920)', (tester) async {
+    const size = Size(1920, 1080);
+    await _pump(tester, size: size);
+    await _openBurgerSheet(tester);
+
+    final sheetRect = tester.getRect(find.byType(ModifierSelectionSheet));
+    expect(sheetRect.width, moreOrLessEquals(1200, epsilon: 1));
+    expect(sheetRect.center.dx, moreOrLessEquals(size.width / 2, epsilon: 1));
+    expect(sheetRect.bottom, moreOrLessEquals(size.height, epsilon: 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the OPEN sheet re-flows when the viewport grows (browser resize '
+      '/ tablet rotation): its width follows the live viewport, it is never '
+      'frozen at its open-time width', (tester) async {
+    // Opened on a narrow-ish viewport…
+    await _pump(tester, size: const Size(760, 900));
+    await _openBurgerSheet(tester);
+    expect(
+      tester.getRect(find.byType(ModifierSelectionSheet)).width,
+      moreOrLessEquals(760, epsilon: 1),
+    );
+
+    // …then the window is maximized / the tablet rotated to landscape while
+    // the sheet stays open: it must grow to the capped sheet width, not stay
+    // a narrow column stranded in the middle of a wide screen.
+    tester.view.physicalSize = const Size(1600, 1000);
+    await tester.pumpAndSettle();
+
+    final grown = tester.getRect(find.byType(ModifierSelectionSheet));
+    expect(grown.width, moreOrLessEquals(1200, epsilon: 1));
+    expect(grown.center.dx, moreOrLessEquals(800, epsilon: 1));
+    expect(grown.bottom, moreOrLessEquals(1000, epsilon: 1));
+
+    // And back down: it clamps to the smaller viewport without overflowing.
+    tester.view.physicalSize = const Size(700, 900);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getRect(find.byType(ModifierSelectionSheet)).width,
+      moreOrLessEquals(700, epsilon: 1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the sheet stays clear of the status bar / notch (useSafeArea)', (
+    tester,
+  ) async {
+    tester.view.padding = const FakeViewPadding(top: 64);
+    addTearDown(tester.view.resetPadding);
+    // A tall menu on a short screen: without the safe area the sheet would
+    // grow up underneath the status bar.
+    await _pump(tester, size: const Size(600, 700));
+    await _openBurgerSheet(tester);
+
+    final sheetRect = tester.getRect(find.byType(BottomSheet));
+    expect(sheetRect.top, greaterThanOrEqualTo(64));
+    expect(sheetRect.bottom, moreOrLessEquals(700, epsilon: 1));
     expect(tester.takeException(), isNull);
   });
 
@@ -272,8 +424,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the dialog close button dismisses without adding; Escape '
-      'dismisses too', (tester) async {
+  testWidgets('the sheet dismisses without adding via the close button, via '
+      'Escape, and via the scrim', (tester) async {
     await _pump(tester);
     final l10n = await _en();
 
@@ -286,6 +438,15 @@ void main() {
 
     await _openBurgerSheet(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(ModifierSelectionSheet), findsNothing);
+    expect(find.text(l10n.posCartEmpty), findsOneWidget);
+
+    // Scrim (barrier) tap: the sheet is dismissible by tapping the dimmed POS
+    // above it — a tap well above the sheet's top edge.
+    await _openBurgerSheet(tester);
+    final sheetTop = tester.getRect(find.byType(ModifierSelectionSheet)).top;
+    await tester.tapAt(Offset(700, sheetTop / 2));
     await tester.pumpAndSettle();
     expect(find.byType(ModifierSelectionSheet), findsNothing);
     expect(find.text(l10n.posCartEmpty), findsOneWidget);
@@ -368,7 +529,6 @@ void main() {
               ),
               groups: groups,
               currencyCode: 'ILS',
-              asDialog: true,
               onConfirm: (selections, note) => confirmed++,
             ),
           ),
@@ -388,7 +548,7 @@ void main() {
 
   for (final locale in const [Locale('he'), Locale('ar')]) {
     testWidgets(
-      'the dialog renders RTL (${locale.languageCode}) with the card row in '
+      'the sheet renders RTL (${locale.languageCode}) with the card row in '
       'logical order and no overflow',
       (tester) async {
         await _pump(tester, locale: locale);
@@ -790,13 +950,18 @@ void main() {
 
   for (final size in const [Size(1320, 620)]) {
     testWidgets(
-      'short wide dialog at ${size.width.toInt()}×${size.height.toInt()}: the '
+      'short wide sheet at ${size.width.toInt()}×${size.height.toInt()}: the '
       'footer stays visible, the body scrolls under a fixed header, and the '
       'last option + note are reachable',
       (tester) async {
         await _pump(tester, size: size);
         await _openBurgerSheet(tester);
-        expect(find.byType(Dialog), findsOneWidget);
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(find.byType(Dialog), findsNothing);
+        // Short screen: the sheet is capped, so the scrim above it stays
+        // visible — it never becomes a full-screen page.
+        final sheetRect = tester.getRect(find.byType(BottomSheet));
+        expect(sheetRect.top, greaterThan(0));
         expect(tester.takeException(), isNull);
 
         // The confirm action is on screen from the start.
@@ -834,7 +999,7 @@ void main() {
     );
   }
 
-  testWidgets('short wide dialog at 1024×600: the footer stays visible, the '
+  testWidgets('short wide sheet at 1024×600: the footer stays visible, the '
       'body scrolls under a fixed header, and the last option + note are '
       'reachable (modal isolated on a 1024×600 host — the POS PAGE itself '
       'overflows 36px at this width WITHOUT any modal, so a full-app pump '
@@ -981,7 +1146,9 @@ void main() {
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    expect(find.byType(Dialog), findsOneWidget);
+    // The keyboard case runs on the real presentation: a modal bottom sheet.
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
     expect(tester.takeException(), isNull);
 
     // Focus the note field with the keyboard up: the cashier scrolls the body
@@ -1020,6 +1187,183 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ModifierSelectionSheet), findsNothing);
     expect(confirmed, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  // ── Squeezed sheet: short landscape tablet + on-screen keyboard ─────────
+  // The sheet is laid out over the FULL viewport height and lifts its content
+  // above the keyboard itself, so a short landscape tablet with the keyboard up
+  // can leave under 200dp of usable height. The fixed header then joins the
+  // scrolling body and the footer's padding tightens, so nothing overflows and
+  // the confirm action stays clear of the keyboard.
+
+  for (final probe in const [
+    // (viewport, keyboard) — real postures: a 10" landscape tablet, an 8"
+    // landscape tablet, a wide short landscape screen, and a deliberately
+    // extreme keyboard (63% of the viewport) as the worst case.
+    (Size(1024, 600), 300.0),
+    (Size(853, 533), 280.0),
+    (Size(1320, 620), 360.0),
+    (Size(1024, 600), 380.0),
+  ]) {
+    final size = probe.$1;
+    final keyboard = probe.$2;
+    testWidgets(
+      'keyboard up on ${size.width.toInt()}×${size.height.toInt()} with a '
+      '${keyboard.toInt()}dp keyboard: no overflow, and the confirm action '
+      'stays fully above the keyboard',
+      (tester) async {
+        var confirmed = 0;
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetViewInsets);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: FilledButton(
+                    onPressed: () => ModifierSelectionSheet.show(
+                      context,
+                      item: _item(name: 'Cheeseburger'),
+                      groups: [
+                        _singleGroup(
+                          name: 'Doneness',
+                          options: const [
+                            PosModifierOption(
+                              id: 'd-1',
+                              name: 'Rare',
+                              priceDeltaMinor: 0,
+                            ),
+                            PosModifierOption(
+                              id: 'd-2',
+                              name: 'Medium',
+                              priceDeltaMinor: 0,
+                            ),
+                          ],
+                        ),
+                        _multiGroup(
+                          name: 'Toppings',
+                          options: const [
+                            PosModifierOption(
+                              id: 't-1',
+                              name: 'Onion',
+                              priceDeltaMinor: 0,
+                            ),
+                            PosModifierOption(
+                              id: 't-2',
+                              name: 'Cheese',
+                              priceDeltaMinor: 300,
+                            ),
+                          ],
+                        ),
+                      ],
+                      currencyCode: 'ILS',
+                      onConfirm: (selections, note) => confirmed++,
+                    ),
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+
+        // No RenderFlex overflow anywhere in the squeezed sheet.
+        expect(tester.takeException(), isNull);
+        expect(find.byType(BottomSheet), findsOneWidget);
+
+        final keyboardTop = size.height - keyboard;
+        // The confirm button is FULLY above the keyboard and still full-size.
+        final button = tester.getRect(
+          find.byKey(const Key('modifier-add-button')),
+        );
+        expect(button.bottom, lessThanOrEqualTo(keyboardTop));
+        expect(button.top, greaterThanOrEqualTo(0));
+        expect(button.height, greaterThanOrEqualTo(44));
+        // The running total is still on screen next to it.
+        expect(_sheetTextContaining('₪40.00'), findsWidgets);
+
+        // The body is the only scrolling region: every option and the note the
+        // cashier is typing into can be reached through it (the squeezed sheet
+        // scrolls its header away rather than pinching the body shut).
+        final scrollable = find.descendant(
+          of: find.descendant(
+            of: find.byType(ModifierSelectionSheet),
+            matching: find.byType(ListView),
+          ),
+          matching: find.byType(Scrollable),
+        );
+
+        // Pick the required option (scrolled into view), with the keyboard up.
+        const option = ValueKey('modifier-option-d-2');
+        await tester.scrollUntilVisible(
+          find.byKey(option),
+          80,
+          scrollable: scrollable,
+          maxScrolls: 120,
+        );
+        await tester.ensureVisible(find.byKey(option));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(option));
+        await tester.pumpAndSettle();
+
+        // The note lands above the keyboard once scrolled to.
+        final note = find.byKey(const Key('modifier-item-note'));
+        await tester.scrollUntilVisible(
+          note,
+          80,
+          scrollable: scrollable,
+          maxScrolls: 120,
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(tester.getRect(note).top, lessThan(keyboardTop));
+
+        // The confirm action is still clear of the keyboard, and commits.
+        final buttonAfter = tester.getRect(
+          find.byKey(const Key('modifier-add-button')),
+        );
+        expect(buttonAfter.bottom, lessThanOrEqualTo(keyboardTop));
+        await tester.tap(find.byKey(const Key('modifier-add-button')));
+        await tester.pumpAndSettle();
+        expect(confirmed, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('a squeezed sheet keeps the item header reachable (it scrolls '
+      'with the body instead of eating the height), and a roomy sheet keeps it '
+      'fixed above the body', (tester) async {
+    // Roomy: the header is OUTSIDE the scrolling body (it does not move).
+    await _pump(tester, size: const Size(1320, 900));
+    await _openBurgerSheet(tester);
+    final body = find.descendant(
+      of: find.byType(ModifierSelectionSheet),
+      matching: find.byType(ListView),
+    );
+    final headerText = find.descendant(
+      of: find.byType(ModifierSelectionSheet),
+      matching: find.text('Cheeseburger'),
+    );
+    expect(
+      find.descendant(of: body, matching: headerText),
+      findsNothing,
+      reason: 'a roomy sheet keeps the header fixed above the scrolling body',
+    );
+    final before = tester.getRect(headerText);
+    await tester.drag(body, const Offset(0, -200));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(headerText), before);
     expect(tester.takeException(), isNull);
   });
 
