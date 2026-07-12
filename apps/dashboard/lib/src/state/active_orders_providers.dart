@@ -25,6 +25,7 @@ import '../data/active_orders_models.dart';
 import '../data/active_orders_repository.dart';
 import '../data/real_active_orders_repository.dart';
 import 'dashboard_providers.dart';
+import 'order_history_providers.dart' show demoOrderStoreProvider;
 
 /// The single auto-refresh cadence. Coarse on purpose: an ops board is a human
 /// glance surface, not a kitchen display, and Supabase must not be hammered.
@@ -37,7 +38,10 @@ const Duration kActiveOrdersRefreshInterval = Duration(seconds: 30);
 final activeOrdersRepositoryProvider = Provider<ActiveOrdersRepository>((ref) {
   final config = ref.watch(runtimeConfigProvider);
   if (config.isDemoMode) {
+    // The SHARED demo store, so a demo completion really drops the order off
+    // this board (ORDER-COMPLETION-001).
     return DemoActiveOrdersRepository(
+      store: ref.watch(demoOrderStoreProvider),
       clock: ref.watch(activeOrdersClockProvider),
     );
   }

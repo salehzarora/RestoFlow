@@ -10,10 +10,19 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../data/demo_order_store.dart';
 import '../data/order_history_models.dart';
 import '../data/order_history_repository.dart';
 import '../data/real_order_history_repository.dart';
 import 'dashboard_providers.dart';
+
+/// The ONE mutable demo order dataset (ORDER-COMPLETION-001), shared by the demo
+/// order-history, active-orders and completion repositories — so a demo
+/// completion really moves an order OUT of Active Orders and INTO History instead
+/// of mutating a private copy nobody else can see.
+final demoOrderStoreProvider = Provider<DemoOrderStore>(
+  (ref) => DemoOrderStore(),
+);
 
 /// The order-history data seam. Demo mode (the DEFAULT) uses the computed
 /// [DemoOrderHistoryRepository]; real mode returns [RealOrderHistoryRepository]
@@ -23,7 +32,7 @@ import 'dashboard_providers.dart';
 final orderHistoryRepositoryProvider = Provider<OrderHistoryRepository>((ref) {
   final config = ref.watch(runtimeConfigProvider);
   if (config.isDemoMode) {
-    return DemoOrderHistoryRepository();
+    return DemoOrderHistoryRepository(store: ref.watch(demoOrderStoreProvider));
   }
   return RealOrderHistoryRepository(
     config.supabase,

@@ -18,25 +18,36 @@ import '../data/order_history_models.dart';
 import '../format/money_format.dart';
 import '../print/order_preview_builders.dart';
 import '../state/order_history_providers.dart';
+import 'order_complete_action.dart';
 import 'order_history_screen.dart' show statusLabel, statusTone, orderTypeLabel;
 import 'order_preview_dialog.dart';
 
 /// Opens the detail sheet for [row]. The loader is captured from the current
-/// (scoped) repository provider so the dialog itself needs no Riverpod scope.
+/// (scoped) repository provider.
+///
+/// The dialog is mounted on the root overlay, ABOVE the Orders surface's scoped
+/// [ProviderScope], so it is re-parented onto the SAME container via
+/// [UncontrolledProviderScope]. Without that, the completion action inside would
+/// read the root scope and miss the membership/transport overrides (and would
+/// fail closed in real mode).
 Future<void> showOrderDetailSheet(
   BuildContext context,
   WidgetRef ref,
   OrderHistoryRow row,
 ) {
+  final container = ProviderScope.containerOf(context);
   Future<OrderDetail> loader() =>
       ref.read(orderHistoryRepositoryProvider).loadDetail(row.orderId);
   return showDialog<void>(
     context: context,
-    builder: (context) => Dialog(
-      key: const Key('order-detail-sheet'),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 760),
-        child: _OrderDetailPanel(row: row, loader: loader),
+    builder: (context) => UncontrolledProviderScope(
+      container: container,
+      child: Dialog(
+        key: const Key('order-detail-sheet'),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 760),
+          child: _OrderDetailPanel(row: row, loader: loader),
+        ),
       ),
     ),
   );
@@ -147,6 +158,9 @@ class _DetailContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ORDER-COMPLETION-001: the ONLY write on this surface. It renders
+          // nothing unless the order is `served` AND the viewer may settle orders.
+          OrderCompleteAction(detail: detail, l10n: l10n),
           _reprintBar(context),
           const SizedBox(height: RestoflowSpacing.lg),
           _infoCard(),

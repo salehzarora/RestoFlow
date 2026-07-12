@@ -3744,4 +3744,56 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get ordersBranchAll => 'כל הסניפים המורשים';
+
+  @override
+  String get ordersCompleteAction => 'סגירת הזמנה';
+
+  @override
+  String get ordersCompleteConfirmTitle => 'לסגור את ההזמנה?';
+
+  @override
+  String ordersCompleteConfirmBody(String orderCode) {
+    return 'פעולה זו סוגרת את הזמנה $orderCode ומעבירה אותה להיסטוריית ההזמנות. היא אינה רושמת תשלום.';
+  }
+
+  @override
+  String get ordersCompletePaymentLabel => 'תשלום';
+
+  @override
+  String get ordersCompleteBlockedUnpaid =>
+      'ההזמנה אינה משולמת. יש לרשום את התשלום לפני סגירתה.';
+
+  @override
+  String get ordersCompleteSuccess => 'ההזמנה נסגרה';
+
+  @override
+  String get ordersCompleteErrorNotPaid =>
+      'לא ניתן לסגור את ההזמנה לפני שנרשם התשלום.';
+
+  @override
+  String get ordersCompleteErrorInvalidState =>
+      'ההזמנה כבר אינה מוכנה לסגירה. רענן ונסה שוב.';
+
+  @override
+  String get ordersCompleteErrorDenied => 'אין לך הרשאה לסגור הזמנה זו.';
+
+  @override
+  String get ordersCompleteErrorConflict =>
+      'מישהו אחר עדכן את ההזמנה. רענן כדי לראות את המצב העדכני.';
+
+  @override
+  String get ordersCompleteErrorNotFound => 'ההזמנה כבר אינה זמינה.';
+
+  @override
+  String get ordersCompleteErrorTransient =>
+      'לא ניתן להגיע לשרת. ההזמנה לא שונתה.';
+
+  @override
+  String get ordersCompleteRetry => 'נסה שוב';
+
+  @override
+  String get activityLogFieldOrderCode => 'הזמנה';
+
+  @override
+  String get activityLogFieldPaymentStatus => 'תשלום';
 }

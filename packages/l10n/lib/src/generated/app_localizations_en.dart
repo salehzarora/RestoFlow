@@ -3792,4 +3792,58 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ordersBranchAll => 'All permitted branches';
+
+  @override
+  String get ordersCompleteAction => 'Complete order';
+
+  @override
+  String get ordersCompleteConfirmTitle => 'Complete this order?';
+
+  @override
+  String ordersCompleteConfirmBody(String orderCode) {
+    return 'This closes $orderCode and moves it to order history. It does not record a payment.';
+  }
+
+  @override
+  String get ordersCompletePaymentLabel => 'Payment';
+
+  @override
+  String get ordersCompleteBlockedUnpaid =>
+      'This order is unpaid. Record the payment before completing it.';
+
+  @override
+  String get ordersCompleteSuccess => 'Order completed';
+
+  @override
+  String get ordersCompleteErrorNotPaid =>
+      'This order cannot be completed until its payment is recorded.';
+
+  @override
+  String get ordersCompleteErrorInvalidState =>
+      'This order is no longer ready to be completed. Refresh and try again.';
+
+  @override
+  String get ordersCompleteErrorDenied =>
+      'You do not have permission to complete this order.';
+
+  @override
+  String get ordersCompleteErrorConflict =>
+      'Someone else updated this order. Refresh to see the latest state.';
+
+  @override
+  String get ordersCompleteErrorNotFound =>
+      'This order is no longer available.';
+
+  @override
+  String get ordersCompleteErrorTransient =>
+      'Couldn\'t reach the server. The order was not changed.';
+
+  @override
+  String get ordersCompleteRetry => 'Try again';
+
+  @override
+  String get activityLogFieldOrderCode => 'Order';
+
+  @override
+  String get activityLogFieldPaymentStatus => 'Payment';
 }

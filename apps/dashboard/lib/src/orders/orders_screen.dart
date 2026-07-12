@@ -81,29 +81,42 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             RestoflowSpacing.lg,
             0,
           ),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: RestoflowSegmentedControl<OrdersTab>(
-              segments: [
-                RestoflowSegment(
-                  key: const Key('orders-tab-active'),
-                  value: OrdersTab.active,
-                  label: l10n.ordersTabActive,
-                  icon: Icons.local_fire_department_outlined,
-                ),
-                RestoflowSegment(
-                  key: const Key('orders-tab-history'),
-                  value: OrdersTab.history,
-                  label: l10n.ordersTabHistory,
-                  icon: Icons.history,
-                ),
-              ],
-              selected: _tab,
-              onSelected: (tab) {
-                if (tab == _tab) return;
-                setState(() => _tab = tab);
-              },
-            ),
+          // On a phone the two labels do not fit side by side at their natural
+          // width, so the segments SHARE the available width (the control's
+          // `expand` mode) instead of overflowing; on wider layouts the bar hugs
+          // its content at the reading start, as before.
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow =
+                  constraints.maxWidth < RestoflowBreakpoints.compact;
+              final control = RestoflowSegmentedControl<OrdersTab>(
+                segments: [
+                  RestoflowSegment(
+                    key: const Key('orders-tab-active'),
+                    value: OrdersTab.active,
+                    label: l10n.ordersTabActive,
+                    icon: Icons.local_fire_department_outlined,
+                  ),
+                  RestoflowSegment(
+                    key: const Key('orders-tab-history'),
+                    value: OrdersTab.history,
+                    label: l10n.ordersTabHistory,
+                    icon: Icons.history,
+                  ),
+                ],
+                selected: _tab,
+                expand: narrow,
+                onSelected: (tab) {
+                  if (tab == _tab) return;
+                  setState(() => _tab = tab);
+                },
+              );
+              if (narrow) return control;
+              return Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: control,
+              );
+            },
           ),
         ),
         Expanded(

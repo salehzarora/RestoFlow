@@ -14,6 +14,7 @@ library;
 
 import 'active_orders_models.dart';
 import 'audit_log_models.dart' show AuditBranchOption;
+import 'demo_order_store.dart';
 import 'order_history_models.dart';
 import 'order_history_repository.dart';
 
@@ -39,16 +40,22 @@ class ActiveOrdersException implements Exception {
 /// (canonical active set, scope-only summary, FIFO order, capped page) so the UI
 /// behaves exactly as it will against the real backend.
 class DemoActiveOrdersRepository implements ActiveOrdersRepository {
+  /// Pass [store] to share ONE mutable dataset with the demo history + completion
+  /// repositories, so a demo completion really removes the order from this board
+  /// (ORDER-COMPLETION-001). [orders] remains supported for isolated fixtures.
   DemoActiveOrdersRepository({
+    DemoOrderStore? store,
     List<DemoOrder>? orders,
     DateTime Function()? clock,
     this.failureMessage,
     this.limit = 100,
-  }) : _orders = orders ?? demoOrderHistory(),
+  }) : _store = store ?? DemoOrderStore(orders),
        _clock = clock ?? DateTime.now;
 
-  final List<DemoOrder> _orders;
+  final DemoOrderStore _store;
   final DateTime Function() _clock;
+
+  List<DemoOrder> get _orders => _store.orders;
 
   /// When non-null the load throws an [ActiveOrdersException] with this message
   /// (drives/tests the error state).
