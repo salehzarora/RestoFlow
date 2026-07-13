@@ -100,9 +100,20 @@ select ok((app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-
 select is((select status from orders where id='00000000-0000-0000-0000-00000000a0d1')::text, 'submitted', 'paid order still unchanged after the cashier authorization denial');
 
 -- ===== T5: 'completed'-STATUS order still rejected by state legality ========== 17
-select throws_ok(
-  $$ select app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d5','00000000-0000-0000-0000-00000000da11','op-v5','void completed',null) $$,
-  '42501', NULL, 'a completed-STATUS order is rejected by state legality (42501), not converted into the payment guard');
+-- MONEY-SETTLEMENT-CONSISTENCY-001 (corrective): still rejected (D-024 terminal — the
+-- eligibility set is unchanged), but with the stable, typed domain code instead of an
+-- untyped 42501 raise. The POINT of this test survives intact and is now sharper: the
+-- STATE-LEGALITY code (invalid_transition / order_not_voidable) is returned, and it is
+-- NOT converted into the completed-payment guard (permission_denied /
+-- order_has_completed_payment) — the two refusals stay distinguishable.
+select ok(
+  (select r ->> 'ok' = 'false'
+      and r ->> 'error'  = 'invalid_transition'
+      and r ->> 'detail' = 'order_not_voidable'
+      and r ->> 'detail' <> 'order_has_completed_payment'
+      and r ->> 'order_status' = 'completed'
+   from app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d5','00000000-0000-0000-0000-00000000da11','op-v5','void completed',null) as r),
+  'a completed-STATUS order is rejected by STATE LEGALITY (invalid_transition / order_not_voidable), NOT converted into the payment guard');
 
 -- ===== T7: idempotency =====================================================  18-20
 select is((app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d2','00000000-0000-0000-0000-00000000da11','op-v3','void unpaid',null) ->> 'idempotency_replay')::boolean, true,

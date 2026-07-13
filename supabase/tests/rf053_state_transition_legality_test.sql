@@ -54,10 +54,37 @@ select is((app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-
 select is((app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b05','00000000-0000-0000-0000-00000000da11','o-served','x', null) ->> 'status'), 'voided', 'void from served succeeds');
 
 -- forbidden source states -> rejected --------------------------------------- 6-9
-select throws_ok($$ select app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b06','00000000-0000-0000-0000-00000000da11','o-draft','x', null) $$, '42501', NULL, 'void from draft rejected');
-select throws_ok($$ select app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b07','00000000-0000-0000-0000-00000000da11','o-comp','x', null) $$, '42501', NULL, 'void from completed rejected (D-024 terminal)');
-select throws_ok($$ select app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b08','00000000-0000-0000-0000-00000000da11','o-canc','x', null) $$, '42501', NULL, 'void from cancelled rejected');
-select throws_ok($$ select app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b09','00000000-0000-0000-0000-00000000da11','o-void','x', null) $$, '42501', NULL, 'void from voided rejected');
+-- ELIGIBILITY IS UNCHANGED (this is the point of these four): draft/completed/cancelled/
+-- voided are STILL refused, and `completed` is STILL terminal (D-024) — there is no
+-- completed -> void path. What changed (MONEY-SETTLEMENT-CONSISTENCY-001, corrective) is
+-- only the SHAPE of the refusal: it now RETURNS the stable, typed domain code
+-- {error:'invalid_transition', detail:'order_not_voidable', order_status:<the state>}
+-- instead of raising an untyped 42501. app.sync_push REBUILDS the envelope from scratch
+-- for a RAISE, collapsing every domain code to a generic 'rejected' — which left the POS
+-- unable to tell an already-closed order apart from a dropped network. These assertions
+-- are therefore STRONGER than the ones they replace: they pin the exact code and the
+-- exact refused state, not merely "some 42501 happened".
+select ok(
+  (select r ->> 'ok' = 'false' and r ->> 'error' = 'invalid_transition'
+      and r ->> 'detail' = 'order_not_voidable' and r ->> 'order_status' = 'draft'
+   from app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b06','00000000-0000-0000-0000-00000000da11','o-draft','x', null) as r),
+  'void from draft rejected (invalid_transition / order_not_voidable)');
+select ok(
+  (select r ->> 'ok' = 'false' and r ->> 'error' = 'invalid_transition'
+      and r ->> 'detail' = 'order_not_voidable' and r ->> 'order_status' = 'completed'
+   from app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b07','00000000-0000-0000-0000-00000000da11','o-comp','x', null) as r)
+  and (select o.status = 'completed' from orders o where o.id = '00000000-0000-0000-0000-0000000d5b07'),
+  'void from completed rejected (D-024 TERMINAL — no completed -> void path) and the order is untouched');
+select ok(
+  (select r ->> 'ok' = 'false' and r ->> 'error' = 'invalid_transition'
+      and r ->> 'detail' = 'order_not_voidable' and r ->> 'order_status' = 'cancelled'
+   from app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b08','00000000-0000-0000-0000-00000000da11','o-canc','x', null) as r),
+  'void from cancelled rejected (invalid_transition / order_not_voidable)');
+select ok(
+  (select r ->> 'ok' = 'false' and r ->> 'error' = 'invalid_transition'
+      and r ->> 'detail' = 'order_not_voidable' and r ->> 'order_status' = 'voided'
+   from app.void_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000d5b09','00000000-0000-0000-0000-00000000da11','o-void','x', null) as r),
+  'void from voided rejected (invalid_transition / order_not_voidable)');
 
 -- cascade: voiding the submitted order voided its item ----------------------- 10
 select is((select status from order_items where id='00000000-0000-0000-0000-000000005101')::text, 'voided', 'voiding the order cascaded its order_item to voided');

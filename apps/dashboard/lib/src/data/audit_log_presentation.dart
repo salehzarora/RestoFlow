@@ -75,7 +75,17 @@ class AuditEventView {
 }
 
 /// How an allowlisted field value is formatted.
-enum _Kind { text, role, money, count, boolean }
+enum _Kind {
+  text,
+  role,
+  money,
+  count,
+  boolean,
+  paymentStatus,
+  completionMode,
+  completionTrigger,
+  deniedReason,
+}
 
 /// The EXPLICIT allowlist of payload keys that may ever be shown, and how to
 /// render each. Any key NOT here is never surfaced (privacy allowlist, §10).
@@ -117,7 +127,22 @@ const Map<String, _Kind> _displayableKeys = {
   // reference (never the order UUID); `payment_status` is a STATE (paid/unpaid),
   // not a money figure — T-003 still holds.
   'order_code': _Kind.text,
-  'payment_status': _Kind.text,
+  // paid | unpaid | not_chargeable. A ZERO-TOTAL (comped) order completes with NO
+  // payment row, and the server audits `not_chargeable` rather than the false literal
+  // "paid" — so the VALUE is a closed enum and is localized, never shown raw.
+  'payment_status': _Kind.paymentStatus,
+  // Automatic completion (ORDER-AUTO-COMPLETION-001). Both are STATES describing
+  // HOW an order closed — not money, not identifiers (T-003 holds). Unlike the
+  // plain-text keys above, their VALUES are a closed enum, so both the label and
+  // the value are localized (ar/he/en) rather than shown as a raw server token.
+  'completion_mode': _Kind.completionMode, //     automatic | manual
+  'completion_trigger':
+      _Kind.completionTrigger, // order_served | payment_recorded
+  // WHY a mutation was denied (MONEY-SETTLEMENT-CONSISTENCY-001). The denial actions have
+  // always carried this, but it was never allowlisted — so the Activity Log said THAT a
+  // discount was refused and never WHY. A closed enum of safe STATE tokens; never money,
+  // never an identifier (T-003 holds).
+  'denied_reason': _Kind.deniedReason,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -158,6 +183,9 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'receipt_prefix' => l10n.activityLogFieldReceiptPrefix,
   'order_code' => l10n.activityLogFieldOrderCode,
   'payment_status' => l10n.activityLogFieldPaymentStatus,
+  'completion_mode' => l10n.activityLogFieldCompletionMode,
+  'completion_trigger' => l10n.activityLogFieldCompletionTrigger,
+  'denied_reason' => l10n.activityLogFieldDeniedReason,
   _ => key,
 };
 
@@ -388,9 +416,48 @@ class AuditEventPresenter {
       _Kind.count => _int(value).toString(),
       _Kind.boolean => _bool(value),
       _Kind.role => _roleLabel(value.toString()),
+      _Kind.paymentStatus => _paymentStatusLabel(value.toString()),
+      _Kind.completionMode => _completionModeLabel(value.toString()),
+      _Kind.completionTrigger => _completionTriggerLabel(value.toString()),
+      _Kind.deniedReason => _deniedReasonLabel(value.toString()),
       _Kind.text => value.toString(),
     };
   }
+
+  /// WHY a mutation was refused. An unknown token is shown raw rather than guessed —
+  /// an honest unknown beats a confident mislabel.
+  String _deniedReasonLabel(String reason) => switch (reason) {
+    'order_has_completed_payment' => l10n.activityLogDeniedOrderHasPayment,
+    'full_comp_requires_manager' =>
+      l10n.activityLogDeniedFullCompRequiresManager,
+    'order_not_voidable' => l10n.activityLogDeniedOrderNotVoidable,
+    _ => reason,
+  };
+
+  /// Whether the order owed anything, and whether it was settled. `not_chargeable`
+  /// is a ZERO-TOTAL (comped) order: it closed without a payment because there was
+  /// nothing to pay — reporting that as "Paid" would be a lie.
+  String _paymentStatusLabel(String status) => switch (status) {
+    'paid' => l10n.dashboardPaid,
+    'unpaid' => l10n.dashboardUnpaid,
+    'not_chargeable' => l10n.activityLogPaymentNotChargeable,
+    _ => status,
+  };
+
+  /// HOW the order closed. An unknown value falls back to the raw token rather
+  /// than guessing — an honest unknown beats a confident mislabel.
+  String _completionModeLabel(String mode) => switch (mode) {
+    'automatic' => l10n.activityLogCompletionModeAutomatic,
+    'manual' => l10n.activityLogCompletionModeManual,
+    _ => mode,
+  };
+
+  /// WHICH event closed it (automatic completions only).
+  String _completionTriggerLabel(String trigger) => switch (trigger) {
+    'order_served' => l10n.activityLogCompletionTriggerOrderServed,
+    'payment_recorded' => l10n.activityLogCompletionTriggerPaymentRecorded,
+    _ => trigger,
+  };
 
   String _bool(Object? value) {
     final v = value is bool ? value : value.toString() == 'true';

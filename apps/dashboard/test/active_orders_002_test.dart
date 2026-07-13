@@ -186,7 +186,10 @@ void main() {
       expect(ids, contains('s-unpaid'));
       expect(ids, contains('s-paid'));
       expect(
-        wait.rows.firstWhere((r) => r.orderId == 's-unpaid').paid,
+        wait.rows
+            .firstWhere((r) => r.orderId == 's-unpaid')
+            .settlement
+            .isSettled,
         isFalse,
       );
     },

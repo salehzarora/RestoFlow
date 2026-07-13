@@ -11,9 +11,17 @@ const String _demoDeviceId = 'demo-device';
 
 /// Thrown when a cash payment cannot be recorded (e.g. the tendered amount does
 /// not cover the order total). Messages carry only domain values — never secrets.
+///
+/// [notChargeable] is set ONLY for the server's exact stable domain code
+/// `order_not_chargeable` (MONEY-SETTLEMENT-CONSISTENCY-001): the order is zero-total, so
+/// it owes nothing and the server refuses to mint a 0-amount payment or burn a receipt
+/// number. It is a TYPED flag on purpose — a transport failure, a malformed envelope or
+/// any other rejection must NEVER be mistaken for it, because the UI tells the cashier
+/// something categorically different in each case.
 class PaymentException implements Exception {
-  const PaymentException(this.message);
+  const PaymentException(this.message, {this.notChargeable = false});
   final String message;
+  final bool notChargeable;
   @override
   String toString() => 'PaymentException: $message';
 }
@@ -323,6 +331,16 @@ class RealPaymentRepository implements PaymentRepository {
     if (status is! String) reject('missing_status');
     if (status != 'applied') {
       final error = op['error'];
+      // MONEY-SETTLEMENT-CONSISTENCY-001: the ONE typed refusal. Matched on the EXACT
+      // stable domain code the server returns — never on a raw database message, never on
+      // a SQLSTATE, and never inferred from the order's total. Every other rejection
+      // (including the generic `rejected`) stays a plain, retryable failure.
+      if (error == 'order_not_chargeable') {
+        throw const PaymentException(
+          'order_not_chargeable',
+          notChargeable: true,
+        );
+      }
       reject(error is String ? error : status);
     }
     if (op['ok'] == false) reject('applied_not_ok');
@@ -343,6 +361,11 @@ class RealPaymentRepository implements PaymentRepository {
     final recordedMethod =
         PaymentMethod.fromWire(op['method']) ?? requestedMethod;
 
+    // MONEY-SETTLEMENT-CONSISTENCY-001 / ORDER-AUTO-COMPLETION-001: the server reports the
+    // order's FINAL status here — `completed` when this payment auto-closed a served
+    // order. Absent on an older server: null means "not told", never "not terminal".
+    final orderStatus = op['order_status'];
+
     return CashPayment(
       paymentId: paymentId,
       orderNumber: orderNumber,
@@ -356,6 +379,9 @@ class RealPaymentRepository implements PaymentRepository {
       currencyCode: currencyCode,
       receiptNumber: receiptNumber,
       paidAt: paidAt,
+      orderStatus: orderStatus is String && orderStatus.isNotEmpty
+          ? orderStatus
+          : null,
     );
   }
 

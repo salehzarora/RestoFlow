@@ -90,11 +90,13 @@ void main() {
       );
       expect(code.newValue, '#02A001');
 
-      // The payment state at completion (a STATE, not a money figure).
+      // The payment state at completion (a STATE, not a money figure). Since
+      // ORDER-AUTO-COMPLETION-001 the VALUE is localized (paid | unpaid |
+      // not_chargeable), never the raw server token.
       final payment = view.changes.firstWhere(
         (c) => c.label == l10n.activityLogFieldPaymentStatus,
       );
-      expect(payment.newValue, 'paid');
+      expect(payment.newValue, l10n.dashboardPaid);
 
       // The authority actually used.
       expect(
@@ -203,7 +205,7 @@ void main() {
       // The safe fields ARE still shown.
       expect(rendered.contains('completed'), isTrue);
       expect(rendered.contains('#02A001'), isTrue);
-      expect(rendered.contains('paid'), isTrue);
+      expect(rendered.contains(l10n.dashboardPaid), isTrue);
     },
   );
 

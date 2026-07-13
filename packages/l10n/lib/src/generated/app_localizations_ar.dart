@@ -3675,6 +3675,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posUnpaidChip => 'غير مدفوع';
 
   @override
+  String get posNoChargeChip => 'بدون رسوم';
+
+  @override
+  String get posNoChargeNoPayment => 'هذا الطلب مجاني — لا يوجد مبلغ مستحق.';
+
+  @override
+  String get posCancelOrderClosed =>
+      'تم إغلاق هذا الطلب بالفعل ولم يعد بالإمكان إلغاؤه.';
+
+  @override
+  String get posCancelOrderConflict =>
+      'تم تغيير هذا الطلب من جهاز آخر. حدّث الصفحة وحاول مرة أخرى.';
+
+  @override
   String get posRecentSyncPending => 'جارٍ المزامنة…';
 
   @override
@@ -3773,6 +3787,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get ordersCompleteAction => 'إتمام الطلب';
 
   @override
+  String get ordersCompleteRecoveryNote =>
+      'هذا الطلب مُقدَّم ومدفوع، وكان يُفترض أن يُغلق تلقائيًا. إتمامه يدويًا هو إجراء استدراكي.';
+
+  @override
   String get ordersCompleteConfirmTitle => 'هل تريد إتمام هذا الطلب؟';
 
   @override
@@ -3822,6 +3840,47 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogFieldPaymentStatus => 'الدفع';
 
   @override
+  String get dashboardNoCharge => 'بدون رسوم';
+
+  @override
+  String get ordersPaymentFrozen =>
+      'تم دفع هذا الطلب، لذا أصبح إجماليه مثبتًا. لم يعد بالإمكان تغيير الخصومات.';
+
+  @override
+  String get activityLogFieldDeniedReason => 'السبب';
+
+  @override
+  String get activityLogDeniedOrderHasPayment => 'الطلب مدفوع مسبقًا';
+
+  @override
+  String get activityLogDeniedFullCompRequiresManager =>
+      'الإعفاء الكامل يتطلب مديرًا';
+
+  @override
+  String get activityLogDeniedOrderNotVoidable => 'الطلب مغلق بالفعل';
+
+  @override
+  String get activityLogPaymentNotChargeable => 'لا مبلغ مستحق';
+
+  @override
+  String get activityLogFieldCompletionMode => 'طريقة الإغلاق';
+
+  @override
+  String get activityLogFieldCompletionTrigger => 'سبب الإغلاق';
+
+  @override
+  String get activityLogCompletionModeAutomatic => 'تلقائيًا';
+
+  @override
+  String get activityLogCompletionModeManual => 'بواسطة شخص';
+
+  @override
+  String get activityLogCompletionTriggerOrderServed => 'تقديم الطلب';
+
+  @override
+  String get activityLogCompletionTriggerPaymentRecorded => 'تسجيل الدفعة';
+
+  @override
   String get ordersActiveSubtitleV2 =>
       'الطلبات المفتوحة حاليًا، وتنتقل إلى السجل بعد إتمامها أو إنهائها.';
 
@@ -3853,11 +3912,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get ordersAwaitingCloseExplainer =>
-      'هذه طلبات تم تقديمها. يمكن إتمام الطلب المدفوع من تفاصيله، أما غير المدفوع فيلزم تسجيل دفعته أولًا. وتبقى نشطة حتى يتم إتمامها أو إلغاؤها أو إبطالها.';
+      'الطلب المُقدَّم يُغلق تلقائيًا بمجرد سداده بالكامل، لذا فما تبقّى هنا يحتاج إلى انتباه — وغالبًا يكون السبب دفعة لم تُسجَّل. سجّل الدفعة وسيُغلق الطلب من تلقاء نفسه.';
 
   @override
   String ordersAwaitingCloseBacklog(int count) {
-    return 'لا يزال $count طلبًا مُقدَّمًا مفتوحًا. تبقى نشطة حتى يتم إتمام كل منها.';
+    return '$count طلبًا مُقدَّمًا لم تُغلق. الطلب المُقدَّم يُغلق تلقائيًا بمجرد سداده بالكامل، لذا فهذه الطلبات تنتظر شيئًا ما.';
   }
 
   @override

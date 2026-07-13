@@ -67,7 +67,17 @@ class CashPayment {
     required this.currencyCode,
     required this.receiptNumber,
     required this.paidAt,
+    this.orderStatus,
   });
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: the order's CANONICAL status as the SERVER
+  /// reported it in this payment's envelope (`record_payment` returns `order_status`,
+  /// which is `completed` when the served + fully-settled rule auto-closed the order).
+  ///
+  /// This is how the POS learns an order became TERMINAL, so it stops offering Cancel on
+  /// it. Null on an older server (or in demo) — and null means "not told", never
+  /// "not terminal": the server remains the authority.
+  final String? orderStatus;
 
   final String paymentId;
 

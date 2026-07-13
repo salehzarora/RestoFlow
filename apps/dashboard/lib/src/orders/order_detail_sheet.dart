@@ -21,6 +21,7 @@ import '../state/order_history_providers.dart';
 import 'order_complete_action.dart';
 import 'order_history_screen.dart' show statusLabel, statusTone, orderTypeLabel;
 import 'order_preview_dialog.dart';
+import 'settlement_badge.dart';
 
 /// Opens the detail sheet for [row]. The loader is captured from the current
 /// (scoped) repository provider.
@@ -290,10 +291,16 @@ class _DetailContent extends StatelessWidget {
           emphasised: true,
         ),
         const SizedBox(height: RestoflowSpacing.sm),
+        // A payment row is shown when money actually moved. Otherwise state the
+        // SETTLEMENT honestly: a zero-total order reads "No charge" (it owes nothing and
+        // was never charged), NOT "Unpaid" — which would imply money is outstanding.
         if (pay != null)
           _Row(_paymentMethodLabel(l10n, pay.method), _money(pay.amountMinor))
         else
-          _Row(l10n.ordersFilterPayment, l10n.dashboardUnpaid),
+          _Row(
+            l10n.ordersFilterPayment,
+            settlementLabel(l10n, detail.settlement),
+          ),
       ],
     );
   }

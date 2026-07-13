@@ -20,9 +20,22 @@ class PosRecentOrder {
     this.payment,
     this.voidedAt,
     this.voidReason,
+    this.status,
   });
 
   final SubmittedOrderView order;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: the last CANONICAL order status this device
+  /// heard from the SERVER (`submitted` on submit, then whatever a server envelope
+  /// reports — e.g. `record_payment` returns `order_status`, which is `completed` when
+  /// the served+settled rule auto-closed the order).
+  ///
+  /// NULL means "this device has not been told" — the POS does not pull orders back, so
+  /// a status change driven purely by the KDS (a bump that auto-completes a comped
+  /// order) never reaches this device. We therefore treat null as NOT-known-terminal and
+  /// let the SERVER be the authority: it refuses the write and the UI explains why. What
+  /// we must never do is infer terminality from the payment marker.
+  final String? status;
 
   /// The recorded payment once the order is settled, or null while unpaid.
   final CashPayment? payment;
@@ -44,11 +57,51 @@ class PosRecentOrder {
   String get orderNumber => order.orderNumber;
   String? get orderId => order.orderId;
 
-  /// True once a COMPLETED payment is attached (the paid/unpaid axis).
+  /// True once a COMPLETED payment row is attached. This is a MARKER — "was money
+  /// taken?" — NOT the settlement question. It is the right test for "can we reprint a
+  /// receipt?" and for the server's void guard (which blocks on a live completed
+  /// payment), and the WRONG test for "does this order still owe money?".
   bool get isPaid => payment != null && payment!.status.isPaid;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001 — the client mirror of `app.order_is_fully_settled`:
+  /// does this order still owe money?
+  ///
+  ///   total == 0 -> SETTLED (non-chargeable: it owes nothing and carries no payment)
+  ///   total  > 0 -> settled only when the completed payment COVERS the current total
+  ///   total  < 0 -> FAIL CLOSED
+  ///
+  /// A payment-row marker is wrong in both directions: it calls a comped order "unpaid"
+  /// forever, and an UNDER-COVERED order "paid".
+  bool get isFullySettled {
+    if (grandTotalMinor < 0) return false;
+    if (grandTotalMinor == 0) return true;
+    final p = payment;
+    if (p == null || !p.status.isPaid) return false;
+    return p.amountMinor >= grandTotalMinor;
+  }
+
+  /// A ZERO-TOTAL (comped / 100%-discounted) order: it owes nothing, and the server
+  /// REFUSES to take a payment for it (no zero-value payment, no burned receipt number).
+  ///
+  /// EXACTLY zero — never `<= 0`. A NEGATIVE total is not "nothing to pay", it is a MONEY
+  /// DEFECT (the DB CHECK forbids it, so it should be unreachable). Treating it as
+  /// non-chargeable would label a corrupt order "No charge" and hide its payment and
+  /// cancel controls — silently swallowing the very thing an operator needs to see. It
+  /// therefore falls through to [isFullySettled], which FAILS CLOSED on a negative total:
+  /// the order reads UNPAID and keeps every control.
+  bool get isNonChargeable => grandTotalMinor == 0;
 
   /// MONEY-VOID-001: true once the order has been cancelled (voided).
   bool get isVoided => voidedAt != null;
+
+  /// The order is in a CANONICAL TERMINAL state as far as this device knows, so no
+  /// mutation (payment, cancel/void) can succeed. `completed` is terminal and stays
+  /// terminal — there is no completed -> void path (human decision).
+  bool get isTerminal =>
+      isVoided ||
+      status == 'completed' ||
+      status == 'cancelled' ||
+      status == 'voided';
 
   int get grandTotalMinor => order.grandTotalMinor;
   String get currencyCode => order.currencyCode;
@@ -57,12 +110,14 @@ class PosRecentOrder {
     CashPayment? payment,
     DateTime? voidedAt,
     String? voidReason,
+    String? status,
   }) => PosRecentOrder(
     order: order,
     submittedAt: submittedAt,
     payment: payment ?? this.payment,
     voidedAt: voidedAt ?? this.voidedAt,
     voidReason: voidReason ?? this.voidReason,
+    status: status ?? this.status,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -71,6 +126,7 @@ class PosRecentOrder {
     if (payment != null) 'payment': _paymentToJson(payment!),
     if (voidedAt != null) 'voided_at': voidedAt!.toIso8601String(),
     if (voidReason != null) 'void_reason': voidReason,
+    if (status != null) 'status': status,
   };
 
   /// Parses a persisted recent order. Throws [FormatException] on a
@@ -97,6 +153,7 @@ class PosRecentOrder {
           : null,
       voidedAt: voidedAtRaw is String ? DateTime.tryParse(voidedAtRaw) : null,
       voidReason: _strOrNull(voidReasonRaw),
+      status: _strOrNull(json['status']),
     );
   }
 }
@@ -191,6 +248,7 @@ Map<String, Object?> _paymentToJson(CashPayment p) => <String, Object?>{
   'currency_code': p.currencyCode,
   'receipt_number': p.receiptNumber,
   'paid_at': p.paidAt.toIso8601String(),
+  if (p.orderStatus != null) 'order_status': p.orderStatus,
 };
 
 CashPayment _paymentFromJson(Map<String, Object?> j) {
@@ -211,6 +269,7 @@ CashPayment _paymentFromJson(Map<String, Object?> j) {
     currencyCode: '${j['currency_code'] ?? ''}',
     receiptNumber: '${j['receipt_number'] ?? ''}',
     paidAt: paidAt,
+    orderStatus: _strOrNull(j['order_status']),
   );
 }
 

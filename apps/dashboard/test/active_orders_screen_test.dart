@@ -198,7 +198,10 @@ void main() {
       expect(codes, isNot(contains('t-draft')));
       // A PAID order stays active (payment is a separate axis — D-025).
       expect(codes, contains('a-ready'));
-      expect(snap.rows.firstWhere((r) => r.orderId == 'a-ready').paid, isTrue);
+      expect(
+        snap.rows.firstWhere((r) => r.orderId == 'a-ready').settlement,
+        SettlementState.paid,
+      );
       // A SERVED order stays active until the lifecycle closes it.
       expect(codes, contains('a-served'));
       expect(snap.rows.length, 5);
@@ -243,7 +246,7 @@ void main() {
       itemCount: 1,
       grandTotalMinor: 0,
       currencyCode: 'ILS',
-      paid: false,
+      settlement: SettlementState.unpaid,
     );
     // No absolute timestamp -> NO age (never a fabricated "0 min").
     expect(openMinutes(known, _now), isNull);
@@ -257,7 +260,7 @@ void main() {
       itemCount: 1,
       grandTotalMinor: 0,
       currencyCode: 'ILS',
-      paid: false,
+      settlement: SettlementState.unpaid,
       createdAtUtc: _now.subtract(const Duration(minutes: 75)),
     );
     expect(openMinutes(row, _now), 75);
@@ -271,7 +274,7 @@ void main() {
       itemCount: 1,
       grandTotalMinor: 0,
       currencyCode: 'ILS',
-      paid: false,
+      settlement: SettlementState.unpaid,
       createdAtUtc: _now.add(const Duration(minutes: 5)),
     );
     expect(openMinutes(skewed, _now), 0);

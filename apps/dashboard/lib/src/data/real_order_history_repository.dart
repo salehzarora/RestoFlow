@@ -128,7 +128,8 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
       itemCount: _int(row['item_count']),
       grandTotalMinor: _int(row['grand_total_minor']),
       currencyCode: currency,
-      paid: (row['payment_status'] ?? '').toString() == 'paid',
+      // paid | unpaid | not_chargeable, straight from the ONE server predicate.
+      settlement: SettlementState.fromWire(row['payment_status']),
       receiptNumber: _strOrNull(row['receipt_number']),
       customerName: _strOrNull(row['customer_name']),
       tableLabel: _strOrNull(row['table_label']),

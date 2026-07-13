@@ -132,12 +132,14 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
     if (q.status.wire != null && d.status != q.status.wire) return false;
     if (q.orderType.wire != null && d.orderType != q.orderType.wire)
       return false;
-    final paid = d.completedPayment != null;
+    // SETTLEMENT, not a marker — the SAME rule the live board and the server apply, so
+    // history and the board can never disagree about the same order.
+    final settled = d.settlement.isSettled;
     switch (q.payment) {
       case PaymentFilter.paid:
-        if (!paid) return false;
+        if (!settled) return false;
       case PaymentFilter.unpaid:
-        if (paid) return false;
+        if (settled) return false;
       case PaymentFilter.cash:
         if (d.completedPayment?.method != 'cash') return false;
       case PaymentFilter.all:
@@ -173,7 +175,7 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
       itemCount: items,
       grandTotalMinor: d.grandTotalMinor,
       currencyCode: d.currencyCode,
-      paid: pay != null,
+      settlement: d.settlement,
       receiptNumber: d.receiptNumber,
       customerName: d.customerName,
       tableLabel: d.tableLabel,
@@ -512,9 +514,12 @@ List<DemoOrder> demoOrderHistory() {
         payments: [cash(7400, receipt: 'R-1008', at: '13:31')],
       ),
     ),
-    // SERVED and PAID -> the COMPLETABLE one (D-025 satisfied). Its sibling
-    // #1007GG is served but UNPAID, so completing it is refused — the two make the
-    // ORDER-COMPLETION-001 policy visible in demo mode.
+    // SERVED and PAID, yet still open — an ANOMALY under ORDER-AUTO-COMPLETION-001
+    // (the rule closes a served order the moment it is fully paid), and therefore
+    // exactly the case the MANUAL recovery completion exists for: an order served
+    // and paid before the rule shipped. Its sibling #1007GG is served but UNPAID —
+    // the ordinary Awaiting-close exception, which no rule may close. Together they
+    // make both policies visible in demo mode.
     DemoOrder(
       daysAgo: 0,
       minutesAgo: 55,

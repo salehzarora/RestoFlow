@@ -32,7 +32,10 @@ class RecentOrdersButton extends ConsumerWidget {
     // unpaid badge (a voided order carries no payment, so !isPaid alone would
     // still count it). Watching the list state above keeps this reactive: the
     // badge updates the instant an order is cancelled, no restart needed.
-    final unpaid = orders.where((o) => !o.isPaid && !o.isVoided).length;
+    // MONEY-SETTLEMENT-CONSISTENCY-001: the badge counts OUTSTANDING MONEY, not "orders
+    // with no payment row". A comped (zero-total) order owes nothing and must not sit in
+    // the cashier's unpaid badge forever; an UNDER-COVERED order still owes and must.
+    final unpaid = orders.where((o) => !o.isFullySettled && !o.isVoided).length;
     final icon = IconButton(
       key: const Key('recent-orders-button'),
       tooltip: l10n.posRecentOrdersTitle,
@@ -82,8 +85,9 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
           _RecentFilter.all => true,
           // MONEY-VOID-001: a cancelled (voided) order is no longer active work,
           // so it drops out of the "unpaid" filter (still visible under "all").
-          _RecentFilter.unpaid => !o.isPaid && !o.isVoided,
-          _RecentFilter.paid => o.isPaid,
+          // SETTLEMENT, not the marker: `unpaid` means "still owes money".
+          _RecentFilter.unpaid => !o.isFullySettled && !o.isVoided,
+          _RecentFilter.paid => o.isFullySettled,
         })
           o,
     ];
@@ -195,7 +199,12 @@ class _RecentOrderCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final o = order.order;
-    final paid = order.isPaid;
+    // SETTLEMENT ("does it still owe money?") drives what we SAY. The payment MARKER
+    // ("was money taken?") drives what we OFFER: a receipt can only be reprinted when a
+    // payment exists, and the server's void guard blocks exactly on a live completed
+    // payment. Conflating the two is what made the POS lie.
+    final settled = order.isFullySettled;
+    final hasPayment = order.payment != null;
     final dineIn = o.orderType == OrderType.dineIn;
     final subtitle = <String>[
       dineIn ? l10n.posOrderTypeDineIn : l10n.posOrderTypeTakeaway,
@@ -281,11 +290,25 @@ class _RecentOrderCard extends ConsumerWidget {
                   icon: Icons.block,
                 )
               else ...[
-                RestoflowStatusPill(
-                  label: paid ? l10n.posPaidChip : l10n.posUnpaidChip,
-                  tone: paid ? RestoflowTone.success : RestoflowTone.warning,
-                  icon: paid ? Icons.check_circle_outline : Icons.schedule,
-                ),
+                // MONEY-SETTLEMENT-CONSISTENCY-001: SETTLEMENT, not the payment marker.
+                // A NON-CHARGEABLE (zero-total) order reads "No charge" — it is neither
+                // Paid (no money was taken) nor Unpaid (nothing is owed). An
+                // UNDER-COVERED order reads Unpaid, because money IS still owed.
+                if (order.isNonChargeable)
+                  RestoflowStatusPill(
+                    key: Key('recent-nocharge-${order.orderNumber}'),
+                    label: l10n.posNoChargeChip,
+                    tone: RestoflowTone.neutral,
+                    icon: Icons.money_off_outlined,
+                  )
+                else
+                  RestoflowStatusPill(
+                    label: settled ? l10n.posPaidChip : l10n.posUnpaidChip,
+                    tone: settled
+                        ? RestoflowTone.success
+                        : RestoflowTone.warning,
+                    icon: settled ? Icons.check_circle_outline : Icons.schedule,
+                  ),
                 if (syncState != null && syncState!.isFailed)
                   RestoflowStatusPill(
                     label: l10n.posRecentSyncFailed,
@@ -301,48 +324,75 @@ class _RecentOrderCard extends ConsumerWidget {
               ],
             ],
           ),
-          // MONEY-VOID-001: a cancelled (voided) order is terminal + money-free
-          // — no Take payment, no receipt reprint. The action row is omitted.
-          if (!order.isVoided) ...[
+          // MONEY-SETTLEMENT-CONSISTENCY-001: a TERMINAL order (cancelled/voided, or a
+          // `completed` one — including a comped order the served+settled rule closed by
+          // itself) accepts NO mutation. It must not offer Take payment or Cancel: the
+          // server would refuse them, and a button that always fails is a lie. Reprint
+          // stays available whenever a receipt actually exists.
+          if (!order.isTerminal || hasPayment) ...[
             const SizedBox(height: RestoflowSpacing.sm),
+            // A NON-CHARGEABLE (zero-total) order owes nothing, and the server REFUSES a
+            // payment for it (no zero-value payment row, no burned receipt number). Say
+            // so plainly instead of showing a control that cannot work.
+            if (!order.isTerminal && order.isNonChargeable && !hasPayment)
+              Padding(
+                key: Key('recent-nocharge-note-${order.orderNumber}'),
+                padding: const EdgeInsetsDirectional.only(
+                  bottom: RestoflowSpacing.sm,
+                ),
+                child: Text(
+                  l10n.posNoChargeNoPayment,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
             Row(
               children: [
-                if (!paid) ...[
-                  Expanded(
-                    child: FilledButton.icon(
-                      key: Key('recent-pay-${order.orderNumber}'),
-                      onPressed: () => CashPaymentSheet.show(
-                        context,
-                        orderId: o.orderId,
-                        orderNumber: o.orderNumber,
-                        amountMinor: o.grandTotalMinor,
-                        currencyCode: o.currencyCode,
+                if (!hasPayment) ...[
+                  // Offered only when there is genuinely money to collect.
+                  if (!order.isNonChargeable) ...[
+                    Expanded(
+                      child: FilledButton.icon(
+                        key: Key('recent-pay-${order.orderNumber}'),
+                        onPressed: () => CashPaymentSheet.show(
+                          context,
+                          orderId: o.orderId,
+                          orderNumber: o.orderNumber,
+                          amountMinor: o.grandTotalMinor,
+                          currencyCode: o.currencyCode,
+                        ),
+                        icon: const Icon(Icons.payments_outlined, size: 18),
+                        label: Text(l10n.posTakePayment),
                       ),
-                      icon: const Icon(Icons.payments_outlined, size: 18),
-                      label: Text(l10n.posTakePayment),
                     ),
-                  ),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                  // A deliberate, distinct destructive action to CANCEL a wrong
-                  // unpaid order (danger outline; opens a reason+confirm sheet,
-                  // never a one-tap cancel). The server enforces the
-                  // manager/owner role gate.
-                  OutlinedButton.icon(
-                    key: Key('recent-cancel-${order.orderNumber}'),
-                    onPressed: () =>
-                        CancelOrderSheet.show(context, order: order),
-                    icon: const Icon(Icons.block, size: 18),
-                    label: Text(l10n.posCancelOrderAction),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: RestoflowTone.danger
-                          .styleOf(theme)
-                          .accent,
-                      side: BorderSide(
-                        color: RestoflowTone.danger.styleOf(theme).accent,
+                    const SizedBox(width: RestoflowSpacing.sm),
+                  ],
+                  // CANCEL mirrors the SERVER's void rule — a live completed payment
+                  // blocks a void, and a terminal order cannot be voided at all. It is
+                  // NOT gated on the payment marker as a stand-in for "settled": a
+                  // zero-total order that is still ACTIVE remains cancellable, exactly as
+                  // the server allows.
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: Key('recent-cancel-${order.orderNumber}'),
+                      onPressed: () =>
+                          CancelOrderSheet.show(context, order: order),
+                      icon: const Icon(Icons.block, size: 18),
+                      label: Text(l10n.posCancelOrderAction),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: RestoflowTone.danger
+                            .styleOf(theme)
+                            .accent,
+                        side: BorderSide(
+                          color: RestoflowTone.danger.styleOf(theme).accent,
+                        ),
                       ),
                     ),
                   ),
                 ] else ...[
+                  // A receipt exists -> it can be reprinted and viewed. Gated on the
+                  // PAYMENT ROW (not settlement): a comped order has no receipt to show.
                   Expanded(
                     child: OutlinedButton.icon(
                       key: Key('recent-reprint-${order.orderNumber}'),

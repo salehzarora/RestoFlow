@@ -532,6 +532,208 @@ and that `anon` still cannot execute it; (3) **only then** deploy the Dashboard.
 **No POS/KDS APK rebuild is required** — POS and KDS never call this RPC. **NOT
 applied to hosted by the ticket branch.**
 
+**ORDER-AUTO-COMPLETION-001 rollout (DB-first — MANDATORY; this one CHANGES LIVE
+POS/KDS BEHAVIOUR, so read this before applying).** Migration
+`20260714090000_order_auto_completion_001_served_paid.sql` is **additive /
+forward-only**: it adds two INTERNAL helpers (`app.order_is_fully_settled`,
+`app.try_auto_complete_order` — granted to **no** client role, no public wrapper)
+and **re-creates** three existing functions in place with surgical changes —
+`app.apply_order_status_transition` (the D-025 gate becomes the amount-aware
+settlement test + trigger direction A), `app.record_payment` (trigger direction B;
+**signature, gates, errors, money maths and the payment row are UNCHANGED** — only
+two additive result keys), and `app.audit_safe_detail` (allowlist gains
+`completion_mode` + `completion_trigger`). **No table, column, CHECK, RLS policy,
+trigger or index change; no historical order, payment or audit row is rewritten;
+no lifecycle transition is added; no signature changes**, so no client can break on
+an argument mismatch.
+
+**The behaviour change is real and it lands the moment the migration is applied:**
+a `served` order that is fully paid will complete **itself** — on the KDS bump of an
+already-paid order, and on the POS payment of an already-served order. Existing POS
+and KDS builds keep working unchanged (they ignore the additive `auto_completed` /
+`order_status` keys), so **this migration on its own forces no APK rebuild** — but the
+field will start seeing served+paid orders close on their own, and the *Awaiting close*
+queue will drain to genuine exceptions (mostly unpaid orders). **Brief the pilot staff
+before applying.** (**Release note:** the companion MONEY-SETTLEMENT-CONSISTENCY-001,
+which ships in the SAME release, *does* require a **POS** APK rebuild for its POS surface
+fix. **KDS still does not** — see the verified build matrix below.) Order: (1) apply to hosted; (2) verify a paid `served` bump returns
+`status: completed` + `auto_completed: true`, that an **unpaid** served order stays
+`served`, that a payment on a **submitted** order still succeeds and does **not**
+complete it, that a payment on a `served` order returns `auto_completed: true`, that
+the audit shows ONE `order.status_updated` with `completion_mode='automatic'`, and
+that `anon`/`authenticated` cannot execute either new helper; (3) deploy the
+Dashboard (it only needs the migration for the new audit fields and the recovery
+copy — it degrades honestly without it). **NOT applied to hosted by the ticket
+branch** — a future apply still requires the **RISK R-003** sign-off and the §13
+preflight.
+
+**ZERO-TOTAL (COMPED) ORDERS — a SECOND behaviour change in the same migration.**
+`app.order_is_fully_settled` treats `grand_total_minor = 0` as **NON-CHARGEABLE and
+settled** (it owes nothing, so it settles with no payment row; a positive total still
+needs a covering completed payment — D-025 is not weakened). Consequences the moment
+the migration is applied:
+- A **comped / 100%-discounted** order will **auto-complete** as soon as the kitchen
+  bumps it to `served`. Before this migration such an order was **stuck** — neither the
+  rule nor the manual *Complete order* action would close it (both returned
+  `order_not_paid`). Any zero-total orders already sitting in *Awaiting close* will
+  therefore close on the next KDS bump, or can be closed by the manual action.
+- **A comped order becomes NON-VOIDABLE once it auto-completes** (`completed` is
+  terminal; `app.void_order` refuses it), and the POS *recent orders* sheet still shows
+  an enabled **Cancel** button for it, which will now fail with a generic error. A
+  mis-comped order can become unrecoverable. **Brief the pilot staff on this before
+  applying** — the POS surface for this is fixed by MONEY-SETTLEMENT-CONSISTENCY-001
+  (below), which ships in the SAME release; `completed` stays terminal by decision.
+- Post-apply verification, in addition to the list above: a zero-total `served` order
+  with **no payment row** reports settled and completes (automatic **and** manual), its
+  completion audit carries `payment_status = 'not_chargeable'` (never `paid`), and
+  **no payment row is created** for it.
+
+**MONEY-SETTLEMENT-CONSISTENCY-001 rollout — APPLY IT IN THE SAME RELEASE, IMMEDIATELY
+AFTER `20260714090000`.** Migration
+`20260715090000_money_settlement_consistency_001.sql` re-creates SIX existing functions
+(`app.apply_discount`, `app.record_payment`, `app.owner_active_orders`,
+`app.owner_order_history`, `app.owner_daily_report`, `app.owner_report_range`) plus
+`app.audit_safe_detail`, **all with IDENTICAL signatures**, so `CREATE OR REPLACE`
+preserves every ACL and no client can break on an argument mismatch. **No table, column,
+CHECK, RLS policy, trigger or index change; no historical row is rewritten.**
+
+**ORDERING IS NOT OPTIONAL.** `20260714090000` introduces the settlement rule (a comped
+order auto-completes and becomes NON-VOIDABLE); `20260715090000` is what makes the POS
+stop offering a Cancel button on such an order, stops `record_payment` minting a
+0-amount payment + burning a receipt number, and stops the reports counting a comped
+order as unpaid. **Applying the first without the second ships the sharp edge without
+the guard rail.** Apply both, then deploy the clients.
+
+Behaviour changes the moment it is applied:
+- A discount on an order that already carries a **completed payment** is now REFUSED
+  (`permission_denied` / `order_has_completed_payment`), **including a discount that
+  would lower the total** — post-payment price changes are refunds, and there is no
+  refund flow. Brief managers: the total must be right **before** the money is taken.
+- **A payment on a zero-total order is REFUSED** (`order_not_chargeable`) before the
+  receipt counter is touched.
+- The owner's `unpaid_count`, the paid/unpaid filters and the payment badges switch from
+  a payment-row **marker** to real **settlement**. Expect `unpaid_count` to **drop** by
+  the number of comped orders and to **rise** by the number of under-covered ones.
+  **No money figure moves** — billed still comes from the order snapshot, collected still
+  from `payments.status='completed'`.
+
+**VERIFIED BUILD MATRIX for the ORDER-AUTO-COMPLETION-001 + MONEY-SETTLEMENT-CONSISTENCY-001
+release.** DB-first remains the correct order; the server guards work regardless of which
+clients are rebuilt.
+
+| Artifact | Rebuild | Why |
+|---|---|---|
+| **Dashboard (web)** | **REQUIRED** | It is the ONLY client that reads the new three-valued `payment_status` (`paid` \| `unpaid` \| `not_chargeable`) from `owner_active_orders` / `owner_order_history`, and it ships the new settlement badge, filters and counters. |
+| **POS APK** | **REQUIRED** | 6 POS runtime files changed. It does **not** read `payment_status` — it derives settlement locally (`PosRecentOrder.isFullySettled`) — but it now reads **`order_status`** from `record_payment`'s envelope to learn an order became terminal, and it carries the surface fix (Cancel / Take-payment gating, the "No charge" chip, the zero-tender explanation). |
+| **KDS APK** | **NOT REQUIRED** | See the verification below. An existing KDS APK keeps working unchanged against the new server. |
+
+**Why KDS needs no rebuild (verified against the code, not assumed):**
+- **No KDS file changed.** Nothing under `apps/kds/**` or `packages/feature_kitchen/**` is
+  in the diff. Of KDS's ten path dependencies (`feature_kitchen`, `l10n`, `domain`, `sync`,
+  `design_system`, `printing`, `native_printing`, `auth_identity`, `feature_auth`,
+  `data_remote`) the **only** one this release touches is **`l10n`**.
+- **KDS references none of the changed strings.** All 18 new/changed l10n keys were
+  grepped against `apps/kds/lib` + `packages/feature_kitchen/lib`: **zero hits**. The only
+  two keys whose *values* changed (`ordersAwaitingCloseExplainer`,
+  `ordersAwaitingCloseBacklog`) are Dashboard-only.
+- **The changed server envelope cannot reach KDS.** `KdsStatusPusher.push` does
+  `await _transport.invoke('sync_push', …)` and **discards the return value entirely** — it
+  only cares whether the call threw. The new `auto_completed` / `completion_trigger` keys,
+  and the fact that `status` may now come back as `completed` instead of `served`, are
+  therefore unobservable to it.
+- **An auto-completed order leaves the board exactly as a served one did.**
+  `KdsTicketMapper` uses an **allowlist** — `{submitted, accepted, preparing, ready}` — so
+  both `served` and `completed` are excluded. The board behaviour is identical.
+- **KDS calls none of the changed RPCs.** It never invokes `record_payment`,
+  `apply_discount`, `owner_active_orders`, `owner_order_history`, `owner_daily_report` or
+  `owner_report_range`, and it reads no `payment_status` / `not_chargeable` / money field
+  (T-003 — the KDS stays money-free).
+
+**Client/server compatibility:** the Dashboard **fails closed to `unpaid`** on an unknown
+`payment_status` token, so an **old Dashboard against the new server** degrades honestly
+(it simply never shows *No charge* and keeps the old, less accurate label — no crash). A
+**new client against an old server** never sees `not_chargeable`. **An old POS or KDS APK
+against the new server keeps working**: the server-side guards (discount freeze, zero-tender
+refusal) are enforced regardless of client version.
+
+Post-apply verification: a discount on a paid order is refused and audited with
+`denied_reason`; `owner_active_orders` reports `payment_status='not_chargeable'` for a
+comped order and `'unpaid'` for an under-covered one; and `anon` still cannot execute any
+of the re-created functions. **The zero-total payment smoke test is defined below — run it
+through the REAL client path (`public.sync_push`), not by calling the RPC directly.**
+
+**MONEY-SETTLEMENT-CONSISTENCY-001 (corrective) — THE THIRD MIGRATION, APPLY IT WITH THE
+OTHER TWO.** `20260716090000_settlement_and_void_error_contracts.sql` re-creates
+`app.record_payment` and `app.void_order` (identical signatures; ACLs preserved) so their
+domain refusals **RETURN** instead of RAISE. **`app.sync_push` is NOT modified.**
+
+Why it is not optional: `sync_push` rebuilds the envelope from scratch for a RAISE,
+collapsing every domain code into a generic `rejected`. Without this migration the POS
+cannot see `order_not_chargeable` (so the "nothing to pay" explanation is unreachable) and
+cannot tell an **already-closed order** apart from a **dropped network** — which is exactly
+how a cashier could be told an order was closed when the connection had merely failed.
+
+Behaviour at apply time: an order that is TERMINAL now returns
+`invalid_transition` / `order_not_voidable` (and is audited `order.void_denied`), and a
+zero-total payment returns `order_not_chargeable`. **Void eligibility is UNCHANGED —
+`completed` stays terminal and there is no `completed → void` path.** Normal payments,
+successful envelopes and idempotent replay are byte-for-byte unchanged.
+
+#### Post-apply SMOKE TESTS — run them through the REAL client path
+**Drive `public.sync_push`, NOT the RPC directly.** The whole defect this migration fixes
+lives at the sync boundary: calling `app.record_payment` / `app.void_order` directly would
+pass even when the client can see nothing. Neither smoke test may depend on a SQLSTATE, and
+neither envelope may carry a raw SQL message.
+
+**A. Zero-total payment** — push a `payment.create` op for an order with
+`grand_total_minor = 0`. Expected **per-operation result**:
+- `status = "rejected"`
+- **`error = "order_not_chargeable"`** (**not** the generic `"rejected"`)
+- **no `sqlstate` field**, and **no raw SQL message text** anywhere in the envelope
+
+…and, in the database, the refusal must have touched **nothing**:
+- **no** `payments` row for the order
+- **`branch_receipt_counters.last_issued_value` UNCHANGED** (no receipt number burned —
+  the sequence is gapless, so a burned number can never be reclaimed)
+- **no** `shifts` / `cash_drawer_sessions` mutation
+- **no** `orders.revision` change and **no** `orders.receipt_number` set
+- **no** success `order_operations` (idempotency-ledger) row
+
+**B. Terminal void** — push an `order.void` op for a `completed` order. Expected
+**per-operation result**:
+- `status = "rejected"`, **`error = "invalid_transition"`**, **`detail = "order_not_voidable"`**,
+  `order_status = "completed"`
+
+…and:
+- the order **remains `completed`** and otherwise **unchanged** (D-024 — `completed` is
+  terminal; there is **no** `completed → void` path)
+- **no `order.voided` success audit event** is written
+- the **denial audit is intact**: exactly one `order.void_denied` with
+  `denied_reason = 'order_not_voidable'`, carrying the actor, the scope and the safe
+  `order_code`
+- a **paid**-order void still returns `permission_denied` + `order_has_completed_payment`,
+  and a **role** denial still returns a bare `permission_denied` — the three refusals stay
+  distinguishable
+
+**FINAL MIGRATION ORDER — apply all three back-to-back in ONE controlled DB-first rollout:**
+1. `20260714090000_order_auto_completion_001_served_paid.sql`
+2. `20260715090000_money_settlement_consistency_001.sql`
+3. `20260716090000_settlement_and_void_error_contracts.sql`
+
+**Do NOT leave (1) live without (2) and (3).** (1) introduces the sharp edge (a comped
+order auto-completes and becomes non-voidable); (2) is the guard rail; (3) is what lets the
+client explain what happened instead of guessing.
+
+**ROLLBACK — NOT FULLY REVERSIBLE. Prefer a FORWARD FIX.** Re-applying the previous
+definitions restores the old *code*, but it does **not** restore the *world*:
+- **Orders that already auto-completed stay `completed`.** They are terminal, and there is
+  no un-complete path. Nothing rewinds them.
+- A rollback of (3) re-collapses both domain codes into a generic `rejected`, and a
+  rollback of (2) re-opens the discount and zero-tender holes.
+- No data is migrated by any of the three files, and no historical row is rewritten — but
+  "no data migration" is **not** the same as "no effect". **A forward fix is the preferred
+  production recovery strategy.**
+
 **Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).
 - **Yesterday / Last 7 days / Last 30 days** load with real current + comparison

@@ -1,9 +1,17 @@
-/// The "Complete order" action (ORDER-COMPLETION-001).
+/// The "Complete order" action — a RECOVERY step (ORDER-COMPLETION-001, reframed
+/// by ORDER-AUTO-COMPLETION-001).
 ///
 /// The ONE write the Dashboard performs on an order: move an eligible `served`
 /// order to the canonical terminal state `completed`. It is deliberately NOT a
 /// payment, a settlement, a refund, a void or a status picker — there is no
 /// next-status choice anywhere, and the server hard-codes the target.
+///
+/// Since ORDER-AUTO-COMPLETION-001 a served order that is fully paid closes
+/// ITSELF, so this action is no longer how an order normally ends: it is the
+/// fallback for an order the rule did not close (one served and paid before the
+/// rule existed, or one whose automatic step failed soft). When the order IS served
+/// and fully paid, we say so plainly — reaching for this button means something is
+/// off, and hiding that would be dishonest.
 ///
 /// It appears ONLY when the order is eligible under the canonical state machine
 /// (`served`), and only for a settlement role. For an UNPAID order it renders
@@ -22,6 +30,7 @@ import '../data/order_completion_repository.dart';
 import '../data/order_history_models.dart';
 import '../state/dashboard_providers.dart';
 import '../state/order_completion_providers.dart';
+import 'settlement_badge.dart';
 
 /// Whether [role] may settle orders — the SAME allowlist the server enforces
 /// (`cashier` / `manager` / `restaurant_owner` / `org_owner`). `kitchen_staff` and
@@ -61,7 +70,11 @@ class OrderCompleteAction extends ConsumerWidget {
     if (!canCompleteOrders(role)) return const SizedBox.shrink();
 
     final state = ref.watch(orderCompletionControllerProvider(detail.orderId));
-    final paid = detail.completedPayment != null;
+    // The SETTLEMENT test, not a marker test — the same one the server applies
+    // (`app.order_is_fully_settled`): the completed payment must cover the order's
+    // CURRENT total. An under-covered order is refused by the server, so offering an
+    // enabled button for it would be a lie.
+    final paid = detail.isFullySettled;
 
     if (state.completed) {
       return _Banner(
@@ -83,6 +96,15 @@ class OrderCompleteAction extends ConsumerWidget {
             tone: RestoflowTone.warning,
             icon: Icons.schedule,
             message: l10n.ordersCompleteBlockedUnpaid,
+          ),
+        // Served AND fully paid, yet still open: the automatic rule should already
+        // have closed this. Say so — this button is a recovery step, not routine.
+        if (paid)
+          _Banner(
+            key: const Key('order-complete-recovery-note'),
+            tone: RestoflowTone.info,
+            icon: Icons.build_circle_outlined,
+            message: l10n.ordersCompleteRecoveryNote,
           ),
         if (state.error != null)
           _Banner(
@@ -156,17 +178,15 @@ class OrderCompleteAction extends ConsumerWidget {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(width: RestoflowSpacing.sm),
-                RestoflowStatusPill(
-                  label: detail.completedPayment != null
-                      ? l10n.dashboardPaid
-                      : l10n.dashboardUnpaid,
-                  tone: detail.completedPayment != null
-                      ? RestoflowTone.success
-                      : RestoflowTone.warning,
-                  icon: detail.completedPayment != null
-                      ? Icons.check_circle_outline
-                      : Icons.schedule,
-                ),
+                // The canonical THREE-VALUED settlement state, rendered by the ONE shared
+                // badge helper — the same one Active Orders and History use.
+                //
+                // A boolean would force a lie in both directions. `settled ? Paid :
+                // Unpaid` calls a ZERO-TOTAL order "Paid" even though no payment was ever
+                // taken (the server audits it as `not_chargeable` and would refuse to
+                // charge it at all), and a payment-row MARKER would call an UNDER-COVERED
+                // order "Paid" while money is still owed. Two states cannot express three.
+                settlementPill(l10n, detail.settlement),
               ],
             ),
           ],

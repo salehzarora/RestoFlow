@@ -121,9 +121,15 @@ select is((select count(*) from order_operations where action='void_order' and o
   'T-006: NO success void ledger row for the paid order');
 select is((app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d2','00000000-0000-0000-0000-00000000da11','op-v3','void unpaid',null) ->> 'ok')::boolean, true,
   'T-006: an UNPAID eligible order is still voided by a manager');
-select throws_ok(
-  $$ select app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d5','00000000-0000-0000-0000-00000000da11','op-v5','void completed',null) $$,
-  '42501', NULL, 'T-006: a completed-STATUS order is rejected by state legality (42501)');
+-- MONEY-SETTLEMENT-CONSISTENCY-001 (corrective): eligibility is UNCHANGED — a completed
+-- order is still refused (D-024 terminal) — but the refusal is now the stable, typed
+-- domain code instead of an untyped 42501 raise (which app.sync_push flattened into a
+-- generic 'rejected'). The assertion is strengthened accordingly.
+select ok(
+  (select r ->> 'ok' = 'false' and r ->> 'error' = 'invalid_transition'
+      and r ->> 'detail' = 'order_not_voidable' and r ->> 'order_status' = 'completed'
+   from app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d5','00000000-0000-0000-0000-00000000da11','op-v5','void completed',null) as r),
+  'T-006: a completed-STATUS order is rejected by state legality (invalid_transition / order_not_voidable)');
 
 -- ===== T-011 accountant is strictly read-only ============================== 17-20
 select throws_ok(
