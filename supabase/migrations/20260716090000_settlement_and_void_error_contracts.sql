@@ -233,17 +233,25 @@ begin
   --      `<= 0` also FAILS CLOSED on a negative total (impossible under the orders CHECK
   --      grand_total_minor >= 0, but a money defect must never be charged for).
   --
-  --      REFUSAL POLICY: raise, no audit — the SAME convention every other record_payment
-  --      precondition uses (state legality, double-charge, insufficient tender). Only the
-  --      AUTHORIZATION denial is return-based + audited (payment.denied); this is not an
-  --      authorization failure, so it does not borrow that path.
-  --      RETURNS the stable domain code (it does NOT raise). app.sync_push rebuilds the
-  --      envelope from scratch for a RAISE — collapsing every domain code to the generic
-  --      literal 'rejected' — but merges a RETURNED envelope through VERBATIM, so `error`
-  --      survives to the client. That is the same contract app.void_order already relies on
-  --      for order_has_completed_payment. NOTHING is written on this path: the guard is
-  --      before the shift/drawer locks, before the receipt allocation, before the payment
-  --      insert, and the order_operations ledger row is only written on success.
+  --      REFUSAL POLICY — RETURNS A TYPED DOMAIN REFUSAL; it DOES NOT RAISE for this
+  --      precondition. app.sync_push REBUILDS the envelope from scratch for a RAISE,
+  --      collapsing every domain code into the generic literal 'rejected', but MERGES a
+  --      RETURNED envelope through VERBATIM — so `error` (and `detail`) survive to the
+  --      client. That is the same contract app.void_order already relies on for
+  --      order_has_completed_payment, and it is why this refusal returns rather than raises:
+  --      a raise would be invisible to the POS. No SQLSTATE and no raw SQL message is
+  --      exposed through the returned envelope.
+  --      (Every OTHER record_payment precondition — state legality, double-charge,
+  --      insufficient tender, no open shift/drawer — still RAISES, unchanged.)
+  --
+  --      NO AUDIT, deliberately: only the AUTHORIZATION denial is audited (payment.denied);
+  --      a precondition is not, and a zero-total order is a precondition, not a denial.
+  --      app.sync_push still records the refusal as sync.operation_rejected, now carrying
+  --      the HONEST error='order_not_chargeable' instead of a generic one.
+  --
+  --      NOTHING is written on this path: the guard is before the shift/drawer locks,
+  --      before the receipt allocation, before the payment insert, and the order_operations
+  --      ledger row is only written on success.
   if v_grand <= 0 then
     return jsonb_build_object(
       'ok', false, 'error', 'order_not_chargeable', 'order_id', p_order_id,
@@ -405,7 +413,7 @@ end;
 $$;
 
 comment on function app.record_payment(uuid, uuid, uuid, text, text, bigint, text, integer) is
-  'RF-054/RF-055/RF-117 + ORDER-AUTO-COMPLETION-001 (API_CONTRACT §4.7, D-011) SECURITY DEFINER RPC: records a payment + assigns the per-branch receipt number (D-021). Tender cash|card|bit|external; CASH keeps tendered>=grand_total + change=tendered-grand_total; NON-CASH records amount=tendered=grand_total, change=0. Requires an open shift + active bound cash drawer and stamps shift_id/cash_drawer_session_id. PIN-session auth; cashier+ only; order-bound idempotency; at most one completed payment per order. AUTO-COMPLETION (direction B): after the payment is written, if the order is ALREADY `served` and is now fully settled, app.try_auto_complete_order completes it in the SAME transaction under the order row lock this function already holds (no new lock, no new lock order); an order in submitted/accepted/preparing/ready is left untouched, and a terminal order is never revived. The helper NEVER RAISES, so a successful payment can never be surfaced as a failed one. The payment row itself is NEVER modified. It still does NOT advance orders.status by itself (D-025) — the automatic rule does, and only for served+fully-paid. Writes payment.recorded + receipt_number.assigned (D-013), plus ONE order.status_updated (completion_mode=automatic) when it auto-completes.';
+  'RF-054/RF-055/RF-117 + ORDER-AUTO-COMPLETION-001 + MONEY-SETTLEMENT-CONSISTENCY-001 (API_CONTRACT §4.7/§4.35, D-011) SECURITY DEFINER RPC: records a payment + assigns the per-branch receipt number (D-021). Tender cash|card|bit|external; CASH keeps tendered>=grand_total + change=tendered-grand_total; NON-CASH records amount=tendered=grand_total, change=0. Requires an open shift + active bound cash drawer and stamps shift_id/cash_drawer_session_id. PIN-session auth; cashier+ only; order-bound idempotency; at most one completed payment per order. NON-CHARGEABLE ORDERS: grand_total_minor <= 0 RETURNS a typed domain refusal {ok:false, error:"order_not_chargeable"} — it does NOT raise for this precondition, because app.sync_push rebuilds the envelope from scratch for a RAISE (collapsing every domain code to a generic "rejected") but merges a RETURNED envelope through verbatim, so the code survives to the client. No SQLSTATE and no raw SQL message is exposed. The guard sits AFTER authorization/scope/state validation and BEFORE the shift/drawer locks, the receipt allocation and the payment insert, so a refused zero tender writes NO payment row, allocates/burns NO receipt number, mutates NO shift or cash drawer, bumps NO order revision and leaves NO success ledger entry. It is keyed on the ORDER total, never on p_amount_tendered_minor (a non-cash tender legitimately passes tendered=0). No audit is written: only the AUTHORIZATION denial is audited (payment.denied); a precondition is not. Every OTHER precondition (state legality, double-charge, insufficient tender, no open shift/drawer) still raises, unchanged. AUTO-COMPLETION (direction B): after the payment is written, if the order is ALREADY `served` and is now fully settled, app.try_auto_complete_order completes it in the SAME transaction under the order row lock this function already holds (no new lock, no new lock order); an order in submitted/accepted/preparing/ready is left untouched, and a terminal order is never revived. The helper NEVER RAISES, so a successful payment can never be surfaced as a failed one. The payment row itself is NEVER modified. It still does NOT advance orders.status by itself (D-025) — the automatic rule does, and only for served+fully-paid. Writes payment.recorded + receipt_number.assigned (D-013), plus ONE order.status_updated (completion_mode=automatic) when it auto-completes.';
 
 -- ---------------------------------------------------------------------------
 -- 2. app.void_order — re-created VERBATIM from STAFF-CASHIER-PERMISSIONS-001
@@ -600,7 +608,10 @@ begin
   --      replay, expected_revision, and state legality, BEFORE any mutation, so: a prior
   --      successful void still replays at (e) (a voided order can never acquire a
   --      completed payment afterward — record_payment rejects non-eligible orders); a
-  --      genuinely terminal status is still rejected at (g) with 42501; and only a
+  --      genuinely terminal status is still refused at (g), which now RETURNS the typed
+  --      domain refusal (invalid_transition + detail=order_not_voidable + order_status)
+  --      rather than raising an untyped 42501 — so the two refusals stay DISTINGUISHABLE
+  --      to the client; and only a
   --      legal-source order that nonetheless carries settled money reaches here. The
   --      order row is locked FOR UPDATE (b) and record_payment also locks it, so a
   --      concurrent payment cannot slip in. A4/A5/A3 decisions: block ONLY a live

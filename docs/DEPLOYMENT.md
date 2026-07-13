@@ -657,10 +657,10 @@ against the new server keeps working**: the server-side guards (discount freeze,
 refusal) are enforced regardless of client version.
 
 Post-apply verification: a discount on a paid order is refused and audited with
-`denied_reason`; `record_payment` on a zero-total order raises and leaves
-`branch_receipt_counters.last_issued_value` unchanged; `owner_active_orders` reports
-`payment_status='not_chargeable'` for a comped order and `'unpaid'` for an under-covered
-one; and `anon` still cannot execute any of the re-created functions.
+`denied_reason`; `owner_active_orders` reports `payment_status='not_chargeable'` for a
+comped order and `'unpaid'` for an under-covered one; and `anon` still cannot execute any
+of the re-created functions. **The zero-total payment smoke test is defined below — run it
+through the REAL client path (`public.sync_push`), not by calling the RPC directly.**
 
 **MONEY-SETTLEMENT-CONSISTENCY-001 (corrective) — THE THIRD MIGRATION, APPLY IT WITH THE
 OTHER TWO.** `20260716090000_settlement_and_void_error_contracts.sql` re-creates
@@ -678,6 +678,42 @@ Behaviour at apply time: an order that is TERMINAL now returns
 zero-total payment returns `order_not_chargeable`. **Void eligibility is UNCHANGED —
 `completed` stays terminal and there is no `completed → void` path.** Normal payments,
 successful envelopes and idempotent replay are byte-for-byte unchanged.
+
+#### Post-apply SMOKE TESTS — run them through the REAL client path
+**Drive `public.sync_push`, NOT the RPC directly.** The whole defect this migration fixes
+lives at the sync boundary: calling `app.record_payment` / `app.void_order` directly would
+pass even when the client can see nothing. Neither smoke test may depend on a SQLSTATE, and
+neither envelope may carry a raw SQL message.
+
+**A. Zero-total payment** — push a `payment.create` op for an order with
+`grand_total_minor = 0`. Expected **per-operation result**:
+- `status = "rejected"`
+- **`error = "order_not_chargeable"`** (**not** the generic `"rejected"`)
+- **no `sqlstate` field**, and **no raw SQL message text** anywhere in the envelope
+
+…and, in the database, the refusal must have touched **nothing**:
+- **no** `payments` row for the order
+- **`branch_receipt_counters.last_issued_value` UNCHANGED** (no receipt number burned —
+  the sequence is gapless, so a burned number can never be reclaimed)
+- **no** `shifts` / `cash_drawer_sessions` mutation
+- **no** `orders.revision` change and **no** `orders.receipt_number` set
+- **no** success `order_operations` (idempotency-ledger) row
+
+**B. Terminal void** — push an `order.void` op for a `completed` order. Expected
+**per-operation result**:
+- `status = "rejected"`, **`error = "invalid_transition"`**, **`detail = "order_not_voidable"`**,
+  `order_status = "completed"`
+
+…and:
+- the order **remains `completed`** and otherwise **unchanged** (D-024 — `completed` is
+  terminal; there is **no** `completed → void` path)
+- **no `order.voided` success audit event** is written
+- the **denial audit is intact**: exactly one `order.void_denied` with
+  `denied_reason = 'order_not_voidable'`, carrying the actor, the scope and the safe
+  `order_code`
+- a **paid**-order void still returns `permission_denied` + `order_has_completed_payment`,
+  and a **role** denial still returns a bare `permission_denied` — the three refusals stay
+  distinguishable
 
 **FINAL MIGRATION ORDER — apply all three back-to-back in ONE controlled DB-first rollout:**
 1. `20260714090000_order_auto_completion_001_served_paid.sql`
