@@ -3796,4 +3796,57 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogFieldPaymentStatus => 'תשלום';
+
+  @override
+  String get ordersActiveSubtitleV2 =>
+      'הזמנות פתוחות כעת בתפעול. הזמנות שהסתיימו עוברות להיסטוריה.';
+
+  @override
+  String get ordersQueueInProgress => 'בתהליך';
+
+  @override
+  String get ordersQueueAwaitingClose => 'ממתינות לסגירה';
+
+  @override
+  String get ordersQueueAllActive => 'כל ההזמנות הפעילות';
+
+  @override
+  String get ordersSortLabel => 'מיון';
+
+  @override
+  String get ordersSortNewest => 'החדשות ביותר תחילה';
+
+  @override
+  String get ordersSortOldest => 'הוותיקות ביותר תחילה';
+
+  @override
+  String get ordersActiveEmptyInProgress =>
+      'אין כרגע הזמנות בהכנה או בהמתנה להגשה.';
+
+  @override
+  String get ordersActiveEmptyAwaitingClose =>
+      'אין הזמנות שהוגשו וממתינות לסגירה.';
+
+  @override
+  String get ordersAwaitingCloseExplainer =>
+      'הזמנות אלו הוגשו. הזמנה משולמת ניתן לסגור מתוך הפרטים שלה; הזמנה שאינה משולמת דורשת רישום תשלום תחילה. הן נשארות פעילות עד לסגירתן, ביטולן או פסילתן.';
+
+  @override
+  String ordersAwaitingCloseBacklog(int count) {
+    return '$count הזמנות שהוגשו עדיין פתוחות. הן נשארות פעילות עד לסגירת כל אחת מהן.';
+  }
+
+  @override
+  String ordersActiveTruncatedNewest(int shown, int total) {
+    return 'מוצגות $shown ההזמנות החדשות ביותר מתוך $total הזמנות פעילות תואמות.';
+  }
+
+  @override
+  String ordersActiveTruncatedOldest(int shown, int total) {
+    return 'מוצגות $shown ההזמנות הוותיקות ביותר מתוך $total הזמנות פעילות תואמות.';
+  }
+
+  @override
+  String get ordersActiveRefreshFailed =>
+      'הרענון נכשל כעת. ייתכן שההזמנות אינן מעודכנות.';
 }

@@ -85,6 +85,16 @@ List<DemoOrder> _mixed() => [
   _order('a-submitted', status: 'submitted', minutesAgo: 4),
 ];
 
+/// ACTIVE-ORDERS-002 changed the DEFAULTS (queue = in progress, sort = newest).
+/// These ACTIVE-ORDERS-001 invariants (the canonical active set, elapsed age,
+/// money, read-only, RTL, responsiveness) are about the BOARD, not the queue, so
+/// they pin the ALL-ACTIVE queue explicitly. The queues, the new default sort and
+/// the refresh rework are covered by active_orders_002_test.dart.
+const ActiveOrdersQuery _allActive = ActiveOrdersQuery(
+  queue: ActiveOrderQueue.allActive,
+  sort: ActiveOrdersSort.oldest,
+);
+
 Widget _wrap(
   ActiveOrdersRepository repo, {
   bool demo = true,
@@ -97,6 +107,10 @@ Widget _wrap(
     ),
     activeOrdersRepositoryProvider.overrideWithValue(repo),
     activeOrdersClockProvider.overrideWithValue(_clock),
+    activeOrdersQueryProvider.overrideWith((ref) => _allActive),
+    // INJECTED scheduling: no polling here, so no timer can outlive a test. The
+    // polling behaviour itself is tested with fake time in active_orders_002_test.
+    activeOrdersPollIntervalProvider.overrideWithValue(null),
     // The detail sheet loads through the history seam — point it at the same
     // dataset so opening an active row resolves.
     orderHistoryRepositoryProvider.overrideWithValue(
@@ -138,9 +152,12 @@ class _GatedRepo implements ActiveOrdersRepository {
   final Future<void> _gate;
 
   @override
-  Future<ActiveOrdersSnapshot> loadActive(ActiveOrdersQuery query) async {
+  Future<ActiveOrdersSnapshot> loadActive(
+    ActiveOrdersQuery query, {
+    String? cursor,
+  }) async {
     await _gate;
-    return _inner.loadActive(query);
+    return _inner.loadActive(query, cursor: cursor);
   }
 }
 
@@ -173,7 +190,7 @@ void main() {
   test(
     'A2 terminal orders are excluded and paid active orders are kept',
     () async {
-      final snap = await _repo().loadActive(const ActiveOrdersQuery());
+      final snap = await _repo().loadActive(_allActive);
       final codes = snap.rows.map((r) => r.orderId).toList();
       expect(codes, isNot(contains('t-completed')));
       expect(codes, isNot(contains('t-voided')));
@@ -189,7 +206,7 @@ void main() {
   );
 
   test('A3 rows are FIFO (oldest first)', () async {
-    final snap = await _repo().loadActive(const ActiveOrdersQuery());
+    final snap = await _repo().loadActive(_allActive);
     expect(snap.rows.map((r) => r.orderId).toList(), [
       'a-served', // 50 min
       'a-ready', // 40
@@ -201,7 +218,7 @@ void main() {
 
   test('A4 the summary covers the SCOPE, not the filters', () async {
     final repo = _repo();
-    final all = await repo.loadActive(const ActiveOrdersQuery());
+    final all = await repo.loadActive(_allActive);
     expect(all.summary.total, 5);
     expect(all.summary.unpaid, 3); // served, preparing, submitted
     expect(all.summary.ready, 1);
@@ -274,35 +291,35 @@ void main() {
         ),
       ],
     );
+    // Every filter is exercised over the ALL-ACTIVE queue in FIFO order, so these
+    // assertions keep the exact meaning they had before ACTIVE-ORDERS-002.
     Future<List<String>> ids(ActiveOrdersQuery q) async =>
         (await repo.loadActive(q)).rows.map((r) => r.orderId).toList();
 
     expect(
-      await ids(const ActiveOrdersQuery(stage: ActiveOrderStageFilter.served)),
+      await ids(_allActive.copyWith(stage: ActiveOrderStageFilter.served)),
       ['a-served'],
     );
     // Still FIFO within the filter: 50, 30, 10, 4 minutes open.
-    expect(await ids(const ActiveOrdersQuery(payment: PaymentFilter.unpaid)), [
+    expect(await ids(_allActive.copyWith(payment: PaymentFilter.unpaid)), [
       'a-served',
       'a-preparing',
       'a-harbor',
       'a-submitted',
     ]);
-    expect(await ids(const ActiveOrdersQuery(payment: PaymentFilter.paid)), [
+    expect(await ids(_allActive.copyWith(payment: PaymentFilter.paid)), [
       'a-ready',
       'a-accepted',
     ]);
     expect(
-      await ids(const ActiveOrdersQuery(orderType: OrderTypeFilter.takeaway)),
+      await ids(_allActive.copyWith(orderType: OrderTypeFilter.takeaway)),
       ['a-served'],
     );
-    expect(await ids(const ActiveOrdersQuery(search: 'Layla')), [
-      'a-preparing',
-    ]);
+    expect(await ids(_allActive.copyWith(search: 'Layla')), ['a-preparing']);
     expect(
       await ids(
-        const ActiveOrdersQuery(
-          branch: AuditBranchOption(
+        _allActive.copyWith(
+          branch: const AuditBranchOption(
             branchId: 'demo-branch-harbor',
             restaurantId: 'demo-rest-1',
             label: 'Harbor',
@@ -314,7 +331,7 @@ void main() {
   });
 
   test('B2 the page cap truncates HONESTLY', () async {
-    final snap = await _repo(limit: 2).loadActive(const ActiveOrdersQuery());
+    final snap = await _repo(limit: 2).loadActive(_allActive);
     expect(snap.rows.length, 2);
     expect(snap.matching, 5);
     expect(snap.truncated, isTrue);
@@ -415,15 +432,17 @@ void main() {
     expect(find.text(l10n.dashboardPaid), findsWidgets);
   });
 
-  testWidgets('C6 the summary tiles filter the board', (tester) async {
+  testWidgets('C6 the summary tiles narrow the board', (tester) async {
     _sized(tester, 1320);
     await tester.pumpWidget(_wrap(_repo()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('active-summary-ready')));
+    // The Unpaid card applies the PAYMENT filter (never a lifecycle change).
+    await tester.tap(find.byKey(const Key('active-summary-unpaid')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('active-order-card-a-ready')), findsOneWidget);
-    expect(find.byKey(const Key('active-order-card-a-served')), findsNothing);
+    expect(find.byKey(const Key('active-order-card-a-served')), findsOneWidget);
+    // a-ready is PAID, so the unpaid filter drops it.
+    expect(find.byKey(const Key('active-order-card-a-ready')), findsNothing);
   });
 
   testWidgets('C7 the stage dropdown filters the board', (tester) async {
@@ -530,25 +549,18 @@ void main() {
     expect(find.byKey(const Key('active-order-card-a-ready')), findsOneWidget);
   });
 
-  testWidgets('E2 auto-refresh is OFF by default and is a visible toggle', (
+  testWidgets('E2 there is NO auto-refresh switch (ACTIVE-ORDERS-002)', (
     tester,
   ) async {
     _sized(tester, 1320);
     await tester.pumpWidget(_wrap(_repo()));
     await tester.pumpAndSettle();
 
-    final toggle = find.byKey(const Key('active-orders-auto-refresh'));
-    expect(toggle, findsOneWidget);
-    expect(tester.widget<Switch>(toggle).value, isFalse);
-
-    await tester.tap(toggle);
-    await tester.pumpAndSettle();
-    expect(tester.widget<Switch>(toggle).value, isTrue);
-
-    // Turn it back off so no periodic timer outlives the test.
-    await tester.tap(toggle);
-    await tester.pumpAndSettle();
-    expect(tester.widget<Switch>(toggle).value, isFalse);
+    // The board now refreshes itself while it is on screen, so the toggle — chrome
+    // with no operational value — is gone. Only the honest stamp remains.
+    expect(find.byKey(const Key('active-orders-auto-refresh')), findsNothing);
+    expect(find.byType(Switch), findsNothing);
+    expect(find.byKey(const Key('active-orders-last-updated')), findsOneWidget);
   });
 
   // ===== F. read-only ========================================================

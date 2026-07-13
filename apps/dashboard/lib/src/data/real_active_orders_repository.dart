@@ -37,7 +37,10 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
   final SyncRpcTransport? transport;
 
   @override
-  Future<ActiveOrdersSnapshot> loadActive(ActiveOrdersQuery query) async {
+  Future<ActiveOrdersSnapshot> loadActive(
+    ActiveOrdersQuery query, {
+    String? cursor,
+  }) async {
     final t = transport;
     final m = scope;
     if (t == null || m == null) {
@@ -65,6 +68,12 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
         'p_payment': query.payment.wire,
         'p_search': query.searchOrNull,
         'p_limit': 100,
+        // The QUEUE and the SORT are the SERVER's job (ACTIVE-ORDERS-002): the
+        // page is capped, so re-sorting it here would silently omit every
+        // matching row the server did not send.
+        'p_queue': query.queue.wire,
+        'p_sort': query.sort.wire,
+        'p_cursor': cursor,
       });
     } on SyncTransportException {
       throw const ActiveOrdersException(
@@ -73,6 +82,22 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
     }
     if (raw is! Map || raw['ok'] != true) {
       throw const ActiveOrdersException('owner_active_orders rejected');
+    }
+
+    // FAIL CLOSED on a malformed queue/sort response: if the server did not serve
+    // the queue and sort we asked for, these rows are not what the operator is
+    // looking at — and silently re-ordering them here would be a lie.
+    final servedQueue = _strOrNull(raw['queue']);
+    final servedSort = _strOrNull(raw['sort']);
+    if (servedQueue != null && servedQueue != query.queue.wire) {
+      throw const ActiveOrdersException(
+        'owner_active_orders served a different queue than requested',
+      );
+    }
+    if (servedSort != null && servedSort != query.sort.wire) {
+      throw const ActiveOrdersException(
+        'owner_active_orders served a different sort than requested',
+      );
     }
 
     final currency = (raw['currency_code'] ?? '').toString();
@@ -84,13 +109,17 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
         rows.add(_row(row, currency));
       }
     }
+    final hasMore = raw['has_more'] == true || raw['truncated'] == true;
     return ActiveOrdersSnapshot(
       rows: rows,
       summary: _summary(raw['summary']),
       currencyCode: currency,
+      // The FULL filtered count the server computed — never the loaded page.
       matching: _int(raw['matching'], fallback: rows.length),
       limit: _int(raw['limit'], fallback: 100),
-      truncated: raw['truncated'] == true,
+      truncated: hasMore,
+      hasMore: hasMore,
+      nextCursor: _strOrNull(raw['next_cursor']),
     );
   }
 

@@ -1190,5 +1190,19 @@
   "ordersCompleteErrorTransient": "לא ניתן להגיע לשרת. ההזמנה לא שונתה.",
   "ordersCompleteRetry": "נסה שוב",
   "activityLogFieldOrderCode": "הזמנה",
-  "activityLogFieldPaymentStatus": "תשלום"
+  "activityLogFieldPaymentStatus": "תשלום",
+  "ordersActiveSubtitleV2": "הזמנות פתוחות כעת בתפעול. הזמנות שהסתיימו עוברות להיסטוריה.",
+  "ordersQueueInProgress": "בתהליך",
+  "ordersQueueAwaitingClose": "ממתינות לסגירה",
+  "ordersQueueAllActive": "כל ההזמנות הפעילות",
+  "ordersSortLabel": "מיון",
+  "ordersSortNewest": "החדשות ביותר תחילה",
+  "ordersSortOldest": "הוותיקות ביותר תחילה",
+  "ordersActiveEmptyInProgress": "אין כרגע הזמנות בהכנה או בהמתנה להגשה.",
+  "ordersActiveEmptyAwaitingClose": "אין הזמנות שהוגשו וממתינות לסגירה.",
+  "ordersAwaitingCloseExplainer": "הזמנות אלו הוגשו. הזמנה משולמת ניתן לסגור מתוך הפרטים שלה; הזמנה שאינה משולמת דורשת רישום תשלום תחילה. הן נשארות פעילות עד לסגירתן, ביטולן או פסילתן.",
+  "ordersAwaitingCloseBacklog": "{count} הזמנות שהוגשו עדיין פתוחות. הן נשארות פעילות עד לסגירת כל אחת מהן.",
+  "ordersActiveTruncatedNewest": "מוצגות {shown} ההזמנות החדשות ביותר מתוך {total} הזמנות פעילות תואמות.",
+  "ordersActiveTruncatedOldest": "מוצגות {shown} ההזמנות הוותיקות ביותר מתוך {total} הזמנות פעילות תואמות.",
+  "ordersActiveRefreshFailed": "הרענון נכשל כעת. ייתכן שההזמנות אינן מעודכנות."
 }

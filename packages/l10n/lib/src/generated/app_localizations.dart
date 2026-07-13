@@ -7209,6 +7209,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payment'**
   String get activityLogFieldPaymentStatus;
+
+  /// ACTIVE-ORDERS-002 Active-orders subtitle: explains that this surface holds open operational orders and that finished ones go to History.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders currently open in operations. Finished orders move to History.'**
+  String get ordersActiveSubtitleV2;
+
+  /// ACTIVE-ORDERS-002 queue: orders moving through preparation (submitted/accepted/preparing/ready). The default landing queue.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get ordersQueueInProgress;
+
+  /// ACTIVE-ORDERS-002 queue: served orders waiting to be completed.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting close'**
+  String get ordersQueueAwaitingClose;
+
+  /// ACTIVE-ORDERS-002 queue: every canonical active order.
+  ///
+  /// In en, this message translates to:
+  /// **'All active'**
+  String get ordersQueueAllActive;
+
+  /// ACTIVE-ORDERS-002 sort control label.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get ordersSortLabel;
+
+  /// ACTIVE-ORDERS-002 sort option: newest first (the default).
+  ///
+  /// In en, this message translates to:
+  /// **'Newest first'**
+  String get ordersSortNewest;
+
+  /// ACTIVE-ORDERS-002 sort option: oldest first (FIFO).
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest first'**
+  String get ordersSortOldest;
+
+  /// ACTIVE-ORDERS-002 empty state for the In-progress queue.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders are currently being prepared or waiting to be served.'**
+  String get ordersActiveEmptyInProgress;
+
+  /// ACTIVE-ORDERS-002 empty state for the Awaiting-close queue.
+  ///
+  /// In en, this message translates to:
+  /// **'No served orders are waiting to be completed.'**
+  String get ordersActiveEmptyAwaitingClose;
+
+  /// ACTIVE-ORDERS-002 explainer shown above the Awaiting-close queue: what these orders are and how they leave it.
+  ///
+  /// In en, this message translates to:
+  /// **'These orders were served. A paid order can be completed from its details; an unpaid one needs its payment recorded first. They stay active until they are completed, cancelled or voided.'**
+  String get ordersAwaitingCloseExplainer;
+
+  /// ACTIVE-ORDERS-002 restrained notice when the awaiting-close backlog is meaningfully high. States the fact without inventing urgency or blame.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} served orders are still open. They remain active until each one is completed.'**
+  String ordersAwaitingCloseBacklog(int count);
+
+  /// ACTIVE-ORDERS-002 honest truncation notice under the newest-first sort.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the newest {shown} of {total} matching active orders.'**
+  String ordersActiveTruncatedNewest(int shown, int total);
+
+  /// ACTIVE-ORDERS-002 honest truncation notice under the oldest-first sort.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the oldest {shown} of {total} matching active orders.'**
+  String ordersActiveTruncatedOldest(int shown, int total);
+
+  /// ACTIVE-ORDERS-002: a background/manual refresh failed while usable rows are on screen. The rows are kept; this is shown beside them.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t refresh just now. These orders may be out of date.'**
+  String get ordersActiveRefreshFailed;
 }
 
 class _AppLocalizationsDelegate

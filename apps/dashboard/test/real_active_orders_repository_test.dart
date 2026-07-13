@@ -200,6 +200,119 @@ void main() {
     },
   );
 
+  // ===== ACTIVE-ORDERS-002: queue + sort + cursor go to the SERVER ===========
+  test(
+    'R2b the QUEUE, the SORT and the CURSOR are sent to the server',
+    () async {
+      final transport = _FakeTransport(_okBody());
+      final repo = RealActiveOrdersRepository(
+        null,
+        scope: _membership(MembershipRole.orgOwner),
+        transport: transport,
+      );
+
+      // The DEFAULTS.
+      await repo.loadActive(const ActiveOrdersQuery());
+      expect(transport.lastArgs!['p_queue'], 'in_progress');
+      expect(transport.lastArgs!['p_sort'], 'newest');
+      expect(transport.lastArgs!['p_cursor'], isNull);
+
+      // An explicit queue + sort + keyset continuation.
+      await repo.loadActive(
+        const ActiveOrdersQuery(
+          queue: ActiveOrderQueue.awaitingClose,
+          sort: ActiveOrdersSort.oldest,
+        ),
+        cursor: 'oldest|2026-07-13T10:00:00Z|abc',
+      );
+      expect(transport.lastArgs!['p_queue'], 'awaiting_close');
+      expect(transport.lastArgs!['p_sort'], 'oldest');
+      expect(
+        transport.lastArgs!['p_cursor'],
+        'oldest|2026-07-13T10:00:00Z|abc',
+      );
+    },
+  );
+
+  test('R2c a MISMATCHED queue/sort in the response FAILS CLOSED', () async {
+    // If the server did not serve what we asked for, these rows are not what the
+    // operator is looking at — and silently re-ordering them here would be a lie.
+    final wrongSort = _FakeTransport({..._okBody(), 'sort': 'oldest'});
+    await expectLater(
+      RealActiveOrdersRepository(
+        null,
+        scope: _membership(MembershipRole.orgOwner),
+        transport: wrongSort,
+      ).loadActive(const ActiveOrdersQuery()),
+      throwsA(isA<ActiveOrdersException>()),
+    );
+
+    final wrongQueue = _FakeTransport({
+      ..._okBody(),
+      'queue': 'awaiting_close',
+    });
+    await expectLater(
+      RealActiveOrdersRepository(
+        null,
+        scope: _membership(MembershipRole.orgOwner),
+        transport: wrongQueue,
+      ).loadActive(const ActiveOrdersQuery()),
+      throwsA(isA<ActiveOrdersException>()),
+    );
+  });
+
+  test('R2d the FULL matching count and the continuation are mapped', () async {
+    final transport = _FakeTransport({
+      ..._okBody(),
+      'matching': 133,
+      'count': 100,
+      'has_more': true,
+      'next_cursor': 'newest|2026-07-13T09:00:00Z|zzz',
+    });
+    final snap = await RealActiveOrdersRepository(
+      null,
+      scope: _membership(MembershipRole.orgOwner),
+      transport: transport,
+    ).loadActive(const ActiveOrdersQuery());
+
+    // `matching` is the server's FULL filtered count — never the loaded page.
+    expect(snap.matching, 133);
+    expect(snap.rows.length, 2); // the fake body carries 2 rows
+    expect(snap.hasMore, isTrue);
+    expect(snap.truncated, isTrue);
+    expect(snap.nextCursor, 'newest|2026-07-13T09:00:00Z|zzz');
+  });
+
+  test('R2e the queue counts come from the server summary', () async {
+    final transport = _FakeTransport({
+      ..._okBody(),
+      'summary': <String, Object?>{
+        'total': 133,
+        'unpaid': 31,
+        'in_progress': 6,
+        'awaiting_close': 127,
+        'by_status': <String, Object?>{
+          'submitted': 2,
+          'accepted': 1,
+          'preparing': 3,
+          'ready': 0,
+          'served': 127,
+        },
+      },
+    });
+    final snap = await RealActiveOrdersRepository(
+      null,
+      scope: _membership(MembershipRole.orgOwner),
+      transport: transport,
+    ).loadActive(const ActiveOrdersQuery());
+
+    expect(snap.summary.total, 133);
+    expect(snap.summary.unpaid, 31);
+    expect(snap.summary.inProgress, 6);
+    expect(snap.summary.awaitingClose, 127);
+    expect(snap.summary.ready, 0);
+  });
+
   test(
     'R3 an unfiltered query sends NULL tokens (never a made-up default)',
     () async {
