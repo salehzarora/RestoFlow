@@ -3797,6 +3797,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ordersCompleteAction => 'Complete order';
 
   @override
+  String get ordersCompleteRecoveryNote =>
+      'This order is served and paid, so it should have closed itself. Completing it by hand is a recovery step.';
+
+  @override
   String get ordersCompleteConfirmTitle => 'Complete this order?';
 
   @override
@@ -3848,6 +3852,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get activityLogFieldPaymentStatus => 'Payment';
 
   @override
+  String get activityLogPaymentNotChargeable => 'Nothing to pay';
+
+  @override
+  String get activityLogFieldCompletionMode => 'Closed';
+
+  @override
+  String get activityLogFieldCompletionTrigger => 'Closed by';
+
+  @override
+  String get activityLogCompletionModeAutomatic => 'Automatically';
+
+  @override
+  String get activityLogCompletionModeManual => 'By a person';
+
+  @override
+  String get activityLogCompletionTriggerOrderServed =>
+      'The order being served';
+
+  @override
+  String get activityLogCompletionTriggerPaymentRecorded =>
+      'The payment being recorded';
+
+  @override
   String get ordersActiveSubtitleV2 =>
       'Orders currently open in operations. Finished orders move to History.';
 
@@ -3879,11 +3906,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ordersAwaitingCloseExplainer =>
-      'These orders were served. A paid order can be completed from its details; an unpaid one needs its payment recorded first. They stay active until they are completed, cancelled or voided.';
+      'A served order closes itself as soon as it is fully paid, so anything still here needs attention — usually a payment that was never recorded. Record the payment and the order closes on its own.';
 
   @override
   String ordersAwaitingCloseBacklog(int count) {
-    return '$count served orders are still open. They remain active until each one is completed.';
+    return '$count served orders have not closed. A served order closes itself once it is fully paid, so these are waiting on something.';
   }
 
   @override

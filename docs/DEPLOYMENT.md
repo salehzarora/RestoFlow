@@ -532,6 +532,61 @@ and that `anon` still cannot execute it; (3) **only then** deploy the Dashboard.
 **No POS/KDS APK rebuild is required** — POS and KDS never call this RPC. **NOT
 applied to hosted by the ticket branch.**
 
+**ORDER-AUTO-COMPLETION-001 rollout (DB-first — MANDATORY; this one CHANGES LIVE
+POS/KDS BEHAVIOUR, so read this before applying).** Migration
+`20260714090000_order_auto_completion_001_served_paid.sql` is **additive /
+forward-only**: it adds two INTERNAL helpers (`app.order_is_fully_settled`,
+`app.try_auto_complete_order` — granted to **no** client role, no public wrapper)
+and **re-creates** three existing functions in place with surgical changes —
+`app.apply_order_status_transition` (the D-025 gate becomes the amount-aware
+settlement test + trigger direction A), `app.record_payment` (trigger direction B;
+**signature, gates, errors, money maths and the payment row are UNCHANGED** — only
+two additive result keys), and `app.audit_safe_detail` (allowlist gains
+`completion_mode` + `completion_trigger`). **No table, column, CHECK, RLS policy,
+trigger or index change; no historical order, payment or audit row is rewritten;
+no lifecycle transition is added; no signature changes**, so no client can break on
+an argument mismatch.
+
+**The behaviour change is real and it lands the moment the migration is applied:**
+a `served` order that is fully paid will complete **itself** — on the KDS bump of an
+already-paid order, and on the POS payment of an already-served order. Existing POS
+and KDS builds keep working unchanged (they ignore the additive `auto_completed` /
+`order_status` keys), so **no APK rebuild is required** — but the field will start
+seeing served+paid orders close on their own, and the *Awaiting close* queue will
+drain to genuine exceptions (mostly unpaid orders). **Brief the pilot staff before
+applying.** Order: (1) apply to hosted; (2) verify a paid `served` bump returns
+`status: completed` + `auto_completed: true`, that an **unpaid** served order stays
+`served`, that a payment on a **submitted** order still succeeds and does **not**
+complete it, that a payment on a `served` order returns `auto_completed: true`, that
+the audit shows ONE `order.status_updated` with `completion_mode='automatic'`, and
+that `anon`/`authenticated` cannot execute either new helper; (3) deploy the
+Dashboard (it only needs the migration for the new audit fields and the recovery
+copy — it degrades honestly without it). **NOT applied to hosted by the ticket
+branch** — a future apply still requires the **RISK R-003** sign-off and the §13
+preflight.
+
+**ZERO-TOTAL (COMPED) ORDERS — a SECOND behaviour change in the same migration.**
+`app.order_is_fully_settled` treats `grand_total_minor = 0` as **NON-CHARGEABLE and
+settled** (it owes nothing, so it settles with no payment row; a positive total still
+needs a covering completed payment — D-025 is not weakened). Consequences the moment
+the migration is applied:
+- A **comped / 100%-discounted** order will **auto-complete** as soon as the kitchen
+  bumps it to `served`. Before this migration such an order was **stuck** — neither the
+  rule nor the manual *Complete order* action would close it (both returned
+  `order_not_paid`). Any zero-total orders already sitting in *Awaiting close* will
+  therefore close on the next KDS bump, or can be closed by the manual action.
+- **A comped order becomes NON-VOIDABLE once it auto-completes** (`completed` is
+  terminal; `app.void_order` refuses it), and the POS *recent orders* sheet still shows
+  an enabled **Cancel** button for it, which will now fail with a generic error. A
+  mis-comped order can become unrecoverable. **Brief the pilot staff on this before
+  applying** — see `VOID-COMPED-ORDER-001` in [API_CONTRACT §4.32d](API_CONTRACT.md).
+- The owner's `unpaid_count` KPI still counts an auto-completed comped order as unpaid
+  (marker-based). **No money figure moves.** See `REPORT-SETTLEMENT-CONSISTENCY-001`.
+- Post-apply verification, in addition to the list above: a zero-total `served` order
+  with **no payment row** reports settled and completes (automatic **and** manual), its
+  completion audit carries `payment_status = 'not_chargeable'` (never `paid`), and
+  **no payment row is created** for it.
+
 **Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).
 - **Yesterday / Last 7 days / Last 30 days** load with real current + comparison

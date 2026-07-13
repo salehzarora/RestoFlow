@@ -3749,6 +3749,10 @@ class AppLocalizationsHe extends AppLocalizations {
   String get ordersCompleteAction => 'סגירת הזמנה';
 
   @override
+  String get ordersCompleteRecoveryNote =>
+      'ההזמנה הוגשה ושולמה, ולכן הייתה אמורה להיסגר מעצמה. סגירה ידנית היא פעולת תיקון.';
+
+  @override
   String get ordersCompleteConfirmTitle => 'לסגור את ההזמנה?';
 
   @override
@@ -3798,6 +3802,27 @@ class AppLocalizationsHe extends AppLocalizations {
   String get activityLogFieldPaymentStatus => 'תשלום';
 
   @override
+  String get activityLogPaymentNotChargeable => 'אין תשלום נדרש';
+
+  @override
+  String get activityLogFieldCompletionMode => 'אופן הסגירה';
+
+  @override
+  String get activityLogFieldCompletionTrigger => 'מה סגר';
+
+  @override
+  String get activityLogCompletionModeAutomatic => 'אוטומטית';
+
+  @override
+  String get activityLogCompletionModeManual => 'על ידי אדם';
+
+  @override
+  String get activityLogCompletionTriggerOrderServed => 'הגשת ההזמנה';
+
+  @override
+  String get activityLogCompletionTriggerPaymentRecorded => 'רישום התשלום';
+
+  @override
   String get ordersActiveSubtitleV2 =>
       'הזמנות פתוחות כעת בתפעול. הזמנות שהסתיימו עוברות להיסטוריה.';
 
@@ -3829,11 +3854,11 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get ordersAwaitingCloseExplainer =>
-      'הזמנות אלו הוגשו. הזמנה משולמת ניתן לסגור מתוך הפרטים שלה; הזמנה שאינה משולמת דורשת רישום תשלום תחילה. הן נשארות פעילות עד לסגירתן, ביטולן או פסילתן.';
+      'הזמנה שהוגשה נסגרת מעצמה ברגע שהיא משולמת במלואה, ולכן כל מה שנשאר כאן דורש טיפול — לרוב תשלום שלא נרשם. רשמו את התשלום וההזמנה תיסגר מעצמה.';
 
   @override
   String ordersAwaitingCloseBacklog(int count) {
-    return '$count הזמנות שהוגשו עדיין פתוחות. הן נשארות פעילות עד לסגירת כל אחת מהן.';
+    return '$count הזמנות שהוגשו לא נסגרו. הזמנה שהוגשה נסגרת מעצמה ברגע שהיא משולמת במלואה, ולכן אלו ממתינות למשהו.';
   }
 
   @override

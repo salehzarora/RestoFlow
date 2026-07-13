@@ -307,6 +307,32 @@ class OrderDetail {
     }
     return null;
   }
+
+  /// Does this order still owe money? The client mirror of the ONE server predicate
+  /// `app.order_is_fully_settled` (ORDER-AUTO-COMPLETION-001). The two must agree,
+  /// so this is the ONLY place the client decides "settled" — there is no second
+  /// zero-total exception in the completion action or the demo store.
+  ///
+  ///   * `grandTotalMinor == 0` → SETTLED. A zero-total order is **non-chargeable**:
+  ///     it owes nothing, settles with **no payment row**, and none is ever created
+  ///     for it. (This is the schema's definition of D-025's "chargeable order".)
+  ///   * `grandTotalMinor > 0`  → settled only when a completed payment **covers**
+  ///     the CURRENT total, in integer minor units (D-007). D-025 is not weakened.
+  ///     A SETTLEMENT test, not a marker test: a bare "has a completed payment" check
+  ///     is not time-invariant, because a discount applied after the payment re-bases
+  ///     the total and the marker would then call a part-settled order paid.
+  ///   * `grandTotalMinor < 0`  → FAIL CLOSED. Unreachable (the DB CHECK forbids it),
+  ///     but a negative total is a money defect and must never close an order.
+  ///
+  /// The server is the authority either way — this only decides what the UI dares to
+  /// offer, and it must never offer what the server would refuse.
+  bool get isFullySettled {
+    if (grandTotalMinor < 0) return false;
+    if (grandTotalMinor == 0) return true;
+    final payment = completedPayment;
+    if (payment == null) return false;
+    return payment.amountMinor >= grandTotalMinor;
+  }
 }
 
 /// One aggregated whole-order kitchen count line (e.g. "9 patties").

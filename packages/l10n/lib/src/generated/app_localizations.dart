@@ -7120,11 +7120,17 @@ abstract class AppLocalizations {
   /// **'All permitted branches'**
   String get ordersBranchAll;
 
-  /// ORDER-COMPLETION-001: the action that closes an eligible served order (moves it to the terminal `completed` state). NOT a payment.
+  /// ORDER-COMPLETION-001: the action that closes an eligible served order (moves it to the terminal `completed` state). NOT a payment. Since ORDER-AUTO-COMPLETION-001 this is a RECOVERY action, not the normal way an order closes.
   ///
   /// In en, this message translates to:
   /// **'Complete order'**
   String get ordersCompleteAction;
+
+  /// ORDER-AUTO-COMPLETION-001: shown above the manual Complete button when the order is served AND fully paid — i.e. the automatic rule did not close it and a human is stepping in. Explains that this is the exception path.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is served and paid, so it should have closed itself. Completing it by hand is a recovery step.'**
+  String get ordersCompleteRecoveryNote;
 
   /// ORDER-COMPLETION-001 confirmation dialog title.
   ///
@@ -7210,6 +7216,48 @@ abstract class AppLocalizations {
   /// **'Payment'**
   String get activityLogFieldPaymentStatus;
 
+  /// ORDER-AUTO-COMPLETION-001 Activity-log VALUE for payment_status=not_chargeable: a ZERO-TOTAL (comped / fully discounted) order closed with NO payment because it owed nothing. Never rendered as 'Paid' — the audit trail must not assert a payment that was never taken.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to pay'**
+  String get activityLogPaymentNotChargeable;
+
+  /// ORDER-AUTO-COMPLETION-001 Activity-log safe detail field: whether the completion was applied by the automatic served+paid rule or by a person. A state, not a money figure.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get activityLogFieldCompletionMode;
+
+  /// ORDER-AUTO-COMPLETION-001 Activity-log safe detail field: which event caused the automatic completion (the order being served, or the payment being recorded).
+  ///
+  /// In en, this message translates to:
+  /// **'Closed by'**
+  String get activityLogFieldCompletionTrigger;
+
+  /// ORDER-AUTO-COMPLETION-001 Activity-log VALUE for completion_mode=automatic: the served+fully-paid rule closed the order.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically'**
+  String get activityLogCompletionModeAutomatic;
+
+  /// ORDER-AUTO-COMPLETION-001 Activity-log VALUE for completion_mode=manual: a person completed the order by hand (the recovery action).
+  ///
+  /// In en, this message translates to:
+  /// **'By a person'**
+  String get activityLogCompletionModeManual;
+
+  /// ORDER-AUTO-COMPLETION-001 Activity-log VALUE for completion_trigger=order_served: the order was already paid and completed the moment it was served.
+  ///
+  /// In en, this message translates to:
+  /// **'The order being served'**
+  String get activityLogCompletionTriggerOrderServed;
+
+  /// ORDER-AUTO-COMPLETION-001 Activity-log VALUE for completion_trigger=payment_recorded: the order was already served and completed the moment it was paid.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment being recorded'**
+  String get activityLogCompletionTriggerPaymentRecorded;
+
   /// ACTIVE-ORDERS-002 Active-orders subtitle: explains that this surface holds open operational orders and that finished ones go to History.
   ///
   /// In en, this message translates to:
@@ -7264,16 +7312,16 @@ abstract class AppLocalizations {
   /// **'No served orders are waiting to be completed.'**
   String get ordersActiveEmptyAwaitingClose;
 
-  /// ACTIVE-ORDERS-002 explainer shown above the Awaiting-close queue: what these orders are and how they leave it.
+  /// ORDER-AUTO-COMPLETION-001 explainer above the Awaiting-close queue. Served + fully paid now completes automatically, so this queue is the EXCEPTION list, not the normal backlog.
   ///
   /// In en, this message translates to:
-  /// **'These orders were served. A paid order can be completed from its details; an unpaid one needs its payment recorded first. They stay active until they are completed, cancelled or voided.'**
+  /// **'A served order closes itself as soon as it is fully paid, so anything still here needs attention — usually a payment that was never recorded. Record the payment and the order closes on its own.'**
   String get ordersAwaitingCloseExplainer;
 
-  /// ACTIVE-ORDERS-002 restrained notice when the awaiting-close backlog is meaningfully high. States the fact without inventing urgency or blame.
+  /// ORDER-AUTO-COMPLETION-001 restrained notice when the awaiting-close backlog is meaningfully high. States the fact without inventing urgency or blame.
   ///
   /// In en, this message translates to:
-  /// **'{count} served orders are still open. They remain active until each one is completed.'**
+  /// **'{count} served orders have not closed. A served order closes itself once it is fully paid, so these are waiting on something.'**
   String ordersAwaitingCloseBacklog(int count);
 
   /// ACTIVE-ORDERS-002 honest truncation notice under the newest-first sort.

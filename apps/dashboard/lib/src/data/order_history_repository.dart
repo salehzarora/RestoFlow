@@ -512,9 +512,12 @@ List<DemoOrder> demoOrderHistory() {
         payments: [cash(7400, receipt: 'R-1008', at: '13:31')],
       ),
     ),
-    // SERVED and PAID -> the COMPLETABLE one (D-025 satisfied). Its sibling
-    // #1007GG is served but UNPAID, so completing it is refused — the two make the
-    // ORDER-COMPLETION-001 policy visible in demo mode.
+    // SERVED and PAID, yet still open — an ANOMALY under ORDER-AUTO-COMPLETION-001
+    // (the rule closes a served order the moment it is fully paid), and therefore
+    // exactly the case the MANUAL recovery completion exists for: an order served
+    // and paid before the rule shipped. Its sibling #1007GG is served but UNPAID —
+    // the ordinary Awaiting-close exception, which no rule may close. Together they
+    // make both policies visible in demo mode.
     DemoOrder(
       daysAgo: 0,
       minutesAgo: 55,
