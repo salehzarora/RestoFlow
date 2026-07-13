@@ -338,7 +338,7 @@
   "posDrawerClosed": "סגורה",
   "posCashInDrawer": "מזומן במגירה",
   "posLastCashPayment": "תשלום מזומן אחרון",
-  "posShiftDemoNote": "הדגמה — ההתאמה מחושבת מקומית ואינה נשמרת בשרת.",
+  "posShiftDemoNote": "משמרת הדגמה — לא מסונכרנת",
   "posShiftRealName": "המשמרת הנוכחית",
   "posShiftRealNote": "נפתחה בכניסה — סכומי המזומן מנוהלים בשרת",
   "posShiftCloseTitle": "סגירת משמרת וספירת מזומן",
@@ -350,6 +350,7 @@
   "posShiftDoneAction": "סיום",
   "posShiftNoOpenShift": "אין משמרת פתוחה במכשיר זה.",
   "posShiftNoOpenShiftHint": "משמרת נפתחת אוטומטית בכניסת קופאי.",
+  "posShiftDemoNote": "הדגמה — ההתאמה מחושבת מקומית ואינה נשמרת בשרת.",
   "posShiftOpenedAt": "נפתחה בשעה",
   "posShiftOpeningFloat": "קופה פותחת",
   "posShiftExpectedCash": "מזומן צפוי",
@@ -630,9 +631,11 @@
   "menuTemplateOptMild": "עדין",
   "menuTemplateOptMediumSpicy": "בינוני",
   "menuTemplateOptHot": "חריף",
+
   "dashboardNavSettings": "הגדרות",
   "dashboardNavUsers": "משתמשים",
   "dashboardNavDevices": "מכשירים",
+
   "adminDemoBanner": "נתוני דמו — הפעולות תואמות לחוזי הצד-האחורי של RF-112 אך פועלות מול מאגר בזיכרון במכשיר זה; שום דבר עדיין לא נשמר בשרת.",
   "adminPermissionDeniedTitle": "אין לך הרשאה",
   "adminPermissionDeniedBody": "התפקיד שלך אינו יכול לבצע פעולה זו בהיקף זה. שומר דירוג-התפקידים מגביל את הניהול לתפקידים גבוהים יותר.",
@@ -660,6 +663,7 @@
   "adminDevStatusRevoked": "בוטל",
   "adminDevStatusCodeExpired": "פג תוקף הקוד",
   "adminDevStatusRejected": "נדחה",
+
   "adminSettingsTitle": "הגדרות",
   "adminSettingsSubtitle": "הגדרות ארגון, מסעדה וסניף עבור היקף זה.",
   "adminSettingsReadOnly": "התפקיד שלך יכול לצפות בהגדרות אלו אך לא לערוך אותן.",
@@ -679,6 +683,7 @@
   "adminOptional": "אופציונלי",
   "adminSave": "שמור",
   "adminCancel": "ביטול",
+
   "adminUsersTitle": "משתמשים ותפקידים",
   "adminUsersSubtitle": "נהל מי יכול לגשת לארגון זה ומה מותר לו לעשות.",
   "adminGrantUser": "הענק גישה",
@@ -702,6 +707,7 @@
   "adminRevokeMemberTitle": "לבטל את הגישה?",
   "adminRevokeMemberBody": "פעולה זו מסירה את גישת החבר לארגון ומסיימת כל כניסה עם קוד PIN. לא ניתן לבטל זאת מכאן.",
   "adminMemberRevoked": "הגישה בוטלה",
+
   "adminDevicesTitle": "מכשירים",
   "adminDevicesSubtitle": "ספק וצמד מכשירי קופה ומסכי מטבח עבור סניף זה.",
   "adminCreateDevice": "הוסף מכשיר",
