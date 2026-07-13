@@ -183,6 +183,27 @@ class RealDiscountRepository implements DiscountRepository {
     final status = op['status'];
     if (status != 'applied' || op['ok'] == false) {
       final error = op['error'];
+      final detail = op['detail'];
+      // FULL-COMP-PERMISSION-001 — dispatch on the SERVER's typed contract only.
+      // `detail` survives `public.sync_push` precisely because app.apply_discount
+      // RETURNS its refusal envelope instead of raising (a raised error is rebuilt
+      // by sync_push and its `error` collapses to the literal 'rejected', losing the
+      // domain code). So the exact-match tests below are the whole contract — the
+      // POS never infers "this was a comp refusal" from a zero total or a generic
+      // rejection.
+      if (detail == 'full_comp_permission_required') {
+        throw const DiscountException(
+          'full_comp_permission_required',
+          permissionDenied: true,
+          fullCompRequired: true,
+        );
+      }
+      if (detail == 'discount_exceeds_order_total') {
+        throw const DiscountException(
+          'discount_exceeds_order_total',
+          exceedsOrderTotal: true,
+        );
+      }
       if (error == 'permission_denied') {
         throw const DiscountException(
           'permission_denied',

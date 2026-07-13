@@ -3,6 +3,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/discount_repository.dart';
 import '../data/ids.dart';
+import '../data/staff_capabilities.dart';
 import 'pos_session.dart';
 
 /// The order-level discount repository (RF-117 part C). Selects by client runtime
@@ -22,3 +23,27 @@ final discountRepositoryProvider = Provider<DiscountRepository>((ref) {
     ref.watch(clientIdGeneratorProvider),
   );
 });
+
+/// FULL-COMP-PERMISSION-001: the repository that reads the EFFECTIVE capabilities
+/// of the current PIN session. Same demo/real seam as [discountRepositoryProvider].
+final staffCapabilitiesRepositoryProvider =
+    Provider<StaffCapabilitiesRepository>((ref) {
+      final cfg = ref.watch(runtimeConfigProvider);
+      if (cfg.isDemoMode) return const DemoStaffCapabilitiesRepository();
+      return RealStaffCapabilitiesRepository(
+        ref.watch(posAuthTransportProvider),
+        ref.watch(posSyncSessionProvider),
+      );
+    });
+
+/// The current operator's EFFECTIVE capabilities, or null while unknown (still
+/// loading, no session, or a transport failure).
+///
+/// UNKNOWN IS NOT DENIED. The POS keeps the discount controls usable when this is
+/// null and lets the SERVER refuse — hiding a manager's discount button because a
+/// capability probe blipped would be a worse failure than an honest server-side
+/// rejection, and nothing unsafe can follow because the server gate is
+/// authoritative either way.
+final staffCapabilitiesProvider = FutureProvider<PosStaffCapabilities?>(
+  (ref) => ref.watch(staffCapabilitiesRepositoryProvider).fetch(),
+);

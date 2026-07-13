@@ -338,7 +338,7 @@
   "posDrawerClosed": "مغلق",
   "posCashInDrawer": "النقد في الدرج",
   "posLastCashPayment": "آخر دفعة نقدية",
-  "posShiftDemoNote": "وردية تجريبية — غير متزامنة",
+  "posShiftDemoNote": "وضع تجريبي — الجرد محسوب محليًا ولا يُحفظ على الخادم.",
   "posShiftRealName": "الوردية الحالية",
   "posShiftRealNote": "فُتحت عند تسجيل الدخول — إجماليات النقد تُتابَع على الخادم",
   "posShiftCloseTitle": "إغلاق الوردية وجرد النقد",
@@ -350,7 +350,6 @@
   "posShiftDoneAction": "تم",
   "posShiftNoOpenShift": "لا توجد وردية مفتوحة على هذا الجهاز.",
   "posShiftNoOpenShiftHint": "تُفتح الوردية تلقائيًا عند تسجيل دخول الكاشير.",
-  "posShiftDemoNote": "وضع تجريبي — الجرد محسوب محليًا ولا يُحفظ على الخادم.",
   "posShiftOpenedAt": "فُتحت الساعة",
   "posShiftOpeningFloat": "الرصيد الافتتاحي",
   "posShiftExpectedCash": "النقد المتوقع",
@@ -631,11 +630,9 @@
   "menuTemplateOptMild": "خفيف",
   "menuTemplateOptMediumSpicy": "وسط",
   "menuTemplateOptHot": "حار",
-
   "dashboardNavSettings": "الإعدادات",
   "dashboardNavUsers": "المستخدمون",
   "dashboardNavDevices": "الأجهزة",
-
   "adminDemoBanner": "بيانات تجريبية — الإجراءات تتبع عقود الواجهة الخلفية RF-112 لكنها تعمل على مخزن في الذاكرة على هذا الجهاز؛ لا شيء يُحفظ على الخادم بعد.",
   "adminPermissionDeniedTitle": "ليس لديك صلاحية",
   "adminPermissionDeniedBody": "لا يمكن لدورك تنفيذ هذا الإجراء في هذا النطاق. حارس رتبة الأدوار يقصر الإدارة على الأدوار الأعلى.",
@@ -663,7 +660,6 @@
   "adminDevStatusRevoked": "مُلغى",
   "adminDevStatusCodeExpired": "انتهت صلاحية الرمز",
   "adminDevStatusRejected": "مرفوض",
-
   "adminSettingsTitle": "الإعدادات",
   "adminSettingsSubtitle": "إعدادات المؤسسة والمطعم والفرع لهذا النطاق.",
   "adminSettingsReadOnly": "يمكن لدورك عرض هذه الإعدادات لكن لا يمكن تعديلها.",
@@ -683,7 +679,6 @@
   "adminOptional": "اختياري",
   "adminSave": "حفظ",
   "adminCancel": "إلغاء",
-
   "adminUsersTitle": "المستخدمون والأدوار",
   "adminUsersSubtitle": "أدر من يمكنه الوصول إلى هذه المؤسسة وما يمكنه فعله.",
   "adminGrantUser": "منح وصول",
@@ -707,7 +702,6 @@
   "adminRevokeMemberTitle": "إلغاء الوصول؟",
   "adminRevokeMemberBody": "يؤدي هذا إلى إزالة وصول العضو إلى هذه المؤسسة وإنهاء أي تسجيل دخول برمز PIN. لا يمكن التراجع عن ذلك من هنا.",
   "adminMemberRevoked": "تم إلغاء الوصول",
-
   "adminDevicesTitle": "الأجهزة",
   "adminDevicesSubtitle": "زوّد واقترن أجهزة نقاط البيع وشاشات المطبخ لهذا الفرع.",
   "adminCreateDevice": "إضافة جهاز",
@@ -1222,5 +1216,16 @@
   "ordersAwaitingCloseBacklog": "{count} طلبًا مُقدَّمًا لم تُغلق. الطلب المُقدَّم يُغلق تلقائيًا بمجرد سداده بالكامل، لذا فهذه الطلبات تنتظر شيئًا ما.",
   "ordersActiveTruncatedNewest": "يتم عرض أحدث {shown} من أصل {total} طلبًا نشطًا مطابقًا.",
   "ordersActiveTruncatedOldest": "يتم عرض أقدم {shown} من أصل {total} طلبًا نشطًا مطابقًا.",
-  "ordersActiveRefreshFailed": "تعذّر التحديث الآن. قد تكون هذه الطلبات غير محدَّثة."
+  "ordersActiveRefreshFailed": "تعذّر التحديث الآن. قد تكون هذه الطلبات غير محدَّثة.",
+  "staffCapApplyFullComp": "يمكنه جعل الطلب مجانيًا",
+  "staffCapApplyFullCompHint": "يسمح بخصم يجعل إجمالي الطلب صفرًا. مُعطَّل افتراضيًا.",
+  "staffCapApplyFullCompNeedsDiscount": "يتطلب صلاحية الخصم أعلاه.",
+  "staffCapabilitiesRoleNote": "المديرون والمالكون يمتلكون هذه الصلاحيات أصلًا.",
+  "posDiscountFullCompDenied": "لا تملك صلاحية جعل الطلب مجانيًا — اطلب مديرًا.",
+  "posDiscountExceedsOrderTotal": "قيمة الخصم أكبر من إجمالي الطلب.",
+  "activityLogCapApplyFullComp": "جعل الطلب مجانيًا",
+  "activityLogDeniedFullCompPermissionRequired": "جعل الطلب مجانيًا يتطلب صلاحية",
+  "activityLogDeniedDiscountExceedsOrderTotal": "الخصم تجاوز إجمالي الطلب",
+  "activityLogFieldResultingChargeState": "سيصبح",
+  "activityLogTitleDiscountDenied": "تم رفض الخصم"
 }

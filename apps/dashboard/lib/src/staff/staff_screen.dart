@@ -498,6 +498,41 @@ class _CapabilitiesSwitches extends StatelessWidget {
               ? (v) => onChanged(value.copyWith(applyDiscount: v))
               : null,
         ),
+        // FULL-COMP-PERMISSION-001 — deliberately placed DIRECTLY BENEATH the
+        // ordinary discount switch and indented under it, because it is not a
+        // sibling capability: it is a STRICTLY NARROWER right that only has meaning
+        // while ordinary discounts are allowed. The server enforces that ordering
+        // (it checks apply_discount first and refuses there), so when discounts are
+        // off this switch is disabled and says why, rather than pretending a stored
+        // grant still does something.
+        Padding(
+          padding: const EdgeInsetsDirectional.only(start: RestoflowSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                key: const Key('cap-apply-full-comp'),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(l10n.staffCapApplyFullComp),
+                subtitle: Text(
+                  value.applyDiscount
+                      ? l10n.staffCapApplyFullCompHint
+                      : l10n.staffCapApplyFullCompNeedsDiscount,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                value: value.applyFullComp,
+                // Ineffective without the ordinary discount right — so it is not
+                // merely styled as off, it is genuinely not editable.
+                onChanged: enabled && value.applyDiscount
+                    ? (v) => onChanged(value.copyWith(applyFullComp: v))
+                    : null,
+              ),
+            ],
+          ),
+        ),
         SwitchListTile(
           key: const Key('cap-void-order'),
           contentPadding: EdgeInsets.zero,
@@ -517,6 +552,16 @@ class _CapabilitiesSwitches extends StatelessWidget {
           onChanged: enabled
               ? (v) => onChanged(value.copyWith(closeShift: v))
               : null,
+        ),
+        const SizedBox(height: RestoflowSpacing.xxs),
+        // Honest: these switches are cashier-only. A manager/owner already holds
+        // every one of these rights BY ROLE and is unaffected by them.
+        Text(
+          key: const Key('cap-role-note'),
+          l10n.staffCapabilitiesRoleNote,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );

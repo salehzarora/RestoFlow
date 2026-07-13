@@ -8,7 +8,9 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/discount.dart';
 import '../data/discount_repository.dart';
+import '../data/staff_capabilities.dart';
 import '../format/cash_input.dart';
+import '../format/tax_math.dart';
 import '../state/cart_controller.dart';
 import '../state/discount_controller.dart';
 
@@ -91,8 +93,25 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
   int? get _parsedValue =>
       parseCashToMinor(_valueController.text, fractionDigits: 2);
 
+  /// The order total this entry WOULD leave, in integer minor units — the same
+  /// arithmetic the server performs (`subtotal - discount + tax`, with the discount
+  /// clamped to the subtotal). Used only to PREDICT a refusal, never to write:
+  /// the applied total is always read back from the server's result.
+  int _prospectiveGrandMinor(int value) {
+    final raw = _type == DiscountType.fixed
+        ? value
+        : percentMinor(widget.subtotalMinor, value);
+    final discount = raw > widget.subtotalMinor ? widget.subtotalMinor : raw;
+    return widget.subtotalMinor - discount + widget.taxTotalMinor;
+  }
+
   /// The client-side validation error key, or null when the entry is valid.
-  String? _validate(AppLocalizations l10n) {
+  ///
+  /// [caps] are the operator's EFFECTIVE capabilities, or null when UNKNOWN. The
+  /// full-comp pre-check fires ONLY when we positively know the right is absent —
+  /// unknown capabilities fall through and let the SERVER decide, because blocking
+  /// on a failed probe could wrongly stop a manager.
+  String? _validate(AppLocalizations l10n, PosStaffCapabilities? caps) {
     final value = _parsedValue;
     if (value == null || value <= 0) return l10n.posDiscountValueInvalid;
     if (_type == DiscountType.percentage && value > 10000) {
@@ -104,11 +123,21 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
     if (_reasonController.text.trim().isEmpty) {
       return l10n.posDiscountReasonRequired;
     }
+    // FULL-COMP-PERMISSION-001 — predict the server's rule rather than guessing at
+    // it. The refusal depends on the RESULTING TOTAL, so this checks the computed
+    // total and NOT whether a "100%" preset was chosen: a FIXED amount that happens
+    // to cover the order is caught by exactly the same test, which is why a
+    // percentage-only client gate would have been a hole.
+    if (caps != null &&
+        !caps.applyFullComp &&
+        _prospectiveGrandMinor(value) <= 0) {
+      return l10n.posDiscountFullCompDenied;
+    }
     return null;
   }
 
-  Future<void> _apply(AppLocalizations l10n) async {
-    final error = _validate(l10n);
+  Future<void> _apply(AppLocalizations l10n, PosStaffCapabilities? caps) async {
+    final error = _validate(l10n, caps);
     if (error != null) {
       setState(() => _applyError = error);
       return;
@@ -140,9 +169,19 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _applyError = e.permissionDenied
-            ? l10n.posDiscountPermissionDenied
-            : l10n.posDiscountFailed;
+        // TYPED dispatch on the server's contract — checked most-specific first,
+        // because a full-comp refusal is ALSO a permission_denied and would
+        // otherwise be flattened into the generic "ask a manager" message, hiding
+        // the fact that ordinary discounts are still allowed.
+        _applyError = switch (e) {
+          DiscountException(fullCompRequired: true) =>
+            l10n.posDiscountFullCompDenied,
+          DiscountException(exceedsOrderTotal: true) =>
+            l10n.posDiscountExceedsOrderTotal,
+          DiscountException(permissionDenied: true) =>
+            l10n.posDiscountPermissionDenied,
+          _ => l10n.posDiscountFailed,
+        };
       });
     }
   }
@@ -152,6 +191,9 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+    // FULL-COMP-PERMISSION-001: null while loading/unknown. The discount controls
+    // stay fully usable in that case — the server remains authoritative.
+    final caps = ref.watch(staffCapabilitiesProvider).value;
 
     return SafeArea(
       child: Padding(
@@ -270,7 +312,11 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
               width: double.infinity,
               child: FilledButton.icon(
                 key: const Key('discount-apply-button'),
-                onPressed: _submitting ? null : () => _apply(l10n),
+                // NOT disabled when full-comp is denied: the cashier may still
+                // apply ORDINARY discounts, and hiding the action entirely would
+                // punish them for a right they never needed. The entry is judged on
+                // its RESULT, at apply time.
+                onPressed: _submitting ? null : () => _apply(l10n, caps),
                 icon: const Icon(Icons.check),
                 label: Text(l10n.posDiscountApplyAction),
                 style: RestoflowButtonStyles.big(context),

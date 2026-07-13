@@ -85,6 +85,7 @@ enum _Kind {
   completionMode,
   completionTrigger,
   deniedReason,
+  chargeState,
 }
 
 /// The EXPLICIT allowlist of payload keys that may ever be shown, and how to
@@ -143,6 +144,10 @@ const Map<String, _Kind> _displayableKeys = {
   // discount was refused and never WHY. A closed enum of safe STATE tokens; never money,
   // never an identifier (T-003 holds).
   'denied_reason': _Kind.deniedReason,
+  // WHAT the mutation would have left the order as (FULL-COMP-PERMISSION-001).
+  // A closed enum of STATE tokens (currently `not_chargeable`), so both the label
+  // and the value are localized — never money, never an identifier (T-003 holds).
+  'resulting_charge_state': _Kind.chargeState,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -186,15 +191,20 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'completion_mode' => l10n.activityLogFieldCompletionMode,
   'completion_trigger' => l10n.activityLogFieldCompletionTrigger,
   'denied_reason' => l10n.activityLogFieldDeniedReason,
+  'resulting_charge_state' => l10n.activityLogFieldResultingChargeState,
   _ => key,
 };
 
-/// The three cashier capability keys (nested under `capabilities`) rendered as
-/// Enabled/Disabled booleans.
+/// The cashier capability keys (nested under `capabilities`) rendered as
+/// Enabled/Disabled booleans. `apply_full_comp` (FULL-COMP-PERMISSION-001) is
+/// default-OFF and grant-only, but it renders exactly like the others — the
+/// polarity lives in the server resolver and in [StaffCapabilities.fromJson],
+/// not here: this list only decides WHAT is shown, not what it means.
 const List<String> _capabilityKeys = [
   'apply_discount',
   'void_order',
   'close_shift',
+  'apply_full_comp',
 ];
 
 /// Substrings that mark a key as secret-bearing — a final client guard on top of
@@ -313,6 +323,11 @@ class AuditEventPresenter {
   String? _title(AuditEvent e) => switch (e.action) {
     'order.voided' => l10n.activityLogTitleOrderVoided,
     'order.discount_applied' => l10n.activityLogTitleDiscountApplied,
+    // FULL-COMP-PERMISSION-001: a REFUSED discount had no title of its own, so it
+    // fell back to the bare category label — the operator saw "Discounts" and had
+    // to infer that something had been blocked. A refusal is exactly the row a
+    // manager needs to notice, so it now says so.
+    'order.discount_denied' => l10n.activityLogTitleDiscountDenied,
     'order.submitted' => l10n.activityLogTitleOrderSubmitted,
     'order.status_updated' => l10n.activityLogTitleOrderStatusUpdated,
     'staff.created' => l10n.activityLogTitleStaffCreated,
@@ -420,18 +435,35 @@ class AuditEventPresenter {
       _Kind.completionMode => _completionModeLabel(value.toString()),
       _Kind.completionTrigger => _completionTriggerLabel(value.toString()),
       _Kind.deniedReason => _deniedReasonLabel(value.toString()),
+      _Kind.chargeState => _chargeStateLabel(value.toString()),
       _Kind.text => value.toString(),
     };
   }
 
   /// WHY a mutation was refused. An unknown token is shown raw rather than guessed —
   /// an honest unknown beats a confident mislabel.
+  ///
+  /// `full_comp_requires_manager` is the token the server emitted BEFORE
+  /// FULL-COMP-PERMISSION-001, when the right was role-only. The audit trail is
+  /// APPEND-ONLY, so those historical rows still exist and must keep rendering
+  /// correctly — the old mapping stays, and the new token is added beside it.
   String _deniedReasonLabel(String reason) => switch (reason) {
     'order_has_completed_payment' => l10n.activityLogDeniedOrderHasPayment,
     'full_comp_requires_manager' =>
       l10n.activityLogDeniedFullCompRequiresManager,
+    'full_comp_permission_required' =>
+      l10n.activityLogDeniedFullCompPermissionRequired,
+    'discount_exceeds_order_total' =>
+      l10n.activityLogDeniedDiscountExceedsOrderTotal,
     'order_not_voidable' => l10n.activityLogDeniedOrderNotVoidable,
     _ => reason,
+  };
+
+  /// WHAT the mutation would have left the order as. `not_chargeable` means the
+  /// order would owe nothing at all — i.e. it would be FREE.
+  String _chargeStateLabel(String state) => switch (state) {
+    'not_chargeable' => l10n.dashboardNoCharge,
+    _ => state,
   };
 
   /// Whether the order owed anything, and whether it was settled. `not_chargeable`
@@ -480,6 +512,7 @@ class AuditEventPresenter {
     'apply_discount' => l10n.activityLogCapApplyDiscount,
     'void_order' => l10n.activityLogCapVoidOrder,
     'close_shift' => l10n.activityLogCapCloseShift,
+    'apply_full_comp' => l10n.activityLogCapApplyFullComp,
     _ => cap,
   };
 

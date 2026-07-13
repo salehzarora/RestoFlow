@@ -3906,4 +3906,43 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get ordersActiveRefreshFailed =>
       'הרענון נכשל כעת. ייתכן שההזמנות אינן מעודכנות.';
+
+  @override
+  String get staffCapApplyFullComp => 'יכול לתת הזמנה חינם';
+
+  @override
+  String get staffCapApplyFullCompHint =>
+      'מאפשר הנחה שמאפסת את סכום ההזמנה. כבוי כברירת מחדל.';
+
+  @override
+  String get staffCapApplyFullCompNeedsDiscount =>
+      'דורש את הרשאת ההנחה שלמעלה.';
+
+  @override
+  String get staffCapabilitiesRoleNote =>
+      'למנהלים ולבעלים כבר יש את כל ההרשאות האלה.';
+
+  @override
+  String get posDiscountFullCompDenied =>
+      'אין לך הרשאה לתת הזמנה חינם — פנה למנהל.';
+
+  @override
+  String get posDiscountExceedsOrderTotal => 'ההנחה גדולה מסכום ההזמנה.';
+
+  @override
+  String get activityLogCapApplyFullComp => 'מתן הזמנה חינם';
+
+  @override
+  String get activityLogDeniedFullCompPermissionRequired =>
+      'מתן הזמנה חינם דורש הרשאה';
+
+  @override
+  String get activityLogDeniedDiscountExceedsOrderTotal =>
+      'ההנחה עלתה על סכום ההזמנה';
+
+  @override
+  String get activityLogFieldResultingChargeState => 'יישאר';
+
+  @override
+  String get activityLogTitleDiscountDenied => 'ההנחה נדחתה';
 }
