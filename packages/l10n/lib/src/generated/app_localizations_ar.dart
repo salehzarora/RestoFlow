@@ -3820,4 +3820,57 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogFieldPaymentStatus => 'الدفع';
+
+  @override
+  String get ordersActiveSubtitleV2 =>
+      'الطلبات المفتوحة حاليًا، وتنتقل إلى السجل بعد إتمامها أو إنهائها.';
+
+  @override
+  String get ordersQueueInProgress => 'قيد التنفيذ';
+
+  @override
+  String get ordersQueueAwaitingClose => 'بانتظار الإغلاق';
+
+  @override
+  String get ordersQueueAllActive => 'كل الطلبات النشطة';
+
+  @override
+  String get ordersSortLabel => 'الترتيب';
+
+  @override
+  String get ordersSortNewest => 'الأحدث أولًا';
+
+  @override
+  String get ordersSortOldest => 'الأقدم أولًا';
+
+  @override
+  String get ordersActiveEmptyInProgress =>
+      'لا توجد طلبات قيد التحضير أو بانتظار التقديم حاليًا.';
+
+  @override
+  String get ordersActiveEmptyAwaitingClose =>
+      'لا توجد طلبات مُقدَّمة بانتظار الإتمام.';
+
+  @override
+  String get ordersAwaitingCloseExplainer =>
+      'هذه طلبات تم تقديمها. يمكن إتمام الطلب المدفوع من تفاصيله، أما غير المدفوع فيلزم تسجيل دفعته أولًا. وتبقى نشطة حتى يتم إتمامها أو إلغاؤها أو إبطالها.';
+
+  @override
+  String ordersAwaitingCloseBacklog(int count) {
+    return 'لا يزال $count طلبًا مُقدَّمًا مفتوحًا. تبقى نشطة حتى يتم إتمام كل منها.';
+  }
+
+  @override
+  String ordersActiveTruncatedNewest(int shown, int total) {
+    return 'يتم عرض أحدث $shown من أصل $total طلبًا نشطًا مطابقًا.';
+  }
+
+  @override
+  String ordersActiveTruncatedOldest(int shown, int total) {
+    return 'يتم عرض أقدم $shown من أصل $total طلبًا نشطًا مطابقًا.';
+  }
+
+  @override
+  String get ordersActiveRefreshFailed =>
+      'تعذّر التحديث الآن. قد تكون هذه الطلبات غير محدَّثة.';
 }

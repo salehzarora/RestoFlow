@@ -114,9 +114,13 @@ insert into payments (id, organization_id, restaurant_id, branch_id, order_id, d
 -- ===== calls (org_owner) =====================================================
 set local role authenticated;
 set local app.current_app_user_id = '00000000-0000-0000-0000-00000000f001';
-create temp table t_a1a as select app.owner_active_orders('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00') as res;
-create temp table t_org as select app.owner_active_orders('00000000-0000-0000-0000-0000000a0000') as res;
-create temp table t_cap as select app.owner_active_orders('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00', null, null, null, null, 2) as res;
+-- ACTIVE-ORDERS-002 changed the DEFAULT sort to `newest`. These assertions were
+-- written for the FIFO (oldest-first) board, so they now request that ordering
+-- EXPLICITLY — proving oldest-first is still fully supported as an option. The
+-- new default and the queues are covered by active_orders_002_*.
+create temp table t_a1a as select app.owner_active_orders('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00', p_sort => 'oldest') as res;
+create temp table t_org as select app.owner_active_orders('00000000-0000-0000-0000-0000000a0000', p_sort => 'oldest') as res;
+create temp table t_cap as select app.owner_active_orders('00000000-0000-0000-0000-0000000a0000','00000000-0000-0000-0000-0000000a1000','00000000-0000-0000-0000-0000000a1a00', null, null, null, null, 2, p_sort => 'oldest') as res;
 reset role;
 
 -- ===== (1) envelope ==========================================================
@@ -344,12 +348,16 @@ select ok(
               where p.proname='owner_active_orders' and p.pronamespace='app'::regnamespace and cfg like 'search_path=%')
   and exists (select 1 from pg_proc p cross join lateral unnest(coalesce(p.proconfig,'{}'::text[])) as cfg
               where p.proname='owner_active_orders' and p.pronamespace='public'::regnamespace and cfg like 'search_path=%')
-  and not has_function_privilege('anon',   'public.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int)', 'execute')
-  and not has_function_privilege('public', 'public.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int)', 'execute')
-  and has_function_privilege('authenticated', 'public.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int)', 'execute')
-  and not has_function_privilege('anon',   'app.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int)', 'execute')
-  and not has_function_privilege('public', 'app.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int)', 'execute')
-  and has_function_privilege('authenticated', 'app.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int)', 'execute')
+  -- ACTIVE-ORDERS-002 widened the signature (+p_queue/+p_sort/+p_cursor); the ACL
+  -- contract is unchanged and is re-asserted against the CURRENT signature.
+  and not has_function_privilege('anon',   'public.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int,text,text,text)', 'execute')
+  and not has_function_privilege('public', 'public.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int,text,text,text)', 'execute')
+  and has_function_privilege('authenticated', 'public.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int,text,text,text)', 'execute')
+  and not has_function_privilege('anon',   'app.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int,text,text,text)', 'execute')
+  and not has_function_privilege('public', 'app.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int,text,text,text)', 'execute')
+  and has_function_privilege('authenticated', 'app.owner_active_orders(uuid,uuid,uuid,text,text,text,text,int,text,text,text)', 'execute')
+  -- the OLD 8-arg signature is GONE (widened, not duplicated — no competing RPC).
+  and not exists (select 1 from pg_proc p where p.proname='owner_active_orders' and p.pronargs = 8)
   and exists (select 1 from pg_indexes where schemaname='public' and indexname='orders_active_ops_idx'),
   'app fn is DEFINER + public wrapper is INVOKER, both search_path-locked, authenticated-only (anon + PUBLIC revoked), and the supporting index exists');
 

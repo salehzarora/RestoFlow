@@ -511,6 +511,27 @@ POS/KDS APK rebuild is required** — the POS/KDS code is untouched and the PIN
 front's signature and behaviour are unchanged. **NOT applied to hosted by the
 ticket branch.**
 
+**ACTIVE-ORDERS-002 rollout (DB-first — MANDATORY, and the RPC signature CHANGES).**
+Migration `20260713140000_active_orders_002_queues_and_sort.sql` widens
+`owner_active_orders` with three appended, backward-compatible parameters
+(`p_queue`, `p_sort`, `p_cursor`). Postgres cannot add parameters in place, so the
+**8-argument signature is DROPPED and the 11-argument one created** — the ACL is
+re-applied (`authenticated` only; **`anon` and `PUBLIC` explicitly revoked** on
+both `app.*` and the `public` wrapper). **No table / column / CHECK / RLS /
+trigger / index change; no order row, payment row, lifecycle transition, audit
+writer or audit action is touched** (this is a read-only query/presentation
+change).
+
+**Because the old signature is dropped, the Dashboard MUST NOT be deployed before
+the migration is applied** — a Dashboard build sending `p_queue`/`p_sort` to the
+old 8-arg function (or an old build calling a signature that no longer exists)
+would fail. Order: (1) apply to hosted; (2) verify `owner_active_orders` serves
+`p_queue => 'in_progress'` and `p_queue => 'awaiting_close'`, that
+`p_sort => 'newest'` is the default, that an unknown queue/sort returns `22023`,
+and that `anon` still cannot execute it; (3) **only then** deploy the Dashboard.
+**No POS/KDS APK rebuild is required** — POS and KDS never call this RPC. **NOT
+applied to hosted by the ticket branch.**
+
 **Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).
 - **Yesterday / Last 7 days / Last 30 days** load with real current + comparison

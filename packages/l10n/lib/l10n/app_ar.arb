@@ -1190,5 +1190,19 @@
   "ordersCompleteErrorTransient": "تعذّر الوصول إلى الخادم. لم يتم تغيير الطلب.",
   "ordersCompleteRetry": "حاول مجددًا",
   "activityLogFieldOrderCode": "الطلب",
-  "activityLogFieldPaymentStatus": "الدفع"
+  "activityLogFieldPaymentStatus": "الدفع",
+  "ordersActiveSubtitleV2": "الطلبات المفتوحة حاليًا، وتنتقل إلى السجل بعد إتمامها أو إنهائها.",
+  "ordersQueueInProgress": "قيد التنفيذ",
+  "ordersQueueAwaitingClose": "بانتظار الإغلاق",
+  "ordersQueueAllActive": "كل الطلبات النشطة",
+  "ordersSortLabel": "الترتيب",
+  "ordersSortNewest": "الأحدث أولًا",
+  "ordersSortOldest": "الأقدم أولًا",
+  "ordersActiveEmptyInProgress": "لا توجد طلبات قيد التحضير أو بانتظار التقديم حاليًا.",
+  "ordersActiveEmptyAwaitingClose": "لا توجد طلبات مُقدَّمة بانتظار الإتمام.",
+  "ordersAwaitingCloseExplainer": "هذه طلبات تم تقديمها. يمكن إتمام الطلب المدفوع من تفاصيله، أما غير المدفوع فيلزم تسجيل دفعته أولًا. وتبقى نشطة حتى يتم إتمامها أو إلغاؤها أو إبطالها.",
+  "ordersAwaitingCloseBacklog": "لا يزال {count} طلبًا مُقدَّمًا مفتوحًا. تبقى نشطة حتى يتم إتمام كل منها.",
+  "ordersActiveTruncatedNewest": "يتم عرض أحدث {shown} من أصل {total} طلبًا نشطًا مطابقًا.",
+  "ordersActiveTruncatedOldest": "يتم عرض أقدم {shown} من أصل {total} طلبًا نشطًا مطابقًا.",
+  "ordersActiveRefreshFailed": "تعذّر التحديث الآن. قد تكون هذه الطلبات غير محدَّثة."
 }

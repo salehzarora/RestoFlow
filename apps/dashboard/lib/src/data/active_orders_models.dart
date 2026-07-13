@@ -60,18 +60,85 @@ enum ActiveOrderStageFilter {
   final String? wire;
 }
 
+/// The statuses of the IN-PROGRESS queue — the orders actually moving through
+/// preparation. A PRESENTATION grouping OVER the canonical states, never a new
+/// taxonomy: every member is one of the five canonical active statuses.
+const List<String> kInProgressStatuses = <String>[
+  'submitted',
+  'accepted',
+  'preparing',
+  'ready',
+];
+
+/// The statuses of the AWAITING-CLOSE queue: cooked and handed over, but not yet
+/// closed by the lifecycle. Still ACTIVE — never moved to History before it is
+/// actually completed (ORDER-COMPLETION-001).
+const List<String> kAwaitingCloseStatuses = <String>['served'];
+
+/// The operational queues of the active board (ACTIVE-ORDERS-002).
+///
+/// In production the board runs ~127 `served` orders against a handful in
+/// preparation, so a single flat list buries the live work and reads like
+/// History. The queues separate the two WITHOUT hiding anything: every active
+/// order is still reachable, and terminal orders still live only in History.
+enum ActiveOrderQueue {
+  /// The DEFAULT landing queue: what is actually moving right now.
+  inProgress('in_progress', kInProgressStatuses),
+
+  /// Served, waiting to be completed (or paid first — D-025).
+  awaitingClose('awaiting_close', kAwaitingCloseStatuses),
+
+  /// Every canonical active state.
+  allActive('all_active', kActiveOrderStatuses);
+
+  const ActiveOrderQueue(this.wire, this.statuses);
+
+  /// The exact token the RPC expects for `p_queue`.
+  final String wire;
+
+  /// The canonical statuses this queue contains.
+  final List<String> statuses;
+
+  bool contains(String status) => statuses.contains(status);
+}
+
+/// The board's sort order. AUTHORITATIVE and SERVER-SIDE: the page is capped, so
+/// the un-fetched rows are simply not in the payload — reversing the page on the
+/// client would silently omit them.
+enum ActiveOrdersSort {
+  /// The DEFAULT: what just came in, first (`created_at DESC, id DESC`).
+  newest('newest'),
+
+  /// FIFO (`created_at ASC, id ASC`) — the classic kitchen queue order.
+  oldest('oldest');
+
+  const ActiveOrdersSort(this.wire);
+
+  /// The exact token the RPC expects for `p_sort`.
+  final String wire;
+}
+
 /// The active-board controls. [branch] is picked from the SCOPE-SAFE option list
 /// (never a typed UUID); null means "every branch I am permitted to see", which
 /// the repository resolves from the caller's role — the server intersects it with
 /// the server-derived scope regardless.
 class ActiveOrdersQuery {
   const ActiveOrdersQuery({
+    this.queue = ActiveOrderQueue.inProgress,
+    this.sort = ActiveOrdersSort.newest,
     this.branch,
     this.stage = ActiveOrderStageFilter.all,
     this.orderType = OrderTypeFilter.all,
     this.payment = PaymentFilter.all,
     this.search = '',
   });
+
+  /// The operational queue. Defaults to IN PROGRESS — the board opens on the work
+  /// that is actually moving, not on the served backlog.
+  final ActiveOrderQueue queue;
+
+  /// The server-side sort. Defaults to NEWEST first.
+  final ActiveOrdersSort sort;
 
   final AuditBranchOption? branch;
   final ActiveOrderStageFilter stage;
@@ -80,19 +147,33 @@ class ActiveOrdersQuery {
   final String search;
 
   ActiveOrdersQuery copyWith({
+    ActiveOrderQueue? queue,
+    ActiveOrdersSort? sort,
     AuditBranchOption? branch,
     bool clearBranch = false,
     ActiveOrderStageFilter? stage,
     OrderTypeFilter? orderType,
     PaymentFilter? payment,
     String? search,
-  }) => ActiveOrdersQuery(
-    branch: clearBranch ? null : (branch ?? this.branch),
-    stage: stage ?? this.stage,
-    orderType: orderType ?? this.orderType,
-    payment: payment ?? this.payment,
-    search: search ?? this.search,
-  );
+  }) {
+    final nextQueue = queue ?? this.queue;
+    var nextStage = stage ?? this.stage;
+    // A stage filter must sit INSIDE the queue — the RPC rejects a contradiction
+    // (22023), so changing queue drops a stage the new queue cannot contain
+    // rather than sending an impossible request.
+    if (nextStage.wire != null && !nextQueue.contains(nextStage.wire!)) {
+      nextStage = ActiveOrderStageFilter.all;
+    }
+    return ActiveOrdersQuery(
+      queue: nextQueue,
+      sort: sort ?? this.sort,
+      branch: clearBranch ? null : (branch ?? this.branch),
+      stage: nextStage,
+      orderType: orderType ?? this.orderType,
+      payment: payment ?? this.payment,
+      search: search ?? this.search,
+    );
+  }
 
   /// The trimmed search, or null when blank (so the RPC skips the filter).
   String? get searchOrNull {
@@ -126,6 +207,26 @@ class ActiveOrdersSummary {
 
   /// Cooked and handed to the guest, but not yet closed by the lifecycle.
   int get served => stage('served');
+
+  /// The IN-PROGRESS queue count (submitted + accepted + preparing + ready),
+  /// server-computed over the whole scope.
+  int get inProgress {
+    var n = 0;
+    for (final s in kInProgressStatuses) {
+      n += stage(s);
+    }
+    return n;
+  }
+
+  /// The AWAITING-CLOSE queue count (served), server-computed over the scope.
+  int get awaitingClose => served;
+
+  /// The count of the given [queue] — the number the queue's card renders.
+  int ofQueue(ActiveOrderQueue queue) => switch (queue) {
+    ActiveOrderQueue.inProgress => inProgress,
+    ActiveOrderQueue.awaitingClose => awaitingClose,
+    ActiveOrderQueue.allActive => total,
+  };
 }
 
 /// One bounded read of the active board.
@@ -137,22 +238,32 @@ class ActiveOrdersSnapshot {
     this.matching = 0,
     this.limit = 100,
     this.truncated = false,
+    this.hasMore = false,
+    this.nextCursor,
   });
 
-  /// The board rows, OLDEST FIRST (FIFO — the project's canonical rule).
+  /// The board rows, in the SERVER-applied order (newest first by default).
   final List<OrderHistoryRow> rows;
   final ActiveOrdersSummary summary;
   final String currencyCode;
 
-  /// How many orders matched the filters server-side (may exceed [rows.length]).
+  /// How many orders matched the QUEUE + filters server-side — the FULL set,
+  /// never the loaded page. Drives the honest "showing N of [matching]" line.
   final int matching;
 
   /// The server-applied page cap.
   final int limit;
 
-  /// True when the cap bit — the board is showing the OLDEST [limit] of
-  /// [matching]. Surfaced to the operator; never a silent cut.
+  /// True when more matching orders exist than have been delivered so far.
   final bool truncated;
+
+  /// True when a further page can be fetched.
+  final bool hasMore;
+
+  /// The keyset continuation, TAGGED with the sort it was minted under. The
+  /// server rejects it if replayed under the other direction, so it can never
+  /// silently mis-page the board.
+  final String? nextCursor;
 
   bool get isEmpty => rows.isEmpty;
 }

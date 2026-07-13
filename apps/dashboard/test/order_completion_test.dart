@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
+import 'package:restoflow_dashboard/src/data/active_orders_models.dart';
 import 'package:restoflow_dashboard/src/data/demo_order_store.dart';
 import 'package:restoflow_dashboard/src/data/order_completion_repository.dart';
 import 'package:restoflow_dashboard/src/data/order_history_models.dart';
@@ -76,6 +77,16 @@ List<DemoOrder> _fixtures() => [
 
 DemoOrderStore _store() => DemoOrderStore(_fixtures());
 
+/// ACTIVE-ORDERS-002 split the board into queues and lands on IN PROGRESS, so a
+/// `served` order is no longer on the default board. The completion workflow is
+/// independent of that navigation, so these tests pin the ALL-ACTIVE queue and
+/// exercise completion directly. Completion FROM the awaiting-close queue (the
+/// real operator path) is covered by active_orders_002_test.dart.
+const ActiveOrdersQuery _allActive = ActiveOrdersQuery(
+  queue: ActiveOrderQueue.allActive,
+  sort: ActiveOrdersSort.oldest,
+);
+
 Widget _wrap(
   DemoOrderStore store, {
   String locale = 'en',
@@ -88,6 +99,9 @@ Widget _wrap(
     ),
     demoOrderStoreProvider.overrideWithValue(store),
     activeOrdersClockProvider.overrideWithValue(_clock),
+    activeOrdersQueryProvider.overrideWith((ref) => _allActive),
+    // Injected scheduling: no polling in these tests (no stray timers).
+    activeOrdersPollIntervalProvider.overrideWithValue(null),
     dashboardMembershipProvider.overrideWithValue(membership),
     if (forcedError != null)
       orderCompletionRepositoryProvider.overrideWithValue(
@@ -353,14 +367,17 @@ void main() {
     },
   );
 
-  testWidgets('E2 the active FILTERS survive a completion', (tester) async {
+  testWidgets('E2 the selected QUEUE + filters survive a completion', (
+    tester,
+  ) async {
     _sized(tester, 1320);
     final store = _store();
     await tester.pumpWidget(_wrap(store));
     await tester.pumpAndSettle();
 
-    // Narrow the board to the SERVED stage, then complete from within that filter.
-    await tester.tap(find.byKey(const Key('active-summary-served')));
+    // Open the AWAITING-CLOSE queue (the real operator path) and complete from
+    // inside it — the queue must still be selected afterwards.
+    await tester.tap(find.byKey(const Key('active-queue-awaiting-close')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('active-order-card-ready')), findsNothing);
 
@@ -372,8 +389,8 @@ void main() {
     await tester.tap(find.byKey(const Key('order-detail-close')));
     await tester.pumpAndSettle();
 
-    // Still filtered to served: the completed order is gone, the unpaid one stays,
-    // and the ready/preparing orders are still filtered out.
+    // Still on AWAITING CLOSE: the completed order is gone (it is terminal now),
+    // the unpaid served order stays, and the in-progress orders are still out.
     expect(
       find.byKey(const Key('active-order-card-paid-served')),
       findsNothing,
@@ -383,6 +400,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('active-order-card-ready')), findsNothing);
+    expect(
+      find.byKey(const Key('active-orders-awaiting-explainer')),
+      findsOneWidget,
+    );
   });
 
   // ===== F. one write per double-tap ========================================
@@ -439,6 +460,8 @@ void main() {
           ),
           demoOrderStoreProvider.overrideWithValue(store),
           activeOrdersClockProvider.overrideWithValue(_clock),
+          activeOrdersQueryProvider.overrideWith((ref) => _allActive),
+          activeOrdersPollIntervalProvider.overrideWithValue(null),
           dashboardMembershipProvider.overrideWithValue(null),
           orderCompletionRepositoryProvider.overrideWithValue(gate),
         ],

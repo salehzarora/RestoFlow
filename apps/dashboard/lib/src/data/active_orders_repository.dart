@@ -20,9 +20,17 @@ import 'order_history_repository.dart';
 
 /// Loads the active-order board for a scope.
 abstract class ActiveOrdersRepository {
-  /// The current active board for [query]. Implementations may fail (network,
-  /// auth, RLS) — surfaced as an error, never as fabricated or stale-as-live data.
-  Future<ActiveOrdersSnapshot> loadActive(ActiveOrdersQuery query);
+  /// The current active board for [query], continuing from [cursor] (null = the
+  /// first page). Implementations may fail (network, auth, RLS) — surfaced as an
+  /// error, never as fabricated or stale-as-live data.
+  ///
+  /// The QUEUE and the SORT are applied SERVER-side: the page is capped, so the
+  /// un-fetched rows are simply not in the payload and a client-side re-sort
+  /// would silently omit them.
+  Future<ActiveOrdersSnapshot> loadActive(
+    ActiveOrdersQuery query, {
+    String? cursor,
+  });
 }
 
 /// A failure loading the active board.
@@ -65,35 +73,75 @@ class DemoActiveOrdersRepository implements ActiveOrdersRepository {
   final int limit;
 
   @override
-  Future<ActiveOrdersSnapshot> loadActive(ActiveOrdersQuery query) async {
+  Future<ActiveOrdersSnapshot> loadActive(
+    ActiveOrdersQuery query, {
+    String? cursor,
+  }) async {
     final message = failureMessage;
     if (message != null) throw ActiveOrdersException(message);
 
     final now = _clock();
 
-    // The SCOPE: active orders on the selected branch (or every demo branch).
+    // The SCOPE: every ACTIVE order on the selected branch, regardless of queue —
+    // this is what the SUMMARY counts, so the cards never move when the operator
+    // switches queue (exactly the RPC's rule).
     final scoped = _orders
         .where((o) => isActiveOrderStatus(o.detail.status))
         .where((o) => _inBranch(o, query.branch))
         .toList();
 
-    final matched = scoped.where((o) => _matches(o, query)).toList()
-      ..sort((a, b) {
-        // FIFO: oldest first, id breaking ties so equal ages order stably.
-        final byAge = _minutesAgo(b).compareTo(_minutesAgo(a));
-        if (byAge != 0) return byAge;
-        return a.detail.orderId.compareTo(b.detail.orderId);
-      });
+    // The QUEUE + the list filters.
+    final matched =
+        scoped
+            .where((o) => query.queue.contains(o.detail.status))
+            .where((o) => _matches(o, query))
+            .toList()
+          ..sort((a, b) {
+            // The SAME ordering the server applies. `minutesAgo` counts BACKWARD
+            // from now, so a LARGER value is an OLDER order.
+            final newest = query.sort == ActiveOrdersSort.newest;
+            final byAge = newest
+                ? _minutesAgo(a).compareTo(_minutesAgo(b)) // smaller age first
+                : _minutesAgo(b).compareTo(_minutesAgo(a)); // larger age first
+            if (byAge != 0) return byAge;
+            // Stable tie-break on the id, mirroring the server's (created_at, id)
+            // keyset: DESC under newest, ASC under oldest.
+            final byId = a.detail.orderId.compareTo(b.detail.orderId);
+            return newest ? -byId : byId;
+          });
 
-    final page = matched.take(limit).toList();
+    // The keyset continuation is TAGGED with its sort, exactly like the RPC's, so
+    // a cursor can never be replayed under the other direction.
+    final offset = _decodeCursor(cursor, query.sort);
+    final page = matched.skip(offset).take(limit).toList();
+    final consumed = offset + page.length;
+    final hasMore = consumed < matched.length;
+
     return ActiveOrdersSnapshot(
       rows: [for (final o in page) _rowOf(o, now)],
       summary: _summaryOf(scoped),
       currencyCode: scoped.isEmpty ? 'ILS' : scoped.first.detail.currencyCode,
+      // The FULL filtered count — never the loaded page.
       matching: matched.length,
       limit: limit,
-      truncated: matched.length > page.length,
+      truncated: hasMore,
+      hasMore: hasMore,
+      nextCursor: hasMore ? '${query.sort.wire}|$consumed' : null,
     );
+  }
+
+  /// Decodes a `"<sort>|<offset>"` cursor. A cursor minted under the OTHER sort
+  /// is REJECTED — the same contract the RPC enforces (22023), so the demo can
+  /// never silently mis-page where the server would refuse.
+  int _decodeCursor(String? cursor, ActiveOrdersSort sort) {
+    if (cursor == null || cursor.isEmpty) return 0;
+    final parts = cursor.split('|');
+    if (parts.length != 2 || parts.first != sort.wire) {
+      throw const ActiveOrdersException(
+        'active-orders: the cursor was issued for a different sort order',
+      );
+    }
+    return int.tryParse(parts[1]) ?? 0;
   }
 
   bool _inBranch(DemoOrder o, AuditBranchOption? branch) =>

@@ -1,19 +1,28 @@
-/// Active-orders state seam (ACTIVE-ORDERS-001).
+/// Active-orders state seam (ACTIVE-ORDERS-001, reworked by ACTIVE-ORDERS-002).
 ///
 /// Picks the demo vs real repository from [runtimeConfigProvider] (the one
-/// audited mode switch) exactly like the order-history seam, scoped to the
-/// active membership + authenticated transport.
+/// audited mode switch), scoped to the active membership + authenticated
+/// transport.
 ///
-/// FRESHNESS — deliberately restrained (the Dashboard has no background timer
-/// anywhere today, and the repo's only Realtime source is a KDS/paired-device
-/// branch-topic construct that a JWT dashboard principal is not authorized for):
-///   * a MANUAL refresh is always available;
-///   * an OPT-IN, user-visible auto-refresh polls on ONE coarse interval
-///     ([kActiveOrdersRefreshInterval]) and is OFF by default;
+/// FRESHNESS (ACTIVE-ORDERS-002) — simplified. The opt-in auto-refresh SWITCH is
+/// gone: it added chrome without operational value, and an operations board that
+/// only updates when you remember to flip a toggle is worse than useless. Now:
+///   * the board auto-refreshes on ONE coarse interval
+///     ([kActiveOrdersRefreshInterval]) WHILE IT IS VISIBLE, and only then;
+///   * switching to History (or disposing the view) CANCELS the timer — the
+///     Dashboard never polls a surface nobody is looking at;
+///   * a MANUAL refresh is always available and resets the stamp;
 ///   * a refresh KEEPS the current rows on screen (`refreshing`, not `loading`);
-///   * overlapping requests are impossible (an in-flight load short-circuits);
-///   * the timer is cancelled on dispose.
-/// Nothing is ever presented as "live" that is not actually being refreshed.
+///   * requests can never overlap (an in-flight load short-circuits);
+///   * a BACKGROUND refresh failure does NOT wipe usable rows — it is surfaced
+///     beside them; only a failed FIRST load shows the full error state.
+/// Nothing is ever described as "live" or "real-time" — the UI shows an honest
+/// "last updated" stamp.
+///
+/// PAGING: the server applies the QUEUE and the SORT and caps the page, so pages
+/// are ACCUMULATED here (never re-sorted). Changing queue / sort / branch /
+/// filter / search rebuilds the controller, which resets pagination — a cursor
+/// from the old state can never be replayed (the server rejects it anyway).
 library;
 
 import 'dart:async';
@@ -23,6 +32,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/active_orders_models.dart';
 import '../data/active_orders_repository.dart';
+import '../data/order_history_models.dart';
 import '../data/real_active_orders_repository.dart';
 import 'dashboard_providers.dart';
 import 'order_history_providers.dart' show demoOrderStoreProvider;
@@ -58,22 +68,30 @@ final activeOrdersClockProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
 );
 
-/// The active board's controls (branch + stage + type + payment + search).
+/// The active board's controls (queue + sort + branch + stage + type + payment +
+/// search). Defaults to the IN-PROGRESS queue, NEWEST first.
 final activeOrdersQueryProvider = StateProvider<ActiveOrdersQuery>(
   (ref) => const ActiveOrdersQuery(),
 );
 
-/// Whether the opt-in auto-refresh is running. OFF by default — the board never
-/// silently claims to be live.
-final activeOrdersAutoRefreshProvider = StateProvider<bool>((ref) => false);
+/// The auto-refresh cadence, INJECTED so scheduling is testable.
+///
+/// Null disables polling entirely. Widget tests default it to null (no stray
+/// timer can outlive a test), and the polling tests inject an interval and
+/// advance FAKE time with `tester.pump(duration)` — no test ever waits on a real
+/// 30-second delay.
+final activeOrdersPollIntervalProvider = Provider<Duration?>(
+  (ref) => kActiveOrdersRefreshInterval,
+);
 
-/// The active board state: the initial load status, the current snapshot, and
-/// when it was last successfully refreshed.
+/// The active board state.
 class ActiveOrdersState {
   const ActiveOrdersState({
     this.loading = true,
     this.refreshing = false,
+    this.loadingMore = false,
     this.error,
+    this.refreshError = false,
     this.snapshot,
     this.lastUpdated,
   });
@@ -84,13 +102,21 @@ class ActiveOrdersState {
   /// A refresh is in flight while the previous rows STAY on screen.
   final bool refreshing;
 
-  /// The load failure, if any.
+  /// A "load more" page is in flight (rows already shown).
+  final bool loadingMore;
+
+  /// The FIRST-load failure. Only this replaces the board with an error state.
   final Object? error;
 
-  /// The last successful read. Null until the first load lands.
+  /// A BACKGROUND/manual refresh failed while usable rows are on screen. The rows
+  /// are KEPT and this is surfaced beside them — a transient blip must never wipe
+  /// the operator's board.
+  final bool refreshError;
+
+  /// The last successful read (rows ACCUMULATED across pages).
   final ActiveOrdersSnapshot? snapshot;
 
-  /// When [snapshot] was read (used for the honest "updated HH:MM" stamp).
+  /// When [snapshot] was last successfully read (drives the honest stamp).
   final DateTime? lastUpdated;
 
   bool get isEmpty =>
@@ -100,9 +126,10 @@ class ActiveOrdersState {
 }
 
 /// Drives the active board for a fixed [ActiveOrdersQuery]. Recreated whenever
-/// the query changes (so a filter change reloads the board).
+/// the query changes — which is exactly what RESETS pagination on a queue / sort /
+/// filter change.
 class ActiveOrdersController extends StateNotifier<ActiveOrdersState> {
-  ActiveOrdersController(this._repo, this._query, this._clock)
+  ActiveOrdersController(this._repo, this._query, this._clock, this._interval)
     : super(const ActiveOrdersState(loading: true)) {
     _load(initial: true);
   }
@@ -111,26 +138,83 @@ class ActiveOrdersController extends StateNotifier<ActiveOrdersState> {
   final ActiveOrdersQuery _query;
   final DateTime Function() _clock;
 
+  /// The injected poll cadence. Null = no polling at all.
+  final Duration? _interval;
+
   Timer? _timer;
   bool _inFlight = false;
 
-  /// Starts/stops the opt-in polling. Idempotent.
-  void setAutoRefresh(bool enabled) {
+  /// Starts/stops the automatic refresh. Driven by the view's VISIBILITY, not by
+  /// a user switch: the board polls while it is on screen and stops the moment it
+  /// is not. Idempotent.
+  void setPolling(bool enabled) {
     _timer?.cancel();
     _timer = null;
-    if (!enabled || !mounted) return;
-    _timer = Timer.periodic(
-      kActiveOrdersRefreshInterval,
-      (_) => unawaited(refresh()),
-    );
+    final interval = _interval;
+    if (!enabled || interval == null || !mounted) return;
+    _timer = Timer.periodic(interval, (_) => unawaited(refresh()));
   }
 
-  /// Re-reads the board, KEEPING the current rows on screen while it does.
+  /// Re-reads the FIRST page, KEEPING the current rows on screen while it does.
+  /// Resets the accumulated pages (the board is showing the freshest window).
   Future<void> refresh() => _load(initial: false);
 
+  /// Appends the next page. A failure here just stops paging — it never wipes the
+  /// rows already on screen.
+  Future<void> loadMore() async {
+    final snapshot = state.snapshot;
+    final cursor = snapshot?.nextCursor;
+    if (_inFlight ||
+        state.loading ||
+        state.loadingMore ||
+        snapshot == null ||
+        !snapshot.hasMore ||
+        cursor == null) {
+      return;
+    }
+    _inFlight = true;
+    state = ActiveOrdersState(
+      loading: false,
+      loadingMore: true,
+      snapshot: snapshot,
+      lastUpdated: state.lastUpdated,
+    );
+    try {
+      final next = await _repo.loadActive(_query, cursor: cursor);
+      if (!mounted) return;
+      state = ActiveOrdersState(
+        loading: false,
+        snapshot: ActiveOrdersSnapshot(
+          // Pages are APPENDED in the order the SERVER returned them — never
+          // re-sorted here (the un-fetched rows are not in the payload).
+          rows: <OrderHistoryRow>[...snapshot.rows, ...next.rows],
+          summary: next.summary,
+          currencyCode: next.currencyCode,
+          matching: next.matching,
+          limit: next.limit,
+          truncated: next.hasMore,
+          hasMore: next.hasMore,
+          nextCursor: next.nextCursor,
+        ),
+        lastUpdated: state.lastUpdated,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      // Keep the rows; just stop paging.
+      state = ActiveOrdersState(
+        loading: false,
+        snapshot: snapshot,
+        lastUpdated: state.lastUpdated,
+        refreshError: true,
+      );
+    } finally {
+      _inFlight = false;
+    }
+  }
+
   Future<void> _load({required bool initial}) async {
-    // An in-flight load short-circuits: a slow response can never be overtaken
-    // by a tick, and requests can never pile up.
+    // An in-flight load short-circuits: a slow response can never be overtaken by
+    // a poll tick, and requests can never pile up.
     if (_inFlight) return;
     _inFlight = true;
     if (initial) {
@@ -153,9 +237,20 @@ class ActiveOrdersController extends StateNotifier<ActiveOrdersState> {
       );
     } catch (e) {
       if (!mounted) return;
-      // A failed refresh does NOT keep showing stale rows as if they were fresh:
-      // the board surfaces the error and offers a retry.
-      state = ActiveOrdersState(loading: false, error: e);
+      final existing = state.snapshot;
+      if (!initial && existing != null && existing.rows.isNotEmpty) {
+        // A background/manual refresh failed but the operator still has usable
+        // rows: KEEP them and flag the failure beside them. Never blank the board
+        // on a transient blip.
+        state = ActiveOrdersState(
+          loading: false,
+          snapshot: existing,
+          lastUpdated: state.lastUpdated,
+          refreshError: true,
+        );
+      } else {
+        state = ActiveOrdersState(loading: false, error: e);
+      }
     } finally {
       _inFlight = false;
     }
@@ -170,25 +265,32 @@ class ActiveOrdersController extends StateNotifier<ActiveOrdersState> {
 }
 
 /// The active board controller for the current query.
+///
+/// AUTO-DISPOSED, and that is what implements the freshness rule: the board polls
+/// from the moment it is watched (i.e. the Active-orders view is on screen) and
+/// Riverpod tears the controller — and its timer — down the moment nothing
+/// watches it any more (switching to History unmounts the view; so does leaving
+/// the Orders area). No visibility bookkeeping, no timer can outlive the surface,
+/// and the Dashboard never refreshes something nobody is looking at.
 final activeOrdersControllerProvider =
-    StateNotifierProvider<ActiveOrdersController, ActiveOrdersState>(
+    StateNotifierProvider.autoDispose<
+      ActiveOrdersController,
+      ActiveOrdersState
+    >(
       (ref) {
         final controller = ActiveOrdersController(
           ref.watch(activeOrdersRepositoryProvider),
           ref.watch(activeOrdersQueryProvider),
           ref.watch(activeOrdersClockProvider),
+          ref.watch(activeOrdersPollIntervalProvider),
         );
-        ref.listen<bool>(
-          activeOrdersAutoRefreshProvider,
-          (_, enabled) => controller.setAutoRefresh(enabled),
-          fireImmediately: true,
-        );
+        controller.setPolling(true);
         return controller;
       },
       dependencies: [
         activeOrdersRepositoryProvider,
         activeOrdersQueryProvider,
         activeOrdersClockProvider,
-        activeOrdersAutoRefreshProvider,
+        activeOrdersPollIntervalProvider,
       ],
     );

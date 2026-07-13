@@ -62,8 +62,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           ),
           icon: Icons.receipt_long_outlined,
           title: isActive ? l10n.ordersActiveTitle : l10n.ordersHistoryTitle,
+          // Say what each surface IS: Active holds orders still open in
+          // operations; finished ones move to History.
           subtitle: isActive
-              ? l10n.ordersActiveSubtitle
+              ? l10n.ordersActiveSubtitleV2
               : l10n.ordersHistorySubtitle,
           actions: [
             IconButton(
@@ -108,6 +110,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 expand: narrow,
                 onSelected: (tab) {
                   if (tab == _tab) return;
+                  // Switching tabs MOUNTS/UNMOUNTS the view below, and the active
+                  // board reports its own visibility from that lifecycle — so its
+                  // polling stops on History with no bookkeeping here. Each view
+                  // keeps its OWN filter state; neither is reset by the switch.
                   setState(() => _tab = tab);
                 },
               );

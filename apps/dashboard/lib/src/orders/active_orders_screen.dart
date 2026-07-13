@@ -87,6 +87,8 @@ class _ActiveOrdersViewState extends ConsumerState<ActiveOrdersView> {
           l10n: l10n,
         ),
         const SizedBox(height: RestoflowSpacing.lg),
+        _QueueSelector(query: query, onApply: _apply, l10n: l10n),
+        const SizedBox(height: RestoflowSpacing.md),
         _FilterBar(
           query: query,
           branches: branches,
@@ -98,21 +100,177 @@ class _ActiveOrdersViewState extends ConsumerState<ActiveOrdersView> {
         _FreshnessRow(state: state, l10n: l10n),
         const SizedBox(height: RestoflowSpacing.xs),
         _NoDueTimeNotice(l10n: l10n),
+        // What the AWAITING-CLOSE queue actually is, and how an order leaves it.
+        if (query.queue == ActiveOrderQueue.awaitingClose) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          RestoflowNoticeBanner(
+            key: const Key('active-orders-awaiting-explainer'),
+            icon: Icons.task_alt_outlined,
+            body: l10n.ordersAwaitingCloseExplainer,
+          ),
+          // A restrained statement of fact when the backlog is meaningfully high.
+          // No urgency, no blame, and deliberately NO one-click bulk close.
+          if (state.data.summary.awaitingClose >=
+              kAwaitingCloseBacklogNotice) ...[
+            const SizedBox(height: RestoflowSpacing.sm),
+            RestoflowNoticeBanner(
+              key: const Key('active-orders-awaiting-backlog'),
+              icon: Icons.inventory_2_outlined,
+              tone: RestoflowTone.warning,
+              body: l10n.ordersAwaitingCloseBacklog(
+                state.data.summary.awaitingClose,
+              ),
+            ),
+          ],
+        ],
+        // The board is CAPPED, so say so — and say it in the terms of the sort
+        // actually applied (newest vs oldest), never "all orders".
         if (state.data.truncated) ...[
           const SizedBox(height: RestoflowSpacing.md),
           RestoflowNoticeBanner(
             key: const Key('active-orders-truncated'),
             icon: Icons.filter_list,
             tone: RestoflowTone.warning,
-            body: l10n.ordersActiveTruncated(
-              state.data.rows.length,
-              state.data.matching,
-            ),
+            body: query.sort == ActiveOrdersSort.newest
+                ? l10n.ordersActiveTruncatedNewest(
+                    state.data.rows.length,
+                    state.data.matching,
+                  )
+                : l10n.ordersActiveTruncatedOldest(
+                    state.data.rows.length,
+                    state.data.matching,
+                  ),
+          ),
+        ],
+        // A refresh failed but the rows are still usable — surface it BESIDE them
+        // instead of blanking the operator's board.
+        if (state.refreshError && !state.isEmpty) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          RestoflowNoticeBanner(
+            key: const Key('active-orders-refresh-failed'),
+            icon: Icons.cloud_off_outlined,
+            tone: RestoflowTone.danger,
+            body: l10n.ordersActiveRefreshFailed,
           ),
         ],
         const SizedBox(height: RestoflowSpacing.lg),
-        _Board(state: state, now: now, l10n: l10n),
+        _Board(state: state, query: query, now: now, l10n: l10n),
       ],
+    );
+  }
+}
+
+/// From this many served orders, the awaiting-close queue shows a restrained
+/// "this backlog is real" notice. A presentation threshold only — it ranks
+/// nothing, blames nobody, and invents no urgency.
+const int kAwaitingCloseBacklogNotice = 25;
+
+/// The operational QUEUE selector + the SORT control.
+class _QueueSelector extends StatelessWidget {
+  const _QueueSelector({
+    required this.query,
+    required this.onApply,
+    required this.l10n,
+  });
+
+  final ActiveOrdersQuery query;
+  final void Function(ActiveOrdersQuery Function(ActiveOrdersQuery)) onApply;
+  final AppLocalizations l10n;
+
+  void _selectQueue(ActiveOrderQueue queue) {
+    if (queue == query.queue) return;
+    // Changing the queue rebuilds the controller, which RESETS pagination — a
+    // cursor from the old queue can never be replayed.
+    onApply((q) => q.copyWith(queue: queue));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final segments = <RestoflowSegment<ActiveOrderQueue>>[
+      RestoflowSegment(
+        key: const Key('active-queue-in-progress'),
+        value: ActiveOrderQueue.inProgress,
+        label: l10n.ordersQueueInProgress,
+        icon: Icons.local_fire_department_outlined,
+      ),
+      RestoflowSegment(
+        key: const Key('active-queue-awaiting-close'),
+        value: ActiveOrderQueue.awaitingClose,
+        label: l10n.ordersQueueAwaitingClose,
+        icon: Icons.task_alt_outlined,
+      ),
+      RestoflowSegment(
+        key: const Key('active-queue-all'),
+        value: ActiveOrderQueue.allActive,
+        label: l10n.ordersQueueAllActive,
+        icon: Icons.list_alt_outlined,
+      ),
+    ];
+
+    final sort = SizedBox(
+      width: 190,
+      child: DropdownButtonFormField<ActiveOrdersSort>(
+        key: const Key('active-orders-sort'),
+        initialValue: query.sort,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: l10n.ordersSortLabel,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+        items: [
+          DropdownMenuItem(
+            value: ActiveOrdersSort.newest,
+            child: Text(l10n.ordersSortNewest),
+          ),
+          DropdownMenuItem(
+            value: ActiveOrdersSort.oldest,
+            child: Text(l10n.ordersSortOldest),
+          ),
+        ],
+        onChanged: (value) {
+          if (value == null || value == query.sort) return;
+          // The SERVER re-sorts and pagination resets — the client never reverses
+          // a capped page (the un-fetched rows are not in the payload).
+          onApply((q) => q.copyWith(sort: value));
+        },
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // On a phone the queue bar and the sort control cannot share a row at
+        // their natural widths, so they stack and the segments share the width.
+        final narrow = constraints.maxWidth < RestoflowBreakpoints.posTwoPane;
+        final control = RestoflowSegmentedControl<ActiveOrderQueue>(
+          segments: segments,
+          selected: query.queue,
+          expand: narrow,
+          onSelected: _selectQueue,
+        );
+        if (narrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              control,
+              const SizedBox(height: RestoflowSpacing.sm),
+              Align(alignment: AlignmentDirectional.centerStart, child: sort),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Flexible(
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: control,
+              ),
+            ),
+            const SizedBox(width: RestoflowSpacing.md),
+            sort,
+          ],
+        );
+      },
     );
   }
 }
@@ -135,6 +293,9 @@ class _SummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The counters are SERVER-computed over the whole SCOPE (never the queue and
+    // never the loaded page), so they stay put while the operator moves between
+    // queues — and they can never disagree with what the board is showing.
     final tiles = <Widget>[
       RestoflowMetricCard(
         key: const Key('active-summary-total'),
@@ -144,28 +305,30 @@ class _SummaryStrip extends StatelessWidget {
         tone: RestoflowTone.info,
         onTap: () => onApply(
           (q) => q.copyWith(
+            queue: ActiveOrderQueue.allActive,
             stage: ActiveOrderStageFilter.all,
             payment: PaymentFilter.all,
           ),
         ),
       ),
       RestoflowMetricCard(
-        key: const Key('active-summary-ready'),
-        label: l10n.ordersStatusReady,
-        value: '${summary.ready}',
-        icon: Icons.room_service_outlined,
+        key: const Key('active-summary-in-progress'),
+        label: l10n.ordersQueueInProgress,
+        value: '${summary.inProgress}',
+        icon: Icons.local_fire_department_outlined,
         tone: RestoflowTone.success,
+        // The card IS the queue selector — tapping it opens the In-progress queue.
         onTap: () =>
-            onApply((q) => q.copyWith(stage: ActiveOrderStageFilter.ready)),
+            onApply((q) => q.copyWith(queue: ActiveOrderQueue.inProgress)),
       ),
       RestoflowMetricCard(
-        key: const Key('active-summary-served'),
-        label: l10n.ordersActiveSummaryAwaitingClose,
-        value: '${summary.served}',
+        key: const Key('active-summary-awaiting-close'),
+        label: l10n.ordersQueueAwaitingClose,
+        value: '${summary.awaitingClose}',
         icon: Icons.task_alt_outlined,
         tone: RestoflowTone.neutral,
         onTap: () =>
-            onApply((q) => q.copyWith(stage: ActiveOrderStageFilter.served)),
+            onApply((q) => q.copyWith(queue: ActiveOrderQueue.awaitingClose)),
       ),
       RestoflowMetricCard(
         key: const Key('active-summary-unpaid'),
@@ -173,7 +336,14 @@ class _SummaryStrip extends StatelessWidget {
         value: '${summary.unpaid}',
         icon: Icons.schedule,
         tone: RestoflowTone.warning,
-        onTap: () => onApply((q) => q.copyWith(payment: PaymentFilter.unpaid)),
+        // Unpaid is a PAYMENT attribute, never an operational stage (D-025): this
+        // applies the payment filter and leaves the lifecycle queue alone.
+        onTap: () => onApply(
+          (q) => q.copyWith(
+            queue: ActiveOrderQueue.allActive,
+            payment: PaymentFilter.unpaid,
+          ),
+        ),
       ),
     ];
 
@@ -375,9 +545,11 @@ class _FreshnessRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final auto = ref.watch(activeOrdersAutoRefreshProvider);
     final updated = state.lastUpdated;
 
+    // ACTIVE-ORDERS-002: the auto-refresh SWITCH is gone. The board refreshes
+    // itself while it is on screen, so all the operator needs is an honest stamp
+    // of when it was last read. It is never described as "live" or "real-time".
     return Wrap(
       alignment: WrapAlignment.end,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -390,28 +562,21 @@ class _FreshnessRow extends ConsumerWidget {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
         if (updated != null)
-          Text(
-            key: const Key('active-orders-last-updated'),
-            // The viewer's own device clock: this stamps when THEY last read the
-            // board, not when anything happened in a branch.
-            l10n.ordersActiveLastUpdated(_hhmm(updated)),
-            style: theme.textTheme.bodySmall?.copyWith(color: kRestoflowInk3),
+          Semantics(
+            // Screen readers get the same sentence sighted users read.
+            label: l10n.ordersActiveLastUpdated(_hhmm(updated)),
+            child: ExcludeSemantics(
+              child: Text(
+                key: const Key('active-orders-last-updated'),
+                // The viewer's own device clock: this stamps when THEY last read
+                // the board, not when anything happened in a branch.
+                l10n.ordersActiveLastUpdated(_hhmm(updated)),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: kRestoflowInk3,
+                ),
+              ),
+            ),
           ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              l10n.ordersActiveAutoRefresh,
-              style: theme.textTheme.bodySmall?.copyWith(color: kRestoflowInk2),
-            ),
-            Switch(
-              key: const Key('active-orders-auto-refresh'),
-              value: auto,
-              onChanged: (on) =>
-                  ref.read(activeOrdersAutoRefreshProvider.notifier).state = on,
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -455,11 +620,18 @@ class _NoDueTimeNotice extends StatelessWidget {
   }
 }
 
-/// Loading skeletons / error + retry / empty / the FIFO rows.
+/// Loading skeletons / error + retry / the QUEUE-specific empty state / the rows
+/// (in the SERVER's order) + the load-more continuation.
 class _Board extends ConsumerWidget {
-  const _Board({required this.state, required this.now, required this.l10n});
+  const _Board({
+    required this.state,
+    required this.query,
+    required this.now,
+    required this.l10n,
+  });
 
   final ActiveOrdersState state;
+  final ActiveOrdersQuery query;
   final DateTime now;
   final AppLocalizations l10n;
 
@@ -496,11 +668,17 @@ class _Board extends ConsumerWidget {
       );
     }
     if (state.isEmpty) {
+      // The empty state must say what THIS queue means — "no orders" is useless
+      // when the awaiting-close backlog is 127.
       return RestoflowStateView(
         key: const Key('active-orders-empty'),
         icon: Icons.inbox_outlined,
         title: l10n.ordersActiveEmpty,
-        message: l10n.ordersActiveEmptyHint,
+        message: switch (query.queue) {
+          ActiveOrderQueue.inProgress => l10n.ordersActiveEmptyInProgress,
+          ActiveOrderQueue.awaitingClose => l10n.ordersActiveEmptyAwaitingClose,
+          ActiveOrderQueue.allActive => l10n.ordersActiveEmptyHint,
+        },
       );
     }
 
@@ -520,6 +698,26 @@ class _Board extends ConsumerWidget {
                   now: now,
                   dense: dense,
                   l10n: l10n,
+                ),
+              ),
+            // Page BEYOND the cap instead of silently ending at the limit. Pages
+            // are appended in the SERVER's order — never re-sorted here.
+            if (state.data.hasMore)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: RestoflowSpacing.sm,
+                ),
+                child: Center(
+                  child: state.loadingMore
+                      ? const RestoflowSkeleton(width: 160, height: 40)
+                      : OutlinedButton.icon(
+                          key: const Key('active-orders-load-more'),
+                          onPressed: () => ref
+                              .read(activeOrdersControllerProvider.notifier)
+                              .loadMore(),
+                          icon: const Icon(Icons.expand_more),
+                          label: Text(l10n.ordersLoadMore),
+                        ),
                 ),
               ),
           ],

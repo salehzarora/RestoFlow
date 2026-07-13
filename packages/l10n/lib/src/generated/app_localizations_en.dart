@@ -3846,4 +3846,57 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogFieldPaymentStatus => 'Payment';
+
+  @override
+  String get ordersActiveSubtitleV2 =>
+      'Orders currently open in operations. Finished orders move to History.';
+
+  @override
+  String get ordersQueueInProgress => 'In progress';
+
+  @override
+  String get ordersQueueAwaitingClose => 'Awaiting close';
+
+  @override
+  String get ordersQueueAllActive => 'All active';
+
+  @override
+  String get ordersSortLabel => 'Sort';
+
+  @override
+  String get ordersSortNewest => 'Newest first';
+
+  @override
+  String get ordersSortOldest => 'Oldest first';
+
+  @override
+  String get ordersActiveEmptyInProgress =>
+      'No orders are currently being prepared or waiting to be served.';
+
+  @override
+  String get ordersActiveEmptyAwaitingClose =>
+      'No served orders are waiting to be completed.';
+
+  @override
+  String get ordersAwaitingCloseExplainer =>
+      'These orders were served. A paid order can be completed from its details; an unpaid one needs its payment recorded first. They stay active until they are completed, cancelled or voided.';
+
+  @override
+  String ordersAwaitingCloseBacklog(int count) {
+    return '$count served orders are still open. They remain active until each one is completed.';
+  }
+
+  @override
+  String ordersActiveTruncatedNewest(int shown, int total) {
+    return 'Showing the newest $shown of $total matching active orders.';
+  }
+
+  @override
+  String ordersActiveTruncatedOldest(int shown, int total) {
+    return 'Showing the oldest $shown of $total matching active orders.';
+  }
+
+  @override
+  String get ordersActiveRefreshFailed =>
+      'Couldn\'t refresh just now. These orders may be out of date.';
 }
