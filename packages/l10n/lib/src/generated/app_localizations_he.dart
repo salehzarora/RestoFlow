@@ -3652,6 +3652,15 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posUnpaidChip => 'לא שולם';
 
   @override
+  String get posNoChargeChip => 'ללא חיוב';
+
+  @override
+  String get posNoChargeNoPayment => 'ההזמנה ללא חיוב — אין מה לשלם.';
+
+  @override
+  String get posCancelOrderClosed => 'ההזמנה כבר נסגרה ולא ניתן עוד לבטל אותה.';
+
+  @override
   String get posRecentSyncPending => 'מסנכרן…';
 
   @override
@@ -3800,6 +3809,22 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogFieldPaymentStatus => 'תשלום';
+
+  @override
+  String get dashboardNoCharge => 'ללא חיוב';
+
+  @override
+  String get ordersPaymentFrozen =>
+      'ההזמנה כבר שולמה, ולכן הסכום שלה נעול. לא ניתן עוד לשנות הנחות.';
+
+  @override
+  String get activityLogFieldDeniedReason => 'סיבה';
+
+  @override
+  String get activityLogDeniedOrderHasPayment => 'ההזמנה כבר שולמה';
+
+  @override
+  String get activityLogDeniedFullCompRequiresManager => 'פטור מלא מחייב מנהל';
 
   @override
   String get activityLogPaymentNotChargeable => 'אין תשלום נדרש';

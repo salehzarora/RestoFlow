@@ -6958,6 +6958,24 @@ abstract class AppLocalizations {
   /// **'Unpaid'**
   String get posUnpaidChip;
 
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: the POS recent-orders chip for a ZERO-TOTAL (comped / fully discounted) order. It owes nothing and carries no payment row, so it is neither Paid nor Unpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'No charge'**
+  String get posNoChargeChip;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: explains why no Take-payment button is offered on a zero-total order (the server refuses a zero-value payment).
+  ///
+  /// In en, this message translates to:
+  /// **'This order is free — there is nothing to pay.'**
+  String get posNoChargeNoPayment;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: shown when a cancellation is refused because the order has reached a terminal state (completed/cancelled/voided). `completed` is terminal — there is no completed-to-void path.
+  ///
+  /// In en, this message translates to:
+  /// **'This order is already closed and can no longer be cancelled.'**
+  String get posCancelOrderClosed;
+
   /// POS recent orders: the order is still syncing to the backend.
   ///
   /// In en, this message translates to:
@@ -7215,6 +7233,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payment'**
   String get activityLogFieldPaymentStatus;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: the payment badge/filter state for a ZERO-TOTAL (comped / fully discounted) order. It owes nothing and carries NO payment row, so it is neither Paid (no payment was taken) nor Unpaid (nothing is owed).
+  ///
+  /// In en, this message translates to:
+  /// **'No charge'**
+  String get dashboardNoCharge;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: shown when a discount is refused because the order already carries a completed payment (the financial snapshot is frozen at payment).
+  ///
+  /// In en, this message translates to:
+  /// **'This order has been paid, so its total is locked. Discounts can no longer be changed.'**
+  String get ordersPaymentFrozen;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001 Activity-log safe detail field: WHY a mutation was denied. A closed enum of safe state tokens, never money and never an identifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get activityLogFieldDeniedReason;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001 Activity-log VALUE for denied_reason=order_has_completed_payment.
+  ///
+  /// In en, this message translates to:
+  /// **'The order was already paid'**
+  String get activityLogDeniedOrderHasPayment;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001 Activity-log VALUE for denied_reason=full_comp_requires_manager (STAFF-CASHIER-PERMISSIONS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'A full comp needs a manager'**
+  String get activityLogDeniedFullCompRequiresManager;
 
   /// ORDER-AUTO-COMPLETION-001 Activity-log VALUE for payment_status=not_chargeable: a ZERO-TOTAL (comped / fully discounted) order closed with NO payment because it owed nothing. Never rendered as 'Paid' — the audit trail must not assert a payment that was never taken.
   ///

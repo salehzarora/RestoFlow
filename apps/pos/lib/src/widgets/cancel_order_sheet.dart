@@ -87,9 +87,22 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
         _submitting = false;
         _error = e.alreadyPaid
             ? l10n.posCancelPaidOrderError
-            : (e.permissionDenied
-                  ? l10n.posCancelPermissionDenied
-                  : l10n.posCancelOrderFailed);
+            : e.permissionDenied
+            ? l10n.posCancelPermissionDenied
+            // MONEY-SETTLEMENT-CONSISTENCY-001: for a NON-CHARGEABLE (zero-total) order a
+            // generic rejection is DETERMINISTICALLY the "already closed" case, so we can
+            // name it instead of shrugging. The server refuses a void for exactly three
+            // reasons: a role denial (returns permission_denied, handled above), a live
+            // completed payment (returns alreadyPaid, handled above — and a zero-total
+            // order can never have one, since the server now refuses a zero-value
+            // payment), or an illegal source state, i.e. the order is already TERMINAL.
+            // A comped order auto-completes on `served`, and this device is never told
+            // (the POS does not pull orders back), so this is exactly the case that used
+            // to surface as "Cancellation failed. Please try again." — advice that could
+            // never work.
+            : widget.order.isNonChargeable
+            ? l10n.posCancelOrderClosed
+            : l10n.posCancelOrderFailed;
       });
     }
   }

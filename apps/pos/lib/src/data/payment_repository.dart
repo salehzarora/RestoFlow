@@ -343,6 +343,11 @@ class RealPaymentRepository implements PaymentRepository {
     final recordedMethod =
         PaymentMethod.fromWire(op['method']) ?? requestedMethod;
 
+    // MONEY-SETTLEMENT-CONSISTENCY-001 / ORDER-AUTO-COMPLETION-001: the server reports the
+    // order's FINAL status here — `completed` when this payment auto-closed a served
+    // order. Absent on an older server: null means "not told", never "not terminal".
+    final orderStatus = op['order_status'];
+
     return CashPayment(
       paymentId: paymentId,
       orderNumber: orderNumber,
@@ -356,6 +361,9 @@ class RealPaymentRepository implements PaymentRepository {
       currencyCode: currencyCode,
       receiptNumber: receiptNumber,
       paidAt: paidAt,
+      orderStatus: orderStatus is String && orderStatus.isNotEmpty
+          ? orderStatus
+          : null,
     );
   }
 

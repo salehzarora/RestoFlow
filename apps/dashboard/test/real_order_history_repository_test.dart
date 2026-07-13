@@ -185,12 +185,12 @@ void main() {
     expect(r0.itemCount, 2);
     expect(r0.grandTotalMinor, 1000);
     expect(r0.grandTotalMinor, isA<int>());
-    expect(r0.paid, isTrue);
+    expect(r0.settlement, SettlementState.paid);
     expect(r0.paymentMethod, 'cash');
     expect(r0.paidAmountMinor, 1000);
     final r1 = page.rows[1];
     expect(r1.customerName, isNull);
-    expect(r1.paid, isFalse);
+    expect(r1.settlement, SettlementState.unpaid);
     expect(r1.paymentMethod, isNull);
     expect(r1.paidAmountMinor, isNull);
   });

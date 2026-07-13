@@ -97,12 +97,20 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   /// Attaches [payment] to a stored unpaid order (no-op if unknown/already paid,
   /// or MONEY-VOID-001 already cancelled — a voided order is terminal and can
   /// never be marked paid).
-  void recordPayment(String orderNumber, CashPayment payment) {
+  /// [orderStatus] is the order's CANONICAL status as the server reported it in the
+  /// payment envelope (`record_payment` returns `order_status`, which is `completed`
+  /// when the served + fully-settled rule auto-closed the order). Storing it is how this
+  /// device learns an order became terminal, so it stops offering Cancel on it.
+  void recordPayment(
+    String orderNumber,
+    CashPayment payment, {
+    String? orderStatus,
+  }) {
     var changed = false;
     final next = <PosRecentOrder>[];
     for (final o in state) {
       if (o.orderNumber == orderNumber && o.payment == null && !o.isVoided) {
-        next.add(o.copyWith(payment: payment));
+        next.add(o.copyWith(payment: payment, status: orderStatus));
         changed = true;
       } else {
         next.add(o);
@@ -122,8 +130,19 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     var changed = false;
     final next = <PosRecentOrder>[];
     for (final o in state) {
-      if (o.orderNumber == orderNumber && !o.isVoided && !o.isPaid) {
-        next.add(o.copyWith(voidedAt: DateTime.now(), voidReason: reason));
+      // The SERVER already decided (this only runs after it confirmed the void), so this
+      // guard must not re-derive policy — it only stops a double write. It checks the
+      // PAYMENT MARKER, not settlement, because a live completed payment is exactly what
+      // the server's void guard blocks on; a NON-CHARGEABLE order carries none and is
+      // genuinely voidable while it is still active.
+      if (o.orderNumber == orderNumber && !o.isVoided && o.payment == null) {
+        next.add(
+          o.copyWith(
+            voidedAt: DateTime.now(),
+            voidReason: reason,
+            status: 'voided',
+          ),
+        );
         changed = true;
       } else {
         next.add(o);
@@ -141,10 +160,14 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     return null;
   }
 
-  /// Count of currently-unpaid recent orders (drives the app-bar badge).
-  /// MONEY-VOID-001: a cancelled (voided) order is no longer active work, so it
-  /// is excluded from the unpaid count.
-  int get unpaidCount => state.where((o) => !o.isPaid && !o.isVoided).length;
+  /// Count of recent orders that still OWE MONEY (drives the app-bar badge).
+  ///
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: SETTLEMENT, not "has no payment row" — a comped
+  /// (zero-total) order owes nothing and must not sit in the badge forever, while an
+  /// UNDER-COVERED order still owes and must. MONEY-VOID-001: a cancelled order is no
+  /// longer active work.
+  int get unpaidCount =>
+      state.where((o) => !o.isFullySettled && !o.isVoided).length;
 
   void _syncPayments(PaymentState ps) {
     var changed = false;
@@ -154,7 +177,9 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       if (o.payment == null && !o.isVoided) {
         final p = ps.paymentFor(o.orderNumber);
         if (p != null) {
-          next.add(o.copyWith(payment: p));
+          // Learn the order's CANONICAL status from the server's payment envelope, so a
+          // payment that auto-closed the order stops this device offering Cancel on it.
+          next.add(o.copyWith(payment: p, status: p.orderStatus));
           changed = true;
           continue;
         }

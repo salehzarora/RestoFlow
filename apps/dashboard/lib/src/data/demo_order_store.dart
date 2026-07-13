@@ -104,6 +104,13 @@ class DemoOrderStore {
     if (_isTerminal(detail.status) || detail.completedPayment != null) {
       return const DemoTransitionOutcome(applied: false, autoCompleted: false);
     }
+    // MONEY-SETTLEMENT-CONSISTENCY-001: a NON-CHARGEABLE (zero-total) order takes NO
+    // payment — the server now refuses it before it can mint a 0-amount payment row or
+    // burn a receipt number. The demo must refuse it too, or it would model a state the
+    // real system cannot reach.
+    if (detail.grandTotalMinor <= 0) {
+      return const DemoTransitionOutcome(applied: false, autoCompleted: false);
+    }
     // The payment covers the order total exactly — the server takes no amount
     // parameter and forces amount = the order's own total.
     _replace(

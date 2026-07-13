@@ -153,12 +153,16 @@ class DemoActiveOrdersRepository implements ActiveOrdersRepository {
     if (q.orderType.wire != null && d.orderType != q.orderType.wire) {
       return false;
     }
-    final paid = d.completedPayment != null;
+    // SETTLEMENT, not a payment-row marker (MONEY-SETTLEMENT-CONSISTENCY-001) — the same
+    // question the server's filter now asks. `unpaid` means "still owes money", so a
+    // NON-CHARGEABLE order never surfaces there, and an UNDER-COVERED one always does.
+    // `cash` is a TENDER-METHOD question and stays payment-rooted.
+    final settled = d.settlement.isSettled;
     switch (q.payment) {
       case PaymentFilter.paid:
-        if (!paid) return false;
+        if (!settled) return false;
       case PaymentFilter.unpaid:
-        if (paid) return false;
+        if (settled) return false;
       case PaymentFilter.cash:
         if (d.completedPayment?.method != 'cash') return false;
       case PaymentFilter.all:
@@ -184,7 +188,9 @@ class DemoActiveOrdersRepository implements ActiveOrdersRepository {
     var unpaid = 0;
     for (final o in scoped) {
       byStatus[o.detail.status] = (byStatus[o.detail.status] ?? 0) + 1;
-      if (o.detail.completedPayment == null) unpaid++;
+      // OUTSTANDING money, not "no payment row": a comped order owes nothing and must
+      // not inflate the operator's unpaid card forever.
+      if (!o.detail.settlement.isSettled) unpaid++;
     }
     return ActiveOrdersSummary(
       total: scoped.length,
@@ -217,7 +223,7 @@ class DemoActiveOrdersRepository implements ActiveOrdersRepository {
       itemCount: items,
       grandTotalMinor: d.grandTotalMinor,
       currencyCode: d.currencyCode,
-      paid: pay != null,
+      settlement: d.settlement,
       receiptNumber: d.receiptNumber,
       customerName: d.customerName,
       tableLabel: d.tableLabel,

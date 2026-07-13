@@ -6,7 +6,7 @@ import 'package:restoflow_dashboard/src/data/active_orders_repository.dart';
 import 'package:restoflow_dashboard/src/data/audit_log_models.dart'
     show AuditBranchOption;
 import 'package:restoflow_dashboard/src/data/order_history_models.dart'
-    show OrderTypeFilter, PaymentFilter;
+    show OrderTypeFilter, PaymentFilter, SettlementState;
 import 'package:restoflow_dashboard/src/data/real_active_orders_repository.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RealRepoNotWiredError;
@@ -135,14 +135,14 @@ void main() {
     expect(first.itemCount, 2);
     // Money stays an exact integer minor value.
     expect(first.grandTotalMinor, 8400);
-    expect(first.paid, isFalse);
+    expect(first.settlement, SettlementState.unpaid);
     // The branch-local display string AND the absolute instant both survive.
     expect(first.createdAtLabel, '2026-07-12 16:00');
     expect(first.createdAtUtc, DateTime.utc(2026, 7, 12, 13, 0));
     expect(openMinutes(first, DateTime.utc(2026, 7, 12, 13, 45)), 45);
 
     final second = snap.rows[1];
-    expect(second.paid, isTrue);
+    expect(second.settlement, SettlementState.paid);
     expect(second.paymentMethod, 'cash');
     expect(second.paidAmountMinor, 1000);
   });

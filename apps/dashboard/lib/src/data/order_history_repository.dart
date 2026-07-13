@@ -132,12 +132,14 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
     if (q.status.wire != null && d.status != q.status.wire) return false;
     if (q.orderType.wire != null && d.orderType != q.orderType.wire)
       return false;
-    final paid = d.completedPayment != null;
+    // SETTLEMENT, not a marker — the SAME rule the live board and the server apply, so
+    // history and the board can never disagree about the same order.
+    final settled = d.settlement.isSettled;
     switch (q.payment) {
       case PaymentFilter.paid:
-        if (!paid) return false;
+        if (!settled) return false;
       case PaymentFilter.unpaid:
-        if (paid) return false;
+        if (settled) return false;
       case PaymentFilter.cash:
         if (d.completedPayment?.method != 'cash') return false;
       case PaymentFilter.all:
@@ -173,7 +175,7 @@ class DemoOrderHistoryRepository implements OrderHistoryRepository {
       itemCount: items,
       grandTotalMinor: d.grandTotalMinor,
       currencyCode: d.currencyCode,
-      paid: pay != null,
+      settlement: d.settlement,
       receiptNumber: d.receiptNumber,
       customerName: d.customerName,
       tableLabel: d.tableLabel,

@@ -3675,6 +3675,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posUnpaidChip => 'غير مدفوع';
 
   @override
+  String get posNoChargeChip => 'بدون رسوم';
+
+  @override
+  String get posNoChargeNoPayment => 'هذا الطلب مجاني — لا يوجد مبلغ مستحق.';
+
+  @override
+  String get posCancelOrderClosed =>
+      'تم إغلاق هذا الطلب بالفعل ولم يعد بالإمكان إلغاؤه.';
+
+  @override
   String get posRecentSyncPending => 'جارٍ المزامنة…';
 
   @override
@@ -3824,6 +3834,23 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogFieldPaymentStatus => 'الدفع';
+
+  @override
+  String get dashboardNoCharge => 'بدون رسوم';
+
+  @override
+  String get ordersPaymentFrozen =>
+      'تم دفع هذا الطلب، لذا أصبح إجماليه مثبتًا. لم يعد بالإمكان تغيير الخصومات.';
+
+  @override
+  String get activityLogFieldDeniedReason => 'السبب';
+
+  @override
+  String get activityLogDeniedOrderHasPayment => 'الطلب مدفوع مسبقًا';
+
+  @override
+  String get activityLogDeniedFullCompRequiresManager =>
+      'الإعفاء الكامل يتطلب مديرًا';
 
   @override
   String get activityLogPaymentNotChargeable => 'لا مبلغ مستحق';

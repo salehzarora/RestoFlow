@@ -99,6 +99,40 @@ class OrderHistoryQuery {
   }
 }
 
+/// Does an order still owe money? The client mirror of the ONE server predicate
+/// `app.order_is_fully_settled` (MONEY-SETTLEMENT-CONSISTENCY-001), and the ONLY
+/// paid/unpaid vocabulary the Dashboard uses.
+///
+/// Three states, because two would force a lie:
+///   * [paid]          — a completed payment COVERS the current total.
+///   * [unpaid]        — money is still outstanding. An UNDER-COVERED order (a real
+///                       completed payment that no longer covers a re-based total)
+///                       lands here, where a payment-row MARKER would have said "paid".
+///   * [notChargeable] — a ZERO-TOTAL (comped / 100%-discounted) order. It owes nothing
+///                       and carries NO payment row. Calling it "paid" would assert a
+///                       payment that never happened; calling it "unpaid" would imply
+///                       money is owed when none is. The server says `not_chargeable`
+///                       on the wire and in the audit trail, and so do we.
+enum SettlementState {
+  paid,
+  unpaid,
+  notChargeable;
+
+  /// The server's `payment_status` token. Unknown/absent tokens FAIL CLOSED to
+  /// [unpaid]: never claim an order is settled on the strength of a value we do not
+  /// understand.
+  static SettlementState fromWire(Object? wire) => switch ('$wire') {
+    'paid' => SettlementState.paid,
+    'not_chargeable' => SettlementState.notChargeable,
+    _ => SettlementState.unpaid,
+  };
+
+  /// Nothing is outstanding — either it was paid, or there was nothing to pay.
+  /// This is the operational question ("does this still need money?"), and it is what
+  /// the unpaid counters and the paid/unpaid filter ask.
+  bool get isSettled => this != SettlementState.unpaid;
+}
+
 /// One summary row in the history list (no line items — those load lazily via
 /// [OrderDetail]).
 class OrderHistoryRow {
@@ -111,7 +145,7 @@ class OrderHistoryRow {
     required this.itemCount,
     required this.grandTotalMinor,
     required this.currencyCode,
-    required this.paid,
+    required this.settlement,
     this.receiptNumber,
     this.customerName,
     this.tableLabel,
@@ -136,8 +170,9 @@ class OrderHistoryRow {
   final int grandTotalMinor;
   final String currencyCode;
 
-  /// Whether a completed payment exists for this order.
-  final bool paid;
+  /// Does this order still owe money? THE canonical settlement state — never a
+  /// payment-row marker (see [SettlementState]).
+  final SettlementState settlement;
   final String? receiptNumber;
   final String? customerName;
   final String? tableLabel;
@@ -332,6 +367,15 @@ class OrderDetail {
     final payment = completedPayment;
     if (payment == null) return false;
     return payment.amountMinor >= grandTotalMinor;
+  }
+
+  /// The SAME question as [isFullySettled], but three-valued for display — so a
+  /// non-chargeable order is never rendered as "Paid" (no payment was taken) nor as
+  /// "Unpaid" (nothing is owed). This is the ONE place the demo derives what the
+  /// server sends as `payment_status`, so demo and real can never disagree.
+  SettlementState get settlement {
+    if (grandTotalMinor == 0) return SettlementState.notChargeable;
+    return isFullySettled ? SettlementState.paid : SettlementState.unpaid;
   }
 }
 

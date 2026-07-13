@@ -17,6 +17,7 @@ import '../data/order_history_models.dart';
 import '../format/money_format.dart';
 import '../state/order_history_providers.dart';
 import 'order_detail_sheet.dart';
+import 'settlement_badge.dart';
 
 /// The standalone Order-history surface: the page header + the [OrderHistoryView]
 /// body. Kept intact so it can be mounted on its own; the tabbed Orders area
@@ -461,17 +462,7 @@ class OrderHistoryCard extends ConsumerWidget {
                           label: statusLabel(l10n, row.status),
                           tone: statusTone(row.status),
                         ),
-                        RestoflowStatusPill(
-                          label: row.paid
-                              ? l10n.dashboardPaid
-                              : l10n.dashboardUnpaid,
-                          tone: row.paid
-                              ? RestoflowTone.success
-                              : RestoflowTone.warning,
-                          icon: row.paid
-                              ? Icons.check_circle_outline
-                              : Icons.schedule,
-                        ),
+                        settlementPill(l10n, row.settlement),
                       ],
                     ),
                   ],

@@ -84,6 +84,7 @@ enum _Kind {
   paymentStatus,
   completionMode,
   completionTrigger,
+  deniedReason,
 }
 
 /// The EXPLICIT allowlist of payload keys that may ever be shown, and how to
@@ -137,6 +138,11 @@ const Map<String, _Kind> _displayableKeys = {
   'completion_mode': _Kind.completionMode, //     automatic | manual
   'completion_trigger':
       _Kind.completionTrigger, // order_served | payment_recorded
+  // WHY a mutation was denied (MONEY-SETTLEMENT-CONSISTENCY-001). The denial actions have
+  // always carried this, but it was never allowlisted — so the Activity Log said THAT a
+  // discount was refused and never WHY. A closed enum of safe STATE tokens; never money,
+  // never an identifier (T-003 holds).
+  'denied_reason': _Kind.deniedReason,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -179,6 +185,7 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'payment_status' => l10n.activityLogFieldPaymentStatus,
   'completion_mode' => l10n.activityLogFieldCompletionMode,
   'completion_trigger' => l10n.activityLogFieldCompletionTrigger,
+  'denied_reason' => l10n.activityLogFieldDeniedReason,
   _ => key,
 };
 
@@ -412,9 +419,19 @@ class AuditEventPresenter {
       _Kind.paymentStatus => _paymentStatusLabel(value.toString()),
       _Kind.completionMode => _completionModeLabel(value.toString()),
       _Kind.completionTrigger => _completionTriggerLabel(value.toString()),
+      _Kind.deniedReason => _deniedReasonLabel(value.toString()),
       _Kind.text => value.toString(),
     };
   }
+
+  /// WHY a mutation was refused. An unknown token is shown raw rather than guessed —
+  /// an honest unknown beats a confident mislabel.
+  String _deniedReasonLabel(String reason) => switch (reason) {
+    'order_has_completed_payment' => l10n.activityLogDeniedOrderHasPayment,
+    'full_comp_requires_manager' =>
+      l10n.activityLogDeniedFullCompRequiresManager,
+    _ => reason,
+  };
 
   /// Whether the order owed anything, and whether it was settled. `not_chargeable`
   /// is a ZERO-TOTAL (comped) order: it closed without a payment because there was

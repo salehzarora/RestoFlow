@@ -152,7 +152,9 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
     itemCount: _int(row['item_count']),
     grandTotalMinor: _int(row['grand_total_minor']),
     currencyCode: currency,
-    paid: (row['payment_status'] ?? '').toString() == 'paid',
+    // The SERVER is the authority: it now emits paid | unpaid | not_chargeable from the
+    // ONE settlement predicate. An unknown token FAILS CLOSED to unpaid.
+    settlement: SettlementState.fromWire(row['payment_status']),
     receiptNumber: _strOrNull(row['receipt_number']),
     customerName: _strOrNull(row['customer_name']),
     tableLabel: _strOrNull(row['table_label']),

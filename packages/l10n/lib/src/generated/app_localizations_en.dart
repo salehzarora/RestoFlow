@@ -3699,6 +3699,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posUnpaidChip => 'Unpaid';
 
   @override
+  String get posNoChargeChip => 'No charge';
+
+  @override
+  String get posNoChargeNoPayment =>
+      'This order is free — there is nothing to pay.';
+
+  @override
+  String get posCancelOrderClosed =>
+      'This order is already closed and can no longer be cancelled.';
+
+  @override
   String get posRecentSyncPending => 'Syncing…';
 
   @override
@@ -3850,6 +3861,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogFieldPaymentStatus => 'Payment';
+
+  @override
+  String get dashboardNoCharge => 'No charge';
+
+  @override
+  String get ordersPaymentFrozen =>
+      'This order has been paid, so its total is locked. Discounts can no longer be changed.';
+
+  @override
+  String get activityLogFieldDeniedReason => 'Reason';
+
+  @override
+  String get activityLogDeniedOrderHasPayment => 'The order was already paid';
+
+  @override
+  String get activityLogDeniedFullCompRequiresManager =>
+      'A full comp needs a manager';
 
   @override
   String get activityLogPaymentNotChargeable => 'Nothing to pay';

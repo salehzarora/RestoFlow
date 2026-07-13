@@ -26,6 +26,7 @@ import '../state/active_orders_providers.dart';
 import '../state/audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'order_detail_sheet.dart';
 import 'order_history_screen.dart' show orderTypeLabel, statusLabel, statusTone;
+import 'settlement_badge.dart';
 
 /// Above this width the board renders as a dense operational table; below it,
 /// as stacked cards. Uses the shared breakpoint so it matches the rest of the
@@ -771,11 +772,7 @@ class ActiveOrderTile extends ConsumerWidget {
           label: statusLabel(l10n, row.status),
           tone: statusTone(row.status),
         ),
-        RestoflowStatusPill(
-          label: row.paid ? l10n.dashboardPaid : l10n.dashboardUnpaid,
-          tone: row.paid ? RestoflowTone.success : RestoflowTone.warning,
-          icon: row.paid ? Icons.check_circle_outline : Icons.schedule,
-        ),
+        settlementPill(l10n, row.settlement),
       ],
     );
 
