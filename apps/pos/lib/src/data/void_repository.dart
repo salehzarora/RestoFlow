@@ -2,20 +2,43 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
 import 'ids.dart';
 
-/// MONEY-VOID-001: a failure to cancel (void) an order. [permissionDenied] marks
-/// the honest server role-gate refusal ("only a manager can cancel this order");
-/// [alreadyPaid] marks the "order has a completed payment" refusal (paid orders
-/// cannot be cancelled in the MVP — refunds are a separate, deferred flow).
+/// A failure to cancel (void) an order. Each flag is set ONLY by the server's EXACT
+/// stable domain code — never by a raw message, never by a SQLSTATE, and never inferred
+/// from the order's total. An unflagged [VoidException] means exactly one thing: "we do
+/// not know why this failed", and the UI must say so generically.
+///
+/// This distinction is load-bearing. Before MONEY-SETTLEMENT-CONSISTENCY-001 (corrective),
+/// `app.void_order` RAISED on a terminal order and `app.sync_push` flattened every raise
+/// into a generic `rejected` — so a dropped network, a malformed envelope and an
+/// already-closed order were indistinguishable here. The POS was reduced to GUESSING
+/// "already closed" from a zero total, which could tell an operator an order was closed
+/// when the connection had merely failed.
+///
+///   * [permissionDenied] — `permission_denied`: the role gate refused (ask a manager).
+///   * [alreadyPaid]      — `permission_denied` + detail `order_has_completed_payment`:
+///                          a live completed payment blocks the void (no refund flow).
+///   * [notVoidable]      — `invalid_transition` + detail `order_not_voidable`: the order
+///                          is TERMINAL (completed/cancelled/voided). `completed` stays
+///                          terminal — there is no completed -> void path.
+///   * [conflict]         — `conflict`: the order changed under us (stale revision).
+///   * [transport]        — the request never got a verdict (network/auth transport).
+///                          RETRYABLE; the order's true state is UNKNOWN.
 class VoidException implements Exception {
   const VoidException(
     this.message, {
     this.permissionDenied = false,
     this.alreadyPaid = false,
+    this.notVoidable = false,
+    this.conflict = false,
+    this.transport = false,
   });
 
   final String message;
   final bool permissionDenied;
   final bool alreadyPaid;
+  final bool notVoidable;
+  final bool conflict;
+  final bool transport;
 
   @override
   String toString() => 'VoidException: $message';
@@ -130,7 +153,13 @@ class RealVoidRepository implements VoidRepository {
     } on SyncTransportException catch (e) {
       // A whole-batch failure (e.g. 42501 - revoked device / expired PIN
       // session). Carry only the error code, never raw backend text.
-      throw VoidException('cancel failed: ${e.code ?? e.kind.name}');
+      // TRANSPORT: the request never reached a verdict, so the order's true state is
+      // UNKNOWN. This must never be presented as "already closed" — that would state a
+      // fact we do not have.
+      throw VoidException(
+        'cancel failed: ${e.code ?? e.kind.name}',
+        transport: true,
+      );
     }
 
     _checkVoidResult(raw: raw, localOperationId: localOperationId);
@@ -167,8 +196,9 @@ class RealVoidRepository implements VoidRepository {
     final status = op['status'];
     if (status != 'applied' || op['ok'] == false) {
       final error = op['error'];
+      final detail = op['detail'];
       if (error == 'permission_denied') {
-        if (op['detail'] == 'order_has_completed_payment') {
+        if (detail == 'order_has_completed_payment') {
           throw const VoidException(
             'order_has_completed_payment',
             alreadyPaid: true,
@@ -176,6 +206,17 @@ class RealVoidRepository implements VoidRepository {
         }
         throw const VoidException('permission_denied', permissionDenied: true);
       }
+      // MONEY-SETTLEMENT-CONSISTENCY-001 (corrective): the TERMINAL refusal, matched on
+      // the EXACT stable code pair the server now returns. This is the ONLY thing that may
+      // ever tell an operator the order is already closed.
+      if (error == 'invalid_transition' && detail == 'order_not_voidable') {
+        throw const VoidException('order_not_voidable', notVoidable: true);
+      }
+      if (error == 'conflict') {
+        throw const VoidException('conflict', conflict: true);
+      }
+      // Anything else — including the generic `rejected` — is an UNKNOWN failure. It stays
+      // unflagged, and the UI says so honestly rather than inventing a cause.
       throw VoidException(
         'cancel rejected: ${error is String ? error : (status is String ? status : 'unknown')}',
       );

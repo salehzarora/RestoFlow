@@ -202,8 +202,8 @@ Each RPC below is a **contract**: name, purpose, inputs (in addition to the comm
 - **Returns:** new `revision`.
 
 ### 4.7 `record_payment` (cash) + `assign_receipt_number`
-- **Purpose:** Record a cash payment against an order and assign the authoritative per-branch receipt number. (Card/other tenders **DEFERRED** beyond cash for MVP scope per [MVP_SCOPE](MVP_SCOPE.md); tips **DEFERRED**, **OPEN QUESTION Q-011**.)
-- **Inputs:** `order_id`, `tender_type` = `cash`, `amount_tendered_minor`, `expected_revision`, optional client `provisional_receipt_number`. Service charge rules **OPEN QUESTION Q-012**.
+- **Purpose:** Record a payment against an order and assign the authoritative per-branch receipt number. (**STALE-PHRASE CORRECTION:** this section used to say card/other tenders were *deferred beyond cash*. **RF-117 shipped them** — `cash` | `card` | `bit` | `external` are all accepted. A **non-cash** tender is *externally recorded*: RestoFlow processes no charge, and it records `tendered = amount = grand_total`, `change = 0`, so it never inflates expected drawer cash. Tips **DEFERRED**, **OPEN QUESTION Q-011**.)
+- **Inputs:** `order_id`, `tender_type` ∈ `cash` | `card` | `bit` | `external`, `amount_tendered_minor`, `expected_revision`, optional client `provisional_receipt_number`. **A non-cash tender legitimately passes `amount_tendered_minor = 0`** — which is why the zero-total guard below keys on the ORDER's total and never on the tendered amount. Service charge rules **OPEN QUESTION Q-012**.
 - **Authorization:** `cashier`+ scoped to the branch, on an `active` device with valid PIN session, with an `open` shift and `active` cash drawer session bound to it (else `precondition_failed`).
 - **Precondition — eligible order states (DECISION D-025):** Payment and fulfillment are **independent**; **pay-first is supported**. The order must be in one of `submitted`, `accepted`, `preparing`, `ready`, `served` to **start** a payment; `draft`, `cancelled`, `voided`, and `completed` are excluded (else `precondition_failed`). The contract does **not** require `ready`/`served` before payment.
 - **Precondition — THE ORDER MUST BE CHARGEABLE (`MONEY-SETTLEMENT-CONSISTENCY-001`, §4.34).** `grand_total_minor <= 0` ⇒ refused with the stable **`order_not_chargeable`** error. A zero-total (comped) order owes **nothing**: it is already settled and auto-completes on `served` **with no payment row**. The check runs **after** authorization/scope/state validation but **BEFORE** the shift/drawer row locks, **BEFORE** the receipt-number allocation and **BEFORE** the payment insert — so a refused zero tender touches **nothing** (no shift, no cash drawer, no **burned receipt number**, no payment row, no order revision, no ledger entry). It is keyed on the **order's** total, **never** on `amount_tendered_minor`, because a **non-cash** tender legitimately passes `tendered = 0` (RF-117).
@@ -640,6 +640,38 @@ ORDER-AUTO-COMPLETION-001 made the order **lifecycle** obey `app.order_is_fully_
 - **KNOWN LIMITATION, stated plainly:** the POS **does not pull orders back**, so a status change driven purely by the KDS (a bump that auto-completes a comped order) never reaches that device. `status == null` means *"not told"*, never *"not terminal"* — the **server remains the authority** and refuses the write. For a **non-chargeable** order the POS can still name the refusal precisely (*"already closed"*) rather than shrugging, because for such an order a generic `42501` void refusal can **only** mean "already terminal": a role denial and a completed-payment block each return their own distinct shape, and a zero-total order can carry no payment at all. A general fix needs a POS order-status pull — a separate ticket.
 
 *Status: forward-only additive migration `20260715090000_money_settlement_consistency_001.sql`. **No** table, column, CHECK, RLS policy, trigger, index or **signature** change — six functions are re-created verbatim with surgical edits, so `CREATE OR REPLACE` preserves every existing ACL and no client can break on an argument mismatch. **NOT applied to the hosted DB** by this ticket; a future apply still requires the **RISK R-003** sign-off and the DEPLOYMENT §13 preflight.*
+
+---
+
+### 4.35 THE DOMAIN ERROR CONTRACT THROUGH `sync_push` (`MONEY-SETTLEMENT-CONSISTENCY-001`, corrective)
+**A stable domain code only reaches the client if the RPC RETURNS it. A RAISE is flattened.** `app.sync_push` finalizes a dispatched operation two different ways, and only one preserves the RPC's own envelope:
+
+| The dispatched RPC… | What the client receives |
+|---|---|
+| **RETURNS** `{ok:false, error:…, detail:…}` | `v_results \|\| (v_dispatch \|\| {status:'rejected', …})` — **the RPC's envelope is merged through VERBATIM.** `error` and `detail` survive. |
+| **RAISES** | The envelope is **rebuilt from scratch**: `error` collapses to the generic literal **`'rejected'`**, `sqlstate` is attached, and `detail` is populated for exactly **one** legacy message pattern (`revoked_employee`). **Every other domain code is LOST.** |
+
+This is why `order_has_completed_payment` has always reached the POS (it returns) while two refusals never could (they raised). **Both now RETURN. `app.sync_push` itself is NOT modified**, no new envelope is invented, no raw SQL text or SQLSTATE is exposed, `status` stays `rejected`, and the sync ledger / `sync.operation_rejected` audit behave exactly as before.
+
+**1. `app.record_payment` → `order_not_chargeable`.** A zero-total order now returns `{ok:false, error:'order_not_chargeable'}` instead of raising. The guard's **position is unchanged**, so every zero-tender protection holds: the refusal writes **no payment, allocates no receipt number, touches no shift or cash drawer, bumps no revision and leaves no success ledger entry** (`order_operations` is written only on success). Every **other** precondition (state legality, double-charge, insufficient tender, no open shift) still **raises**, unchanged.
+- **Audit: none, deliberately.** `record_payment`'s policy is that only the *authorization* denial is audited (`payment.denied`); preconditions are not. A zero-total order is a precondition, not a denial. `sync_push` still records the refusal as `sync.operation_rejected` — now carrying the honest `error='order_not_chargeable'` instead of a generic one, so the trail is **strictly more informative** with **no new action key**.
+
+**2. `app.void_order` → `invalid_transition` + `detail='order_not_voidable'` + `order_status`.** The illegal-source-state refusal now returns instead of raising, and is **audited `order.void_denied`** with `denied_reason='order_not_voidable'` — the same convention its two other RETURN-based denials already use (a raise could not have audited at all: it would roll the audit row back). `order_status` is a **state**, never an identifier, and is safe to return.
+- **VOID ELIGIBILITY IS NOT CHANGED.** The legal source states are still exactly `submitted`/`accepted`/`preparing`/`ready`/`served`. **`completed` stays TERMINAL (D-024) and a completed order — zero-total or not — is still NOT voidable. There is no `completed → void` path.** Only the *shape* of the refusal changed.
+
+**WHY IT MATTERED (the defect this closes).** With the terminal refusal flattened to a generic `rejected`, the POS could not tell an **already-closed order** apart from a **dropped network**, a **malformed envelope**, or any other rejection — so it *inferred* "already closed" from the order having a zero total. **That could tell an operator an order was closed when the connection had merely failed.** The POS now dispatches on the server's exact codes and **an unknown failure stays unknown**:
+
+| Server outcome | POS |
+|---|---|
+| `invalid_transition` + `order_not_voidable` | *"This order is already closed…"* — **the only thing that may ever say this** |
+| `permission_denied` + `order_has_completed_payment` | the existing paid-order block |
+| `permission_denied` | the existing role message |
+| `conflict` | *"This order changed on another device…"* |
+| transport failure / malformed / generic `rejected` | a generic, **retryable** failure — we do not know the order's state and must not pretend to |
+
+Terminal state is **never** inferred from `grand_total_minor == 0`, a missing payment marker, a bare SQLSTATE `42501`, or a raw message.
+
+*Status: forward-only additive migration `20260716090000_settlement_and_void_error_contracts.sql`. Two functions re-created with identical signatures (ACLs preserved); `app.sync_push` untouched. **NOT applied to the hosted DB.***
 - **INTERNAL:** both `app.order_is_fully_settled` and `app.try_auto_complete_order` are granted to **no client role** (`public`/`anon`/`authenticated` all revoked) and have **no public wrapper**.
 - *Status: forward-only additive migration `20260714090000_order_auto_completion_001_served_paid.sql` (no table, column, CHECK, RLS policy, trigger or index change; no historical row rewritten; **no new lifecycle transition** — direction A chains a second, already-legal single-step transition under the same lock). **NOT applied to the hosted DB** by this ticket; a future apply still requires the **RISK R-003** sign-off and the DEPLOYMENT §13 preflight.*
 

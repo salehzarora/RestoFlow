@@ -249,11 +249,15 @@ create temp table t_receipt_before as
   select coalesce((select last_issued_value from branch_receipt_counters
                     where branch_id = '00000000-0000-0000-0000-00000cafeaa0'), 0) as v;
 
-select throws_ok(
-  $$ select app.record_payment('00000000-0000-0000-0000-00000cafec51', '00000000-0000-0000-0000-00000cafe003',
-                               '00000000-0000-0000-0000-00000cafed01', 'msc-pay-z', 'cash', 0, null) $$,
-  '42501', NULL,
-  'a NON-CHARGEABLE (zero-total) order REFUSES a payment (order_not_chargeable, 42501)');   -- 11
+-- The refusal RETURNS the stable domain code (it does not raise): app.sync_push rebuilds
+-- the envelope from scratch for a RAISE, collapsing every domain code to a generic
+-- 'rejected', but merges a RETURNED envelope through verbatim. See
+-- settlement_and_void_error_contracts_test.sql for the end-to-end proof through sync_push.
+select ok(
+  (select r ->> 'ok' = 'false' and r ->> 'error' = 'order_not_chargeable'
+   from app.record_payment('00000000-0000-0000-0000-00000cafec51', '00000000-0000-0000-0000-00000cafe003',
+                           '00000000-0000-0000-0000-00000cafed01', 'msc-pay-z', 'cash', 0, null) as r),
+  'a NON-CHARGEABLE (zero-total) order REFUSES a payment with the stable order_not_chargeable code');  -- 11
 select is((select count(*)::int from payments where order_id = '00000000-0000-0000-0000-00000cafe003'), 0,
   'NO payment row was inserted for the non-chargeable order (no zero-value payment)');      -- 12
 select ok(

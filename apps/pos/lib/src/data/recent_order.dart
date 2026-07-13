@@ -82,7 +82,14 @@ class PosRecentOrder {
 
   /// A ZERO-TOTAL (comped / 100%-discounted) order: it owes nothing, and the server
   /// REFUSES to take a payment for it (no zero-value payment, no burned receipt number).
-  bool get isNonChargeable => grandTotalMinor <= 0;
+  ///
+  /// EXACTLY zero — never `<= 0`. A NEGATIVE total is not "nothing to pay", it is a MONEY
+  /// DEFECT (the DB CHECK forbids it, so it should be unreachable). Treating it as
+  /// non-chargeable would label a corrupt order "No charge" and hide its payment and
+  /// cancel controls — silently swallowing the very thing an operator needs to see. It
+  /// therefore falls through to [isFullySettled], which FAILS CLOSED on a negative total:
+  /// the order reads UNPAID and keeps every control.
+  bool get isNonChargeable => grandTotalMinor == 0;
 
   /// MONEY-VOID-001: true once the order has been cancelled (voided).
   bool get isVoided => voidedAt != null;

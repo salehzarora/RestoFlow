@@ -3661,6 +3661,10 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posCancelOrderClosed => 'ההזמנה כבר נסגרה ולא ניתן עוד לבטל אותה.';
 
   @override
+  String get posCancelOrderConflict =>
+      'ההזמנה שונתה במכשיר אחר. רעננו ונסו שוב.';
+
+  @override
   String get posRecentSyncPending => 'מסנכרן…';
 
   @override
@@ -3825,6 +3829,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogDeniedFullCompRequiresManager => 'פטור מלא מחייב מנהל';
+
+  @override
+  String get activityLogDeniedOrderNotVoidable => 'ההזמנה כבר נסגרה';
 
   @override
   String get activityLogPaymentNotChargeable => 'אין תשלום נדרש';

@@ -3685,6 +3685,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تم إغلاق هذا الطلب بالفعل ولم يعد بالإمكان إلغاؤه.';
 
   @override
+  String get posCancelOrderConflict =>
+      'تم تغيير هذا الطلب من جهاز آخر. حدّث الصفحة وحاول مرة أخرى.';
+
+  @override
   String get posRecentSyncPending => 'جارٍ المزامنة…';
 
   @override
@@ -3851,6 +3855,9 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get activityLogDeniedFullCompRequiresManager =>
       'الإعفاء الكامل يتطلب مديرًا';
+
+  @override
+  String get activityLogDeniedOrderNotVoidable => 'الطلب مغلق بالفعل';
 
   @override
   String get activityLogPaymentNotChargeable => 'لا مبلغ مستحق';

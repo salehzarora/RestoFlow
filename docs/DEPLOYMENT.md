@@ -662,12 +662,41 @@ Post-apply verification: a discount on a paid order is refused and audited with
 `payment_status='not_chargeable'` for a comped order and `'unpaid'` for an under-covered
 one; and `anon` still cannot execute any of the re-created functions.
 
-**ROLLBACK (manual; forward-only migrations are never auto-reverted).** Re-apply the
-previous shipping definition of each of the seven functions from the migrations named in
-the rollback header of `20260715090000`. **No data is migrated by this file, so a
-rollback loses nothing** — it only restores marker-based classification and re-opens the
-discount / zero-tender holes. Audit rows already written with `denied_reason` simply stop
-being projected to the Dashboard.
+**MONEY-SETTLEMENT-CONSISTENCY-001 (corrective) — THE THIRD MIGRATION, APPLY IT WITH THE
+OTHER TWO.** `20260716090000_settlement_and_void_error_contracts.sql` re-creates
+`app.record_payment` and `app.void_order` (identical signatures; ACLs preserved) so their
+domain refusals **RETURN** instead of RAISE. **`app.sync_push` is NOT modified.**
+
+Why it is not optional: `sync_push` rebuilds the envelope from scratch for a RAISE,
+collapsing every domain code into a generic `rejected`. Without this migration the POS
+cannot see `order_not_chargeable` (so the "nothing to pay" explanation is unreachable) and
+cannot tell an **already-closed order** apart from a **dropped network** — which is exactly
+how a cashier could be told an order was closed when the connection had merely failed.
+
+Behaviour at apply time: an order that is TERMINAL now returns
+`invalid_transition` / `order_not_voidable` (and is audited `order.void_denied`), and a
+zero-total payment returns `order_not_chargeable`. **Void eligibility is UNCHANGED —
+`completed` stays terminal and there is no `completed → void` path.** Normal payments,
+successful envelopes and idempotent replay are byte-for-byte unchanged.
+
+**FINAL MIGRATION ORDER — apply all three back-to-back in ONE controlled DB-first rollout:**
+1. `20260714090000_order_auto_completion_001_served_paid.sql`
+2. `20260715090000_money_settlement_consistency_001.sql`
+3. `20260716090000_settlement_and_void_error_contracts.sql`
+
+**Do NOT leave (1) live without (2) and (3).** (1) introduces the sharp edge (a comped
+order auto-completes and becomes non-voidable); (2) is the guard rail; (3) is what lets the
+client explain what happened instead of guessing.
+
+**ROLLBACK — NOT FULLY REVERSIBLE. Prefer a FORWARD FIX.** Re-applying the previous
+definitions restores the old *code*, but it does **not** restore the *world*:
+- **Orders that already auto-completed stay `completed`.** They are terminal, and there is
+  no un-complete path. Nothing rewinds them.
+- A rollback of (3) re-collapses both domain codes into a generic `rejected`, and a
+  rollback of (2) re-opens the discount and zero-tender holes.
+- No data is migrated by any of the three files, and no historical row is rewritten — but
+  "no data migration" is **not** the same as "no effect". **A forward fix is the preferred
+  production recovery strategy.**
 
 **Post-migration smoke tests** (owner/manager) — the RF-REPORT-004 apply **passed these on 2026-07-06**; re-run them for any future reporting apply:
 - **Dashboard Today** loads real range data (not the range-unavailable state).

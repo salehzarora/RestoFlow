@@ -725,40 +725,116 @@ void main() {
     }
   });
 
+  // The confirm dialog must never contradict its own gate — AND must never overstate.
+  // The first version of this test asserted "Paid" for a ZERO-TOTAL order, because the
+  // pill was driven by a BOOLEAN (`settled ? Paid : Unpaid`). That was wrong: the order
+  // owes nothing, but NO PAYMENT WAS EVER TAKEN — the server itself audits it as
+  // `not_chargeable` and refuses to charge it. Two states cannot express three, so the
+  // dialog now renders the canonical THREE-VALUED settlement state.
   testWidgets(
-    'G7 the confirm dialog cannot CONTRADICT its own gate (one predicate, not a marker)',
+    'G7 the confirm dialog shows NO CHARGE for a zero-total order — never Paid (ar/he/en)',
     (tester) async {
       _sized(tester, 1320);
-      final l10n = await _l('en');
-      await tester.pumpWidget(_wrap(_store()));
-      await tester.pumpAndSettle();
+      for (final code in ['ar', 'he', 'en']) {
+        final l10n = await _l(code);
+        await tester.pumpWidget(_wrap(_store(), locale: code));
+        await tester.pumpAndSettle();
 
-      // A ZERO-TOTAL order carries NO payment row. A marker-based pill
-      // (`completedPayment != null`) would say "Unpaid" right next to an ENABLED
-      // Complete button — the dialog contradicting its own gate.
-      await _openDetail(tester, 'zero-served');
-      await tester.tap(find.byKey(const Key('order-complete-button')));
-      await tester.pumpAndSettle();
+        await _openDetail(tester, 'zero-served');
+        await tester.tap(find.byKey(const Key('order-complete-button')));
+        await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('order-complete-confirm')), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('order-complete-confirm')),
-          matching: find.text(l10n.dashboardPaid),
-        ),
-        findsOneWidget,
-        reason:
-            'a settled (non-chargeable) order owes nothing — never "Unpaid"',
-      );
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('order-complete-confirm')),
-          matching: find.text(l10n.dashboardUnpaid),
-        ),
-        findsNothing,
-      );
+        final dialog = find.byKey(const Key('order-complete-confirm'));
+        expect(dialog, findsOneWidget, reason: code);
+        expect(
+          find.descendant(
+            of: dialog,
+            matching: find.text(l10n.dashboardNoCharge),
+          ),
+          findsOneWidget,
+          reason: '$code: nothing was ever paid, and nothing is owed',
+        );
+        expect(
+          find.descendant(of: dialog, matching: find.text(l10n.dashboardPaid)),
+          findsNothing,
+          reason:
+              '$code: claiming "Paid" would assert a payment that never happened',
+        );
+        expect(
+          find.descendant(
+            of: dialog,
+            matching: find.text(l10n.dashboardUnpaid),
+          ),
+          findsNothing,
+          reason: '$code: claiming "Unpaid" would imply money is owed',
+        );
+      }
     },
   );
+
+  testWidgets('G7b the confirm dialog shows PAID for a genuinely paid order', (
+    tester,
+  ) async {
+    _sized(tester, 1320);
+    final l10n = await _l('en');
+    await tester.pumpWidget(_wrap(_store()));
+    await tester.pumpAndSettle();
+
+    await _openDetail(tester, 'served-paid');
+    await tester.tap(find.byKey(const Key('order-complete-button')));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byKey(const Key('order-complete-confirm'));
+    expect(
+      find.descendant(of: dialog, matching: find.text(l10n.dashboardPaid)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text(l10n.dashboardNoCharge)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('G7c an UNDER-COVERED order reads UNPAID and cannot be completed', (
+    tester,
+  ) async {
+    _sized(tester, 1320);
+    final l10n = await _l('en');
+    await tester.pumpWidget(_wrap(_store()));
+    await tester.pumpAndSettle();
+
+    // It carries a REAL completed payment, so a marker would have said "Paid" — while
+    // money is still owed. The button stays gated by the canonical settlement state, so
+    // the dialog is unreachable; the DETAIL SHEET must still tell the truth.
+    await _openDetail(tester, 'served-under');
+    final button = tester.widget<FilledButton>(
+      find.byKey(const Key('order-complete-button')),
+    );
+    expect(button.onPressed, isNull, reason: 'D-025: it still owes money');
+
+    // Scoped to the SHEET — the board behind it legitimately shows other orders'
+    // badges, including "No charge" on the comped ones.
+    final sheet = find.byKey(const Key('order-detail-sheet'));
+    // It carries a real payment, so the sheet shows that payment's row; the "money is
+    // still owed" signal is the D-025 block, which must be present.
+    expect(
+      find.descendant(
+        of: sheet,
+        matching: find.byKey(const Key('order-complete-unpaid-blocked')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.text(l10n.dashboardNoCharge)),
+      findsNothing,
+      reason: 'money IS owed — this is not a non-chargeable order',
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.text(l10n.dashboardPaid)),
+      findsNothing,
+      reason: 'a marker would have called this PAID while 26.00 is still owed',
+    );
+  });
 
   testWidgets(
     'G8 Active Orders drops the zero-total order after an authoritative refresh',

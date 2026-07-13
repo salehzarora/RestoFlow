@@ -150,6 +150,29 @@ void main() {
     },
   );
 
+  // ===== P2. a NEGATIVE total FAILS CLOSED — it is never "No charge" ==========
+  test('a NEGATIVE total fails closed: not settled, and NOT non-chargeable', () {
+    // Unlike the POS view (which clamps at zero), OrderDetail carries the server's total
+    // verbatim — so this is the model where a corrupt negative is actually reachable.
+    // A negative total is a MONEY DEFECT, not "nothing to pay". Rendering it as
+    // "No charge" would hide it behind a reassuring chip; the canonical rule fails closed.
+    final store = DemoOrderStore([
+      _order('negative', status: 'served', total: -1),
+    ]);
+    final d = _detail(store, 'negative');
+
+    expect(
+      d.isFullySettled,
+      isFalse,
+      reason: 'never settle an impossible total',
+    );
+    expect(d.settlement, SettlementState.unpaid);
+    expect(d.settlement, isNot(SettlementState.notChargeable));
+    expect(d.settlement.isSettled, isFalse);
+    // ...and it therefore cannot be completed.
+    expect(store.complete('negative'), DemoCompleteRefusal.notPaid);
+  });
+
   // ===== 30. an UNDER-COVERED order stays visibly unsettled ===================
   test(
     '30 an UNDER-COVERED order is unpaid, not paid (marker would have lied)',

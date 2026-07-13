@@ -4,10 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
+import 'package:restoflow_pos/src/data/payment_repository.dart';
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
+import 'package:restoflow_pos/src/state/payment_controller.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
+import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
 
 /// MONEY-SETTLEMENT-CONSISTENCY-001 — the POS half.
@@ -309,4 +312,92 @@ void main() {
     expect(find.byKey(const Key('recent-cancel-#ZC')), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  // ===== 28. the payment sheet SHOWS the localized non-chargeable explanation ==
+  // The POS no longer OFFERS Take payment on a zero-total order (test 38), so this is the
+  // backstop: if the sheet is reached anyway, the server's typed `order_not_chargeable`
+  // refusal must produce its own explanation — NOT the generic "payment failed, try
+  // again" banner, which would send the cashier into a retry loop that can never succeed.
+  for (final code in ['ar', 'he', 'en']) {
+    testWidgets(
+      '28 a refused zero tender shows the localized non-chargeable explanation ($code)',
+      (tester) async {
+        _wide(tester);
+        final l10n = await _l(code);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              paymentRepositoryProvider.overrideWithValue(
+                const _NotChargeablePaymentRepo(),
+              ),
+            ],
+            child: MaterialApp(
+              locale: Locale(code),
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: const Scaffold(
+                body: CashPaymentSheet(
+                  orderNumber: '#Z0',
+                  amountMinor: 0,
+                  currencyCode: 'ILS',
+                  orderId: 'oid-#Z0',
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Cash tender of 0.00 — it "covers" a zero total, so Confirm enables and the
+        // request actually reaches the server, which refuses it.
+        await tester.enterText(find.byType(TextField).first, '0.00');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('confirm-payment-button')));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('payment-not-chargeable-banner')),
+          findsOneWidget,
+          reason: '$code: the order owes nothing — say so',
+        );
+        expect(
+          find.byKey(const Key('payment-failed-banner')),
+          findsNothing,
+          reason: '$code: "try again" would be advice that can never work',
+        );
+        expect(find.text(l10n.posNoChargeNoPayment), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+}
+
+/// A repository that fails exactly the way the server now does for a zero-total order:
+/// the typed `order_not_chargeable` refusal.
+class _NotChargeablePaymentRepo implements PaymentRepository {
+  const _NotChargeablePaymentRepo();
+
+  @override
+  Future<CashPayment> recordCashPayment({
+    required String orderId,
+    required String orderNumber,
+    required int amountMinor,
+    required int tenderedMinor,
+    required String currencyCode,
+    PaymentMethod method = PaymentMethod.cash,
+  }) async =>
+      throw const PaymentException('order_not_chargeable', notChargeable: true);
+
+  @override
+  ShiftContext shiftContext() => const ShiftContext(
+    shiftOpen: false,
+    drawerOpen: false,
+    openingFloatMinor: 0,
+    cashInDrawerMinor: 0,
+    lastPaymentMinor: 0,
+    currencyCode: 'ILS',
+  );
+
+  @override
+  CashPayment? paymentFor(String orderNumber) => null;
 }

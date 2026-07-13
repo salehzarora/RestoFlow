@@ -30,6 +30,7 @@ import '../data/order_completion_repository.dart';
 import '../data/order_history_models.dart';
 import '../state/dashboard_providers.dart';
 import '../state/order_completion_providers.dart';
+import 'settlement_badge.dart';
 
 /// Whether [role] may settle orders — the SAME allowlist the server enforces
 /// (`cashier` / `manager` / `restaurant_owner` / `org_owner`). `kitchen_staff` and
@@ -158,8 +159,6 @@ class OrderCompleteAction extends ConsumerWidget {
   }
 
   Future<void> _confirmAndComplete(BuildContext context, WidgetRef ref) async {
-    // The ONE settlement predicate — the same one that gated the button.
-    final settled = detail.isFullySettled;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -179,16 +178,15 @@ class OrderCompleteAction extends ConsumerWidget {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(width: RestoflowSpacing.sm),
-                // THE SAME predicate that gates the button above — never a second
-                // definition. A marker (`completedPayment != null`) would say
-                // "Unpaid" for a settled ZERO-TOTAL order while the button next to it
-                // was enabled, and would say "Paid" for an UNDER-COVERED one the
-                // server will refuse. The dialog must not contradict its own gate.
-                RestoflowStatusPill(
-                  label: settled ? l10n.dashboardPaid : l10n.dashboardUnpaid,
-                  tone: settled ? RestoflowTone.success : RestoflowTone.warning,
-                  icon: settled ? Icons.check_circle_outline : Icons.schedule,
-                ),
+                // The canonical THREE-VALUED settlement state, rendered by the ONE shared
+                // badge helper — the same one Active Orders and History use.
+                //
+                // A boolean would force a lie in both directions. `settled ? Paid :
+                // Unpaid` calls a ZERO-TOTAL order "Paid" even though no payment was ever
+                // taken (the server audits it as `not_chargeable` and would refuse to
+                // charge it at all), and a payment-row MARKER would call an UNDER-COVERED
+                // order "Paid" while money is still owed. Two states cannot express three.
+                settlementPill(l10n, detail.settlement),
               ],
             ),
           ],

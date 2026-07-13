@@ -430,6 +430,7 @@ class AuditEventPresenter {
     'order_has_completed_payment' => l10n.activityLogDeniedOrderHasPayment,
     'full_comp_requires_manager' =>
       l10n.activityLogDeniedFullCompRequiresManager,
+    'order_not_voidable' => l10n.activityLogDeniedOrderNotVoidable,
     _ => reason,
   };
 

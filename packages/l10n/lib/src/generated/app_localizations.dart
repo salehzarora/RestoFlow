@@ -6976,6 +6976,12 @@ abstract class AppLocalizations {
   /// **'This order is already closed and can no longer be cancelled.'**
   String get posCancelOrderClosed;
 
+  /// MONEY-SETTLEMENT-CONSISTENCY-001 (corrective): shown when a cancellation is refused because the order changed under us (a stale revision / conflict). Distinct from a terminal order, a permission denial, and a generic/transport failure.
+  ///
+  /// In en, this message translates to:
+  /// **'This order changed on another device. Refresh and try again.'**
+  String get posCancelOrderConflict;
+
   /// POS recent orders: the order is still syncing to the backend.
   ///
   /// In en, this message translates to:
@@ -7263,6 +7269,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A full comp needs a manager'**
   String get activityLogDeniedFullCompRequiresManager;
+
+  /// MONEY-SETTLEMENT-CONSISTENCY-001 (corrective) Activity-log VALUE for denied_reason=order_not_voidable: the void was refused because the order is in a terminal state (completed/cancelled/voided). `completed` is terminal — there is no completed-to-void path.
+  ///
+  /// In en, this message translates to:
+  /// **'The order was already closed'**
+  String get activityLogDeniedOrderNotVoidable;
 
   /// ORDER-AUTO-COMPLETION-001 Activity-log VALUE for payment_status=not_chargeable: a ZERO-TOTAL (comped / fully discounted) order closed with NO payment because it owed nothing. Never rendered as 'Paid' — the audit trail must not assert a payment that was never taken.
   ///

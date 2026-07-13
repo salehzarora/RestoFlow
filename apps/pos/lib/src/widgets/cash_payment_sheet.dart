@@ -73,15 +73,29 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   /// input or attempt clears it.
   bool _failed = false;
 
+  /// MONEY-SETTLEMENT-CONSISTENCY-001: set ONLY by the server's exact typed
+  /// `order_not_chargeable` refusal — a ZERO-TOTAL order owes nothing, so the server
+  /// refuses to mint a 0-amount payment or burn a receipt number.
+  ///
+  /// This is NOT a failure to retry (no retry can ever succeed), so it renders its own
+  /// explanatory banner instead of the danger "payment failed" one. It is never inferred
+  /// from the order total, a SQLSTATE, or a raw error message.
+  bool _notChargeable = false;
+
   /// The selected tender (RF-117). Cash is the default; a non-cash tender is
   /// externally recorded (no drawer cash, no change).
   PaymentMethod _method = PaymentMethod.cash;
+
+  void _clearErrors() {
+    _failed = false;
+    _notChargeable = false;
+  }
 
   void _selectMethod(PaymentMethod method) {
     if (_method == method) return;
     setState(() {
       _method = method;
-      _failed = false;
+      _clearErrors();
     });
   }
 
@@ -98,7 +112,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     final digits = minor % 100;
     final text = '${minor ~/ 100}.${digits.toString().padLeft(2, '0')}';
     _controller.text = text;
-    setState(() => _failed = false);
+    setState(_clearErrors);
   }
 
   /// Keypad wiring (design-polish): the on-screen keypad appends into the SAME
@@ -108,7 +122,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     final text = _controller.text + ch;
     _controller.text = text;
     _controller.selection = TextSelection.collapsed(offset: text.length);
-    setState(() => _failed = false);
+    setState(_clearErrors);
   }
 
   void _backspace() {
@@ -117,7 +131,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     final next = text.substring(0, text.length - 1);
     _controller.text = next;
     _controller.selection = TextSelection.collapsed(offset: next.length);
-    setState(() => _failed = false);
+    setState(_clearErrors);
   }
 
   Future<void> _confirm() async {
@@ -133,7 +147,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     }
     setState(() {
       _submitting = true;
-      _failed = false;
+      _clearErrors();
     });
     final navigator = Navigator.of(context);
     try {
@@ -150,14 +164,19 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       // The sheet is drag/barrier-dismissible while the push is in flight;
       // popping an already-dismissed sheet would pop the ROOT POS route.
       if (mounted) navigator.pop();
-    } on PaymentException {
+    } on PaymentException catch (e) {
       // DESIGN-001: an honest, visible failure — the payment was NOT recorded
       // and the cashier must know. The banner below the sheet body says so;
       // Confirm stays enabled as the retry.
+      //
+      // MONEY-SETTLEMENT-CONSISTENCY-001: a NON-CHARGEABLE order is NOT a failure to
+      // retry — the order owes nothing and no retry can ever succeed. It gets its own
+      // banner, driven by the server's EXACT typed code (never by a guess at the total).
       if (mounted) {
         setState(() {
           _submitting = false;
-          _failed = true;
+          _failed = !e.notChargeable;
+          _notChargeable = e.notChargeable;
         });
       }
     }
@@ -264,7 +283,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                 ],
                 // Hardware-keyboard edits clear a stale failure banner too
                 // (the on-screen keypad path clears it via _appendChar).
-                onChanged: (_) => setState(() => _failed = false),
+                onChanged: (_) => setState(_clearErrors),
                 decoration: InputDecoration(
                   labelText: l10n.posCashReceived,
                   border: const OutlineInputBorder(),
@@ -330,10 +349,25 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
               ),
             ] else
               _NonCashNote(message: l10n.posNonCashNote),
+            if (_notChargeable) ...[
+              const SizedBox(height: RestoflowSpacing.md),
+              // MONEY-SETTLEMENT-CONSISTENCY-001: the server's typed
+              // `order_not_chargeable` refusal. NOT a danger/retry banner — the order
+              // owes nothing, so retrying can never succeed. Telling the cashier to
+              // "try again" here would be a lie.
+              RestoflowNoticeBanner(
+                key: const Key('payment-not-chargeable-banner'),
+                tone: RestoflowTone.info,
+                title: l10n.posNoChargeChip,
+                body: l10n.posNoChargeNoPayment,
+              ),
+            ],
             if (_failed) ...[
               const SizedBox(height: RestoflowSpacing.md),
               // DESIGN-001: the payment-failure banner — pinned in the sheet
               // (not a transient SnackBar), danger tone, honest about state.
+              // Every OTHER failure (transport, malformed envelope, generic rejection)
+              // lands here and stays retryable.
               RestoflowNoticeBanner(
                 key: const Key('payment-failed-banner'),
                 tone: RestoflowTone.danger,

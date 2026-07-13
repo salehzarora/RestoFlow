@@ -85,24 +85,22 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = e.alreadyPaid
-            ? l10n.posCancelPaidOrderError
-            : e.permissionDenied
-            ? l10n.posCancelPermissionDenied
-            // MONEY-SETTLEMENT-CONSISTENCY-001: for a NON-CHARGEABLE (zero-total) order a
-            // generic rejection is DETERMINISTICALLY the "already closed" case, so we can
-            // name it instead of shrugging. The server refuses a void for exactly three
-            // reasons: a role denial (returns permission_denied, handled above), a live
-            // completed payment (returns alreadyPaid, handled above — and a zero-total
-            // order can never have one, since the server now refuses a zero-value
-            // payment), or an illegal source state, i.e. the order is already TERMINAL.
-            // A comped order auto-completes on `served`, and this device is never told
-            // (the POS does not pull orders back), so this is exactly the case that used
-            // to surface as "Cancellation failed. Please try again." — advice that could
-            // never work.
-            : widget.order.isNonChargeable
-            ? l10n.posCancelOrderClosed
-            : l10n.posCancelOrderFailed;
+        // MONEY-SETTLEMENT-CONSISTENCY-001 (corrective): TYPED dispatch on the server's
+        // exact domain codes. The previous version INFERRED "already closed" from a
+        // zero-total order whenever the rejection was generic — which meant a dropped
+        // network could tell the operator an order was closed when it was not. Only the
+        // server's `order_not_voidable` may ever claim that now; everything else stays
+        // honestly distinct, and an unknown failure stays unknown.
+        _error = switch (e) {
+          VoidException(alreadyPaid: true) => l10n.posCancelPaidOrderError,
+          VoidException(permissionDenied: true) =>
+            l10n.posCancelPermissionDenied,
+          VoidException(notVoidable: true) => l10n.posCancelOrderClosed,
+          VoidException(conflict: true) => l10n.posCancelOrderConflict,
+          // Transport, malformed envelope, and any unknown rejection: a generic,
+          // retryable failure. We do NOT know the order's state and must not pretend to.
+          _ => l10n.posCancelOrderFailed,
+        };
       });
     }
   }

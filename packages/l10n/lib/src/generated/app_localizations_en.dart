@@ -3710,6 +3710,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This order is already closed and can no longer be cancelled.';
 
   @override
+  String get posCancelOrderConflict =>
+      'This order changed on another device. Refresh and try again.';
+
+  @override
   String get posRecentSyncPending => 'Syncing…';
 
   @override
@@ -3878,6 +3882,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get activityLogDeniedFullCompRequiresManager =>
       'A full comp needs a manager';
+
+  @override
+  String get activityLogDeniedOrderNotVoidable =>
+      'The order was already closed';
 
   @override
   String get activityLogPaymentNotChargeable => 'Nothing to pay';
