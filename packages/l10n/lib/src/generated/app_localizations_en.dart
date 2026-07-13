@@ -3962,4 +3962,44 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ordersActiveRefreshFailed =>
       'Couldn\'t refresh just now. These orders may be out of date.';
+
+  @override
+  String get staffCapApplyFullComp => 'Can make an order free';
+
+  @override
+  String get staffCapApplyFullCompHint =>
+      'Allows a discount that brings the order total to zero. Off by default.';
+
+  @override
+  String get staffCapApplyFullCompNeedsDiscount =>
+      'Needs the discount permission above.';
+
+  @override
+  String get staffCapabilitiesRoleNote =>
+      'Managers and owners can already do all of this.';
+
+  @override
+  String get posDiscountFullCompDenied =>
+      'You don\'t have permission to make an order free - ask a manager.';
+
+  @override
+  String get posDiscountExceedsOrderTotal =>
+      'That discount is more than the order total.';
+
+  @override
+  String get activityLogCapApplyFullComp => 'Make an order free';
+
+  @override
+  String get activityLogDeniedFullCompPermissionRequired =>
+      'Making an order free needs permission';
+
+  @override
+  String get activityLogDeniedDiscountExceedsOrderTotal =>
+      'The discount was more than the order total';
+
+  @override
+  String get activityLogFieldResultingChargeState => 'Would leave';
+
+  @override
+  String get activityLogTitleDiscountDenied => 'Discount refused';
 }

@@ -241,11 +241,16 @@ class SupabaseStaffRepository implements StaffRepository {
     // overrides (only the switches turned OFF) so create_staff_member persists
     // them ATOMICALLY with the membership. Absent keys = role default ON; never
     // sent for a non-cashier (the RPC would reject it).
+    // FULL-COMP-PERMISSION-001: two polarities. The three default-ON keys are sent
+    // ONLY to DENY them ('false'); apply_full_comp is default-OFF and is sent ONLY
+    // to GRANT it ('true'). Sending the wrong polarity is rejected by the server's
+    // validator, so the client cannot drift from the storage rule.
     final denies = <String, String>{
       if (role == MembershipRole.cashier && capabilities != null) ...{
         if (!capabilities.applyDiscount) 'apply_discount': 'false',
         if (!capabilities.voidOrder) 'void_order': 'false',
         if (!capabilities.closeShift) 'close_shift': 'false',
+        if (capabilities.applyFullComp) 'apply_full_comp': 'true',
       },
     };
     final params = <String, dynamic>{
@@ -322,17 +327,21 @@ class SupabaseStaffRepository implements StaffRepository {
     try {
       raw = await _t.invoke('set_staff_capabilities', <String, dynamic>{
         // A FRESH request id per submission — states are the fingerprint, so
-        // toggling back-and-forth is not a stale replay no-op.
+        // toggling back-and-forth is not a stale replay no-op. FULL-COMP-PERMISSION-001:
+        // the 4th toggle is part of BOTH this id and the server-side fingerprint,
+        // so flipping ONLY full-comp is a real write rather than a stale replay.
         'p_client_request_id': _requestId('set-caps', [
           employeeProfileId,
           '${capabilities.applyDiscount}',
           '${capabilities.voidOrder}',
           '${capabilities.closeShift}',
+          '${capabilities.applyFullComp}',
         ]),
         'p_employee_profile_id': employeeProfileId,
         'p_apply_discount': capabilities.applyDiscount,
         'p_void_order': capabilities.voidOrder,
         'p_close_shift': capabilities.closeShift,
+        'p_apply_full_comp': capabilities.applyFullComp,
       });
     } on SyncTransportException catch (e) {
       return Failure(_mapTransport(e));

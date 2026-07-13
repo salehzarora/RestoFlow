@@ -7401,6 +7401,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t refresh just now. These orders may be out of date.'**
   String get ordersActiveRefreshFailed;
+
+  /// FULL-COMP-PERMISSION-001 staff-permission switch: allows this cashier to apply a discount that brings the order total to zero (a full comp). SEPARATE from the ordinary discount permission and OFF by default.
+  ///
+  /// In en, this message translates to:
+  /// **'Can make an order free'**
+  String get staffCapApplyFullComp;
+
+  /// FULL-COMP-PERMISSION-001: explains what the full-comp switch grants - a discount whose RESULTING total is zero, i.e. the guest pays nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Allows a discount that brings the order total to zero. Off by default.'**
+  String get staffCapApplyFullCompHint;
+
+  /// FULL-COMP-PERMISSION-001: shown when the full-comp switch is on but the ordinary discount permission is OFF. The server checks the discount permission first, so the stored comp grant has no effect until discounts are re-enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs the discount permission above.'**
+  String get staffCapApplyFullCompNeedsDiscount;
+
+  /// FULL-COMP-PERMISSION-001: honest note that these switches apply only to cashiers - managers/owners hold these rights by role and are not affected by the toggles.
+  ///
+  /// In en, this message translates to:
+  /// **'Managers and owners can already do all of this.'**
+  String get staffCapabilitiesRoleNote;
+
+  /// FULL-COMP-PERMISSION-001 POS: the cashier may apply ordinary discounts but not one that brings the total to zero. Shown for the typed server refusal full_comp_permission_required AND for the client-side pre-check.
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have permission to make an order free - ask a manager.'**
+  String get posDiscountFullCompDenied;
+
+  /// FULL-COMP-PERMISSION-001 POS: the typed server refusal discount_exceeds_order_total - the discount would drive the order total below zero, which is refused rather than silently floored.
+  ///
+  /// In en, this message translates to:
+  /// **'That discount is more than the order total.'**
+  String get posDiscountExceedsOrderTotal;
+
+  /// FULL-COMP-PERMISSION-001 Activity-log label for the apply_full_comp capability in a staff.capabilities_updated / staff.created change row.
+  ///
+  /// In en, this message translates to:
+  /// **'Make an order free'**
+  String get activityLogCapApplyFullComp;
+
+  /// FULL-COMP-PERMISSION-001 Activity-log VALUE for denied_reason=full_comp_permission_required: the discount would have made the order free and the actor lacks the separate full-comp permission.
+  ///
+  /// In en, this message translates to:
+  /// **'Making an order free needs permission'**
+  String get activityLogDeniedFullCompPermissionRequired;
+
+  /// FULL-COMP-PERMISSION-001 Activity-log VALUE for denied_reason=discount_exceeds_order_total: the discount would have driven the total below zero, so it was refused rather than floored to zero.
+  ///
+  /// In en, this message translates to:
+  /// **'The discount was more than the order total'**
+  String get activityLogDeniedDiscountExceedsOrderTotal;
+
+  /// FULL-COMP-PERMISSION-001 Activity-log safe detail field: WHAT the attempted mutation would have left the order as (currently only not_chargeable = the order would owe nothing). A state, not a money figure.
+  ///
+  /// In en, this message translates to:
+  /// **'Would leave'**
+  String get activityLogFieldResultingChargeState;
+
+  /// FULL-COMP-PERMISSION-001 Activity-log title for order.discount_denied. Previously a refused discount had no title of its own and fell back to the bare category label, so the operator could not see at a glance that something had been BLOCKED. Category stays 'discounts'.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount refused'**
+  String get activityLogTitleDiscountDenied;
 }
 
 class _AppLocalizationsDelegate

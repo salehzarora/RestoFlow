@@ -3932,4 +3932,42 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get ordersActiveRefreshFailed =>
       'تعذّر التحديث الآن. قد تكون هذه الطلبات غير محدَّثة.';
+
+  @override
+  String get staffCapApplyFullComp => 'يمكنه جعل الطلب مجانيًا';
+
+  @override
+  String get staffCapApplyFullCompHint =>
+      'يسمح بخصم يجعل إجمالي الطلب صفرًا. مُعطَّل افتراضيًا.';
+
+  @override
+  String get staffCapApplyFullCompNeedsDiscount => 'يتطلب صلاحية الخصم أعلاه.';
+
+  @override
+  String get staffCapabilitiesRoleNote =>
+      'المديرون والمالكون يمتلكون هذه الصلاحيات أصلًا.';
+
+  @override
+  String get posDiscountFullCompDenied =>
+      'لا تملك صلاحية جعل الطلب مجانيًا — اطلب مديرًا.';
+
+  @override
+  String get posDiscountExceedsOrderTotal => 'قيمة الخصم أكبر من إجمالي الطلب.';
+
+  @override
+  String get activityLogCapApplyFullComp => 'جعل الطلب مجانيًا';
+
+  @override
+  String get activityLogDeniedFullCompPermissionRequired =>
+      'جعل الطلب مجانيًا يتطلب صلاحية';
+
+  @override
+  String get activityLogDeniedDiscountExceedsOrderTotal =>
+      'الخصم تجاوز إجمالي الطلب';
+
+  @override
+  String get activityLogFieldResultingChargeState => 'سيصبح';
+
+  @override
+  String get activityLogTitleDiscountDenied => 'تم رفض الخصم';
 }

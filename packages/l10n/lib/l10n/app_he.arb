@@ -1222,5 +1222,16 @@
   "ordersAwaitingCloseBacklog": "{count} הזמנות שהוגשו לא נסגרו. הזמנה שהוגשה נסגרת מעצמה ברגע שהיא משולמת במלואה, ולכן אלו ממתינות למשהו.",
   "ordersActiveTruncatedNewest": "מוצגות {shown} ההזמנות החדשות ביותר מתוך {total} הזמנות פעילות תואמות.",
   "ordersActiveTruncatedOldest": "מוצגות {shown} ההזמנות הוותיקות ביותר מתוך {total} הזמנות פעילות תואמות.",
-  "ordersActiveRefreshFailed": "הרענון נכשל כעת. ייתכן שההזמנות אינן מעודכנות."
+  "ordersActiveRefreshFailed": "הרענון נכשל כעת. ייתכן שההזמנות אינן מעודכנות.",
+  "staffCapApplyFullComp": "יכול לתת הזמנה חינם",
+  "staffCapApplyFullCompHint": "מאפשר הנחה שמאפסת את סכום ההזמנה. כבוי כברירת מחדל.",
+  "staffCapApplyFullCompNeedsDiscount": "דורש את הרשאת ההנחה שלמעלה.",
+  "staffCapabilitiesRoleNote": "למנהלים ולבעלים כבר יש את כל ההרשאות האלה.",
+  "posDiscountFullCompDenied": "אין לך הרשאה לתת הזמנה חינם — פנה למנהל.",
+  "posDiscountExceedsOrderTotal": "ההנחה גדולה מסכום ההזמנה.",
+  "activityLogCapApplyFullComp": "מתן הזמנה חינם",
+  "activityLogDeniedFullCompPermissionRequired": "מתן הזמנה חינם דורש הרשאה",
+  "activityLogDeniedDiscountExceedsOrderTotal": "ההנחה עלתה על סכום ההזמנה",
+  "activityLogFieldResultingChargeState": "יישאר",
+  "activityLogTitleDiscountDenied": "ההנחה נדחתה"
 }

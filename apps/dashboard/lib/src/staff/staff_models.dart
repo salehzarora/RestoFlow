@@ -1,18 +1,25 @@
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 
-/// STAFF-CASHIER-PERMISSIONS-001: the three default-ON cashier capabilities, as
-/// EFFECTIVE booleans (server-resolved: on unless an explicit deny override
-/// exists). These toggles apply ONLY to the cashier role; the backend is the
-/// authoritative gate — this is display/edit state only. Defaults are all ON to
-/// match a freshly-created cashier.
+/// The EFFECTIVE cashier capabilities (server-resolved). These toggles apply ONLY
+/// to the cashier role; the backend is the authoritative gate — this is
+/// display/edit state only.
+///
+/// TWO POLARITIES, mirroring the server:
+///  * STAFF-CASHIER-PERMISSIONS-001 — [applyDiscount], [voidOrder], [closeShift]
+///    are DEFAULT-ON and denied only by an explicit override.
+///  * FULL-COMP-PERMISSION-001 — [applyFullComp] is DEFAULT-OFF and granted only
+///    by an explicit override. Getting this inversion wrong in [fromJson] would
+///    render an ungranted cashier as *allowed to give food away*, so it is parsed
+///    with the opposite test to the other three.
 class StaffCapabilities {
   const StaffCapabilities({
     this.applyDiscount = true,
     this.voidOrder = true,
     this.closeShift = true,
+    this.applyFullComp = false,
   });
 
-  /// Applying order/item discounts.
+  /// Applying order/item discounts. Default ON.
   final bool applyDiscount;
 
   /// Cancelling/voiding an UNPAID order (paid-order void stays server-blocked).
@@ -21,26 +28,45 @@ class StaffCapabilities {
   /// Closing the cashier's OWN/current shift.
   final bool closeShift;
 
-  /// True when nothing is disabled (a new cashier's default preset).
+  /// FULL-COMP-PERMISSION-001: making an order FREE — a discount that leaves the
+  /// order's total at exactly zero. DEFAULT OFF: a cashier holds it only when an
+  /// owner/manager grants it explicitly.
+  final bool applyFullComp;
+
+  /// True when none of the DEFAULT-ON capabilities is disabled (a new cashier's
+  /// preset). [applyFullComp] is deliberately NOT part of this: it is default-OFF,
+  /// so a fresh cashier having it off is the norm, not a deviation.
   bool get allEnabled => applyDiscount && voidOrder && closeShift;
+
+  /// FULL-COMP-PERMISSION-001: a stored full-comp grant is INERT while ordinary
+  /// discounts are denied — the server checks [applyDiscount] first and refuses
+  /// there. The UI must say so rather than implying the comp switch still works.
+  bool get fullCompEffective => applyFullComp && applyDiscount;
 
   StaffCapabilities copyWith({
     bool? applyDiscount,
     bool? voidOrder,
     bool? closeShift,
+    bool? applyFullComp,
   }) => StaffCapabilities(
     applyDiscount: applyDiscount ?? this.applyDiscount,
     voidOrder: voidOrder ?? this.voidOrder,
     closeShift: closeShift ?? this.closeShift,
+    applyFullComp: applyFullComp ?? this.applyFullComp,
   );
 
   /// Parses the `capabilities` object from `list_staff` (effective booleans).
-  /// A missing key defaults to ON (the role default), matching the server rule.
+  ///
+  /// The three default-ON keys use `!= false` (a MISSING key means the role
+  /// default, ON). [applyFullComp] uses the INVERSE — `== true` — so a missing
+  /// key, an old server that does not send the field at all, or any malformed
+  /// value all resolve to DENIED. Fail-closed: the client never invents a grant.
   static StaffCapabilities fromJson(Map<Object?, Object?> json) =>
       StaffCapabilities(
         applyDiscount: json['apply_discount'] != false,
         voidOrder: json['void_order'] != false,
         closeShift: json['close_shift'] != false,
+        applyFullComp: json['apply_full_comp'] == true,
       );
 }
 

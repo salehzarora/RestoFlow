@@ -1222,5 +1222,16 @@
   "ordersAwaitingCloseBacklog": "{count} طلبًا مُقدَّمًا لم تُغلق. الطلب المُقدَّم يُغلق تلقائيًا بمجرد سداده بالكامل، لذا فهذه الطلبات تنتظر شيئًا ما.",
   "ordersActiveTruncatedNewest": "يتم عرض أحدث {shown} من أصل {total} طلبًا نشطًا مطابقًا.",
   "ordersActiveTruncatedOldest": "يتم عرض أقدم {shown} من أصل {total} طلبًا نشطًا مطابقًا.",
-  "ordersActiveRefreshFailed": "تعذّر التحديث الآن. قد تكون هذه الطلبات غير محدَّثة."
+  "ordersActiveRefreshFailed": "تعذّر التحديث الآن. قد تكون هذه الطلبات غير محدَّثة.",
+  "staffCapApplyFullComp": "يمكنه جعل الطلب مجانيًا",
+  "staffCapApplyFullCompHint": "يسمح بخصم يجعل إجمالي الطلب صفرًا. مُعطَّل افتراضيًا.",
+  "staffCapApplyFullCompNeedsDiscount": "يتطلب صلاحية الخصم أعلاه.",
+  "staffCapabilitiesRoleNote": "المديرون والمالكون يمتلكون هذه الصلاحيات أصلًا.",
+  "posDiscountFullCompDenied": "لا تملك صلاحية جعل الطلب مجانيًا — اطلب مديرًا.",
+  "posDiscountExceedsOrderTotal": "قيمة الخصم أكبر من إجمالي الطلب.",
+  "activityLogCapApplyFullComp": "جعل الطلب مجانيًا",
+  "activityLogDeniedFullCompPermissionRequired": "جعل الطلب مجانيًا يتطلب صلاحية",
+  "activityLogDeniedDiscountExceedsOrderTotal": "الخصم تجاوز إجمالي الطلب",
+  "activityLogFieldResultingChargeState": "سيصبح",
+  "activityLogTitleDiscountDenied": "تم رفض الخصم"
 }
