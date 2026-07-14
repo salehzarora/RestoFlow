@@ -279,10 +279,19 @@ class RealPaymentRepository implements PaymentRepository {
         // POS-OPERATIONS-SYNC-001: OPTIMISTIC CONCURRENCY, finally switched on.
         // sync_push forwards this to app.record_payment, which refuses (SQLSTATE
         // 40001 -> the typed `conflict`) when the order has moved since we read it.
-        // The POS stored NO revision before this phase and sent none, so the
-        // server's conflict branch was UNREACHABLE: two tills could each pay an
-        // order they both believed was unpaid. Omitted when we genuinely do not
-        // know one -- sending a guess would be worse than sending nothing.
+        // The POS stored NO revision before this phase and sent none, so this branch
+        // was unreachable. Omitted when we genuinely do not know a revision -- sending
+        // a guess would be worse than sending nothing.
+        //
+        // WHAT IT DOES AND DOES NOT DO. It detects a STALE ORDER-STATE ASSUMPTION and
+        // turns it into an explicit, handleable conflict -- so the cashier is told the
+        // order moved instead of being handed a confusing failure. It is NOT what
+        // stops an order being charged twice. THAT is enforced server-side, and always
+        // was: the order row is locked FOR UPDATE, record_payment guards on an existing
+        // completed payment, payments_one_completed_per_order_uidx makes a second
+        // completed payment structurally impossible, and (device_id,
+        // local_operation_id) idempotency collapses a retried push onto the original
+        // result. expected_revision improves the CONVERSATION, not the guarantee.
         if (expectedRevision != null) 'expected_revision': expectedRevision,
       },
     };

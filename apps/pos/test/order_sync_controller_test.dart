@@ -5,6 +5,8 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
 import 'package:restoflow_data_remote/restoflow_data_remote.dart'
     show SyncSession;
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show RuntimeConfig, runtimeConfigProvider;
 import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/order_snapshot.dart';
 import 'package:restoflow_pos/src/data/order_snapshot_repository.dart';
@@ -75,6 +77,12 @@ void main() {
           cursors ?? InMemorySyncCursorStore(),
         ),
         posSyncClockProvider.overrideWithValue(() => t0),
+        // REAL mode: the scope is derived from the paired device context, so
+        // `withScope: false` genuinely means "this till is not paired yet". In demo
+        // mode the scope is a fixed constant and there is no such thing as unpaired.
+        runtimeConfigProvider.overrideWithValue(
+          RuntimeConfig.test(isDemoMode: false),
+        ),
         if (withScope)
           posSyncSessionProvider.overrideWithValue(
             const SyncSession(pinSessionId: 'pin1', deviceId: 'dev1'),
@@ -394,6 +402,13 @@ class _CountingRepo implements OrderSnapshotRepository {
     await Future<void>.delayed(Duration.zero);
     return PosSnapshotPage.empty;
   }
+
+  @override
+  Future<PosSnapshotPage> fetchWindow({
+    PosSyncCursor? before,
+    int limit = 50,
+    int windowDays = 2,
+  }) => fetchChanges(limit: limit, windowDays: windowDays);
 
   @override
   Future<PosSnapshotPage> fetchOrders(List<String> orderIds) async {

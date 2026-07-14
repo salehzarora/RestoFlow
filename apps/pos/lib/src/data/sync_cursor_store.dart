@@ -62,6 +62,10 @@ abstract class PosSyncCursorStore {
   /// reconciled snapshot set has been persisted. The cursor only ever moves
   /// FORWARD, so advancing it past data we failed to apply loses that data
   /// permanently — the server will never offer it again.
+  ///
+  /// THROWS [PosPersistenceException] when the write does not stick. It must not
+  /// return quietly: a caller that believes the cursor advanced when it did not will
+  /// happily skip the very rows it failed to save.
   Future<void> save(PosSyncScope scope, PosSyncCursor cursor);
 
   /// Forgets the cursor for [scope] (used when a scope's cache is invalidated).
@@ -112,10 +116,36 @@ class SharedPrefsSyncCursorStore implements PosSyncCursorStore {
   }
 
   @override
-  Future<void> save(PosSyncScope scope, PosSyncCursor cursor) =>
-      _prefs.setString(_keyFor(scope), jsonEncode(cursor.toJson()));
+  Future<void> save(PosSyncScope scope, PosSyncCursor cursor) async {
+    // setString returns Future<bool> and can report FALSE WITHOUT THROWING — a full
+    // disk, a browser refusing localStorage. Ignoring that return value is how a
+    // cursor "advances" in memory, is lost on restart, and quietly re-delivers or
+    // skips a page. `false` is a failure, and it is reported as one.
+    final ok = await _prefs.setString(
+      _keyFor(scope),
+      jsonEncode(cursor.toJson()),
+    );
+    if (!ok) {
+      throw const PosPersistenceException('sync cursor could not be persisted');
+    }
+  }
 
   @override
   Future<void> clear(PosSyncScope scope) =>
       _prefs.remove(_keyFor(scope)).then((_) {});
+}
+
+/// A durable write did not stick.
+///
+/// `SharedPreferences.setString` returns `Future<bool>`: it can report **false**
+/// without throwing. Silently treating that as success is how the POS ends up with a
+/// cursor that has moved past rows it never actually stored — rows the server will
+/// never offer again, because as far as it is concerned we already have them.
+class PosPersistenceException implements Exception {
+  const PosPersistenceException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'PosPersistenceException: $message';
 }

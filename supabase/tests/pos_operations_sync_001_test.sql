@@ -19,7 +19,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(34);
+select plan(38);
 
 -- ---- Org A (2 branches) + Org B ---------------------------------------------
 insert into organizations (id, name, slug, default_currency) values
@@ -130,8 +130,9 @@ insert into payments (id, organization_id, restaurant_id, branch_id, order_id, d
 -- one canonical full-window pull, reused by many assertions
 create temp table snap as
   select app.pos_order_snapshots(
-    '90a00000-0000-0000-0000-00000000c503', '90a00000-0000-0000-0000-0000000d0a11',
-    null, null, null, 100, 2) as r;
+    p_pin_session_id => '90a00000-0000-0000-0000-00000000c503',
+    p_device_id      => '90a00000-0000-0000-0000-0000000d0a11',
+    p_limit => 100, p_window_days => 2) as r;
 create temp table rows_ as
   select o from snap, lateral jsonb_array_elements((select r from snap) -> 'orders') as o;
 
@@ -151,13 +152,13 @@ select ok(not exists(select 1 from rows_ where o ->> 'order_id' = '90a00000-0000
 
 
 -- ===== B. Session/device validity: fail closed, one envelope ============== 7-10
-select is((app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c509','90a00000-0000-0000-0000-0000000d0a99',null,null,null,50,2) ->> 'error'),
+select is((app.pos_order_snapshots(p_pin_session_id => '90a00000-0000-0000-0000-00000000c509', p_device_id => '90a00000-0000-0000-0000-0000000d0a99') ->> 'error'),
   'invalid_session', 'B1 a REVOKED device session is denied');
-select is((app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c5e0','90a00000-0000-0000-0000-0000000d0a11',null,null,null,50,2) ->> 'error'),
+select is((app.pos_order_snapshots(p_pin_session_id => '90a00000-0000-0000-0000-00000000c5e0', p_device_id => '90a00000-0000-0000-0000-0000000d0a11') ->> 'error'),
   'invalid_session', 'B2 an EXPIRED PIN session is denied');
-select is((app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c503','90a00000-0000-0000-0000-0000000d0a99',null,null,null,50,2) ->> 'error'),
+select is((app.pos_order_snapshots(p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a99') ->> 'error'),
   'invalid_session', 'B3 a device_id that does not match the PIN session is denied');
-select is((app.pos_order_snapshots('00000000-0000-0000-0000-0000000000ff','90a00000-0000-0000-0000-0000000d0a11',null,null,null,50,2) ->> 'error'),
+select is((app.pos_order_snapshots(p_pin_session_id => '00000000-0000-0000-0000-0000000000ff', p_device_id => '90a00000-0000-0000-0000-0000000d0a11') ->> 'error'),
   'invalid_session', 'B4 an UNKNOWN session is denied with the SAME envelope (no existence oracle)');
 
 
@@ -215,53 +216,110 @@ select ok((select (o ->> 'sync_at')::timestamptz from rows_ where o ->> 'order_i
 -- payment.updated_at) must deliver it.
 create temp table after_pay as
   select app.pos_order_snapshots(
-    '90a00000-0000-0000-0000-00000000c503','90a00000-0000-0000-0000-0000000d0a11',
-    now() - interval '10 minutes', '00000000-0000-0000-0000-000000000000',
-    null, 50, 2) as r;
+    p_pin_session_id => '90a00000-0000-0000-0000-00000000c503',
+    p_device_id      => '90a00000-0000-0000-0000-0000000d0a11',
+    p_since_at => now() - interval '10 minutes',
+    p_since_id => '00000000-0000-0000-0000-000000000000') as r;
 select is((select jsonb_array_length((r -> 'orders')) from after_pay), 1,
   'F2 an incremental pull delivers the order whose PAYMENT moved — even though its ORDER ROW is older than the cursor');
 select is((select (r -> 'orders' -> 0 ->> 'order_id') from after_pay), '90a00000-0000-0000-0000-0000000000d4',
   'F3 ... and it is exactly that order, now reporting its authoritative settlement');
 
 
--- ===== G. Pagination: bounded, stable, idempotent ======================= 27-30
-create temp table p1 as
-  select app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c503','90a00000-0000-0000-0000-0000000d0a11',
-    null, null, null, 2, 2) as r;
-select is((select jsonb_array_length(r -> 'orders') from p1), 2, 'G1 the page size is BOUNDED by p_limit');
-select is((select (r ->> 'has_more')::boolean from p1), true, 'G2 a full page reports has_more with a next_cursor');
--- the SAME cursor twice must return the SAME page (idempotent; no duplicates)
-create temp table p2a as
-  select app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c503','90a00000-0000-0000-0000-0000000d0a11',
-    ((select r from p1) -> 'next_cursor' ->> 'at')::timestamptz,
-    ((select r from p1) -> 'next_cursor' ->> 'id')::uuid, null, 2, 2) as r;
-create temp table p2b as
-  select app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c503','90a00000-0000-0000-0000-0000000d0a11',
-    ((select r from p1) -> 'next_cursor' ->> 'at')::timestamptz,
-    ((select r from p1) -> 'next_cursor' ->> 'id')::uuid, null, 2, 2) as r;
-select is((select r -> 'orders' from p2a), (select r -> 'orders' from p2b),
-  'G3 re-running the SAME cursor is IDEMPOTENT — a duplicate page can never duplicate an order');
+-- ===== G. WINDOW PAGINATION — NEWEST FIRST ============================= 27-33
+-- THE BUG THIS CLOSES. The window used to page ASCENDING from the start of the
+-- window, so the FIRST page returned the OLDEST rows. On a busy branch the cashier
+-- was shown yesterday's breakfast while the order placed ninety seconds ago sat
+-- thousands of rows away — and a client that stopped after N pages would NEVER reach
+-- it, while still reporting a successful sync.
+create temp table w1 as
+  select app.pos_order_snapshots(
+    p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_limit => 2, p_window_days => 2) as r;
+
+-- d7 (-15m) is the most recently touched live order; d4's PAYMENT moved 5m ago, so
+-- d4 has the greatest sync_at of all. Newest-first means d4 leads.
+select is((select (r -> 'orders' -> 0 ->> 'order_id') from w1),
+  '90a00000-0000-0000-0000-0000000000d4',
+  'G1 the FIRST row of the FIRST page is the NEWEST order — at any volume');
+select is((select jsonb_array_length(r -> 'orders') from w1), 2,
+  'G2 the page is BOUNDED by p_limit');
+select is((select (r ->> 'has_more')::boolean from w1), true,
+  'G3 a full page reports has_more with a resumable cursor');
+
+-- LOAD MORE walks BACKWARD into older rows.
+create temp table w2 as
+  select app.pos_order_snapshots(
+    p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_before_at => ((select r from w1) -> 'next_cursor' ->> 'at')::timestamptz,
+    p_before_id => ((select r from w1) -> 'next_cursor' ->> 'id')::uuid,
+    p_limit => 2, p_window_days => 2) as r;
 select ok(not exists(
     select 1
-    from jsonb_array_elements((select r from p1) -> 'orders') a,
-         jsonb_array_elements((select r from p2a) -> 'orders') b
+    from jsonb_array_elements((select r from w1) -> 'orders') a,
+         jsonb_array_elements((select r from w2) -> 'orders') b
     where a ->> 'order_id' = b ->> 'order_id'),
-  'G4 page 2 does not repeat page 1 (stable keyset, no overlap)');
+  'G4 page 2 NEVER repeats page 1 — no duplicate');
+select ok(
+  (select min((o ->> 'sync_at')::timestamptz)
+     from jsonb_array_elements((select r from w1) -> 'orders') o)
+  >= (select max((o ->> 'sync_at')::timestamptz)
+        from jsonb_array_elements((select r from w2) -> 'orders') o),
+  'G5 page 2 is strictly OLDER than page 1 — no skip, monotonic descent');
+
+-- IDEMPOTENT: the same cursor twice is the same page.
+create temp table w2b as
+  select app.pos_order_snapshots(
+    p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_before_at => ((select r from w1) -> 'next_cursor' ->> 'at')::timestamptz,
+    p_before_id => ((select r from w1) -> 'next_cursor' ->> 'id')::uuid,
+    p_limit => 2, p_window_days => 2) as r;
+select is((select r -> 'orders' from w2), (select r -> 'orders' from w2b),
+  'G6 replaying the SAME window cursor is IDEMPOTENT');
+
+-- EQUAL sync_at must still page deterministically: the ORDER ID breaks the tie, so a
+-- row can be neither duplicated across pages nor skipped between them.
+update orders set updated_at = now() - interval '2 minutes'
+  where id in ('90a00000-0000-0000-0000-0000000000d1',
+               '90a00000-0000-0000-0000-0000000000d2',
+               '90a00000-0000-0000-0000-0000000000d5');
+create temp table tie1 as
+  select app.pos_order_snapshots(
+    p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_limit => 2, p_window_days => 2) as r;
+create temp table tie2 as
+  select app.pos_order_snapshots(
+    p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_before_at => ((select r from tie1) -> 'next_cursor' ->> 'at')::timestamptz,
+    p_before_id => ((select r from tie1) -> 'next_cursor' ->> 'id')::uuid,
+    p_limit => 4, p_window_days => 2) as r;
+select ok(not exists(
+    select 1
+    from jsonb_array_elements((select r from tie1) -> 'orders') a,
+         jsonb_array_elements((select r from tie2) -> 'orders') b
+    where a ->> 'order_id' = b ->> 'order_id'),
+  'G7 rows sharing an identical sync_at page deterministically by order id — no duplicate, no skip');
 
 
--- ===== H. Malformed input FAILS CLOSED ================================= 31-33
-select is((app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c503','90a00000-0000-0000-0000-0000000d0a11',
-    now(), null, null, 50, 2) ->> 'error'),
+-- ===== H. Malformed input FAILS CLOSED ================================= 34-37
+select is((app.pos_order_snapshots(p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_since_at => now()) ->> 'error'),
   'invalid_cursor', 'H1 a HALF cursor is REFUSED — never silently restarted from the beginning');
-select is((app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c503','90a00000-0000-0000-0000-0000000d0a11',
-    null, null, null, 5000, 2) ->> 'error'),
+-- The two cursors ask DIFFERENT questions; one page cannot honour both, and silently
+-- picking one would move a cursor the caller never meant to move.
+select is((app.pos_order_snapshots(p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_since_at => now(), p_since_id => '00000000-0000-0000-0000-000000000000',
+    p_before_at => now(), p_before_id => '00000000-0000-0000-0000-000000000000') ->> 'error'),
+  'invalid_cursor', 'H1b asking BOTH cursors at once is REFUSED');
+select is((app.pos_order_snapshots(p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_limit => 5000) ->> 'error'),
   'invalid_limit', 'H2 an out-of-range limit is REFUSED (a client cannot ask for the whole history)');
-select is((app.pos_order_snapshots('90a00000-0000-0000-0000-00000000c503','90a00000-0000-0000-0000-0000000d0a11',
-    null, null, null, 50, 999) ->> 'error'),
+select is((app.pos_order_snapshots(p_pin_session_id => '90a00000-0000-0000-0000-00000000c503', p_device_id => '90a00000-0000-0000-0000-0000000d0a11',
+    p_window_days => 999) ->> 'error'),
   'invalid_window', 'H3 an out-of-range window is REFUSED');
 
 
--- ===== I. A READ IS NOT A WRITE ============================================ 34
+-- ===== I. A READ IS NOT A WRITE ============================================ 38
 select is((select count(*)::int from audit_events), 0,
   'I1 the snapshot read emitted NO audit event — opening a screen, polling and reconciling are not operational actions');
 

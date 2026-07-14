@@ -19,6 +19,7 @@ import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 
 /// POS-OPERATIONS-SYNC-001 (Commit 3) — the operational centre, on screen.
 void main() {
@@ -81,7 +82,7 @@ void main() {
     final store = InMemoryRecentOrdersStore();
     // In demo mode the controller keys its store on the demo device id, so the seed
     // must be written under exactly that scope.
-    await store.persist('demo-device', seed);
+    await store.persist(kDemoSyncScope.key, seed);
     return ProviderScope(
       overrides: [
         // A real device/PIN scope: without one the coordinator correctly no-ops, and

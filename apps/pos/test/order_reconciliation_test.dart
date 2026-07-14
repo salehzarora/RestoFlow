@@ -588,6 +588,13 @@ class _FakeTransportRepo implements OrderSnapshotRepository {
   }) => Future<PosSnapshotPage>.sync(() => _parse(_envelope));
 
   @override
+  Future<PosSnapshotPage> fetchWindow({
+    PosSyncCursor? before,
+    int limit = 50,
+    int windowDays = 2,
+  }) => fetchChanges(limit: limit, windowDays: windowDays);
+
+  @override
   Future<PosSnapshotPage> fetchOrders(List<String> orderIds) =>
       Future<PosSnapshotPage>.sync(() => _parse(_envelope));
 

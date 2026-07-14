@@ -9,6 +9,7 @@ import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 
 /// MONEY-VOID-001: the app-bar unpaid-orders badge ([RecentOrdersButton]) counts
 /// only orders that are still awaiting payment. A cancelled (voided) order — like
@@ -126,7 +127,7 @@ void main() {
       // Pre-seed a voided order (payment == null): !isPaid is true, so only the
       // voided check keeps it off the badge. Sync state is irrelevant here.
       final store = InMemoryRecentOrdersStore();
-      await store.persist('demo-device', [
+      await store.persist(kDemoSyncScope.key, [
         PosRecentOrder(
           order: _view('#V1'),
           submittedAt: DateTime.now(),

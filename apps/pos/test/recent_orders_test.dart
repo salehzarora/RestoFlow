@@ -6,6 +6,7 @@ import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// POS-ORDERS-AND-PAYMENT-001 (B/C): the local recent/unpaid-orders store —
@@ -249,7 +250,7 @@ void main() {
     () async {
       final store = InMemoryRecentOrdersStore();
       final now = DateTime.now();
-      await store.persist('demo-device', [
+      await store.persist(kDemoSyncScope.key, [
         PosRecentOrder(
           order: _view('#OLD'),
           submittedAt: now.subtract(const Duration(days: 3)),

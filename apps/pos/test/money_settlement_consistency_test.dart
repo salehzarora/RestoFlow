@@ -12,6 +12,7 @@ import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 
 /// MONEY-SETTLEMENT-CONSISTENCY-001 — the POS half.
 ///
@@ -72,7 +73,7 @@ CashPayment _payment(String number, {int amount = 4200, String? orderStatus}) =>
 Future<InMemoryRecentOrdersStore> _seeded() async {
   final store = InMemoryRecentOrdersStore();
   final now = DateTime.now();
-  await store.persist('demo-device', [
+  await store.persist(kDemoSyncScope.key, [
     PosRecentOrder(
       order: _view('#Z0', total: 0),
       submittedAt: now,

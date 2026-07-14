@@ -20,8 +20,8 @@ import '../data/order_snapshot.dart';
 import '../data/order_snapshot_repository.dart';
 import '../data/sync_cursor_store.dart';
 import 'outbox_controller.dart';
-import 'pos_device_context.dart';
 import 'pos_session.dart';
+import 'pos_sync_scope_provider.dart';
 import 'recent_orders_controller.dart';
 
 /// Why the last sync attempt failed, in terms the UI can speak honestly about.
@@ -35,6 +35,20 @@ enum PosSyncError {
 
   /// The server sent something we could not trust. The cursor did NOT advance.
   malformed,
+
+  /// THE LOCAL WRITE FAILED. We fetched fine — we could not STORE it.
+  ///
+  /// This is not cosmetic. `SharedPreferences.setString` returns a `Future<bool>` and
+  /// can report `false` WITHOUT throwing (a full disk, a browser refusing
+  /// localStorage). Treating that as success is how rows vanish on restart while the
+  /// cursor sails past them and the server never offers them again. The cursor stays
+  /// put, the same page is re-offered, and we do NOT claim a successful sync.
+  persistence,
+
+  /// The change feed had more pages than the runaway guard allows. What we stored is
+  /// durable and the cursor is honest — but this was not a COMPLETE sync, and saying
+  /// it was would be a lie the next refresh has to live with.
+  incomplete,
 }
 
 /// The coordinator's observable state. Presentation-free: Commit 3 renders it.
@@ -101,33 +115,30 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   /// It is deliberately SEPARATE from the persisted incremental cursor, and it is
   /// deliberately NOT persisted. They answer different questions:
   ///
-  ///   incremental cursor -> "what has CHANGED since I last looked?"  (durable)
-  ///   window days        -> "how far back am I looking right now?"   (per session)
+  ///   incremental cursor -> "what has CHANGED since I last looked?"  (DURABLE,
+  ///                           ascending, only ever moves FORWARD)
+  ///   window cursor      -> "how far back am I looking right now?"   (SESSION-local,
+  ///                           descending, newest-first)
   ///
-  /// Reusing one for the other would be a quiet disaster: widening the window would
-  /// drag the change-feed cursor along with it, skipping changes that would then
-  /// never be offered again.
+  /// They are never conflated. Widening the view is not the same event as learning
+  /// that something changed, and dragging the durable cursor along while paging back
+  /// through history would skip changes the server never offers again.
   ///
-  /// WHY DAYS AND NOT A PAGE CURSOR. The server's keyset pages ASCENDING by
-  /// `sync_at`. A bounded page from the start of the window therefore returns the
-  /// OLDEST rows — so "load the first page, stop" would show the cashier yesterday's
-  /// breakfast and hide the order placed ninety seconds ago. (That is exactly the
-  /// defect ACTIVE-ORDERS-002 had to fix on the Dashboard.) So we DRAIN the current
-  /// window — it is bounded to a couple of days by design, not an archive — and
-  /// "Load more" WIDENS it. Same contract, no new SQL, and the newest order is never
-  /// the one left behind.
-  int _windowDays = defaultWindowDays;
+  /// NEWEST-FIRST IS A CORRECTNESS REQUIREMENT. The previous build DRAINED the window
+  /// ascending, page after page, because the server only paged from oldest to newest.
+  /// On a branch with more rows than the drain cap, that meant re-fetching the same
+  /// oldest prefix on every refresh and NEVER reaching the newest order — while the UI
+  /// happily reported a successful sync. The server now pages the window DESCENDING,
+  /// so the newest order is the first row of the first page, at any volume, and there
+  /// is no drain loop left to overflow.
+  PosSyncCursor? _windowCursor;
 
-  /// The default operational window: today + yesterday, matching the POS's own local
-  /// prune window.
+  /// The operational window: today + yesterday, matching the POS's own local prune.
   static const int defaultWindowDays = 2;
 
-  /// The server refuses anything beyond this (`invalid_window`). The POS is an
-  /// operational surface, not an archive.
-  static const int maxWindowDays = 14;
-
-  /// The steps "Load more" walks through.
-  static const List<int> windowSteps = <int>[2, 4, 7, 14];
+  /// One page of the window. The FIRST page already contains the newest orders, so
+  /// this is a page size, not a race against the volume of the branch.
+  static const int windowPageSize = 50;
 
   /// The production tick. Not "real-time" — we do not pretend to be, and we never
   /// say so in the UI.
@@ -145,21 +156,9 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
 
   DateTime _now() => ref.read(posSyncClockProvider)();
 
-  PosSyncScope? _scope() {
-    final session = ref.read(posSyncSessionProvider);
-    final ctx = ref.read(posDeviceContextProvider);
-    if (session == null || ctx == null) return null;
-    return PosSyncScope(
-      organizationId: ctx.organizationId,
-      // DeviceContext.restaurantId is optional. It is not load-bearing for SCOPE
-      // (the server derives org+branch from the PIN session itself and ignores
-      // anything the client claims) — it only widens the local cache key, so an
-      // empty value is safe and simply groups by org+branch+device.
-      restaurantId: ctx.restaurantId ?? '',
-      branchId: ctx.branchId,
-      deviceId: session.deviceId,
-    );
-  }
+  /// THE canonical scope — the SAME one the recent-order cache keys on. There is one
+  /// definition of "where this till is", and it is not re-derived here.
+  PosSyncScope? _scope() => ref.read(posSyncScopeProvider);
 
   // ---------------------------------------------------------------------------
   // Triggers
@@ -245,21 +244,22 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   /// True while the periodic tick is armed. Test seam.
   bool get isPolling => _periodic != null;
 
-  /// The window currently being shown, in days. Test/UI seam.
-  int get windowDays => _windowDays;
+  /// Where "Load more" has paged back to. Test/UI seam.
+  PosSyncCursor? get windowCursor => _windowCursor;
 
-  /// LOAD MORE — WIDENS the operational window and re-drains it.
+  /// LOAD MORE — pages BACKWARD into older orders, newest-first.
   ///
-  /// The incremental change-feed cursor is NOT touched: how far back we are looking
-  /// says nothing about what has changed since we last looked, and dragging that
-  /// cursor along would skip changes that are never offered again.
+  /// It moves ONLY the session-local window cursor. The durable change-feed cursor is
+  /// untouched: how far back we are looking says nothing about what has changed since
+  /// we last looked, and dragging that cursor along would skip changes the server
+  /// never offers again.
   ///
-  /// Rows already on screen are PRESERVED. Reconciliation dedupes by SERVER ORDER ID
-  /// and is idempotent, so re-reading rows we already hold is a no-op — a wider
-  /// window can add rows but can never duplicate or drop one.
+  /// Rows already on screen are PRESERVED — reconciliation dedupes by SERVER ORDER ID
+  /// and is idempotent, so a page can add rows but never duplicate or drop one.
   Future<void> loadMore() {
     final existing = _inFlightLoadMore;
-    // No overlapping load-more: two concurrent widens would fetch the same rows.
+    // No overlapping load-more: two concurrent pages would start from the same cursor
+    // and fetch the same rows.
     if (existing != null) return existing;
     final run = _loadMore();
     _inFlightLoadMore = run;
@@ -270,22 +270,34 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
 
   Future<void> _loadMore() async {
     if (_disposed || _scope() == null) return;
-    final next = windowSteps.firstWhere(
-      (d) => d > _windowDays,
-      orElse: () => _windowDays,
-    );
-    if (next == _windowDays) {
-      state = state.copyWith(isLoadingMore: false, hasMoreHistory: false);
-      return;
-    }
+    if (!state.hasMoreHistory) return;
     state = state.copyWith(isLoadingMore: true);
     try {
-      await _drainWindow(next);
+      final page = await ref
+          .read(orderSnapshotRepositoryProvider)
+          .fetchWindow(before: _windowCursor, limit: windowPageSize);
       if (_disposed) return;
-      _windowDays = next;
+
+      final ok = await ref
+          .read(posRecentOrdersControllerProvider.notifier)
+          .applySnapshots(page.orders);
+      if (_disposed) return;
+
+      if (!ok) {
+        // DURABILITY FAILED. The window cursor does NOT advance, so the very same
+        // page is re-offered on the next attempt. Advancing past rows we could not
+        // store would lose them: nothing else would ever fetch them again.
+        state = state.copyWith(
+          isLoadingMore: false,
+          error: PosSyncError.persistence,
+        );
+        return;
+      }
+
+      _windowCursor = page.nextCursor ?? _windowCursor;
       state = state.copyWith(
         isLoadingMore: false,
-        hasMoreHistory: _windowDays < maxWindowDays,
+        hasMoreHistory: page.hasMore,
         lastSyncedAt: _now(),
         clearError: true,
       );
@@ -296,50 +308,65 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
     }
   }
 
-  /// Reads the WHOLE window (bounded, a couple of days) rather than one page.
+  /// Rebuilds the window from its NEWEST page (first load / manual refresh / scope
+  /// change). Reconciliation is idempotent, so re-reading rows we hold is a no-op.
   ///
-  /// A single ascending page would return the OLDEST rows and hide the order placed
-  /// ninety seconds ago — see the note on [_windowDays].
-  Future<void> _drainWindow(int days) async {
-    final repo = ref.read(orderSnapshotRepositoryProvider);
-    PosSyncCursor? cursor;
-    // A hard stop so a pathological branch cannot spin here forever. If it is ever
-    // hit, the next refresh simply carries on -- nothing is lost.
-    const maxPages = 60;
-    for (var page = 0; page < maxPages; page++) {
-      final result = await repo.fetchChanges(
-        cursor: cursor,
-        limit: 100,
-        windowDays: days,
-      );
-      if (_disposed) return;
-      await ref
-          .read(posRecentOrdersControllerProvider.notifier)
-          .applySnapshots(result.orders);
-      if (_disposed) return;
-      if (!result.hasMore || result.nextCursor == null) break;
-      cursor = result.nextCursor;
-    }
-  }
-
-  /// Rebuilds the CURRENT window from scratch (manual refresh / scope change).
-  /// Reconciliation is idempotent, so this cannot duplicate a row — it re-asserts.
+  /// It also SEEDS the durable incremental cursor when there is none, to the newest
+  /// row it just saw. That is what makes the incremental feed cheap forever after:
+  /// it only ever asks for things newer than the newest thing we have, instead of
+  /// re-walking the branch from the beginning of time.
   Future<void> refreshWindow() async {
-    if (_disposed || _scope() == null) return;
+    if (_disposed) return;
+    final scope = _scope();
+    if (scope == null) return;
     state = state.copyWith(isSyncing: true);
     try {
-      await _drainWindow(_windowDays);
+      final page = await ref
+          .read(orderSnapshotRepositoryProvider)
+          .fetchWindow(limit: windowPageSize);
       if (_disposed) return;
+
+      final ok = await ref
+          .read(posRecentOrdersControllerProvider.notifier)
+          .applySnapshots(page.orders);
+      if (_disposed) return;
+
+      if (!ok) {
+        // Durable write failed: report it, keep the rows on screen, and do NOT claim
+        // a successful sync. `lastSyncedAt` is a promise, not a decoration.
+        state = state.copyWith(
+          isSyncing: false,
+          error: PosSyncError.persistence,
+        );
+        return;
+      }
+
+      _windowCursor = page.nextCursor;
+
+      // SEED the durable cursor to the NEWEST row (page 0, descending) when we have
+      // none. Without this the first incremental pull would have a null cursor, which
+      // is the WINDOW question, not the change question.
+      final cursorStore = ref.read(posSyncCursorStoreProvider);
+      final existing = await cursorStore.load(scope);
+      if (_disposed) return;
+      if (existing == null && page.orders.isNotEmpty) {
+        await cursorStore.save(scope, page.orders.first.cursor);
+        if (_disposed) return;
+      }
+
       state = state.copyWith(
         isSyncing: false,
         lastSyncedAt: _now(),
         hasEverSynced: true,
-        hasMoreHistory: _windowDays < maxWindowDays,
+        hasMoreHistory: page.hasMore,
         clearError: true,
       );
     } on PosSnapshotException catch (e) {
       if (_disposed) return;
       state = state.copyWith(isSyncing: false, error: _mapError(e));
+    } on PosPersistenceException {
+      if (_disposed) return;
+      state = state.copyWith(isSyncing: false, error: PosSyncError.persistence);
     }
   }
 
@@ -347,7 +374,7 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   /// default and the session-local paging is forgotten — the DURABLE cursor and the
   /// queued operations are NOT touched here; they belong to their own scope's store.
   void resetWindow() {
-    _windowDays = defaultWindowDays;
+    _windowCursor = null;
     state = const PosSyncStatus();
   }
 
@@ -381,14 +408,27 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
       }
 
       final cursorStore = ref.read(posSyncCursorStoreProvider);
-      var cursor = await cursorStore.load(scope);
+      final cursor = await cursorStore.load(scope);
       if (_disposed) return;
 
-      // Drain the feed, page by page. Bounded so a very busy branch cannot spin
-      // here forever; the next tick simply carries on from the cursor.
-      const maxPages = 10;
+      if (cursor == null) {
+        // NO DURABLE CURSOR YET. A cursorless incremental call is the WINDOW question,
+        // not the change question — asking it here is exactly the bug that made the
+        // POS re-walk the branch from its oldest row on every start. Take the newest
+        // window page instead; it seeds the cursor and we are done.
+        state = state.copyWith(isSyncing: false);
+        await refreshWindow();
+        return;
+      }
+
+      // INCREMENTAL. Changes since the cursor are normally a handful of rows, so this
+      // drains to the end rather than gambling on a cap. The cap that remains is a
+      // runaway guard, and if it is ever hit we say so instead of claiming success.
+      const maxPages = 20;
+      var current = cursor;
+      var complete = false;
       for (var page = 0; page < maxPages; page++) {
-        final result = await repo.fetchChanges(cursor: cursor);
+        final result = await repo.fetchChanges(cursor: current);
         if (_disposed) return;
 
         final ok = await ref
@@ -396,23 +436,38 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
             .applySnapshots(result.orders);
         if (_disposed) return;
 
-        // THE CURSOR MOVES LAST, AND ONLY ON SUCCESS. If persistence failed we must
-        // NOT advance: the cursor only goes forward, so skipping past data we did
-        // not store loses it permanently — the server will never offer it again.
+        // THE CURSOR MOVES LAST, AND ONLY ON SUCCESS. It only ever goes forward, so
+        // skipping past data we did not store loses it permanently — the server will
+        // never offer it again.
         if (!ok) {
           state = state.copyWith(
             isSyncing: false,
-            error: PosSyncError.malformed,
+            error: PosSyncError.persistence,
           );
           return;
         }
+
         final next = result.nextCursor;
         if (next != null) {
           await cursorStore.save(scope, next);
           if (_disposed) return;
-          cursor = next;
+          current = next;
         }
-        if (!result.hasMore) break;
+        if (!result.hasMore) {
+          complete = true;
+          break;
+        }
+      }
+
+      if (!complete) {
+        // We stopped at the guard with more still pending. The data we DID store is
+        // durable and the cursor is honest, but this was not a complete sync and we
+        // will not pretend it was: `lastSyncedAt` is a promise, not a decoration.
+        state = state.copyWith(
+          isSyncing: false,
+          error: PosSyncError.incomplete,
+        );
+        return;
       }
 
       state = state.copyWith(

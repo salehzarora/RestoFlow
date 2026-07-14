@@ -52,14 +52,33 @@ class PosSnapshotException implements Exception {
 
 /// Reads authoritative order snapshots for THIS device's branch.
 abstract class OrderSnapshotRepository {
-  /// INCREMENTAL: everything that changed after [cursor]. With a null cursor this
-  /// is the WINDOW mode — the whole bounded operational window from its start.
+  /// INCREMENTAL — "what has CHANGED since I last looked?"
   ///
-  /// [windowDays] widens how far back the window reaches (the server caps it at 14
-  /// and refuses anything beyond). This is what "Load more" moves — never the
-  /// durable change-feed cursor.
+  /// ASCENDING (sync_at, id), strictly AFTER [cursor]. This drives the DURABLE
+  /// change-feed cursor, which only ever moves forward.
+  ///
+  /// [cursor] must NOT be null in normal operation: a cursorless call is the WINDOW
+  /// question, and the two are different. See [fetchWindow].
   Future<PosSnapshotPage> fetchChanges({
     PosSyncCursor? cursor,
+    int limit = 50,
+    int windowDays = 2,
+  });
+
+  /// WINDOW — "show me the branch, NEWEST FIRST."
+  ///
+  /// DESCENDING (sync_at, id), strictly BEFORE [before]; a null [before] starts at
+  /// the newest order on the branch.
+  ///
+  /// NEWEST-FIRST IS A CORRECTNESS REQUIREMENT, NOT A PREFERENCE. This used to be
+  /// served by an ASCENDING page from the start of the window, so the first page
+  /// returned the OLDEST rows: on a busy branch the cashier saw yesterday's breakfast
+  /// while the order placed ninety seconds ago sat thousands of rows away — and a
+  /// client that gave up after N pages would never reach it, while still reporting a
+  /// successful sync. Descending makes the newest order the first row of the first
+  /// page, by construction, at any volume.
+  Future<PosSnapshotPage> fetchWindow({
+    PosSyncCursor? before,
     int limit = 50,
     int windowDays = 2,
   });
@@ -92,6 +111,18 @@ class RealOrderSnapshotRepository implements OrderSnapshotRepository {
   }) => _invoke(<String, dynamic>{
     'p_since_at': cursor?.at.toUtc().toIso8601String(),
     'p_since_id': cursor?.id,
+    'p_limit': limit,
+    'p_window_days': windowDays,
+  });
+
+  @override
+  Future<PosSnapshotPage> fetchWindow({
+    PosSyncCursor? before,
+    int limit = 50,
+    int windowDays = 2,
+  }) => _invoke(<String, dynamic>{
+    'p_before_at': before?.at.toUtc().toIso8601String(),
+    'p_before_id': before?.id,
     'p_limit': limit,
     'p_window_days': windowDays,
   });

@@ -12,6 +12,7 @@ import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/state/void_controller.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 
 /// MONEY-VOID-001: the POS cancel (void) flow for a WRONG UNPAID order. An
 /// unpaid card offers Cancel; the confirm sheet requires a reason and pushes the
@@ -39,7 +40,7 @@ SubmittedOrderView _view(String number) => SubmittedOrderView(
 
 Future<InMemoryRecentOrdersStore> _seededStore() async {
   final store = InMemoryRecentOrdersStore();
-  await store.persist('demo-device', [
+  await store.persist(kDemoSyncScope.key, [
     PosRecentOrder(order: _view('#U1'), submittedAt: DateTime.now()),
   ]);
   return store;

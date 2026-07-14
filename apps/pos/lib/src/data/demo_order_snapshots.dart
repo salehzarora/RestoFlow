@@ -94,6 +94,38 @@ class DemoOrderSnapshotRepository implements OrderSnapshotRepository {
     );
   }
 
+  /// DESCENDING, newest first — the same keyset the server uses, reversed.
+  @override
+  Future<PosSnapshotPage> fetchWindow({
+    PosSyncCursor? before,
+    int limit = 50,
+    int windowDays = 2,
+  }) async {
+    final failure = _takeFailure();
+    if (failure != null) throw failure;
+
+    final windowStart = DateTime.utc(
+      clock.year,
+      clock.month,
+      clock.day,
+    ).subtract(Duration(days: windowDays - 1));
+
+    final newestFirst = all.reversed.where(
+      (s) =>
+          !s.createdAt.isBefore(windowStart) &&
+          (before == null || _isBefore(s, before)),
+    );
+    final effective = limit < pageLimit ? limit : pageLimit;
+    final page = newestFirst.take(effective).toList();
+    final hasMore = newestFirst.length > page.length;
+    return PosSnapshotPage(
+      orders: page,
+      hasMore: hasMore,
+      // Resume BEFORE the OLDEST row of this page.
+      nextCursor: page.isEmpty ? null : page.last.cursor,
+    );
+  }
+
   @override
   Future<PosSnapshotPage> fetchOrders(List<String> orderIds) async {
     final failure = _takeFailure();
@@ -111,6 +143,16 @@ class DemoOrderSnapshotRepository implements OrderSnapshotRepository {
     if (s.syncAt.isAfter(cursor.at)) return true;
     if (s.syncAt.isAtSameMomentAs(cursor.at)) {
       return s.orderId.compareTo(cursor.id) > 0;
+    }
+    return false;
+  }
+
+  /// Strictly BEFORE the cursor in (sync_at, id) order. The ORDER ID breaks a tie, so
+  /// rows sharing a sync_at cannot be duplicated across pages or skipped between them.
+  static bool _isBefore(PosOrderSnapshot s, PosSyncCursor cursor) {
+    if (s.syncAt.isBefore(cursor.at)) return true;
+    if (s.syncAt.isAtSameMomentAs(cursor.at)) {
+      return s.orderId.compareTo(cursor.id) < 0;
     }
     return false;
   }

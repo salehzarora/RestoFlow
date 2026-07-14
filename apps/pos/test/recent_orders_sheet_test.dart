@@ -9,6 +9,9 @@ import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
+import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
+import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 
 /// POS-ORDERS-AND-PAYMENT-001 (C/D): the recent/unpaid orders surface — an
 /// unpaid order offers "Take payment"; a paid order offers "Reprint receipt" +
@@ -51,7 +54,7 @@ CashPayment _payment(String number) => CashPayment(
 Future<InMemoryRecentOrdersStore> _seededStore() async {
   final store = InMemoryRecentOrdersStore();
   final now = DateTime.now();
-  await store.persist('demo-device', [
+  await store.persist(kDemoSyncScope.key, [
     PosRecentOrder(order: _view('#U1'), submittedAt: now),
     PosRecentOrder(
       order: _view('#P1'),
@@ -66,7 +69,16 @@ Widget _wrap(
   InMemoryRecentOrdersStore store, {
   Locale locale = const Locale('en'),
 }) => ProviderScope(
-  overrides: [posRecentOrdersStoreProvider.overrideWithValue(store)],
+  overrides: [
+    posRecentOrdersStoreProvider.overrideWithValue(store),
+    // These tests assert on the DEVICE's own orders. The demo snapshot feed now
+    // adopts the whole BRANCH (Commit 3), so it is emptied here to keep each test
+    // about the thing it is actually testing.
+    orderSnapshotRepositoryProvider.overrideWithValue(
+      DemoOrderSnapshotRepository(),
+    ),
+    posSyncPollIntervalProvider.overrideWithValue(null),
+  ],
   child: MaterialApp(
     locale: locale,
     localizationsDelegates: restoflowLocalizationsDelegates,

@@ -1,18 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show runtimeConfigProvider;
 
 import '../data/order_reconciler.dart';
 import '../data/order_snapshot.dart';
 import '../data/payment.dart';
 import '../data/recent_order.dart';
 import '../data/recent_orders_store.dart';
-import 'outbox_controller.dart' show kDemoDeviceId;
 import 'payment_controller.dart';
-import 'pos_device_context.dart';
-import 'pos_session.dart';
+import 'pos_sync_scope_provider.dart';
 import 'submitted_order_view.dart';
 
 /// POS-ORDERS-AND-PAYMENT-001: the cashier's recent/unpaid-orders list.
@@ -25,8 +21,16 @@ import 'submitted_order_view.dart';
 /// live fulfillment status, so it does not invent Ready/Delivered states). Money
 /// is the stored snapshot, never recomputed.
 class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
-  late final PosRecentOrdersStore _store;
-  late final String _scopeKey;
+  // NOT `late final`: build() re-runs on the SAME instance whenever the watched scope
+  // changes, and a `late final` would throw on the second assignment.
+  PosRecentOrdersStore _store = InMemoryRecentOrdersStore();
+
+  /// The FULL operational scope key — organization + restaurant + branch + device.
+  ///
+  /// It used to be the device id ALONE, while the sync cursor already used the full
+  /// scope. A till re-paired into another branch therefore kept the same storage key
+  /// and was served branch A's orders while sitting in branch B.
+  String _scopeKey = '';
   bool _disposed = false;
 
   /// Only today + yesterday are surfaced (a lightweight cashier window, not a
@@ -37,7 +41,13 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   @override
   List<PosRecentOrder> build() {
     _store = ref.watch(posRecentOrdersStoreProvider);
-    _scopeKey = _resolveScopeKey();
+    // WATCHED, not read. When the branch/device/session changes this provider
+    // rebuilds, state resets to empty, and _recover() loads THAT scope's cache — so
+    // the previous branch's orders cannot linger on screen. `ref.read` here (the old
+    // behaviour) froze the scope at first build and never looked again.
+    final scope = ref.watch(posSyncScopeProvider);
+    _scopeKey = scope?.key ?? '';
+    _disposed = false;
     ref.onDispose(() => _disposed = true);
     // Reactively attach a payment to its recent order the moment it is recorded
     // (covers the current-order pay-now path AND pay-later from this surface).
@@ -47,14 +57,6 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     );
     _recover();
     return const <PosRecentOrder>[];
-  }
-
-  String _resolveScopeKey() {
-    final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
-    if (isDemo) return kDemoDeviceId;
-    final session = ref.read(posSyncSessionProvider);
-    final ctx = ref.read(posDeviceContextProvider);
-    return session?.deviceId ?? ctx?.deviceId ?? kDemoDeviceId;
   }
 
   /// Loads any persisted recent orders (real mode) and merges them under the
@@ -81,16 +83,21 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   /// Records a freshly-submitted order as UNPAID (idempotent per order number).
   /// Best-effort: a persistence failure never surfaces into the submit path.
   void recordSubmitted(SubmittedOrderView view) {
+    // Replace by IDENTITY, not by display code. `orderNumber` is a shortened human
+    // reference and is NOT unique: keying on it here meant a second, genuinely
+    // different order with the same code silently EVICTED the first from the till.
+    final incoming = PosRecentOrder(order: view, submittedAt: DateTime.now());
+    final key = _identityKey(incoming);
     final existing = <PosRecentOrder>[
       for (final o in state)
-        if (o.orderNumber != view.orderNumber) o,
+        if (_identityKey(o) != key) o,
     ];
     final payment = ref
         .read(paymentControllerProvider)
         .paymentFor(view.orderNumber);
     final order = PosRecentOrder(
       order: view,
-      submittedAt: DateTime.now(),
+      submittedAt: incoming.submittedAt,
       payment: payment,
     );
     _apply(<PosRecentOrder>[order, ...existing]);
@@ -251,28 +258,54 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     if (_disposed) return;
     state = result;
     if (persist) {
-      // Fire-and-forget; a persistence failure must never break the POS.
-      unawaited(_store.persist(_scopeKey, result).catchError((Object _) {}));
+      // Fire-and-forget for the LOCAL-WRITE paths (submit / payment / void), where the
+      // in-memory state is already correct and a durability wobble must not break the
+      // till mid-service. It is recorded so the surface can be honest about it.
+      //
+      // The RECONCILIATION path does NOT come through here -- applySnapshots awaits the
+      // write and REPORTS failure, because that is the path whose success decides
+      // whether the sync cursor may advance.
+      unawaited(
+        _store.persist(_scopeKey, result).catchError((Object _) {
+          _lastPersistFailed = true;
+        }),
+      );
     }
   }
 
+  /// True when the most recent best-effort durable write did not stick. Surfaced so
+  /// the UI can say so rather than silently pretending the day is saved.
+  bool get lastPersistFailed => _lastPersistFailed;
+  bool _lastPersistFailed = false;
+
+  /// THE DEDUPE KEY IS THE AUTHORITATIVE SERVER ORDER ID — never the display code.
+  ///
+  /// `orderNumber` is a SHORTENED, human-facing reference (`#XXXXXX`, the last six hex
+  /// characters of the order UUID). It is not unique and was never promised to be: two
+  /// genuinely different server orders can share one, and this map used to key on it —
+  /// so the second order silently REPLACED the first and one of them vanished from the
+  /// till. A display string is for reading, not for identity.
+  ///
+  /// A row with no server id yet (a local draft, a queued submit) cannot collide with
+  /// a server order at all: it is keyed by its own local identity instead.
   List<PosRecentOrder> _sortedPruned(List<PosRecentOrder> orders) {
-    final byNumber = <String, PosRecentOrder>{};
+    final byId = <String, PosRecentOrder>{};
     for (final o in orders) {
-      final prev = byNumber[o.orderNumber];
+      final key = _identityKey(o);
+      final prev = byId[key];
       if (prev == null) {
-        byNumber[o.orderNumber] = o;
+        byId[key] = o;
         continue;
       }
-      // A TERMINAL marker (paid OR MONEY-VOID-001 voided) must never be lost to
-      // a plain copy on an orderNumber collision (e.g. a payment-less voided
-      // copy meeting an older non-voided copy on reload/merge).
+      // A TERMINAL marker (paid OR MONEY-VOID-001 voided) must never be lost to a
+      // plain copy on a merge (e.g. a payment-less voided copy meeting an older
+      // non-voided copy on reload).
       final prevTerminal = prev.payment != null || prev.isVoided;
       final oTerminal = o.payment != null || o.isVoided;
-      byNumber[o.orderNumber] = (prevTerminal && !oTerminal) ? prev : o;
+      byId[key] = (prevTerminal && !oTerminal) ? prev : o;
     }
-    final list = byNumber.values.toList()
-      ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
+    final list = byId.values.toList()
+      ..sort((a, b) => b.sortAt.compareTo(a.sortAt));
     final now = DateTime.now();
     final cutoff = DateTime(
       now.year,
@@ -281,12 +314,27 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     ).subtract(const Duration(days: 1));
     final windowed = <PosRecentOrder>[
       for (final o in list)
-        if (!o.submittedAt.isBefore(cutoff)) o,
+        if (!o.sortAt.isBefore(cutoff)) o,
     ];
     return windowed.length > _maxOrders
         ? windowed.sublist(0, _maxOrders)
         : windowed;
   }
+}
+
+/// The identity of a row for DEDUPE.
+///
+/// A persisted order is its authoritative SERVER ORDER ID. Anything else — a local
+/// draft, a queued submit the server has not acknowledged — is keyed by its own local
+/// operation/outbox identity, falling back to the display code only when there is
+/// genuinely nothing else. It can therefore never be merged into a server order
+/// merely because their display codes happen to match.
+String _identityKey(PosRecentOrder o) {
+  final id = o.orderId;
+  if (id != null && id.isNotEmpty) return 'srv:$id';
+  final local = o.order?.localOperationId ?? o.order?.outboxEntryId;
+  if (local != null && local.isNotEmpty) return 'loc:$local';
+  return 'num:${o.orderNumber}';
 }
 
 /// The recent-orders persistence seam. Default: in-memory (demo mode / tests —

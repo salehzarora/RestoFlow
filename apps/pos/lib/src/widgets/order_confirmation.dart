@@ -8,13 +8,17 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'package:restoflow_core/restoflow_core.dart';
 
+import '../data/order_actions.dart';
 import '../data/order_submission.dart';
 import '../data/payment.dart' show CashPayment;
+import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/native_print_bridges.dart';
+import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/outbox_controller.dart';
 import '../state/payment_controller.dart';
+import '../state/recent_orders_controller.dart';
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_printer_assignments.dart';
 import '../state/receipt_print_controller.dart';
@@ -58,6 +62,66 @@ class OrderConfirmation extends ConsumerWidget {
     final payment = ref
         .watch(paymentControllerProvider)
         .paymentFor(order.orderNumber);
+
+    // POS-OPERATIONS-SYNC-001 (review correction) — THIS SCREEN IS NOW BOUND TO THE
+    // AUTHORITATIVE ORDER, NOT TO A FROZEN SUBMIT-TIME SNAPSHOT.
+    //
+    // It used to render a static SubmittedOrderView and decide its own actions. While
+    // it sat open — and a confirmation screen sits open for a long time — the order
+    // could be comped to zero, paid on another till, completed by the kitchen, or
+    // voided, and this screen would carry on showing the old total and offering
+    // Take payment on an order that no longer existed in that state. The operational
+    // centre was correct and this path quietly was not, which is worse than both being
+    // wrong: it meant the fix looked done.
+    //
+    // WATCHING the reconciled row means a reconciliation that lands while the screen
+    // is open rebuilds it. No reopen, no reconstruction.
+    // AUTHORITATIVE means THE SERVER HAS ACTUALLY SPOKEN — a reconciled row carrying a
+    // snapshot. A row that merely EXISTS is not authority: before the first pull it
+    // holds the same submit-time figures we already have, and preferring it would
+    // shadow the locally-applied discount the cart keeps current. Where there is no
+    // snapshot we fall back to the existing safe behaviour and fabricate nothing.
+    final row = _authoritativeRow(
+      ref.watch(posRecentOrdersControllerProvider),
+      order.orderId,
+    );
+    final authoritative = row?.snapshot == null ? null : row;
+    final caps = ref.watch(staffCapabilitiesProvider).value;
+
+    // The SAME central policy the operational centre uses. There is exactly one
+    // definition of "may this cashier do this", and a second one here is precisely
+    // how the two screens drifted apart.
+    final actions = authoritative == null
+        ? null
+        : resolveOrderActions(authoritative, capabilities: caps);
+
+    // AUTHORITATIVE money. Falls back to the submit-time view ONLY when the server has
+    // said nothing yet (offline, first moments after submit) -- we never fabricate a
+    // newer state, and the server stays the authority either way.
+    final grandTotalMinor =
+        authoritative?.grandTotalMinor ?? order.grandTotalMinor;
+    final effectiveSubtotal =
+        authoritative?.subtotalMinor ?? order.subtotalMinor;
+    final effectiveTax = authoritative?.taxTotalMinor ?? order.taxTotalMinor;
+    final effectiveDiscount =
+        authoritative?.discountTotalMinor ?? order.discountTotalMinor;
+    final expectedRevision = authoritative?.revision;
+
+    // Actions come from the policy when we HAVE authority. Before the first snapshot
+    // arrives we keep the existing, safe behaviour rather than blanking the screen.
+    final canPay = actions?.canPay ?? (payment == null);
+    final canDiscount =
+        actions?.canDiscount ??
+        (payment == null && order.discountTotalMinor == 0);
+
+    // The money the screen SHOWS. Realigned to the server's figures so a comp applied
+    // while this screen was open cannot keep printing the old total. The order LINES
+    // are untouched -- they are the order-time price snapshot (D-008).
+    final displayOrder = order.copyWith(
+      subtotalMinor: effectiveSubtotal,
+      discountTotalMinor: effectiveDiscount,
+      taxTotalMinor: effectiveTax,
+    );
 
     // Part E: the receipt auto-print trigger. Fires ONLY on THIS order's
     // payment SUCCESS transition (a failed submit/payment never reaches a
@@ -194,7 +258,7 @@ class OrderConfirmation extends ConsumerWidget {
                   // RF-117: subtotal always; discount/tax lines when present; the
                   // grand total (what the customer pays) is the loud figure once
                   // there's a discount or tax, else the subtotal keeps emphasis.
-                  _OrderTotals(order: order, l10n: l10n),
+                  _OrderTotals(order: displayOrder, l10n: l10n),
                   const SizedBox(height: RestoflowSpacing.md),
                   // RF-141B: shared design-system notice (subtle info tone).
                   // Demo only — a REAL order was actually sent (or shows its
@@ -228,32 +292,38 @@ class OrderConfirmation extends ConsumerWidget {
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            // RF-116/RF-117: opens the payment sheet (cash or a
-                            // non-cash tender). The e2e depends on this KEY.
-                            key: const Key('pay-cash-button'),
-                            onPressed: () => CashPaymentSheet.show(
-                              context,
-                              orderId: order.orderId,
-                              orderNumber: order.orderNumber,
-                              // RF-117: pay the GRAND total (subtotal − discount
-                              // + tax), not the bare subtotal.
-                              amountMinor: order.grandTotalMinor,
-                              currencyCode: order.currencyCode,
+                        // AUTHORITATIVE gating. `payment == null` is a LOCAL marker:
+                        // it cannot know the order was comped to zero, completed by
+                        // the kitchen, or paid on another till. The policy can.
+                        if (canPay)
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              // RF-116/RF-117: opens the payment sheet (cash or a
+                              // non-cash tender). The e2e depends on this KEY.
+                              key: const Key('pay-cash-button'),
+                              onPressed: () => CashPaymentSheet.show(
+                                context,
+                                orderId: order.orderId,
+                                orderNumber: order.orderNumber,
+                                // The AUTHORITATIVE grand total, not the submit-time
+                                // one: an order comped to zero while this screen was
+                                // open must not open a payment sheet for the old 40.
+                                amountMinor: grandTotalMinor,
+                                currencyCode: order.currencyCode,
+                                expectedRevision: expectedRevision,
+                              ),
+                              icon: const Icon(Icons.payments_outlined),
+                              label: Text(l10n.posTakePayment),
+                              style: RestoflowButtonStyles.big(context),
                             ),
-                            icon: const Icon(Icons.payments_outlined),
-                            label: Text(l10n.posTakePayment),
-                            style: RestoflowButtonStyles.big(context),
                           ),
-                        ),
-                        const SizedBox(height: RestoflowSpacing.sm),
+                        if (canPay) const SizedBox(height: RestoflowSpacing.sm),
                         // RF-117 part C: apply an order-level discount before
                         // payment (server-authoritative + authorized in real
                         // mode; local in demo). Hidden once a discount is
                         // applied so it is not stacked twice.
-                        if (order.discountTotalMinor == 0)
+                        if (canDiscount && effectiveDiscount == 0)
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton.icon(
@@ -261,15 +331,16 @@ class OrderConfirmation extends ConsumerWidget {
                               onPressed: () => DiscountSheet.show(
                                 context,
                                 orderId: order.orderId ?? '',
-                                subtotalMinor: order.subtotalMinor,
-                                taxTotalMinor: order.taxTotalMinor,
+                                subtotalMinor: effectiveSubtotal,
+                                taxTotalMinor: effectiveTax,
                                 currencyCode: order.currencyCode,
+                                expectedRevision: expectedRevision,
                               ),
                               icon: const Icon(Icons.percent),
                               label: Text(l10n.posApplyDiscount),
                             ),
                           ),
-                        if (order.discountTotalMinor == 0)
+                        if (canDiscount && effectiveDiscount == 0)
                           const SizedBox(height: RestoflowSpacing.sm),
                         // POS-ORDERS-AND-PAYMENT-001: "Pay later" leaves the order
                         // UNPAID (already recorded in Recent orders at submit) and
@@ -854,4 +925,17 @@ class _ConfirmationLine extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The AUTHORITATIVE reconciled row for this order, or null when the server has not
+/// spoken about it yet (offline, or the first moments after submit).
+///
+/// Looked up by the SERVER ORDER ID -- never by the display code, which is a
+/// shortened human reference and not an identity.
+PosRecentOrder? _authoritativeRow(List<PosRecentOrder> rows, String? orderId) {
+  if (orderId == null || orderId.isEmpty) return null;
+  for (final r in rows) {
+    if (r.orderId == orderId) return r;
+  }
+  return null;
 }

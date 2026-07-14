@@ -180,6 +180,17 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
       navigator.pop();
     } on DiscountException catch (e) {
       if (!mounted) return;
+      // POS-OPERATIONS-SYNC-001 (review correction): a CONFLICT means our picture of
+      // this order is stale, so the totals this sheet was computed from are wrong.
+      // Fetch the truth BEFORE explaining anything -- a conflict message on top of a
+      // stale total explains nothing. It is NEVER auto-retried: the cashier must act
+      // again deliberately, against the refreshed state.
+      if (e.conflict) {
+        await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
+          <String>[widget.orderId],
+        );
+      }
+      if (!mounted) return;
       setState(() {
         _submitting = false;
         // TYPED dispatch on the server's contract — checked most-specific first,
@@ -191,6 +202,7 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
             l10n.posDiscountFullCompDenied,
           DiscountException(exceedsOrderTotal: true) =>
             l10n.posDiscountExceedsOrderTotal,
+          DiscountException(conflict: true) => l10n.posOrdersConflictRefreshed,
           DiscountException(permissionDenied: true) =>
             l10n.posDiscountPermissionDenied,
           _ => l10n.posDiscountFailed,
