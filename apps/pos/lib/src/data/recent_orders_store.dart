@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'recent_order.dart';
+import 'sync_cursor_store.dart' show PosPersistenceException;
 
 /// POS-ORDERS-AND-PAYMENT-001: persistence for the POS recent/unpaid-orders
 /// surface. Mirrors the RF-114 durable-outbox seam so the recent-orders list
@@ -20,6 +21,10 @@ abstract class PosRecentOrdersStore {
   Future<List<PosRecentOrder>> load(String scopeKey);
 
   /// Replaces the persisted set for [scopeKey] with [orders].
+  ///
+  /// THROWS [PosPersistenceException] when the write does not stick. Reporting
+  /// success on a failed write is how the cashier's day disappears on restart while
+  /// the sync cursor has already sailed past it.
   Future<void> persist(String scopeKey, List<PosRecentOrder> orders);
 }
 
@@ -91,10 +96,25 @@ class SharedPrefsRecentOrdersStore implements PosRecentOrdersStore {
 
   @override
   Future<void> persist(String scopeKey, List<PosRecentOrder> orders) async {
+    // BUILD AND SERIALIZE FIRST. If any row cannot be encoded we fail here, before
+    // touching the durable store — the old set is still on disk and still correct.
     final envelope = <String, Object?>{
       'version': schemaVersion,
       'orders': [for (final o in orders) o.toJson()],
     };
-    await _prefs.setString(_keyFor(scopeKey), jsonEncode(envelope));
+    final encoded = jsonEncode(envelope);
+
+    // setString returns Future<bool> and can report FALSE WITHOUT THROWING (a full
+    // disk; a browser refusing localStorage). The previous build ignored that value,
+    // so a failed write looked exactly like a successful one — and the caller went on
+    // to advance the sync cursor past rows that were never stored. Those rows vanish
+    // on restart and the server never offers them again, because as far as it is
+    // concerned we already have them.
+    final ok = await _prefs.setString(_keyFor(scopeKey), encoded);
+    if (!ok) {
+      throw const PosPersistenceException(
+        'recent orders could not be persisted',
+      );
+    }
   }
 }

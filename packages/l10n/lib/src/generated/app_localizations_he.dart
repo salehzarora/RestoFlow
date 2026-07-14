@@ -3945,4 +3945,124 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogTitleDiscountDenied => 'ההנחה נדחתה';
+
+  @override
+  String get posOrdersCenterTitle => 'הזמנות';
+
+  @override
+  String get posOrdersSectionOpen => 'פתוחות';
+
+  @override
+  String get posOrdersSectionNeedsPayment => 'ממתינות לתשלום';
+
+  @override
+  String get posOrdersSectionCompleted => 'נסגרו לאחרונה';
+
+  @override
+  String get posOrdersSectionAll => 'כל האחרונות';
+
+  @override
+  String get posOrdersSearchHint => 'חיפוש לפי מספר הזמנה';
+
+  @override
+  String get posOrdersSearchClear => 'ניקוי החיפוש';
+
+  @override
+  String get posOrdersSearchEmpty => 'אין הזמנה שתואמת לחיפוש';
+
+  @override
+  String get posOrdersEmptyOpen => 'אין כרגע הזמנות פתוחות';
+
+  @override
+  String get posOrdersEmptyNeedsPayment => 'אין הזמנות שממתינות לתשלום';
+
+  @override
+  String get posOrdersEmptyCompleted => 'אין הזמנות שנסגרו לאחרונה';
+
+  @override
+  String get posOrdersEmptyOffline => 'אין הזמנות שמורות זמינות במצב לא מקוון';
+
+  @override
+  String get posOrdersLoadMore => 'טעינת עוד';
+
+  @override
+  String get posOrdersRefresh => 'רענון הזמנות';
+
+  @override
+  String get posOrdersSyncing => 'מסנכרן...';
+
+  @override
+  String posOrdersLastUpdated(String time) {
+    return 'עודכן לאחרונה $time';
+  }
+
+  @override
+  String get posOrdersOffline => 'לא מקוון - מוצגים נתונים שמורים';
+
+  @override
+  String get posOrdersSortNewest => 'החדשות תחילה';
+
+  @override
+  String get posOrdersSortOldest => 'הישנות תחילה';
+
+  @override
+  String get posOrdersFilterStatus => 'סטטוס';
+
+  @override
+  String get posOrdersFilterSettlement => 'תשלום';
+
+  @override
+  String get posOrdersSettlementAll => 'הכול';
+
+  @override
+  String get posOrdersSettlementUnpaid => 'ממתינה לתשלום';
+
+  @override
+  String get posOrdersSettlementPaid => 'שולם';
+
+  @override
+  String get posOrdersSettlementNoCharge => 'ללא חיוב';
+
+  @override
+  String get posOrdersPendingPayment => 'מסנכרן תשלום...';
+
+  @override
+  String get posOrdersPendingDiscount => 'מסנכרן הנחה...';
+
+  @override
+  String get posOrdersPendingCancellation => 'מסנכרן ביטול...';
+
+  @override
+  String get posOrdersOtherTill => 'קופה אחרת';
+
+  @override
+  String get posOrdersStatusSubmitted => 'נשלחה';
+
+  @override
+  String get posOrdersStatusAccepted => 'התקבלה';
+
+  @override
+  String get posOrdersStatusPreparing => 'בהכנה';
+
+  @override
+  String get posOrdersStatusReady => 'מוכנה';
+
+  @override
+  String get posOrdersStatusServed => 'הוגשה';
+
+  @override
+  String get posOrdersStatusCompleted => 'הושלמה';
+
+  @override
+  String get posOrdersStatusCancelled => 'בוטלה';
+
+  @override
+  String get posOrdersStatusVoided => 'בוטלה סופית';
+
+  @override
+  String get posOrdersConflictRefreshed =>
+      'ההזמנה השתנתה במכשיר אחר. היא רועננה - בדוק ונסה שוב.';
+
+  @override
+  String get posOrdersConflictClose => 'סגור ופתח מחדש';
 }

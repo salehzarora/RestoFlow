@@ -347,6 +347,13 @@ void main() {
       ); // build() -> null
       controller.clock = () => signInAt;
       final err = await controller.signInWithPin(
+        device: const DeviceContext(
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+          deviceId: 'device-abc',
+          deviceSessionId: 'devsess-1',
+        ),
         deviceId: 'device-abc',
         deviceSessionId: 'devsess-1',
         employeeProfileId: 'emp-1',

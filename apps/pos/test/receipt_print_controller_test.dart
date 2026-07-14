@@ -25,7 +25,7 @@ void main() {
     final controller = c.read(receiptPrintControllerProvider.notifier);
 
     controller.prepare(
-      orderNumber: '#A1',
+      orderKey: '#A1',
       hasEnabledPrinter: true,
       buildDocument: doc,
     );
@@ -41,7 +41,7 @@ void main() {
     final controller = c.read(receiptPrintControllerProvider.notifier);
 
     controller.prepare(
-      orderNumber: '#A1',
+      orderKey: '#A1',
       hasEnabledPrinter: false,
       buildDocument: doc,
     );
@@ -58,7 +58,7 @@ void main() {
 
     for (var i = 0; i < 3; i++) {
       controller.prepare(
-        orderNumber: '#A1',
+        orderKey: '#A1',
         hasEnabledPrinter: true,
         buildDocument: () {
           builds++;
@@ -76,7 +76,7 @@ void main() {
     final controller = c.read(receiptPrintControllerProvider.notifier);
 
     controller.prepare(
-      orderNumber: '#A1',
+      orderKey: '#A1',
       hasEnabledPrinter: true,
       buildDocument: () => throw StateError('boom'),
     );

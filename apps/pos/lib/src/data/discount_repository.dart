@@ -210,6 +210,14 @@ class RealDiscountRepository implements DiscountRepository {
           permissionDenied: true,
         );
       }
+      // POS-OPERATIONS-SYNC-001: `sync_push` classifies SQLSTATE 40001 as the stable
+      // token `conflict`. A domain code -- not a SQLSTATE we sniffed, not a message we
+      // parsed. Now that the POS actually SENDS expected_revision this is reachable,
+      // and it must NOT be flattened into the generic rejection: the order has moved,
+      // and the honest answer is to show the truth, not to retry a stale calculation.
+      if (error == 'conflict') {
+        throw const DiscountException('conflict', conflict: true);
+      }
       throw DiscountException(
         'discount rejected: ${error is String ? error : (status is String ? status : 'unknown')}',
       );

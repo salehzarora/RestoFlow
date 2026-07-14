@@ -9,6 +9,9 @@ import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
+import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
+import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 
 /// POS-ORDERS-AND-PAYMENT-001 (C/D): the recent/unpaid orders surface — an
 /// unpaid order offers "Take payment"; a paid order offers "Reprint receipt" +
@@ -51,7 +54,7 @@ CashPayment _payment(String number) => CashPayment(
 Future<InMemoryRecentOrdersStore> _seededStore() async {
   final store = InMemoryRecentOrdersStore();
   final now = DateTime.now();
-  await store.persist('demo-device', [
+  await store.persist(kDemoSyncScope.key, [
     PosRecentOrder(order: _view('#U1'), submittedAt: now),
     PosRecentOrder(
       order: _view('#P1'),
@@ -66,7 +69,16 @@ Widget _wrap(
   InMemoryRecentOrdersStore store, {
   Locale locale = const Locale('en'),
 }) => ProviderScope(
-  overrides: [posRecentOrdersStoreProvider.overrideWithValue(store)],
+  overrides: [
+    posRecentOrdersStoreProvider.overrideWithValue(store),
+    // These tests assert on the DEVICE's own orders. The demo snapshot feed now
+    // adopts the whole BRANCH (Commit 3), so it is emptied here to keep each test
+    // about the thing it is actually testing.
+    orderSnapshotRepositoryProvider.overrideWithValue(
+      DemoOrderSnapshotRepository(),
+    ),
+    posSyncPollIntervalProvider.overrideWithValue(null),
+  ],
   child: MaterialApp(
     locale: locale,
     localizationsDelegates: restoflowLocalizationsDelegates,
@@ -101,17 +113,25 @@ void main() {
     expect(find.byKey(const Key('recent-pay-#P1')), findsNothing);
   });
 
-  testWidgets('filters narrow to unpaid / paid', (tester) async {
+  // POS-OPERATIONS-SYNC-001 (Commit 3): the settlement filter is now EXACT --
+  // "Paid" means paid, and it does NOT quietly include a comped order.
+  testWidgets('the settlement filter narrows to unpaid / paid EXACTLY', (
+    tester,
+  ) async {
     _wide(tester);
     await tester.pumpWidget(_wrap(await _seededStore()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('recent-filter-unpaid')));
+    // Look across every section, so the filter is what is being tested.
+    await tester.tap(find.byKey(const Key('orders-section-all')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('orders-settlement-needsPayment')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('recent-order-#U1')), findsOneWidget);
     expect(find.byKey(const Key('recent-order-#P1')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('recent-filter-paid')));
+    await tester.tap(find.byKey(const Key('orders-settlement-paid')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('recent-order-#U1')), findsNothing);
     expect(find.byKey(const Key('recent-order-#P1')), findsOneWidget);
@@ -122,8 +142,10 @@ void main() {
     final l10n = await _en();
     await tester.pumpWidget(_wrap(InMemoryRecentOrdersStore()));
     await tester.pumpAndSettle();
+    // The centre now LANDS on Open, so the empty state is section-specific rather
+    // than a single generic "no recent orders".
     expect(find.byKey(const Key('recent-orders-empty')), findsOneWidget);
-    expect(find.text(l10n.posRecentEmpty), findsOneWidget);
+    expect(find.text(l10n.posOrdersEmptyOpen), findsOneWidget);
   });
 
   testWidgets(
@@ -149,7 +171,7 @@ void main() {
       _wrap(await _seededStore(), locale: const Locale('ar')),
     );
     await tester.pumpAndSettle();
-    expect(find.text(l10n.posRecentOrdersTitle), findsOneWidget);
+    expect(find.text(l10n.posOrdersCenterTitle), findsOneWidget);
     expect(find.byKey(const Key('recent-order-#U1')), findsOneWidget);
   });
 }

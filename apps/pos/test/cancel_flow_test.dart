@@ -12,6 +12,7 @@ import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/state/void_controller.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 
 /// MONEY-VOID-001: the POS cancel (void) flow for a WRONG UNPAID order. An
 /// unpaid card offers Cancel; the confirm sheet requires a reason and pushes the
@@ -39,7 +40,7 @@ SubmittedOrderView _view(String number) => SubmittedOrderView(
 
 Future<InMemoryRecentOrdersStore> _seededStore() async {
   final store = InMemoryRecentOrdersStore();
-  await store.persist('demo-device', [
+  await store.persist(kDemoSyncScope.key, [
     PosRecentOrder(order: _view('#U1'), submittedAt: DateTime.now()),
   ]);
   return store;
@@ -128,10 +129,23 @@ void main() {
     expect(find.byKey(const Key('cancel-order-sheet')), findsNothing);
     expect(find.text(l10n.posOrderCancelledSnack), findsOneWidget);
 
-    // The order is now Cancelled: pill shown, no pay/cancel actions.
-    expect(find.byKey(const Key('recent-cancelled-#U1')), findsOneWidget);
+    // POS-OPERATIONS-SYNC-001 (Commit 3): the order is now TERMINAL, so it leaves
+    // the Open section entirely and its actions are gone. The dedicated "cancelled"
+    // pill was folded into the canonical STATUS pill, which every row now carries.
     expect(find.byKey(const Key('recent-pay-#U1')), findsNothing);
     expect(find.byKey(const Key('recent-cancel-#U1')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('orders-section-completedRecently')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('order-status-#U1')), findsOneWidget);
+    // (the same label also appears on the status FILTER chip, so scope the match)
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('order-status-#U1')),
+        matching: find.text(l10n.posOrdersStatusVoided),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('an empty reason is rejected before any backend call', (

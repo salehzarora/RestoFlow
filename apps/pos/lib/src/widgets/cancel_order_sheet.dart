@@ -8,6 +8,8 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/recent_order.dart';
 import '../data/void_repository.dart';
 import '../format/money_format.dart';
+import '../state/order_sync_controller.dart';
+import '../state/pos_sync_scope_provider.dart';
 import '../state/recent_orders_controller.dart';
 import '../state/void_controller.dart';
 
@@ -47,6 +49,19 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
   /// The last failure message to show inline, or null when there is none.
   String? _error;
 
+  /// POS-OPERATIONS-SYNC-001 (stabilization) — THIS SHEET IS NOW STALE.
+  ///
+  /// Set on the two refusals no retry from THIS sheet can ever satisfy: a typed
+  /// `conflict` (the order moved; this sheet's `widget.order.revision` is the one the
+  /// server just rejected, and it is immutable here) and `order_not_voidable` (the
+  /// server says the order is already terminal). Both paths reconcile the row, so the
+  /// truth is on screen behind the sheet — but the sheet itself used to keep Confirm
+  /// enabled over the stale revision, re-sending a request that cannot ever succeed
+  /// while its own error text said "refresh and try again". Now the message can come
+  /// true: Confirm is REPLACED by Close, and a new deliberate attempt starts from the
+  /// refreshed order.
+  bool _staleAfterRefusal = false;
+
   @override
   void dispose() {
     _reasonController.dispose();
@@ -57,6 +72,9 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
     // Double-tap guard: the disabled button relies on a rebuild, so also refuse
     // re-entry synchronously — a cancel must never be pushed twice.
     if (_submitting) return;
+    // BELT AND BRACES: a retired sheet holds the revision the server just refused;
+    // it must be impossible to re-send it even by another route.
+    if (_staleAfterRefusal) return;
     final reason = _reasonController.text.trim();
     if (reason.isEmpty) {
       setState(() => _error = l10n.posCancellationReasonRequired);
@@ -68,23 +86,90 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
     });
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    // CAPTURED BEFORE THE AWAIT. The sheet is drag/barrier-dismissible while the
+    // void is in flight; touching the WIDGET's `ref` after a dismissal throws —
+    // and skipping the local terminal marker or the authoritative reconcile
+    // because the sheet died would leave a SERVER-VOIDED order sitting on the
+    // till with live Pay and Cancel buttons until the next poll. The notifiers
+    // outlive the sheet; the data work completes whether or not the UI is still
+    // there. `mounted` gates ONLY setState / pop / snackbars.
+    final voids = ref.read(voidRepositoryProvider);
+    final orders = ref.read(posRecentOrdersControllerProvider.notifier);
+    final sync = ref.read(posOrderSyncControllerProvider.notifier);
+    final container = ProviderScope.containerOf(context, listen: false);
+    // The scope this void is being submitted IN. If the pairing context changes
+    // mid-flight, the result belongs to the ORIGINAL scope: it is not merged into
+    // whichever scope is active when the response lands — that scope reconciles
+    // it from its own authoritative feed when it returns.
+    final scopeKey = container.read(posSyncScopeProvider)?.key;
+    bool scopeMoved() => container.read(posSyncScopeProvider)?.key != scopeKey;
     try {
-      await ref
-          .read(voidRepositoryProvider)
-          .voidOrder(orderId: widget.order.orderId ?? '', reason: reason);
+      await voids.voidOrder(
+        orderId: widget.order.orderId ?? '',
+        reason: reason,
+        // POS-OPERATIONS-SYNC-001: the AUTHORITATIVE revision. The POS stored none
+        // before this phase and sent none, so app.void_order's optimistic-
+        // concurrency check could never fire and a cancel could land on an order
+        // that had already moved (paid on another till, bumped by the kitchen).
+        expectedRevision: widget.order.revision,
+      );
+      // A scope that moved mid-flight: the void SUCCEEDED for the original
+      // scope's order and stands server-side; nothing may be written into the
+      // NEW scope's state. The original scope reconciles the terminal status
+      // from its own feed on return. (markVoided would already no-op — the new
+      // scope holds no row with this identity — but we do not even ask.)
+      // Stopping the spinner is pure UI: in the real app the pairing change
+      // unmounts this tree anyway, but a still-mounted sheet must not spin
+      // forever over work it deliberately dropped.
+      if (scopeMoved()) {
+        if (mounted) setState(() => _submitting = false);
+        return;
+      }
       // The server confirmed the void -> mark the local order cancelled (drops
-      // out of the unpaid count, no pay/reprint). Money-free.
-      ref
-          .read(posRecentOrdersControllerProvider.notifier)
-          .markVoided(widget.order.orderNumber, reason);
+      // out of the unpaid count, no pay/reprint). Money-free. On the CAPTURED
+      // notifier, so a dismissed sheet cannot skip it.
+      // BY IDENTITY: cancelling this order must not cancel a different one that
+      // happens to share its printed code.
+      orders.markVoided(widget.order.identity, reason);
+      // POS-OPERATIONS-SYNC-001: void_order returns only {status, revision} — take
+      // the authoritative snapshot so the row carries the server's terminal status
+      // and revision, not just this device's local marker.
+      await _reconcile(sync);
+      if (!mounted)
+        return; // UI only from here — the data work is already done.
       navigator.pop();
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.posOrderCancelledSnack)),
       );
     } on VoidException catch (e) {
+      // POS-OPERATIONS-SYNC-001: a typed refusal means our picture of this order is
+      // WRONG, and showing the right message on top of a stale row explains nothing.
+      //
+      //   order_not_voidable -> the server says it is already terminal. Reconcile, so
+      //     the row goes terminal and STOPS offering Cancel at all. Telling the
+      //     cashier "already closed" while leaving the Cancel button live would be a
+      //     message that argues with its own screen.
+      //   conflict           -> someone else moved it. Fetch the truth; NEVER blindly
+      //     retry the mutation.
+      //
+      // permission_denied / already-paid / transport are NOT staleness: the order is
+      // exactly as we thought, we simply may not do this to it. No refetch.
+      //
+      // THE RECONCILE DOES NOT DEPEND ON THE SHEET STILL EXISTING — it runs on the
+      // captured coordinator (a dismissed sheet used to skip it and leave the
+      // terminal order actionable). It is skipped only when the SCOPE moved: the
+      // refusal belongs to the original scope, which refreshes on its own return.
+      if ((e.notVoidable || e.conflict) && !scopeMoved()) {
+        await _reconcile(sync);
+      }
       if (!mounted) return;
       setState(() {
         _submitting = false;
+        // Retire the sheet on the refusals a retry can never satisfy. Permission
+        // denials, an already-paid order and transport failures are NOT staleness:
+        // the order is exactly as we thought, so the same deliberate entry may be
+        // retried once the obstacle is resolved.
+        _staleAfterRefusal = e.notVoidable || e.conflict;
         // MONEY-SETTLEMENT-CONSISTENCY-001 (corrective): TYPED dispatch on the server's
         // exact domain codes. The previous version INFERRED "already closed" from a
         // zero-total order whenever the rejection was generic — which meant a dropped
@@ -105,6 +190,16 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
     }
   }
 
+  /// Pulls the authoritative snapshot for THIS order through the CAPTURED
+  /// coordinator (never the widget's `ref`, which dies with a dismissed sheet).
+  /// Never throws — the coordinator records its own failure, and a failed refresh
+  /// must not turn a SUCCESSFUL void into an error the cashier sees.
+  Future<void> _reconcile(PosOrderSyncController sync) async {
+    final orderId = widget.order.orderId;
+    if (orderId == null || orderId.isEmpty) return;
+    await sync.refreshOrders(<String>[orderId]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -115,7 +210,10 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
 
     final infoParts = <String>[
       order.orderNumber,
-      if (order.order.customerName case final name? when name.trim().isNotEmpty)
+      // Null for a branch-discovered order — another till took it and we never saw
+      // its customer. We show what we have, and invent nothing.
+      if (order.order?.customerName case final name?
+          when name.trim().isNotEmpty)
         name.trim(),
       MoneyFormatter.formatMinor(order.grandTotalMinor, order.currencyCode),
     ];
@@ -166,7 +264,7 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
             TextField(
               key: const Key('cancel-reason-field'),
               controller: _reasonController,
-              enabled: !_submitting,
+              enabled: !_submitting && !_staleAfterRefusal,
               onChanged: (_) => setState(() => _error = null),
               decoration: InputDecoration(
                 labelText: l10n.posCancellationReasonLabel,
@@ -206,17 +304,30 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
             const SizedBox(height: RestoflowSpacing.md),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('cancel-confirm-button'),
-                onPressed: _submitting ? null : () => _submit(l10n),
-                icon: _submitting
-                    ? const RestoflowInlineSpinner()
-                    : const Icon(Icons.block),
-                label: Text(l10n.posCancelOrderConfirm),
-                style: RestoflowButtonStyles.big(
-                  context,
-                ).copyWith(backgroundColor: WidgetStatePropertyAll(danger)),
-              ),
+              child: _staleAfterRefusal
+                  // RETIRED. The revision this sheet holds is the one the server just
+                  // refused (conflict), or the order is already terminal
+                  // (order_not_voidable) — either way, no re-send from here can ever
+                  // succeed. The typed message above says why; this button lets the
+                  // cashier acknowledge it and act again from the refreshed order.
+                  ? FilledButton.icon(
+                      key: const Key('cancel-conflict-close-button'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(l10n.posOrdersConflictClose),
+                      style: RestoflowButtonStyles.big(context),
+                    )
+                  : FilledButton.icon(
+                      key: const Key('cancel-confirm-button'),
+                      onPressed: _submitting ? null : () => _submit(l10n),
+                      icon: _submitting
+                          ? const RestoflowInlineSpinner()
+                          : const Icon(Icons.block),
+                      label: Text(l10n.posCancelOrderConfirm),
+                      style: RestoflowButtonStyles.big(context).copyWith(
+                        backgroundColor: WidgetStatePropertyAll(danger),
+                      ),
+                    ),
             ),
           ],
         ),

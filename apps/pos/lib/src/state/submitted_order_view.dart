@@ -1,6 +1,8 @@
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_money/restoflow_money.dart';
 
+import '../data/order_identity.dart';
+
 /// Immutable UI snapshot of a locally-submitted demo order (RF-101 + RF-114).
 ///
 /// Built from the domain `LocalOrder` at submit time so the confirmation panel
@@ -58,22 +60,32 @@ class SubmittedOrderView {
 
   /// Copies the view, overriding the post-submit money lines (used when an
   /// order-level discount is applied and the totals must reflect the result).
-  SubmittedOrderView copyWith({int? discountTotalMinor, int? taxTotalMinor}) =>
-      SubmittedOrderView(
-        orderNumber: orderNumber,
-        orderType: orderType,
-        currencyCode: currencyCode,
-        subtotalMinor: subtotalMinor,
-        lines: lines,
-        discountTotalMinor: discountTotalMinor ?? this.discountTotalMinor,
-        taxTotalMinor: taxTotalMinor ?? this.taxTotalMinor,
-        taxRateBp: taxRateBp,
-        tableLabel: tableLabel,
-        customerName: customerName,
-        outboxEntryId: outboxEntryId,
-        localOperationId: localOperationId,
-        orderId: orderId,
-      );
+  ///
+  /// POS-OPERATIONS-SYNC-001 adds [subtotalMinor]: the SERVER is authoritative for
+  /// the order's money after submit, and its subtotal can move (an item voided on
+  /// another till, a re-rolled line). Without this the view's subtotal was
+  /// structurally frozen at submit time and `grandTotalMinor` — a getter derived
+  /// from it — could never tell the truth again. The order LINES are untouched:
+  /// they are the order-time price snapshot (D-008) and are never recomputed.
+  SubmittedOrderView copyWith({
+    int? subtotalMinor,
+    int? discountTotalMinor,
+    int? taxTotalMinor,
+  }) => SubmittedOrderView(
+    orderNumber: orderNumber,
+    orderType: orderType,
+    currencyCode: currencyCode,
+    subtotalMinor: subtotalMinor ?? this.subtotalMinor,
+    lines: lines,
+    discountTotalMinor: discountTotalMinor ?? this.discountTotalMinor,
+    taxTotalMinor: taxTotalMinor ?? this.taxTotalMinor,
+    taxRateBp: taxRateBp,
+    tableLabel: tableLabel,
+    customerName: customerName,
+    outboxEntryId: outboxEntryId,
+    localOperationId: localOperationId,
+    orderId: orderId,
+  );
 
   /// The assigned dine-in table label, or null for takeaway / unassigned.
   final String? tableLabel;
@@ -95,6 +107,16 @@ class SubmittedOrderView {
   /// The idempotency operation id `(deviceId, localOperationId)` (DECISION
   /// D-022), shown compactly as the outbox reference.
   final String? localOperationId;
+
+  /// THE identity of this order for association — payment, receipt, void, dedupe.
+  /// The server id when we have one, this device's own operation id until then, and
+  /// NEVER the display code (see [PosOrderIdentity]).
+  PosOrderIdentity get identity => PosOrderIdentity.of(
+    orderId: orderId,
+    localOperationId: localOperationId,
+    outboxEntryId: outboxEntryId,
+    orderNumber: orderNumber,
+  );
 
   /// Non-authoritative subtotal preview as [Money] (no tax/discounts).
   Money get subtotal => Money(subtotalMinor, currencyCode);

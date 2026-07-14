@@ -3970,4 +3970,124 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogTitleDiscountDenied => 'تم رفض الخصم';
+
+  @override
+  String get posOrdersCenterTitle => 'الطلبات';
+
+  @override
+  String get posOrdersSectionOpen => 'مفتوحة';
+
+  @override
+  String get posOrdersSectionNeedsPayment => 'بحاجة إلى دفع';
+
+  @override
+  String get posOrdersSectionCompleted => 'أُغلقت مؤخرًا';
+
+  @override
+  String get posOrdersSectionAll => 'كل الحديثة';
+
+  @override
+  String get posOrdersSearchHint => 'ابحث برقم الطلب';
+
+  @override
+  String get posOrdersSearchClear => 'مسح البحث';
+
+  @override
+  String get posOrdersSearchEmpty => 'لا يوجد طلب مطابق لهذا البحث';
+
+  @override
+  String get posOrdersEmptyOpen => 'لا توجد طلبات مفتوحة الآن';
+
+  @override
+  String get posOrdersEmptyNeedsPayment => 'لا توجد طلبات بحاجة إلى دفع';
+
+  @override
+  String get posOrdersEmptyCompleted => 'لا توجد طلبات أُغلقت مؤخرًا';
+
+  @override
+  String get posOrdersEmptyOffline => 'لا توجد طلبات محفوظة متاحة دون اتصال';
+
+  @override
+  String get posOrdersLoadMore => 'تحميل المزيد';
+
+  @override
+  String get posOrdersRefresh => 'تحديث الطلبات';
+
+  @override
+  String get posOrdersSyncing => 'جارٍ المزامنة...';
+
+  @override
+  String posOrdersLastUpdated(String time) {
+    return 'آخر تحديث $time';
+  }
+
+  @override
+  String get posOrdersOffline => 'دون اتصال - عرض البيانات المحفوظة';
+
+  @override
+  String get posOrdersSortNewest => 'الأحدث أولًا';
+
+  @override
+  String get posOrdersSortOldest => 'الأقدم أولًا';
+
+  @override
+  String get posOrdersFilterStatus => 'الحالة';
+
+  @override
+  String get posOrdersFilterSettlement => 'الدفع';
+
+  @override
+  String get posOrdersSettlementAll => 'الكل';
+
+  @override
+  String get posOrdersSettlementUnpaid => 'بحاجة إلى دفع';
+
+  @override
+  String get posOrdersSettlementPaid => 'مدفوع';
+
+  @override
+  String get posOrdersSettlementNoCharge => 'بدون رسوم';
+
+  @override
+  String get posOrdersPendingPayment => 'جارٍ مزامنة الدفع...';
+
+  @override
+  String get posOrdersPendingDiscount => 'جارٍ مزامنة الخصم...';
+
+  @override
+  String get posOrdersPendingCancellation => 'جارٍ مزامنة الإلغاء...';
+
+  @override
+  String get posOrdersOtherTill => 'صندوق آخر';
+
+  @override
+  String get posOrdersStatusSubmitted => 'مُرسَل';
+
+  @override
+  String get posOrdersStatusAccepted => 'مقبول';
+
+  @override
+  String get posOrdersStatusPreparing => 'قيد التحضير';
+
+  @override
+  String get posOrdersStatusReady => 'جاهز';
+
+  @override
+  String get posOrdersStatusServed => 'قُدِّم';
+
+  @override
+  String get posOrdersStatusCompleted => 'مكتمل';
+
+  @override
+  String get posOrdersStatusCancelled => 'ملغى';
+
+  @override
+  String get posOrdersStatusVoided => 'مُبطَل';
+
+  @override
+  String get posOrdersConflictRefreshed =>
+      'تغيّر هذا الطلب على جهاز آخر. تم تحديثه - راجعه ثم أعد المحاولة.';
+
+  @override
+  String get posOrdersConflictClose => 'إغلاق وإعادة الفتح';
 }

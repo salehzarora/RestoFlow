@@ -2,6 +2,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 
 import 'ids.dart';
+import 'order_identity.dart';
 import 'payment.dart';
 
 const String _demoOrgId = 'demo-org';
@@ -19,9 +20,23 @@ const String _demoDeviceId = 'demo-device';
 /// any other rejection must NEVER be mistaken for it, because the UI tells the cashier
 /// something categorically different in each case.
 class PaymentException implements Exception {
-  const PaymentException(this.message, {this.notChargeable = false});
+  const PaymentException(
+    this.message, {
+    this.notChargeable = false,
+    this.conflict = false,
+  });
   final String message;
+
+  /// The server's EXACT `order_not_chargeable`. Terminal for this sheet: the order
+  /// owes nothing, and no tender, amount or retry can change that.
   final bool notChargeable;
+
+  /// POS-OPERATIONS-SYNC-001: an optimistic-concurrency conflict — the order moved
+  /// under us (another till, the kitchen, an auto-completion). NEVER auto-retried:
+  /// re-sending the same payment against a state we now know is wrong is exactly how
+  /// a double charge happens. The row is refreshed and the cashier decides.
+  final bool conflict;
+
   @override
   String toString() => 'PaymentException: $message';
 }
@@ -35,9 +50,9 @@ class PaymentException implements Exception {
 /// Supabase-backed implementation lands with the device/PIN-session auth bridge.
 /// Nothing here contacts a backend or a printer.
 abstract class PaymentRepository {
-  /// Records a completed payment for the order [orderId] (the server order id a
-  /// real `payment.create` references; ignored by the demo store which keys on
-  /// [orderNumber]). [method] is the tender (RF-117): CASH requires
+  /// Records a completed payment for the order [orderId] (the server order id a real
+  /// `payment.create` references). [orderNumber] is the DISPLAY code — printed and read
+  /// out, never an identity. [method] is the tender (RF-117): CASH requires
   /// [tenderedMinor] >= [amountMinor] and yields change; a NON-CASH tender
   /// (card/bit/external) is externally recorded with change 0 and
   /// tendered = [amountMinor] (the order total). Throws [PaymentException] if a
@@ -50,13 +65,18 @@ abstract class PaymentRepository {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   });
 
   /// The current demo shift / cash-drawer context.
   ShiftContext shiftContext();
 
-  /// The recorded payment for [orderNumber], or null if it is unpaid.
-  CashPayment? paymentFor(String orderNumber);
+  /// The recorded payment for the order with [identity], or null if it is unpaid.
+  ///
+  /// BY IDENTITY, never by display code: two orders can share a `#XXXXXX`, and a lookup
+  /// keyed on it would hand back the OTHER order's payment — which, here, is the very
+  /// check that decides whether a payment is a duplicate.
+  CashPayment? paymentFor(PosOrderIdentity identity);
 }
 
 /// In-memory, clearly-labelled DEMO cash-payment + shift store (RF-116).
@@ -96,13 +116,15 @@ class DemoPaymentStore implements PaymentRepository {
 
   @override
   Future<CashPayment> recordCashPayment({
-    required String
-    orderId, // demo keys on orderNumber; orderId is ignored here
+    // The AUTHORITATIVE order. The demo store used to ignore it and key on the display
+    // code — which is how paying one order could return another's payment.
+    required String orderId,
     required String orderNumber,
     required int amountMinor,
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision, // demo has no server revision to conflict against
   }) async {
     if (amountMinor < 0 || tenderedMinor < 0) {
       throw const PaymentException('amounts must not be negative');
@@ -118,7 +140,11 @@ class DemoPaymentStore implements PaymentRepository {
 
     // Idempotency: a duplicate pay for an already-paid order returns the
     // existing payment (mirrors the per-order single-completed-payment rule).
-    final existing = paymentFor(orderNumber);
+    // Keyed on the ORDER, so a different order that happens to share this one's printed
+    // code is not mistaken for a duplicate — and silently handed a payment it never had.
+    final existing = paymentFor(
+      PosOrderIdentity.of(orderId: orderId, orderNumber: orderNumber),
+    );
     if (existing != null) return existing;
 
     _seq++;
@@ -128,6 +154,9 @@ class DemoPaymentStore implements PaymentRepository {
     final changeMinor = method.isCash ? tenderedMinor - amountMinor : 0;
     final payment = CashPayment(
       paymentId: 'demo-payment-$n',
+      // Recorded even in demo when the caller knows it: the payment must carry the
+      // AUTHORITATIVE order it settles, not just the code printed on the ticket.
+      orderId: orderId.isEmpty ? null : orderId,
       orderNumber: orderNumber,
       deviceId: _demoDeviceId,
       localOperationId: 'demo-pay-op-$n',
@@ -145,9 +174,13 @@ class DemoPaymentStore implements PaymentRepository {
   }
 
   @override
-  CashPayment? paymentFor(String orderNumber) {
+  CashPayment? paymentFor(PosOrderIdentity identity) {
     for (final p in _payments) {
-      if (p.orderNumber == orderNumber) return p;
+      final id = PosOrderIdentity.of(
+        orderId: p.orderId,
+        orderNumber: p.orderNumber,
+      );
+      if (id == identity) return p;
     }
     return null;
   }
@@ -223,6 +256,7 @@ class RealPaymentRepository implements PaymentRepository {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   }) async {
     final transport = _transport;
     final session = _session;
@@ -259,6 +293,23 @@ class RealPaymentRepository implements PaymentRepository {
         'order_id': orderId,
         'tender_type': method.wire, // 'cash' | 'card' | 'bit' | 'external'
         'amount_tendered_minor': tenderedMinor,
+        // POS-OPERATIONS-SYNC-001: OPTIMISTIC CONCURRENCY, finally switched on.
+        // sync_push forwards this to app.record_payment, which refuses (SQLSTATE
+        // 40001 -> the typed `conflict`) when the order has moved since we read it.
+        // The POS stored NO revision before this phase and sent none, so this branch
+        // was unreachable. Omitted when we genuinely do not know a revision -- sending
+        // a guess would be worse than sending nothing.
+        //
+        // WHAT IT DOES AND DOES NOT DO. It detects a STALE ORDER-STATE ASSUMPTION and
+        // turns it into an explicit, handleable conflict -- so the cashier is told the
+        // order moved instead of being handed a confusing failure. It is NOT what
+        // stops an order being charged twice. THAT is enforced server-side, and always
+        // was: the order row is locked FOR UPDATE, record_payment guards on an existing
+        // completed payment, payments_one_completed_per_order_uidx makes a second
+        // completed payment structurally impossible, and (device_id,
+        // local_operation_id) idempotency collapses a retried push onto the original
+        // result. expected_revision improves the CONVERSATION, not the guarantee.
+        if (expectedRevision != null) 'expected_revision': expectedRevision,
       },
     };
 
@@ -278,6 +329,7 @@ class RealPaymentRepository implements PaymentRepository {
     return _applyPaymentResult(
       raw: raw,
       localOperationId: localOperationId,
+      orderId: orderId,
       orderNumber: orderNumber,
       deviceId: session.deviceId,
       amountMinor: amountMinor,
@@ -302,6 +354,7 @@ class RealPaymentRepository implements PaymentRepository {
   CashPayment _applyPaymentResult({
     required Object? raw,
     required String localOperationId,
+    required String orderId,
     required String orderNumber,
     required String deviceId,
     required int amountMinor,
@@ -341,6 +394,16 @@ class RealPaymentRepository implements PaymentRepository {
           notChargeable: true,
         );
       }
+      // POS-OPERATIONS-SYNC-001: the optimistic-concurrency refusal. `sync_push`
+      // classifies SQLSTATE 40001 as the stable token `conflict`, so this is a typed
+      // domain code — not a SQLSTATE we sniffed and not a raw message we parsed.
+      //
+      // Now that the POS actually SENDS expected_revision, this path is reachable for
+      // the first time. It is NEVER auto-retried: re-sending the same payment against
+      // a state we now know is wrong is precisely how an order gets charged twice.
+      if (error == 'conflict') {
+        throw const PaymentException('conflict', conflict: true);
+      }
       reject(error is String ? error : status);
     }
     if (op['ok'] == false) reject('applied_not_ok');
@@ -368,6 +431,10 @@ class RealPaymentRepository implements PaymentRepository {
 
     return CashPayment(
       paymentId: paymentId,
+      // THE ORDER THIS MONEY SETTLES. The server was asked to settle exactly this id,
+      // so the payment records exactly this id — never the display code, which two
+      // orders can share.
+      orderId: orderId.isEmpty ? null : orderId,
       orderNumber: orderNumber,
       deviceId: deviceId,
       localOperationId: localOperationId,
@@ -402,5 +469,5 @@ class RealPaymentRepository implements PaymentRepository {
   /// No client-side payment cache in real mode (the controller holds recorded
   /// payments in its state); a real lookup would be a `sync_pull` (deferred).
   @override
-  CashPayment? paymentFor(String orderNumber) => null;
+  CashPayment? paymentFor(PosOrderIdentity identity) => null;
 }

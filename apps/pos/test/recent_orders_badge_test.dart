@@ -9,6 +9,8 @@ import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 
 /// MONEY-VOID-001: the app-bar unpaid-orders badge ([RecentOrdersButton]) counts
 /// only orders that are still awaiting payment. A cancelled (voided) order — like
@@ -67,6 +69,9 @@ String? _badgeText(WidgetTester tester) {
   return null;
 }
 
+/// The order identity of a row built by [_view] — the SAME derivation production uses.
+PosOrderIdentity _id(String number) => PosOrderIdentity.server('oid-$number');
+
 void main() {
   testWidgets('the badge counts unpaid orders and hides at zero', (
     tester,
@@ -90,12 +95,12 @@ void main() {
     expect(_badgeText(tester), '2');
 
     // Cancel one -> badge decrements to 1 immediately (no restart).
-    notifier.markVoided('#U1', 'wrong order');
+    notifier.markVoided(_id('#U1'), 'wrong order');
     await tester.pump();
     expect(_badgeText(tester), '1');
 
     // Cancel the last -> badge disappears (count 0 hides it).
-    notifier.markVoided('#U2', 'also wrong');
+    notifier.markVoided(_id('#U2'), 'also wrong');
     await tester.pump();
     expect(find.byType(Badge), findsNothing);
   });
@@ -115,7 +120,7 @@ void main() {
     expect(_badgeText(tester), '2');
 
     // Paying one drops it off the badge (paid is not "awaiting payment").
-    notifier.recordPayment('#P1', _payment('#P1'));
+    notifier.recordPayment(_id('#P1'), _payment('#P1'));
     await tester.pump();
     expect(_badgeText(tester), '1');
   });
@@ -126,7 +131,7 @@ void main() {
       // Pre-seed a voided order (payment == null): !isPaid is true, so only the
       // voided check keeps it off the badge. Sync state is irrelevant here.
       final store = InMemoryRecentOrdersStore();
-      await store.persist('demo-device', [
+      await store.persist(kDemoSyncScope.key, [
         PosRecentOrder(
           order: _view('#V1'),
           submittedAt: DateTime.now(),

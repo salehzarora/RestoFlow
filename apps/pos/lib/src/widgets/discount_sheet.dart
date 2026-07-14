@@ -13,6 +13,7 @@ import '../format/cash_input.dart';
 import '../format/tax_math.dart';
 import '../state/cart_controller.dart';
 import '../state/discount_controller.dart';
+import '../state/order_sync_controller.dart';
 
 /// Modal order-level discount entry (RF-117 part C): a FIXED ₪ amount OR a
 /// PERCENTAGE, plus a REQUIRED reason. On apply it pushes the SERVER-AUTHORITATIVE
@@ -80,6 +81,21 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
   /// or null when there is none.
   String? _applyError;
 
+  /// POS-OPERATIONS-SYNC-001 (second review correction) — THIS SHEET IS NOW STALE.
+  ///
+  /// A conflict means the server has told us that the order we are looking at is not
+  /// the order it holds. Everything this sheet was built from is therefore wrong: its
+  /// `expectedRevision`, its subtotal, its tax. They are `widget` fields — immutable for
+  /// the life of the sheet — so a second Apply would send THE SAME STALE REVISION again,
+  /// and conflict again, forever. The cashier would tap a button that cannot ever work.
+  ///
+  /// So on a conflict the sheet retires itself: the authoritative state is fetched, the
+  /// conflict is explained, and Apply is REPLACED by Close. A new attempt must be made
+  /// from the refreshed order, which reopens this sheet with the new revision and the
+  /// new totals. Never an auto-retry: a discount is the cashier's decision, and the
+  /// state it was decided against just changed underneath them.
+  bool _staleAfterConflict = false;
+
   @override
   void dispose() {
     _valueController.dispose();
@@ -137,6 +153,9 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
   }
 
   Future<void> _apply(AppLocalizations l10n, PosStaffCapabilities? caps) async {
+    // BELT AND BRACES. The button is already gone once the sheet is stale; this makes
+    // it impossible to re-send the rejected revision even by another route.
+    if (_staleAfterConflict) return;
     final error = _validate(l10n, caps);
     if (error != null) {
       setState(() => _applyError = error);
@@ -164,11 +183,37 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
       ref
           .read(cartControllerProvider.notifier)
           .applyOrderDiscount(discountTotalMinor: result.discountTotalMinor);
+
+      // POS-OPERATIONS-SYNC-001 — THE "STALE 40" FIX.
+      //
+      // The discount used to update the CART and stop there, so the RECENT-ORDERS
+      // entry kept its submit-time total forever: a comped order still read "40",
+      // still counted as unpaid, and still offered Take payment. The apply_discount
+      // envelope carries the new discount/grand/revision but NOT the status, tax or
+      // settlement, so we take the authoritative snapshot rather than assembling a
+      // half-truth from the parts we happen to have.
+      await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
+        <String>[widget.orderId],
+      );
       navigator.pop();
     } on DiscountException catch (e) {
       if (!mounted) return;
+      // POS-OPERATIONS-SYNC-001 (review correction): a CONFLICT means our picture of
+      // this order is stale, so the totals this sheet was computed from are wrong.
+      // Fetch the truth BEFORE explaining anything -- a conflict message on top of a
+      // stale total explains nothing. It is NEVER auto-retried: the cashier must act
+      // again deliberately, against the refreshed state.
+      if (e.conflict) {
+        await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
+          <String>[widget.orderId],
+        );
+      }
+      if (!mounted) return;
       setState(() {
         _submitting = false;
+        // A CONFLICT RETIRES THE SHEET. Apply disappears; it cannot be pressed again
+        // with the revision the server has just rejected.
+        if (e.conflict) _staleAfterConflict = true;
         // TYPED dispatch on the server's contract — checked most-specific first,
         // because a full-comp refusal is ALSO a permission_denied and would
         // otherwise be flattened into the generic "ask a manager" message, hiding
@@ -178,6 +223,7 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
             l10n.posDiscountFullCompDenied,
           DiscountException(exceedsOrderTotal: true) =>
             l10n.posDiscountExceedsOrderTotal,
+          DiscountException(conflict: true) => l10n.posOrdersConflictRefreshed,
           DiscountException(permissionDenied: true) =>
             l10n.posDiscountPermissionDenied,
           _ => l10n.posDiscountFailed,
@@ -252,7 +298,7 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
             TextField(
               key: const Key('discount-value-field'),
               controller: _valueController,
-              enabled: !_submitting,
+              enabled: !_submitting && !_staleAfterConflict,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -270,7 +316,7 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
             TextField(
               key: const Key('discount-reason-field'),
               controller: _reasonController,
-              enabled: !_submitting,
+              enabled: !_submitting && !_staleAfterConflict,
               onChanged: (_) => setState(() => _applyError = null),
               decoration: InputDecoration(
                 labelText: l10n.posDiscountReasonLabel,
@@ -310,17 +356,29 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
             const SizedBox(height: RestoflowSpacing.md),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('discount-apply-button'),
-                // NOT disabled when full-comp is denied: the cashier may still
-                // apply ORDINARY discounts, and hiding the action entirely would
-                // punish them for a right they never needed. The entry is judged on
-                // its RESULT, at apply time.
-                onPressed: _submitting ? null : () => _apply(l10n, caps),
-                icon: const Icon(Icons.check),
-                label: Text(l10n.posDiscountApplyAction),
-                style: RestoflowButtonStyles.big(context),
-              ),
+              child: _staleAfterConflict
+                  // STALE. The order moved; this sheet's revision and totals are the
+                  // old ones. There is no Apply here to press — the cashier
+                  // acknowledges and reopens the discount against the refreshed order,
+                  // which is the only entry that can actually succeed.
+                  ? FilledButton.icon(
+                      key: const Key('discount-conflict-close-button'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(l10n.posOrdersConflictClose),
+                      style: RestoflowButtonStyles.big(context),
+                    )
+                  : FilledButton.icon(
+                      key: const Key('discount-apply-button'),
+                      // NOT disabled when full-comp is denied: the cashier may still
+                      // apply ORDINARY discounts, and hiding the action entirely would
+                      // punish them for a right they never needed. The entry is judged
+                      // on its RESULT, at apply time.
+                      onPressed: _submitting ? null : () => _apply(l10n, caps),
+                      icon: const Icon(Icons.check),
+                      label: Text(l10n.posDiscountApplyAction),
+                      style: RestoflowButtonStyles.big(context),
+                    ),
             ),
           ],
         ),

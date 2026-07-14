@@ -53,9 +53,20 @@ class DiscountException implements Exception {
     this.permissionDenied = false,
     this.fullCompRequired = false,
     this.exceedsOrderTotal = false,
+    this.conflict = false,
   });
 
   final String message;
+
+  /// POS-OPERATIONS-SYNC-001: an optimistic-concurrency conflict — the order moved
+  /// under us (another till discounted it, the kitchen bumped it, a payment landed).
+  ///
+  /// It is a DISTINCT outcome, not a generic rejection. It used to be flattened into
+  /// the catch-all, so a cashier was told "discount failed" for an order that had in
+  /// fact been comped a second earlier — and the screen still showed the old total to
+  /// prove it. NEVER auto-retried: re-applying a discount computed against a state the
+  /// server has just called stale is how an order gets discounted twice.
+  final bool conflict;
 
   /// The actor may not apply discounts at all
   /// (`permission_denied`, no detail).

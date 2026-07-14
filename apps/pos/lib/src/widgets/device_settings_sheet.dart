@@ -442,7 +442,7 @@ class _ReprintLastReceiptButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final last = ref.watch(lastReceiptOrderNumberProvider);
+    final last = ref.watch(lastReceiptOrderKeyProvider);
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
@@ -455,7 +455,7 @@ class _ReprintLastReceiptButton extends ConsumerWidget {
                 await ref
                     .read(receiptPrintControllerProvider.notifier)
                     .reprint(
-                      orderNumber: last,
+                      orderKey: last,
                       submitToBridge: bridge == null ? null : bridge.submit,
                     );
                 messenger.showSnackBar(

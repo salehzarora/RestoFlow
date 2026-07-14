@@ -67,6 +67,7 @@ class CashPayment {
     required this.currencyCode,
     required this.receiptNumber,
     required this.paidAt,
+    this.orderId,
     this.orderStatus,
   });
 
@@ -81,8 +82,19 @@ class CashPayment {
 
   final String paymentId;
 
-  /// The order this payment settles (the provisional order number, e.g.
-  /// `DEMO-0001`).
+  /// THE AUTHORITATIVE ORDER THIS PAYMENT SETTLES (`orders.id`), or null when the
+  /// server has not named the order (demo / the RF-101 in-memory path) or when the
+  /// record was persisted by a build that did not store it.
+  ///
+  /// POS-OPERATIONS-SYNC-001 (second review correction): a payment used to identify
+  /// its order ONLY by [orderNumber], which is a display code and not unique. Two
+  /// orders sharing a code therefore shared one payment marker — money filed against
+  /// the wrong order. Association is now by [PosOrderIdentity]; this field is what
+  /// makes that identity authoritative and durable.
+  final String? orderId;
+
+  /// The order's DISPLAY code (e.g. `DEMO-0001`, `#A1B2C3`) — printed on the receipt
+  /// and read out to the customer. NEVER an identity: see [orderId].
   final String orderNumber;
 
   final String deviceId;

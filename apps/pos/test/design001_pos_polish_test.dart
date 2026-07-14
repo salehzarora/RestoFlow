@@ -6,6 +6,7 @@ import 'package:restoflow_pos/src/data/payment.dart';
 import 'package:restoflow_pos/src/data/payment_repository.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/payment_controller.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
 
 /// DESIGN-001 POS polish contracts:
@@ -25,6 +26,7 @@ class _FailingPaymentRepository extends DemoPaymentStore {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   }) async {
     attempts++;
     throw const PaymentException('payment failed: transient');
@@ -38,8 +40,9 @@ Widget _sheetHarness(_FailingPaymentRepository repo, {Locale? locale}) =>
         locale: locale ?? const Locale('en'),
         localizationsDelegates: restoflowLocalizationsDelegates,
         supportedLocales: kSupportedLocales,
-        home: const Scaffold(
+        home: Scaffold(
           body: CashPaymentSheet(
+            identity: PosOrderIdentity.legacyDisplayCode('DEMO-0001'),
             orderNumber: 'DEMO-0001',
             amountMinor: 4200,
             currencyCode: 'ILS',

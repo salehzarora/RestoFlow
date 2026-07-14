@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
 import 'package:restoflow_pos/src/data/payment_repository.dart';
 import 'package:restoflow_pos/src/state/payment_controller.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 
 void main() {
   late DemoPaymentStore store;
@@ -33,6 +34,7 @@ void main() {
 
   test('an exact cash payment completes with zero change', () async {
     final p = await controller().payCash(
+      identity: PosOrderIdentity.server('order-1'),
       orderId: 'order-1',
       orderNumber: 'DEMO-0001',
       amountMinor: 4200,
@@ -46,11 +48,12 @@ void main() {
     expect(p.tenderedMinor, 4200);
     expect(p.changeMinor, 0);
     expect(p.receiptNumber, 'PROV-0001');
-    expect(state().paymentFor('DEMO-0001'), isNotNull);
+    expect(state().paymentFor(PosOrderIdentity.server('order-1')), isNotNull);
   });
 
   test('an overpayment computes the change in integer minor units', () async {
     final p = await controller().payCash(
+      identity: PosOrderIdentity.server('order-1'),
       orderId: 'order-1',
       orderNumber: 'DEMO-0001',
       amountMinor: 4200,
@@ -65,6 +68,7 @@ void main() {
   test('insufficient cash is rejected and records nothing', () async {
     await expectLater(
       controller().payCash(
+        identity: PosOrderIdentity.server('order-1'),
         orderId: 'order-1',
         orderNumber: 'DEMO-0001',
         amountMinor: 4200,
@@ -73,7 +77,7 @@ void main() {
       ),
       throwsA(isA<PaymentException>()),
     );
-    expect(state().paymentFor('DEMO-0001'), isNull);
+    expect(state().paymentFor(PosOrderIdentity.server('order-1')), isNull);
     expect(state().shift.cashInDrawerMinor, 20000);
   });
 
@@ -81,6 +85,7 @@ void main() {
     'the drawer grows by the ORDER amount (not the tender) per payment',
     () async {
       await controller().payCash(
+        identity: PosOrderIdentity.server('order-1'),
         orderId: 'order-1',
         orderNumber: 'DEMO-0001',
         amountMinor: 4200,
@@ -91,6 +96,7 @@ void main() {
       expect(state().shift.lastPaymentMinor, 4200);
 
       await controller().payCash(
+        identity: PosOrderIdentity.server('order-2'),
         orderId: 'order-2',
         orderNumber: 'DEMO-0002',
         amountMinor: 900,
@@ -104,6 +110,7 @@ void main() {
 
   test('paying an already-paid order is idempotent', () async {
     final a = await controller().payCash(
+      identity: PosOrderIdentity.server('order-1'),
       orderId: 'order-1',
       orderNumber: 'DEMO-0001',
       amountMinor: 4200,
@@ -111,6 +118,7 @@ void main() {
       currencyCode: 'ILS',
     );
     final b = await controller().payCash(
+      identity: PosOrderIdentity.server('order-1'),
       orderId: 'order-1',
       orderNumber: 'DEMO-0001',
       amountMinor: 4200,

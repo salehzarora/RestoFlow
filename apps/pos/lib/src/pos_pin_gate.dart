@@ -76,7 +76,20 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
   Widget build(BuildContext context) {
     final device = widget.device;
     final session = ref.watch(posSyncSessionProvider);
-    if (session != null) {
+    final binding = ref.watch(posPinSessionBindingProvider);
+    // THE SESSION MUST BE BOUND TO EXACTLY THIS PAIRING CONTEXT. A PIN session is
+    // minted for one organization + restaurant + branch + device + device session;
+    // the session controller records that binding at establish time and drops the
+    // session on any pairing transition. This gate additionally REFUSES to unlock
+    // for any session whose full binding does not match the current pairing —
+    // never by deviceId alone, because a device id cannot distinguish "this till"
+    // from "this till re-paired into another branch or tenant". Acting under a
+    // mismatched session would run every submit and payment on the OLD pairing's
+    // server books. A session without a binding never passed through the session
+    // controller and is refused outright (fail closed).
+    final ownSession =
+        session != null && binding != null && binding.matchesContext(device);
+    if (ownSession) {
       // Re-authenticated: clear any stale "expired" notice for the next sign-out.
       if (_expiredNotice) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -110,6 +123,8 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
       onStartSession: (employeeProfileId, pin) => ref
           .read(posSessionControllerProvider.notifier)
           .signInWithPin(
+            // The full pairing context the new session will be BOUND to.
+            device: device,
             deviceId: deviceId,
             deviceSessionId: deviceSessionId,
             employeeProfileId: employeeProfileId,

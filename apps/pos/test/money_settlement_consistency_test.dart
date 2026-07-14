@@ -12,6 +12,8 @@ import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 
 /// MONEY-SETTLEMENT-CONSISTENCY-001 — the POS half.
 ///
@@ -72,7 +74,7 @@ CashPayment _payment(String number, {int amount = 4200, String? orderStatus}) =>
 Future<InMemoryRecentOrdersStore> _seeded() async {
   final store = InMemoryRecentOrdersStore();
   final now = DateTime.now();
-  await store.persist('demo-device', [
+  await store.persist(kDemoSyncScope.key, [
     PosRecentOrder(
       order: _view('#Z0', total: 0),
       submittedAt: now,
@@ -121,6 +123,14 @@ void _wide(WidgetTester tester, [Size size = const Size(1000, 2400)]) {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
+/// Commit 3: the operational centre lands on OPEN. A test about a TERMINAL order (or
+/// about all orders at once) must select the section it now lives in -- that is the
+/// point of having sections.
+Future<void> _showAllSections(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('orders-section-all')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   // ===== 35. a COMPLETED zero-total order shows NO Cancel =====================
   testWidgets(
@@ -129,6 +139,7 @@ void main() {
       _wide(tester);
       await tester.pumpWidget(_wrap(await _seeded()));
       await tester.pumpAndSettle();
+      await _showAllSections(tester);
 
       expect(find.byKey(const Key('recent-order-#ZC')), findsOneWidget);
       // THE BUG THIS CLOSES: the server refuses a void on a terminal order, so offering
@@ -148,6 +159,7 @@ void main() {
       _wide(tester);
       await tester.pumpWidget(_wrap(await _seeded()));
       await tester.pumpAndSettle();
+      await _showAllSections(tester);
 
       expect(find.byKey(const Key('recent-reprint-#P1')), findsOneWidget);
       expect(find.byKey(const Key('recent-view-#P1')), findsOneWidget);
@@ -163,6 +175,7 @@ void main() {
     _wide(tester);
     await tester.pumpWidget(_wrap(await _seeded()));
     await tester.pumpAndSettle();
+    await _showAllSections(tester);
 
     expect(find.byKey(const Key('recent-pay-#U1')), findsOneWidget);
     expect(find.byKey(const Key('recent-cancel-#U1')), findsOneWidget);
@@ -176,6 +189,7 @@ void main() {
     final l10n = await _l('en');
     await tester.pumpWidget(_wrap(await _seeded()));
     await tester.pumpAndSettle();
+    await _showAllSections(tester);
 
     // The server now REFUSES a zero-value tender (it would mint a 0-amount payment row
     // and burn a receipt number), so the button must not be offered at all.
@@ -195,9 +209,10 @@ void main() {
       final l10n = await _l('en');
       await tester.pumpWidget(_wrap(await _seeded()));
       await tester.pumpAndSettle();
+      await _showAllSections(tester);
 
       // Neither "Paid" (no money was taken) nor "Unpaid" (nothing is owed).
-      expect(find.byKey(const Key('recent-nocharge-#Z0')), findsOneWidget);
+      expect(find.byKey(const Key('order-settlement-#Z0')), findsOneWidget);
       expect(find.text(l10n.posNoChargeChip), findsWidgets);
       // No payment row -> no receipt to view or reprint.
       expect(find.byKey(const Key('recent-view-#Z0')), findsNothing);
@@ -267,6 +282,7 @@ void main() {
     final l10n = await _l('en');
     await tester.pumpWidget(_wrap(await _seeded()));
     await tester.pumpAndSettle();
+    await _showAllSections(tester);
 
     // It carries a REAL completed payment, so the old marker called it "Paid" — while
     // 2200 was still owed.
@@ -307,6 +323,7 @@ void main() {
     _wide(tester, const Size(390, 2400));
     await tester.pumpWidget(_wrap(await _seeded()));
     await tester.pumpAndSettle();
+    await _showAllSections(tester);
 
     expect(find.byKey(const Key('recent-order-#Z0')), findsOneWidget);
     expect(find.byKey(const Key('recent-cancel-#ZC')), findsNothing);
@@ -335,8 +352,9 @@ void main() {
               locale: Locale(code),
               localizationsDelegates: restoflowLocalizationsDelegates,
               supportedLocales: kSupportedLocales,
-              home: const Scaffold(
+              home: Scaffold(
                 body: CashPaymentSheet(
+                  identity: PosOrderIdentity.server('oid-#Z0'),
                   orderNumber: '#Z0',
                   amountMinor: 0,
                   currencyCode: 'ILS',
@@ -385,6 +403,7 @@ class _NotChargeablePaymentRepo implements PaymentRepository {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   }) async =>
       throw const PaymentException('order_not_chargeable', notChargeable: true);
 
@@ -399,5 +418,5 @@ class _NotChargeablePaymentRepo implements PaymentRepository {
   );
 
   @override
-  CashPayment? paymentFor(String orderNumber) => null;
+  CashPayment? paymentFor(PosOrderIdentity identity) => null;
 }

@@ -117,6 +117,18 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     }
   }
 
+  /// POS-OPERATIONS-SYNC-001: push whatever is queued, now.
+  ///
+  /// The reconnect/startup sequence is PUSH-then-PULL: queued work is delivered and
+  /// its acknowledgements/rejections processed BEFORE an authoritative pull, so the
+  /// pull observes a server that has already seen this device's writes. Pulling
+  /// first would hand us a snapshot that predates our own queued payment and invite
+  /// the UI to "correct" itself back to a state we are in the middle of changing.
+  ///
+  /// Re-entrancy is already guarded inside [_sweep]; a second caller is a no-op
+  /// rather than a second concurrent push.
+  Future<void> pushQueued() => _sweep();
+
   /// Manually re-queues + pushes every FAILED entry ("Sync failed — retry all").
   Future<void> retryAllFailed() async {
     final failed = <String>[

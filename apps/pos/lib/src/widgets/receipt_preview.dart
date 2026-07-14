@@ -34,7 +34,7 @@ class ReceiptPreview extends ConsumerWidget {
     // successful print. Watch this order's receipt print job.
     final printStatus = ref.watch(
       receiptPrintControllerProvider.select(
-        (jobs) => jobs[order.orderNumber]?.status,
+        (jobs) => jobs[order.identity.key]?.status,
       ),
     );
     final theme = Theme.of(context);

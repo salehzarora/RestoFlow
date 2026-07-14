@@ -33,7 +33,7 @@ void main() {
       final c = container();
       final controller = c.read(receiptPrintControllerProvider.notifier);
       await controller.prepareAndDispatch(
-        orderNumber: '#A1',
+        orderKey: '#A1',
         hasEnabledPrinter: true,
         buildDocument: doc,
         submitToBridge: null,
@@ -46,7 +46,7 @@ void main() {
     final c = container();
     final controller = c.read(receiptPrintControllerProvider.notifier);
     await controller.prepareAndDispatch(
-      orderNumber: '#A1',
+      orderKey: '#A1',
       hasEnabledPrinter: true,
       buildDocument: doc,
       submitToBridge: always(
@@ -65,7 +65,7 @@ void main() {
       final c = container();
       final controller = c.read(receiptPrintControllerProvider.notifier);
       await controller.prepareAndDispatch(
-        orderNumber: '#A1',
+        orderKey: '#A1',
         hasEnabledPrinter: true,
         buildDocument: doc,
         submitToBridge: always(
@@ -84,7 +84,7 @@ void main() {
     final c = container();
     final controller = c.read(receiptPrintControllerProvider.notifier);
     await controller.prepareAndDispatch(
-      orderNumber: '#A1',
+      orderKey: '#A1',
       hasEnabledPrinter: true,
       buildDocument: doc,
       submitToBridge: always(
@@ -100,7 +100,7 @@ void main() {
       final c = container();
       final controller = c.read(receiptPrintControllerProvider.notifier);
       await controller.prepareAndDispatch(
-        orderNumber: '#A1',
+        orderKey: '#A1',
         hasEnabledPrinter: true,
         buildDocument: doc,
         submitToBridge: always(
@@ -123,7 +123,7 @@ void main() {
     final c = container();
     final controller = c.read(receiptPrintControllerProvider.notifier);
     await controller.prepareAndDispatch(
-      orderNumber: '#A1',
+      orderKey: '#A1',
       hasEnabledPrinter: true,
       buildDocument: doc,
       submitToBridge: (_) async => throw StateError('boom'),
@@ -138,7 +138,7 @@ void main() {
       final controller = c.read(receiptPrintControllerProvider.notifier);
       // First attempt fails (paper out).
       await controller.prepareAndDispatch(
-        orderNumber: '#A1',
+        orderKey: '#A1',
         hasEnabledPrinter: true,
         buildDocument: doc,
         submitToBridge: always(
@@ -148,7 +148,7 @@ void main() {
       expect(controller.jobFor('#A1')!.status, PrintJobStatus.failed);
       // Retry with a now-healthy bridge.
       await controller.retry(
-        orderNumber: '#A1',
+        orderKey: '#A1',
         hasEnabledPrinter: true,
         buildDocument: doc,
         submitToBridge: always(const pp.BridgeSubmitResult.sentToPrinter()),
@@ -167,7 +167,7 @@ void main() {
     };
     for (var i = 0; i < 3; i++) {
       await controller.prepareAndDispatch(
-        orderNumber: '#A1',
+        orderKey: '#A1',
         hasEnabledPrinter: true,
         buildDocument: doc,
         submitToBridge: counting,

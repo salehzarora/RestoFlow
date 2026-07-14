@@ -13,11 +13,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/durable_outbox_store.dart';
 import 'src/data/recent_orders_store.dart';
+import 'src/data/sync_cursor_store.dart';
 import 'src/print/print_bridge.dart';
 import 'src/pos_menu_screen.dart';
 import 'src/pos_pairing_gate.dart';
 import 'src/pos_pin_gate.dart';
 import 'src/state/locale_controller.dart';
+import 'src/state/order_sync_controller.dart';
 import 'src/state/outbox_controller.dart';
 import 'src/state/pos_branch_tax.dart';
 import 'src/state/pos_device_context.dart';
@@ -25,6 +27,7 @@ import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_session.dart';
 import 'src/state/pos_shift_close_policy.dart';
 import 'src/state/recent_orders_controller.dart';
+import 'src/widgets/pos_sync_lifecycle.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -84,6 +87,18 @@ Widget _posApp(
       // paid/unpaid state survive a refresh / restart (per-device key).
       posRecentOrdersStoreProvider.overrideWithValue(
         SharedPrefsRecentOrdersStore(prefs),
+      ),
+      // POS-OPERATIONS-SYNC-001: the incremental pull cursor is durable and
+      // SCOPE-PARTITIONED (org/restaurant/branch/device). Replaying one branch's
+      // cursor against another would skip that branch's whole history and present
+      // an empty, confident, completely wrong board.
+      posSyncCursorStoreProvider.overrideWithValue(
+        SharedPrefsSyncCursorStore(prefs),
+      ),
+      // The ~30s re-pull, armed ONLY while an orders surface is on screen (the
+      // coordinator stops it when the last one closes). Null in tests.
+      posSyncPollIntervalProvider.overrideWithValue(
+        PosOrderSyncController.defaultPeriodicInterval,
       ),
       // RF-118: the client PIN-attempt lockout counter persists to
       // shared_preferences too, so a too-many-attempts cooldown survives a
@@ -300,8 +315,9 @@ class PosApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final gate = AuthGatedHome(
       surface: AppSurface.pos,
-      demoHome: const PosMenuScreen(),
-      onReady: (context, state) => const PosMenuScreen(),
+      demoHome: const PosSyncLifecycle(child: PosMenuScreen()),
+      onReady: (context, state) =>
+          const PosSyncLifecycle(child: PosMenuScreen()),
       demoMode: demoMode,
       fetchContext: fetchContext,
     );
@@ -318,7 +334,7 @@ class PosApp extends ConsumerWidget {
             signedInBuilder: (context, device) => PosPinGate(
               device: device,
               staffRepository: deviceStaffRepository,
-              child: const PosMenuScreen(),
+              child: const PosSyncLifecycle(child: PosMenuScreen()),
             ),
           )
         : (!demo && problem != null)
