@@ -240,7 +240,7 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
     if (_submitting) return;
     setState(() => _submitting = true);
     try {
-      await _submitOrder(
+      await submitOrderFromCart(
         ref: ref,
         context: context,
         cart: cart,
@@ -299,7 +299,11 @@ class _SheetGrip extends StatelessWidget {
 /// a successful enqueue materialize the confirmation + clear the cart + reset the
 /// order setup. If the enqueue fails the cart is left intact and a message is
 /// shown — the order is never silently lost.
-Future<void> _submitOrder({
+///
+/// PUBLIC (visible for testing): this is the Send button's handler, and the
+/// delayed-result scope race it guards can only be proven by driving THIS seam.
+@visibleForTesting
+Future<void> submitOrderFromCart({
   required WidgetRef ref,
   required BuildContext context,
   required CartViewState cart,
@@ -312,11 +316,13 @@ Future<void> _submitOrder({
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final outbox = ref.read(outboxControllerProvider.notifier);
-  // The scope this order is being submitted IN — captured before the await, the same
-  // guard payCash carries. If the till is re-paired while the push is in flight, the
-  // order is real and queued, but its local recent-orders record belongs to the
-  // branch that took it, not to whichever branch the till lands in next.
-  final scopeKey = ref.read(posSyncScopeProvider)?.key;
+  // Captured BEFORE the await: the widget's ref dies with the tree (an unpair
+  // unmounts the POS), but the container and the notifiers it owns do not.
+  final container = ProviderScope.containerOf(context, listen: false);
+  // The scope this order is being submitted IN. If the till's pairing context
+  // changes while the push is in flight, the RESULT still belongs to the scope
+  // that submitted it — not to whichever scope the till lands in next.
+  final scopeKey = container.read(posSyncScopeProvider)?.key;
   try {
     final result = await outbox.submit(
       lines: cart.lines,
@@ -329,6 +335,18 @@ Future<void> _submitOrder({
       // ORDER-CUSTOMER-001: the optional customer name (null when not entered).
       customerName: setup.customerName,
     );
+    // THE MUTATION BOUNDARY. Everything below this line mutates state a NEW scope
+    // would see — the cart's submitted-order view, the confirmation screen, the
+    // order-setup reset, the recent-orders row. If the scope moved while the
+    // submit was in flight, NONE of it may run: the server may genuinely have
+    // accepted the order (for the ORIGINAL scope — the outbox entry is durable and
+    // is not deleted), but showing branch A's confirmation with live payment and
+    // discount actions inside branch B would be presenting one branch's order as
+    // another's. This is an OBSOLETE UI RESULT, not a failure: nothing is
+    // fabricated, nothing is rolled back, and the original scope re-discovers the
+    // accepted order through its own authoritative window pull.
+    if (container.read(posSyncScopeProvider)?.key != scopeKey) return;
+
     cartController.submitOrder(
       orderType: setup.orderType,
       tableLabel: setup.assignedTable?.label,
@@ -342,19 +360,20 @@ Future<void> _submitOrder({
     );
     // POS-ORDERS-AND-PAYMENT-001: record the just-submitted order in the local
     // recent/unpaid-orders list (UNPAID — no payment yet). Best-effort: this
-    // never affects the submit/outbox result above.
-    //
-    // ONLY under the scope it was submitted in. A scope that moved mid-flight means
-    // this record belongs to the previous branch's bucket, which is no longer ours
-    // to write — that branch re-discovers the order from its own feed.
-    final submitted = ref.read(cartControllerProvider).submittedOrder;
-    if (submitted != null && ref.read(posSyncScopeProvider)?.key == scopeKey) {
-      ref
+    // never affects the submit/outbox result above. Scope-safe by the boundary
+    // guard above; read through the container so a mid-flight unmount cannot
+    // throw ref-after-dispose.
+    final submitted = container.read(cartControllerProvider).submittedOrder;
+    if (submitted != null) {
+      container
           .read(posRecentOrdersControllerProvider.notifier)
           .recordSubmitted(submitted);
     }
     setupController.reset();
   } on OrderSubmissionException {
+    // A failure that belongs to a scope we have LEFT is not this scope's failure;
+    // showing it here would blame the new branch for the old one's submit.
+    if (container.read(posSyncScopeProvider)?.key != scopeKey) return;
     messenger.showSnackBar(SnackBar(content: Text(l10n.posSubmitFailed)));
   }
 }

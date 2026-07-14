@@ -9,6 +9,7 @@ import '../data/recent_order.dart';
 import '../data/void_repository.dart';
 import '../format/money_format.dart';
 import '../state/order_sync_controller.dart';
+import '../state/pos_sync_scope_provider.dart';
 import '../state/recent_orders_controller.dart';
 import '../state/void_controller.dart';
 
@@ -85,35 +86,62 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
     });
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    // CAPTURED BEFORE THE AWAIT. The sheet is drag/barrier-dismissible while the
+    // void is in flight; touching the WIDGET's `ref` after a dismissal throws —
+    // and skipping the local terminal marker or the authoritative reconcile
+    // because the sheet died would leave a SERVER-VOIDED order sitting on the
+    // till with live Pay and Cancel buttons until the next poll. The notifiers
+    // outlive the sheet; the data work completes whether or not the UI is still
+    // there. `mounted` gates ONLY setState / pop / snackbars.
+    final voids = ref.read(voidRepositoryProvider);
+    final orders = ref.read(posRecentOrdersControllerProvider.notifier);
+    final sync = ref.read(posOrderSyncControllerProvider.notifier);
+    final container = ProviderScope.containerOf(context, listen: false);
+    // The scope this void is being submitted IN. If the pairing context changes
+    // mid-flight, the result belongs to the ORIGINAL scope: it is not merged into
+    // whichever scope is active when the response lands — that scope reconciles
+    // it from its own authoritative feed when it returns.
+    final scopeKey = container.read(posSyncScopeProvider)?.key;
+    bool scopeMoved() => container.read(posSyncScopeProvider)?.key != scopeKey;
     try {
-      await ref
-          .read(voidRepositoryProvider)
-          .voidOrder(
-            orderId: widget.order.orderId ?? '',
-            reason: reason,
-            // POS-OPERATIONS-SYNC-001: the AUTHORITATIVE revision. The POS stored none
-            // before this phase and sent none, so app.void_order's optimistic-
-            // concurrency check could never fire and a cancel could land on an order
-            // that had already moved (paid on another till, bumped by the kitchen).
-            expectedRevision: widget.order.revision,
-          );
+      await voids.voidOrder(
+        orderId: widget.order.orderId ?? '',
+        reason: reason,
+        // POS-OPERATIONS-SYNC-001: the AUTHORITATIVE revision. The POS stored none
+        // before this phase and sent none, so app.void_order's optimistic-
+        // concurrency check could never fire and a cancel could land on an order
+        // that had already moved (paid on another till, bumped by the kitchen).
+        expectedRevision: widget.order.revision,
+      );
+      // A scope that moved mid-flight: the void SUCCEEDED for the original
+      // scope's order and stands server-side; nothing may be written into the
+      // NEW scope's state. The original scope reconciles the terminal status
+      // from its own feed on return. (markVoided would already no-op — the new
+      // scope holds no row with this identity — but we do not even ask.)
+      // Stopping the spinner is pure UI: in the real app the pairing change
+      // unmounts this tree anyway, but a still-mounted sheet must not spin
+      // forever over work it deliberately dropped.
+      if (scopeMoved()) {
+        if (mounted) setState(() => _submitting = false);
+        return;
+      }
       // The server confirmed the void -> mark the local order cancelled (drops
-      // out of the unpaid count, no pay/reprint). Money-free.
-      ref
-          .read(posRecentOrdersControllerProvider.notifier)
-          // BY IDENTITY: cancelling this order must not cancel a different one that
-          // happens to share its printed code.
-          .markVoided(widget.order.identity, reason);
+      // out of the unpaid count, no pay/reprint). Money-free. On the CAPTURED
+      // notifier, so a dismissed sheet cannot skip it.
+      // BY IDENTITY: cancelling this order must not cancel a different one that
+      // happens to share its printed code.
+      orders.markVoided(widget.order.identity, reason);
       // POS-OPERATIONS-SYNC-001: void_order returns only {status, revision} — take
       // the authoritative snapshot so the row carries the server's terminal status
       // and revision, not just this device's local marker.
-      await _reconcile();
+      await _reconcile(sync);
+      if (!mounted)
+        return; // UI only from here — the data work is already done.
       navigator.pop();
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.posOrderCancelledSnack)),
       );
     } on VoidException catch (e) {
-      if (!mounted) return;
       // POS-OPERATIONS-SYNC-001: a typed refusal means our picture of this order is
       // WRONG, and showing the right message on top of a stale row explains nothing.
       //
@@ -126,8 +154,13 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
       //
       // permission_denied / already-paid / transport are NOT staleness: the order is
       // exactly as we thought, we simply may not do this to it. No refetch.
-      if (e.notVoidable || e.conflict) {
-        await _reconcile();
+      //
+      // THE RECONCILE DOES NOT DEPEND ON THE SHEET STILL EXISTING — it runs on the
+      // captured coordinator (a dismissed sheet used to skip it and leave the
+      // terminal order actionable). It is skipped only when the SCOPE moved: the
+      // refusal belongs to the original scope, which refreshes on its own return.
+      if ((e.notVoidable || e.conflict) && !scopeMoved()) {
+        await _reconcile(sync);
       }
       if (!mounted) return;
       setState(() {
@@ -157,15 +190,14 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
     }
   }
 
-  /// Pulls the authoritative snapshot for THIS order. Never throws — the
-  /// coordinator records its own failure, and a failed refresh must not turn a
-  /// SUCCESSFUL void into an error the cashier sees.
-  Future<void> _reconcile() async {
+  /// Pulls the authoritative snapshot for THIS order through the CAPTURED
+  /// coordinator (never the widget's `ref`, which dies with a dismissed sheet).
+  /// Never throws — the coordinator records its own failure, and a failed refresh
+  /// must not turn a SUCCESSFUL void into an error the cashier sees.
+  Future<void> _reconcile(PosOrderSyncController sync) async {
     final orderId = widget.order.orderId;
     if (orderId == null || orderId.isEmpty) return;
-    await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
-      <String>[orderId],
-    );
+    await sync.refreshOrders(<String>[orderId]);
   }
 
   @override

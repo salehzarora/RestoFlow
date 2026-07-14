@@ -49,30 +49,38 @@ final posSyncScopeProvider = Provider<PosSyncScope?>((ref) {
   final ctx = ref.watch(posDeviceContextProvider);
   if (ctx == null) return null;
 
-  // A SESSION FROM ANOTHER PAIRING DOES NOT NAME THIS TILL'S SCOPE. The PIN-session
-  // lifecycle is not bound to the pairing lifecycle: an unpair clears the device
-  // context but leaves an established in-memory session standing (its best-effort
-  // server revoke can fail offline, and nothing client-side ends it). Re-pair the
-  // till into another branch and, without this check, the scope became a HYBRID —
-  // the NEW pairing's organization/branch with the OLD session's device id — and
-  // every pull made under it ran on the OLD branch's server session: branch A's
-  // orders, displayed and durably persisted on a till standing in branch B. A
-  // mismatch is therefore REFUSED outright: no scope, no sync, no cache, until the
-  // operator signs in on the pairing the till actually has.
-  final sessionDeviceId = session?.deviceId;
+  // A SESSION FROM ANOTHER PAIRING CONTEXT DOES NOT NAME THIS TILL'S SCOPE. The
+  // session controller binds every session it establishes to the FULL pairing
+  // context (org + restaurant + branch + device + device session) and drops it on
+  // any pairing transition. This provider additionally refuses to mint a scope for
+  // a session whose binding does not match the current context — never by deviceId
+  // alone: the same device id under a different branch, tenant, or pairing is a
+  // different operational world, and a scope mixing the new context with the old
+  // session runs every pull on the OLD pairing's server session (branch A's
+  // orders, displayed and durably persisted on a till standing in branch B).
+  //
+  // NO SESSION, NO SCOPE. A paired-but-not-signed-in till has no authority to sync
+  // with, and every surface that could consume the cache sits behind the PIN gate
+  // anyway. Minting a scope from the pairing alone would let reads and cache
+  // recovery run for a context no one has authenticated into.
+  if (session == null) return null;
+
+  final binding = ref.watch(posPinSessionBindingProvider);
+  if (binding != null && !binding.matchesContext(ctx)) return null;
+  // A session with NO binding never passed through the session controller. In the
+  // shipped app that cannot happen (production sessions are controller-established
+  // and always bound); it is reachable only where tests inject a session directly,
+  // and there the deviceId cross-check remains as the floor.
   final pairedDeviceId = ctx.deviceId;
-  if (sessionDeviceId != null &&
+  if (binding == null &&
       pairedDeviceId != null &&
       pairedDeviceId.isNotEmpty &&
-      sessionDeviceId != pairedDeviceId) {
+      session.deviceId != pairedDeviceId) {
     return null;
   }
 
-  // The device id may be known from the pairing before a PIN session exists, so a
-  // paired-but-not-signed-in till still reads its OWN branch's cache rather than
-  // falling back to a shared one.
-  final deviceId = sessionDeviceId ?? pairedDeviceId;
-  if (deviceId == null || deviceId.isEmpty) return null;
+  final deviceId = session.deviceId;
+  if (deviceId.isEmpty) return null;
 
   return PosSyncScope(
     organizationId: ctx.organizationId,

@@ -260,7 +260,13 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
     final ids = orderIds.where((id) => id.trim().isNotEmpty).toList();
     if (ids.isEmpty) return;
     final gen = _generation;
-    final scopeKey = _scope()?.key;
+    // NO SCOPE, NO CALL. Without a valid scope there is nothing this read could be
+    // FOR — and the repository would still authenticate with whatever session it
+    // captured, which after an unpair is a session this till no longer owns. A
+    // scopeless till performs ZERO snapshot RPCs: not "fetch and discard", none.
+    final scope = _scope();
+    if (scope == null) return;
+    final scopeKey = scope.key;
     final repo = ref.read(orderSnapshotRepositoryProvider);
     try {
       final page = await repo.fetchOrders(ids);
@@ -493,12 +499,14 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
     final gen = _generation;
     final scope = _scope();
     final scopeKey = scope?.key;
-    final repo = ref.read(orderSnapshotRepositoryProvider);
     if (scope == null) {
       // No device/PIN context yet. Not an error — there is simply nothing to sync
       // against, and pretending otherwise would show a scary banner at startup.
+      // The repository is deliberately not even READ here: constructing it
+      // captures a session, and a scopeless till must make zero snapshot calls.
       return;
     }
+    final repo = ref.read(orderSnapshotRepositoryProvider);
 
     state = state.copyWith(isSyncing: true);
     try {

@@ -8,6 +8,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/ids.dart';
 import '../data/shift_repository.dart';
+import 'pos_device_context.dart';
 import 'pos_shift.dart';
 
 /// Operator-supplied real-mode PIN/device context (RF-131), read from
@@ -157,6 +158,61 @@ final posImageUrlResolverProvider = Provider<DeviceImageUrlResolver?>(
   (ref) => null,
 );
 
+/// POS-OPERATIONS-SYNC-001 (final review) — WHAT a PIN session is valid FOR.
+///
+/// A PIN session is minted for ONE exact operational pairing context: the
+/// organization, restaurant and branch the device was paired into, the paired
+/// device itself, and — the strongest handle both sides already carry — the
+/// DEVICE SESSION the PIN session was started against (`start_pin_session`'s
+/// `p_device_session_id`). A new pairing always mints a new device session, so the
+/// binding distinguishes two pairings even in the hypothetical where a device id
+/// were ever reused across them.
+///
+/// This is CLIENT CONTAINMENT ONLY. The server remains the sole authority on what
+/// the session may actually do; the binding exists so a session that outlived its
+/// pairing (unpair's server revoke is best-effort and can fail offline) can never
+/// unlock a surface, name a sync scope, or be compared by the deviceId alone —
+/// which was the previous check, and deviceId alone cannot distinguish "the same
+/// till" from "the same till re-paired somewhere else".
+class PosPinSessionBinding {
+  const PosPinSessionBinding({
+    required this.organizationId,
+    required this.restaurantId,
+    required this.branchId,
+    required this.deviceId,
+    required this.deviceSessionId,
+  });
+
+  /// The tenant scope of the pairing the session was established under. Null only
+  /// on the legacy dart-define path when no device context existed at establish
+  /// time — in which case [matchesContext] can never return true and the operator
+  /// signs in through the gate, which records a full binding.
+  final String? organizationId;
+  final String? restaurantId;
+  final String? branchId;
+
+  /// The paired device the session was started on.
+  final String? deviceId;
+
+  /// The DEVICE SESSION handle the PIN session was started against — the pairing
+  /// identity itself. A re-pair always changes it.
+  final String? deviceSessionId;
+
+  /// True only when EVERY component of the current pairing context matches the
+  /// one this session was established under. deviceId alone is NOT sufficient:
+  /// the same device id in a different branch, tenant, or pairing is a different
+  /// operational world.
+  bool matchesContext(DeviceContext ctx) =>
+      organizationId != null &&
+      organizationId == ctx.organizationId &&
+      restaurantId == ctx.restaurantId &&
+      branchId == ctx.branchId &&
+      deviceId != null &&
+      deviceId == ctx.deviceId &&
+      deviceSessionId != null &&
+      deviceSessionId == ctx.deviceSessionId;
+}
+
 /// Establishes and owns the POS [SyncSession] for real mode (RF-131).
 ///
 /// In demo mode (the DEFAULT), and whenever the Supabase transport or the
@@ -168,6 +224,14 @@ final posImageUrlResolverProvider = Provider<DeviceImageUrlResolver?>(
 /// precondition failure (42501), or a transient transport error all resolve to
 /// `null` (fail-closed) - there is no path to a fake or forced session.
 class PosSessionController extends AsyncNotifier<SyncSession?> {
+  /// The exact pairing context the CURRENT session was established under, or null
+  /// when no session is active. Read via [posPinSessionBindingProvider]; compared
+  /// by the PIN gate and the sync-scope provider. Never trusted by the server.
+  PosPinSessionBinding? _binding;
+
+  /// The current session's pairing binding (see [PosPinSessionBinding]).
+  PosPinSessionBinding? get binding => _binding;
+
   /// RF-118: when the current PIN session was established (drives the client
   /// expiry policy). Null when no session is active.
   DateTime? _startedAt;
@@ -215,6 +279,16 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
 
   @override
   FutureOr<SyncSession?> build() {
+    // A SESSION DIES WITH ITS PAIRING. Watching the device context means ANY
+    // pairing transition — unpair, re-pair, restore into a different context —
+    // re-runs this build and DROPS the imperatively-established session (and its
+    // binding) on the floor. That is the point: a PIN session belongs to exactly
+    // one pairing, the unpair's server-side revoke is only best-effort, and
+    // nothing else client-side would ever end the old session. The pairing gate
+    // publishes the context once per genuine transition (init / restore / paired /
+    // unpair), never per rebuild, so this cannot churn a live session.
+    ref.watch(posDeviceContextProvider);
+    _binding = null;
     final cfg = ref.watch(runtimeConfigProvider);
     if (cfg.isDemoMode) return null;
     final transport = ref.watch(posAuthTransportProvider);
@@ -238,6 +312,18 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         final session = SyncSession(
           pinSessionId: started.pinSessionId,
           deviceId: config.deviceId,
+        );
+        // Bind the session to the pairing context it was established under. On
+        // this legacy dart-define path the context may be absent — the binding
+        // then matches NOTHING (fail closed) until a gate sign-in records a full
+        // one.
+        final ctx = ref.read(posDeviceContextProvider);
+        _binding = PosPinSessionBinding(
+          organizationId: ctx?.organizationId,
+          restaurantId: ctx?.restaurantId,
+          branchId: ctx?.branchId,
+          deviceId: config.deviceId,
+          deviceSessionId: config.deviceSessionId,
         );
         _startedAt = clock(); // RF-118: start the client expiry window.
         _pausedAt = null;
@@ -365,6 +451,7 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// typed, safe [PinLoginError] for the screen to show. Fail-closed: any
   /// failure leaves the session null.
   Future<PinLoginError?> signInWithPin({
+    required DeviceContext device,
     required String deviceId,
     required String deviceSessionId,
     required String employeeProfileId,
@@ -382,6 +469,14 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         final session = SyncSession(
           pinSessionId: started.pinSessionId,
           deviceId: deviceId,
+        );
+        // The session is valid for EXACTLY this pairing context and no other.
+        _binding = PosPinSessionBinding(
+          organizationId: device.organizationId,
+          restaurantId: device.restaurantId,
+          branchId: device.branchId,
+          deviceId: deviceId,
+          deviceSessionId: deviceSessionId,
         );
         _startedAt = clock(); // RF-118: start the client expiry window.
         _pausedAt = null;
@@ -404,6 +499,7 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// captured open-shift handle (RF-113) so a new sign-in starts fresh.
   void endSession() {
     ref.read(posOpenShiftProvider.notifier).clear();
+    _binding = null;
     _startedAt = null; // RF-118: close the client expiry window.
     _pausedAt = null;
     state = const AsyncData(null);
@@ -439,3 +535,15 @@ final posSessionControllerProvider =
 final posSyncSessionProvider = Provider<SyncSession?>(
   (ref) => ref.watch(posSessionControllerProvider).valueOrNull,
 );
+
+/// The pairing binding of the CURRENT PIN session, or null when there is no
+/// controller-established session.
+///
+/// Every production session flows through [PosSessionController] and therefore
+/// carries a binding; a session injected past the controller (a test override of
+/// [posSyncSessionProvider]) has none, and consumers document how they fail in
+/// that case. Recomputed whenever the session changes.
+final posPinSessionBindingProvider = Provider<PosPinSessionBinding?>((ref) {
+  ref.watch(posSessionControllerProvider);
+  return ref.read(posSessionControllerProvider.notifier).binding;
+});

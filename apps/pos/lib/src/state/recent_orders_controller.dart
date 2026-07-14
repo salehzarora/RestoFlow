@@ -99,9 +99,9 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     if (key == _scopeKey) return;
     _generation++;
     _scopeKey = key;
-    // The unsaved-day flag belongs to the scope that earned it. Carrying it across
-    // would make the new branch claim ITS day diverges from disk when it does not.
-    _lastPersistFailed = false;
+    // _owedWrites is deliberately NOT touched: each scope's debt is keyed by that
+    // scope and waits for its owner to return. Forgetting it here is exactly how
+    // A's unsaved day used to vanish across A -> B -> A.
   }
 
   /// Loads any persisted recent orders (real mode) and merges them under the
@@ -135,6 +135,18 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     final byIdentity = <String, PosRecentOrder>{
       for (final o in loaded) o.identity.key: o,
     };
+    // THE OWED SNAPSHOT PARTICIPATES IN RECOVERY. If this scope still owes the disk
+    // a write, the owed rows are NEWER than anything the store returned — they are
+    // the very rows the store refused. They carry the order-time lines, payment
+    // markers and void reasons a server re-fetch cannot reconstruct, so they win
+    // over the loaded (stale) copies here; the debt itself stays booked until a
+    // write actually lands.
+    final owed = _owedWrites[scopeKey];
+    if (owed != null) {
+      for (final o in owed) {
+        byIdentity[o.identity.key] = o;
+      }
+    }
     // In-session state (if any) wins over the persisted copy — with ONE exception.
     // If the first pull raced this recovery and landed BEFORE the load completed, it
     // reconciled against an EMPTY list and adopted this device's own orders as
@@ -290,14 +302,26 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
 
     if (snapshots.isEmpty) {
       // AN EMPTY PAGE IS ONLY A SUCCESS IF WE OWE THE DISK NOTHING. "Nothing changed"
-      // is a statement about the SERVER; if the previous durable write failed, memory
+      // is a statement about the SERVER; if a previous durable write failed, memory
       // and disk still disagree, and reporting success here let a quiet server clear
       // the persistence error while the cashier's day remained unstored. If a write
       // is owed, this is the retry.
-      if (!_lastPersistFailed) return true;
+      final owed = _owedWrites[scopeKey];
+      if (owed == null) return true;
+      // Persist the UNION of the owed snapshot and the current state, keyed by
+      // identity with the CURRENT state winning where both hold a row. The owed
+      // rows alone could miss local writes made since the failure; the state alone
+      // could be EMPTY if this retry races startup recovery — and writing [] over
+      // the stored day while clearing the debt would be the exact loss this map
+      // exists to prevent.
+      final byIdentity = <String, PosRecentOrder>{
+        for (final o in owed) o.identity.key: o,
+        for (final o in state) o.identity.key: o,
+      };
+      final rows = _sortedPruned(byIdentity.values.toList());
       try {
-        await store.persist(scopeKey, state);
-        if (!_isStale(gen, scopeKey)) _lastPersistFailed = false;
+        await store.persist(scopeKey, rows);
+        _owedWrites.remove(scopeKey);
         return true;
       } catch (_) {
         return _isStale(gen, scopeKey);
@@ -305,7 +329,7 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     }
 
     final result = reconcileSnapshots(state, snapshots);
-    if (!result.changedAnything && !_lastPersistFailed) {
+    if (!result.changedAnything && !_owedWrites.containsKey(scopeKey)) {
       // IDEMPOTENT: re-applying the same page is a genuine no-op — no state
       // churn, no rewrite, no rebuild.
       return true;
@@ -326,10 +350,13 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // mid-write file branch A's orders under branch B's key — the very leak the
       // scoped key exists to prevent, reintroduced one await later.
       await store.persist(scopeKey, merged);
-      if (!_isStale(gen, scopeKey)) _lastPersistFailed = false;
+      _owedWrites.remove(scopeKey);
       return true;
     } catch (_) {
-      if (!_isStale(gen, scopeKey)) _lastPersistFailed = true;
+      // BOOK THE DEBT UNDER THE CAPTURED KEY — even when the scope has since moved
+      // on. These rows are the captured scope's newest unsaved truth, and they are
+      // what recovery merges back when that scope returns.
+      _owedWrites[scopeKey] = merged;
       // The in-memory state is still correct and usable; only durability failed.
       // Report it so the cursor stays put and the same page is re-delivered next
       // time, rather than being silently skipped.
@@ -397,29 +424,45 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // The RECONCILIATION path does NOT come through here -- applySnapshots awaits the
       // write and REPORTS failure, because that is the path whose success decides
       // whether the sync cursor may advance.
-      final gen = _generation;
       final scopeKey = _scopeKey;
       if (scopeKey.isEmpty) return; // no branch, no bucket (see applySnapshots)
       unawaited(
         _store.persist(scopeKey, result).catchError((Object _) {
-          // A write that failed for a branch we have since LEFT is not this branch's
-          // problem, and flagging it here would make a healthy till claim its day is
-          // unsaved.
-          if (_isStale(gen, scopeKey)) return;
-          _lastPersistFailed = true;
+          // BOOKED UNDER THE CAPTURED KEY, whatever the active scope is by now:
+          // these rows are that scope's newest unsaved truth, and its recovery
+          // merges them back. (Only an awaited applySnapshots success clears the
+          // debt — a racing fire-and-forget success must not.)
+          _owedWrites[scopeKey] = result;
         }),
       );
     }
   }
 
-  /// True when the most recent durable write did not stick — i.e. the in-memory state
-  /// and the stored state DISAGREE, and we still owe the disk a write.
+  /// THE OWED DURABLE WRITES, PER SCOPE: scope key -> the exact rows whose write
+  /// failed. This is the newest unsaved truth for that scope — order-time lines,
+  /// payment markers, void reasons — everything a re-fetch from the server can NOT
+  /// reconstruct (the branch feed returns lineless snapshots).
   ///
-  /// Surfaced so the UI can say so rather than silently pretending the day is saved, and
-  /// used by [applySnapshots] to keep re-attempting the write even when reconciliation
-  /// finds nothing new to merge.
-  bool get lastPersistFailed => _lastPersistFailed;
-  bool _lastPersistFailed = false;
+  /// It used to be one controller-level boolean, RESET on scope change. That lost
+  /// the debt across A -> B -> A: back in A, the persisted store held only the
+  /// stale pre-failure rows, the in-memory rich state was gone with the rebuild,
+  /// and an empty/no-change page then reported success over a disk that silently
+  /// disagreed — receipts and D-008 order-time truth lost. Now the debt is keyed by
+  /// the exact scope that earned it: B never inherits it, B's successes never
+  /// clear it, and returning to A merges the owed rows back through recovery and
+  /// retries the write.
+  ///
+  /// IN-MEMORY, honestly: if the process dies while a write is owed, the unsaved
+  /// delta is gone — the write itself was the thing that failed, so there is
+  /// nowhere durable it could have been kept. Within a live run, however, no scope
+  /// transition ever discards it.
+  final Map<String, List<PosRecentOrder>> _owedWrites =
+      <String, List<PosRecentOrder>>{};
+
+  /// True when the ACTIVE scope still owes the disk a write — the in-memory state
+  /// and the stored state disagree. Surfaced so the UI can say so rather than
+  /// silently pretending the day is saved.
+  bool get lastPersistFailed => _owedWrites.containsKey(_scopeKey);
 
   /// THE DEDUPE KEY IS THE ORDER'S IDENTITY — never the display code.
   ///

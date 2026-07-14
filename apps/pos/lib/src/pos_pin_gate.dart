@@ -76,16 +76,19 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
   Widget build(BuildContext context) {
     final device = widget.device;
     final session = ref.watch(posSyncSessionProvider);
-    // THE SESSION MUST BELONG TO THIS PAIRING. A PIN session is minted for ONE
-    // device; nothing ends it on unpair (the server revoke is best-effort and can
-    // fail offline, and the session controller does not watch the device context).
-    // Re-pair the till — necessarily as a NEW device — and the old session is still
-    // standing. Letting it unlock this surface would run every submit and payment
-    // under the OLD pairing's server session: orders taken on a till standing in
-    // branch B, created on branch A's books. A session for another device is
-    // therefore NOT a session for this till — the operator signs in on the pairing
-    // the till actually has, which replaces the stale session with a real one.
-    final ownSession = session != null && session.deviceId == device.deviceId;
+    final binding = ref.watch(posPinSessionBindingProvider);
+    // THE SESSION MUST BE BOUND TO EXACTLY THIS PAIRING CONTEXT. A PIN session is
+    // minted for one organization + restaurant + branch + device + device session;
+    // the session controller records that binding at establish time and drops the
+    // session on any pairing transition. This gate additionally REFUSES to unlock
+    // for any session whose full binding does not match the current pairing —
+    // never by deviceId alone, because a device id cannot distinguish "this till"
+    // from "this till re-paired into another branch or tenant". Acting under a
+    // mismatched session would run every submit and payment on the OLD pairing's
+    // server books. A session without a binding never passed through the session
+    // controller and is refused outright (fail closed).
+    final ownSession =
+        session != null && binding != null && binding.matchesContext(device);
     if (ownSession) {
       // Re-authenticated: clear any stale "expired" notice for the next sign-out.
       if (_expiredNotice) {
@@ -120,6 +123,8 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
       onStartSession: (employeeProfileId, pin) => ref
           .read(posSessionControllerProvider.notifier)
           .signInWithPin(
+            // The full pairing context the new session will be BOUND to.
+            device: device,
             deviceId: deviceId,
             deviceSessionId: deviceSessionId,
             employeeProfileId: employeeProfileId,
