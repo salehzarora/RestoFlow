@@ -8,6 +8,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/recent_order.dart';
 import '../data/void_repository.dart';
 import '../format/money_format.dart';
+import '../state/order_sync_controller.dart';
 import '../state/recent_orders_controller.dart';
 import '../state/void_controller.dart';
 
@@ -77,11 +78,31 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
       ref
           .read(posRecentOrdersControllerProvider.notifier)
           .markVoided(widget.order.orderNumber, reason);
+      // POS-OPERATIONS-SYNC-001: void_order returns only {status, revision} — take
+      // the authoritative snapshot so the row carries the server's terminal status
+      // and revision, not just this device's local marker.
+      await _reconcile();
       navigator.pop();
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.posOrderCancelledSnack)),
       );
     } on VoidException catch (e) {
+      if (!mounted) return;
+      // POS-OPERATIONS-SYNC-001: a typed refusal means our picture of this order is
+      // WRONG, and showing the right message on top of a stale row explains nothing.
+      //
+      //   order_not_voidable -> the server says it is already terminal. Reconcile, so
+      //     the row goes terminal and STOPS offering Cancel at all. Telling the
+      //     cashier "already closed" while leaving the Cancel button live would be a
+      //     message that argues with its own screen.
+      //   conflict           -> someone else moved it. Fetch the truth; NEVER blindly
+      //     retry the mutation.
+      //
+      // permission_denied / already-paid / transport are NOT staleness: the order is
+      // exactly as we thought, we simply may not do this to it. No refetch.
+      if (e.notVoidable || e.conflict) {
+        await _reconcile();
+      }
       if (!mounted) return;
       setState(() {
         _submitting = false;
@@ -103,6 +124,17 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
         };
       });
     }
+  }
+
+  /// Pulls the authoritative snapshot for THIS order. Never throws — the
+  /// coordinator records its own failure, and a failed refresh must not turn a
+  /// SUCCESSFUL void into an error the cashier sees.
+  Future<void> _reconcile() async {
+    final orderId = widget.order.orderId;
+    if (orderId == null || orderId.isEmpty) return;
+    await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
+      <String>[orderId],
+    );
   }
 
   @override

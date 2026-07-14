@@ -58,22 +58,32 @@ class SubmittedOrderView {
 
   /// Copies the view, overriding the post-submit money lines (used when an
   /// order-level discount is applied and the totals must reflect the result).
-  SubmittedOrderView copyWith({int? discountTotalMinor, int? taxTotalMinor}) =>
-      SubmittedOrderView(
-        orderNumber: orderNumber,
-        orderType: orderType,
-        currencyCode: currencyCode,
-        subtotalMinor: subtotalMinor,
-        lines: lines,
-        discountTotalMinor: discountTotalMinor ?? this.discountTotalMinor,
-        taxTotalMinor: taxTotalMinor ?? this.taxTotalMinor,
-        taxRateBp: taxRateBp,
-        tableLabel: tableLabel,
-        customerName: customerName,
-        outboxEntryId: outboxEntryId,
-        localOperationId: localOperationId,
-        orderId: orderId,
-      );
+  ///
+  /// POS-OPERATIONS-SYNC-001 adds [subtotalMinor]: the SERVER is authoritative for
+  /// the order's money after submit, and its subtotal can move (an item voided on
+  /// another till, a re-rolled line). Without this the view's subtotal was
+  /// structurally frozen at submit time and `grandTotalMinor` — a getter derived
+  /// from it — could never tell the truth again. The order LINES are untouched:
+  /// they are the order-time price snapshot (D-008) and are never recomputed.
+  SubmittedOrderView copyWith({
+    int? subtotalMinor,
+    int? discountTotalMinor,
+    int? taxTotalMinor,
+  }) => SubmittedOrderView(
+    orderNumber: orderNumber,
+    orderType: orderType,
+    currencyCode: currencyCode,
+    subtotalMinor: subtotalMinor ?? this.subtotalMinor,
+    lines: lines,
+    discountTotalMinor: discountTotalMinor ?? this.discountTotalMinor,
+    taxTotalMinor: taxTotalMinor ?? this.taxTotalMinor,
+    taxRateBp: taxRateBp,
+    tableLabel: tableLabel,
+    customerName: customerName,
+    outboxEntryId: outboxEntryId,
+    localOperationId: localOperationId,
+    orderId: orderId,
+  );
 
   /// The assigned dine-in table label, or null for takeaway / unassigned.
   final String? tableLabel;

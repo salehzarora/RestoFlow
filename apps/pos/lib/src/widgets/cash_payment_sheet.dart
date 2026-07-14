@@ -9,7 +9,9 @@ import '../data/payment_repository.dart';
 import '../format/cash_input.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
+import '../state/order_sync_controller.dart';
 import '../state/payment_controller.dart';
+import '../state/recent_orders_controller.dart';
 
 /// The ASCII decimal separator the cash field accepts (mirrors the input
 /// formatter's `[0-9.]`). A format character, not user-facing copy.
@@ -86,9 +88,19 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   /// externally recorded (no drawer cash, no change).
   PaymentMethod _method = PaymentMethod.cash;
 
+  /// Clears the RETRYABLE failure banner.
+  ///
+  /// POS-OPERATIONS-SYNC-001: it deliberately does NOT clear [_notChargeable].
+  /// A transport failure is an input-adjacent error — retype, retry, it may work.
+  /// `order_not_chargeable` is NOT: the order owes NOTHING, and no tender, amount
+  /// or method can change that. It is TERMINAL for this sheet.
+  ///
+  /// This is the deferred defect from MONEY-SETTLEMENT-CONSISTENCY-001: this method
+  /// runs on every keystroke, so clearing the flag here silently re-armed Confirm
+  /// and let the cashier fire a second doomed request that the server rejected
+  /// again — one useless round trip per keypress.
   void _clearErrors() {
     _failed = false;
-    _notChargeable = false;
   }
 
   void _selectMethod(PaymentMethod method) {
@@ -161,6 +173,11 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
             currencyCode: widget.currencyCode,
             method: _method,
           );
+      // POS-OPERATIONS-SYNC-001: take the AUTHORITATIVE order state after the write.
+      // record_payment's envelope carries order_status and auto_completed but NOT the
+      // money or the settlement, and a payment that auto-completes a served order
+      // changes BOTH. We do not infer completion from "the button worked" — we ask.
+      await _reconcile();
       // The sheet is drag/barrier-dismissible while the push is in flight;
       // popping an already-dismissed sheet would pop the ROOT POS route.
       if (mounted) navigator.pop();
@@ -179,7 +196,28 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
           _notChargeable = e.notChargeable;
         });
       }
+      if (e.notChargeable) {
+        // POS-OPERATIONS-SYNC-001: the refusal means our local total is WRONG — the
+        // order was comped somewhere we did not see. Correcting the banner while
+        // leaving "40" on the row would explain nothing. Reconcile, so the row shows
+        // 0 / No charge and the unpaid badge lets it go.
+        ref
+            .read(posRecentOrdersControllerProvider.notifier)
+            .recordSyncRefusal(widget.orderNumber, 'order_not_chargeable');
+        await _reconcile();
+      }
     }
+  }
+
+  /// Pulls the authoritative snapshot for THIS order. Never throws: the coordinator
+  /// records its own failure, and a failed refresh must not turn a SUCCESSFUL
+  /// payment into an error the cashier sees.
+  Future<void> _reconcile() async {
+    final orderId = widget.orderId;
+    if (orderId == null || orderId.isEmpty) return;
+    await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
+      <String>[orderId],
+    );
   }
 
   /// Quick-cash suggestions: the exact amount, then round-ups to ₪10 / ₪50 /
@@ -206,9 +244,18 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
         isCash && tendered != null && tendered < widget.amountMinor;
     // Cash: the tender must cover the total. Non-cash: nothing to type, so the
     // Confirm is enabled as soon as the sheet is not submitting.
-    final canConfirm = isCash
-        ? (tendered != null && tendered >= widget.amountMinor && !_submitting)
-        : !_submitting;
+    //
+    // POS-OPERATIONS-SYNC-001: a NON-CHARGEABLE order disables Confirm outright.
+    // The order owes nothing; the server has already refused and will refuse every
+    // identical retry. Leaving the button live only lets the cashier manufacture
+    // rejected sync operations while believing they are making progress.
+    final canConfirm =
+        !_notChargeable &&
+        (isCash
+            ? (tendered != null &&
+                  tendered >= widget.amountMinor &&
+                  !_submitting)
+            : !_submitting);
     final changeMinor =
         (isCash && tendered != null && tendered >= widget.amountMinor)
         ? tendered - widget.amountMinor

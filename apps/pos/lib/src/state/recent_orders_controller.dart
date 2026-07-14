@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 
+import '../data/order_reconciler.dart';
+import '../data/order_snapshot.dart';
 import '../data/payment.dart';
 import '../data/recent_order.dart';
 import '../data/recent_orders_store.dart';
@@ -160,14 +162,69 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     return null;
   }
 
-  /// Count of recent orders that still OWE MONEY (drives the app-bar badge).
+  /// THE unpaid count (drives the app-bar badge).
   ///
-  /// MONEY-SETTLEMENT-CONSISTENCY-001: SETTLEMENT, not "has no payment row" — a comped
-  /// (zero-total) order owes nothing and must not sit in the badge forever, while an
-  /// UNDER-COVERED order still owes and must. MONEY-VOID-001: a cancelled order is no
-  /// longer active work.
-  int get unpaidCount =>
-      state.where((o) => !o.isFullySettled && !o.isVoided).length;
+  /// POS-OPERATIONS-SYNC-001: delegates to the ONE canonical predicate in
+  /// `order_reconciler.dart`. This logic previously existed in three places, each
+  /// re-deriving settlement from the STALE submit-time total — which is exactly how
+  /// a comped order stayed in the badge forever. There is now one, and it is
+  /// SERVER-authoritative.
+  int get unpaidCount => unpaidOrderCount(state);
+
+  /// POS-OPERATIONS-SYNC-001 — applies AUTHORITATIVE server snapshots.
+  ///
+  /// Build-in-memory, validate, then commit as ONE persistence write. Returns false
+  /// if persistence failed, which is the caller's signal NOT to advance the pull
+  /// cursor: the cursor only moves forward, so advancing past data we failed to
+  /// store would lose it permanently.
+  ///
+  /// A queued operation is NEVER deleted or resolved here — a snapshot is not an
+  /// acknowledgement (see order_reconciler.dart, rule 3).
+  Future<bool> applySnapshots(List<PosOrderSnapshot> snapshots) async {
+    if (_disposed) return true;
+    if (snapshots.isEmpty) return true;
+
+    final result = reconcileSnapshots(state, snapshots);
+    if (!result.changedAnything) {
+      // IDEMPOTENT: re-applying the same page is a genuine no-op — no state
+      // churn, no rewrite, no rebuild.
+      return true;
+    }
+
+    final merged = _sortedPruned(result.orders);
+    if (_disposed) return true;
+    state = merged;
+    try {
+      await _store.persist(_scopeKey, merged);
+      return true;
+    } catch (_) {
+      // The in-memory state is still correct and usable; only durability failed.
+      // Report it so the cursor stays put and the same page is re-delivered next
+      // time, rather than being silently skipped.
+      return false;
+    }
+  }
+
+  /// Records a SAFE, typed server refusal against an order (e.g.
+  /// `order_not_chargeable`), so the UI can explain it instead of silently
+  /// re-submitting a request the server has already refused.
+  void recordSyncRefusal(String orderNumber, String reason) {
+    var changed = false;
+    final next = <PosRecentOrder>[
+      for (final o in state)
+        if (o.orderNumber == orderNumber && !changed)
+          () {
+            changed = true;
+            return o.copyWith(
+              syncState: PosOrderSyncState.rejected,
+              lastSyncError: reason,
+            );
+          }()
+        else
+          o,
+    ];
+    if (changed) _apply(next);
+  }
 
   void _syncPayments(PaymentState ps) {
     var changed = false;

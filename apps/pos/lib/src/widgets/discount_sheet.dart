@@ -13,6 +13,7 @@ import '../format/cash_input.dart';
 import '../format/tax_math.dart';
 import '../state/cart_controller.dart';
 import '../state/discount_controller.dart';
+import '../state/order_sync_controller.dart';
 
 /// Modal order-level discount entry (RF-117 part C): a FIXED ₪ amount OR a
 /// PERCENTAGE, plus a REQUIRED reason. On apply it pushes the SERVER-AUTHORITATIVE
@@ -164,6 +165,18 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
       ref
           .read(cartControllerProvider.notifier)
           .applyOrderDiscount(discountTotalMinor: result.discountTotalMinor);
+
+      // POS-OPERATIONS-SYNC-001 — THE "STALE 40" FIX.
+      //
+      // The discount used to update the CART and stop there, so the RECENT-ORDERS
+      // entry kept its submit-time total forever: a comped order still read "40",
+      // still counted as unpaid, and still offered Take payment. The apply_discount
+      // envelope carries the new discount/grand/revision but NOT the status, tax or
+      // settlement, so we take the authoritative snapshot rather than assembling a
+      // half-truth from the parts we happen to have.
+      await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
+        <String>[widget.orderId],
+      );
       navigator.pop();
     } on DiscountException catch (e) {
       if (!mounted) return;

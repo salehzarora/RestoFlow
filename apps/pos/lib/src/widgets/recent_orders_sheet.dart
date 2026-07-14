@@ -6,10 +6,12 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/order_reconciler.dart' show isCountedUnpaid, unpaidOrderCount;
 import '../data/order_submission.dart' show OutboxSyncState;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
+import '../state/order_sync_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/receipt_print_controller.dart';
 import '../state/recent_orders_controller.dart';
@@ -27,15 +29,11 @@ class RecentOrdersButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final orders = ref.watch(posRecentOrdersControllerProvider);
-    // MONEY-VOID-001: mirror PosRecentOrdersController.unpaidCount — a cancelled
-    // (voided) order is no longer active work, so it must not count toward the
-    // unpaid badge (a voided order carries no payment, so !isPaid alone would
-    // still count it). Watching the list state above keeps this reactive: the
-    // badge updates the instant an order is cancelled, no restart needed.
-    // MONEY-SETTLEMENT-CONSISTENCY-001: the badge counts OUTSTANDING MONEY, not "orders
-    // with no payment row". A comped (zero-total) order owes nothing and must not sit in
-    // the cashier's unpaid badge forever; an UNDER-COVERED order still owes and must.
-    final unpaid = orders.where((o) => !o.isFullySettled && !o.isVoided).length;
+    // POS-OPERATIONS-SYNC-001: ONE canonical predicate, shared with the controller's
+    // count and the filter below. This was a hand-rolled copy that re-derived
+    // settlement from the STALE submit-time total — which is precisely how a comped
+    // order sat in the badge forever. Watching the list keeps it reactive.
+    final unpaid = unpaidOrderCount(orders);
     final icon = IconButton(
       key: const Key('recent-orders-button'),
       tooltip: l10n.posRecentOrdersTitle,
@@ -70,6 +68,33 @@ enum _RecentFilter { all, unpaid, paid }
 class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
   _RecentFilter _filter = _RecentFilter.all;
 
+  /// Held so [dispose] can release the consumer WITHOUT touching `ref` — Riverpod
+  /// forbids reading a ref after the widget is disposed, and a "stop polling" that
+  /// throws on the way out would leave the timer running forever.
+  PosOrderSyncController? _sync;
+
+  @override
+  void initState() {
+    super.initState();
+    // POS-OPERATIONS-SYNC-001: opening this surface is a refresh trigger, and it
+    // arms the periodic tick for as long as the surface is up. The coordinator owns
+    // the timer — a Timer living in a widget is how you end up polling a POS that
+    // has been sitting in a drawer since Tuesday.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final sync = ref.read(posOrderSyncControllerProvider.notifier);
+      _sync = sync;
+      sync.addVisibleConsumer();
+    });
+  }
+
+  @override
+  void dispose() {
+    // The tick STOPS with the sheet. Nothing keeps polling behind a closed screen.
+    _sync?.removeVisibleConsumer();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -83,10 +108,9 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
       for (final o in orders)
         if (switch (_filter) {
           _RecentFilter.all => true,
-          // MONEY-VOID-001: a cancelled (voided) order is no longer active work,
-          // so it drops out of the "unpaid" filter (still visible under "all").
-          // SETTLEMENT, not the marker: `unpaid` means "still owes money".
-          _RecentFilter.unpaid => !o.isFullySettled && !o.isVoided,
+          // POS-OPERATIONS-SYNC-001: the filter and the badge now ask the SAME
+          // question, so they can never disagree about what "unpaid" means.
+          _RecentFilter.unpaid => isCountedUnpaid(o),
           _RecentFilter.paid => o.isFullySettled,
         })
           o,
