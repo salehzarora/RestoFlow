@@ -110,6 +110,31 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   int _visibleConsumers = 0;
   bool _disposed = false;
 
+  /// THE SCOPE THIS CONTROLLER IS SYNCHRONIZING, and the generation that owns it.
+  ///
+  /// Scoping the STORAGE KEY was not enough. Every method here awaits the network and
+  /// then writes: rows into the recent-order state, a cursor into the durable store, a
+  /// `lastSyncedAt` onto the status. Between the await and the write, the till can be
+  /// re-paired into another branch — and the old response then lands in the NEW branch,
+  /// carrying the OLD branch's orders. Correct key, wrong branch, real leak.
+  ///
+  /// So a scope change bumps [_generation], and EVERY await boundary re-checks it
+  /// before touching anything. A result from a scope we have left is dropped. It is not
+  /// an error and it is not shown as one: nothing failed, the question simply stopped
+  /// being ours.
+  String? _scopeKey;
+  int _generation = 0;
+
+  /// True when work begun at [gen] may no longer mutate state, storage or cursors.
+  ///
+  /// A PLAIN FIELD COMPARISON, deliberately. It cannot consult `ref`: Riverpod forbids
+  /// any ref access between a dependency changing and the provider rebuilding — which is
+  /// precisely the window a stale response lands in. The generation is instead advanced
+  /// EAGERLY, by the scope listener in [build], so it is already correct by the time any
+  /// awaited continuation resumes.
+  bool _isStale(int gen, String? scopeKey) =>
+      _disposed || gen != _generation || scopeKey != _scopeKey;
+
   /// THE WINDOW — how far back "Load more" has reached, in days.
   ///
   /// It is deliberately SEPARATE from the persisted incremental cursor, and it is
@@ -133,6 +158,12 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   /// is no drain loop left to overflow.
   PosSyncCursor? _windowCursor;
 
+  /// THE SCOPE THE WINDOW CURSOR BELONGS TO. A position in branch A's history is
+  /// meaningless in branch B, so the cursor is not merely cleared on a scope change —
+  /// it is STRUCTURALLY unusable outside the scope it was earned in, whether or not the
+  /// controller has been rebuilt yet.
+  String? _windowScopeKey;
+
   /// The operational window: today + yesterday, matching the POS's own local prune.
   static const int defaultWindowDays = 2;
 
@@ -146,12 +177,47 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
 
   @override
   PosSyncStatus build() {
+    // WATCHED, not read. The controller used to `ref.read` the scope, so it never
+    // rebuilt when the till was re-paired: the window cursor, `hasMoreHistory` and
+    // `lastSyncedAt` all survived the move, and branch B began paging from branch A's
+    // position — skipping B's own history and reporting a sync that never happened.
+    // LISTENED, not merely watched. `watch` alone rebuilds this controller only when
+    // something next reads it — and a stale network response can land before that. The
+    // listener fires as soon as the scope changes, so the generation has ALREADY moved
+    // by the time any awaited continuation resumes, without this controller having to
+    // touch `ref` in the window where Riverpod forbids it.
+    ref.listen<PosSyncScope?>(
+      posSyncScopeProvider,
+      (previous, next) => _onScopeChanged(next?.key),
+    );
+    _onScopeChanged(ref.watch(posSyncScopeProvider)?.key);
+    _disposed = false;
     ref.onDispose(() {
       _disposed = true;
       _periodic?.cancel();
       _periodic = null;
     });
+    // A fresh scope starts from a FRESH status: an empty branch has not "last synced"
+    // at the moment the previous branch did, and inheriting that timestamp would be a
+    // promise about data this branch has never fetched.
     return const PosSyncStatus();
+  }
+
+  /// A DIFFERENT SCOPE IS A DIFFERENT WORLD. Everything begun for the previous one is
+  /// obsolete: the generation moves (so every in-flight operation discards itself when
+  /// it resumes), and the session-local window position is dropped — a place in branch
+  /// A's history means nothing in branch B.
+  ///
+  /// The DURABLE cursor and the queued operations are NOT touched: they belong to their
+  /// own scope's store and are still exactly right for it.
+  void _onScopeChanged(String? key) {
+    if (key == _scopeKey) return;
+    _generation++;
+    _scopeKey = key;
+    _windowCursor = null;
+    _windowScopeKey = null;
+    _inFlight = null;
+    _inFlightLoadMore = null;
   }
 
   DateTime _now() => ref.read(posSyncClockProvider)();
@@ -193,20 +259,40 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   Future<void> refreshOrders(List<String> orderIds) async {
     final ids = orderIds.where((id) => id.trim().isNotEmpty).toList();
     if (ids.isEmpty) return;
+    final gen = _generation;
+    final scopeKey = _scope()?.key;
     final repo = ref.read(orderSnapshotRepositoryProvider);
     try {
       final page = await repo.fetchOrders(ids);
-      if (_disposed) return;
-      await ref
+      // The till may have moved branch while this was in flight. These rows belong to
+      // the branch we asked FROM, not the one we are in now.
+      if (_isStale(gen, scopeKey)) return;
+
+      final ok = await ref
           .read(posRecentOrdersControllerProvider.notifier)
           .applySnapshots(page.orders);
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
+
+      if (!ok) {
+        // DURABILITY FAILED — and this path used to ignore that entirely, stamping a
+        // fresh `lastSyncedAt` over rows it had not managed to store. It reported a
+        // successful synchronization that had not happened, which is worse than the
+        // failure: the cashier is told the day is safe when it is not, and the three
+        // refresh paths disagreed about what "synced" even meant. All three now answer
+        // the same way.
+        state = state.copyWith(error: PosSyncError.persistence);
+        return;
+      }
+
       // A targeted fetch does NOT move the incremental cursor: it is not a page of
       // the change feed and says nothing about what else may have changed.
       state = state.copyWith(lastSyncedAt: _now(), clearError: true);
     } on PosSnapshotException catch (e) {
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
       state = state.copyWith(error: _mapError(e));
+    } on PosPersistenceException {
+      if (_isStale(gen, scopeKey)) return;
+      state = state.copyWith(error: PosSyncError.persistence);
     }
   }
 
@@ -244,8 +330,11 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   /// True while the periodic tick is armed. Test seam.
   bool get isPolling => _periodic != null;
 
-  /// Where "Load more" has paged back to. Test/UI seam.
-  PosSyncCursor? get windowCursor => _windowCursor;
+  /// Where "Load more" has paged back to IN THE CURRENT SCOPE — null in any other.
+  /// [_onScopeChanged] clears it the moment the till moves, so it can never be sent to
+  /// a branch it was not earned in.
+  PosSyncCursor? get windowCursor =>
+      _windowScopeKey == _scopeKey ? _windowCursor : null;
 
   /// LOAD MORE — pages BACKWARD into older orders, newest-first.
   ///
@@ -269,19 +358,26 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   }
 
   Future<void> _loadMore() async {
-    if (_disposed || _scope() == null) return;
+    final scope = _scope();
+    if (_disposed || scope == null) return;
     if (!state.hasMoreHistory) return;
+    final gen = _generation;
+    final scopeKey = scope.key;
     state = state.copyWith(isLoadingMore: true);
     try {
       final page = await ref
           .read(orderSnapshotRepositoryProvider)
-          .fetchWindow(before: _windowCursor, limit: windowPageSize);
-      if (_disposed) return;
+          // The SCOPE-OWNED cursor: in a branch this cursor does not belong to, it
+          // reads null and we start from that branch's newest order.
+          .fetchWindow(before: windowCursor, limit: windowPageSize);
+      // A page of branch A's history, arriving in branch B. Dropped: it is not B's
+      // history, and appending it would put another branch's orders on this till.
+      if (_isStale(gen, scopeKey)) return;
 
       final ok = await ref
           .read(posRecentOrdersControllerProvider.notifier)
           .applySnapshots(page.orders);
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
 
       if (!ok) {
         // DURABILITY FAILED. The window cursor does NOT advance, so the very same
@@ -295,6 +391,7 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
       }
 
       _windowCursor = page.nextCursor ?? _windowCursor;
+      _windowScopeKey = scopeKey;
       state = state.copyWith(
         isLoadingMore: false,
         hasMoreHistory: page.hasMore,
@@ -302,9 +399,15 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
         clearError: true,
       );
     } on PosSnapshotException catch (e) {
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
       // The rows we already have stay exactly where they are.
       state = state.copyWith(isLoadingMore: false, error: _mapError(e));
+    } on PosPersistenceException {
+      if (_isStale(gen, scopeKey)) return;
+      state = state.copyWith(
+        isLoadingMore: false,
+        error: PosSyncError.persistence,
+      );
     }
   }
 
@@ -317,19 +420,24 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   /// re-walking the branch from the beginning of time.
   Future<void> refreshWindow() async {
     if (_disposed) return;
+    // CAPTURED. Every write below is made against THIS scope and this generation —
+    // never against `_scope()` re-read after an await, which is how branch A's newest
+    // page ended up as branch B's opening screen.
+    final gen = _generation;
     final scope = _scope();
     if (scope == null) return;
+    final scopeKey = scope.key;
     state = state.copyWith(isSyncing: true);
     try {
       final page = await ref
           .read(orderSnapshotRepositoryProvider)
           .fetchWindow(limit: windowPageSize);
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
 
       final ok = await ref
           .read(posRecentOrdersControllerProvider.notifier)
           .applySnapshots(page.orders);
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
 
       if (!ok) {
         // Durable write failed: report it, keep the rows on screen, and do NOT claim
@@ -342,16 +450,20 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
       }
 
       _windowCursor = page.nextCursor;
+      _windowScopeKey = scopeKey;
 
       // SEED the durable cursor to the NEWEST row (page 0, descending) when we have
       // none. Without this the first incremental pull would have a null cursor, which
       // is the WINDOW question, not the change question.
+      //
+      // Saved against the CAPTURED scope, so even a write that slips past the guard
+      // lands in the store of the branch it was read from — never in another's.
       final cursorStore = ref.read(posSyncCursorStoreProvider);
       final existing = await cursorStore.load(scope);
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
       if (existing == null && page.orders.isNotEmpty) {
         await cursorStore.save(scope, page.orders.first.cursor);
-        if (_disposed) return;
+        if (_isStale(gen, scopeKey)) return;
       }
 
       state = state.copyWith(
@@ -362,20 +474,12 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
         clearError: true,
       );
     } on PosSnapshotException catch (e) {
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
       state = state.copyWith(isSyncing: false, error: _mapError(e));
     } on PosPersistenceException {
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
       state = state.copyWith(isSyncing: false, error: PosSyncError.persistence);
     }
-  }
-
-  /// A scope change (branch / device / PIN). The window collapses back to the
-  /// default and the session-local paging is forgotten — the DURABLE cursor and the
-  /// queued operations are NOT touched here; they belong to their own scope's store.
-  void resetWindow() {
-    _windowCursor = null;
-    state = const PosSyncStatus();
   }
 
   /// App resume. Debounced to ONE refresh: a resume can fire more than once, and
@@ -386,7 +490,9 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
 
   Future<void> _run({required bool pushFirst}) async {
     if (_disposed) return;
+    final gen = _generation;
     final scope = _scope();
+    final scopeKey = scope?.key;
     final repo = ref.read(orderSnapshotRepositoryProvider);
     if (scope == null) {
       // No device/PIN context yet. Not an error — there is simply nothing to sync
@@ -404,12 +510,12 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
         } catch (_) {
           // swallowed by design — the queue is durable and retries itself.
         }
-        if (_disposed) return;
+        if (_isStale(gen, scopeKey)) return;
       }
 
       final cursorStore = ref.read(posSyncCursorStoreProvider);
       final cursor = await cursorStore.load(scope);
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
 
       if (cursor == null) {
         // NO DURABLE CURSOR YET. A cursorless incremental call is the WINDOW question,
@@ -429,12 +535,14 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
       var complete = false;
       for (var page = 0; page < maxPages; page++) {
         final result = await repo.fetchChanges(cursor: current);
-        if (_disposed) return;
+        // Changes from the branch we have LEFT. They are not this branch's changes, and
+        // applying them would import another branch's orders into this till.
+        if (_isStale(gen, scopeKey)) return;
 
         final ok = await ref
             .read(posRecentOrdersControllerProvider.notifier)
             .applySnapshots(result.orders);
-        if (_disposed) return;
+        if (_isStale(gen, scopeKey)) return;
 
         // THE CURSOR MOVES LAST, AND ONLY ON SUCCESS. It only ever goes forward, so
         // skipping past data we did not store loses it permanently — the server will
@@ -450,7 +558,7 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
         final next = result.nextCursor;
         if (next != null) {
           await cursorStore.save(scope, next);
-          if (_disposed) return;
+          if (_isStale(gen, scopeKey)) return;
           current = next;
         }
         if (!result.hasMore) {
@@ -477,13 +585,16 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
         clearError: true,
       );
     } on PosSnapshotException catch (e) {
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
       // FAILURE PRESERVES THE ROWS. We change the status, never the data: a cashier
       // mid-service would rather see yesterday's total labelled stale than a blank
       // screen that looks like the orders were lost.
       state = state.copyWith(isSyncing: false, error: _mapError(e));
+    } on PosPersistenceException {
+      if (_isStale(gen, scopeKey)) return;
+      state = state.copyWith(isSyncing: false, error: PosSyncError.persistence);
     } catch (_) {
-      if (_disposed) return;
+      if (_isStale(gen, scopeKey)) return;
       state = state.copyWith(isSyncing: false, error: PosSyncError.malformed);
     }
   }

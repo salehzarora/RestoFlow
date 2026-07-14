@@ -85,7 +85,9 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
       // out of the unpaid count, no pay/reprint). Money-free.
       ref
           .read(posRecentOrdersControllerProvider.notifier)
-          .markVoided(widget.order.orderNumber, reason);
+          // BY IDENTITY: cancelling this order must not cancel a different one that
+          // happens to share its printed code.
+          .markVoided(widget.order.identity, reason);
       // POS-OPERATIONS-SYNC-001: void_order returns only {status, revision} — take
       // the authoritative snapshot so the row carries the server's terminal status
       // and revision, not just this device's local marker.

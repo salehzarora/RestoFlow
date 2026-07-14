@@ -18,6 +18,7 @@ import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 
 /// POS-OPERATIONS-SYNC-001 — the coordinator wired into real providers.
 void main() {
@@ -175,7 +176,10 @@ void main() {
       final orders = container.read(posRecentOrdersControllerProvider.notifier);
       orders.recordSubmitted(local().order!);
 
-      orders.recordSyncRefusal('#0000O1', 'order_not_chargeable');
+      orders.recordSyncRefusal(
+        PosOrderIdentity.server('o-1'),
+        'order_not_chargeable',
+      );
 
       final o = container.read(posRecentOrdersControllerProvider).single;
       expect(o.syncState, PosOrderSyncState.rejected);

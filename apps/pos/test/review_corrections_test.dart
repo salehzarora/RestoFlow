@@ -21,6 +21,7 @@ import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/order_confirmation.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// POS-OPERATIONS-SYNC-001 — the independent-review corrections.
@@ -617,7 +618,7 @@ void main() {
       // A refusal that says nothing about the order's state must not change it.
       c
           .read(posRecentOrdersControllerProvider.notifier)
-          .recordSyncRefusal('#o-1', 'rejected');
+          .recordSyncRefusal(PosOrderIdentity.server('o-1'), 'rejected');
       await tester.pumpAndSettle();
 
       expect(

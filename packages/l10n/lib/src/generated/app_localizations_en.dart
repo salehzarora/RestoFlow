@@ -4120,4 +4120,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posOrdersConflictRefreshed =>
       'This order changed on another device. It has been refreshed - check it and try again.';
+
+  @override
+  String get posOrdersConflictClose => 'Close and reopen';
 }

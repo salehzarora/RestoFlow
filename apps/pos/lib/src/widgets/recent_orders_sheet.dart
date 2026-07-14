@@ -9,9 +9,10 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/order_actions.dart';
 import '../data/order_center_view.dart';
+import '../data/order_identity.dart';
 import '../data/order_reconciler.dart' show unpaidOrderCount;
 import '../data/order_snapshot.dart';
-import '../data/order_submission.dart' show OutboxSyncState;
+import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
@@ -23,6 +24,7 @@ import '../state/recent_orders_controller.dart';
 import 'cancel_order_sheet.dart';
 import 'cash_payment_sheet.dart';
 import 'discount_sheet.dart';
+import 'order_status_pills.dart';
 import 'receipt_print_preview.dart';
 
 /// POS-ORDERS-AND-PAYMENT-001: an app-bar button that opens the operational orders
@@ -136,12 +138,16 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     final caps = ref.watch(staffCapabilitiesProvider).value;
     final entries = ref.watch(outboxControllerProvider);
 
-    // The local queue, joined by order code. It reports what THIS DEVICE is doing —
+    // The local queue, joined by ORDER IDENTITY. It reports what THIS DEVICE is doing —
     // never what the ORDER is doing. Conflating the two is what made a queued
     // payment look like a lifecycle state.
-    final pendingByNumber = <String, PosPendingKind>{
+    //
+    // Joined on the code, this map put one order's "syncing" badge on a DIFFERENT order
+    // that happened to share it — and, through `resolveOrderActions`, withdrew that
+    // innocent order's controls as though it had work in flight.
+    final pendingByIdentity = <String, PosPendingKind>{
       for (final e in entries)
-        if (e.syncState.isPending) e.summary.orderNumber: PosPendingKind.submit,
+        if (e.syncState.isPending) _entryIdentity(e).key: PosPendingKind.submit,
     };
 
     final counts = sectionCounts(orders);
@@ -228,9 +234,9 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
                         actions: resolveOrderActions(
                           o,
                           capabilities: caps,
-                          pending: pendingByNumber[o.orderNumber],
+                          pending: pendingByIdentity[o.identity.key],
                         ),
-                        outboxState: _outboxStateFor(entries, o.orderNumber),
+                        outboxState: _outboxStateFor(entries, o.identity),
                       );
                     },
                   ),
@@ -240,14 +246,27 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     );
   }
 
-  OutboxSyncState? _outboxStateFor(List<dynamic> entries, String orderNumber) {
+  OutboxSyncState? _outboxStateFor(
+    List<OutboxEntry> entries,
+    PosOrderIdentity identity,
+  ) {
     for (final e in entries) {
-      if (e.summary.orderNumber == orderNumber)
-        return e.syncState as OutboxSyncState;
+      if (_entryIdentity(e) == identity) return e.syncState;
     }
     return null;
   }
 }
+
+/// The IDENTITY of the order an outbox entry submitted.
+///
+/// `targetId` is the client-generated order id the server adopts, so a queued submit
+/// resolves to the SAME identity as the recent-order row it created — and never to a
+/// different order that merely shares its printed code.
+PosOrderIdentity _entryIdentity(OutboxEntry e) => PosOrderIdentity.of(
+  orderId: e.targetId,
+  localOperationId: e.localOperationId,
+  orderNumber: e.summary.orderNumber,
+);
 
 // ---------------------------------------------------------------------------
 // Header — title + honest sync status. Never the words "live" or "real-time":
@@ -442,7 +461,7 @@ class _Filters extends StatelessWidget {
         if (s != null)
           FilterChip(
             key: Key('orders-status-$s'),
-            label: Text(statusLabel(l10n, s)),
+            label: Text(orderStatusLabel(l10n, s)),
             selected: status == s,
             onSelected: (sel) => onStatus(sel ? s : null),
           ),
@@ -666,30 +685,13 @@ class _OrderCard extends ConsumerWidget {
             spacing: RestoflowSpacing.xs,
             runSpacing: RestoflowSpacing.xs,
             children: [
-              // STATUS. Text + icon, never colour alone — colour is not a label, and
-              // a cashier with a colour-vision deficiency is still a cashier.
-              if (serverStatus != null)
-                RestoflowStatusPill(
-                  key: Key('order-status-${order.orderNumber}'),
-                  label: statusLabel(l10n, serverStatus),
-                  tone: _statusTone(serverStatus),
-                  icon: _statusIcon(serverStatus),
-                ),
-              // SETTLEMENT — the three-valued truth. "No charge" is neither Paid
-              // (no money was taken) nor Unpaid (nothing is owed).
-              RestoflowStatusPill(
-                key: Key('order-settlement-${order.orderNumber}'),
-                label: _settlementPill(l10n, order.settlement),
-                tone: switch (order.settlement) {
-                  PosSettlement.paid => RestoflowTone.success,
-                  PosSettlement.unpaid => RestoflowTone.warning,
-                  PosSettlement.notChargeable => RestoflowTone.neutral,
-                },
-                icon: switch (order.settlement) {
-                  PosSettlement.paid => Icons.check_circle_outline,
-                  PosSettlement.unpaid => Icons.schedule,
-                  PosSettlement.notChargeable => Icons.money_off_outlined,
-                },
+              // LIFECYCLE + SETTLEMENT, from the ONE shared vocabulary both order
+              // surfaces speak (see order_status_pills.dart). The confirmation screen
+              // renders exactly these.
+              OrderStatusPills(
+                serverStatus: serverStatus,
+                settlement: order.settlement,
+                keySuffix: order.orderNumber,
               ),
               // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
               // "My payment is syncing" is a fact about this till, not the order.
@@ -760,6 +762,7 @@ class _ActionRow extends ConsumerWidget {
             key: Key('recent-pay-${order.orderNumber}'),
             onPressed: () => CashPaymentSheet.show(
               context,
+              identity: order.identity,
               orderId: order.orderId,
               orderNumber: order.orderNumber,
               // AUTHORITATIVE total + revision. The sheet no longer receives the
@@ -869,7 +872,9 @@ class _ActionRow extends ConsumerWidget {
     await ref
         .read(receiptPrintControllerProvider.notifier)
         .reprint(
-          orderNumber: order.orderNumber,
+          // The receipt belongs to THIS order, keyed by its identity — not to whichever
+          // order shares its printed code.
+          orderKey: order.identity.key,
           document: document,
           submitToBridge: bridge.submit,
         );
@@ -899,51 +904,11 @@ String _settlementLabel(AppLocalizations l10n, PosSettlementFilter f) =>
       PosSettlementFilter.noCharge => l10n.posOrdersSettlementNoCharge,
     };
 
-String _settlementPill(AppLocalizations l10n, PosSettlement s) => switch (s) {
-  PosSettlement.paid => l10n.posPaidChip,
-  PosSettlement.unpaid => l10n.posUnpaidChip,
-  PosSettlement.notChargeable => l10n.posNoChargeChip,
-};
-
 String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
   PosPendingKind.submit ||
   PosPendingKind.payment => l10n.posOrdersPendingPayment,
   PosPendingKind.discount => l10n.posOrdersPendingDiscount,
   PosPendingKind.cancellation => l10n.posOrdersPendingCancellation,
-};
-
-/// An UNKNOWN status is shown verbatim rather than mapped to something we made up.
-/// Inventing a friendly label for a token we do not understand would be inventing a
-/// fact about the order.
-String statusLabel(AppLocalizations l10n, String status) => switch (status) {
-  'submitted' => l10n.posOrdersStatusSubmitted,
-  'accepted' => l10n.posOrdersStatusAccepted,
-  'preparing' => l10n.posOrdersStatusPreparing,
-  'ready' => l10n.posOrdersStatusReady,
-  'served' => l10n.posOrdersStatusServed,
-  'completed' => l10n.posOrdersStatusCompleted,
-  'cancelled' => l10n.posOrdersStatusCancelled,
-  'voided' => l10n.posOrdersStatusVoided,
-  _ => status,
-};
-
-RestoflowTone _statusTone(String status) => switch (status) {
-  'ready' => RestoflowTone.success,
-  'served' => RestoflowTone.info,
-  'completed' => RestoflowTone.neutral,
-  'cancelled' || 'voided' => RestoflowTone.danger,
-  _ => RestoflowTone.info,
-};
-
-IconData _statusIcon(String status) => switch (status) {
-  'submitted' => Icons.receipt_outlined,
-  'accepted' => Icons.thumb_up_outlined,
-  'preparing' => Icons.local_fire_department_outlined,
-  'ready' => Icons.done_all,
-  'served' => Icons.room_service_outlined,
-  'completed' => Icons.task_alt,
-  'cancelled' || 'voided' => Icons.block,
-  _ => Icons.help_outline,
 };
 
 String _hhmm(DateTime dt) {

@@ -1,5 +1,6 @@
 import 'package:restoflow_domain/restoflow_domain.dart';
 
+import 'order_identity.dart';
 import 'order_snapshot.dart';
 import 'payment.dart';
 import '../state/submitted_order_view.dart';
@@ -132,9 +133,22 @@ class PosRecentOrder {
   /// raw UUID, either way.
   String get orderNumber => order?.orderNumber ?? snapshot?.orderCode ?? '';
 
-  /// The authoritative server order id — the ONLY dedupe key. Two rows for one
-  /// server order is the bug this key exists to prevent.
+  /// The authoritative server order id, or null while the server has not named this
+  /// order yet.
   String? get orderId => order?.orderId ?? snapshot?.orderId;
+
+  /// THE identity of this row — for dedupe, payment, void, receipt and recovery.
+  ///
+  /// The server id when we have one; this device's own operation id until then; the
+  /// display code ONLY for pre-upgrade persisted rows that carry neither. Never the
+  /// display code by preference: two different orders can share one, and keying on it
+  /// is what let a payment attach to the wrong order (see [PosOrderIdentity]).
+  PosOrderIdentity get identity => PosOrderIdentity.of(
+    orderId: orderId,
+    localOperationId: order?.localOperationId,
+    outboxEntryId: order?.outboxEntryId,
+    orderNumber: orderNumber,
+  );
 
   /// THE settlement of this order — the SERVER's answer when we have it.
   ///
@@ -450,6 +464,10 @@ SubmittedLineView _lineFromJson(Map<String, Object?> j) {
 
 Map<String, Object?> _paymentToJson(CashPayment p) => <String, Object?>{
   'payment_id': p.paymentId,
+  // ADDITIVE. A record written by an older build simply lacks it and still loads —
+  // and cannot be misfiled by its absence, because a persisted payment is stored
+  // INSIDE its own order row (see _paymentFromJson).
+  if (p.orderId != null) 'order_id': p.orderId,
   'order_number': p.orderNumber,
   'device_id': p.deviceId,
   'local_operation_id': p.localOperationId,
@@ -464,6 +482,18 @@ Map<String, Object?> _paymentToJson(CashPayment p) => <String, Object?>{
   if (p.orderStatus != null) 'order_status': p.orderStatus,
 };
 
+/// Parses a persisted payment.
+///
+/// LEGACY DATA (POS-OPERATIONS-SYNC-001, second review correction). A record written
+/// before this ticket carries only `order_number`, never `order_id`. That is SAFE, and
+/// it is safe for a structural reason rather than a lucky one: a persisted payment is
+/// stored INSIDE the order row it settles, so its association is already unambiguous —
+/// there is no lookup to get wrong and nothing to guess. A legacy payment therefore
+/// stays attached to exactly the order that recorded it, even when another order shares
+/// its display code, and it simply reports a null [CashPayment.orderId] until the next
+/// authoritative refresh. We do NOT try to re-derive its order from the code: guessing
+/// between two orders that share one is precisely the misfiling this correction exists
+/// to end.
 CashPayment _paymentFromJson(Map<String, Object?> j) {
   final paidAt = DateTime.tryParse('${j['paid_at']}');
   if (paidAt == null) {
@@ -471,6 +501,7 @@ CashPayment _paymentFromJson(Map<String, Object?> j) {
   }
   return CashPayment(
     paymentId: '${j['payment_id'] ?? ''}',
+    orderId: _strOrNull(j['order_id']),
     orderNumber: '${j['order_number'] ?? ''}',
     deviceId: '${j['device_id'] ?? ''}',
     localOperationId: '${j['local_operation_id'] ?? ''}',

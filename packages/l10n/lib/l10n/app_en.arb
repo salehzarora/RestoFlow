@@ -2953,5 +2953,7 @@
   "posOrdersStatusVoided": "Voided",
   "@posOrdersStatusVoided": {"description": "Order lifecycle status."},
   "posOrdersConflictRefreshed": "This order changed on another device. It has been refreshed - check it and try again.",
-  "@posOrdersConflictRefreshed": {"description": "POS: a revision conflict was refused and the row was reconciled."}
+  "@posOrdersConflictRefreshed": {"description": "POS: a revision conflict was refused and the row was reconciled."},
+  "posOrdersConflictClose": "Close and reopen",
+  "@posOrdersConflictClose": {"description": "POS: acknowledges a revision conflict and dismisses the now-stale sheet, so the action is retried against the refreshed order."}
 }

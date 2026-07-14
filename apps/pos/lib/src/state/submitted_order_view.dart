@@ -1,6 +1,8 @@
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_money/restoflow_money.dart';
 
+import '../data/order_identity.dart';
+
 /// Immutable UI snapshot of a locally-submitted demo order (RF-101 + RF-114).
 ///
 /// Built from the domain `LocalOrder` at submit time so the confirmation panel
@@ -105,6 +107,16 @@ class SubmittedOrderView {
   /// The idempotency operation id `(deviceId, localOperationId)` (DECISION
   /// D-022), shown compactly as the outbox reference.
   final String? localOperationId;
+
+  /// THE identity of this order for association — payment, receipt, void, dedupe.
+  /// The server id when we have one, this device's own operation id until then, and
+  /// NEVER the display code (see [PosOrderIdentity]).
+  PosOrderIdentity get identity => PosOrderIdentity.of(
+    orderId: orderId,
+    localOperationId: localOperationId,
+    outboxEntryId: outboxEntryId,
+    orderNumber: orderNumber,
+  );
 
   /// Non-authoritative subtotal preview as [Money] (no tax/discounts).
   Money get subtotal => Money(subtotalMinor, currencyCode);

@@ -7,6 +7,7 @@ import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// POS-ORDERS-AND-PAYMENT-001 (B/C): the local recent/unpaid-orders store —
@@ -52,6 +53,10 @@ CashPayment _payment(String number, {int amount = 4200}) => CashPayment(
   receiptNumber: 'R-1',
   paidAt: DateTime.now(),
 );
+
+/// The order identity of a row built by [_view] — the SAME derivation production uses,
+/// so these tests exercise the real association path rather than a hand-made key.
+PosOrderIdentity _id(String number) => PosOrderIdentity.server('oid-$number');
 
 Future<void> _settle() async {
   for (var i = 0; i < 5; i++) {
@@ -132,7 +137,7 @@ void main() {
       expect(state.single.isPaid, isFalse);
       expect(notifier.unpaidCount, 1);
 
-      notifier.recordPayment('#A4', _payment('#A4'));
+      notifier.recordPayment(_id('#A4'), _payment('#A4'));
       state = container.read(posRecentOrdersControllerProvider);
       expect(state.single.isPaid, isTrue);
       expect(notifier.unpaidCount, 0);
@@ -193,7 +198,7 @@ void main() {
       notifier.recordSubmitted(_view('#V2'));
       expect(notifier.unpaidCount, 1);
 
-      notifier.markVoided('#V2', 'duplicate order');
+      notifier.markVoided(_id('#V2'), 'duplicate order');
       final state = container.read(posRecentOrdersControllerProvider);
       expect(state.single.isVoided, isTrue);
       expect(state.single.voidReason, 'duplicate order');
@@ -213,9 +218,9 @@ void main() {
     addTearDown(container.dispose);
     final notifier = container.read(posRecentOrdersControllerProvider.notifier);
     notifier.recordSubmitted(_view('#V3'));
-    notifier.recordPayment('#V3', _payment('#V3'));
+    notifier.recordPayment(_id('#V3'), _payment('#V3'));
 
-    notifier.markVoided('#V3', 'too late');
+    notifier.markVoided(_id('#V3'), 'too late');
     final state = container.read(posRecentOrdersControllerProvider);
     expect(state.single.isPaid, isTrue);
     expect(state.single.isVoided, isFalse);
@@ -236,9 +241,9 @@ void main() {
         posRecentOrdersControllerProvider.notifier,
       );
       notifier.recordSubmitted(_view('#V4'));
-      notifier.markVoided('#V4', 'wrong');
+      notifier.markVoided(_id('#V4'), 'wrong');
 
-      notifier.recordPayment('#V4', _payment('#V4'));
+      notifier.recordPayment(_id('#V4'), _payment('#V4'));
       final state = container.read(posRecentOrdersControllerProvider);
       expect(state.single.isVoided, isTrue);
       expect(state.single.isPaid, isFalse);

@@ -32,7 +32,7 @@ void main() {
       }
 
       await controller.prepareAndDispatch(
-        orderNumber: '#A',
+        orderKey: '#A',
         hasEnabledPrinter: true,
         buildDocument: () {
           builds++;
@@ -44,7 +44,7 @@ void main() {
       expect(sent, hasLength(1));
       final firstDoc = sent.first;
 
-      await controller.reprint(orderNumber: '#A', submitToBridge: record);
+      await controller.reprint(orderKey: '#A', submitToBridge: record);
 
       expect(builds, 1); // the document was NOT rebuilt (no re-computation)
       expect(sent, hasLength(2)); // it was re-sent
@@ -69,7 +69,7 @@ void main() {
       // The order was settled in a PRIOR session: no in-memory print job exists.
       expect(controller.jobFor('#Z'), isNull);
       await controller.reprint(
-        orderNumber: '#Z',
+        orderKey: '#Z',
         document: snapshot,
         submitToBridge: record,
       );
@@ -85,7 +85,7 @@ void main() {
 
     // Nothing built yet -> nothing happens.
     await controller.reprint(
-      orderNumber: '#none',
+      orderKey: '#none',
       submitToBridge: (_) async =>
           const pp.BridgeSubmitResult.sentToPrinter(mode: 'x'),
     );
@@ -93,38 +93,38 @@ void main() {
 
     // A built receipt but no bridge -> stays prepared, no throw.
     await controller.prepareAndDispatch(
-      orderNumber: '#A',
+      orderKey: '#A',
       hasEnabledPrinter: true,
       buildDocument: doc,
       submitToBridge: null,
     );
-    await controller.reprint(orderNumber: '#A', submitToBridge: null);
+    await controller.reprint(orderKey: '#A', submitToBridge: null);
     expect(controller.jobFor('#A')!.status, PrintJobStatus.prepared);
   });
 
-  test('lastReceiptOrderNumberProvider tracks the last BUILT receipt', () async {
+  test('lastReceiptOrderKeyProvider tracks the last BUILT receipt', () async {
     final c = container();
     final controller = c.read(receiptPrintControllerProvider.notifier);
-    expect(c.read(lastReceiptOrderNumberProvider), isNull);
+    expect(c.read(lastReceiptOrderKeyProvider), isNull);
 
     controller.prepare(
-      orderNumber: '#A',
+      orderKey: '#A',
       hasEnabledPrinter: true,
       buildDocument: doc,
     );
     controller.prepare(
-      orderNumber: '#B',
+      orderKey: '#B',
       hasEnabledPrinter: true,
       buildDocument: doc,
     );
-    expect(c.read(lastReceiptOrderNumberProvider), '#B');
+    expect(c.read(lastReceiptOrderKeyProvider), '#B');
 
     // A notConfigured job carries NO document, so it is not "the last receipt".
     controller.prepare(
-      orderNumber: '#C',
+      orderKey: '#C',
       hasEnabledPrinter: false,
       buildDocument: doc,
     );
-    expect(c.read(lastReceiptOrderNumberProvider), '#B');
+    expect(c.read(lastReceiptOrderKeyProvider), '#B');
   });
 }

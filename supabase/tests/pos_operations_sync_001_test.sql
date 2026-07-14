@@ -19,7 +19,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(38);
+select plan(40);
 
 -- ---- Org A (2 branches) + Org B ---------------------------------------------
 insert into organizations (id, name, slug, default_currency) values
@@ -298,7 +298,49 @@ select ok(not exists(
     from jsonb_array_elements((select r from tie1) -> 'orders') a,
          jsonb_array_elements((select r from tie2) -> 'orders') b
     where a ->> 'order_id' = b ->> 'order_id'),
-  'G7 rows sharing an identical sync_at page deterministically by order id — no duplicate, no skip');
+  'G7 rows sharing an identical sync_at never DUPLICATE across the page boundary');
+
+-- G7 proves no OVERLAP. It does NOT prove COVERAGE — and a paginator that silently
+-- DROPPED a tied row would pass it perfectly, which is the more dangerous failure: the
+-- cashier is never shown the order at all, and nothing anywhere reports a problem.
+-- So assert the UNION is EXACTLY the branch's visible orders. d1/d2/d5 now share one
+-- sync_at to the microsecond (now() is frozen inside the transaction), and the page
+-- boundary falls INSIDE that tie — precisely where a duplicate or a skip would occur.
+-- Expected descending (sync_at, id): d5, d2, d1 (tied, id desc), then d4 (-5m via its
+-- PAYMENT), d7 (-15m), d3 (-35m via its payment). d6 is soft-deleted and appears in
+-- neither page.
+create temp table tie_union as
+  select array_agg(oid order by oid) as ids
+  from (
+    select a ->> 'order_id' as oid from jsonb_array_elements((select r from tie1) -> 'orders') a
+    union all
+    select b ->> 'order_id' from jsonb_array_elements((select r from tie2) -> 'orders') b
+  ) u;
+select is((select ids from tie_union),
+  array[
+    '90a00000-0000-0000-0000-0000000000d1',
+    '90a00000-0000-0000-0000-0000000000d2',
+    '90a00000-0000-0000-0000-0000000000d3',
+    '90a00000-0000-0000-0000-0000000000d4',
+    '90a00000-0000-0000-0000-0000000000d5',
+    '90a00000-0000-0000-0000-0000000000d7'
+  ],
+  'G8 the two pages TOGETHER cover EXACTLY the branch''s visible orders — nothing duplicated, nothing SKIPPED (each id appears exactly once)');
+
+-- The tie itself must descend by order id ACROSS the page boundary: d5, d2, then d1 as
+-- the first row of page 2. That is the tie-break working, not an accident of ordering.
+select is(
+  (select array[
+      (select r from tie1) -> 'orders' -> 0 ->> 'order_id',
+      (select r from tie1) -> 'orders' -> 1 ->> 'order_id',
+      (select r from tie2) -> 'orders' -> 0 ->> 'order_id'
+   ]),
+  array[
+    '90a00000-0000-0000-0000-0000000000d5',
+    '90a00000-0000-0000-0000-0000000000d2',
+    '90a00000-0000-0000-0000-0000000000d1'
+  ],
+  'G9 an equal-sync_at run descends by ORDER ID across the page boundary — a deterministic keyset, not luck');
 
 
 -- ===== H. Malformed input FAILS CLOSED ================================= 34-37

@@ -25,6 +25,7 @@ import '../state/receipt_print_controller.dart';
 import '../state/submitted_order_view.dart';
 import 'cash_payment_sheet.dart';
 import 'discount_sheet.dart';
+import 'order_status_pills.dart';
 import 'receipt_preview.dart';
 import 'receipt_print_preview.dart';
 
@@ -58,10 +59,12 @@ class OrderConfirmation extends ConsumerWidget {
     final entry = _entryForId(entries, order.outboxEntryId);
     final outbox = ref.read(outboxControllerProvider.notifier);
 
-    // RF-116: the recorded cash payment for this order, or null if unpaid.
+    // RF-116: the recorded cash payment for THIS order, or null if unpaid. Looked up
+    // by IDENTITY: keyed by the display code, a payment taken for another order that
+    // shared this one's code would show up here as though this order were paid.
     final payment = ref
         .watch(paymentControllerProvider)
-        .paymentFor(order.orderNumber);
+        .paymentFor(order.identity);
 
     // POS-OPERATIONS-SYNC-001 (review correction) — THIS SCREEN IS NOW BOUND TO THE
     // AUTHORITATIVE ORDER, NOT TO A FROZEN SUBMIT-TIME SNAPSHOT.
@@ -130,9 +133,9 @@ class OrderConfirmation extends ConsumerWidget {
     // but no printer => an honest notConfigured marker; otherwise the job is
     // PREPARED (this build has no bridge transport, so never "printed").
     ref.listen(paymentControllerProvider, (previous, next) {
-      final paid = next.paymentFor(order.orderNumber);
+      final paid = next.paymentFor(order.identity);
       if (paid == null) return;
-      if (previous?.paymentFor(order.orderNumber) != null) return;
+      if (previous?.paymentFor(order.identity) != null) return;
       final assignments = switch (ref
           .read(posPrinterAssignmentsProvider)
           .valueOrNull) {
@@ -156,7 +159,9 @@ class OrderConfirmation extends ConsumerWidget {
       ref
           .read(receiptPrintControllerProvider.notifier)
           .prepareAndDispatch(
-            orderNumber: order.orderNumber,
+            // The receipt is keyed to THIS order. Keyed by the display code, a second
+            // order sharing it found a job already prepared and never got a receipt.
+            orderKey: order.identity.key,
             hasEnabledPrinter: printer,
             buildDocument: () =>
                 buildReceiptDocument(l10n, order, paid, isDemo: isDemo),
@@ -214,24 +219,44 @@ class OrderConfirmation extends ConsumerWidget {
                         const SizedBox(height: RestoflowSpacing.sm),
                         Align(
                           alignment: AlignmentDirectional.centerStart,
-                          child: Wrap(
-                            spacing: RestoflowSpacing.sm,
-                            runSpacing: RestoflowSpacing.xs,
-                            children: [
-                              // RF-141B: shared status pills (info = submitted,
-                              // success = paid).
-                              RestoflowStatusPill(
-                                label: l10n.posOrderStatusSubmitted,
-                                tone: RestoflowTone.info,
-                              ),
-                              if (payment != null)
-                                RestoflowStatusPill(
-                                  label: l10n.posPaidChip,
-                                  tone: RestoflowTone.success,
-                                  icon: Icons.check_circle,
+                          child: authoritative == null
+                              // NO AUTHORITY YET (offline, or the first moments after
+                              // submit). The safe local fallback, unchanged: we know we
+                              // submitted it, and we invent nothing else.
+                              ? Wrap(
+                                  spacing: RestoflowSpacing.sm,
+                                  runSpacing: RestoflowSpacing.xs,
+                                  children: [
+                                    RestoflowStatusPill(
+                                      key: const Key(
+                                        'confirmation-local-status',
+                                      ),
+                                      label: l10n.posOrderStatusSubmitted,
+                                      tone: RestoflowTone.info,
+                                    ),
+                                    if (payment != null)
+                                      RestoflowStatusPill(
+                                        label: l10n.posPaidChip,
+                                        tone: RestoflowTone.success,
+                                        icon: Icons.check_circle,
+                                      ),
+                                  ],
+                                )
+                              // THE SERVER HAS SPOKEN. Its lifecycle status and its
+                              // three-valued settlement, in the SAME words the
+                              // operational centre uses.
+                              //
+                              // This screen used to show a hard-coded "Submitted" chip
+                              // for as long as it stayed open, and a "Paid" chip driven
+                              // by a LOCAL payment marker. So an order the kitchen had
+                              // completed still read "Submitted"; and an order comped to
+                              // zero — which nobody paid and nobody can pay — read
+                              // neither Paid nor No charge, just an unpaid order for 0.
+                              : OrderStatusPills(
+                                  serverStatus: authoritative.serverStatus,
+                                  settlement: authoritative.settlement,
+                                  keySuffix: 'confirmation',
                                 ),
-                            ],
-                          ),
                         ),
                         const SizedBox(height: RestoflowSpacing.sm),
                         _ServiceModeRow(order: order, l10n: l10n),
@@ -304,6 +329,7 @@ class OrderConfirmation extends ConsumerWidget {
                               key: const Key('pay-cash-button'),
                               onPressed: () => CashPaymentSheet.show(
                                 context,
+                                identity: order.identity,
                                 orderId: order.orderId,
                                 orderNumber: order.orderNumber,
                                 // The AUTHORITATIVE grand total, not the submit-time
@@ -481,7 +507,7 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final job = ref.watch(
-      receiptPrintControllerProvider.select((jobs) => jobs[order.orderNumber]),
+      receiptPrintControllerProvider.select((jobs) => jobs[order.identity.key]),
     );
     if (job == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
@@ -563,7 +589,7 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
     ref
         .read(receiptPrintControllerProvider.notifier)
         .retry(
-          orderNumber: order.orderNumber,
+          orderKey: order.identity.key,
           hasEnabledPrinter:
               (assignments?.hasEnabledPrinter ?? false) || nativeConfigured,
           buildDocument: () =>

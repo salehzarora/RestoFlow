@@ -4062,4 +4062,7 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posOrdersConflictRefreshed =>
       'ההזמנה השתנתה במכשיר אחר. היא רועננה - בדוק ונסה שוב.';
+
+  @override
+  String get posOrdersConflictClose => 'סגור ופתח מחדש';
 }

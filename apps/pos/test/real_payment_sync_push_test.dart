@@ -3,6 +3,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_pos/src/data/ids.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
 import 'package:restoflow_pos/src/data/payment_repository.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 
 /// RF-130: RealPaymentRepository delivers a `payment.create` op to the RF-126
 /// `public.sync_push` wrapper (never `app.*`), sends ONLY the tendered cash + the
@@ -408,7 +409,10 @@ void main() {
         expect(ctx.shiftOpen, isFalse);
         expect(ctx.drawerOpen, isFalse);
         expect(ctx.cashInDrawerMinor, 0);
-        expect(repo.paymentFor('DEMO-0001'), isNull);
+        expect(
+          repo.paymentFor(PosOrderIdentity.legacyDisplayCode('DEMO-0001')),
+          isNull,
+        );
       });
     },
   );

@@ -2,6 +2,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 
 import 'ids.dart';
+import 'order_identity.dart';
 import 'payment.dart';
 
 const String _demoOrgId = 'demo-org';
@@ -49,9 +50,9 @@ class PaymentException implements Exception {
 /// Supabase-backed implementation lands with the device/PIN-session auth bridge.
 /// Nothing here contacts a backend or a printer.
 abstract class PaymentRepository {
-  /// Records a completed payment for the order [orderId] (the server order id a
-  /// real `payment.create` references; ignored by the demo store which keys on
-  /// [orderNumber]). [method] is the tender (RF-117): CASH requires
+  /// Records a completed payment for the order [orderId] (the server order id a real
+  /// `payment.create` references). [orderNumber] is the DISPLAY code — printed and read
+  /// out, never an identity. [method] is the tender (RF-117): CASH requires
   /// [tenderedMinor] >= [amountMinor] and yields change; a NON-CASH tender
   /// (card/bit/external) is externally recorded with change 0 and
   /// tendered = [amountMinor] (the order total). Throws [PaymentException] if a
@@ -70,8 +71,12 @@ abstract class PaymentRepository {
   /// The current demo shift / cash-drawer context.
   ShiftContext shiftContext();
 
-  /// The recorded payment for [orderNumber], or null if it is unpaid.
-  CashPayment? paymentFor(String orderNumber);
+  /// The recorded payment for the order with [identity], or null if it is unpaid.
+  ///
+  /// BY IDENTITY, never by display code: two orders can share a `#XXXXXX`, and a lookup
+  /// keyed on it would hand back the OTHER order's payment — which, here, is the very
+  /// check that decides whether a payment is a duplicate.
+  CashPayment? paymentFor(PosOrderIdentity identity);
 }
 
 /// In-memory, clearly-labelled DEMO cash-payment + shift store (RF-116).
@@ -111,8 +116,9 @@ class DemoPaymentStore implements PaymentRepository {
 
   @override
   Future<CashPayment> recordCashPayment({
-    required String
-    orderId, // demo keys on orderNumber; orderId is ignored here
+    // The AUTHORITATIVE order. The demo store used to ignore it and key on the display
+    // code — which is how paying one order could return another's payment.
+    required String orderId,
     required String orderNumber,
     required int amountMinor,
     required int tenderedMinor,
@@ -134,7 +140,11 @@ class DemoPaymentStore implements PaymentRepository {
 
     // Idempotency: a duplicate pay for an already-paid order returns the
     // existing payment (mirrors the per-order single-completed-payment rule).
-    final existing = paymentFor(orderNumber);
+    // Keyed on the ORDER, so a different order that happens to share this one's printed
+    // code is not mistaken for a duplicate — and silently handed a payment it never had.
+    final existing = paymentFor(
+      PosOrderIdentity.of(orderId: orderId, orderNumber: orderNumber),
+    );
     if (existing != null) return existing;
 
     _seq++;
@@ -144,6 +154,9 @@ class DemoPaymentStore implements PaymentRepository {
     final changeMinor = method.isCash ? tenderedMinor - amountMinor : 0;
     final payment = CashPayment(
       paymentId: 'demo-payment-$n',
+      // Recorded even in demo when the caller knows it: the payment must carry the
+      // AUTHORITATIVE order it settles, not just the code printed on the ticket.
+      orderId: orderId.isEmpty ? null : orderId,
       orderNumber: orderNumber,
       deviceId: _demoDeviceId,
       localOperationId: 'demo-pay-op-$n',
@@ -161,9 +174,13 @@ class DemoPaymentStore implements PaymentRepository {
   }
 
   @override
-  CashPayment? paymentFor(String orderNumber) {
+  CashPayment? paymentFor(PosOrderIdentity identity) {
     for (final p in _payments) {
-      if (p.orderNumber == orderNumber) return p;
+      final id = PosOrderIdentity.of(
+        orderId: p.orderId,
+        orderNumber: p.orderNumber,
+      );
+      if (id == identity) return p;
     }
     return null;
   }
@@ -312,6 +329,7 @@ class RealPaymentRepository implements PaymentRepository {
     return _applyPaymentResult(
       raw: raw,
       localOperationId: localOperationId,
+      orderId: orderId,
       orderNumber: orderNumber,
       deviceId: session.deviceId,
       amountMinor: amountMinor,
@@ -336,6 +354,7 @@ class RealPaymentRepository implements PaymentRepository {
   CashPayment _applyPaymentResult({
     required Object? raw,
     required String localOperationId,
+    required String orderId,
     required String orderNumber,
     required String deviceId,
     required int amountMinor,
@@ -412,6 +431,10 @@ class RealPaymentRepository implements PaymentRepository {
 
     return CashPayment(
       paymentId: paymentId,
+      // THE ORDER THIS MONEY SETTLES. The server was asked to settle exactly this id,
+      // so the payment records exactly this id — never the display code, which two
+      // orders can share.
+      orderId: orderId.isEmpty ? null : orderId,
       orderNumber: orderNumber,
       deviceId: deviceId,
       localOperationId: localOperationId,
@@ -446,5 +469,5 @@ class RealPaymentRepository implements PaymentRepository {
   /// No client-side payment cache in real mode (the controller holds recorded
   /// payments in its state); a real lookup would be a `sync_pull` (deferred).
   @override
-  CashPayment? paymentFor(String orderNumber) => null;
+  CashPayment? paymentFor(PosOrderIdentity identity) => null;
 }

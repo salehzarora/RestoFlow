@@ -13,6 +13,7 @@ import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
 import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 
 /// MONEY-SETTLEMENT-CONSISTENCY-001 — the POS half.
 ///
@@ -351,8 +352,9 @@ void main() {
               locale: Locale(code),
               localizationsDelegates: restoflowLocalizationsDelegates,
               supportedLocales: kSupportedLocales,
-              home: const Scaffold(
+              home: Scaffold(
                 body: CashPaymentSheet(
+                  identity: PosOrderIdentity.server('oid-#Z0'),
                   orderNumber: '#Z0',
                   amountMinor: 0,
                   currencyCode: 'ILS',
@@ -416,5 +418,5 @@ class _NotChargeablePaymentRepo implements PaymentRepository {
   );
 
   @override
-  CashPayment? paymentFor(String orderNumber) => null;
+  CashPayment? paymentFor(PosOrderIdentity identity) => null;
 }

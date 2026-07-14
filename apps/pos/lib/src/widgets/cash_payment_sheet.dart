@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/order_identity.dart';
 import '../data/payment.dart';
 import '../data/payment_repository.dart';
 import '../format/cash_input.dart';
@@ -28,6 +29,7 @@ const String _decimalSeparator = '.';
 /// Money is integer minor units throughout — no floats.
 class CashPaymentSheet extends ConsumerStatefulWidget {
   const CashPaymentSheet({
+    required this.identity,
     required this.orderNumber,
     required this.amountMinor,
     required this.currencyCode,
@@ -36,6 +38,14 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     super.key,
   });
 
+  /// THE ORDER THIS MONEY IS FOR. Carried explicitly, all the way from the screen that
+  /// opened the sheet to the recorded payment, so the money is filed against the order
+  /// the cashier is actually looking at — not against whichever order happens to share
+  /// its printed code (see [PosOrderIdentity]).
+  final PosOrderIdentity identity;
+
+  /// The order's DISPLAY code. Shown, printed, read out — never used to decide which
+  /// order this payment belongs to.
   final String orderNumber;
   final int amountMinor;
   final String currencyCode;
@@ -56,6 +66,7 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
 
   static Future<void> show(
     BuildContext context, {
+    required PosOrderIdentity identity,
     required String orderNumber,
     required int amountMinor,
     required String currencyCode,
@@ -66,6 +77,7 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => CashPaymentSheet(
+      identity: identity,
       orderNumber: orderNumber,
       amountMinor: amountMinor,
       currencyCode: currencyCode,
@@ -179,6 +191,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       await ref
           .read(paymentControllerProvider.notifier)
           .payCash(
+            identity: widget.identity,
             orderId: widget.orderId ?? '',
             orderNumber: widget.orderNumber,
             amountMinor: widget.amountMinor,
@@ -224,7 +237,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
         // 0 / No charge and the unpaid badge lets it go.
         ref
             .read(posRecentOrdersControllerProvider.notifier)
-            .recordSyncRefusal(widget.orderNumber, 'order_not_chargeable');
+            .recordSyncRefusal(widget.identity, 'order_not_chargeable');
         await _reconcile();
       }
     }

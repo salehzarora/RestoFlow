@@ -74,24 +74,24 @@ Future<void> _pumpPreview(
   switch (seed) {
     case PrintJobStatus.sentToPrinter:
       ctrl.prepare(
-        orderNumber: _order.orderNumber,
+        orderKey: _order.identity.key,
         hasEnabledPrinter: true,
         buildDocument: buildDoc,
       );
-      ctrl.markSentToPrinter(_order.orderNumber);
+      ctrl.markSentToPrinter(_order.identity.key);
     case PrintJobStatus.notConfigured:
       ctrl.prepare(
-        orderNumber: _order.orderNumber,
+        orderKey: _order.identity.key,
         hasEnabledPrinter: false,
         buildDocument: buildDoc,
       );
     case PrintJobStatus.bridgeUnavailable:
       ctrl.prepare(
-        orderNumber: _order.orderNumber,
+        orderKey: _order.identity.key,
         hasEnabledPrinter: true,
         buildDocument: buildDoc,
       );
-      ctrl.markBridgeUnavailable(_order.orderNumber);
+      ctrl.markBridgeUnavailable(_order.identity.key);
     case null:
       break;
     default:

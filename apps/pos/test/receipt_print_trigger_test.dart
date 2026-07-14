@@ -121,6 +121,7 @@ Future<void> _pay(WidgetTester tester, ProviderContainer container) async {
   await container
       .read(paymentControllerProvider.notifier)
       .payCash(
+        identity: _order.identity,
         orderId: 'order-1',
         orderNumber: _order.orderNumber,
         amountMinor: _order.subtotalMinor,
@@ -145,7 +146,7 @@ void main() {
 
     final job = container
         .read(receiptPrintControllerProvider.notifier)
-        .jobFor(_order.orderNumber)!;
+        .jobFor(_order.identity.key)!;
     expect(job.status, PrintJobStatus.prepared);
     final html = documentToHtml(job.document!);
     expect(html, contains('Extra cheese ×2')); // modifier quantity
@@ -176,7 +177,7 @@ void main() {
 
     final job = container
         .read(receiptPrintControllerProvider.notifier)
-        .jobFor(_order.orderNumber)!;
+        .jobFor(_order.identity.key)!;
     expect(job.status, PrintJobStatus.notConfigured);
     expect(job.document, isNull);
     expect(find.textContaining(l10n.printStatusNotConfigured), findsOneWidget);
@@ -190,6 +191,7 @@ void main() {
       container
           .read(paymentControllerProvider.notifier)
           .payCash(
+            identity: _order.identity,
             orderId: 'order-1',
             orderNumber: _order.orderNumber,
             amountMinor: _order.subtotalMinor,

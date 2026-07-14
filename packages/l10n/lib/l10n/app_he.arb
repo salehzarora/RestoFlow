@@ -1271,5 +1271,6 @@
   "posOrdersStatusCompleted": "הושלמה",
   "posOrdersStatusCancelled": "בוטלה",
   "posOrdersStatusVoided": "בוטלה סופית",
-  "posOrdersConflictRefreshed": "ההזמנה השתנתה במכשיר אחר. היא רועננה - בדוק ונסה שוב."
+  "posOrdersConflictRefreshed": "ההזמנה השתנתה במכשיר אחר. היא רועננה - בדוק ונסה שוב.",
+  "posOrdersConflictClose": "סגור ופתח מחדש"
 }

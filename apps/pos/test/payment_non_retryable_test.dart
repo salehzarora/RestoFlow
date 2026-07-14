@@ -6,6 +6,7 @@ import 'package:restoflow_pos/src/data/payment.dart';
 import 'package:restoflow_pos/src/data/payment_repository.dart';
 import 'package:restoflow_pos/src/state/payment_controller.dart';
 import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
+import 'package:restoflow_pos/src/data/order_identity.dart';
 
 /// POS-OPERATIONS-SYNC-001 — the DEFERRED defect from MONEY-SETTLEMENT-CONSISTENCY-001.
 ///
@@ -46,7 +47,8 @@ void main() {
     final repo = _CountingNotChargeableRepo();
     await tester.pumpWidget(
       wrap(
-        const CashPaymentSheet(
+        CashPaymentSheet(
+          identity: PosOrderIdentity.server('oid-Z0'),
           orderNumber: '#Z0',
           amountMinor: 0,
           currencyCode: 'ILS',
@@ -80,7 +82,8 @@ void main() {
     final repo = _CountingNotChargeableRepo();
     await tester.pumpWidget(
       wrap(
-        const CashPaymentSheet(
+        CashPaymentSheet(
+          identity: PosOrderIdentity.server('oid-Z0'),
           orderNumber: '#Z0',
           amountMinor: 0,
           currencyCode: 'ILS',
@@ -124,7 +127,8 @@ void main() {
 
     await tester.pumpWidget(
       wrap(
-        const CashPaymentSheet(
+        CashPaymentSheet(
+          identity: PosOrderIdentity.server('oid-Z0'),
           orderNumber: '#Z0',
           amountMinor: 0,
           currencyCode: 'ILS',
@@ -155,7 +159,8 @@ void main() {
 
     await tester.pumpWidget(
       wrap(
-        const CashPaymentSheet(
+        CashPaymentSheet(
+          identity: PosOrderIdentity.server('oid-A1'),
           orderNumber: '#A1',
           amountMinor: 1000,
           currencyCode: 'ILS',
@@ -213,7 +218,7 @@ class _CountingNotChargeableRepo implements PaymentRepository {
   );
 
   @override
-  CashPayment? paymentFor(String orderNumber) => null;
+  CashPayment? paymentFor(PosOrderIdentity identity) => null;
 }
 
 class _TransportFailRepo implements PaymentRepository {
@@ -241,5 +246,5 @@ class _TransportFailRepo implements PaymentRepository {
   );
 
   @override
-  CashPayment? paymentFor(String orderNumber) => null;
+  CashPayment? paymentFor(PosOrderIdentity identity) => null;
 }

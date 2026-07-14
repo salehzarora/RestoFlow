@@ -7695,6 +7695,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This order changed on another device. It has been refreshed - check it and try again.'**
   String get posOrdersConflictRefreshed;
+
+  /// POS: acknowledges a revision conflict and dismisses the now-stale sheet, so the action is retried against the refreshed order.
+  ///
+  /// In en, this message translates to:
+  /// **'Close and reopen'**
+  String get posOrdersConflictClose;
 }
 
 class _AppLocalizationsDelegate

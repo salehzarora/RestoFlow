@@ -4087,4 +4087,7 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posOrdersConflictRefreshed =>
       'تغيّر هذا الطلب على جهاز آخر. تم تحديثه - راجعه ثم أعد المحاولة.';
+
+  @override
+  String get posOrdersConflictClose => 'إغلاق وإعادة الفتح';
 }

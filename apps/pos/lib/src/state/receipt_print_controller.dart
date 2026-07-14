@@ -72,7 +72,14 @@ class ReceiptPrintJob {
 typedef ReceiptBridgeSubmit =
     Future<BridgeSubmitResult> Function(PrintDocument document);
 
-/// Holds the receipt print job per ORDER NUMBER (RF-115).
+/// Holds the receipt print job per ORDER IDENTITY (RF-115).
+///
+/// POS-OPERATIONS-SYNC-001 (second review correction): these jobs were keyed by the
+/// DISPLAY code. Because [prepare] is idempotent per key, a second order sharing a
+/// `#XXXXXX` found a job already there and NEVER GOT ITS OWN RECEIPT — while the status
+/// line on its confirmation screen showed the OTHER order's print result. A receipt is
+/// a financial document; it belongs to exactly one order, identified by
+/// [PosOrderIdentity.key] and never by the code printed on it.
 ///
 /// [prepare] stays IDEMPOTENT per order (payment-state rebuilds + repeated
 /// listens never double-prepare, and — with a bridge — never double-send).
@@ -84,21 +91,19 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
   @override
   Map<String, ReceiptPrintJob> build() => const {};
 
-  /// Prepares the receipt job for [orderNumber] once. No enabled printer =>
+  /// Prepares the receipt job for [orderKey] once. No enabled printer =>
   /// an honest [PrintJobStatus.notConfigured] marker; a throwing builder =>
   /// [PrintJobStatus.failed] (the paid order itself is unaffected).
   void prepare({
-    required String orderNumber,
+    required String orderKey,
     required bool hasEnabledPrinter,
     required PrintDocument Function() buildDocument,
   }) {
-    if (state.containsKey(orderNumber)) return; // idempotent per order
+    if (state.containsKey(orderKey)) return; // idempotent per order
     if (!hasEnabledPrinter) {
       state = {
         ...state,
-        orderNumber: const ReceiptPrintJob(
-          status: PrintJobStatus.notConfigured,
-        ),
+        orderKey: const ReceiptPrintJob(status: PrintJobStatus.notConfigured),
       };
       return;
     }
@@ -106,7 +111,7 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
       final document = buildDocument();
       state = {
         ...state,
-        orderNumber: ReceiptPrintJob(
+        orderKey: ReceiptPrintJob(
           status: PrintJobStatus.prepared,
           document: document,
         ),
@@ -114,7 +119,7 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
     } catch (_) {
       state = {
         ...state,
-        orderNumber: const ReceiptPrintJob(status: PrintJobStatus.failed),
+        orderKey: const ReceiptPrintJob(status: PrintJobStatus.failed),
       };
     }
   }
@@ -123,32 +128,32 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
   /// wired — dispatches to the local bridge. With no bridge the job stays
   /// [PrintJobStatus.prepared]. Safe to call repeatedly (dispatches once).
   Future<void> prepareAndDispatch({
-    required String orderNumber,
+    required String orderKey,
     required bool hasEnabledPrinter,
     required PrintDocument Function() buildDocument,
     ReceiptBridgeSubmit? submitToBridge,
   }) async {
-    final alreadyExisted = state.containsKey(orderNumber);
+    final alreadyExisted = state.containsKey(orderKey);
     prepare(
-      orderNumber: orderNumber,
+      orderKey: orderKey,
       hasEnabledPrinter: hasEnabledPrinter,
       buildDocument: buildDocument,
     );
     if (alreadyExisted) return; // already dispatched once
-    await _dispatch(orderNumber, submitToBridge);
+    await _dispatch(orderKey, submitToBridge);
   }
 
   /// Re-runs a job (failed / bridge-unavailable / not-configured): clears the
   /// existing entry so [prepareAndDispatch] rebuilds and re-sends it.
   Future<void> retry({
-    required String orderNumber,
+    required String orderKey,
     required bool hasEnabledPrinter,
     required PrintDocument Function() buildDocument,
     ReceiptBridgeSubmit? submitToBridge,
   }) async {
-    state = {...state}..remove(orderNumber);
+    state = {...state}..remove(orderKey);
     await prepareAndDispatch(
-      orderNumber: orderNumber,
+      orderKey: orderKey,
       hasEnabledPrinter: hasEnabledPrinter,
       buildDocument: buildDocument,
       submitToBridge: submitToBridge,
@@ -156,7 +161,7 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
   }
 
   /// PRINT-STABILITY-001 / POS-ORDERS-AND-PAYMENT-001: reprints the receipt for
-  /// [orderNumber] — re-submits a receipt [PrintDocument] snapshot through the
+  /// [orderKey] — re-submits a receipt [PrintDocument] snapshot through the
   /// bridge WITHOUT rebuilding it from live data. It never creates a new order or
   /// payment and never recomputes money (the document is a snapshot). A no-op
   /// when there is no document (stored or supplied) or no bridge.
@@ -166,30 +171,27 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
   /// the STORED order+payment) so an order settled in a PRIOR session, whose
   /// print job is no longer in memory, can still be reprinted.
   Future<void> reprint({
-    required String orderNumber,
+    required String orderKey,
     ReceiptBridgeSubmit? submitToBridge,
     PrintDocument? document,
   }) async {
-    final doc = document ?? state[orderNumber]?.document;
+    final doc = document ?? state[orderKey]?.document;
     if (doc == null || submitToBridge == null) return;
     // Reset to prepared with the (stored or supplied) document so _dispatch
     // re-sends it.
     state = {
       ...state,
-      orderNumber: ReceiptPrintJob(
-        status: PrintJobStatus.prepared,
-        document: doc,
-      ),
+      orderKey: ReceiptPrintJob(status: PrintJobStatus.prepared, document: doc),
     };
-    await _dispatch(orderNumber, submitToBridge);
+    await _dispatch(orderKey, submitToBridge);
   }
 
   Future<void> _dispatch(
-    String orderNumber,
+    String orderKey,
     ReceiptBridgeSubmit? submitToBridge,
   ) async {
     if (submitToBridge == null) return; // no bridge -> stays prepared
-    final job = state[orderNumber];
+    final job = state[orderKey];
     if (job == null ||
         job.status != PrintJobStatus.prepared ||
         job.document == null) {
@@ -199,22 +201,22 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
     try {
       result = await submitToBridge(job.document!);
     } catch (_) {
-      markBridgeUnavailable(orderNumber);
+      markBridgeUnavailable(orderKey);
       return;
     }
     switch (result.outcome) {
       case BridgeSubmitOutcome.sentToPrinter:
-        markSentToPrinter(orderNumber);
+        markSentToPrinter(orderKey);
       case BridgeSubmitOutcome.accepted:
         // A demo/sink bridge RECEIVED it but did NOT reach hardware — stay
         // honestly [prepared]; only record that a job was submitted.
-        _recordDispatch(orderNumber);
+        _recordDispatch(orderKey);
       case BridgeSubmitOutcome.failed:
         if (result.category == PrinterErrorCategory.unreachable) {
-          markBridgeUnavailable(orderNumber);
+          markBridgeUnavailable(orderKey);
         } else {
           markFailed(
-            orderNumber,
+            orderKey,
             category: result.category,
             message: result.message,
           );
@@ -224,12 +226,12 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
 
   /// Flips an existing job to [PrintJobStatus.sentToPrinter] (bridge confirmed
   /// the transport write — NOT a hardware print acknowledgement).
-  void markSentToPrinter(String orderNumber) {
-    final job = state[orderNumber];
+  void markSentToPrinter(String orderKey) {
+    final job = state[orderKey];
     if (job == null) return;
     state = {
       ...state,
-      orderNumber: job.copyWith(
+      orderKey: job.copyWith(
         status: PrintJobStatus.sentToPrinter,
         at: DateTime.now(),
       ),
@@ -238,15 +240,15 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
 
   /// Flips an existing job to [PrintJobStatus.failed] with a [category]/[message].
   void markFailed(
-    String orderNumber, {
+    String orderKey, {
     PrinterErrorCategory? category,
     String? message,
   }) {
-    final job = state[orderNumber];
+    final job = state[orderKey];
     if (job == null) return;
     state = {
       ...state,
-      orderNumber: job.copyWith(
+      orderKey: job.copyWith(
         status: PrintJobStatus.failed,
         failureCategory: category,
         failureMessage: message,
@@ -256,25 +258,25 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
   }
 
   /// Flips an existing job to [PrintJobStatus.bridgeUnavailable].
-  void markBridgeUnavailable(String orderNumber) {
-    final job = state[orderNumber];
+  void markBridgeUnavailable(String orderKey) {
+    final job = state[orderKey];
     if (job == null) return;
     state = {
       ...state,
-      orderNumber: job.copyWith(
+      orderKey: job.copyWith(
         status: PrintJobStatus.bridgeUnavailable,
         at: DateTime.now(),
       ),
     };
   }
 
-  void _recordDispatch(String orderNumber) {
-    final job = state[orderNumber];
+  void _recordDispatch(String orderKey) {
+    final job = state[orderKey];
     if (job == null) return;
-    state = {...state, orderNumber: job.copyWith(at: DateTime.now())};
+    state = {...state, orderKey: job.copyWith(at: DateTime.now())};
   }
 
-  ReceiptPrintJob? jobFor(String orderNumber) => state[orderNumber];
+  ReceiptPrintJob? jobFor(String orderKey) => state[orderKey];
 }
 
 final receiptPrintControllerProvider =
@@ -282,11 +284,13 @@ final receiptPrintControllerProvider =
       ReceiptPrintController.new,
     );
 
-/// PRINT-STABILITY-001: the most-recent order number that has a BUILT receipt
-/// document (map insertion order — the last one wins), or null when none has
+/// PRINT-STABILITY-001: the IDENTITY KEY of the most-recent order that has a BUILT
+/// receipt document (map insertion order — the last one wins), or null when none has
 /// been prepared this session. Drives the "Reprint last receipt" action's
-/// enabled/hidden state. In-memory only (a receipt is a transient print artifact).
-final lastReceiptOrderNumberProvider = Provider<String?>((ref) {
+/// enabled/hidden state, and is handed straight back to [ReceiptPrintController.reprint]
+/// — an opaque key, never shown to a cashier. In-memory only (a receipt is a transient
+/// print artifact).
+final lastReceiptOrderKeyProvider = Provider<String?>((ref) {
   final jobs = ref.watch(receiptPrintControllerProvider);
   String? last;
   for (final entry in jobs.entries) {

@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/order_identity.dart';
 import '../data/order_reconciler.dart';
 import '../data/order_snapshot.dart';
 import '../data/payment.dart';
 import '../data/recent_order.dart';
 import '../data/recent_orders_store.dart';
+import '../data/sync_cursor_store.dart' show PosSyncScope;
 import 'payment_controller.dart';
 import 'pos_sync_scope_provider.dart';
 import 'submitted_order_view.dart';
@@ -33,6 +35,30 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   String _scopeKey = '';
   bool _disposed = false;
 
+  /// THE SCOPE GENERATION — which is not the same question as the scope KEY.
+  ///
+  /// Keying the store correctly was necessary and not sufficient. An asynchronous load
+  /// or write STARTED in branch A is still in flight when the till is re-paired into
+  /// branch B: it resumes, finds a controller that is now B's, and writes A's orders
+  /// into B's state and B's storage. The key was right and the DATA still crossed the
+  /// branch boundary, because nothing bound the RESULT to the scope it was fetched FOR.
+  ///
+  /// Every scope change bumps this counter, which invalidates every operation started
+  /// under the previous one. A stale result is DISCARDED — silently. It is not an
+  /// error: nothing failed, the question simply stopped being ours to answer, and
+  /// showing branch B a red banner about branch A's fetch would be a lie about B.
+  int _generation = 0;
+
+  /// True when work begun at [gen], for the scope [scopeKey], may no longer touch state
+  /// or storage.
+  ///
+  /// A PLAIN FIELD COMPARISON, deliberately: Riverpod forbids any `ref` access between a
+  /// dependency changing and the provider rebuilding, which is exactly the window a
+  /// stale response lands in. The generation is advanced EAGERLY by the scope listener
+  /// in [build] instead, so it is already correct when an awaited continuation resumes.
+  bool _isStale(int gen, String scopeKey) =>
+      _disposed || gen != _generation || scopeKey != _scopeKey;
+
   /// Only today + yesterday are surfaced (a lightweight cashier window, not a
   /// heavy history); older orders are pruned on load/update. Capped to bound the
   /// persisted size on a very busy day.
@@ -45,8 +71,15 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     // rebuilds, state resets to empty, and _recover() loads THAT scope's cache — so
     // the previous branch's orders cannot linger on screen. `ref.read` here (the old
     // behaviour) froze the scope at first build and never looked again.
-    final scope = ref.watch(posSyncScopeProvider);
-    _scopeKey = scope?.key ?? '';
+    // LISTENED as well as watched: the listener fires the moment the scope changes, so
+    // the generation has already advanced by the time an in-flight load or persist
+    // resumes — without this controller touching `ref` in the window where Riverpod
+    // forbids it.
+    ref.listen<PosSyncScope?>(
+      posSyncScopeProvider,
+      (previous, next) => _onScopeChanged(next?.key ?? ''),
+    );
+    _onScopeChanged(ref.watch(posSyncScopeProvider)?.key ?? '');
     _disposed = false;
     ref.onDispose(() => _disposed = true);
     // Reactively attach a payment to its recent order the moment it is recorded
@@ -59,24 +92,51 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     return const <PosRecentOrder>[];
   }
 
+  /// A DIFFERENT SCOPE IS A DIFFERENT WORLD. Everything begun for the previous one is
+  /// obsolete: the counter moves, and every in-flight load or persist started under it
+  /// discards itself when it resumes.
+  void _onScopeChanged(String key) {
+    if (key == _scopeKey) return;
+    _generation++;
+    _scopeKey = key;
+  }
+
   /// Loads any persisted recent orders (real mode) and merges them under the
   /// in-session state, then applies the current payments. Never throws.
+  ///
+  /// BOUND TO THE SCOPE IT STARTED FOR. A load begun in branch A that completes after
+  /// the till has been re-paired into branch B is DISCARDED: branch A's day must not
+  /// appear on branch B's till, and it must not overwrite the recovery B has already
+  /// begun for itself.
   Future<void> _recover() async {
+    final gen = _generation;
+    final scopeKey = _scopeKey;
+    // NO SCOPE, NO BUCKET. An unpaired/restoring till has no branch, and `''` is not a
+    // branch — it is a REAL, SHARED storage key that every scopeless moment writes to
+    // and reads from. Unpair a till from branch A (scope goes null), re-pair it into
+    // branch B, and the load during that window would hand branch A's orders straight to
+    // branch B, with no race required at all. A till that does not know where it is
+    // loads nothing and stores nothing.
+    if (scopeKey.isEmpty) return;
     List<PosRecentOrder> loaded;
     try {
-      loaded = await _store.load(_scopeKey);
+      loaded = await _store.load(scopeKey);
     } catch (_) {
       return;
     }
-    if (_disposed) return;
-    final byNumber = <String, PosRecentOrder>{
-      for (final o in loaded) o.orderNumber: o,
+    if (_isStale(gen, scopeKey)) return; // the till moved on; this is not ours
+
+    // KEYED BY IDENTITY, NOT BY DISPLAY CODE. Two persisted orders that happen to share
+    // a `#XXXXXX` are two orders: keying this map on the code silently collapsed them
+    // into one on every restart, and one of the cashier's real orders vanished.
+    final byIdentity = <String, PosRecentOrder>{
+      for (final o in loaded) o.identity.key: o,
     };
     // In-session state (if any) wins over the persisted copy.
     for (final o in state) {
-      byNumber[o.orderNumber] = o;
+      byIdentity[o.identity.key] = o;
     }
-    _apply(byNumber.values.toList(), persist: false);
+    _apply(byIdentity.values.toList(), persist: false);
     _syncPayments(ref.read(paymentControllerProvider));
   }
 
@@ -87,14 +147,14 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     // reference and is NOT unique: keying on it here meant a second, genuinely
     // different order with the same code silently EVICTED the first from the till.
     final incoming = PosRecentOrder(order: view, submittedAt: DateTime.now());
-    final key = _identityKey(incoming);
+    final key = incoming.identity.key;
     final existing = <PosRecentOrder>[
       for (final o in state)
-        if (_identityKey(o) != key) o,
+        if (o.identity.key != key) o,
     ];
     final payment = ref
         .read(paymentControllerProvider)
-        .paymentFor(view.orderNumber);
+        .paymentFor(view.identity);
     final order = PosRecentOrder(
       order: view,
       submittedAt: incoming.submittedAt,
@@ -110,15 +170,17 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   /// payment envelope (`record_payment` returns `order_status`, which is `completed`
   /// when the served + fully-settled rule auto-closed the order). Storing it is how this
   /// device learns an order became terminal, so it stops offering Cancel on it.
+  /// Attaches [payment] to the order identified by [identity] — NOT by display code.
+  /// Money is filed against the order it was taken for, and against no other.
   void recordPayment(
-    String orderNumber,
+    PosOrderIdentity identity,
     CashPayment payment, {
     String? orderStatus,
   }) {
     var changed = false;
     final next = <PosRecentOrder>[];
     for (final o in state) {
-      if (o.orderNumber == orderNumber && o.payment == null && !o.isVoided) {
+      if (o.identity == identity && o.payment == null && !o.isVoided) {
         next.add(o.copyWith(payment: payment, status: orderStatus));
         changed = true;
       } else {
@@ -135,7 +197,7 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   /// so this never runs for one). The order stays in the list under a
   /// "Cancelled" pill (auditable) but drops out of the unpaid count and can no
   /// longer be paid or reprinted as a receipt.
-  void markVoided(String orderNumber, String reason) {
+  void markVoided(PosOrderIdentity identity, String reason) {
     var changed = false;
     final next = <PosRecentOrder>[];
     for (final o in state) {
@@ -144,7 +206,10 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // PAYMENT MARKER, not settlement, because a live completed payment is exactly what
       // the server's void guard blocks on; a NON-CHARGEABLE order carries none and is
       // genuinely voidable while it is still active.
-      if (o.orderNumber == orderNumber && !o.isVoided && o.payment == null) {
+      //
+      // Matched by IDENTITY: voiding an order must never cancel a DIFFERENT order that
+      // merely shares its printed code.
+      if (o.identity == identity && !o.isVoided && o.payment == null) {
         next.add(
           o.copyWith(
             voidedAt: DateTime.now(),
@@ -161,10 +226,10 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     _apply(next);
   }
 
-  /// The current recent order for [orderNumber], or null.
-  PosRecentOrder? orderFor(String orderNumber) {
+  /// The current recent order with [identity], or null.
+  PosRecentOrder? orderFor(PosOrderIdentity identity) {
     for (final o in state) {
-      if (o.orderNumber == orderNumber) return o;
+      if (o.identity == identity) return o;
     }
     return null;
   }
@@ -188,38 +253,67 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   /// A queued operation is NEVER deleted or resolved here — a snapshot is not an
   /// acknowledgement (see order_reconciler.dart, rule 3).
   Future<bool> applySnapshots(List<PosOrderSnapshot> snapshots) async {
-    if (_disposed) return true;
+    // NOTHING WAS STORED, so the caller must NOT advance its cursor past these rows.
+    // Returning `true` here (the old behaviour) told the coordinator the page was
+    // durable when the controller was gone and nothing had been written at all.
+    if (_disposed) return false;
     if (snapshots.isEmpty) return true;
 
+    // The scope these rows are being applied INTO, captured before anything can move.
+    final gen = _generation;
+    final scopeKey = _scopeKey;
+    final store = _store;
+
+    // A SCOPELESS TILL HAS NOWHERE TO PUT THESE. `''` is a shared bucket, not a branch;
+    // writing a branch's authoritative orders into it is how they resurface on the NEXT
+    // branch this device is paired to.
+    if (scopeKey.isEmpty) return false;
+
     final result = reconcileSnapshots(state, snapshots);
-    if (!result.changedAnything) {
+    if (!result.changedAnything && !_lastPersistFailed) {
       // IDEMPOTENT: re-applying the same page is a genuine no-op — no state
       // churn, no rewrite, no rebuild.
       return true;
     }
-
-    final merged = _sortedPruned(result.orders);
-    if (_disposed) return true;
+    // ...UNLESS THE LAST DURABLE WRITE FAILED. Then "nothing changed" is true only of
+    // MEMORY: the disk still does not have these rows. Returning success here is how a
+    // retry after a persistence failure quietly re-reported success, cleared the error,
+    // stamped a fresh sync time — and lost the rows anyway at the next restart. If we
+    // owe the disk a write, we attempt it, whatever reconciliation thinks.
+    final merged = result.changedAnything
+        ? _sortedPruned(result.orders)
+        : state;
+    if (_disposed) return false;
     state = merged;
     try {
-      await _store.persist(_scopeKey, merged);
+      // PERSIST UNDER THE CAPTURED KEY, never under whatever `_scopeKey` happens to say
+      // by the time the write runs. Reading the field here would let a branch switch
+      // mid-write file branch A's orders under branch B's key — the very leak the
+      // scoped key exists to prevent, reintroduced one await later.
+      await store.persist(scopeKey, merged);
+      if (!_isStale(gen, scopeKey)) _lastPersistFailed = false;
       return true;
     } catch (_) {
+      if (!_isStale(gen, scopeKey)) _lastPersistFailed = true;
       // The in-memory state is still correct and usable; only durability failed.
       // Report it so the cursor stays put and the same page is re-delivered next
       // time, rather than being silently skipped.
-      return false;
+      //
+      // UNLESS the scope moved on: then this write was for a branch we have left, its
+      // failure says nothing about the branch we are now in, and reporting it would
+      // raise a persistence alarm on a till that is perfectly healthy.
+      return _isStale(gen, scopeKey);
     }
   }
 
   /// Records a SAFE, typed server refusal against an order (e.g.
   /// `order_not_chargeable`), so the UI can explain it instead of silently
   /// re-submitting a request the server has already refused.
-  void recordSyncRefusal(String orderNumber, String reason) {
+  void recordSyncRefusal(PosOrderIdentity identity, String reason) {
     var changed = false;
     final next = <PosRecentOrder>[
       for (final o in state)
-        if (o.orderNumber == orderNumber && !changed)
+        if (o.identity == identity && !changed)
           () {
             changed = true;
             return o.copyWith(
@@ -239,7 +333,10 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     for (final o in state) {
       // MONEY-VOID-001: never reactively attach a payment to a cancelled order.
       if (o.payment == null && !o.isVoided) {
-        final p = ps.paymentFor(o.orderNumber);
+        // BY IDENTITY. This lookup used the display code, so a payment taken for one
+        // order was reactively stamped onto EVERY row sharing that code — the clearest
+        // possible way to mark an unpaid order paid without anyone paying for it.
+        final p = ps.paymentFor(o.identity);
         if (p != null) {
           // Learn the order's CANONICAL status from the server's payment envelope, so a
           // payment that auto-closed the order stops this device offering Cancel on it.
@@ -265,33 +362,41 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // The RECONCILIATION path does NOT come through here -- applySnapshots awaits the
       // write and REPORTS failure, because that is the path whose success decides
       // whether the sync cursor may advance.
+      final gen = _generation;
+      final scopeKey = _scopeKey;
+      if (scopeKey.isEmpty) return; // no branch, no bucket (see applySnapshots)
       unawaited(
-        _store.persist(_scopeKey, result).catchError((Object _) {
+        _store.persist(scopeKey, result).catchError((Object _) {
+          // A write that failed for a branch we have since LEFT is not this branch's
+          // problem, and flagging it here would make a healthy till claim its day is
+          // unsaved.
+          if (_isStale(gen, scopeKey)) return;
           _lastPersistFailed = true;
         }),
       );
     }
   }
 
-  /// True when the most recent best-effort durable write did not stick. Surfaced so
-  /// the UI can say so rather than silently pretending the day is saved.
+  /// True when the most recent durable write did not stick — i.e. the in-memory state
+  /// and the stored state DISAGREE, and we still owe the disk a write.
+  ///
+  /// Surfaced so the UI can say so rather than silently pretending the day is saved, and
+  /// used by [applySnapshots] to keep re-attempting the write even when reconciliation
+  /// finds nothing new to merge.
   bool get lastPersistFailed => _lastPersistFailed;
   bool _lastPersistFailed = false;
 
-  /// THE DEDUPE KEY IS THE AUTHORITATIVE SERVER ORDER ID — never the display code.
+  /// THE DEDUPE KEY IS THE ORDER'S IDENTITY — never the display code.
   ///
   /// `orderNumber` is a SHORTENED, human-facing reference (`#XXXXXX`, the last six hex
   /// characters of the order UUID). It is not unique and was never promised to be: two
   /// genuinely different server orders can share one, and this map used to key on it —
   /// so the second order silently REPLACED the first and one of them vanished from the
-  /// till. A display string is for reading, not for identity.
-  ///
-  /// A row with no server id yet (a local draft, a queued submit) cannot collide with
-  /// a server order at all: it is keyed by its own local identity instead.
+  /// till. A display string is for reading, not for identity. See [PosOrderIdentity].
   List<PosRecentOrder> _sortedPruned(List<PosRecentOrder> orders) {
     final byId = <String, PosRecentOrder>{};
     for (final o in orders) {
-      final key = _identityKey(o);
+      final key = o.identity.key;
       final prev = byId[key];
       if (prev == null) {
         byId[key] = o;
@@ -320,21 +425,6 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
         ? windowed.sublist(0, _maxOrders)
         : windowed;
   }
-}
-
-/// The identity of a row for DEDUPE.
-///
-/// A persisted order is its authoritative SERVER ORDER ID. Anything else — a local
-/// draft, a queued submit the server has not acknowledged — is keyed by its own local
-/// operation/outbox identity, falling back to the display code only when there is
-/// genuinely nothing else. It can therefore never be merged into a server order
-/// merely because their display codes happen to match.
-String _identityKey(PosRecentOrder o) {
-  final id = o.orderId;
-  if (id != null && id.isNotEmpty) return 'srv:$id';
-  final local = o.order?.localOperationId ?? o.order?.outboxEntryId;
-  if (local != null && local.isNotEmpty) return 'loc:$local';
-  return 'num:${o.orderNumber}';
 }
 
 /// The recent-orders persistence seam. Default: in-memory (demo mode / tests —

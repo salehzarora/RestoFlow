@@ -1271,5 +1271,6 @@
   "posOrdersStatusCompleted": "مكتمل",
   "posOrdersStatusCancelled": "ملغى",
   "posOrdersStatusVoided": "مُبطَل",
-  "posOrdersConflictRefreshed": "تغيّر هذا الطلب على جهاز آخر. تم تحديثه - راجعه ثم أعد المحاولة."
+  "posOrdersConflictRefreshed": "تغيّر هذا الطلب على جهاز آخر. تم تحديثه - راجعه ثم أعد المحاولة.",
+  "posOrdersConflictClose": "إغلاق وإعادة الفتح"
 }
