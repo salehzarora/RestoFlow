@@ -386,6 +386,174 @@ void main() {
   });
 
   // ===========================================================================
+  test('PENDING RICH TRUTH (write succeeds): a shell page arriving during the '
+      'A->B->A recovery window, while the rich write is still physically '
+      'pending, must not become the final durable bytes', () async {
+    final store = _RaceStore();
+    final c = harness(store);
+
+    c.read(posDeviceContextProvider.notifier).set(ctxA);
+    await settle();
+    final orders = c.read(posRecentOrdersControllerProvider.notifier);
+    final scopeAKey = 'org-1.rest-1.branch-A.device-1';
+
+    // The rich order's writes are IN FLIGHT: neither durable nor owed.
+    store.gatePersist = true;
+    orders.recordSubmitted(richView());
+    orders.recordPayment(PosOrderIdentity.server('o-1'), paymentO1());
+    await settle();
+    expect(
+      orders.lastPersistFailed,
+      isFalse,
+      reason: 'precondition: the rich truth is pending, not owed',
+    );
+    expect(
+      store.persisted[scopeAKey],
+      isNull,
+      reason: 'precondition: the rich truth is pending, not durable',
+    );
+
+    // A -> B -> A: the state resets; recovery for A is DELAYED.
+    c.read(posDeviceContextProvider.notifier).set(ctxB);
+    await settle();
+    c.read(posRecentOrdersControllerProvider);
+    await settle();
+    store.gateLoads = true;
+    c.read(posDeviceContextProvider.notifier).set(ctxA);
+    await settle();
+    c.read(posRecentOrdersControllerProvider);
+    await settle();
+
+    // The NON-EMPTY shell page arrives inside the window: state empty,
+    // recovery pending, rich write still in flight. Its persistence queues
+    // behind the pending rich write.
+    final queued = orders.applySnapshots([shell(revision: 3)]);
+    await settle();
+
+    // The rich write now completes SUCCESSFULLY; the queued write follows.
+    store.releasePersist();
+    final ok = await queued;
+    expect(ok, isTrue);
+    store.releaseLoad(scopeAKey, const <PosRecentOrder>[]);
+    await settle();
+
+    // THE FINAL DURABLE BYTES must be the rich row with the authoritative
+    // snapshot folded on — never the shell that was frozen before the rich
+    // truth had settled.
+    final persisted = store.persisted[scopeAKey]!;
+    expect(persisted, hasLength(1));
+    expectRichWithServer(persisted.single, revision: 3);
+    expect(
+      store.writeLog.last.$2,
+      isTrue,
+      reason: 'the LAST physical write carries the rich (payment) content',
+    );
+    final rows = c.read(posRecentOrdersControllerProvider);
+    expect(rows, hasLength(1));
+    expectRichWithServer(rows.single, revision: 3);
+  });
+
+  test(
+    'PENDING RICH TRUTH (write fails): the pending truth becomes owed/rebased '
+    'and the queued shell-era write persists the rich merged result',
+    () async {
+      final store = _RaceStore();
+      final c = harness(store);
+
+      c.read(posDeviceContextProvider.notifier).set(ctxA);
+      await settle();
+      final orders = c.read(posRecentOrdersControllerProvider.notifier);
+      final scopeAKey = 'org-1.rest-1.branch-A.device-1';
+
+      store.gatePersist = true;
+      orders.recordSubmitted(richView());
+      orders.recordPayment(PosOrderIdentity.server('o-1'), paymentO1());
+      await settle();
+
+      c.read(posDeviceContextProvider.notifier).set(ctxB);
+      await settle();
+      c.read(posRecentOrdersControllerProvider);
+      await settle();
+      store.gateLoads = true;
+      c.read(posDeviceContextProvider.notifier).set(ctxA);
+      await settle();
+      c.read(posRecentOrdersControllerProvider);
+      await settle();
+
+      final queued = orders.applySnapshots([shell(revision: 3)]);
+      await settle();
+
+      // The FIRST rich write FAILS; the second (payment) and the queued
+      // shell-era write then run against a healed store.
+      store.releasePersistWithFailure();
+      final ok = await queued;
+      expect(ok, isTrue);
+      store.releaseLoad(scopeAKey, const <PosRecentOrder>[]);
+      await settle();
+
+      final persisted = store.persisted[scopeAKey]!;
+      expect(persisted, hasLength(1));
+      expectRichWithServer(persisted.single, revision: 3);
+      expect(
+        orders.lastPersistFailed,
+        isFalse,
+        reason:
+            'the rich truth reached the disk through the later writes — the '
+            'debt is genuinely satisfied',
+      );
+      final rows = c.read(posRecentOrdersControllerProvider);
+      expect(rows, hasLength(1));
+      expectRichWithServer(rows.single, revision: 3);
+    },
+  );
+
+  test('PENDING RICH TRUTH (recovery completes first): both completion orders '
+      'converge on the same rich final row', () async {
+    final store = _RaceStore();
+    final c = harness(store);
+
+    c.read(posDeviceContextProvider.notifier).set(ctxA);
+    await settle();
+    final orders = c.read(posRecentOrdersControllerProvider.notifier);
+    final scopeAKey = 'org-1.rest-1.branch-A.device-1';
+
+    store.gatePersist = true;
+    orders.recordSubmitted(richView());
+    orders.recordPayment(PosOrderIdentity.server('o-1'), paymentO1());
+    await settle();
+
+    c.read(posDeviceContextProvider.notifier).set(ctxB);
+    await settle();
+    c.read(posRecentOrdersControllerProvider);
+    await settle();
+    store.gateLoads = true;
+    c.read(posDeviceContextProvider.notifier).set(ctxA);
+    await settle();
+    c.read(posRecentOrdersControllerProvider);
+    await settle();
+
+    // RECOVERY COMPLETES FIRST (the disk has nothing yet — the rich write is
+    // still pending) ...
+    store.releaseLoad(scopeAKey, const <PosRecentOrder>[]);
+    await settle();
+
+    // ... THEN the shell page arrives, and only afterwards does the pending
+    // rich write settle.
+    final queued = orders.applySnapshots([shell(revision: 3)]);
+    await settle();
+    store.releasePersist();
+    final ok = await queued;
+    expect(ok, isTrue);
+    await settle();
+
+    final persisted = store.persisted[scopeAKey]!;
+    expect(persisted, hasLength(1));
+    expectRichWithServer(persisted.single, revision: 3);
+    final rows = c.read(posRecentOrdersControllerProvider);
+    expect(rows, hasLength(1));
+    expectRichWithServer(rows.single, revision: 3);
+  });
+
   test('an OLDER write FAILING after a NEWER LOCAL SUCCESS must not book stale '
       'debt: the success advances the durable high-water', () async {
     final store = _RaceStore();

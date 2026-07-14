@@ -141,33 +141,44 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     // markers and void reasons a server re-fetch cannot reconstruct, so they win
     // over the loaded (stale) copies here; the debt itself stays booked until a
     // write actually lands.
+    // Newer sources overlay the loaded rows — but a LINELESS SHELL never
+    // replaces a rich row outright, whatever source it arrives from. A shell can
+    // enter any of these overlays: the first pull racing this recovery adopted
+    // this device's own order as a BRANCH-DISCOVERED shell into the state; that
+    // shell then entered the persistence LINEAGE the moment its write was
+    // invoked; and a failed shell-era write can book it as OWED. Letting any of
+    // those overwrite the loaded device-owned row would permanently strip the
+    // day of its lines and receipts. Where the incoming row is a shell and the
+    // already-merged row is rich, the shell's SNAPSHOT is folded in through the
+    // ONE reconciler rule instead — exactly what would have happened had
+    // recovery won the race.
+    void overlay(Iterable<PosRecentOrder> rows) {
+      for (final o in rows) {
+        final key = o.identity.key;
+        final existing = byIdentity[key];
+        final snap = o.snapshot;
+        if (existing != null &&
+            o.order == null &&
+            existing.order != null &&
+            snap != null) {
+          byIdentity[key] = applySnapshot(existing, snap);
+        } else {
+          byIdentity[key] = o;
+        }
+      }
+    }
+
     final owed = _owedWrites[scopeKey];
-    if (owed != null) {
-      for (final o in owed) {
-        byIdentity[o.identity.key] = o;
-      }
-    }
-    // In-session state (if any) wins over the persisted copy — with ONE exception.
-    // If the first pull raced this recovery and landed BEFORE the load completed, it
-    // reconciled against an EMPTY list and adopted this device's own orders as
-    // BRANCH-DISCOVERED: lineless shells with no receipt, no payment marker, no void
-    // reason. Letting such a shell overwrite the loaded device-owned row would
-    // permanently strip the day of its receipts. Where that happened, the loaded row
-    // is kept and the shell's SNAPSHOT is merged into it through the ONE reconciler
-    // rule — exactly what would have happened had recovery won the race.
-    for (final o in state) {
-      final key = o.identity.key;
-      final recovered = byIdentity[key];
-      final shellSnap = o.snapshot;
-      if (recovered != null &&
-          o.origin == PosOrderOrigin.branchDiscovered &&
-          recovered.order != null &&
-          shellSnap != null) {
-        byIdentity[key] = applySnapshot(recovered, shellSnap);
-      } else {
-        byIdentity[key] = o;
-      }
-    }
+    if (owed != null) overlay(owed);
+    // ...as does the persistence LINEAGE: a still-pending (or just-settled)
+    // write's content is newer than anything the store returned, and — like the
+    // owed rows — it may be the only carrier of the rich order-time truth while
+    // this recovery was in flight.
+    final pending = _lineage[scopeKey];
+    if (pending != null) overlay(pending);
+    // In-session state (if any) wins over the persisted copy, under the same
+    // shell-fold rule.
+    overlay(state);
     _apply(byIdentity.values.toList(), persist: false);
     _syncPayments(ref.read(paymentControllerProvider));
   }
@@ -316,7 +327,7 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       final ok = await _persistAndSettle(
         scopeKey: scopeKey,
         store: store,
-        content: _withOwed(scopeKey, state),
+        content: _withLocalTruth(scopeKey, state),
       );
       if (ok) return true;
       return _isStale(gen, scopeKey);
@@ -335,13 +346,22 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     // the local structure and applies the server's authoritative fields on top.
     // Matching is by AUTHORITATIVE SERVER ORDER ID (the reconciler's only key) —
     // never the display code.
+    // ... and everything a scope knows locally INCLUDES its persistence
+    // lineage: a rich write that is still physically pending is in neither the
+    // state (reset by a scope round trip) nor the owed map (it has not failed)
+    // — yet a page derived without it would freeze a poorer payload that the
+    // serialized chain then writes LAST.
     final owedAtMerge = _owedWrites[scopeKey];
+    final pendingAtMerge = _lineage[scopeKey];
     final List<PosRecentOrder> base;
-    if (owedAtMerge == null) {
+    if (owedAtMerge == null && pendingAtMerge == null) {
       base = state;
     } else {
       final byIdentity = <String, PosRecentOrder>{
-        for (final o in owedAtMerge) o.identity.key: o,
+        if (owedAtMerge != null)
+          for (final o in owedAtMerge) o.identity.key: o,
+        if (pendingAtMerge != null)
+          for (final o in pendingAtMerge) o.identity.key: o,
         // The live state wins where both hold a row: it is the same lineage,
         // strictly newer.
         for (final o in state) o.identity.key: o,
@@ -457,7 +477,7 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
         _persistAndSettle(
           scopeKey: scopeKey,
           store: _store,
-          content: _withOwed(scopeKey, result),
+          content: _withLocalTruth(scopeKey, result),
         ),
       );
     }
@@ -521,6 +541,24 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   /// physical write.
   final Map<String, Future<void>> _persistChain = <String, Future<void>>{};
 
+  /// Per scope: the NEWEST content ever handed to the persistence gate — the
+  /// scope's persistence LINEAGE. Recorded synchronously with version
+  /// allocation, so it exists the moment an attempt is invoked, not the moment
+  /// it settles.
+  ///
+  /// This closes the last window in the local-truth basis. "Everything the
+  /// scope knows locally" used to be `state + owed` — but a write that is still
+  /// PHYSICALLY PENDING is in neither: not in state (an A -> B -> A round trip
+  /// reset it), not in owed (the attempt has not failed), not on disk (it has
+  /// not finished). A shell page landing in exactly that window derived its
+  /// content without the pending rich truth, froze the poorer payload, queued
+  /// behind the rich write — and, precisely because writes are serialized,
+  /// executed LAST and became the final durable bytes. With the lineage in
+  /// every derivation basis, no later attempt's content can be poorer than a
+  /// predecessor's merely because that predecessor has not settled yet.
+  final Map<String, List<PosRecentOrder>> _lineage =
+      <String, List<PosRecentOrder>>{};
+
   /// THE ONE GATE every recent-orders persistence attempt goes through.
   ///
   /// It owns the whole protocol, so a call site cannot get part of it wrong:
@@ -541,6 +579,10 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     required List<PosRecentOrder> content,
   }) async {
     final attemptVersion = _nextDebtVersion();
+    // The lineage advances the moment the attempt exists — pending truth is
+    // truth. Monotone by construction: every caller derives [content] from a
+    // basis that includes the previous lineage.
+    _lineage[scopeKey] = content;
     final prior = _persistChain[scopeKey];
     final gate = prior == null
         ? Future<void>.value()
@@ -569,17 +611,27 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     }
   }
 
-  /// The scope's complete current local truth: [rows] merged with any owed
-  /// unsaved rows, by identity, [rows] winning where both hold a row (same
-  /// lineage, strictly newer). A durable write that carried only the visible
-  /// rows would omit owed rich truth — order-time lines, receipt context —
-  /// whenever the debt is momentarily the only carrier (the recovery window),
-  /// and a SUCCESSFUL such write would then mark that omitted truth as settled.
-  List<PosRecentOrder> _withOwed(String scopeKey, List<PosRecentOrder> rows) {
+  /// The scope's COMPLETE current local truth: [rows] merged with any owed
+  /// unsaved rows AND the persistence lineage (which includes still-pending
+  /// writes), by authoritative identity, later sources winning per row —
+  /// owed, then lineage (same content or newer), then [rows] (the live state,
+  /// newest of all where present). A durable write carrying only the visible
+  /// rows would omit rich truth — order-time lines, receipt context, payment
+  /// metadata — whenever the debt or a pending write is momentarily its only
+  /// carrier, and a SUCCESSFUL such write would then mark the omitted truth as
+  /// settled.
+  List<PosRecentOrder> _withLocalTruth(
+    String scopeKey,
+    List<PosRecentOrder> rows,
+  ) {
     final owed = _owedWrites[scopeKey];
-    if (owed == null) return rows;
+    final pending = _lineage[scopeKey];
+    if (owed == null && pending == null) return rows;
     final byIdentity = <String, PosRecentOrder>{
-      for (final o in owed) o.identity.key: o,
+      if (owed != null)
+        for (final o in owed) o.identity.key: o,
+      if (pending != null)
+        for (final o in pending) o.identity.key: o,
       for (final o in rows) o.identity.key: o,
     };
     return _sortedPruned(byIdentity.values.toList());
