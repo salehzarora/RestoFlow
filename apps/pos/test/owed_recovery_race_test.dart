@@ -386,6 +386,182 @@ void main() {
   });
 
   // ===========================================================================
+  test('an OLDER write FAILING after a NEWER LOCAL SUCCESS must not book stale '
+      'debt: the success advances the durable high-water', () async {
+    final store = _RaceStore();
+    final c = harness(store);
+
+    c.read(posDeviceContextProvider.notifier).set(ctxA);
+    await settle();
+    final orders = c.read(posRecentOrdersControllerProvider.notifier);
+    final scopeAKey = 'org-1.rest-1.branch-A.device-1';
+
+    // The rich deviceOwned order, durably stored (its write succeeds).
+    orders.recordSubmitted(richView());
+    await settle();
+
+    // The OLDER attempt v2: a shell page reconciles and its write HANGS.
+    store.gatePersist = true;
+    final older = orders.applySnapshots([shell(revision: 3)]);
+    await settle();
+
+    // While v2 is pending: the NEWER local update — the payment — through the
+    // real production local-mutation path. Its persistence SUCCEEDS.
+    orders.recordPayment(PosOrderIdentity.server('o-1'), paymentO1());
+    await settle();
+
+    // The older v2 now FAILS. On e2350b3 the failure books v2's payment-less
+    // content as debt (the local SUCCESS never advanced the high-water), and
+    // that stale debt later outranks the durable payment truth in recovery.
+    store.releasePersistWithFailure();
+    await older;
+    await settle();
+
+    expect(
+      orders.lastPersistFailed,
+      isFalse,
+      reason:
+          'a NEWER local write already succeeded durably; the older failure '
+          'must not create stale debt',
+    );
+    expect(
+      store.persisted[scopeAKey]!.single.payment,
+      isNotNull,
+      reason: 'the durable state keeps the payment (the newest known truth)',
+    );
+
+    // A -> B -> A: recovery must surface the durable payment truth — not a
+    // resurrected stale shell.
+    c.read(posDeviceContextProvider.notifier).set(ctxB);
+    await settle();
+    c.read(posRecentOrdersControllerProvider);
+    await settle();
+    c.read(posDeviceContextProvider.notifier).set(ctxA);
+    await settle();
+    c.read(posRecentOrdersControllerProvider);
+    await settle();
+
+    final rows = c.read(posRecentOrdersControllerProvider);
+    expect(rows, hasLength(1), reason: 'exactly one order');
+    expect(
+      rows.single.payment,
+      isNotNull,
+      reason: 'no stale debt may hide the durable payment truth',
+    );
+    expect(rows.single.order?.lines, isNotEmpty, reason: 'lines survive');
+    expect(
+      orders.lastPersistFailed,
+      isFalse,
+      reason: 'no stale debt resurrected across the round trip',
+    );
+    // Cross-scope isolation: nothing of this ever touched B.
+    expect(store.persisted.keys.where((k) => k.contains('branch-B')), isEmpty);
+  });
+
+  test(
+    'PHYSICAL ORDER: an older in-flight write cannot leave the disk holding '
+    'older bytes than a newer write — the newest content commits LAST',
+    () async {
+      final store = _RaceStore();
+      final c = harness(store);
+
+      c.read(posDeviceContextProvider.notifier).set(ctxA);
+      await settle();
+      final orders = c.read(posRecentOrdersControllerProvider.notifier);
+      final scopeAKey = 'org-1.rest-1.branch-A.device-1';
+
+      orders.recordSubmitted(richView());
+      await settle();
+      store.writeLog.clear();
+
+      // Older v2 write HANGS mid-flight (payment-less shell merge)...
+      store.gatePersist = true;
+      final older = orders.applySnapshots([shell(revision: 3)]);
+      await settle();
+
+      // ...and the newer v3 (the payment) is issued while v2 is still pending.
+      orders.recordPayment(PosOrderIdentity.server('o-1'), paymentO1());
+      await settle();
+
+      // THE SERIALIZATION PROOF: the newer write must NOT have physically
+      // committed while the older one is still in flight — otherwise a store
+      // whose completions land out of invocation order could finish with the
+      // OLDER bytes on disk.
+      expect(
+        store.writeLog,
+        isEmpty,
+        reason:
+            'no write may physically commit while an older same-scope write '
+            'is still in flight',
+      );
+
+      // The older write completes (successfully) — and only then the newer one.
+      store.releasePersist();
+      await older;
+      await settle();
+
+      expect(
+        store.writeLog,
+        hasLength(2),
+        reason: 'both writes committed, strictly serialized',
+      );
+      expect(
+        store.writeLog.last.$2,
+        isTrue,
+        reason: 'the LAST physical write carries the newest (payment) content',
+      );
+      expect(
+        store.persisted[scopeAKey]!.single.payment,
+        isNotNull,
+        reason: 'the disk holds the newest semantics, never regressed',
+      );
+      expect(orders.lastPersistFailed, isFalse);
+    },
+  );
+
+  test('a NEWER local success with PRE-EXISTING owed debt persists the union — '
+      'the owed rich truth is in the durable content, and only then is the debt '
+      'considered satisfied', () async {
+    final store = _RaceStore();
+    final c = harness(store);
+
+    c.read(posDeviceContextProvider.notifier).set(ctxA);
+    await settle();
+    final orders = c.read(posRecentOrdersControllerProvider.notifier);
+    final scopeAKey = 'org-1.rest-1.branch-A.device-1';
+
+    // Debt: the rich submitted row, write refused.
+    store.failNextPersists = 1;
+    orders.recordSubmitted(richView());
+    await settle();
+    expect(orders.lastPersistFailed, isTrue);
+
+    // The newer LOCAL write (the payment) succeeds. Its persisted content
+    // must be the UNION with the owed rows — not the visible state alone.
+    orders.recordPayment(PosOrderIdentity.server('o-1'), paymentO1());
+    await settle();
+
+    final persisted = store.persisted[scopeAKey]!;
+    expect(persisted, hasLength(1));
+    expect(
+      persisted.single.order?.lines,
+      isNotEmpty,
+      reason: 'the owed order-time lines reached the durable content',
+    );
+    expect(
+      persisted.single.payment,
+      isNotNull,
+      reason: 'with the newer payment on the same row',
+    );
+    expect(
+      orders.lastPersistFailed,
+      isFalse,
+      reason:
+          'the debt is satisfied because the durable content actually '
+          'contains its truth',
+    );
+  });
+
   test(
     'an OLDER write FAILING after newer debt was booked must not overwrite it: '
     'the newer payment metadata survives the failure race and reaches disk',
@@ -496,10 +672,13 @@ void main() {
     orders.recordPayment(PosOrderIdentity.server('o-1'), paymentO1());
     await settle();
 
-    // The older merged write now completes successfully.
+    // The older merged write now completes successfully — and, under the
+    // per-scope write chain, the newer queued write then runs and FAILS,
+    // booking its debt one turn later.
     store.releasePersist();
     final ok = await pending;
     expect(ok, isTrue);
+    await settle();
 
     expect(
       orders.lastPersistFailed,
@@ -549,6 +728,15 @@ class _RaceStore implements PosRecentOrdersStore {
     _loadGates.remove(scopeKey)!.complete(rows);
   }
 
+  /// Every PHYSICAL write that reached the backing store, in completion order:
+  /// (scopeKey, hadPayment) — enough to prove the disk never regresses.
+  final List<(String, bool)> writeLog = <(String, bool)>[];
+
+  void _commit(String scopeKey, List<PosRecentOrder> orders) {
+    persisted[scopeKey] = List.of(orders);
+    writeLog.add((scopeKey, orders.any((o) => o.payment != null)));
+  }
+
   @override
   Future<void> persist(String scopeKey, List<PosRecentOrder> orders) async {
     if (gatePersist) {
@@ -556,14 +744,14 @@ class _RaceStore implements PosRecentOrdersStore {
       final gate = Completer<void>();
       _persistGate = gate;
       await gate.future;
-      persisted[scopeKey] = List.of(orders);
+      _commit(scopeKey, orders);
       return;
     }
     if (failNextPersists > 0) {
       failNextPersists--;
       throw const PosPersistenceException('write refused');
     }
-    persisted[scopeKey] = List.of(orders);
+    _commit(scopeKey, orders);
   }
 
   void releasePersist() => _persistGate!.complete();

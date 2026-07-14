@@ -306,38 +306,20 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // and disk still disagree, and reporting success here let a quiet server clear
       // the persistence error while the cashier's day remained unstored. If a write
       // is owed, this is the retry.
-      final owed = _owedWrites[scopeKey];
-      if (owed == null) return true;
+      if (!_owedWrites.containsKey(scopeKey)) return true;
       // Persist the UNION of the owed snapshot and the current state, keyed by
       // identity with the CURRENT state winning where both hold a row. The owed
       // rows alone could miss local writes made since the failure; the state alone
       // could be EMPTY if this retry races startup recovery — and writing [] over
       // the stored day while clearing the debt would be the exact loss this map
       // exists to prevent.
-      final byIdentity = <String, PosRecentOrder>{
-        for (final o in owed) o.identity.key: o,
-        for (final o in state) o.identity.key: o,
-      };
-      final rows = _sortedPruned(byIdentity.values.toList());
-      final attemptVersion = _nextDebtVersion();
-      try {
-        await store.persist(scopeKey, rows);
-        _settleDebtAfterPersist(
-          scopeKey: scopeKey,
-          attemptVersion: attemptVersion,
-          attempted: rows,
-          success: true,
-        );
-        return true;
-      } catch (_) {
-        _settleDebtAfterPersist(
-          scopeKey: scopeKey,
-          attemptVersion: attemptVersion,
-          attempted: rows,
-          success: false,
-        );
-        return _isStale(gen, scopeKey);
-      }
+      final ok = await _persistAndSettle(
+        scopeKey: scopeKey,
+        store: store,
+        content: _withOwed(scopeKey, state),
+      );
+      if (ok) return true;
+      return _isStale(gen, scopeKey);
     }
 
     // THE MERGE BASIS IS EVERYTHING THIS SCOPE KNOWS LOCALLY — the live state AND
@@ -381,46 +363,27 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     final merged = result.changedAnything
         ? _sortedPruned(result.orders)
         : _sortedPruned(base);
-    // The content version, captured synchronously with the content itself.
-    final attemptVersion = _nextDebtVersion();
     if (_disposed) return false;
     state = merged;
-    try {
-      // PERSIST UNDER THE CAPTURED KEY, never under whatever `_scopeKey` happens to say
-      // by the time the write runs. Reading the field here would let a branch switch
-      // mid-write file branch A's orders under branch B's key — the very leak the
-      // scoped key exists to prevent, reintroduced one await later.
-      await store.persist(scopeKey, merged);
-      // The debt is paid ONLY if this write actually incorporated it — i.e. the
-      // owed snapshot is still the one that entered the merge basis above. A
-      // NEWER debt booked while this write was in flight survives it.
-      _settleDebtAfterPersist(
-        scopeKey: scopeKey,
-        attemptVersion: attemptVersion,
-        attempted: merged,
-        success: true,
-      );
-      return true;
-    } catch (_) {
-      // BOOK THE DEBT UNDER THE CAPTURED KEY — even when the scope has since moved
-      // on. These rows are the captured scope's newest unsaved truth — UNLESS a
-      // newer debt was booked while this write was in flight, in which case the
-      // newer one survives (see _settleDebtAfterPersist).
-      _settleDebtAfterPersist(
-        scopeKey: scopeKey,
-        attemptVersion: attemptVersion,
-        attempted: merged,
-        success: false,
-      );
-      // The in-memory state is still correct and usable; only durability failed.
-      // Report it so the cursor stays put and the same page is re-delivered next
-      // time, rather than being silently skipped.
-      //
-      // UNLESS the scope moved on: then this write was for a branch we have left, its
-      // failure says nothing about the branch we are now in, and reporting it would
-      // raise a persistence alarm on a till that is perfectly healthy.
-      return _isStale(gen, scopeKey);
-    }
+    // PERSIST UNDER THE CAPTURED KEY, never under whatever `_scopeKey` happens to
+    // say by the time the write runs — through the ONE gate, which allocates the
+    // content version, serializes the physical write behind the scope's previous
+    // one, and settles success (advancing the durable high-water) or failure
+    // (booking debt version-safely) alike.
+    final ok = await _persistAndSettle(
+      scopeKey: scopeKey,
+      store: store,
+      content: merged,
+    );
+    if (ok) return true;
+    // The in-memory state is still correct and usable; only durability failed.
+    // Report it so the cursor stays put and the same page is re-delivered next
+    // time, rather than being silently skipped.
+    //
+    // UNLESS the scope moved on: then this write was for a branch we have left, its
+    // failure says nothing about the branch we are now in, and reporting it would
+    // raise a persistence alarm on a till that is perfectly healthy.
+    return _isStale(gen, scopeKey);
   }
 
   /// Records a SAFE, typed server refusal against an order (e.g.
@@ -481,24 +444,21 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // whether the sync cursor may advance.
       final scopeKey = _scopeKey;
       if (scopeKey.isEmpty) return; // no branch, no bucket (see applySnapshots)
-      // The content version, captured synchronously with the content — the
-      // failure booking below must never overwrite anything newer.
-      final attemptVersion = _nextDebtVersion();
+      // Fire-and-forget for the CALLER — but a full participant in the ONE
+      // persistence protocol. Two things were wrong before:
+      //   * SUCCESS never settled, so the durable high-water never learned that
+      //     a newer version had landed — and an OLDER write failing afterwards
+      //     booked its stale content as debt, logically rolling the successful
+      //     payment/receipt truth backwards across the next A -> B -> A;
+      //   * the content was the visible rows alone, omitting owed rich truth
+      //     whenever the debt was momentarily the only carrier of it.
+      // The gate settles both outcomes and the content is the owed-union.
       unawaited(
-        _store.persist(scopeKey, result).catchError((Object _) {
-          // BOOKED UNDER THE CAPTURED KEY, whatever the active scope is by now:
-          // these rows are that scope's newest unsaved truth, and its recovery
-          // merges them back — version-safely: an OLDER failure completing after
-          // a newer debt was booked preserves the newer debt, whatever order the
-          // completions land in. (Only an awaited applySnapshots success clears
-          // debt — a racing fire-and-forget success must not.)
-          _settleDebtAfterPersist(
-            scopeKey: scopeKey,
-            attemptVersion: attemptVersion,
-            attempted: result,
-            success: false,
-          );
-        }),
+        _persistAndSettle(
+          scopeKey: scopeKey,
+          store: _store,
+          content: _withOwed(scopeKey, result),
+        ),
       );
     }
   }
@@ -549,6 +509,81 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   /// succeeds, a slower OLDER failure must find the mark and decline to
   /// resurrect stale debt over a disk that already holds newer truth.
   final Map<String, int> _debtHighWater = <String, int>{};
+
+  /// Per scope: the tail of the PHYSICAL write chain. Every durable write for a
+  /// scope is chained behind the previous one, so the backing store executes
+  /// writes strictly in CONTENT-VERSION order — whatever its own completion
+  /// ordering guarantees are. Without this, an in-memory high-water mark can say
+  /// "v3 is durable" while a slower OLDER write physically lands last and leaves
+  /// v2 bytes on disk: metadata must never paper over regressed storage. A
+  /// failed link never blocks the chain (its error is contained per attempt),
+  /// scopes chain independently, and the newest content is always the last
+  /// physical write.
+  final Map<String, Future<void>> _persistChain = <String, Future<void>>{};
+
+  /// THE ONE GATE every recent-orders persistence attempt goes through.
+  ///
+  /// It owns the whole protocol, so a call site cannot get part of it wrong:
+  ///   1. the VERSION is allocated here, synchronously with the invocation —
+  ///      callers invoke this gate synchronously after deriving [content] from
+  ///      the live state, so version order == content-lineage order;
+  ///   2. the physical write is CHAINED behind the scope's previous write, so
+  ///      the store can never end up holding older bytes than a newer attempt;
+  ///   3. BOTH outcomes settle through [_settleDebtAfterPersist] — a success
+  ///      advances the durable high-water (the gap that let an older failure
+  ///      book stale debt over a newer durable success), a failure books debt
+  ///      version-safely.
+  ///
+  /// Returns true when the write landed durably.
+  Future<bool> _persistAndSettle({
+    required String scopeKey,
+    required PosRecentOrdersStore store,
+    required List<PosRecentOrder> content,
+  }) async {
+    final attemptVersion = _nextDebtVersion();
+    final prior = _persistChain[scopeKey];
+    final gate = prior == null
+        ? Future<void>.value()
+        // A failed predecessor releases the chain; its own attempt already
+        // settled its failure.
+        : prior.catchError((Object _) {});
+    final attempt = gate.then((_) => store.persist(scopeKey, content));
+    _persistChain[scopeKey] = attempt.then((_) {}, onError: (Object _) {});
+    try {
+      await attempt;
+      _settleDebtAfterPersist(
+        scopeKey: scopeKey,
+        attemptVersion: attemptVersion,
+        attempted: content,
+        success: true,
+      );
+      return true;
+    } catch (_) {
+      _settleDebtAfterPersist(
+        scopeKey: scopeKey,
+        attemptVersion: attemptVersion,
+        attempted: content,
+        success: false,
+      );
+      return false;
+    }
+  }
+
+  /// The scope's complete current local truth: [rows] merged with any owed
+  /// unsaved rows, by identity, [rows] winning where both hold a row (same
+  /// lineage, strictly newer). A durable write that carried only the visible
+  /// rows would omit owed rich truth — order-time lines, receipt context —
+  /// whenever the debt is momentarily the only carrier (the recovery window),
+  /// and a SUCCESSFUL such write would then mark that omitted truth as settled.
+  List<PosRecentOrder> _withOwed(String scopeKey, List<PosRecentOrder> rows) {
+    final owed = _owedWrites[scopeKey];
+    if (owed == null) return rows;
+    final byIdentity = <String, PosRecentOrder>{
+      for (final o in owed) o.identity.key: o,
+      for (final o in rows) o.identity.key: o,
+    };
+    return _sortedPruned(byIdentity.values.toList());
+  }
 
   /// VERSION-SAFE debt bookkeeping after ONE persistence attempt for [scopeKey],
   /// whose content [attempted] was computed at [attemptVersion].
