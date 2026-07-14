@@ -4002,4 +4002,122 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogTitleDiscountDenied => 'Discount refused';
+
+  @override
+  String get posOrdersCenterTitle => 'Orders';
+
+  @override
+  String get posOrdersSectionOpen => 'Open';
+
+  @override
+  String get posOrdersSectionNeedsPayment => 'Needs payment';
+
+  @override
+  String get posOrdersSectionCompleted => 'Completed recently';
+
+  @override
+  String get posOrdersSectionAll => 'All recent';
+
+  @override
+  String get posOrdersSearchHint => 'Search order code';
+
+  @override
+  String get posOrdersSearchClear => 'Clear search';
+
+  @override
+  String get posOrdersSearchEmpty => 'No order matches this search';
+
+  @override
+  String get posOrdersEmptyOpen => 'No open orders right now';
+
+  @override
+  String get posOrdersEmptyNeedsPayment => 'No orders currently need payment';
+
+  @override
+  String get posOrdersEmptyCompleted =>
+      'No recently completed or closed orders';
+
+  @override
+  String get posOrdersEmptyOffline => 'No saved orders are available offline';
+
+  @override
+  String get posOrdersLoadMore => 'Load more';
+
+  @override
+  String get posOrdersRefresh => 'Refresh orders';
+
+  @override
+  String get posOrdersSyncing => 'Syncing...';
+
+  @override
+  String posOrdersLastUpdated(String time) {
+    return 'Last updated $time';
+  }
+
+  @override
+  String get posOrdersOffline => 'Offline - showing saved data';
+
+  @override
+  String get posOrdersSortNewest => 'Newest first';
+
+  @override
+  String get posOrdersSortOldest => 'Oldest first';
+
+  @override
+  String get posOrdersFilterStatus => 'Status';
+
+  @override
+  String get posOrdersFilterSettlement => 'Payment';
+
+  @override
+  String get posOrdersSettlementAll => 'All';
+
+  @override
+  String get posOrdersSettlementUnpaid => 'Needs payment';
+
+  @override
+  String get posOrdersSettlementPaid => 'Paid';
+
+  @override
+  String get posOrdersSettlementNoCharge => 'No charge';
+
+  @override
+  String get posOrdersPendingPayment => 'Payment syncing...';
+
+  @override
+  String get posOrdersPendingDiscount => 'Discount syncing...';
+
+  @override
+  String get posOrdersPendingCancellation => 'Cancellation syncing...';
+
+  @override
+  String get posOrdersOtherTill => 'Another till';
+
+  @override
+  String get posOrdersStatusSubmitted => 'Submitted';
+
+  @override
+  String get posOrdersStatusAccepted => 'Accepted';
+
+  @override
+  String get posOrdersStatusPreparing => 'Preparing';
+
+  @override
+  String get posOrdersStatusReady => 'Ready';
+
+  @override
+  String get posOrdersStatusServed => 'Served';
+
+  @override
+  String get posOrdersStatusCompleted => 'Completed';
+
+  @override
+  String get posOrdersStatusCancelled => 'Cancelled';
+
+  @override
+  String get posOrdersStatusVoided => 'Voided';
+
+  @override
+  String get posOrdersConflictRefreshed =>
+      'This order changed on another device. It has been refreshed - check it and try again.';
 }

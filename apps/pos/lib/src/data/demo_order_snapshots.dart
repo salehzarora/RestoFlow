@@ -56,18 +56,33 @@ class DemoOrderSnapshotRepository implements OrderSnapshotRepository {
     return f;
   }
 
+  /// The demo "now". Injected, never DateTime.now() — a demo that drifts with the
+  /// wall clock is a demo that cannot be tested.
+  DateTime clock = DateTime.utc(2026, 7, 14, 12);
+
   @override
   Future<PosSnapshotPage> fetchChanges({
     PosSyncCursor? cursor,
     int limit = 50,
+    int windowDays = 2,
   }) async {
     final failure = _takeFailure();
     if (failure != null) throw failure;
 
+    // The SAME window the server applies: orders CREATED within the last N days.
+    // Widening it is exactly what "Load more" does.
+    final windowStart = DateTime.utc(
+      clock.year,
+      clock.month,
+      clock.day,
+    ).subtract(Duration(days: windowDays - 1));
+
     // The SAME keyset the server uses: strictly after (sync_at, id).
     final after = <PosOrderSnapshot>[
       for (final s in all)
-        if (cursor == null || _isAfter(s, cursor)) s,
+        if (!s.createdAt.isBefore(windowStart) &&
+            (cursor == null || _isAfter(s, cursor)))
+          s,
     ];
     final effective = limit < pageLimit ? limit : pageLimit;
     final page = after.take(effective).toList();
@@ -99,4 +114,127 @@ class DemoOrderSnapshotRepository implements OrderSnapshotRepository {
     }
     return false;
   }
+}
+
+/// The DEMO branch, as the server would report it.
+///
+/// Every state the operational centre must handle, deterministically: an order in
+/// each lifecycle stage, each settlement, a comped one, a cancelled one, a voided
+/// one — and, crucially, orders THIS device never submitted (another till's), which
+/// is the whole point of a branch view.
+///
+/// Deterministic by construction: derived from [now], never from the wall clock.
+List<PosOrderSnapshot> demoBranchSnapshots(DateTime now) {
+  PosOrderSnapshot s({
+    required String id,
+    required String status,
+    required PosSettlement settlement,
+    required int grand,
+    int discount = 0,
+    int minutesAgo = 0,
+    String? table,
+  }) {
+    final at = now.subtract(Duration(minutes: minutesAgo));
+    return PosOrderSnapshot(
+      orderId: id,
+      orderCode: '#${id.toUpperCase().padLeft(6, '0')}',
+      revision: 2,
+      status: status,
+      settlement: settlement,
+      subtotalMinor: grand + discount,
+      discountTotalMinor: discount,
+      taxTotalMinor: 0,
+      grandTotalMinor: grand,
+      createdAt: at,
+      updatedAt: at,
+      syncAt: at,
+      orderType: 'dine_in',
+      tableLabel: table,
+      currencyCode: 'ILS',
+    );
+  }
+
+  return <PosOrderSnapshot>[
+    // --- OPEN, in every stage the kitchen moves through -----------------------
+    s(
+      id: 'd10001',
+      status: 'submitted',
+      settlement: PosSettlement.unpaid,
+      grand: 4200,
+      minutesAgo: 3,
+      table: '4',
+    ),
+    s(
+      id: 'd10002',
+      status: 'accepted',
+      settlement: PosSettlement.unpaid,
+      grand: 6800,
+      minutesAgo: 8,
+      table: '7',
+    ),
+    // paid but still cooking — payment and fulfilment are INDEPENDENT axes (D-025)
+    s(
+      id: 'd10003',
+      status: 'preparing',
+      settlement: PosSettlement.paid,
+      grand: 3100,
+      minutesAgo: 12,
+      table: '2',
+    ),
+    s(
+      id: 'd10004',
+      status: 'ready',
+      settlement: PosSettlement.unpaid,
+      grand: 5500,
+      minutesAgo: 18,
+      table: '9',
+    ),
+    s(
+      id: 'd10005',
+      status: 'served',
+      settlement: PosSettlement.unpaid,
+      grand: 7400,
+      minutesAgo: 25,
+      table: '1',
+    ),
+    // --- TERMINAL --------------------------------------------------------------
+    s(
+      id: 'd10006',
+      status: 'completed',
+      settlement: PosSettlement.paid,
+      grand: 2900,
+      minutesAgo: 40,
+    ),
+    // a COMPED order: closed, owes nothing, and NO money was ever taken for it
+    s(
+      id: 'd10007',
+      status: 'completed',
+      settlement: PosSettlement.notChargeable,
+      grand: 0,
+      discount: 3600,
+      minutesAgo: 55,
+    ),
+    s(
+      id: 'd10008',
+      status: 'cancelled',
+      settlement: PosSettlement.unpaid,
+      grand: 1800,
+      minutesAgo: 70,
+    ),
+    s(
+      id: 'd10009',
+      status: 'voided',
+      settlement: PosSettlement.unpaid,
+      grand: 2300,
+      minutesAgo: 90,
+    ),
+    // --- OLDER than the default 2-day window: only "Load more" reaches these ----
+    s(
+      id: 'd1000a',
+      status: 'completed',
+      settlement: PosSettlement.paid,
+      grand: 4400,
+      minutesAgo: 60 * 24 * 3,
+    ),
+  ];
 }

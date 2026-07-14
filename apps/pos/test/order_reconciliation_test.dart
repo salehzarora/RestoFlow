@@ -61,6 +61,10 @@ void main() {
     voidedAt: voidedAt,
     snapshot: snapshot,
     syncState: syncState,
+    // origin and syncState must agree about drafts: a draft is a draft on both axes.
+    origin: syncState == PosOrderSyncState.localDraft
+        ? PosOrderOrigin.localDraft
+        : PosOrderOrigin.deviceOwned,
   );
 
   CashPayment paid(int amountMinor) => CashPayment(
@@ -82,6 +86,10 @@ void main() {
     test('A1 a LOCAL DRAFT is never overwritten by a snapshot', () {
       // A draft has no server order id, so it is structurally unreachable from a
       // snapshot. Proven, not assumed.
+      //
+      // Commit 3: the snapshot IS adopted -- as a SEPARATE branch-discovered row.
+      // The draft is left exactly as it was. The two are different things, and the
+      // one thing we must never do is let a server row swallow local work.
       final draft = local(
         orderId: null,
         syncState: PosOrderSyncState.localDraft,
@@ -90,9 +98,16 @@ void main() {
         <PosRecentOrder>[draft],
         <PosOrderSnapshot>[snap()],
       );
-      expect(result.applied, 0);
-      expect(identical(result.orders.single, draft), isTrue);
-      expect(result.orders.single.syncState, PosOrderSyncState.localDraft);
+      final keptDraft = result.orders.firstWhere(
+        (o) => o.origin == PosOrderOrigin.localDraft,
+      );
+      expect(identical(keptDraft, draft), isTrue, reason: 'untouched');
+      expect(keptDraft.syncState, PosOrderSyncState.localDraft);
+      expect(
+        result.orders.length,
+        2,
+        reason: 'the server row is adopted BESIDE it',
+      );
     });
 
     test('A2 a NEWER revision wins', () {
@@ -194,13 +209,23 @@ void main() {
       expect(result.orders.length, 2);
     });
 
-    test('A10 a snapshot for an UNKNOWN order is ignored, not invented', () {
+    test('A10 an order THIS DEVICE never took is ADOPTED as branch-discovered', () {
+      // Commit 3: the centre is a BRANCH view. Another till took this order; it is
+      // real, it is happening in this restaurant, and the cashier needs to see it.
       final result = reconcileSnapshots(
         <PosRecentOrder>[local(orderId: 'o-1')],
         [snap(orderId: 'o-99')],
       );
-      expect(result.orders.length, 1);
-      expect(result.applied, 0);
+      expect(result.orders.length, 2);
+      final discovered = result.orders.firstWhere((o) => o.orderId == 'o-99');
+      expect(discovered.origin, PosOrderOrigin.branchDiscovered);
+      // It carries the server's fields and NOTHING local: no order-time lines (so no
+      // receipt can be forged from it), no payment marker, and none of the
+      // originating till's queued work.
+      expect(discovered.order, isNull);
+      expect(discovered.payment, isNull);
+      expect(discovered.canReprintReceipt, isFalse);
+      expect(discovered.grandTotalMinor, 4000);
     });
   });
 
@@ -233,7 +258,7 @@ void main() {
       expect(isCountedUnpaid(after), isFalse, reason: 'a comp owes nothing');
       expect(after.discountTotalMinor, 4000);
       // The receipt view is realigned too — it cannot keep printing 40.
-      expect(after.order.grandTotalMinor, 0);
+      expect(after.order!.grandTotalMinor, 0);
     });
 
     test('B2 subtotal, discount, tax and grand total move TOGETHER', () {
@@ -559,6 +584,7 @@ class _FakeTransportRepo implements OrderSnapshotRepository {
   Future<PosSnapshotPage> fetchChanges({
     PosSyncCursor? cursor,
     int limit = 50,
+    int windowDays = 2,
   }) => Future<PosSnapshotPage>.sync(() => _parse(_envelope));
 
   @override

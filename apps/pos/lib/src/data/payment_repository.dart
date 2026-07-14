@@ -19,9 +19,23 @@ const String _demoDeviceId = 'demo-device';
 /// any other rejection must NEVER be mistaken for it, because the UI tells the cashier
 /// something categorically different in each case.
 class PaymentException implements Exception {
-  const PaymentException(this.message, {this.notChargeable = false});
+  const PaymentException(
+    this.message, {
+    this.notChargeable = false,
+    this.conflict = false,
+  });
   final String message;
+
+  /// The server's EXACT `order_not_chargeable`. Terminal for this sheet: the order
+  /// owes nothing, and no tender, amount or retry can change that.
   final bool notChargeable;
+
+  /// POS-OPERATIONS-SYNC-001: an optimistic-concurrency conflict — the order moved
+  /// under us (another till, the kitchen, an auto-completion). NEVER auto-retried:
+  /// re-sending the same payment against a state we now know is wrong is exactly how
+  /// a double charge happens. The row is refreshed and the cashier decides.
+  final bool conflict;
+
   @override
   String toString() => 'PaymentException: $message';
 }
@@ -50,6 +64,7 @@ abstract class PaymentRepository {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   });
 
   /// The current demo shift / cash-drawer context.
@@ -103,6 +118,7 @@ class DemoPaymentStore implements PaymentRepository {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision, // demo has no server revision to conflict against
   }) async {
     if (amountMinor < 0 || tenderedMinor < 0) {
       throw const PaymentException('amounts must not be negative');
@@ -223,6 +239,7 @@ class RealPaymentRepository implements PaymentRepository {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   }) async {
     final transport = _transport;
     final session = _session;
@@ -259,6 +276,14 @@ class RealPaymentRepository implements PaymentRepository {
         'order_id': orderId,
         'tender_type': method.wire, // 'cash' | 'card' | 'bit' | 'external'
         'amount_tendered_minor': tenderedMinor,
+        // POS-OPERATIONS-SYNC-001: OPTIMISTIC CONCURRENCY, finally switched on.
+        // sync_push forwards this to app.record_payment, which refuses (SQLSTATE
+        // 40001 -> the typed `conflict`) when the order has moved since we read it.
+        // The POS stored NO revision before this phase and sent none, so the
+        // server's conflict branch was UNREACHABLE: two tills could each pay an
+        // order they both believed was unpaid. Omitted when we genuinely do not
+        // know one -- sending a guess would be worse than sending nothing.
+        if (expectedRevision != null) 'expected_revision': expectedRevision,
       },
     };
 
@@ -340,6 +365,16 @@ class RealPaymentRepository implements PaymentRepository {
           'order_not_chargeable',
           notChargeable: true,
         );
+      }
+      // POS-OPERATIONS-SYNC-001: the optimistic-concurrency refusal. `sync_push`
+      // classifies SQLSTATE 40001 as the stable token `conflict`, so this is a typed
+      // domain code — not a SQLSTATE we sniffed and not a raw message we parsed.
+      //
+      // Now that the POS actually SENDS expected_revision, this path is reachable for
+      // the first time. It is NEVER auto-retried: re-sending the same payment against
+      // a state we now know is wrong is precisely how an order gets charged twice.
+      if (error == 'conflict') {
+        throw const PaymentException('conflict', conflict: true);
       }
       reject(error is String ? error : status);
     }

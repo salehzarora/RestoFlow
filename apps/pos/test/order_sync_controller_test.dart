@@ -107,7 +107,7 @@ void main() {
         final orders = container.read(
           posRecentOrdersControllerProvider.notifier,
         );
-        orders.recordSubmitted(local().order);
+        orders.recordSubmitted(local().order!);
 
         expect(orders.unpaidCount, 1);
 
@@ -134,7 +134,7 @@ void main() {
         final orders = container.read(
           posRecentOrdersControllerProvider.notifier,
         );
-        orders.recordSubmitted(local().order);
+        orders.recordSubmitted(local().order!);
 
         final ok = await orders.applySnapshots(<PosOrderSnapshot>[
           snap(revision: 3),
@@ -152,7 +152,7 @@ void main() {
     test('A3 re-applying the same snapshot is a genuine no-op', () async {
       final container = harness(repo: DemoOrderSnapshotRepository());
       final orders = container.read(posRecentOrdersControllerProvider.notifier);
-      orders.recordSubmitted(local().order);
+      orders.recordSubmitted(local().order!);
       await orders.applySnapshots(<PosOrderSnapshot>[snap(revision: 3)]);
       final first = container.read(posRecentOrdersControllerProvider);
 
@@ -165,7 +165,7 @@ void main() {
     test('A4 a typed refusal is recorded against the RIGHT order', () async {
       final container = harness(repo: DemoOrderSnapshotRepository());
       final orders = container.read(posRecentOrdersControllerProvider.notifier);
-      orders.recordSubmitted(local().order);
+      orders.recordSubmitted(local().order!);
 
       orders.recordSyncRefusal('#0000O1', 'order_not_chargeable');
 
@@ -190,7 +190,7 @@ void main() {
       final container = harness(repo: repo, cursors: cursors);
       container
           .read(posRecentOrdersControllerProvider.notifier)
-          .recordSubmitted(local().order);
+          .recordSubmitted(local().order!);
 
       await container
           .read(posOrderSyncControllerProvider.notifier)
@@ -224,7 +224,7 @@ void main() {
         final container = harness(repo: repo);
         container
             .read(posRecentOrdersControllerProvider.notifier)
-            .recordSubmitted(local().order);
+            .recordSubmitted(local().order!);
 
         await container
             .read(posOrderSyncControllerProvider.notifier)
@@ -343,7 +343,7 @@ void main() {
       );
       final container = harness(repo: repo);
       final orders = container.read(posRecentOrdersControllerProvider.notifier);
-      orders.recordSubmitted(local(orderId: 'o-1').order);
+      orders.recordSubmitted(local(orderId: 'o-1').order!);
       orders.recordSubmitted(
         SubmittedOrderView(
           orderNumber: '#0000O2',
@@ -388,6 +388,7 @@ class _CountingRepo implements OrderSnapshotRepository {
   Future<PosSnapshotPage> fetchChanges({
     PosSyncCursor? cursor,
     int limit = 50,
+    int windowDays = 2,
   }) async {
     calls++;
     await Future<void>.delayed(Duration.zero);

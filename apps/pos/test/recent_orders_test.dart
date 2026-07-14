@@ -69,12 +69,12 @@ void main() {
     );
     final restored = PosRecentOrder.fromJson(order.toJson());
     expect(restored.orderNumber, '#A1');
-    expect(restored.order.customerName, 'Layla');
-    expect(restored.order.tableLabel, 'T3');
-    expect(restored.order.orderId, 'oid-#A1');
-    expect(restored.order.lines.single.name, 'Burger');
-    expect(restored.order.lines.single.modifiers, ['Cheese']);
-    expect(restored.order.lines.single.note, 'No onion');
+    expect(restored.order!.customerName, 'Layla');
+    expect(restored.order!.tableLabel, 'T3');
+    expect(restored.order!.orderId, 'oid-#A1');
+    expect(restored.order!.lines.single.name, 'Burger');
+    expect(restored.order!.lines.single.modifiers, ['Cheese']);
+    expect(restored.order!.lines.single.note, 'No onion');
     expect(restored.isPaid, isTrue);
     expect(restored.payment!.amountMinor, 4200);
     expect(restored.grandTotalMinor, 4200);

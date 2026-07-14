@@ -60,6 +60,14 @@ class PosReconcileResult {
 ///   6. A bounded page missing an order is NOT a deletion. Absence means nothing
 ///      here; only an explicit server status can retire an order.
 ///
+///   7. A snapshot for an order this device does not know is ADOPTED as
+///      BRANCH-DISCOVERED (Commit 3). The operational centre is a BRANCH view, not
+///      a till diary. It carries the server's fields and nothing local — no lines,
+///      no receipt, and none of the originating till's queued work. Dedupe is by
+///      SERVER ORDER ID, so a discovered row and a device-owned row for the same
+///      order can never coexist; the device-owned one always absorbs the snapshot
+///      and KEEPS its origin, its lines and its pending operations.
+///
 /// [orders] is not mutated. A new list is returned.
 PosReconcileResult reconcileSnapshots(
   List<PosRecentOrder> orders,
@@ -89,13 +97,20 @@ PosReconcileResult reconcileSnapshots(
   for (final snap in snapshots) {
     final index = byOrderId[snap.orderId];
     if (index == null) {
-      // The server knows an order this device does not. That is normal (another
-      // till on the same branch took it) and it is NOT a draft. We do not
-      // fabricate a local order from a snapshot in Commit 2: the recent-orders
-      // surface is still "what THIS device did". Adopting foreign orders is the
-      // operational centre's job (Commit 3), and doing it here would silently
-      // change what the existing surface means.
-      ignored++;
+      // BRANCH-DISCOVERED. The server knows an order this device does not — another
+      // till on the same branch took it. The operational centre is a BRANCH view, so
+      // we adopt it.
+      //
+      // It gets the authoritative server fields and NOTHING local: no order-time
+      // lines (so no receipt can be forged from it), no payment marker, and above
+      // all NONE of the originating till's queued operations. Those belong to that
+      // device, not to this one.
+      //
+      // It is NOT a draft: a draft has no server order, and this one plainly does.
+      final adopted = PosRecentOrder.discovered(snap);
+      byOrderId[snap.orderId] = next.length;
+      next.add(adopted);
+      applied++;
       continue;
     }
 

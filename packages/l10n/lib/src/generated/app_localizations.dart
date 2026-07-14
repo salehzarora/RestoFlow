@@ -7467,6 +7467,234 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Discount refused'**
   String get activityLogTitleDiscountDenied;
+
+  /// POS operational orders centre title.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders'**
+  String get posOrdersCenterTitle;
+
+  /// POS orders centre section: live orders still being worked.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get posOrdersSectionOpen;
+
+  /// POS orders centre section: orders that still owe money.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs payment'**
+  String get posOrdersSectionNeedsPayment;
+
+  /// POS orders centre section: completed/cancelled/voided.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed recently'**
+  String get posOrdersSectionCompleted;
+
+  /// POS orders centre section: everything loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'All recent'**
+  String get posOrdersSectionAll;
+
+  /// POS orders centre: order-code search field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search order code'**
+  String get posOrdersSearchHint;
+
+  /// POS orders centre: clear the search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get posOrdersSearchClear;
+
+  /// POS orders centre: empty search result.
+  ///
+  /// In en, this message translates to:
+  /// **'No order matches this search'**
+  String get posOrdersSearchEmpty;
+
+  /// POS orders centre: empty Open section.
+  ///
+  /// In en, this message translates to:
+  /// **'No open orders right now'**
+  String get posOrdersEmptyOpen;
+
+  /// POS orders centre: empty Needs payment section.
+  ///
+  /// In en, this message translates to:
+  /// **'No orders currently need payment'**
+  String get posOrdersEmptyNeedsPayment;
+
+  /// POS orders centre: empty Completed section.
+  ///
+  /// In en, this message translates to:
+  /// **'No recently completed or closed orders'**
+  String get posOrdersEmptyCompleted;
+
+  /// POS orders centre: offline with no cached rows.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved orders are available offline'**
+  String get posOrdersEmptyOffline;
+
+  /// POS orders centre: widen the window to older orders.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get posOrdersLoadMore;
+
+  /// POS orders centre: manual refresh control.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh orders'**
+  String get posOrdersRefresh;
+
+  /// POS orders centre: a refresh is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing...'**
+  String get posOrdersSyncing;
+
+  /// POS orders centre: time of the last successful sync.
+  ///
+  /// In en, this message translates to:
+  /// **'Last updated {time}'**
+  String posOrdersLastUpdated(String time);
+
+  /// POS orders centre: offline banner over cached rows.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline - showing saved data'**
+  String get posOrdersOffline;
+
+  /// POS orders centre: default sort.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest first'**
+  String get posOrdersSortNewest;
+
+  /// POS orders centre: optional sort.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest first'**
+  String get posOrdersSortOldest;
+
+  /// POS orders centre: status filter label.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get posOrdersFilterStatus;
+
+  /// POS orders centre: settlement filter label.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get posOrdersFilterSettlement;
+
+  /// POS orders centre settlement filter: no settlement filter.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get posOrdersSettlementAll;
+
+  /// POS orders centre settlement filter: unpaid ONLY.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs payment'**
+  String get posOrdersSettlementUnpaid;
+
+  /// POS orders centre settlement filter: paid ONLY, never comped.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get posOrdersSettlementPaid;
+
+  /// POS orders centre settlement filter: non-chargeable ONLY.
+  ///
+  /// In en, this message translates to:
+  /// **'No charge'**
+  String get posOrdersSettlementNoCharge;
+
+  /// POS orders centre: this device has a payment queued.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment syncing...'**
+  String get posOrdersPendingPayment;
+
+  /// POS orders centre: this device has a discount queued.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount syncing...'**
+  String get posOrdersPendingDiscount;
+
+  /// POS orders centre: this device has a cancellation queued.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation syncing...'**
+  String get posOrdersPendingCancellation;
+
+  /// POS orders centre: the order was taken on a different device on this branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Another till'**
+  String get posOrdersOtherTill;
+
+  /// Order lifecycle status.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted'**
+  String get posOrdersStatusSubmitted;
+
+  /// Order lifecycle status.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted'**
+  String get posOrdersStatusAccepted;
+
+  /// Order lifecycle status.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing'**
+  String get posOrdersStatusPreparing;
+
+  /// Order lifecycle status.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get posOrdersStatusReady;
+
+  /// Order lifecycle status.
+  ///
+  /// In en, this message translates to:
+  /// **'Served'**
+  String get posOrdersStatusServed;
+
+  /// Order lifecycle status.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get posOrdersStatusCompleted;
+
+  /// Order lifecycle status.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get posOrdersStatusCancelled;
+
+  /// Order lifecycle status.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get posOrdersStatusVoided;
+
+  /// POS: a revision conflict was refused and the row was reconciled.
+  ///
+  /// In en, this message translates to:
+  /// **'This order changed on another device. It has been refreshed - check it and try again.'**
+  String get posOrdersConflictRefreshed;
 }
 
 class _AppLocalizationsDelegate

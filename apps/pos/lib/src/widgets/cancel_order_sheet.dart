@@ -72,7 +72,15 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
     try {
       await ref
           .read(voidRepositoryProvider)
-          .voidOrder(orderId: widget.order.orderId ?? '', reason: reason);
+          .voidOrder(
+            orderId: widget.order.orderId ?? '',
+            reason: reason,
+            // POS-OPERATIONS-SYNC-001: the AUTHORITATIVE revision. The POS stored none
+            // before this phase and sent none, so app.void_order's optimistic-
+            // concurrency check could never fire and a cancel could land on an order
+            // that had already moved (paid on another till, bumped by the kitchen).
+            expectedRevision: widget.order.revision,
+          );
       // The server confirmed the void -> mark the local order cancelled (drops
       // out of the unpaid count, no pay/reprint). Money-free.
       ref
@@ -147,7 +155,10 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
 
     final infoParts = <String>[
       order.orderNumber,
-      if (order.order.customerName case final name? when name.trim().isNotEmpty)
+      // Null for a branch-discovered order — another till took it and we never saw
+      // its customer. We show what we have, and invent nothing.
+      if (order.order?.customerName case final name?
+          when name.trim().isNotEmpty)
         name.trim(),
       MoneyFormatter.formatMinor(order.grandTotalMinor, order.currencyCode),
     ];

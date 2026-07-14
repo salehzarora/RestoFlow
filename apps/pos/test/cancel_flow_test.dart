@@ -128,10 +128,23 @@ void main() {
     expect(find.byKey(const Key('cancel-order-sheet')), findsNothing);
     expect(find.text(l10n.posOrderCancelledSnack), findsOneWidget);
 
-    // The order is now Cancelled: pill shown, no pay/cancel actions.
-    expect(find.byKey(const Key('recent-cancelled-#U1')), findsOneWidget);
+    // POS-OPERATIONS-SYNC-001 (Commit 3): the order is now TERMINAL, so it leaves
+    // the Open section entirely and its actions are gone. The dedicated "cancelled"
+    // pill was folded into the canonical STATUS pill, which every row now carries.
     expect(find.byKey(const Key('recent-pay-#U1')), findsNothing);
     expect(find.byKey(const Key('recent-cancel-#U1')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('orders-section-completedRecently')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('order-status-#U1')), findsOneWidget);
+    // (the same label also appears on the status FILTER chip, so scope the match)
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('order-status-#U1')),
+        matching: find.text(l10n.posOrdersStatusVoided),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('an empty reason is rejected before any backend call', (

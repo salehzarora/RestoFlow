@@ -32,12 +32,23 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     required this.amountMinor,
     required this.currencyCode,
     this.orderId,
+    this.expectedRevision,
     super.key,
   });
 
   final String orderNumber;
   final int amountMinor;
   final String currencyCode;
+
+  /// POS-OPERATIONS-SYNC-001: the AUTHORITATIVE server revision this payment is
+  /// being made against, or null when the client does not know one.
+  ///
+  /// This finally makes the server's conflict path REACHABLE. Until now the POS
+  /// stored no revision and sent none, so `app.record_payment`'s optimistic-
+  /// concurrency check could never fire: two tills could each pay an order they both
+  /// believed was unpaid, and the loser found out by accident. Now the server can say
+  /// "that is not the order you were looking at" — and we refresh instead of retrying.
+  final int? expectedRevision;
 
   /// The server order id (a UUID in real mode) a real `payment.create`
   /// references (RF-130); null/empty on the demo in-memory path (ignored there).
@@ -49,6 +60,7 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
     required int amountMinor,
     required String currencyCode,
     String? orderId,
+    int? expectedRevision,
   }) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -58,6 +70,7 @@ class CashPaymentSheet extends ConsumerStatefulWidget {
       amountMinor: amountMinor,
       currencyCode: currencyCode,
       orderId: orderId,
+      expectedRevision: expectedRevision,
     ),
   );
 
@@ -172,6 +185,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
             tenderedMinor: tendered,
             currencyCode: widget.currencyCode,
             method: _method,
+            expectedRevision: widget.expectedRevision,
           );
       // POS-OPERATIONS-SYNC-001: take the AUTHORITATIVE order state after the write.
       // record_payment's envelope carries order_status and auto_completed but NOT the
@@ -195,6 +209,13 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
           _failed = !e.notChargeable;
           _notChargeable = e.notChargeable;
         });
+      }
+      if (e.conflict) {
+        // POS-OPERATIONS-SYNC-001: the order moved under us. NEVER auto-retry -- the
+        // amount on this sheet was computed from a state the server has just told us
+        // is stale, and re-sending it is how an order gets charged twice. Reconcile
+        // and let the cashier decide against the truth.
+        await _reconcile();
       }
       if (e.notChargeable) {
         // POS-OPERATIONS-SYNC-001: the refusal means our local total is WRONG — the

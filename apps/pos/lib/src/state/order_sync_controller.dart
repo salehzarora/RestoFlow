@@ -16,6 +16,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 
 import '../data/demo_order_snapshots.dart';
+import '../data/order_snapshot.dart';
 import '../data/order_snapshot_repository.dart';
 import '../data/sync_cursor_store.dart';
 import 'outbox_controller.dart';
@@ -43,6 +44,8 @@ class PosSyncStatus {
     this.lastSyncedAt,
     this.error,
     this.hasEverSynced = false,
+    this.hasMoreHistory = false,
+    this.isLoadingMore = false,
   });
 
   /// A pull is in flight. Exactly one can be.
@@ -57,6 +60,13 @@ class PosSyncStatus {
 
   final bool hasEverSynced;
 
+  /// More HISTORY pages remain in the operational window. Drives "Load more".
+  final bool hasMoreHistory;
+
+  /// A history page is being fetched. Distinct from [isSyncing]: loading older rows
+  /// and refreshing the current ones are different promises to the cashier.
+  final bool isLoadingMore;
+
   /// True when we are showing data we know may be behind.
   bool get isStale => error != null && hasEverSynced;
 
@@ -65,12 +75,16 @@ class PosSyncStatus {
     DateTime? lastSyncedAt,
     PosSyncError? error,
     bool? hasEverSynced,
+    bool? hasMoreHistory,
+    bool? isLoadingMore,
     bool clearError = false,
   }) => PosSyncStatus(
     isSyncing: isSyncing ?? this.isSyncing,
     lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
     error: clearError ? null : (error ?? this.error),
     hasEverSynced: hasEverSynced ?? this.hasEverSynced,
+    hasMoreHistory: hasMoreHistory ?? this.hasMoreHistory,
+    isLoadingMore: isLoadingMore ?? this.isLoadingMore,
   );
 }
 
@@ -78,8 +92,42 @@ class PosSyncStatus {
 class PosOrderSyncController extends Notifier<PosSyncStatus> {
   Timer? _periodic;
   Future<void>? _inFlight;
+  Future<void>? _inFlightLoadMore;
   int _visibleConsumers = 0;
   bool _disposed = false;
+
+  /// THE WINDOW — how far back "Load more" has reached, in days.
+  ///
+  /// It is deliberately SEPARATE from the persisted incremental cursor, and it is
+  /// deliberately NOT persisted. They answer different questions:
+  ///
+  ///   incremental cursor -> "what has CHANGED since I last looked?"  (durable)
+  ///   window days        -> "how far back am I looking right now?"   (per session)
+  ///
+  /// Reusing one for the other would be a quiet disaster: widening the window would
+  /// drag the change-feed cursor along with it, skipping changes that would then
+  /// never be offered again.
+  ///
+  /// WHY DAYS AND NOT A PAGE CURSOR. The server's keyset pages ASCENDING by
+  /// `sync_at`. A bounded page from the start of the window therefore returns the
+  /// OLDEST rows — so "load the first page, stop" would show the cashier yesterday's
+  /// breakfast and hide the order placed ninety seconds ago. (That is exactly the
+  /// defect ACTIVE-ORDERS-002 had to fix on the Dashboard.) So we DRAIN the current
+  /// window — it is bounded to a couple of days by design, not an archive — and
+  /// "Load more" WIDENS it. Same contract, no new SQL, and the newest order is never
+  /// the one left behind.
+  int _windowDays = defaultWindowDays;
+
+  /// The default operational window: today + yesterday, matching the POS's own local
+  /// prune window.
+  static const int defaultWindowDays = 2;
+
+  /// The server refuses anything beyond this (`invalid_window`). The POS is an
+  /// operational surface, not an archive.
+  static const int maxWindowDays = 14;
+
+  /// The steps "Load more" walks through.
+  static const List<int> windowSteps = <int>[2, 4, 7, 14];
 
   /// The production tick. Not "real-time" — we do not pretend to be, and we never
   /// say so in the UI.
@@ -197,6 +245,112 @@ class PosOrderSyncController extends Notifier<PosSyncStatus> {
   /// True while the periodic tick is armed. Test seam.
   bool get isPolling => _periodic != null;
 
+  /// The window currently being shown, in days. Test/UI seam.
+  int get windowDays => _windowDays;
+
+  /// LOAD MORE — WIDENS the operational window and re-drains it.
+  ///
+  /// The incremental change-feed cursor is NOT touched: how far back we are looking
+  /// says nothing about what has changed since we last looked, and dragging that
+  /// cursor along would skip changes that are never offered again.
+  ///
+  /// Rows already on screen are PRESERVED. Reconciliation dedupes by SERVER ORDER ID
+  /// and is idempotent, so re-reading rows we already hold is a no-op — a wider
+  /// window can add rows but can never duplicate or drop one.
+  Future<void> loadMore() {
+    final existing = _inFlightLoadMore;
+    // No overlapping load-more: two concurrent widens would fetch the same rows.
+    if (existing != null) return existing;
+    final run = _loadMore();
+    _inFlightLoadMore = run;
+    return run.whenComplete(() {
+      if (identical(_inFlightLoadMore, run)) _inFlightLoadMore = null;
+    });
+  }
+
+  Future<void> _loadMore() async {
+    if (_disposed || _scope() == null) return;
+    final next = windowSteps.firstWhere(
+      (d) => d > _windowDays,
+      orElse: () => _windowDays,
+    );
+    if (next == _windowDays) {
+      state = state.copyWith(isLoadingMore: false, hasMoreHistory: false);
+      return;
+    }
+    state = state.copyWith(isLoadingMore: true);
+    try {
+      await _drainWindow(next);
+      if (_disposed) return;
+      _windowDays = next;
+      state = state.copyWith(
+        isLoadingMore: false,
+        hasMoreHistory: _windowDays < maxWindowDays,
+        lastSyncedAt: _now(),
+        clearError: true,
+      );
+    } on PosSnapshotException catch (e) {
+      if (_disposed) return;
+      // The rows we already have stay exactly where they are.
+      state = state.copyWith(isLoadingMore: false, error: _mapError(e));
+    }
+  }
+
+  /// Reads the WHOLE window (bounded, a couple of days) rather than one page.
+  ///
+  /// A single ascending page would return the OLDEST rows and hide the order placed
+  /// ninety seconds ago — see the note on [_windowDays].
+  Future<void> _drainWindow(int days) async {
+    final repo = ref.read(orderSnapshotRepositoryProvider);
+    PosSyncCursor? cursor;
+    // A hard stop so a pathological branch cannot spin here forever. If it is ever
+    // hit, the next refresh simply carries on -- nothing is lost.
+    const maxPages = 60;
+    for (var page = 0; page < maxPages; page++) {
+      final result = await repo.fetchChanges(
+        cursor: cursor,
+        limit: 100,
+        windowDays: days,
+      );
+      if (_disposed) return;
+      await ref
+          .read(posRecentOrdersControllerProvider.notifier)
+          .applySnapshots(result.orders);
+      if (_disposed) return;
+      if (!result.hasMore || result.nextCursor == null) break;
+      cursor = result.nextCursor;
+    }
+  }
+
+  /// Rebuilds the CURRENT window from scratch (manual refresh / scope change).
+  /// Reconciliation is idempotent, so this cannot duplicate a row — it re-asserts.
+  Future<void> refreshWindow() async {
+    if (_disposed || _scope() == null) return;
+    state = state.copyWith(isSyncing: true);
+    try {
+      await _drainWindow(_windowDays);
+      if (_disposed) return;
+      state = state.copyWith(
+        isSyncing: false,
+        lastSyncedAt: _now(),
+        hasEverSynced: true,
+        hasMoreHistory: _windowDays < maxWindowDays,
+        clearError: true,
+      );
+    } on PosSnapshotException catch (e) {
+      if (_disposed) return;
+      state = state.copyWith(isSyncing: false, error: _mapError(e));
+    }
+  }
+
+  /// A scope change (branch / device / PIN). The window collapses back to the
+  /// default and the session-local paging is forgotten — the DURABLE cursor and the
+  /// queued operations are NOT touched here; they belong to their own scope's store.
+  void resetWindow() {
+    _windowDays = defaultWindowDays;
+    state = const PosSyncStatus();
+  }
+
   /// App resume. Debounced to ONE refresh: a resume can fire more than once, and
   /// three simultaneous pulls would be three chances to race.
   Future<void> onResume() => syncNow();
@@ -306,7 +460,14 @@ final orderSnapshotRepositoryProvider = Provider<OrderSnapshotRepository>((
   ref,
 ) {
   final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
-  if (isDemo) return DemoOrderSnapshotRepository();
+  if (isDemo) {
+    // A DETERMINISTIC demo BRANCH — including orders another till took, which is the
+    // whole point of a branch view. Seeded from the injected clock, never
+    // DateTime.now(): a demo that drifts with the wall clock cannot be tested.
+    final now = ref.watch(posSyncClockProvider)();
+    return DemoOrderSnapshotRepository(seed: demoBranchSnapshots(now))
+      ..clock = now;
+  }
   return RealOrderSnapshotRepository(
     ref.watch(posAuthTransportProvider),
     ref.watch(posSyncSessionProvider),

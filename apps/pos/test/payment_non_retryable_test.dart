@@ -196,6 +196,7 @@ class _CountingNotChargeableRepo implements PaymentRepository {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   }) async {
     attempts++;
     throw const PaymentException('order_not_chargeable', notChargeable: true);
@@ -226,6 +227,7 @@ class _TransportFailRepo implements PaymentRepository {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   }) async => throw const PaymentException('network');
 
   @override

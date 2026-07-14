@@ -627,6 +627,20 @@ clients are rebuilt.
 | **POS APK** | **REQUIRED** | 6 POS runtime files changed. It does **not** read `payment_status` — it derives settlement locally (`PosRecentOrder.isFullySettled`) — but it now reads **`order_status`** from `record_payment`'s envelope to learn an order became terminal, and it carries the surface fix (Cancel / Take-payment gating, the "No charge" chip, the zero-tender explanation). |
 | **KDS APK** | **NOT REQUIRED** | See the verification below. An existing KDS APK keeps working unchanged against the new server. |
 
+---
+
+### BUILD MATRIX — POS-OPERATIONS-SYNC-001 (all three commits)
+
+| Artifact | Rebuild? | Why |
+|---|---|---|
+| **Dashboard (web)** | **NOT REQUIRED** | No `apps/dashboard/**` file changed. The phase is server-read + POS-client only. (It *will* redeploy anyway on the next merge to `main`; that is harmless.) |
+| **POS APK** | **REQUIRED** | The entire phase lands here: the authoritative order read, the reconciliation engine, `expected_revision` on every mutation, and the operational orders centre. |
+| **KDS APK** | **NOT REQUIRED** | **No KDS runtime file changed.** The only shared package this phase touches is **`l10n`**, and it only ADDS keys — no existing string, key or generated getter is removed or renamed, so an installed KDS APK keeps working unchanged. `app.sync_pull` (the KDS's feed) is **completely untouched**: the POS deliberately got a NEW, POS-only RPC precisely so the KDS's shared contract would not move. |
+
+**DB-first, as always:** migration `20260718090000` (the POS snapshot contract) must be applied **before** the POS APK that reads it. Commit 3 changed **no SQL at all** — `sync_push` already forwarded `expected_revision` for `order.discount`, `payment.create` and `order.void`, so wiring the revision needed no server change.
+
+---
+
 **Why KDS needs no rebuild (verified against the code, not assumed):**
 - **No KDS file changed.** Nothing under `apps/kds/**` or `packages/feature_kitchen/**` is
   in the diff. Of KDS's ten path dependencies (`feature_kitchen`, `l10n`, `domain`, `sync`,

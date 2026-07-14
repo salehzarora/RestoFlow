@@ -25,6 +25,7 @@ class _FailingPaymentRepository extends DemoPaymentStore {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   }) async {
     attempts++;
     throw const PaymentException('payment failed: transient');

@@ -1,27 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
-import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
-import '../data/order_reconciler.dart' show isCountedUnpaid, unpaidOrderCount;
+import '../data/order_actions.dart';
+import '../data/order_center_view.dart';
+import '../data/order_reconciler.dart' show unpaidOrderCount;
+import '../data/order_snapshot.dart';
 import '../data/order_submission.dart' show OutboxSyncState;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
+import '../state/discount_controller.dart';
 import '../state/order_sync_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/receipt_print_controller.dart';
 import '../state/recent_orders_controller.dart';
 import 'cancel_order_sheet.dart';
 import 'cash_payment_sheet.dart';
+import 'discount_sheet.dart';
 import 'receipt_print_preview.dart';
 
-/// POS-ORDERS-AND-PAYMENT-001: an app-bar button that opens the recent/unpaid
-/// orders surface, badged with the current unpaid count so the cashier can see
-/// at a glance that orders are waiting for payment.
+/// POS-ORDERS-AND-PAYMENT-001: an app-bar button that opens the operational orders
+/// surface, badged with the current unpaid count.
 class RecentOrdersButton extends ConsumerWidget {
   const RecentOrdersButton({super.key});
 
@@ -29,14 +34,11 @@ class RecentOrdersButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final orders = ref.watch(posRecentOrdersControllerProvider);
-    // POS-OPERATIONS-SYNC-001: ONE canonical predicate, shared with the controller's
-    // count and the filter below. This was a hand-rolled copy that re-derived
-    // settlement from the STALE submit-time total — which is precisely how a comped
-    // order sat in the badge forever. Watching the list keeps it reactive.
+    // ONE canonical predicate, shared with the controller's count and the sections.
     final unpaid = unpaidOrderCount(orders);
     final icon = IconButton(
       key: const Key('recent-orders-button'),
-      tooltip: l10n.posRecentOrdersTitle,
+      tooltip: l10n.posOrdersCenterTitle,
       icon: const Icon(Icons.receipt_long_outlined),
       onPressed: () => RecentOrdersSheet.show(context),
     );
@@ -45,10 +47,16 @@ class RecentOrdersButton extends ConsumerWidget {
   }
 }
 
-/// The recent/unpaid orders bottom sheet: a lightweight, cashier-first surface
-/// for the last 2 days' orders — filter by all/unpaid/paid, complete payment on
-/// an unpaid order, and reprint a paid order's receipt. All money is the stored
-/// snapshot (never recomputed). RTL-safe + tri-lingual.
+/// POS-OPERATIONS-SYNC-001 (Commit 3) — THE OPERATIONAL ORDERS CENTRE.
+///
+/// It was a device diary: "the orders THIS till submitted", with no live status and
+/// no idea what the server thought. It is now a BRANCH view — the orders that are
+/// actually happening in this restaurant right now, whichever till took them —
+/// grouped by what the cashier needs to DO about them.
+///
+/// Everything shown is authoritative: the money, the status and the settlement all
+/// come from the server. Every action offered is decided by ONE eligibility policy
+/// (`order_actions.dart`), so a button that cannot work is never drawn.
 class RecentOrdersSheet extends ConsumerStatefulWidget {
   const RecentOrdersSheet({super.key});
 
@@ -56,6 +64,7 @@ class RecentOrdersSheet extends ConsumerStatefulWidget {
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    useSafeArea: true,
     builder: (_) => const RecentOrdersSheet(),
   );
 
@@ -63,23 +72,24 @@ class RecentOrdersSheet extends ConsumerStatefulWidget {
   ConsumerState<RecentOrdersSheet> createState() => _RecentOrdersSheetState();
 }
 
-enum _RecentFilter { all, unpaid, paid }
-
 class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
-  _RecentFilter _filter = _RecentFilter.all;
+  PosOrderSection _section = PosOrderSection.open;
+  PosSettlementFilter _settlement = PosSettlementFilter.all;
+  PosOrderSort _sort = PosOrderSort.newestFirst;
+  String? _status;
+  String _query = '';
+
+  final TextEditingController _search = TextEditingController();
+  Timer? _debounce;
 
   /// Held so [dispose] can release the consumer WITHOUT touching `ref` — Riverpod
-  /// forbids reading a ref after the widget is disposed, and a "stop polling" that
-  /// throws on the way out would leave the timer running forever.
+  /// forbids a ref read after disposal, and a "stop polling" that throws on the way
+  /// out would leave the timer running forever.
   PosOrderSyncController? _sync;
 
   @override
   void initState() {
     super.initState();
-    // POS-OPERATIONS-SYNC-001: opening this surface is a refresh trigger, and it
-    // arms the periodic tick for as long as the surface is up. The coordinator owns
-    // the timer — a Timer living in a widget is how you end up polling a POS that
-    // has been sitting in a drawer since Tuesday.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final sync = ref.read(posOrderSyncControllerProvider.notifier);
@@ -90,9 +100,28 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
     // The tick STOPS with the sheet. Nothing keeps polling behind a closed screen.
     _sync?.removeVisibleConsumer();
     super.dispose();
+  }
+
+  /// DEBOUNCED. Search runs over the loaded authoritative set, so it costs nothing
+  /// to run — but re-filtering and rebuilding a long list on every keystroke makes a
+  /// cheap tablet feel broken, which is its own kind of lie about the software.
+  void _onQuery(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() => _query = value);
+    });
+  }
+
+  void _clearSearch() {
+    _debounce?.cancel();
+    _search.clear();
+    setState(() => _query = '');
   }
 
   @override
@@ -100,142 +129,470 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final orders = ref.watch(posRecentOrdersControllerProvider);
+    final status = ref.watch(posOrderSyncControllerProvider);
+    // EFFECTIVE rights, or null when UNKNOWN. Unknown is NOT denied — a failed probe
+    // must not silently strip a manager of the ability to discount; the server
+    // refuses correctly either way.
+    final caps = ref.watch(staffCapabilitiesProvider).value;
     final entries = ref.watch(outboxControllerProvider);
-    final syncByNumber = <String, OutboxSyncState>{
-      for (final e in entries) e.summary.orderNumber: e.syncState,
-    };
-    final filtered = <PosRecentOrder>[
-      for (final o in orders)
-        if (switch (_filter) {
-          _RecentFilter.all => true,
-          // POS-OPERATIONS-SYNC-001: the filter and the badge now ask the SAME
-          // question, so they can never disagree about what "unpaid" means.
-          _RecentFilter.unpaid => isCountedUnpaid(o),
-          _RecentFilter.paid => o.isFullySettled,
-        })
-          o,
-    ];
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsetsDirectional.fromSTEB(
-          RestoflowSpacing.lg,
-          0,
-          RestoflowSpacing.lg,
-          RestoflowSpacing.lg + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: Column(
-          key: const Key('recent-orders-sheet'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.receipt_long_outlined,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: RestoflowSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.posRecentOrdersTitle,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        l10n.posRecentOrdersWindow,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: RestoflowSpacing.md),
-            Wrap(
-              spacing: RestoflowSpacing.sm,
-              children: [
-                for (final entry in <(_RecentFilter, String)>[
-                  (_RecentFilter.all, l10n.posRecentFilterAll),
-                  (_RecentFilter.unpaid, l10n.posRecentFilterUnpaid),
-                  (_RecentFilter.paid, l10n.posRecentFilterPaid),
-                ])
-                  ChoiceChip(
-                    key: Key('recent-filter-${entry.$1.name}'),
-                    label: Text(entry.$2),
-                    selected: _filter == entry.$1,
-                    onSelected: (_) => setState(() => _filter = entry.$1),
-                  ),
-              ],
-            ),
-            const SizedBox(height: RestoflowSpacing.md),
-            Flexible(
-              child: filtered.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: RestoflowSpacing.xl,
-                      ),
-                      child: RestoflowStateView(
-                        key: const Key('recent-orders-empty'),
-                        icon: Icons.receipt_long_outlined,
-                        title: l10n.posRecentEmpty,
-                        message: l10n.posRecentEmptyHint,
-                      ),
-                    )
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: RestoflowSpacing.sm),
-                      itemBuilder: (context, i) => _RecentOrderCard(
-                        order: filtered[i],
-                        syncState: syncByNumber[filtered[i].orderNumber],
-                        l10n: l10n,
-                      ),
-                    ),
-            ),
+    // The local queue, joined by order code. It reports what THIS DEVICE is doing —
+    // never what the ORDER is doing. Conflating the two is what made a queued
+    // payment look like a lifecycle state.
+    final pendingByNumber = <String, PosPendingKind>{
+      for (final e in entries)
+        if (e.syncState.isPending) e.summary.orderNumber: PosPendingKind.submit,
+    };
+
+    final counts = sectionCounts(orders);
+    final visible = viewOrders(
+      orders,
+      section: _section,
+      settlement: _settlement,
+      status: _status,
+      query: _query,
+      sort: _sort,
+    );
+
+    final width = MediaQuery.sizeOf(context).width;
+    final isWide = width >= RestoflowBreakpoints.posTwoPane;
+
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(
+        RestoflowSpacing.lg,
+        0,
+        RestoflowSpacing.lg,
+        RestoflowSpacing.lg + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        key: const Key('recent-orders-sheet'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Header(l10n: l10n, status: status, theme: theme),
+          const SizedBox(height: RestoflowSpacing.sm),
+          _SectionTabs(
+            l10n: l10n,
+            selected: _section,
+            counts: counts,
+            // The counts describe what is LOADED. While more history remains we do
+            // not pretend otherwise — see the '+' in the chip.
+            partial: status.hasMoreHistory,
+            onSelect: (s) => setState(() => _section = s),
+          ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          _SearchField(
+            l10n: l10n,
+            controller: _search,
+            onChanged: _onQuery,
+            onClear: _clearSearch,
+          ),
+          const SizedBox(height: RestoflowSpacing.sm),
+          _Filters(
+            l10n: l10n,
+            settlement: _settlement,
+            status: _status,
+            sort: _sort,
+            onSettlement: (s) => setState(() => _settlement = s),
+            onStatus: (s) => setState(() => _status = s),
+            onSort: (s) => setState(() => _sort = s),
+          ),
+          if (status.error == PosSyncError.offline) ...[
+            const SizedBox(height: RestoflowSpacing.sm),
+            _OfflineBanner(l10n: l10n, theme: theme),
           ],
+          const SizedBox(height: RestoflowSpacing.md),
+          Flexible(
+            child: visible.isEmpty
+                ? _EmptyState(
+                    l10n: l10n,
+                    section: _section,
+                    searching: _query.trim().isNotEmpty,
+                    offlineNoData:
+                        status.error == PosSyncError.offline && orders.isEmpty,
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: visible.length + (status.hasMoreHistory ? 1 : 0),
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: RestoflowSpacing.sm),
+                    itemBuilder: (context, i) {
+                      if (i == visible.length) {
+                        return _LoadMoreButton(l10n: l10n, status: status);
+                      }
+                      final o = visible[i];
+                      return _OrderCard(
+                        order: o,
+                        l10n: l10n,
+                        isWide: isWide,
+                        actions: resolveOrderActions(
+                          o,
+                          capabilities: caps,
+                          pending: pendingByNumber[o.orderNumber],
+                        ),
+                        outboxState: _outboxStateFor(entries, o.orderNumber),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  OutboxSyncState? _outboxStateFor(List<dynamic> entries, String orderNumber) {
+    for (final e in entries) {
+      if (e.summary.orderNumber == orderNumber)
+        return e.syncState as OutboxSyncState;
+    }
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Header — title + honest sync status. Never the words "live" or "real-time":
+// we poll on a timer, and claiming otherwise would be a promise we do not keep.
+// ---------------------------------------------------------------------------
+class _Header extends ConsumerWidget {
+  const _Header({
+    required this.l10n,
+    required this.status,
+    required this.theme,
+  });
+
+  final AppLocalizations l10n;
+  final PosSyncStatus status;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final String subtitle;
+    if (status.isSyncing) {
+      subtitle = l10n.posOrdersSyncing;
+    } else if (status.error == PosSyncError.offline) {
+      subtitle = l10n.posOrdersOffline;
+    } else if (status.lastSyncedAt != null) {
+      subtitle = l10n.posOrdersLastUpdated(_hhmm(status.lastSyncedAt!));
+    } else {
+      subtitle = l10n.posRecentOrdersWindow;
+    }
+
+    return Row(
+      children: [
+        Icon(Icons.receipt_long_outlined, color: theme.colorScheme.primary),
+        const SizedBox(width: RestoflowSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.posOrdersCenterTitle,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                subtitle,
+                key: const Key('orders-sync-status'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
+        if (status.isSyncing)
+          const Padding(
+            padding: EdgeInsetsDirectional.only(end: RestoflowSpacing.sm),
+            child: SizedBox(
+              key: Key('orders-syncing-indicator'),
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        IconButton(
+          key: const Key('orders-refresh-button'),
+          tooltip: l10n.posOrdersRefresh,
+          icon: const Icon(Icons.refresh),
+          // MANUAL refresh goes through the coordinator like everything else, so it
+          // cannot race the periodic tick — a second caller joins the one in flight.
+          onPressed: () =>
+              ref.read(posOrderSyncControllerProvider.notifier).refreshWindow(),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionTabs extends StatelessWidget {
+  const _SectionTabs({
+    required this.l10n,
+    required this.selected,
+    required this.counts,
+    required this.partial,
+    required this.onSelect,
+  });
+
+  final AppLocalizations l10n;
+  final PosOrderSection selected;
+  final Map<PosOrderSection, int> counts;
+  final bool partial;
+  final ValueChanged<PosOrderSection> onSelect;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        for (final s in PosOrderSection.values) ...[
+          ChoiceChip(
+            key: Key('orders-section-${s.name}'),
+            // The count is of what is LOADED. While older pages remain we mark it
+            // with '+' rather than presenting a page total as a branch total.
+            label: Text(
+              '${_sectionLabel(l10n, s)} (${counts[s] ?? 0}${partial ? '+' : ''})',
+            ),
+            selected: selected == s,
+            onSelected: (_) => onSelect(s),
+          ),
+          const SizedBox(width: RestoflowSpacing.xs),
+        ],
+      ],
+    ),
+  );
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.l10n,
+    required this.controller,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final AppLocalizations l10n;
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    key: const Key('orders-search-field'),
+    controller: controller,
+    onChanged: onChanged,
+    textInputAction: TextInputAction.search,
+    decoration: InputDecoration(
+      isDense: true,
+      hintText: l10n.posOrdersSearchHint,
+      prefixIcon: const Icon(Icons.search),
+      suffixIcon: controller.text.isEmpty
+          ? null
+          : IconButton(
+              key: const Key('orders-search-clear'),
+              tooltip: l10n.posOrdersSearchClear,
+              icon: const Icon(Icons.close),
+              onPressed: onClear,
+            ),
+      border: const OutlineInputBorder(),
+    ),
+  );
+}
+
+class _Filters extends StatelessWidget {
+  const _Filters({
+    required this.l10n,
+    required this.settlement,
+    required this.status,
+    required this.sort,
+    required this.onSettlement,
+    required this.onStatus,
+    required this.onSort,
+  });
+
+  final AppLocalizations l10n;
+  final PosSettlementFilter settlement;
+  final String? status;
+  final PosOrderSort sort;
+  final ValueChanged<PosSettlementFilter> onSettlement;
+  final ValueChanged<String?> onStatus;
+  final ValueChanged<PosOrderSort> onSort;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: RestoflowSpacing.xs,
+    runSpacing: RestoflowSpacing.xs,
+    children: [
+      // SETTLEMENT — EXACT. "Paid" means paid; it does NOT quietly include a comp.
+      // Nobody handed over money for a comped order, and a cashier reconciling a
+      // drawer must not be sent hunting for cash that was never taken.
+      for (final f in PosSettlementFilter.values)
+        FilterChip(
+          key: Key('orders-settlement-${f.name}'),
+          label: Text(_settlementLabel(l10n, f)),
+          selected: settlement == f,
+          onSelected: (_) => onSettlement(f),
+        ),
+      const SizedBox(width: RestoflowSpacing.sm),
+      for (final s in <String?>[
+        null,
+        ...kPosOpenStatuses,
+        ...kPosTerminalStatuses,
+      ])
+        if (s != null)
+          FilterChip(
+            key: Key('orders-status-$s'),
+            label: Text(statusLabel(l10n, s)),
+            selected: status == s,
+            onSelected: (sel) => onStatus(sel ? s : null),
+          ),
+      const SizedBox(width: RestoflowSpacing.sm),
+      FilterChip(
+        key: const Key('orders-sort-toggle'),
+        label: Text(
+          sort == PosOrderSort.newestFirst
+              ? l10n.posOrdersSortNewest
+              : l10n.posOrdersSortOldest,
+        ),
+        selected: sort == PosOrderSort.oldestFirst,
+        onSelected: (_) => onSort(
+          sort == PosOrderSort.newestFirst
+              ? PosOrderSort.oldestFirst
+              : PosOrderSort.newestFirst,
+        ),
+      ),
+    ],
+  );
+}
+
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner({required this.l10n, required this.theme});
+
+  final AppLocalizations l10n;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = RestoflowTone.warning.styleOf(theme);
+    return Container(
+      key: const Key('orders-offline-banner'),
+      padding: const EdgeInsets.all(RestoflowSpacing.sm),
+      decoration: BoxDecoration(
+        color: tone.container,
+        borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off_outlined, size: 18, color: tone.accent),
+          const SizedBox(width: RestoflowSpacing.sm),
+          // The rows STAY. Stale-but-labelled beats a blank screen that looks like
+          // the orders were lost.
+          Expanded(
+            child: Text(
+              l10n.posOrdersOffline,
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _RecentOrderCard extends ConsumerWidget {
-  const _RecentOrderCard({
-    required this.order,
-    required this.syncState,
+class _LoadMoreButton extends ConsumerWidget {
+  const _LoadMoreButton({required this.l10n, required this.status});
+
+  final AppLocalizations l10n;
+  final PosSyncStatus status;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.sm),
+    child: OutlinedButton.icon(
+      key: const Key('orders-load-more'),
+      onPressed: status.isLoadingMore
+          ? null
+          : () => ref.read(posOrderSyncControllerProvider.notifier).loadMore(),
+      icon: status.isLoadingMore
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.history, size: 18),
+      label: Text(l10n.posOrdersLoadMore),
+    ),
+  );
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
     required this.l10n,
+    required this.section,
+    required this.searching,
+    required this.offlineNoData,
+  });
+
+  final AppLocalizations l10n;
+  final PosOrderSection section;
+  final bool searching;
+  final bool offlineNoData;
+
+  @override
+  Widget build(BuildContext context) {
+    final String title;
+    if (offlineNoData) {
+      title = l10n.posOrdersEmptyOffline;
+    } else if (searching) {
+      title = l10n.posOrdersSearchEmpty;
+    } else {
+      title = switch (section) {
+        PosOrderSection.open => l10n.posOrdersEmptyOpen,
+        PosOrderSection.needsPayment => l10n.posOrdersEmptyNeedsPayment,
+        PosOrderSection.completedRecently => l10n.posOrdersEmptyCompleted,
+        PosOrderSection.all => l10n.posRecentEmpty,
+      };
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xl),
+      child: RestoflowStateView(
+        key: const Key('recent-orders-empty'),
+        icon: Icons.receipt_long_outlined,
+        title: title,
+        message: l10n.posRecentEmptyHint,
+      ),
+    );
+  }
+}
+
+/// One order. It says what the order IS (status, settlement, total) and — separately
+/// — what THIS DEVICE is doing about it (a queued payment is not a lifecycle state).
+class _OrderCard extends ConsumerWidget {
+  const _OrderCard({
+    required this.order,
+    required this.l10n,
+    required this.actions,
+    required this.isWide,
+    required this.outboxState,
   });
 
   final PosRecentOrder order;
-  final OutboxSyncState? syncState;
   final AppLocalizations l10n;
+  final PosOrderActions actions;
+  final bool isWide;
+  final OutboxSyncState? outboxState;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final o = order.order;
-    // SETTLEMENT ("does it still owe money?") drives what we SAY. The payment MARKER
-    // ("was money taken?") drives what we OFFER: a receipt can only be reprinted when a
-    // payment exists, and the server's void guard blocks exactly on a live completed
-    // payment. Conflating the two is what made the POS lie.
-    final settled = order.isFullySettled;
-    final hasPayment = order.payment != null;
-    final dineIn = o.orderType == OrderType.dineIn;
-    final subtitle = <String>[
-      dineIn ? l10n.posOrderTypeDineIn : l10n.posOrderTypeTakeaway,
-      if (dineIn && o.tableLabel != null)
-        '${l10n.posTableLabel} ${o.tableLabel}',
-      if (o.customerName case final c?) c,
-      l10n.ordersItemsCount(o.itemCount),
+    final serverStatus = order.serverStatus;
+
+    final meta = <String>[
+      if (order.tableLabel case final t? when t.trim().isNotEmpty)
+        '${l10n.posTableLabel} $t',
+      if (order.order?.customerName case final c? when c.trim().isNotEmpty) c,
+      if (order.origin == PosOrderOrigin.branchDiscovered)
+        l10n.posOrdersOtherTill,
     ].join(' · ');
 
     return Container(
@@ -260,7 +617,7 @@ class _RecentOrderCard extends ConsumerWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            o.orderNumber,
+                            order.orderNumber,
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w800,
                             ),
@@ -270,28 +627,34 @@ class _RecentOrderCard extends ConsumerWidget {
                         ),
                         const SizedBox(width: RestoflowSpacing.sm),
                         Text(
-                          _time(order.submittedAt),
+                          _hhmm(order.sortAt),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: RestoflowSpacing.xs),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: RestoflowSpacing.xs),
+                      Text(
+                        meta,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(width: RestoflowSpacing.sm),
               Text(
-                MoneyFormatter.formatMinor(o.grandTotalMinor, o.currencyCode),
+                // AUTHORITATIVE money. This is the "stale 40" fix, at the pixel.
+                MoneyFormatter.formatMinor(
+                  order.grandTotalMinor,
+                  order.currencyCode,
+                ),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -303,157 +666,196 @@ class _RecentOrderCard extends ConsumerWidget {
             spacing: RestoflowSpacing.xs,
             runSpacing: RestoflowSpacing.xs,
             children: [
-              // MONEY-VOID-001: a cancelled order shows a single danger
-              // "Cancelled" pill instead of the paid/unpaid + sync pills (the
-              // void is terminal; the submit sync state is no longer relevant).
-              if (order.isVoided)
+              // STATUS. Text + icon, never colour alone — colour is not a label, and
+              // a cashier with a colour-vision deficiency is still a cashier.
+              if (serverStatus != null)
                 RestoflowStatusPill(
-                  key: Key('recent-cancelled-${order.orderNumber}'),
-                  label: l10n.posOrderCancelledChip,
+                  key: Key('order-status-${order.orderNumber}'),
+                  label: statusLabel(l10n, serverStatus),
+                  tone: _statusTone(serverStatus),
+                  icon: _statusIcon(serverStatus),
+                ),
+              // SETTLEMENT — the three-valued truth. "No charge" is neither Paid
+              // (no money was taken) nor Unpaid (nothing is owed).
+              RestoflowStatusPill(
+                key: Key('order-settlement-${order.orderNumber}'),
+                label: _settlementPill(l10n, order.settlement),
+                tone: switch (order.settlement) {
+                  PosSettlement.paid => RestoflowTone.success,
+                  PosSettlement.unpaid => RestoflowTone.warning,
+                  PosSettlement.notChargeable => RestoflowTone.neutral,
+                },
+                icon: switch (order.settlement) {
+                  PosSettlement.paid => Icons.check_circle_outline,
+                  PosSettlement.unpaid => Icons.schedule,
+                  PosSettlement.notChargeable => Icons.money_off_outlined,
+                },
+              ),
+              // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
+              // "My payment is syncing" is a fact about this till, not the order.
+              if (actions.pendingKind case final p?)
+                RestoflowStatusPill(
+                  key: Key('order-pending-${order.orderNumber}'),
+                  label: _pendingLabel(l10n, p),
+                  tone: RestoflowTone.info,
+                  icon: Icons.sync,
+                ),
+              if (outboxState != null && outboxState!.isFailed)
+                RestoflowStatusPill(
+                  label: l10n.posRecentSyncFailed,
                   tone: RestoflowTone.danger,
-                  icon: Icons.block,
-                )
-              else ...[
-                // MONEY-SETTLEMENT-CONSISTENCY-001: SETTLEMENT, not the payment marker.
-                // A NON-CHARGEABLE (zero-total) order reads "No charge" — it is neither
-                // Paid (no money was taken) nor Unpaid (nothing is owed). An
-                // UNDER-COVERED order reads Unpaid, because money IS still owed.
-                if (order.isNonChargeable)
-                  RestoflowStatusPill(
-                    key: Key('recent-nocharge-${order.orderNumber}'),
-                    label: l10n.posNoChargeChip,
-                    tone: RestoflowTone.neutral,
-                    icon: Icons.money_off_outlined,
-                  )
-                else
-                  RestoflowStatusPill(
-                    label: settled ? l10n.posPaidChip : l10n.posUnpaidChip,
-                    tone: settled
-                        ? RestoflowTone.success
-                        : RestoflowTone.warning,
-                    icon: settled ? Icons.check_circle_outline : Icons.schedule,
-                  ),
-                if (syncState != null && syncState!.isFailed)
-                  RestoflowStatusPill(
-                    label: l10n.posRecentSyncFailed,
-                    tone: RestoflowTone.danger,
-                    icon: Icons.sync_problem,
-                  )
-                else if (syncState != null && syncState!.isPending)
-                  RestoflowStatusPill(
-                    label: l10n.posRecentSyncPending,
-                    tone: RestoflowTone.info,
-                    icon: Icons.sync,
-                  ),
-              ],
+                  icon: Icons.sync_problem,
+                ),
             ],
           ),
-          // MONEY-SETTLEMENT-CONSISTENCY-001: a TERMINAL order (cancelled/voided, or a
-          // `completed` one — including a comped order the served+settled rule closed by
-          // itself) accepts NO mutation. It must not offer Take payment or Cancel: the
-          // server would refuse them, and a button that always fails is a lie. Reprint
-          // stays available whenever a receipt actually exists.
-          if (!order.isTerminal || hasPayment) ...[
+          // A DEAD CONTROL WITH NO REASON IS WORSE THAN NO CONTROL. When an order is
+          // still active but owes nothing, the missing Take-payment button needs an
+          // explanation — otherwise the cashier just sees a button that "should be
+          // there" and does not know why it is not.
+          if (!order.isTerminal &&
+              order.settlement == PosSettlement.notChargeable &&
+              order.payment == null) ...[
             const SizedBox(height: RestoflowSpacing.sm),
-            // A NON-CHARGEABLE (zero-total) order owes nothing, and the server REFUSES a
-            // payment for it (no zero-value payment row, no burned receipt number). Say
-            // so plainly instead of showing a control that cannot work.
-            if (!order.isTerminal && order.isNonChargeable && !hasPayment)
-              Padding(
-                key: Key('recent-nocharge-note-${order.orderNumber}'),
-                padding: const EdgeInsetsDirectional.only(
-                  bottom: RestoflowSpacing.sm,
-                ),
-                child: Text(
-                  l10n.posNoChargeNoPayment,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
+            Text(
+              key: Key('recent-nocharge-note-${order.orderNumber}'),
+              l10n.posNoChargeNoPayment,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-            Row(
-              children: [
-                if (!hasPayment) ...[
-                  // Offered only when there is genuinely money to collect.
-                  if (!order.isNonChargeable) ...[
-                    Expanded(
-                      child: FilledButton.icon(
-                        key: Key('recent-pay-${order.orderNumber}'),
-                        onPressed: () => CashPaymentSheet.show(
-                          context,
-                          orderId: o.orderId,
-                          orderNumber: o.orderNumber,
-                          amountMinor: o.grandTotalMinor,
-                          currencyCode: o.currencyCode,
-                        ),
-                        icon: const Icon(Icons.payments_outlined, size: 18),
-                        label: Text(l10n.posTakePayment),
-                      ),
-                    ),
-                    const SizedBox(width: RestoflowSpacing.sm),
-                  ],
-                  // CANCEL mirrors the SERVER's void rule — a live completed payment
-                  // blocks a void, and a terminal order cannot be voided at all. It is
-                  // NOT gated on the payment marker as a stand-in for "settled": a
-                  // zero-total order that is still ACTIVE remains cancellable, exactly as
-                  // the server allows.
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: Key('recent-cancel-${order.orderNumber}'),
-                      onPressed: () =>
-                          CancelOrderSheet.show(context, order: order),
-                      icon: const Icon(Icons.block, size: 18),
-                      label: Text(l10n.posCancelOrderAction),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: RestoflowTone.danger
-                            .styleOf(theme)
-                            .accent,
-                        side: BorderSide(
-                          color: RestoflowTone.danger.styleOf(theme).accent,
-                        ),
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  // A receipt exists -> it can be reprinted and viewed. Gated on the
-                  // PAYMENT ROW (not settlement): a comped order has no receipt to show.
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: Key('recent-reprint-${order.orderNumber}'),
-                      onPressed: () => _reprint(context, ref),
-                      icon: const Icon(Icons.print_outlined, size: 18),
-                      label: Text(l10n.posRecentReprintAction),
-                    ),
-                  ),
-                  const SizedBox(width: RestoflowSpacing.sm),
-                  Expanded(
-                    child: TextButton.icon(
-                      key: Key('recent-view-${order.orderNumber}'),
-                      onPressed: () => ReceiptPrintPreview.show(
-                        context,
-                        order: o,
-                        payment: order.payment!,
-                      ),
-                      icon: const Icon(Icons.visibility_outlined, size: 18),
-                      label: Text(l10n.receiptPreviewTitle),
-                    ),
-                  ),
-                ],
-              ],
             ),
+          ],
+          if (!actions.isEmpty) ...[
+            const SizedBox(height: RestoflowSpacing.sm),
+            _ActionRow(order: order, l10n: l10n, actions: actions),
           ],
         ],
       ),
     );
   }
+}
 
-  /// Reprints the STORED receipt for a paid order: rebuilds the customer receipt
-  /// document from the stored order+payment snapshot and re-sends it through the
-  /// active POS printer (native Wi-Fi/Bluetooth + raster ar/he path preserved).
-  /// It creates NO order and NO payment. Honest fallback when no printer.
+/// The trailing actions — EVERY one of them decided by the central policy. A control
+/// that the server would refuse is not drawn at all: a button that always fails is a
+/// lie, and under a lunch rush it is an expensive one.
+class _ActionRow extends ConsumerWidget {
+  const _ActionRow({
+    required this.order,
+    required this.l10n,
+    required this.actions,
+  });
+
+  final PosRecentOrder order;
+  final AppLocalizations l10n;
+  final PosOrderActions actions;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final children = <Widget>[];
+
+    if (actions.canPay) {
+      children.add(
+        _ActionButton(
+          child: FilledButton.icon(
+            key: Key('recent-pay-${order.orderNumber}'),
+            onPressed: () => CashPaymentSheet.show(
+              context,
+              orderId: order.orderId,
+              orderNumber: order.orderNumber,
+              // AUTHORITATIVE total + revision. The sheet no longer receives the
+              // submit-time figure it used to be handed.
+              amountMinor: order.grandTotalMinor,
+              currencyCode: order.currencyCode,
+              expectedRevision: order.revision,
+            ),
+            icon: const Icon(Icons.payments_outlined, size: 18),
+            label: Text(l10n.posTakePayment),
+          ),
+        ),
+      );
+    }
+
+    if (actions.canDiscount) {
+      children.add(
+        _ActionButton(
+          child: OutlinedButton.icon(
+            key: Key('recent-discount-${order.orderNumber}'),
+            onPressed: () => DiscountSheet.show(
+              context,
+              orderId: order.orderId ?? '',
+              subtotalMinor: order.subtotalMinor,
+              taxTotalMinor: order.taxTotalMinor,
+              currencyCode: order.currencyCode,
+              expectedRevision: order.revision,
+            ),
+            icon: const Icon(Icons.percent, size: 18),
+            label: Text(l10n.posApplyDiscount),
+          ),
+        ),
+      );
+    }
+
+    if (actions.canVoid) {
+      children.add(
+        _ActionButton(
+          child: OutlinedButton.icon(
+            key: Key('recent-cancel-${order.orderNumber}'),
+            onPressed: () => CancelOrderSheet.show(context, order: order),
+            icon: const Icon(Icons.block, size: 18),
+            label: Text(l10n.posCancelOrderAction),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: RestoflowTone.danger.styleOf(theme).accent,
+              side: BorderSide(
+                color: RestoflowTone.danger.styleOf(theme).accent,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (actions.canOpenReceipt) {
+      children.add(
+        _ActionButton(
+          child: OutlinedButton.icon(
+            key: Key('recent-reprint-${order.orderNumber}'),
+            onPressed: () => _reprint(context, ref),
+            icon: const Icon(Icons.print_outlined, size: 18),
+            label: Text(l10n.posRecentReprintAction),
+          ),
+        ),
+      );
+      children.add(
+        _ActionButton(
+          child: TextButton.icon(
+            key: Key('recent-view-${order.orderNumber}'),
+            onPressed: () => ReceiptPrintPreview.show(
+              context,
+              order: order.order!,
+              payment: order.payment!,
+            ),
+            icon: const Icon(Icons.visibility_outlined, size: 18),
+            label: Text(l10n.receiptPreviewTitle),
+          ),
+        ),
+      );
+    }
+
+    // A WRAP, not a Row: on a phone the actions stack instead of being squeezed
+    // below a usable touch target, and on a tablet they sit on one line.
+    return Wrap(
+      spacing: RestoflowSpacing.sm,
+      runSpacing: RestoflowSpacing.sm,
+      children: children,
+    );
+  }
+
+  /// Reprints the STORED receipt. It needs the ORDER-TIME lines, which only a
+  /// device-owned order has — the eligibility policy already refuses it otherwise.
   Future<void> _reprint(BuildContext context, WidgetRef ref) async {
     final payment = order.payment;
-    if (payment == null) return;
+    final view = order.order;
+    if (payment == null || view == null) return;
     final messenger = ScaffoldMessenger.of(context);
     final bridge = ref.read(posActivePrintBridgeProvider);
     if (bridge == null) {
@@ -463,12 +865,7 @@ class _RecentOrderCard extends ConsumerWidget {
       return;
     }
     final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
-    final document = buildReceiptDocument(
-      l10n,
-      order.order,
-      payment,
-      isDemo: isDemo,
-    );
+    final document = buildReceiptDocument(l10n, view, payment, isDemo: isDemo);
     await ref
         .read(receiptPrintControllerProvider.notifier)
         .reprint(
@@ -480,9 +877,91 @@ class _RecentOrderCard extends ConsumerWidget {
       SnackBar(content: Text(l10n.posRecentReprintStarted)),
     );
   }
+}
 
-  String _time(DateTime dt) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${two(dt.hour)}:${two(dt.minute)}';
-  }
+// ---------------------------------------------------------------------------
+// Labels. Every user-facing string is localized; no raw wire token ever reaches
+// the screen (`not_chargeable` is a protocol detail, not English).
+// ---------------------------------------------------------------------------
+
+String _sectionLabel(AppLocalizations l10n, PosOrderSection s) => switch (s) {
+  PosOrderSection.open => l10n.posOrdersSectionOpen,
+  PosOrderSection.needsPayment => l10n.posOrdersSectionNeedsPayment,
+  PosOrderSection.completedRecently => l10n.posOrdersSectionCompleted,
+  PosOrderSection.all => l10n.posOrdersSectionAll,
+};
+
+String _settlementLabel(AppLocalizations l10n, PosSettlementFilter f) =>
+    switch (f) {
+      PosSettlementFilter.all => l10n.posOrdersSettlementAll,
+      PosSettlementFilter.needsPayment => l10n.posOrdersSettlementUnpaid,
+      PosSettlementFilter.paid => l10n.posOrdersSettlementPaid,
+      PosSettlementFilter.noCharge => l10n.posOrdersSettlementNoCharge,
+    };
+
+String _settlementPill(AppLocalizations l10n, PosSettlement s) => switch (s) {
+  PosSettlement.paid => l10n.posPaidChip,
+  PosSettlement.unpaid => l10n.posUnpaidChip,
+  PosSettlement.notChargeable => l10n.posNoChargeChip,
+};
+
+String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
+  PosPendingKind.submit ||
+  PosPendingKind.payment => l10n.posOrdersPendingPayment,
+  PosPendingKind.discount => l10n.posOrdersPendingDiscount,
+  PosPendingKind.cancellation => l10n.posOrdersPendingCancellation,
+};
+
+/// An UNKNOWN status is shown verbatim rather than mapped to something we made up.
+/// Inventing a friendly label for a token we do not understand would be inventing a
+/// fact about the order.
+String statusLabel(AppLocalizations l10n, String status) => switch (status) {
+  'submitted' => l10n.posOrdersStatusSubmitted,
+  'accepted' => l10n.posOrdersStatusAccepted,
+  'preparing' => l10n.posOrdersStatusPreparing,
+  'ready' => l10n.posOrdersStatusReady,
+  'served' => l10n.posOrdersStatusServed,
+  'completed' => l10n.posOrdersStatusCompleted,
+  'cancelled' => l10n.posOrdersStatusCancelled,
+  'voided' => l10n.posOrdersStatusVoided,
+  _ => status,
+};
+
+RestoflowTone _statusTone(String status) => switch (status) {
+  'ready' => RestoflowTone.success,
+  'served' => RestoflowTone.info,
+  'completed' => RestoflowTone.neutral,
+  'cancelled' || 'voided' => RestoflowTone.danger,
+  _ => RestoflowTone.info,
+};
+
+IconData _statusIcon(String status) => switch (status) {
+  'submitted' => Icons.receipt_outlined,
+  'accepted' => Icons.thumb_up_outlined,
+  'preparing' => Icons.local_fire_department_outlined,
+  'ready' => Icons.done_all,
+  'served' => Icons.room_service_outlined,
+  'completed' => Icons.task_alt,
+  'cancelled' || 'voided' => Icons.block,
+  _ => Icons.help_outline,
+};
+
+String _hhmm(DateTime dt) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(dt.hour)}:${two(dt.minute)}';
+}
+
+/// One action control, sized so it stays a real touch target on a phone and does
+/// not stretch absurdly wide on a tablet. (It is deliberately NOT `Expanded`: these
+/// live in a `Wrap`, which is not a Flex, and `Expanded` there is a crash.)
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(minWidth: 148, minHeight: 44),
+    child: child,
+  );
 }

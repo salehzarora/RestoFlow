@@ -54,7 +54,15 @@ class PosSnapshotException implements Exception {
 abstract class OrderSnapshotRepository {
   /// INCREMENTAL: everything that changed after [cursor]. With a null cursor this
   /// is the WINDOW mode — the whole bounded operational window from its start.
-  Future<PosSnapshotPage> fetchChanges({PosSyncCursor? cursor, int limit = 50});
+  ///
+  /// [windowDays] widens how far back the window reaches (the server caps it at 14
+  /// and refuses anything beyond). This is what "Load more" moves — never the
+  /// durable change-feed cursor.
+  Future<PosSnapshotPage> fetchChanges({
+    PosSyncCursor? cursor,
+    int limit = 50,
+    int windowDays = 2,
+  });
 
   /// TARGETED: authoritative snapshots for specific orders, ignoring the window.
   /// Used after a write, a conflict, or a typed refusal, so the device learns the
@@ -80,10 +88,12 @@ class RealOrderSnapshotRepository implements OrderSnapshotRepository {
   Future<PosSnapshotPage> fetchChanges({
     PosSyncCursor? cursor,
     int limit = 50,
+    int windowDays = 2,
   }) => _invoke(<String, dynamic>{
     'p_since_at': cursor?.at.toUtc().toIso8601String(),
     'p_since_id': cursor?.id,
     'p_limit': limit,
+    'p_window_days': windowDays,
   });
 
   @override

@@ -69,6 +69,36 @@ const Set<String> kPosOpenStatuses = <String>{
   'served',
 };
 
+/// WHERE A ROW CAME FROM — its ownership, which is a different question from both
+/// its lifecycle status and its sync state (POS-OPERATIONS-SYNC-001, Commit 3).
+///
+/// The operational centre shows the BRANCH's orders, not just this till's. That
+/// only works if "this device made it" and "the server told us about it" stay
+/// distinct: a row we merely discovered must never inherit another till's queue, and
+/// a receipt can only be reprinted for lines this device actually captured.
+enum PosOrderOrigin {
+  /// Never submitted. Exists only here. The server has no such order, so a snapshot
+  /// can neither create nor overwrite one.
+  localDraft,
+
+  /// THIS device submitted it (or holds durable local operations for it). It may
+  /// carry queued work, and it has the order-time line snapshot a receipt needs.
+  deviceOwned,
+
+  /// Discovered from the server's branch feed — another till took it. We hold the
+  /// authoritative server fields and NOTHING local: no lines, no receipt, and above
+  /// all no other device's pending operations.
+  ///
+  /// It can BECOME device-interacted (this till pays it, discounts it, cancels it),
+  /// but it stays ONE row: origin describes where it came from, not who may act.
+  branchDiscovered;
+
+  /// True when this device holds the order-time snapshot (lines + prices) that a
+  /// receipt is built from. A discovered order has none — and inventing empty lines
+  /// to print would be a forged receipt.
+  bool get hasLocalOrderSnapshot => this == PosOrderOrigin.deviceOwned;
+}
+
 /// The LOCAL synchronization state of a POS order — deliberately NOT the order's
 /// lifecycle status.
 ///

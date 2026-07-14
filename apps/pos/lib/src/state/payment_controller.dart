@@ -43,6 +43,7 @@ class PaymentController extends Notifier<PaymentState> {
     required int tenderedMinor,
     required String currencyCode,
     PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
   }) async {
     final payment = await _repo.recordCashPayment(
       orderId: orderId,
@@ -51,6 +52,9 @@ class PaymentController extends Notifier<PaymentState> {
       tenderedMinor: tenderedMinor,
       currencyCode: currencyCode,
       method: method,
+      // POS-OPERATIONS-SYNC-001: the authoritative revision this payment is being
+      // made against. It makes the server's conflict path reachable at last.
+      expectedRevision: expectedRevision,
     );
     state = PaymentState(
       shift: _repo.shiftContext(),

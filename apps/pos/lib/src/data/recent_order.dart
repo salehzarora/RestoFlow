@@ -17,26 +17,53 @@ import '../state/submitted_order_view.dart';
 ///
 ///   * [order] — the ORDER-TIME snapshot: the lines and the prices as they were
 ///     captured (D-008). This is what a receipt reprints. It is never recomputed.
+///     NULL for a BRANCH-DISCOVERED order: another till took it, so this device
+///     never saw its lines — and fabricating empty ones to print would be a forged
+///     receipt.
 ///   * [snapshot] — the AUTHORITATIVE server state: revision, canonical status,
-///     the current money, and the SERVER-COMPUTED settlement. Null until this
-///     device has heard from the server about this order.
+///     the current money, and the SERVER-COMPUTED settlement. Null only for an order
+///     this device has never heard back about (offline, or pre-upgrade data).
 ///
-/// Where the two disagree about money or status, THE SERVER WINS — every getter
-/// below prefers [snapshot]. Money is integer minor units (D-007), always.
+/// At least ONE of the two is always present. Where they disagree about money or
+/// status, THE SERVER WINS — every getter below prefers [snapshot]. Money is integer
+/// minor units (D-007), always.
 class PosRecentOrder {
   const PosRecentOrder({
-    required this.order,
-    required this.submittedAt,
+    this.order,
+    DateTime? submittedAt,
     this.payment,
     this.voidedAt,
     this.voidReason,
     this.status,
     this.snapshot,
     this.syncState = PosOrderSyncState.synchronized,
+    this.origin = PosOrderOrigin.deviceOwned,
     this.lastSyncError,
-  });
+  }) : assert(
+         order != null || snapshot != null,
+         'an order is either something this device submitted or something the '
+         'server told us about — a row that is neither does not exist',
+       ),
+       _submittedAt = submittedAt;
 
-  final SubmittedOrderView order;
+  /// Builds a row for an order DISCOVERED on the branch feed. It carries the server
+  /// snapshot and NOTHING local: no lines, no receipt, and — critically — none of
+  /// the originating till's queued work.
+  factory PosRecentOrder.discovered(PosOrderSnapshot snapshot) =>
+      PosRecentOrder(
+        snapshot: snapshot,
+        origin: PosOrderOrigin.branchDiscovered,
+        syncState: snapshot.isTerminal
+            ? PosOrderSyncState.terminal
+            : PosOrderSyncState.synchronized,
+      );
+
+  /// The ORDER-TIME view captured when THIS device submitted the order, or NULL for
+  /// a branch-discovered one (another till took it; we never saw its lines).
+  final SubmittedOrderView? order;
+
+  /// Where this row came from. Ownership — not lifecycle, not sync state.
+  final PosOrderOrigin origin;
 
   /// POS-OPERATIONS-SYNC-001: the last AUTHORITATIVE server snapshot, or null when
   /// this device has never heard back about this order (offline, or pre-upgrade
@@ -73,9 +100,22 @@ class PosRecentOrder {
   /// The recorded payment once the order is settled, or null while unpaid.
   final CashPayment? payment;
 
-  /// When this device submitted the order (local time; drives the window +
-  /// newest-first ordering).
-  final DateTime submittedAt;
+  /// When THIS device submitted the order (local time), or null for a
+  /// branch-discovered one — another till submitted it and we were not there.
+  final DateTime? _submittedAt;
+
+  /// When this device submitted the order. For a discovered order this falls back
+  /// to the SERVER's `created_at`, which is the honest answer to "when was this
+  /// order opened" and is what the list sorts by.
+  DateTime get submittedAt =>
+      _submittedAt ??
+      snapshot?.createdAt ??
+      DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// The ONE timestamp the operational centre sorts by. The SERVER's creation time
+  /// when we have it, so a device-owned row and a discovered row sort against the
+  /// same clock rather than against one local and one remote one.
+  DateTime get sortAt => snapshot?.createdAt ?? submittedAt;
 
   /// MONEY-VOID-001: when this order was CANCELLED (voided), or null. Set once
   /// the server confirms the void; persisted so a cancelled order stays
@@ -87,8 +127,14 @@ class PosRecentOrder {
   /// null. Display only — never money.
   final String? voidReason;
 
-  String get orderNumber => order.orderNumber;
-  String? get orderId => order.orderId;
+  /// The cashier-visible code. A device-owned order shows the code it was submitted
+  /// with; a discovered order shows the SERVER's safe `#XXXXXX` reference. Never a
+  /// raw UUID, either way.
+  String get orderNumber => order?.orderNumber ?? snapshot?.orderCode ?? '';
+
+  /// The authoritative server order id — the ONLY dedupe key. Two rows for one
+  /// server order is the bug this key exists to prevent.
+  String? get orderId => order?.orderId ?? snapshot?.orderId;
 
   /// THE settlement of this order — the SERVER's answer when we have it.
   ///
@@ -144,19 +190,29 @@ class PosRecentOrder {
   }
 
   /// The AUTHORITATIVE total. Server first — this is the "stale 40" fix.
-  int get grandTotalMinor => snapshot?.grandTotalMinor ?? order.grandTotalMinor;
+  int get grandTotalMinor =>
+      snapshot?.grandTotalMinor ?? order?.grandTotalMinor ?? 0;
 
-  int get subtotalMinor => snapshot?.subtotalMinor ?? order.subtotalMinor;
+  int get subtotalMinor => snapshot?.subtotalMinor ?? order?.subtotalMinor ?? 0;
 
   int get discountTotalMinor =>
-      snapshot?.discountTotalMinor ?? order.discountTotalMinor;
+      snapshot?.discountTotalMinor ?? order?.discountTotalMinor ?? 0;
 
-  int get taxTotalMinor => snapshot?.taxTotalMinor ?? order.taxTotalMinor;
+  int get taxTotalMinor => snapshot?.taxTotalMinor ?? order?.taxTotalMinor ?? 0;
 
   /// The canonical server status, when known.
   String? get serverStatus => snapshot?.status ?? status;
 
-  String get currencyCode => order.currencyCode;
+  String get currencyCode =>
+      order?.currencyCode ?? snapshot?.currencyCode ?? '';
+
+  /// The dine-in table label, when the server or the local view knows one.
+  String? get tableLabel => order?.tableLabel ?? snapshot?.tableLabel;
+
+  /// True when a receipt can actually be rebuilt: it needs the ORDER-TIME lines,
+  /// which only a device-owned order has, plus a real payment. A discovered order
+  /// has no lines — printing "a receipt" for it would be printing a forgery.
+  bool get canReprintReceipt => order != null && payment != null;
 
   PosRecentOrder copyWith({
     CashPayment? payment,
@@ -165,17 +221,19 @@ class PosRecentOrder {
     String? status,
     PosOrderSnapshot? snapshot,
     PosOrderSyncState? syncState,
+    PosOrderOrigin? origin,
     String? lastSyncError,
     bool clearSyncError = false,
   }) => PosRecentOrder(
     order: order,
-    submittedAt: submittedAt,
+    submittedAt: _submittedAt,
     payment: payment ?? this.payment,
     voidedAt: voidedAt ?? this.voidedAt,
     voidReason: voidReason ?? this.voidReason,
     status: status ?? this.status,
     snapshot: snapshot ?? this.snapshot,
     syncState: syncState ?? this.syncState,
+    origin: origin ?? this.origin,
     lastSyncError: clearSyncError
         ? null
         : (lastSyncError ?? this.lastSyncError),
@@ -184,9 +242,12 @@ class PosRecentOrder {
   /// Adopts an AUTHORITATIVE server snapshot.
   ///
   /// The order-time [SubmittedOrderView] money is realigned to the server's, so the
-  /// confirmation/receipt path (which reads `.order`) cannot keep showing a total
-  /// the server has already changed. The order LINES are untouched — they are the
+  /// confirmation/receipt path (which reads it) cannot keep showing a total the
+  /// server has already changed. The order LINES are untouched — they are the
   /// order-time price snapshot (D-008) and are never recomputed.
+  ///
+  /// ORIGIN IS PRESERVED. A snapshot arriving for a device-owned order does NOT
+  /// demote it to "discovered": we still hold its lines and its receipt.
   ///
   /// The queued-operation record is NOT touched here: a snapshot is not an
   /// acknowledgement (see order_reconciler.dart, rule 3).
@@ -194,12 +255,12 @@ class PosRecentOrder {
     PosOrderSnapshot snap, {
     PosOrderSyncState? syncState,
   }) => PosRecentOrder(
-    order: order.copyWith(
+    order: order?.copyWith(
       subtotalMinor: snap.subtotalMinor,
       discountTotalMinor: snap.discountTotalMinor,
       taxTotalMinor: snap.taxTotalMinor,
     ),
-    submittedAt: submittedAt,
+    submittedAt: _submittedAt,
     payment: payment,
     // A server-voided order is terminal even if THIS device never ran the void.
     voidedAt: voidedAt ?? (snap.status == 'voided' ? snap.updatedAt : null),
@@ -207,12 +268,13 @@ class PosRecentOrder {
     status: snap.status,
     snapshot: snap,
     syncState: syncState ?? this.syncState,
+    origin: origin,
     lastSyncError: lastSyncError,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'submitted_at': submittedAt.toIso8601String(),
-    'order': _orderToJson(order),
+    if (_submittedAt != null) 'submitted_at': _submittedAt.toIso8601String(),
+    if (order != null) 'order': _orderToJson(order!),
     if (payment != null) 'payment': _paymentToJson(payment!),
     if (voidedAt != null) 'voided_at': voidedAt!.toIso8601String(),
     if (voidReason != null) 'void_reason': voidReason,
@@ -222,6 +284,7 @@ class PosRecentOrder {
     // existing recent orders rather than discarding the cashier's day.
     if (snapshot != null) 'snapshot': snapshot!.toJson(),
     'sync_state': syncState.name,
+    'origin': origin.name,
     if (lastSyncError != null) 'last_sync_error': lastSyncError,
   };
 
@@ -231,11 +294,18 @@ class PosRecentOrder {
   static PosRecentOrder fromJson(Map<String, Object?> json) {
     final submittedAtRaw = json['submitted_at'];
     final orderRaw = json['order'];
-    if (submittedAtRaw is! String || orderRaw is! Map) {
-      throw const FormatException('recent order: missing order/submitted_at');
+
+    // A record must be ONE of the two things it can be: something this device
+    // submitted (an `order` view) or something the server told us about (a
+    // `snapshot`). Neither is not an order.
+    final snapshotEarly = PosOrderSnapshot.fromJson(json['snapshot']);
+    if (orderRaw is! Map && snapshotEarly == null) {
+      throw const FormatException('recent order: neither order nor snapshot');
     }
-    final submittedAt = DateTime.tryParse(submittedAtRaw);
-    if (submittedAt == null) {
+    final submittedAt = submittedAtRaw is String
+        ? DateTime.tryParse(submittedAtRaw)
+        : null;
+    if (orderRaw is Map && submittedAt == null) {
       throw const FormatException('recent order: bad submitted_at');
     }
     final paymentRaw = json['payment'];
@@ -252,11 +322,14 @@ class PosRecentOrder {
     // A snapshot that fails to parse is DISCARDED rather than throwing: the order
     // itself is still perfectly good, and the next pull will re-authoritative it.
     // Throwing here would drop a real order over a bad optional field.
-    final snapshot = PosOrderSnapshot.fromJson(json['snapshot']);
+    final snapshot = snapshotEarly;
     final syncState = _syncStateFromName(json['sync_state']);
+    final parsedOrder = orderRaw is Map
+        ? _orderFromJson(orderRaw.cast<String, Object?>())
+        : null;
 
     return PosRecentOrder(
-      order: _orderFromJson(orderRaw.cast<String, Object?>()),
+      order: parsedOrder,
       submittedAt: submittedAt,
       payment: paymentRaw is Map
           ? _paymentFromJson(paymentRaw.cast<String, Object?>())
@@ -266,6 +339,14 @@ class PosRecentOrder {
       status: _strOrNull(json['status']),
       snapshot: snapshot,
       syncState: syncState,
+      // A record with no `order` view was never submitted here, so it can only be
+      // one we discovered — that is the honest default for a pre-origin record too.
+      origin: _originFromName(
+        json['origin'],
+        fallback: parsedOrder != null
+            ? PosOrderOrigin.deviceOwned
+            : PosOrderOrigin.branchDiscovered,
+      ),
       lastSyncError: _strOrNull(json['last_sync_error']),
     );
   }
@@ -278,6 +359,16 @@ PosOrderSyncState _syncStateFromName(Object? name) {
     if (s.name == name) return s;
   }
   return PosOrderSyncState.synchronized;
+}
+
+PosOrderOrigin _originFromName(
+  Object? name, {
+  required PosOrderOrigin fallback,
+}) {
+  for (final o in PosOrderOrigin.values) {
+    if (o.name == name) return o;
+  }
+  return fallback;
 }
 
 // --- SubmittedOrderView (+ lines) serialization -----------------------------
