@@ -76,7 +76,17 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
   Widget build(BuildContext context) {
     final device = widget.device;
     final session = ref.watch(posSyncSessionProvider);
-    if (session != null) {
+    // THE SESSION MUST BELONG TO THIS PAIRING. A PIN session is minted for ONE
+    // device; nothing ends it on unpair (the server revoke is best-effort and can
+    // fail offline, and the session controller does not watch the device context).
+    // Re-pair the till — necessarily as a NEW device — and the old session is still
+    // standing. Letting it unlock this surface would run every submit and payment
+    // under the OLD pairing's server session: orders taken on a till standing in
+    // branch B, created on branch A's books. A session for another device is
+    // therefore NOT a session for this till — the operator signs in on the pairing
+    // the till actually has, which replaces the stale session with a real one.
+    final ownSession = session != null && session.deviceId == device.deviceId;
+    if (ownSession) {
       // Re-authenticated: clear any stale "expired" notice for the next sign-out.
       if (_expiredNotice) {
         WidgetsBinding.instance.addPostFrameCallback((_) {

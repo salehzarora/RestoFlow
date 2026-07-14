@@ -48,6 +48,19 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
   /// The last failure message to show inline, or null when there is none.
   String? _error;
 
+  /// POS-OPERATIONS-SYNC-001 (stabilization) — THIS SHEET IS NOW STALE.
+  ///
+  /// Set on the two refusals no retry from THIS sheet can ever satisfy: a typed
+  /// `conflict` (the order moved; this sheet's `widget.order.revision` is the one the
+  /// server just rejected, and it is immutable here) and `order_not_voidable` (the
+  /// server says the order is already terminal). Both paths reconcile the row, so the
+  /// truth is on screen behind the sheet — but the sheet itself used to keep Confirm
+  /// enabled over the stale revision, re-sending a request that cannot ever succeed
+  /// while its own error text said "refresh and try again". Now the message can come
+  /// true: Confirm is REPLACED by Close, and a new deliberate attempt starts from the
+  /// refreshed order.
+  bool _staleAfterRefusal = false;
+
   @override
   void dispose() {
     _reasonController.dispose();
@@ -58,6 +71,9 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
     // Double-tap guard: the disabled button relies on a rebuild, so also refuse
     // re-entry synchronously — a cancel must never be pushed twice.
     if (_submitting) return;
+    // BELT AND BRACES: a retired sheet holds the revision the server just refused;
+    // it must be impossible to re-send it even by another route.
+    if (_staleAfterRefusal) return;
     final reason = _reasonController.text.trim();
     if (reason.isEmpty) {
       setState(() => _error = l10n.posCancellationReasonRequired);
@@ -116,6 +132,11 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
+        // Retire the sheet on the refusals a retry can never satisfy. Permission
+        // denials, an already-paid order and transport failures are NOT staleness:
+        // the order is exactly as we thought, so the same deliberate entry may be
+        // retried once the obstacle is resolved.
+        _staleAfterRefusal = e.notVoidable || e.conflict;
         // MONEY-SETTLEMENT-CONSISTENCY-001 (corrective): TYPED dispatch on the server's
         // exact domain codes. The previous version INFERRED "already closed" from a
         // zero-total order whenever the rejection was generic — which meant a dropped
@@ -211,7 +232,7 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
             TextField(
               key: const Key('cancel-reason-field'),
               controller: _reasonController,
-              enabled: !_submitting,
+              enabled: !_submitting && !_staleAfterRefusal,
               onChanged: (_) => setState(() => _error = null),
               decoration: InputDecoration(
                 labelText: l10n.posCancellationReasonLabel,
@@ -251,17 +272,30 @@ class _CancelOrderSheetState extends ConsumerState<CancelOrderSheet> {
             const SizedBox(height: RestoflowSpacing.md),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('cancel-confirm-button'),
-                onPressed: _submitting ? null : () => _submit(l10n),
-                icon: _submitting
-                    ? const RestoflowInlineSpinner()
-                    : const Icon(Icons.block),
-                label: Text(l10n.posCancelOrderConfirm),
-                style: RestoflowButtonStyles.big(
-                  context,
-                ).copyWith(backgroundColor: WidgetStatePropertyAll(danger)),
-              ),
+              child: _staleAfterRefusal
+                  // RETIRED. The revision this sheet holds is the one the server just
+                  // refused (conflict), or the order is already terminal
+                  // (order_not_voidable) — either way, no re-send from here can ever
+                  // succeed. The typed message above says why; this button lets the
+                  // cashier acknowledge it and act again from the refreshed order.
+                  ? FilledButton.icon(
+                      key: const Key('cancel-conflict-close-button'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(l10n.posOrdersConflictClose),
+                      style: RestoflowButtonStyles.big(context),
+                    )
+                  : FilledButton.icon(
+                      key: const Key('cancel-confirm-button'),
+                      onPressed: _submitting ? null : () => _submit(l10n),
+                      icon: _submitting
+                          ? const RestoflowInlineSpinner()
+                          : const Icon(Icons.block),
+                      label: Text(l10n.posCancelOrderConfirm),
+                      style: RestoflowButtonStyles.big(context).copyWith(
+                        backgroundColor: WidgetStatePropertyAll(danger),
+                      ),
+                    ),
             ),
           ],
         ),

@@ -109,6 +109,22 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
   /// from the order total, a SQLSTATE, or a raw error message.
   bool _notChargeable = false;
 
+  /// POS-OPERATIONS-SYNC-001 (stabilization) — THIS SHEET IS NOW STALE.
+  ///
+  /// A typed `conflict` means the order moved while this sheet was open: the amount
+  /// and the revision it was built from are `widget` fields — immutable for the life
+  /// of the sheet — so a second Confirm would re-send THE SAME stale revision and
+  /// conflict forever, while the sheet keeps quoting the OLD amount due. The discount
+  /// sheet already retires itself on exactly this refusal; this sheet used to flatten
+  /// it into the generic "payment failed, check the connection" banner instead — a
+  /// false diagnosis over a dead retry button, in front of a cashier who may be
+  /// counting out the OLD amount in cash.
+  ///
+  /// So on a conflict the sheet retires: the row behind it is reconciled, the refusal
+  /// is explained in its own words, and Confirm is REPLACED by Close. The next attempt
+  /// starts from the refreshed order, which carries the new amount and revision.
+  bool _conflictStale = false;
+
   /// The selected tender (RF-117). Cash is the default; a non-cash tender is
   /// externally recorded (no drawer cash, no change).
   PaymentMethod _method = PaymentMethod.cash;
@@ -187,24 +203,29 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       _clearErrors();
     });
     final navigator = Navigator.of(context);
+    // CAPTURED BEFORE THE AWAIT. The sheet is drag/barrier-dismissible while the push
+    // is in flight; touching the WIDGET's `ref` after a dismissal throws, and skipping
+    // the reconcile/refusal because the sheet died would leave the row behind it
+    // stale. The notifiers outlive the sheet — the work completes either way.
+    final payments = ref.read(paymentControllerProvider.notifier);
+    final orders = ref.read(posRecentOrdersControllerProvider.notifier);
+    final sync = ref.read(posOrderSyncControllerProvider.notifier);
     try {
-      await ref
-          .read(paymentControllerProvider.notifier)
-          .payCash(
-            identity: widget.identity,
-            orderId: widget.orderId ?? '',
-            orderNumber: widget.orderNumber,
-            amountMinor: widget.amountMinor,
-            tenderedMinor: tendered,
-            currencyCode: widget.currencyCode,
-            method: _method,
-            expectedRevision: widget.expectedRevision,
-          );
+      await payments.payCash(
+        identity: widget.identity,
+        orderId: widget.orderId ?? '',
+        orderNumber: widget.orderNumber,
+        amountMinor: widget.amountMinor,
+        tenderedMinor: tendered,
+        currencyCode: widget.currencyCode,
+        method: _method,
+        expectedRevision: widget.expectedRevision,
+      );
       // POS-OPERATIONS-SYNC-001: take the AUTHORITATIVE order state after the write.
       // record_payment's envelope carries order_status and auto_completed but NOT the
       // money or the settlement, and a payment that auto-completes a served order
       // changes BOTH. We do not infer completion from "the button worked" — we ask.
-      await _reconcile();
+      await _reconcile(sync);
       // The sheet is drag/barrier-dismissible while the push is in flight;
       // popping an already-dismissed sheet would pop the ROOT POS route.
       if (mounted) navigator.pop();
@@ -216,11 +237,17 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
       // MONEY-SETTLEMENT-CONSISTENCY-001: a NON-CHARGEABLE order is NOT a failure to
       // retry — the order owes nothing and no retry can ever succeed. It gets its own
       // banner, driven by the server's EXACT typed code (never by a guess at the total).
+      //
+      // A CONFLICT retires the sheet outright (see [_conflictStale]): it is neither
+      // the retryable danger banner (retrying the same revision cannot ever succeed)
+      // nor the non-chargeable one (the order may well still owe money — just not
+      // the amount this sheet was opened with).
       if (mounted) {
         setState(() {
           _submitting = false;
-          _failed = !e.notChargeable;
+          _failed = !e.notChargeable && !e.conflict;
           _notChargeable = e.notChargeable;
+          _conflictStale = _conflictStale || e.conflict;
         });
       }
       if (e.conflict) {
@@ -228,30 +255,27 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
         // amount on this sheet was computed from a state the server has just told us
         // is stale, and re-sending it is how an order gets charged twice. Reconcile
         // and let the cashier decide against the truth.
-        await _reconcile();
+        await _reconcile(sync);
       }
       if (e.notChargeable) {
         // POS-OPERATIONS-SYNC-001: the refusal means our local total is WRONG — the
         // order was comped somewhere we did not see. Correcting the banner while
         // leaving "40" on the row would explain nothing. Reconcile, so the row shows
         // 0 / No charge and the unpaid badge lets it go.
-        ref
-            .read(posRecentOrdersControllerProvider.notifier)
-            .recordSyncRefusal(widget.identity, 'order_not_chargeable');
-        await _reconcile();
+        orders.recordSyncRefusal(widget.identity, 'order_not_chargeable');
+        await _reconcile(sync);
       }
     }
   }
 
-  /// Pulls the authoritative snapshot for THIS order. Never throws: the coordinator
-  /// records its own failure, and a failed refresh must not turn a SUCCESSFUL
-  /// payment into an error the cashier sees.
-  Future<void> _reconcile() async {
+  /// Pulls the authoritative snapshot for THIS order through the CAPTURED coordinator
+  /// (never the widget's `ref`, which dies with a dismissed sheet). Never throws: the
+  /// coordinator records its own failure, and a failed refresh must not turn a
+  /// SUCCESSFUL payment into an error the cashier sees.
+  Future<void> _reconcile(PosOrderSyncController sync) async {
     final orderId = widget.orderId;
     if (orderId == null || orderId.isEmpty) return;
-    await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
-      <String>[orderId],
-    );
+    await sync.refreshOrders(<String>[orderId]);
   }
 
   /// Quick-cash suggestions: the exact amount, then round-ups to ₪10 / ₪50 /
@@ -285,6 +309,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
     // rejected sync operations while believing they are making progress.
     final canConfirm =
         !_notChargeable &&
+        !_conflictStale &&
         (isCash
             ? (tendered != null &&
                   tendered >= widget.amountMinor &&
@@ -332,7 +357,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
             _TenderSelector(
               l10n: l10n,
               selected: _method,
-              enabled: !_submitting,
+              enabled: !_submitting && !_conflictStale,
               onSelect: _selectMethod,
             ),
             const SizedBox(height: RestoflowSpacing.md),
@@ -404,7 +429,7 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
               RestoflowNumericKeypad(
                 onDigit: _appendChar,
                 onBackspace: _backspace,
-                enabled: !_submitting,
+                enabled: !_submitting && !_conflictStale,
                 buttonHeight: 52,
                 trailingKey: FilledButton.tonal(
                   onPressed: _submitting
@@ -443,6 +468,19 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
                 body: l10n.posNoChargeNoPayment,
               ),
             ],
+            if (_conflictStale) ...[
+              const SizedBox(height: RestoflowSpacing.md),
+              // THE ORDER MOVED. Not a danger banner — nothing here is broken to
+              // retry — and not "no charge" either: the order may still owe money,
+              // just not the amount this sheet was opened with. The refreshed truth
+              // is already on the row behind this sheet.
+              RestoflowNoticeBanner(
+                key: const Key('payment-conflict-banner'),
+                tone: RestoflowTone.warning,
+                title: l10n.posPaymentFailedTitle,
+                body: l10n.posOrdersConflictRefreshed,
+              ),
+            ],
             if (_failed) ...[
               const SizedBox(height: RestoflowSpacing.md),
               // DESIGN-001: the payment-failure banner — pinned in the sheet
@@ -459,17 +497,29 @@ class _CashPaymentSheetState extends ConsumerState<CashPaymentSheet> {
             const SizedBox(height: RestoflowSpacing.md),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('confirm-payment-button'),
-                onPressed: canConfirm ? _confirm : null,
-                // While the push is in flight the button says so (finite:
-                // the spinner exists only between tap and result).
-                icon: _submitting
-                    ? const RestoflowInlineSpinner()
-                    : const Icon(Icons.check),
-                label: Text(l10n.posConfirmPayment),
-                style: RestoflowButtonStyles.big(context),
-              ),
+              child: _conflictStale
+                  // RETIRED. There is no Confirm to press: the amount and revision
+                  // this sheet holds are the ones the server just refused, and
+                  // re-sending them can never succeed. The cashier acknowledges and
+                  // acts again from the refreshed order.
+                  ? FilledButton.icon(
+                      key: const Key('payment-conflict-close-button'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(l10n.posOrdersConflictClose),
+                      style: RestoflowButtonStyles.big(context),
+                    )
+                  : FilledButton.icon(
+                      key: const Key('confirm-payment-button'),
+                      onPressed: canConfirm ? _confirm : null,
+                      // While the push is in flight the button says so (finite:
+                      // the spinner exists only between tap and result).
+                      icon: _submitting
+                          ? const RestoflowInlineSpinner()
+                          : const Icon(Icons.check),
+                      label: Text(l10n.posConfirmPayment),
+                      style: RestoflowButtonStyles.big(context),
+                    ),
             ),
           ],
         ),

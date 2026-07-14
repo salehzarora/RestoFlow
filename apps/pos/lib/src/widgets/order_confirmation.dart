@@ -163,8 +163,15 @@ class OrderConfirmation extends ConsumerWidget {
             // order sharing it found a job already prepared and never got a receipt.
             orderKey: order.identity.key,
             hasEnabledPrinter: printer,
+            // The RECEIPT prints the REALIGNED money, exactly like the totals on
+            // screen. This branch used to hand the FROZEN submit-time view to the
+            // printer, so an order discounted on another till printed "Total 40.00 /
+            // Paid 30.00" — an incoherent financial document — while the orders
+            // centre's reprint (built from the reconciled row) printed 30.00 for the
+            // very same order. The LINES are untouched: they are the order-time
+            // price snapshot (D-008) and are never recomputed.
             buildDocument: () =>
-                buildReceiptDocument(l10n, order, paid, isDemo: isDemo),
+                buildReceiptDocument(l10n, displayOrder, paid, isDemo: isDemo),
             submitToBridge: bridge == null ? null : bridge.submit,
           );
     });
@@ -294,12 +301,16 @@ class OrderConfirmation extends ConsumerWidget {
                       tone: RestoflowTone.info,
                     ),
                 ] else ...[
-                  ReceiptPreview(order: order, payment: payment),
+                  // The REALIGNED view, same as the printed document: the receipt a
+                  // cashier reads on screen and the one that comes off the printer
+                  // must be the same document, and both must say what was actually
+                  // charged — not what the order cost when it was submitted.
+                  ReceiptPreview(order: displayOrder, payment: payment),
                   // RF-115: the HONEST receipt print-job status (prepared /
                   // sent to printer / bridge unavailable / not configured /
                   // failed — never a fake "printed") with a Retry action.
                   _ReceiptPrintStatusLine(
-                    order: order,
+                    order: displayOrder,
                     payment: payment,
                     isDemo: isDemo,
                     l10n: l10n,

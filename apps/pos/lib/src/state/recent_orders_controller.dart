@@ -99,6 +99,9 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     if (key == _scopeKey) return;
     _generation++;
     _scopeKey = key;
+    // The unsaved-day flag belongs to the scope that earned it. Carrying it across
+    // would make the new branch claim ITS day diverges from disk when it does not.
+    _lastPersistFailed = false;
   }
 
   /// Loads any persisted recent orders (real mode) and merges them under the
@@ -132,9 +135,26 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     final byIdentity = <String, PosRecentOrder>{
       for (final o in loaded) o.identity.key: o,
     };
-    // In-session state (if any) wins over the persisted copy.
+    // In-session state (if any) wins over the persisted copy — with ONE exception.
+    // If the first pull raced this recovery and landed BEFORE the load completed, it
+    // reconciled against an EMPTY list and adopted this device's own orders as
+    // BRANCH-DISCOVERED: lineless shells with no receipt, no payment marker, no void
+    // reason. Letting such a shell overwrite the loaded device-owned row would
+    // permanently strip the day of its receipts. Where that happened, the loaded row
+    // is kept and the shell's SNAPSHOT is merged into it through the ONE reconciler
+    // rule — exactly what would have happened had recovery won the race.
     for (final o in state) {
-      byIdentity[o.identity.key] = o;
+      final key = o.identity.key;
+      final recovered = byIdentity[key];
+      final shellSnap = o.snapshot;
+      if (recovered != null &&
+          o.origin == PosOrderOrigin.branchDiscovered &&
+          recovered.order != null &&
+          shellSnap != null) {
+        byIdentity[key] = applySnapshot(recovered, shellSnap);
+      } else {
+        byIdentity[key] = o;
+      }
     }
     _apply(byIdentity.values.toList(), persist: false);
     _syncPayments(ref.read(paymentControllerProvider));
@@ -257,7 +277,6 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     // Returning `true` here (the old behaviour) told the coordinator the page was
     // durable when the controller was gone and nothing had been written at all.
     if (_disposed) return false;
-    if (snapshots.isEmpty) return true;
 
     // The scope these rows are being applied INTO, captured before anything can move.
     final gen = _generation;
@@ -268,6 +287,22 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     // writing a branch's authoritative orders into it is how they resurface on the NEXT
     // branch this device is paired to.
     if (scopeKey.isEmpty) return false;
+
+    if (snapshots.isEmpty) {
+      // AN EMPTY PAGE IS ONLY A SUCCESS IF WE OWE THE DISK NOTHING. "Nothing changed"
+      // is a statement about the SERVER; if the previous durable write failed, memory
+      // and disk still disagree, and reporting success here let a quiet server clear
+      // the persistence error while the cashier's day remained unstored. If a write
+      // is owed, this is the retry.
+      if (!_lastPersistFailed) return true;
+      try {
+        await store.persist(scopeKey, state);
+        if (!_isStale(gen, scopeKey)) _lastPersistFailed = false;
+        return true;
+      } catch (_) {
+        return _isStale(gen, scopeKey);
+      }
+    }
 
     final result = reconcileSnapshots(state, snapshots);
     if (!result.changedAnything && !_lastPersistFailed) {

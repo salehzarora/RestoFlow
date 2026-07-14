@@ -49,10 +49,29 @@ final posSyncScopeProvider = Provider<PosSyncScope?>((ref) {
   final ctx = ref.watch(posDeviceContextProvider);
   if (ctx == null) return null;
 
+  // A SESSION FROM ANOTHER PAIRING DOES NOT NAME THIS TILL'S SCOPE. The PIN-session
+  // lifecycle is not bound to the pairing lifecycle: an unpair clears the device
+  // context but leaves an established in-memory session standing (its best-effort
+  // server revoke can fail offline, and nothing client-side ends it). Re-pair the
+  // till into another branch and, without this check, the scope became a HYBRID —
+  // the NEW pairing's organization/branch with the OLD session's device id — and
+  // every pull made under it ran on the OLD branch's server session: branch A's
+  // orders, displayed and durably persisted on a till standing in branch B. A
+  // mismatch is therefore REFUSED outright: no scope, no sync, no cache, until the
+  // operator signs in on the pairing the till actually has.
+  final sessionDeviceId = session?.deviceId;
+  final pairedDeviceId = ctx.deviceId;
+  if (sessionDeviceId != null &&
+      pairedDeviceId != null &&
+      pairedDeviceId.isNotEmpty &&
+      sessionDeviceId != pairedDeviceId) {
+    return null;
+  }
+
   // The device id may be known from the pairing before a PIN session exists, so a
   // paired-but-not-signed-in till still reads its OWN branch's cache rather than
   // falling back to a shared one.
-  final deviceId = session?.deviceId ?? ctx.deviceId;
+  final deviceId = sessionDeviceId ?? pairedDeviceId;
   if (deviceId == null || deviceId.isEmpty) return null;
 
   return PosSyncScope(

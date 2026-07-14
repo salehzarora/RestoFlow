@@ -17,6 +17,7 @@ import '../state/outbox_controller.dart';
 import '../state/pos_branch_tax.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/recent_orders_controller.dart';
+import '../state/pos_sync_scope_provider.dart';
 import 'modifier_selection_sheet.dart';
 import 'order_confirmation.dart';
 import 'order_setup_section.dart';
@@ -311,6 +312,11 @@ Future<void> _submitOrder({
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final outbox = ref.read(outboxControllerProvider.notifier);
+  // The scope this order is being submitted IN — captured before the await, the same
+  // guard payCash carries. If the till is re-paired while the push is in flight, the
+  // order is real and queued, but its local recent-orders record belongs to the
+  // branch that took it, not to whichever branch the till lands in next.
+  final scopeKey = ref.read(posSyncScopeProvider)?.key;
   try {
     final result = await outbox.submit(
       lines: cart.lines,
@@ -337,8 +343,12 @@ Future<void> _submitOrder({
     // POS-ORDERS-AND-PAYMENT-001: record the just-submitted order in the local
     // recent/unpaid-orders list (UNPAID — no payment yet). Best-effort: this
     // never affects the submit/outbox result above.
+    //
+    // ONLY under the scope it was submitted in. A scope that moved mid-flight means
+    // this record belongs to the previous branch's bucket, which is no longer ours
+    // to write — that branch re-discovers the order from its own feed.
     final submitted = ref.read(cartControllerProvider).submittedOrder;
-    if (submitted != null) {
+    if (submitted != null && ref.read(posSyncScopeProvider)?.key == scopeKey) {
       ref
           .read(posRecentOrdersControllerProvider.notifier)
           .recordSubmitted(submitted);

@@ -165,7 +165,26 @@ class PosRecentOrder {
   ///   total  < 0 -> FAIL CLOSED to unpaid (a money defect must stay visible)
   PosSettlement get settlement {
     final snap = snapshot;
-    if (snap != null) return snap.settlement;
+    if (snap != null) {
+      // A LOCALLY-HELD SERVER CONFIRMATION CAN BE NEWER THAN THE RETAINED SNAPSHOT.
+      // `record_payment` succeeded on THIS device — a server fact — but the payment
+      // does not bump the order's revision, and the follow-up targeted refresh can
+      // fail (offline blip right after the payment RPC returned). The stale snapshot
+      // then still says `unpaid`, and preferring it re-entered a genuinely PAID order
+      // into the unpaid badge until the next successful pull. This is NOT client
+      // re-derivation from submit-time figures (the forbidden thing): it combines two
+      // SERVER statements — the snapshot's authoritative total and the confirmed
+      // payment — under exactly the `app.order_is_fully_settled` coverage rule, and
+      // the next snapshot (whose sync_at includes the payment) says the same thing.
+      final p = payment;
+      if (snap.settlement == PosSettlement.unpaid &&
+          p != null &&
+          p.status.isPaid &&
+          p.amountMinor >= snap.grandTotalMinor) {
+        return PosSettlement.paid;
+      }
+      return snap.settlement;
+    }
 
     final total = grandTotalMinor;
     if (total < 0) return PosSettlement.unpaid; // fail closed
@@ -197,10 +216,21 @@ class PosRecentOrder {
   /// terminal, it is terminal — that is how a KDS bump or an auto-completion this
   /// device never saw finally reaches it. An UNKNOWN server status is NOT terminal;
   /// we will not invent a lifecycle state and strip a live order's controls.
+  ///
+  /// THE RATCHET SPANS EVERY SERVER-CONFIRMED CHANNEL, not just the snapshot feed.
+  /// [voidedAt] is set only AFTER the server confirmed a void, and [status] only ever
+  /// carries what a server envelope reported (`record_payment`'s `order_status`, the
+  /// void confirmation, a snapshot). A snapshot RETAINED FROM BEFORE one of those
+  /// confirmations is the OLDER fact — and it used to OUTVOTE them: a just-voided
+  /// order whose targeted refresh failed (network blip right after the void RPC
+  /// returned) read `served`/`unpaid` off its stale snapshot, re-entered the unpaid
+  /// badge, and re-offered Pay and Cancel — on an order the server had already
+  /// confirmed dead. Terminal-by-any-confirmed-channel can never wrongly fire,
+  /// because every one of these inputs is a server statement.
   bool get isTerminal {
-    final snap = snapshot;
-    if (snap != null) return snap.isTerminal;
-    return voidedAt != null || kPosTerminalStatuses.contains(status);
+    if (voidedAt != null) return true;
+    if (kPosTerminalStatuses.contains(status)) return true;
+    return snapshot?.isTerminal ?? false;
   }
 
   /// The AUTHORITATIVE total. Server first — this is the "stale 40" fix.

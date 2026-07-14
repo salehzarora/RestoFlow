@@ -105,6 +105,17 @@
 --    rows sharing a sync_at to the microsecond still page deterministically: no
 --    duplicate, no skip, in either direction.
 -- ---------------------------------------------------------------------------
+-- DEFENSIVE DROP of the superseded 7-argument DRAFT signature (no p_before_at /
+-- p_before_id). `create or replace` with a DIFFERENT argument list does not replace —
+-- it OVERLOADS: a database that ever applied the draft and then received this final
+-- text would carry TWO executable SECURITY DEFINER functions, both granted to
+-- `authenticated`, and PostgREST dispatch between them would be ambiguous. No such
+-- database should exist (this migration has never been applied to hosted), but the
+-- repository convention for a changed signature is an explicit drop of its
+-- predecessor — an invariant, not an assumption about deployment history.
+drop function if exists app.pos_order_snapshots(uuid, uuid, timestamptz, uuid, uuid[], integer, integer);
+drop function if exists public.pos_order_snapshots(uuid, uuid, timestamptz, uuid, uuid[], integer, integer);
+
 create or replace function app.pos_order_snapshots(
   p_pin_session_id uuid,
   p_device_id      uuid,

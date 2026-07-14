@@ -139,6 +139,34 @@ void main() {
     expect(find.text('Wrong PIN — try again.'), findsOneWidget);
   });
 
+  testWidgets(
+    "a session minted for ANOTHER pairing does not unlock this till — the PIN "
+    'screen is shown, not the POS surface',
+    (tester) async {
+      // The stale-session shape: the till was unpaired (which never ends the
+      // in-memory PIN session) and re-paired as a NEW device. The old session is
+      // still standing — for a device this pairing has never been.
+      await _pump(
+        tester,
+        transport: _FakeTransport((fn, p) => fail('no call')),
+        overrides: [
+          posSyncSessionProvider.overrideWithValue(
+            const SyncSession(
+              pinSessionId: 'stale-pin-A',
+              deviceId: 'SOME-OTHER-DEVICE',
+            ),
+          ),
+        ],
+      );
+
+      // Rendering the POS here would run every submit and payment under the OLD
+      // pairing's server session — orders taken on this till, created on another
+      // branch's books.
+      expect(find.byKey(const Key('pos-surface')), findsNothing);
+      expect(find.byType(PinLoginScreen), findsOneWidget);
+    },
+  );
+
   testWidgets('a device context WITHOUT a session handle fails closed', (
     tester,
   ) async {
