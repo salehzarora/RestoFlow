@@ -321,15 +321,48 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       final rows = _sortedPruned(byIdentity.values.toList());
       try {
         await store.persist(scopeKey, rows);
-        _owedWrites.remove(scopeKey);
+        // Clear the debt ONLY if it is still the exact snapshot this write
+        // incorporated. A NEWER debt booked while the write was in flight (a
+        // local write the disk refused a moment ago) is not paid off by the
+        // completion of an OLDER one — object identity is the version token.
+        if (identical(_owedWrites[scopeKey], owed)) {
+          _owedWrites.remove(scopeKey);
+        }
         return true;
       } catch (_) {
         return _isStale(gen, scopeKey);
       }
     }
 
-    final result = reconcileSnapshots(state, snapshots);
-    if (!result.changedAnything && !_owedWrites.containsKey(scopeKey)) {
+    // THE MERGE BASIS IS EVERYTHING THIS SCOPE KNOWS LOCALLY — the live state AND
+    // any owed unsaved rows. Reconciling against the state alone lost data in one
+    // exact window: back in a scope whose recovery load was still pending, the
+    // state was momentarily EMPTY while the owed map held the scope's rich
+    // deviceOwned rows (order-time lines, payment/receipt truth, local operation
+    // identity — everything a server page cannot carry). A NON-EMPTY page landing
+    // in that window was adopted as a lineless branchDiscovered SHELL, the shell
+    // was persisted, and the debt was cleared — the known rich truth discarded
+    // within the same process lifetime. With the owed rows in the basis, the
+    // canonical reconciler does what it always does for a deviceOwned row: keeps
+    // the local structure and applies the server's authoritative fields on top.
+    // Matching is by AUTHORITATIVE SERVER ORDER ID (the reconciler's only key) —
+    // never the display code.
+    final owedAtMerge = _owedWrites[scopeKey];
+    final List<PosRecentOrder> base;
+    if (owedAtMerge == null) {
+      base = state;
+    } else {
+      final byIdentity = <String, PosRecentOrder>{
+        for (final o in owedAtMerge) o.identity.key: o,
+        // The live state wins where both hold a row: it is the same lineage,
+        // strictly newer.
+        for (final o in state) o.identity.key: o,
+      };
+      base = byIdentity.values.toList();
+    }
+
+    final result = reconcileSnapshots(base, snapshots);
+    if (!result.changedAnything && owedAtMerge == null) {
       // IDEMPOTENT: re-applying the same page is a genuine no-op — no state
       // churn, no rewrite, no rebuild.
       return true;
@@ -341,7 +374,7 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     // owe the disk a write, we attempt it, whatever reconciliation thinks.
     final merged = result.changedAnything
         ? _sortedPruned(result.orders)
-        : state;
+        : _sortedPruned(base);
     if (_disposed) return false;
     state = merged;
     try {
@@ -350,7 +383,12 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // mid-write file branch A's orders under branch B's key — the very leak the
       // scoped key exists to prevent, reintroduced one await later.
       await store.persist(scopeKey, merged);
-      _owedWrites.remove(scopeKey);
+      // The debt is paid ONLY if this write actually incorporated it — i.e. the
+      // owed snapshot is still the one that entered the merge basis above. A
+      // NEWER debt booked while this write was in flight survives it.
+      if (identical(_owedWrites[scopeKey], owedAtMerge)) {
+        _owedWrites.remove(scopeKey);
+      }
       return true;
     } catch (_) {
       // BOOK THE DEBT UNDER THE CAPTURED KEY — even when the scope has since moved
