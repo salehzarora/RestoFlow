@@ -319,17 +319,23 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
         for (final o in state) o.identity.key: o,
       };
       final rows = _sortedPruned(byIdentity.values.toList());
+      final attemptVersion = _nextDebtVersion();
       try {
         await store.persist(scopeKey, rows);
-        // Clear the debt ONLY if it is still the exact snapshot this write
-        // incorporated. A NEWER debt booked while the write was in flight (a
-        // local write the disk refused a moment ago) is not paid off by the
-        // completion of an OLDER one — object identity is the version token.
-        if (identical(_owedWrites[scopeKey], owed)) {
-          _owedWrites.remove(scopeKey);
-        }
+        _settleDebtAfterPersist(
+          scopeKey: scopeKey,
+          attemptVersion: attemptVersion,
+          attempted: rows,
+          success: true,
+        );
         return true;
       } catch (_) {
+        _settleDebtAfterPersist(
+          scopeKey: scopeKey,
+          attemptVersion: attemptVersion,
+          attempted: rows,
+          success: false,
+        );
         return _isStale(gen, scopeKey);
       }
     }
@@ -375,6 +381,8 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     final merged = result.changedAnything
         ? _sortedPruned(result.orders)
         : _sortedPruned(base);
+    // The content version, captured synchronously with the content itself.
+    final attemptVersion = _nextDebtVersion();
     if (_disposed) return false;
     state = merged;
     try {
@@ -386,15 +394,24 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // The debt is paid ONLY if this write actually incorporated it — i.e. the
       // owed snapshot is still the one that entered the merge basis above. A
       // NEWER debt booked while this write was in flight survives it.
-      if (identical(_owedWrites[scopeKey], owedAtMerge)) {
-        _owedWrites.remove(scopeKey);
-      }
+      _settleDebtAfterPersist(
+        scopeKey: scopeKey,
+        attemptVersion: attemptVersion,
+        attempted: merged,
+        success: true,
+      );
       return true;
     } catch (_) {
       // BOOK THE DEBT UNDER THE CAPTURED KEY — even when the scope has since moved
-      // on. These rows are the captured scope's newest unsaved truth, and they are
-      // what recovery merges back when that scope returns.
-      _owedWrites[scopeKey] = merged;
+      // on. These rows are the captured scope's newest unsaved truth — UNLESS a
+      // newer debt was booked while this write was in flight, in which case the
+      // newer one survives (see _settleDebtAfterPersist).
+      _settleDebtAfterPersist(
+        scopeKey: scopeKey,
+        attemptVersion: attemptVersion,
+        attempted: merged,
+        success: false,
+      );
       // The in-memory state is still correct and usable; only durability failed.
       // Report it so the cursor stays put and the same page is re-delivered next
       // time, rather than being silently skipped.
@@ -464,13 +481,23 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
       // whether the sync cursor may advance.
       final scopeKey = _scopeKey;
       if (scopeKey.isEmpty) return; // no branch, no bucket (see applySnapshots)
+      // The content version, captured synchronously with the content — the
+      // failure booking below must never overwrite anything newer.
+      final attemptVersion = _nextDebtVersion();
       unawaited(
         _store.persist(scopeKey, result).catchError((Object _) {
           // BOOKED UNDER THE CAPTURED KEY, whatever the active scope is by now:
           // these rows are that scope's newest unsaved truth, and its recovery
-          // merges them back. (Only an awaited applySnapshots success clears the
+          // merges them back — version-safely: an OLDER failure completing after
+          // a newer debt was booked preserves the newer debt, whatever order the
+          // completions land in. (Only an awaited applySnapshots success clears
           // debt — a racing fire-and-forget success must not.)
-          _owedWrites[scopeKey] = result;
+          _settleDebtAfterPersist(
+            scopeKey: scopeKey,
+            attemptVersion: attemptVersion,
+            attempted: result,
+            success: false,
+          );
         }),
       );
     }
@@ -501,6 +528,96 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
   /// and the stored state disagree. Surfaced so the UI can say so rather than
   /// silently pretending the day is saved.
   bool get lastPersistFailed => _owedWrites.containsKey(_scopeKey);
+
+  /// THE CONTENT-VERSION CLOCK for the owed-write map.
+  ///
+  /// Every persistence attempt captures a version — [_nextDebtVersion] — at the
+  /// moment its CONTENT is computed from the live state. State mutations are
+  /// strictly serialized on the Dart event loop and content derivation is
+  /// synchronous with the state read, so a higher version is EXACTLY "derived
+  /// from a newer state of this controller". Object identity of the debt list
+  /// cannot provide this: it detects that the debt CHANGED under an in-flight
+  /// write, but not in WHICH DIRECTION — two failures whose bookings interleave
+  /// out of capture order made the OLDER content win, which is precisely the
+  /// last-completer-wins race this clock ends.
+  int _debtClock = 0;
+  int _nextDebtVersion() => ++_debtClock;
+
+  /// Per scope: the version of the newest content whose persistence OUTCOME has
+  /// been applied to the map — booked as debt, or successfully written. It is a
+  /// HIGH-WATER MARK and deliberately survives a clear: after a newer write
+  /// succeeds, a slower OLDER failure must find the mark and decline to
+  /// resurrect stale debt over a disk that already holds newer truth.
+  final Map<String, int> _debtHighWater = <String, int>{};
+
+  /// VERSION-SAFE debt bookkeeping after ONE persistence attempt for [scopeKey],
+  /// whose content [attempted] was computed at [attemptVersion].
+  ///
+  /// The invariant, symmetric across success and failure: AN OLDER ATTEMPT MAY
+  /// NEVER CLEAR, REPLACE OR DOWNGRADE NEWER DEBT — and a NEWER attempt always
+  /// supersedes older debt. The success path carried a version discipline
+  /// already; the failure path did not: its unconditional
+  /// `_owedWrites[scopeKey] = merged` let an OLDER write, failing after a newer
+  /// failure had booked richer debt (a payment the disk refused a moment ago),
+  /// overwrite that debt with its own older content. The payment then vanished
+  /// the next time the debt was the day's only carrier (A -> B -> A, state
+  /// reset, disk empty).
+  ///
+  ///   * SUCCESS, attempt >= high-water -> the disk now holds this content or
+  ///     newer of the same lineage; the debt is paid and cleared.
+  ///   * SUCCESS, attempt <  high-water -> an OLDER write landed after newer
+  ///     debt was booked; the newer debt survives untouched.
+  ///   * FAILURE, attempt >  high-water -> [attempted] is the newest known
+  ///     content; it becomes the debt.
+  ///   * FAILURE, attempt <= high-water -> newer debt (or a newer successful
+  ///     write) exists. The newer debt is preserved; any authoritative snapshot
+  ///     the failed attempt carried is folded FORWARD into the newer rows
+  ///     through the canonical reconciler — revision-first, so a no-op in the
+  ///     normal linear lineage, where every later content derives from a state
+  ///     that had already absorbed the earlier merge (state is assigned
+  ///     synchronously BEFORE each persist await). The fold never adds rows: a
+  ///     row absent from the newer debt was pruned, and pruning is correct. If
+  ///     the debt was CLEARED by a newer successful write, nothing is re-booked
+  ///     — that would resurrect stale debt over newer durable truth.
+  void _settleDebtAfterPersist({
+    required String scopeKey,
+    required int attemptVersion,
+    required List<PosRecentOrder> attempted,
+    required bool success,
+  }) {
+    final highWater = _debtHighWater[scopeKey] ?? -1;
+    if (success) {
+      if (attemptVersion >= highWater) {
+        _owedWrites.remove(scopeKey);
+        _debtHighWater[scopeKey] = attemptVersion;
+      }
+      return;
+    }
+    if (attemptVersion > highWater) {
+      _owedWrites[scopeKey] = attempted;
+      _debtHighWater[scopeKey] = attemptVersion;
+      return;
+    }
+    // An OLDER attempt failing after newer debt (or a newer success).
+    final current = _owedWrites[scopeKey];
+    if (current == null) return;
+    var changed = false;
+    final byId = <String, PosRecentOrder>{
+      for (final o in current) o.identity.key: o,
+    };
+    for (final o in attempted) {
+      final snap = o.snapshot;
+      if (snap == null) continue;
+      final newer = byId[o.identity.key];
+      if (newer == null) continue;
+      final folded = applySnapshot(newer, snap);
+      if (!identical(folded, newer)) {
+        byId[o.identity.key] = folded;
+        changed = true;
+      }
+    }
+    if (changed) _owedWrites[scopeKey] = byId.values.toList();
+  }
 
   /// THE DEDUPE KEY IS THE ORDER'S IDENTITY — never the display code.
   ///

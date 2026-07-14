@@ -386,6 +386,90 @@ void main() {
   });
 
   // ===========================================================================
+  test(
+    'an OLDER write FAILING after newer debt was booked must not overwrite it: '
+    'the newer payment metadata survives the failure race and reaches disk',
+    () async {
+      final store = _RaceStore();
+      final c = harness(store);
+
+      c.read(posDeviceContextProvider.notifier).set(ctxA);
+      await settle();
+      final orders = c.read(posRecentOrdersControllerProvider.notifier);
+      final scopeAKey = 'org-1.rest-1.branch-A.device-1';
+
+      // Debt v1: the rich submitted row, write refused.
+      store.failNextPersists = 1;
+      orders.recordSubmitted(richView());
+      await settle();
+      expect(orders.lastPersistFailed, isTrue);
+
+      // The OLDER attempt: a shell page reconciles (merged carries the
+      // authoritative snapshot) and its write HANGS in flight.
+      store.gatePersist = true;
+      final older = orders.applySnapshots([shell(revision: 3)]);
+      await settle();
+
+      // While it hangs: the NEWER local update — the cashier takes the payment
+      // — and ITS write fails too. Debt v2 = rows WITH the payment (and, via
+      // the linear state lineage, WITH the snapshot the older attempt merged).
+      store.failNextPersists = 1;
+      orders.recordPayment(PosOrderIdentity.server('o-1'), paymentO1());
+      await settle();
+      expect(
+        c.read(posRecentOrdersControllerProvider).single.payment,
+        isNotNull,
+        reason: 'precondition: the newer update is in the live state',
+      );
+
+      // NOW the older write completes — WITH FAILURE. Its catch used to run
+      // `_owedWrites[scope] = mergedOld` unconditionally, replacing debt v2
+      // (payment included) with the older payment-less merge.
+      store.releasePersistWithFailure();
+      final ok = await older;
+      expect(ok, isFalse, reason: 'the older write honestly failed');
+      expect(orders.lastPersistFailed, isTrue, reason: 'debt remains owed');
+
+      // THE PROOF that the debt was not downgraded: the debt is the only
+      // carrier of the day across a scope round trip (the state resets, the
+      // disk has nothing). If the older failure overwrote debt v2, the payment
+      // is gone here — permanently.
+      c.read(posDeviceContextProvider.notifier).set(ctxB);
+      await settle();
+      c.read(posRecentOrdersControllerProvider);
+      await settle();
+      c.read(posDeviceContextProvider.notifier).set(ctxA);
+      await settle();
+      c.read(posRecentOrdersControllerProvider);
+      await settle();
+
+      final rows = c.read(posRecentOrdersControllerProvider);
+      expect(rows, hasLength(1), reason: 'no duplication, identity unchanged');
+      expectRichWithServer(rows.single, revision: 3);
+      expect(
+        rows.single.payment,
+        isNotNull,
+        reason:
+            'the NEWER debt (with the payment the disk refused) must survive '
+            'the OLDER write completing with failure',
+      );
+
+      // RETRY: the store has healed; the NEWEST state lands durably, and only
+      // that write pays the debt off.
+      final okRetry = await orders.applySnapshots(const []);
+      expect(okRetry, isTrue);
+      expect(orders.lastPersistFailed, isFalse);
+      final persisted = store.persisted[scopeAKey]!;
+      expect(persisted, hasLength(1));
+      expectRichWithServer(persisted.single, revision: 3);
+      expect(
+        persisted.single.payment,
+        isNotNull,
+        reason: 'the durable state contains the newest rich data',
+      );
+    },
+  );
+
   test('a debt booked WHILE the merged write is in flight survives that write '
       '(clearing an older owed snapshot cannot erase a newer one)', () async {
     final store = _RaceStore();
@@ -483,4 +567,8 @@ class _RaceStore implements PosRecentOrdersStore {
   }
 
   void releasePersist() => _persistGate!.complete();
+
+  void releasePersistWithFailure() => _persistGate!.completeError(
+    const PosPersistenceException('write refused (released as failure)'),
+  );
 }
