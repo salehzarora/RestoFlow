@@ -23,6 +23,8 @@ insert into device_pairings (id, organization_id, restaurant_id, branch_id, devi
   ('00000000-0000-0000-0000-00000000fa11', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000da11', 'active');
 insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id) values
   ('00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000da11', '00000000-0000-0000-0000-00000000fa11');
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('00000000-0000-0000-0000-00000000ab1e', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'T-RF052M', true);
 insert into app_users (id, email) values ('00000000-0000-0000-0000-00000000ee0a', 'rf052m@example.test');
 insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role) values
   ('00000000-0000-0000-0000-00000000ab01', '00000000-0000-0000-0000-00000000ee0a', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'cashier');
@@ -30,31 +32,35 @@ insert into employee_profiles (id, organization_id, restaurant_id, branch_id, ap
   ('00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee0a', '00000000-0000-0000-0000-00000000ab01');
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('00000000-0000-0000-0000-00000000c501', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-00000000ab01', now() + interval '1 hour');
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-00000052ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000052ca01', 'Item', 1000, 'USD', 1);
 
 -- ===== fractional unit price is rejected ==================================== 1
 select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1',
-  '00000000-0000-0000-0000-00000000da11','op-frac','dine_in',null,null,'USD',null,
+  '00000000-0000-0000-0000-00000000da11','op-frac','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":12.5,"menu_item_name_snapshot":"Item"}]'::jsonb,
   13,0,0,13,null) $$, '42501', NULL,
   'a fractional unit_price_minor_snapshot (12.5) is rejected (no float money)');
 
 -- ===== negative unit price is rejected ====================================== 2
 select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d2',
-  '00000000-0000-0000-0000-00000000da11','op-neg','dine_in',null,null,'USD',null,
+  '00000000-0000-0000-0000-00000000da11','op-neg','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":-100,"menu_item_name_snapshot":"Item"}]'::jsonb,
   0,0,0,0,null) $$, '42501', NULL,
   'a negative unit_price_minor_snapshot is rejected (money parse, non-negative integer only)');
 
 -- ===== fractional modifier price is rejected ================================ 3
 select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d3',
-  '00000000-0000-0000-0000-00000000da11','op-mfrac','dine_in',null,null,'USD',null,
+  '00000000-0000-0000-0000-00000000da11','op-mfrac','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":9.99,"quantity":1,"option_name_snapshot":"X"}]}]'::jsonb,
   1010,0,0,1010,null) $$, '42501', NULL,
   'a fractional modifier price_minor_snapshot (9.99) is rejected');
 
 -- ===== non-numeric money is rejected ======================================== 4
 select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d4',
-  '00000000-0000-0000-0000-00000000da11','op-str','dine_in',null,null,'USD',null,
+  '00000000-0000-0000-0000-00000000da11','op-str','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":"1000","menu_item_name_snapshot":"Item"}]'::jsonb,
   1000,0,0,1000,null) $$, '42501', NULL,
   'a non-numeric (string) money value is rejected');
@@ -62,14 +68,14 @@ select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c50
 -- ===== a clean integer-minor payload succeeds (control) ===================== 5
 select ok(
   (app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d5',
-    '00000000-0000-0000-0000-00000000da11','op-ok','dine_in',null,null,'USD',null,
+    '00000000-0000-0000-0000-00000000da11','op-ok','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
     '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":3,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,
     3000,0,0,3000,null) ->> 'order_id') is not null,
   'a clean integer-minor payload submits successfully');
 
 -- ===== an out-of-range quantity yields a clean 42501 (not a raw 22003 cast) == 6
 select throws_ok($$ select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d6',
-  '00000000-0000-0000-0000-00000000da11','op-bigqty','dine_in',null,null,'USD',null,
+  '00000000-0000-0000-0000-00000000da11','op-bigqty','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":9999999999,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,
   0,0,0,0,null) $$, '42501', NULL,
   'an out-of-range quantity (> int max) is rejected with a clean 42501');

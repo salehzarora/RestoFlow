@@ -16,6 +16,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/order_snapshot.dart';
@@ -27,6 +28,7 @@ class OrderStatusPills extends StatelessWidget {
     required this.serverStatus,
     required this.settlement,
     required this.keySuffix,
+    this.orderType,
     super.key,
   });
 
@@ -38,6 +40,11 @@ class OrderStatusPills extends StatelessWidget {
 
   /// Disambiguates the pill keys between surfaces/rows.
   final String keySuffix;
+
+  /// RESTAURANT-OPERATIONS-V1-001: the order's type, when known. The persisted
+  /// `served` state is RENDERED "Picked up" for takeaway — one state machine,
+  /// two operational meanings. Null falls back to the generic wording.
+  final OrderType? orderType;
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +58,7 @@ class OrderStatusPills extends StatelessWidget {
         if (serverStatus != null)
           RestoflowStatusPill(
             key: Key('order-status-$keySuffix'),
-            label: orderStatusLabel(l10n, serverStatus!),
+            label: orderStatusLabelFor(l10n, serverStatus!, orderType),
             tone: orderStatusTone(serverStatus!),
             icon: orderStatusIcon(serverStatus!),
           ),
@@ -72,17 +79,32 @@ class OrderStatusPills extends StatelessWidget {
 /// Inventing a friendly label for a token we do not understand would be inventing a
 /// fact about the order.
 String orderStatusLabel(AppLocalizations l10n, String status) =>
-    switch (status) {
-      'submitted' => l10n.posOrdersStatusSubmitted,
-      'accepted' => l10n.posOrdersStatusAccepted,
-      'preparing' => l10n.posOrdersStatusPreparing,
-      'ready' => l10n.posOrdersStatusReady,
-      'served' => l10n.posOrdersStatusServed,
-      'completed' => l10n.posOrdersStatusCompleted,
-      'cancelled' => l10n.posOrdersStatusCancelled,
-      'voided' => l10n.posOrdersStatusVoided,
-      _ => status,
-    };
+    orderStatusLabelFor(l10n, status, null);
+
+/// TYPE-AWARE status label (RESTAURANT-OPERATIONS-V1-001): identical to
+/// [orderStatusLabel] except that a TAKEAWAY order's persisted `served` renders
+/// as "Picked up" — the customer collected it; nothing was carried to a table.
+/// The persisted state machine is untouched; only the words change.
+String orderStatusLabelFor(
+  AppLocalizations l10n,
+  String status,
+  OrderType? orderType,
+) {
+  if (status == 'served' && orderType == OrderType.takeaway) {
+    return l10n.posOrdersStatusPickedUp;
+  }
+  return switch (status) {
+    'submitted' => l10n.posOrdersStatusSubmitted,
+    'accepted' => l10n.posOrdersStatusAccepted,
+    'preparing' => l10n.posOrdersStatusPreparing,
+    'ready' => l10n.posOrdersStatusReady,
+    'served' => l10n.posOrdersStatusServed,
+    'completed' => l10n.posOrdersStatusCompleted,
+    'cancelled' => l10n.posOrdersStatusCancelled,
+    'voided' => l10n.posOrdersStatusVoided,
+    _ => status,
+  };
+}
 
 RestoflowTone orderStatusTone(String status) => switch (status) {
   'ready' => RestoflowTone.success,

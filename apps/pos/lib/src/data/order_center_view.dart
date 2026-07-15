@@ -5,6 +5,8 @@
 /// sections are views of it, never separate stores that can drift apart.
 library;
 
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+
 import 'order_reconciler.dart' show isCountedUnpaid;
 import 'order_snapshot.dart';
 import 'recent_order.dart';
@@ -47,6 +49,22 @@ enum PosSettlementFilter {
   };
 }
 
+/// RESTAURANT-OPERATIONS-V1-001: the order-type filter. EXACT, like the
+/// settlement filter — "Dine-in" means dine-in. An order whose type is unknown
+/// (a pre-upgrade row the server never described) matches only "All": we do not
+/// guess a type to make a filter look fuller.
+enum PosOrderTypeFilter {
+  all,
+  dineIn,
+  takeaway;
+
+  bool matches(PosRecentOrder o) => switch (this) {
+    PosOrderTypeFilter.all => true,
+    PosOrderTypeFilter.dineIn => o.orderType == OrderType.dineIn,
+    PosOrderTypeFilter.takeaway => o.orderType == OrderType.takeaway,
+  };
+}
+
 /// Newest first is the default: a POS is about what just happened.
 enum PosOrderSort { newestFirst, oldestFirst }
 
@@ -78,6 +96,7 @@ List<PosRecentOrder> viewOrders(
   Iterable<PosRecentOrder> orders, {
   required PosOrderSection section,
   PosSettlementFilter settlement = PosSettlementFilter.all,
+  PosOrderTypeFilter type = PosOrderTypeFilter.all,
   String? status,
   String query = '',
   PosOrderSort sort = PosOrderSort.newestFirst,
@@ -88,8 +107,9 @@ List<PosRecentOrder> viewOrders(
     for (final o in orders)
       if (sectionContains(section, o) &&
           settlement.matches(o) &&
+          type.matches(o) &&
           (status == null || o.serverStatus == status) &&
-          (needle.isEmpty || _matchesCode(o, needle)))
+          (needle.isEmpty || _matchesQuery(o, needle)))
         o,
   ];
 
@@ -111,13 +131,21 @@ Map<PosOrderSection, int> sectionCounts(Iterable<PosRecentOrder> orders) => {
     s: orders.where((o) => sectionContains(s, o)).length,
 };
 
-/// Order-code search. Tolerant of the '#' and of case, because a cashier reading a
-/// code off a printed ticket types what they see, not what we stored.
+/// Order-code + table-label search. Tolerant of the '#' and of case, because a
+/// cashier reading a code off a printed ticket types what they see, not what we
+/// stored. RESTAURANT-OPERATIONS-V1-001 adds the TABLE LABEL — "which order is
+/// table 7's?" is the floor's most common lookup, and a floor label is public
+/// signage, not private data.
 ///
-/// It searches the ORDER CODE only. Not notes, not the customer — a search box that
+/// It searches NOTHING else. Not notes, not the customer — a search box that
 /// quietly matches private fields is a data-leak surface, not a feature.
-bool _matchesCode(PosRecentOrder o, String needle) =>
-    _normalize(o.orderNumber).contains(needle);
+bool _matchesQuery(PosRecentOrder o, String needle) {
+  if (_normalize(o.orderNumber).contains(needle)) return true;
+  final table = o.tableLabel;
+  return table != null &&
+      table.trim().isNotEmpty &&
+      _normalize(table).contains(needle);
+}
 
 String _normalize(String s) =>
     s.trim().toUpperCase().replaceAll('#', '').replaceAll(' ', '');

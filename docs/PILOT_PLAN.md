@@ -51,7 +51,7 @@ its owning specification.
 | Order submission and order/order-item state machine (**DECISION D-018**) | `submitted -> accepted -> preparing -> ready -> served -> completed` | RF-032, RF-052 |
 | Kitchen routing items → stations | Kitchen ticket / station item | RF-033, RF-072 |
 | KDS displays tickets; bump and recall flows | Kitchen ticket: `new -> acknowledged -> in_preparation -> ready -> bumped`; `recalled` audited | RF-034, RF-072 |
-| Table management (dine-in / takeaway) | Takeaway skips `served` (`ready -> completed`) | RF-035 |
+| Table management (dine-in / takeaway) | Shared lifecycle (review B3): takeaway is served at pickup (displayed "Picked up"); dine-in requires a table, takeaway forbids one | RF-035 |
 | Money engine: integer **minor units**, discounts, totals (no floating point) (**DECISION D-007**) | [MONEY_AND_TAX_SPEC.md](MONEY_AND_TAX_SPEC.md) | RF-036, RF-054 |
 | Cash payment + change due; **per-branch monotonic receipt number** (**DECISION D-021**) | Payment: `pending -> tendered -> completed` (`completed` TERMINAL; void only pre-completion, **DECISION D-023**); payment & fulfillment independent, pay-first supported (**DECISION D-025**) | RF-054 |
 | Apply discount / void order — permission-gated, reason required, **audited** (**DECISION D-013**) | `voided` is post-submission, terminal; `completed` order TERMINAL and void/cancel **REJECTED** once a completed payment exists (refund **DEFERRED**) (**DECISION D-023**, **D-024**) | RF-053 |

@@ -3,6 +3,11 @@ import 'package:test/test.dart';
 
 /// Independent re-statement of the legal ORDER edges (NOT derived from the SUT)
 /// so the exhaustive matrix tests the machine against the spec, not itself.
+///
+/// RESTAURANT-OPERATIONS-V1-001 (review B3): the SAME canonical chain for both
+/// order types — `ready -> served -> completed`, with NO type-conditional edge.
+/// Takeaway's `served` is displayed as "Picked up" (wording, not a state), and
+/// `ready -> completed` is not a legal direct transition for either type.
 Set<(OrderStatus, OrderStatus)> _legalOrderEdges(OrderType type) => {
   (OrderStatus.draft, OrderStatus.submitted),
   (OrderStatus.submitted, OrderStatus.accepted),
@@ -10,14 +15,13 @@ Set<(OrderStatus, OrderStatus)> _legalOrderEdges(OrderType type) => {
   (OrderStatus.accepted, OrderStatus.preparing),
   (OrderStatus.accepted, OrderStatus.cancelled),
   (OrderStatus.preparing, OrderStatus.ready),
+  (OrderStatus.ready, OrderStatus.served),
   (OrderStatus.served, OrderStatus.completed),
   (OrderStatus.submitted, OrderStatus.voided),
   (OrderStatus.accepted, OrderStatus.voided),
   (OrderStatus.preparing, OrderStatus.voided),
   (OrderStatus.ready, OrderStatus.voided),
   (OrderStatus.served, OrderStatus.voided),
-  if (type == OrderType.dineIn) (OrderStatus.ready, OrderStatus.served),
-  if (type == OrderType.takeaway) (OrderStatus.ready, OrderStatus.completed),
 };
 
 void main() {
@@ -110,46 +114,44 @@ void main() {
     });
   });
 
-  group('order-type fork at ready (RF-032)', () {
-    test('dine-in: ready -> served allowed', () {
-      expect(
-        OrderStateMachine.isLegal(
-          OrderStatus.ready,
-          OrderStatus.served,
-          OrderType.dineIn,
-        ),
-        isTrue,
-      );
-    });
-    test('dine-in: ready -> completed rejected', () {
-      expect(
-        OrderStateMachine.isLegal(
-          OrderStatus.ready,
-          OrderStatus.completed,
-          OrderType.dineIn,
-        ),
-        isFalse,
-      );
-    });
-    test('takeaway: ready -> completed allowed', () {
-      expect(
-        OrderStateMachine.isLegal(
-          OrderStatus.ready,
-          OrderStatus.completed,
-          OrderType.takeaway,
-        ),
-        isTrue,
-      );
-    });
-    test('takeaway: ready -> served rejected', () {
-      expect(
-        OrderStateMachine.isLegal(
-          OrderStatus.ready,
-          OrderStatus.served,
-          OrderType.takeaway,
-        ),
-        isFalse,
-      );
-    });
+  group('the shared canonical chain at ready (review B3)', () {
+    // BOTH types serve at ready — a takeaway `served` is the customer pickup
+    // (displayed "Picked up"; the persisted state is `served`, never a
+    // `picked_up` state).
+    for (final type in OrderType.values) {
+      test('${type.name}: ready -> served allowed', () {
+        expect(
+          OrderStateMachine.isLegal(
+            OrderStatus.ready,
+            OrderStatus.served,
+            type,
+          ),
+          isTrue,
+        );
+      });
+      // Direct ready -> completed is illegal for BOTH types. The server's
+      // auto-completion of a served+settled order is a settlement SIDE
+      // EFFECT, not a manual transition — it must not appear as an edge here.
+      test('${type.name}: direct ready -> completed rejected', () {
+        expect(
+          OrderStateMachine.isLegal(
+            OrderStatus.ready,
+            OrderStatus.completed,
+            type,
+          ),
+          isFalse,
+        );
+      });
+      test('${type.name}: served -> completed allowed', () {
+        expect(
+          OrderStateMachine.isLegal(
+            OrderStatus.served,
+            OrderStatus.completed,
+            type,
+          ),
+          isTrue,
+        );
+      });
+    }
   });
 }

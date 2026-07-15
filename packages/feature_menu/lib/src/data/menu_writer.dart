@@ -110,4 +110,18 @@ abstract class MenuWriter {
     required MenuEntityType entity,
     required String id,
   });
+
+  /// RESTAURANT-OPERATIONS-V1-001: sets the item's PER-BRANCH availability
+  /// override — a day-to-day operational flip, distinct from editing the item
+  /// or toggling is_active. Requires [MenuScope.branchId] (availability is
+  /// per-branch by definition); [availability] is 'available'|'unavailable'
+  /// with a REQUIRED structured [reason] ('sold_out'|'paused') when
+  /// unavailable. Manager+ only, enforced server-side; historical orders are
+  /// never touched.
+  Future<MenuWriteOutcome> setItemAvailability({
+    required MenuScope scope,
+    required String menuItemId,
+    required String availability,
+    String? reason,
+  });
 }

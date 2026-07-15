@@ -380,10 +380,25 @@ class RealOutboxRepository implements OutboxRepository {
     }
 
     final errorCode = opResult['error'];
+    // RESTAURANT-OPERATIONS-V1-001: for the ONE refusal a cashier must act on
+    // line-by-line, keep the blocked-item names the server echoed back (from
+    // OUR OWN payload snapshots — safe display text, never raw backend JSON).
+    String? errorDetail;
+    if (errorCode == 'item_unavailable' && opResult['items'] is List) {
+      final names = <String>[
+        for (final it in opResult['items'] as List)
+          if (it is Map &&
+              it['name'] is String &&
+              (it['name'] as String).trim().isNotEmpty)
+            (it['name'] as String).trim(),
+      ];
+      if (names.isNotEmpty) errorDetail = names.join(', ');
+    }
     return entry.copyWith(
       syncState: state,
       attemptCount: entry.attemptCount + 1,
       lastErrorCode: errorCode is String ? errorCode : null,
+      lastErrorDetail: errorDetail,
       clearError: errorCode is! String,
     );
   }

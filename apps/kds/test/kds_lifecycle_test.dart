@@ -57,8 +57,8 @@ void main() {
 
     // ready -> Bump
     expect(find.text('ready'), findsOneWidget);
-    expect(find.text(l10n.kdsBumpAction), findsOneWidget);
-    await tester.tap(find.text(l10n.kdsBumpAction));
+    expect(find.text(l10n.kdsServedAction), findsOneWidget);
+    await tester.tap(find.text(l10n.kdsServedAction));
     await tester.pumpAndSettle();
 
     // bumped -> Recall (existing audited path)

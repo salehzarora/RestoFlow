@@ -255,7 +255,14 @@ select is((select res->'events'->0->'new_values' ? 'target_app_user_id' from t_o
 select is((select position('@example.test' in res::text)::int from t_owner_org), 0, 'no actor email address leaks into the audit payload');
 
 -- ===== READ-ONLY + WRAPPER HYGIENE (34-35) ====================================
-select is((select count(*)::int from audit_events), 12, 'owner_audit_events is read-only: audit_events row count is unchanged after all reads');
+-- REVIEW DELTA (hygiene): count THIS FILE'S audit rows, not the whole
+-- database — the exact expected total (12) is unchanged, but a concurrency
+-- harness run in the same disposable db leaves append-only rows under its own
+-- org that a global count would wrongly absorb.
+select is((select count(*)::int from audit_events
+            where organization_id in ('00000000-0000-0000-0000-0000000a0000',
+                                      '00000000-0000-0000-0000-0000000b0000')),
+  12, 'owner_audit_events is read-only: audit_events row count is unchanged after all reads');
 select ok(
   (select prosecdef from pg_proc where proname = 'owner_audit_events' and pronamespace = 'app'::regnamespace)
   and not (select prosecdef from pg_proc where proname = 'owner_audit_events' and pronamespace = 'public'::regnamespace)

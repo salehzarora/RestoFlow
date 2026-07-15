@@ -269,6 +269,12 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     final prepMinutes = row['prep_minutes'];
     final kitchenNote = row['kitchen_note'];
     final rawAttributes = row['attributes'];
+    // RESTAURANT-OPERATIONS-V1-001: the SESSION-BRANCH availability override.
+    // FAIL-OPEN to 'available' on a missing/wrong-typed key: availability is a
+    // display + cart gate only — the SERVER re-refuses an unavailable item at
+    // acceptance (item_unavailable), so a lenient parse can never oversell.
+    final availability = row['availability'];
+    final availabilityReason = row['availability_reason'];
     items.add(
       DemoMenuItem(
         id: (row['id'] ?? '').toString(),
@@ -295,6 +301,13 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         attributes: rawAttributes is Map
             ? Map<String, dynamic>.from(rawAttributes)
             : const <String, dynamic>{},
+        availability: availability == 'unavailable'
+            ? 'unavailable'
+            : 'available',
+        availabilityReason:
+            availabilityReason is String && availabilityReason.isNotEmpty
+            ? availabilityReason
+            : null,
       ),
     );
   }

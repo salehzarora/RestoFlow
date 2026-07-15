@@ -88,7 +88,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     try {
       final failed = <String>[
         for (final e in state)
-          if (e.syncState.isFailed && e.attemptCount < _maxAutoAttempts) e.id,
+          // REVIEW B2: a permanent business rejection replays its stored
+          // verdict forever — sweeping it would burn attempts on a foregone
+          // conclusion and imply the order might still go through.
+          if (e.syncState.isFailed &&
+              !e.isPermanentBusinessRejection &&
+              e.attemptCount < _maxAutoAttempts)
+            e.id,
       ];
       final pending = <String>[
         for (final e in state)
@@ -129,11 +135,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   /// rather than a second concurrent push.
   Future<void> pushQueued() => _sweep();
 
-  /// Manually re-queues + pushes every FAILED entry ("Sync failed — retry all").
+  /// Manually re-queues + pushes every RETRYABLE failed entry ("Sync failed —
+  /// retry all"). REVIEW B2: permanently-rejected business operations are
+  /// excluded — their verdict is ledgered and replay cannot change it.
   Future<void> retryAllFailed() async {
     final failed = <String>[
       for (final e in state)
-        if (e.syncState.isFailed) e.id,
+        if (e.syncState.isFailed && !e.isPermanentBusinessRejection) e.id,
     ];
     for (final id in failed) {
       try {
@@ -365,6 +373,18 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     ];
     await _repo.push(entryId);
     state = await _repo.recentEntries();
+    // RESTAURANT-OPERATIONS-V1-001: the server refusing an item as unavailable
+    // means OUR menu is stale — a manager flipped availability after our last
+    // load. Reload it so the grid greys the item out before the cashier
+    // re-enters the corrected order. Availability only travels with the menu
+    // (there is no realtime push), so this is the honest refresh point.
+    for (final e in state) {
+      if (e.id == entryId &&
+          e.syncState == OutboxSyncState.rejected &&
+          e.lastErrorCode == 'item_unavailable') {
+        ref.invalidate(posMenuProvider);
+      }
+    }
   }
 
   /// Re-queues a failed [entryId] and pushes it again.

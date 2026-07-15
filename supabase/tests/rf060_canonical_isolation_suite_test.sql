@@ -53,12 +53,22 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, grand_total_minor, local_operation_id) values
   ('00000000-0000-0000-0000-00000000a01a', '00000000-0000-0000-0000-0000000000a0','00000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-00000000a1b1','00000000-0000-0000-0000-00000000da11','00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000ef001','00000000-0000-0000-0000-00000000ab01','dine_in','submitted','USD',1000,1000,'oa1a-fixt'),
   ('00000000-0000-0000-0000-00000000b01a', '00000000-0000-0000-0000-0000000000b0','00000000-0000-0000-0000-0000000000b1','00000000-0000-0000-0000-00000000b1d1','00000000-0000-0000-0000-00000000db11','00000000-0000-0000-0000-00000000c50b','00000000-0000-0000-0000-0000000ef00b','00000000-0000-0000-0000-00000000ab0b','dine_in','submitted','EUR',3000,3000,'ob1a-fixt');
+-- live active dining table in Org A / Rest A1 / Branch A1a (RESTAURANT-OPERATIONS-V1-001:
+-- dine_in submits now require a live, active same-scope table)
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('00000000-0000-0000-0000-000000007ab1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'RF060 T1', true);
+-- sellable menu fixture for the Org A submit_order payload (RESTAURANT-OPERATIONS-V1-001:
+-- submit_order now refuses line items that are not proven-sellable menu items)
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
 
 -- ===== idempotency / replay (exactly-once) via submit_order ================== 1-3
-select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0e1','00000000-0000-0000-0000-00000000da11','op-rep','dine_in',null,null,'USD',null,
+select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0e1','00000000-0000-0000-0000-00000000da11','op-rep','dine_in','00000000-0000-0000-0000-000000007ab1',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,1000,0,0,1000,null) ->> 'ok')::boolean, true,
   'first submit_order applies');
-select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0e1','00000000-0000-0000-0000-00000000da11','op-rep','dine_in',null,null,'USD',null,
+select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0e1','00000000-0000-0000-0000-00000000da11','op-rep','dine_in','00000000-0000-0000-0000-000000007ab1',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,1000,0,0,1000,null) ->> 'idempotency_replay')::boolean, true,
   'replay of the same (device_id, local_operation_id) returns idempotency_replay=true (exactly-once)');
 select is((select count(*) from orders where local_operation_id='op-rep')::int, 1, 'the replay created exactly ONE order (no double effect)');

@@ -19,7 +19,8 @@ import '../format/money_format.dart';
 import '../print/order_preview_builders.dart';
 import '../state/order_history_providers.dart';
 import 'order_complete_action.dart';
-import 'order_history_screen.dart' show statusLabel, statusTone, orderTypeLabel;
+import 'order_history_screen.dart'
+    show statusLabelFor, statusTone, orderTypeLabel;
 import 'order_preview_dialog.dart';
 import 'settlement_badge.dart';
 
@@ -256,7 +257,7 @@ class _DetailContent extends StatelessWidget {
       child: Align(
         alignment: AlignmentDirectional.centerStart,
         child: RestoflowStatusPill(
-          label: statusLabel(l10n, detail.status),
+          label: statusLabelFor(l10n, detail.status, detail.orderType),
           tone: statusTone(detail.status),
         ),
       ),

@@ -322,6 +322,7 @@ class KdsTicketCard extends StatelessWidget {
               _TicketAction(
                 status: ticket.status,
                 l10n: l10n,
+                takeaway: ticket.orderType == 'takeaway',
                 onAdvance: onAdvance,
                 onRecall: onRecall,
               ),
@@ -639,12 +640,20 @@ class _TicketAction extends StatelessWidget {
   const _TicketAction({
     required this.status,
     required this.l10n,
+    required this.takeaway,
     required this.onAdvance,
     required this.onRecall,
   });
 
   final KitchenTicketStatus status;
   final AppLocalizations l10n;
+
+  /// RESTAURANT-OPERATIONS-V1-001: the ready-stage action is TYPE-AWARE. The
+  /// underlying transition is the SAME canonical `served` push either way —
+  /// only the words change: a dine-in plate is "Served" to the table, a
+  /// takeaway bag is "Picked up" by the customer.
+  final bool takeaway;
+
   final void Function(KitchenTicketStatus to) onAdvance;
   final VoidCallback? onRecall;
 
@@ -671,8 +680,8 @@ class _TicketAction extends StatelessWidget {
         );
       case KitchenTicketStatus.ready:
         return _ForwardButton(
-          icon: Icons.check,
-          label: l10n.kdsBumpAction,
+          icon: takeaway ? Icons.takeout_dining_outlined : Icons.room_service,
+          label: takeaway ? l10n.kdsPickedUpAction : l10n.kdsServedAction,
           style: RestoflowButtonStyles.big(context),
           onPressed: () => onAdvance(KitchenTicketStatus.bumped),
         );

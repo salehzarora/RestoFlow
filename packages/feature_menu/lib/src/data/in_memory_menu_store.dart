@@ -199,6 +199,36 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
   }
 
   @override
+  Future<MenuWriteOutcome> setItemAvailability({
+    required MenuScope scope,
+    required String menuItemId,
+    required String availability,
+    String? reason,
+  }) async {
+    if (readOnly) return _denied(MenuEntityType.item);
+    // Mirrors the server rules: unavailable REQUIRES a structured reason,
+    // available never carries one; a tombstoned/unknown item is not_found.
+    if (availability != 'available' && availability != 'unavailable') {
+      return const Failure(MenuValidationRejected('bad availability'));
+    }
+    final normalizedReason = availability == 'unavailable' ? reason : null;
+    if (availability == 'unavailable' &&
+        (normalizedReason != 'sold_out' && normalizedReason != 'paused')) {
+      return const Failure(MenuValidationRejected('reason required'));
+    }
+    final existing = _findById(_items, menuItemId, (i) => i.id);
+    if (existing == null || existing.isDeleted) {
+      return const Failure(MenuValidationRejected('not_found'));
+    }
+    _upsert(
+      _items,
+      existing.withAvailability(availability, normalizedReason),
+      (i) => i.id,
+    );
+    return _ok(MenuEntityType.item, menuItemId, false);
+  }
+
+  @override
   Future<MenuWriteOutcome> upsertSize({
     required MenuScope scope,
     String? id,

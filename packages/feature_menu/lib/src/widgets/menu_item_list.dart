@@ -40,6 +40,37 @@ class MenuItemList extends ConsumerWidget {
   final String query;
   final MenuActiveFilter filter;
 
+  /// RESTAURANT-OPERATIONS-V1-001: flips the item's availability in the ACTIVE
+  /// branch. Distinct from delete/archive/edit — a day-to-day operational
+  /// state the manager toggles without touching the item definition.
+  Future<void> _setAvailability(
+    BuildContext context,
+    WidgetRef ref,
+    MenuItem item, {
+    required String availability,
+    String? reason,
+  }) async {
+    final l10n = AppLocalizations.of(context);
+    final outcome = await ref
+        .read(menuWriteControllerProvider)
+        .setItemAvailability(
+          menuItemId: item.id,
+          availability: availability,
+          reason: reason,
+        );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          outcome.fold(
+            (_) => l10n.menuAvailabilityUpdated,
+            (_) => l10n.menuAvailabilityUpdateFailed,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _delete(
     BuildContext context,
     WidgetRef ref,
@@ -107,9 +138,20 @@ class MenuItemList extends ConsumerWidget {
             // Live (non-deleted) modifier groups from the snapshot the screen
             // already holds — no extra read.
             modifierGroupCount: snapshot.modifiersForItem(item.id).length,
+            // Availability is PER-BRANCH: with no branch in scope there is no
+            // single truthful state, so the control is withheld (an honest
+            // hint replaces it in the menu).
+            branchScoped: scope.branchId != null,
             onTap: () => onOpenEditor(MenuEditorTarget(item: item)),
             onEdit: () => onOpenEditor(MenuEditorTarget(item: item)),
             onDelete: () => _delete(context, ref, item),
+            onSetAvailability: (availability, reason) => _setAvailability(
+              context,
+              ref,
+              item,
+              availability: availability,
+              reason: reason,
+            ),
           );
         },
       );
@@ -131,22 +173,46 @@ class MenuItemList extends ConsumerWidget {
   }
 }
 
+PopupMenuItem<String> _availabilityEntry({
+  required String value,
+  required String label,
+  required bool selected,
+}) => PopupMenuItem<String>(
+  value: value,
+  child: Row(
+    children: [
+      Icon(
+        selected ? Icons.radio_button_checked : Icons.radio_button_off,
+        size: 18,
+      ),
+      const SizedBox(width: RestoflowSpacing.sm),
+      Text(label),
+    ],
+  ),
+);
+
 class _ItemTile extends StatelessWidget {
   const _ItemTile({
     required this.item,
     required this.modifierGroupCount,
+    required this.branchScoped,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    required this.onSetAvailability,
   });
 
   final MenuItem item;
 
   /// Live modifier groups on this item (0 = no indicator).
   final int modifierGroupCount;
+
+  /// Whether the active scope names a branch (availability is per-branch).
+  final bool branchScoped;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final void Function(String availability, String? reason) onSetAvailability;
 
   @override
   Widget build(BuildContext context) {
@@ -202,6 +268,24 @@ class _ItemTile extends StatelessWidget {
                           isActive: item.isActive,
                           branchId: item.branchId,
                         ),
+                        // RESTAURANT-OPERATIONS-V1-001: the branch availability
+                        // state, when the load was branch-scoped. Reason-first
+                        // wording — "Sold out" tells the floor more than a bare
+                        // "Unavailable".
+                        if (item.isUnavailableInBranch)
+                          MenuPill(
+                            key: Key('menu-availability-pill-' + item.id),
+                            label: item.availabilityReason == 'paused'
+                                ? l10n.menuAvailabilityPaused
+                                : l10n.menuAvailabilitySoldOut,
+                            icon: Icons.do_not_disturb_on_outlined,
+                            background: RestoflowTone.danger
+                                .styleOf(theme)
+                                .container,
+                            foreground: RestoflowTone.danger
+                                .styleOf(theme)
+                                .onContainer,
+                          ),
                         ...buildMenuTagPills(context, item.tags),
                         if (modifierGroupCount > 0)
                           Tooltip(
@@ -228,15 +312,58 @@ class _ItemTile extends StatelessWidget {
                 ),
               ),
               PopupMenuButton<String>(
+                key: Key('menu-item-menu-' + item.id),
                 onSelected: (value) {
                   if (value == 'edit') onEdit();
                   if (value == 'delete') onDelete();
+                  if (value == 'availability_available') {
+                    onSetAvailability('available', null);
+                  }
+                  if (value == 'availability_sold_out') {
+                    onSetAvailability('unavailable', 'sold_out');
+                  }
+                  if (value == 'availability_paused') {
+                    onSetAvailability('unavailable', 'paused');
+                  }
                 },
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'edit',
                     child: Text(l10n.menuEditAction),
                   ),
+                  // RESTAURANT-OPERATIONS-V1-001: the three availability states
+                  // as one-tap operational actions; the current state carries a
+                  // check. Per-branch only — an unscoped surface shows the
+                  // honest disabled hint instead of a control that cannot work.
+                  if (branchScoped) ...[
+                    const PopupMenuDivider(),
+                    _availabilityEntry(
+                      value: 'availability_available',
+                      label: l10n.menuAvailabilityAvailable,
+                      selected: !item.isUnavailableInBranch,
+                    ),
+                    _availabilityEntry(
+                      value: 'availability_sold_out',
+                      label: l10n.menuAvailabilitySoldOut,
+                      selected:
+                          item.isUnavailableInBranch &&
+                          item.availabilityReason == 'sold_out',
+                    ),
+                    _availabilityEntry(
+                      value: 'availability_paused',
+                      label: l10n.menuAvailabilityPaused,
+                      selected:
+                          item.isUnavailableInBranch &&
+                          item.availabilityReason == 'paused',
+                    ),
+                  ] else ...[
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      enabled: false,
+                      child: Text(l10n.menuAvailabilityNeedsBranch),
+                    ),
+                  ],
+                  const PopupMenuDivider(),
                   PopupMenuItem(
                     value: 'delete',
                     child: Text(l10n.menuDeleteAction),

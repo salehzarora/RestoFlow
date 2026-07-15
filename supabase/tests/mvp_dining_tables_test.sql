@@ -311,7 +311,7 @@ select is(
 select is(
   (select count(*) from (select jsonb_object_keys(
      app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0) as k) s)::int,
-  5, 'a pos_tables row carries exactly the five keys {id,label,seats,area,status}');
+  6, 'a pos_tables row carries exactly the six keys {id,label,seats,area,status,active_order_count}');
 select ok(
   (select r->>'label' = 'Alpha' and (r->>'seats')::int = 4 and r->>'area' = 'Main' and r->>'status' = 'available'
    from (select app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0 as r) s),

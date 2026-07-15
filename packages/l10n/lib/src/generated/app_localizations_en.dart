@@ -4123,4 +4123,169 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posOrdersConflictClose => 'Close and reopen';
+
+  @override
+  String get posOrdersStatusPickedUp => 'Picked up';
+
+  @override
+  String get posMenuItemSoldOut => 'Sold out';
+
+  @override
+  String get posMenuItemPaused => 'Temporarily unavailable';
+
+  @override
+  String posSyncItemUnavailable(String items) {
+    return 'Not available right now: $items. Re-enter the order without these items.';
+  }
+
+  @override
+  String get posSyncTableUnavailable =>
+      'The selected table is no longer available. Pick another table and re-enter the order.';
+
+  @override
+  String get posOrdersFilterTypeAll => 'All types';
+
+  @override
+  String get posMoveTableAction => 'Move table';
+
+  @override
+  String get posMoveTableTitle => 'Move to another table';
+
+  @override
+  String posMoveTableCurrent(String table) {
+    return 'Current table: $table';
+  }
+
+  @override
+  String get posMoveTableNoTable => 'No table assigned yet';
+
+  @override
+  String get posMoveTableConfirm => 'Move';
+
+  @override
+  String posMoveTableMoved(String table) {
+    return 'Moved to $table';
+  }
+
+  @override
+  String get posMoveTableConflict =>
+      'This order changed on another device. Close and act again from the updated order.';
+
+  @override
+  String get posMoveTableNotMovable => 'This order can no longer be moved.';
+
+  @override
+  String get posMoveTableTableUnavailable =>
+      'That table is no longer available. Pick another.';
+
+  @override
+  String get posMoveTablePermissionDenied =>
+      'You don’t have permission to move this order.';
+
+  @override
+  String get posMoveTableFailed =>
+      'Couldn’t move the table. Check the connection and try again.';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count open orders',
+      one: '1 open order',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get kdsServedAction => 'Served';
+
+  @override
+  String get kdsPickedUpAction => 'Picked up';
+
+  @override
+  String get ordersStatusPickedUp => 'Picked up';
+
+  @override
+  String get menuAvailabilityLabel => 'Availability';
+
+  @override
+  String get menuAvailabilityAvailable => 'Available';
+
+  @override
+  String get menuAvailabilityUnavailable => 'Unavailable';
+
+  @override
+  String get menuAvailabilitySoldOut => 'Sold out';
+
+  @override
+  String get menuAvailabilityPaused => 'Paused';
+
+  @override
+  String get menuAvailabilityUpdated => 'Availability updated';
+
+  @override
+  String get menuAvailabilityUpdateFailed => 'Couldn’t update availability';
+
+  @override
+  String get menuAvailabilityNeedsBranch =>
+      'Select a branch to manage availability';
+
+  @override
+  String tablesOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count open orders',
+      one: '1 open order',
+      zero: 'No open orders',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get activityLogTitleMenuAvailabilityChanged =>
+      'Menu item availability changed';
+
+  @override
+  String get activityLogTitleMenuAvailabilityDenied =>
+      'Menu availability change denied';
+
+  @override
+  String get activityLogTitleOrderTableMoved => 'Order moved to another table';
+
+  @override
+  String get activityLogTitleOrderTableMoveDenied => 'Table move denied';
+
+  @override
+  String get activityLogFieldAvailability => 'Availability';
+
+  @override
+  String get activityLogFieldAvailabilityReason => 'Reason';
+
+  @override
+  String get activityLogFieldItemName => 'Item';
+
+  @override
+  String get activityLogFieldTableLabel => 'Table';
+
+  @override
+  String get activityLogFieldFromTable => 'From table';
+
+  @override
+  String get activityLogFieldToTable => 'To table';
+
+  @override
+  String get activityLogDeniedTakeawayOrder =>
+      'Takeaway orders don’t use tables';
+
+  @override
+  String get activityLogDeniedOrderNotMovable =>
+      'The order can no longer be moved';
+
+  @override
+  String get activityLogDeniedTableNotAvailable => 'The table isn’t available';
+
+  @override
+  String get activityLogDeniedPermission => 'Not permitted for this role';
 }

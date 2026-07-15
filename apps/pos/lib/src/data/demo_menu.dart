@@ -54,6 +54,8 @@ class DemoMenuItem {
     this.prepMinutes,
     this.kitchenNote,
     this.attributes = const <String, dynamic>{},
+    this.availability = 'available',
+    this.availabilityReason,
   });
 
   /// Stable demo identifier; also used as the cart line's menu item id.
@@ -89,6 +91,17 @@ class DemoMenuItem {
   final int? prepMinutes;
   final String? kitchenNote;
   final Map<String, dynamic> attributes;
+
+  /// RESTAURANT-OPERATIONS-V1-001: the item's availability in THIS branch, as
+  /// the server reported it ('available' | 'unavailable'; absence of an
+  /// override row is 'available'). The POS keeps unavailable items VISIBLE —
+  /// greyed, with [availabilityReason] ('sold_out' | 'paused') explaining why —
+  /// and refuses to add them to the cart; the server refuses the sale again at
+  /// acceptance (item_unavailable), so a stale menu can never oversell.
+  final String availability;
+  final String? availabilityReason;
+
+  bool get isUnavailable => availability == 'unavailable';
 
   /// KITCHEN-PREP-001: the item's configured PER-UNIT kitchen prep components,
   /// parsed from the generic [attributes] bag (`prep_components`). Non-money;
@@ -228,12 +241,16 @@ const List<DemoMenuItem> kDemoMenu = <DemoMenuItem>[
     categoryId: 'sides',
     categoryName: 'Sides',
   ),
+  // RESTAURANT-OPERATIONS-V1-001: a SOLD-OUT demo item — visible, greyed, not
+  // sellable, so the availability treatment has a live example.
   DemoMenuItem(
     id: 'onion-rings',
     name: 'Onion Rings',
     priceMinor: 1900,
     categoryId: 'sides',
     categoryName: 'Sides',
+    availability: 'unavailable',
+    availabilityReason: 'sold_out',
   ),
   DemoMenuItem(
     id: 'garden-salad',
@@ -250,12 +267,15 @@ const List<DemoMenuItem> kDemoMenu = <DemoMenuItem>[
     categoryId: 'drinks',
     categoryName: 'Drinks',
   ),
+  // RESTAURANT-OPERATIONS-V1-001: a PAUSED demo item (temporarily unavailable).
   DemoMenuItem(
     id: 'fresh-lemonade',
     name: 'Fresh Lemonade',
     priceMinor: 1400,
     categoryId: 'drinks',
     categoryName: 'Drinks',
+    availability: 'unavailable',
+    availabilityReason: 'paused',
   ),
   DemoMenuItem(
     id: 'mineral-water',

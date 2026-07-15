@@ -220,6 +220,9 @@ class SupabaseTablesRepository implements TablesAdminRepository {
     if (status == null) return null; // unknown -> skip
     final seats = row['seats'];
     final area = row['area']?.toString();
+    // RESTAURANT-OPERATIONS-V1-001: server-derived occupancy; missing/malformed
+    // degrades to 0 (display truth, never a gate).
+    final activeOrders = row['active_order_count'];
     return DashboardTable(
       id: (row['id'] ?? '').toString(),
       label: (row['label'] ?? '').toString(),
@@ -228,6 +231,9 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       status: status,
       isActive: row['is_active'] == true,
       branchId: (row['branch_id'] ?? '').toString(),
+      activeOrderCount: activeOrders is int && activeOrders > 0
+          ? activeOrders
+          : 0,
     );
   }
 

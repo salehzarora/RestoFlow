@@ -67,10 +67,16 @@ class SubmittedOrderView {
   /// structurally frozen at submit time and `grandTotalMinor` — a getter derived
   /// from it — could never tell the truth again. The order LINES are untouched:
   /// they are the order-time price snapshot (D-008) and are never recomputed.
+  ///
+  /// RESTAURANT-OPERATIONS-V1-001 adds [tableLabel]: a table MOVE on any till
+  /// changes where the order sits, and a receipt reprinted afterwards must name
+  /// the CURRENT table (the lines and prices stay order-time, D-008 — a table
+  /// is service state, not money).
   SubmittedOrderView copyWith({
     int? subtotalMinor,
     int? discountTotalMinor,
     int? taxTotalMinor,
+    String? tableLabel,
   }) => SubmittedOrderView(
     orderNumber: orderNumber,
     orderType: orderType,
@@ -80,7 +86,7 @@ class SubmittedOrderView {
     discountTotalMinor: discountTotalMinor ?? this.discountTotalMinor,
     taxTotalMinor: taxTotalMinor ?? this.taxTotalMinor,
     taxRateBp: taxRateBp,
-    tableLabel: tableLabel,
+    tableLabel: tableLabel ?? this.tableLabel,
     customerName: customerName,
     outboxEntryId: outboxEntryId,
     localOperationId: localOperationId,

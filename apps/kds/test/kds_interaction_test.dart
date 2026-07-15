@@ -38,17 +38,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // A ready ticket shows the bump action and its status.
+    // A ready ticket shows the type-aware serve action and its status
+    // (RESTAURANT-OPERATIONS-V1-001: dine-in wording; a takeaway would read
+    // Picked up).
     expect(find.text('ready'), findsOneWidget);
-    expect(find.text(l10n.kdsBumpAction), findsOneWidget);
+    expect(find.text(l10n.kdsServedAction), findsOneWidget);
     expect(find.text(l10n.kdsRecallAction), findsNothing);
 
     // Bump -> status becomes bumped; the recall action appears.
-    await tester.tap(find.text(l10n.kdsBumpAction));
+    await tester.tap(find.text(l10n.kdsServedAction));
     await tester.pumpAndSettle();
     expect(find.text('bumped'), findsOneWidget);
     expect(find.text(l10n.kdsRecallAction), findsOneWidget);
-    expect(find.text(l10n.kdsBumpAction), findsNothing);
+    expect(find.text(l10n.kdsServedAction), findsNothing);
     expect(captured, isNull); // no recall yet
 
     // Recall -> status returns to in_preparation; a placeholder event is emitted.

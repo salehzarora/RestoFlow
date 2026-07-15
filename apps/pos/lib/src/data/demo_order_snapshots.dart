@@ -39,6 +39,43 @@ class DemoOrderSnapshotRepository implements OrderSnapshotRepository {
     _byOrderId[snapshot.orderId] = snapshot;
   }
 
+  /// RESTAURANT-OPERATIONS-V1-001: the demo "server accepted a table move"
+  /// lever. Rewrites the held snapshot's table label + revision and advances
+  /// its sync_at (so the change flows out through the SAME cursor/refresh
+  /// machinery the real feed uses).
+  ///
+  /// Returns FALSE when the demo server does not hold the order (a
+  /// device-submitted demo order never enters this feed) — the caller must
+  /// then refuse honestly rather than claim a success nothing will reflect,
+  /// mirroring the real contract's refusal of an unknown order.
+  bool recordTableMove({
+    required String orderId,
+    required String tableLabel,
+    required int revision,
+  }) {
+    final held = _byOrderId[orderId];
+    if (held == null) return false;
+    clock = clock.add(const Duration(seconds: 1));
+    _byOrderId[orderId] = PosOrderSnapshot(
+      orderId: held.orderId,
+      orderCode: held.orderCode,
+      revision: revision,
+      status: held.status,
+      settlement: held.settlement,
+      subtotalMinor: held.subtotalMinor,
+      discountTotalMinor: held.discountTotalMinor,
+      taxTotalMinor: held.taxTotalMinor,
+      grandTotalMinor: held.grandTotalMinor,
+      createdAt: held.createdAt,
+      updatedAt: clock,
+      syncAt: clock,
+      orderType: held.orderType,
+      tableLabel: tableLabel,
+      currencyCode: held.currencyCode,
+    );
+    return true;
+  }
+
   /// Everything the demo server currently holds, oldest change first — the same
   /// ordering the real RPC guarantees.
   List<PosOrderSnapshot> get all {
@@ -175,6 +212,7 @@ List<PosOrderSnapshot> demoBranchSnapshots(DateTime now) {
     int discount = 0,
     int minutesAgo = 0,
     String? table,
+    String orderType = 'dine_in',
   }) {
     final at = now.subtract(Duration(minutes: minutesAgo));
     return PosOrderSnapshot(
@@ -190,7 +228,7 @@ List<PosOrderSnapshot> demoBranchSnapshots(DateTime now) {
       createdAt: at,
       updatedAt: at,
       syncAt: at,
-      orderType: 'dine_in',
+      orderType: orderType,
       tableLabel: table,
       currencyCode: 'ILS',
     );
@@ -223,13 +261,15 @@ List<PosOrderSnapshot> demoBranchSnapshots(DateTime now) {
       minutesAgo: 12,
       table: '2',
     ),
+    // a TAKEAWAY at the counter: no table, ready for pickup — the picked-up
+    // wording and the type badge need a live example (RESTAURANT-OPERATIONS-V1-001)
     s(
       id: 'd10004',
       status: 'ready',
       settlement: PosSettlement.unpaid,
       grand: 5500,
       minutesAgo: 18,
-      table: '9',
+      orderType: 'takeaway',
     ),
     s(
       id: 'd10005',
@@ -238,6 +278,16 @@ List<PosOrderSnapshot> demoBranchSnapshots(DateTime now) {
       grand: 7400,
       minutesAgo: 25,
       table: '1',
+    ),
+    // a TAKEAWAY already picked up (persisted status: served) but not yet paid —
+    // the POS must render it "Picked up", never "Served"
+    s(
+      id: 'd1000b',
+      status: 'served',
+      settlement: PosSettlement.unpaid,
+      grand: 2600,
+      minutesAgo: 30,
+      orderType: 'takeaway',
     ),
     // --- TERMINAL --------------------------------------------------------------
     s(

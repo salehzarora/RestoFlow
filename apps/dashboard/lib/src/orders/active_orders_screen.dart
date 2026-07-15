@@ -25,7 +25,8 @@ import '../format/money_format.dart';
 import '../state/active_orders_providers.dart';
 import '../state/audit_log_providers.dart' show auditBranchOptionsProvider;
 import 'order_detail_sheet.dart';
-import 'order_history_screen.dart' show orderTypeLabel, statusLabel, statusTone;
+import 'order_history_screen.dart'
+    show orderTypeLabel, statusLabelFor, statusTone;
 import 'settlement_badge.dart';
 
 /// Above this width the board renders as a dense operational table; below it,
@@ -769,7 +770,7 @@ class ActiveOrderTile extends ConsumerWidget {
       runSpacing: RestoflowSpacing.xs,
       children: [
         RestoflowStatusPill(
-          label: statusLabel(l10n, row.status),
+          label: statusLabelFor(l10n, row.status, row.orderType),
           tone: statusTone(row.status),
         ),
         settlementPill(l10n, row.settlement),

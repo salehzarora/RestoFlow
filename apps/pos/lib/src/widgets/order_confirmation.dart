@@ -263,6 +263,11 @@ class OrderConfirmation extends ConsumerWidget {
                                   serverStatus: authoritative.serverStatus,
                                   settlement: authoritative.settlement,
                                   keySuffix: 'confirmation',
+                                  // RESTAURANT-OPERATIONS-V1-001: a takeaway's
+                                  // `served` renders "Picked up" here too — the
+                                  // confirmation speaks the same words as the
+                                  // orders centre.
+                                  orderType: authoritative.orderType,
                                 ),
                         ),
                         const SizedBox(height: RestoflowSpacing.sm),
@@ -279,7 +284,18 @@ class OrderConfirmation extends ConsumerWidget {
                   onSync: entry != null && entry.syncState.isPending
                       ? () => outbox.pushEntry(entry.id)
                       : null,
-                  onRetry: entry != null && entry.syncState.isFailed
+                  // REVIEW B2: no Retry for a PERMANENT business rejection —
+                  // the server ledgered the verdict under this operation
+                  // identity and replays it verbatim; a button claiming
+                  // otherwise is a lie. The typed note above (item names,
+                  // menu refreshed) already directs the cashier to re-enter
+                  // the order deliberately. Transport-ish failures (no
+                  // recorded verdict) keep Retry: an idempotent re-push is
+                  // safe and meaningful there.
+                  onRetry:
+                      entry != null &&
+                          entry.syncState.isFailed &&
+                          !entry.isPermanentBusinessRejection
                       ? () => outbox.retryEntry(entry.id)
                       : null,
                 ),
@@ -626,6 +642,8 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
   OutboxSyncState state,
   AppLocalizations l10n, {
   required bool isDemo,
+  String? errorCode,
+  String? errorDetail,
 }) {
   switch (state) {
     case OutboxSyncState.inFlight:
@@ -644,9 +662,23 @@ OutboxEntry? _entryForId(List<OutboxEntry> entries, String? id) {
       );
     case OutboxSyncState.rejected:
     case OutboxSyncState.dead:
+      // RESTAURANT-OPERATIONS-V1-001: the TYPED acceptance refusals get their
+      // own honest instruction instead of the generic failure line. The cart
+      // is already cleared at this point, so "re-enter the order" is the true
+      // recovery path — matched on the server's EXACT stable codes only.
+      final String rejectedNote;
+      if (isDemo) {
+        rejectedNote = l10n.posSyncDemoNotice;
+      } else if (errorCode == 'item_unavailable') {
+        rejectedNote = l10n.posSyncItemUnavailable(errorDetail ?? '—');
+      } else if (errorCode == 'table_not_available') {
+        rejectedNote = l10n.posSyncTableUnavailable;
+      } else {
+        rejectedNote = l10n.posSyncFailedReal;
+      }
       return (
         label: l10n.posSyncStateFailed,
-        note: isDemo ? l10n.posSyncDemoNotice : l10n.posSyncFailedReal,
+        note: rejectedNote,
         tone: RestoflowTone.danger,
         icon: Icons.error_outline,
       );
@@ -685,7 +717,13 @@ class _SyncStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = entry?.syncState ?? OutboxSyncState.pending;
-    final visual = _syncVisual(state, l10n, isDemo: isDemo);
+    final visual = _syncVisual(
+      state,
+      l10n,
+      isDemo: isDemo,
+      errorCode: entry?.lastErrorCode,
+      errorDetail: entry?.lastErrorDetail,
+    );
     final opRef = entry?.localOperationId;
     final sending = state == OutboxSyncState.inFlight;
     final refLine = opRef == null ? null : '${l10n.posOutboxRefLabel}: $opRef';

@@ -9,19 +9,26 @@ import 'order_item_status.dart';
 import 'order_status.dart';
 import 'order_type.dart';
 
-/// Validates ORDER transitions (STATE_MACHINES.md §1). The `ready` fork is
-/// parameterized by [OrderType]: takeaway goes `ready -> completed` (skipping
-/// `served`); dine-in goes `ready -> served -> completed`.
+/// Validates ORDER transitions (STATE_MACHINES.md §1).
+///
+/// RESTAURANT-OPERATIONS-V1-001 (review B3): BOTH order types share the ONE
+/// canonical chain `submitted -> accepted -> preparing -> ready -> served ->
+/// completed`. `served` is a real lifecycle state for takeaway too — the POS
+/// and KDS merely DISPLAY it as "Picked up" (a wording concern, not a state);
+/// there is NO persisted `picked_up` state. `ready -> completed` is NOT a
+/// legal direct transition for either type: the server's auto-completion of a
+/// served+settled order is a SIDE EFFECT of settlement, never a manual
+/// transition, so it does not appear in this legality table.
 abstract final class OrderStateMachine {
-  /// Order edges that do NOT depend on order type. The two type-conditional
-  /// `ready` edges are handled explicitly in [isLegal].
-  static const Set<(OrderStatus, OrderStatus)> _typeIndependentEdges = {
+  /// The exhaustive legal order edges — identical for both order types.
+  static const Set<(OrderStatus, OrderStatus)> _edges = {
     (OrderStatus.draft, OrderStatus.submitted),
     (OrderStatus.submitted, OrderStatus.accepted),
     (OrderStatus.submitted, OrderStatus.cancelled),
     (OrderStatus.accepted, OrderStatus.preparing),
     (OrderStatus.accepted, OrderStatus.cancelled),
     (OrderStatus.preparing, OrderStatus.ready),
+    (OrderStatus.ready, OrderStatus.served),
     (OrderStatus.served, OrderStatus.completed),
     (OrderStatus.submitted, OrderStatus.voided),
     (OrderStatus.accepted, OrderStatus.voided),
@@ -30,16 +37,11 @@ abstract final class OrderStateMachine {
     (OrderStatus.served, OrderStatus.voided),
   };
 
-  /// Whether `from -> to` is a legal order transition for [orderType].
-  static bool isLegal(OrderStatus from, OrderStatus to, OrderType orderType) {
-    if (from == OrderStatus.ready && to == OrderStatus.served) {
-      return orderType == OrderType.dineIn; // takeaway skips `served`
-    }
-    if (from == OrderStatus.ready && to == OrderStatus.completed) {
-      return orderType == OrderType.takeaway; // dine-in must go via `served`
-    }
-    return _typeIndependentEdges.contains((from, to));
-  }
+  /// Whether `from -> to` is a legal order transition. [orderType] is retained
+  /// on the signature (callers legitimately carry it; the aggregate passes it
+  /// through) but no edge depends on it — the lifecycle is shared (review B3).
+  static bool isLegal(OrderStatus from, OrderStatus to, OrderType orderType) =>
+      _edges.contains((from, to));
 
   /// Returns [to] if the transition is legal, else throws
   /// [IllegalOrderTransitionException]. Does not apply higher-level guards

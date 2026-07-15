@@ -47,9 +47,15 @@ insert into memberships (id, app_user_id, organization_id, restaurant_id, branch
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
   ('10000000-0000-0000-0000-0000000ef001', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-00000000a1b1', '10000000-0000-0000-0000-00000000ee01', '10000000-0000-0000-0000-00000000ab01'),
   ('10000000-0000-0000-0000-0000000ef004', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-00000000a1b1', '10000000-0000-0000-0000-00000000ee04', '10000000-0000-0000-0000-00000000ab04');
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('10000000-0000-0000-0000-00000000e0a1', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-00000000a1b1', 'T1', true);
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('10000000-0000-0000-0000-00000000c501', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-00000000a1b1', '10000000-0000-0000-0000-0000000005a1', '10000000-0000-0000-0000-0000000ef001', '10000000-0000-0000-0000-00000000ab01', now() + interval '1 hour'),
   ('10000000-0000-0000-0000-00000000c504', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-00000000a1b1', '10000000-0000-0000-0000-0000000005a2', '10000000-0000-0000-0000-0000000ef004', '10000000-0000-0000-0000-00000000ab04', now() + interval '1 hour');
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('10000000-0000-0000-0000-00000000ca01', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('10000000-0000-0000-0000-0000000000f1', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', null, '10000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
 
 -- ===== fixtures: org B (its own device + cashier session + order) ============
 insert into organizations (id, name, slug, default_currency) values
@@ -70,20 +76,26 @@ insert into memberships (id, app_user_id, organization_id, restaurant_id, branch
   ('20000000-0000-0000-0000-00000000ab02', '20000000-0000-0000-0000-00000000ee02', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-00000000b1b1', 'cashier');
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
   ('20000000-0000-0000-0000-0000000ef002', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-00000000b1b1', '20000000-0000-0000-0000-00000000ee02', '20000000-0000-0000-0000-00000000ab02');
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('20000000-0000-0000-0000-00000000e0b1', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-00000000b1b1', 'T1', true);
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('20000000-0000-0000-0000-00000000c502', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-00000000b1b1', '20000000-0000-0000-0000-0000000005b1', '20000000-0000-0000-0000-0000000ef002', '20000000-0000-0000-0000-00000000ab02', now() + interval '1 hour');
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('20000000-0000-0000-0000-00000000cb01', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('20000000-0000-0000-0000-0000000000f1', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', null, '20000000-0000-0000-0000-00000000cb01', 'B Item', 900, 'EUR', 1);
 
 -- ===== setup: three submitted orders via app.submit_order (status 'submitted')
 select app.submit_order('10000000-0000-0000-0000-00000000c501', '10000000-0000-0000-0000-00000000a0d1',
-  '10000000-0000-0000-0000-00000000da11', 'op-sub-1', 'dine_in', null, null, 'USD', null,
+  '10000000-0000-0000-0000-00000000da11', 'op-sub-1', 'dine_in', '10000000-0000-0000-0000-00000000e0a1', null, 'USD', null,
   '[{"menu_item_id":"10000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,
   1000, 0, 0, 1000, null);
 select app.submit_order('10000000-0000-0000-0000-00000000c501', '10000000-0000-0000-0000-00000000a0d2',
-  '10000000-0000-0000-0000-00000000da11', 'op-sub-2', 'dine_in', null, null, 'USD', null,
+  '10000000-0000-0000-0000-00000000da11', 'op-sub-2', 'dine_in', '10000000-0000-0000-0000-00000000e0a1', null, 'USD', null,
   '[{"menu_item_id":"10000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,
   1000, 0, 0, 1000, null);
 select app.submit_order('20000000-0000-0000-0000-00000000c502', '20000000-0000-0000-0000-00000000b0d1',
-  '20000000-0000-0000-0000-00000000db11', 'op-sub-b1', 'dine_in', null, null, 'EUR', null,
+  '20000000-0000-0000-0000-00000000db11', 'op-sub-b1', 'dine_in', '20000000-0000-0000-0000-00000000e0b1', null, 'EUR', null,
   '[{"menu_item_id":"20000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":900,"menu_item_name_snapshot":"B Item"}]'::jsonb,
   900, 0, 0, 900, null);
 

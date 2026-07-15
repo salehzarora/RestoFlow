@@ -126,6 +126,20 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
   // --- menu / tables / organization / sync (representatives) ----------------
   'menu.menu_item.updated': AuditActionSpec(category: 'menu'),
   'menu.menu_item.upsert_denied': AuditActionSpec(category: 'menu'),
+  // RESTAURANT-OPERATIONS-V1-001: branch availability + table moves.
+  'menu.menu_item.availability_changed': AuditActionSpec(
+    category: 'menu',
+    hasTitle: true,
+  ),
+  'menu.menu_item.availability_denied': AuditActionSpec(
+    category: 'menu',
+    hasTitle: true,
+  ),
+  'order.table_moved': AuditActionSpec(category: 'orders', hasTitle: true),
+  'order.table_move_denied': AuditActionSpec(
+    category: 'orders',
+    hasTitle: true,
+  ),
   'table.created': AuditActionSpec(category: 'tables'),
   'table.delete_denied': AuditActionSpec(category: 'tables'),
   'organization.created': AuditActionSpec(

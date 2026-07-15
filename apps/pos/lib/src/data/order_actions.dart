@@ -13,6 +13,8 @@
 /// always fails is a lie, and a cashier under rush deserves better than a lie.
 library;
 
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+
 import 'order_snapshot.dart';
 import 'recent_order.dart';
 import 'staff_capabilities.dart';
@@ -24,6 +26,7 @@ class PosOrderActions {
     required this.canDiscount,
     required this.canFullComp,
     required this.canVoid,
+    required this.canMoveTable,
     required this.canOpenReceipt,
     required this.pendingKind,
   });
@@ -37,6 +40,12 @@ class PosOrderActions {
 
   final bool canVoid;
 
+  /// RESTAURANT-OPERATIONS-V1-001: the order may be moved to another table —
+  /// an ACTIVE DINE-IN order the server already knows about. Takeaway never
+  /// sits at a table; a terminal order keeps its historical one. The server
+  /// enforces both again (table_not_allowed / order_not_movable).
+  final bool canMoveTable;
+
   /// A receipt can be rebuilt: this device holds the order-time lines AND a payment
   /// exists. A discovered order has no lines — printing one would be a forgery.
   final bool canOpenReceipt;
@@ -49,7 +58,8 @@ class PosOrderActions {
   bool get hasPending => pendingKind != null;
 
   /// True when nothing at all can be offered — the row shows no trailing actions.
-  bool get isEmpty => !canPay && !canDiscount && !canVoid && !canOpenReceipt;
+  bool get isEmpty =>
+      !canPay && !canDiscount && !canVoid && !canMoveTable && !canOpenReceipt;
 }
 
 /// The local mutation this device currently has queued/in flight for an order.
@@ -74,6 +84,7 @@ PosOrderActions resolveOrderActions(
       canDiscount: false,
       canFullComp: false,
       canVoid: false,
+      canMoveTable: false,
       canOpenReceipt: false,
       pendingKind: null,
     );
@@ -147,11 +158,20 @@ PosOrderActions resolveOrderActions(
       pending != PosPendingKind.cancellation &&
       pending != PosPendingKind.payment;
 
+  // MOVE TABLE (RESTAURANT-OPERATIONS-V1-001). A floor action, not a money
+  // action: any order-taking session may move an ACTIVE DINE-IN order the
+  // server already holds. Withheld while THIS device has any operation in
+  // flight for the order — a move races nothing from here, and its
+  // expected_revision would be stale the moment the queued work lands.
+  final canMoveTable =
+      !terminal && order.orderType == OrderType.dineIn && pending == null;
+
   return PosOrderActions(
     canPay: canPay,
     canDiscount: canDiscount,
     canFullComp: canFullComp,
     canVoid: canVoid,
+    canMoveTable: canMoveTable,
     // Reprint stays available for a real receipt even on a terminal order — reading
     // a receipt is not a mutation, and a closed order is exactly when someone asks
     // for one again.

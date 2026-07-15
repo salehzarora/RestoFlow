@@ -19,6 +19,7 @@ class MenuRpcNames {
   static const upsertModifier = 'menu_upsert_modifier';
   static const upsertModifierOption = 'menu_upsert_modifier_option';
   static const softDelete = 'menu_soft_delete';
+  static const setItemAvailability = 'menu_set_item_availability';
 }
 
 /// Calls the RF-109 `public.menu_*` RPCs over the neutral [SyncRpcTransport].
@@ -59,6 +60,56 @@ class RpcMenuWriter implements MenuWriter {
     } on SyncTransportException catch (e) {
       if (e.code == '42501') {
         // RF-109 raises validation/scope/not-found with a descriptive message.
+        return Failure(MenuValidationRejected(e.message ?? ''));
+      }
+      if (e.kind == SyncTransportErrorKind.transient) {
+        return Failure(MenuTransientFailure(e.message));
+      }
+      return Failure(MenuServerFailure(e.message));
+    }
+  }
+
+  @override
+  Future<MenuWriteOutcome> setItemAvailability({
+    required MenuScope scope,
+    required String menuItemId,
+    required String availability,
+    String? reason,
+  }) async {
+    // Bespoke result handling: the availability envelope is
+    // `{ok:true, entity:'menu_item_availability', menu_item_id, availability,
+    // reason}` — no `id`/`action` keys, so the generic parser cannot read it.
+    // A `not_found` (tombstoned / branch-pinned-elsewhere / unknown item) is a
+    // validation-grade refusal, not an auth failure.
+    try {
+      final raw = await _transport.invoke(MenuRpcNames.setItemAvailability, {
+        'p_organization_id': scope.organizationId,
+        'p_restaurant_id': scope.restaurantId,
+        'p_branch_id': scope.branchId,
+        'p_menu_item_id': menuItemId,
+        'p_availability': availability,
+        'p_reason': reason,
+      });
+      if (raw is! Map) return const Failure(MenuInvalidResponseFailure());
+      final body = Map<String, dynamic>.from(raw);
+      if (body['ok'] == true) {
+        return Success(
+          MenuWriteResult(
+            entity: MenuEntityType.item,
+            id: menuItemId,
+            action: MenuWriteAction.updated,
+          ),
+        );
+      }
+      if (body['error'] == 'permission_denied') {
+        return Failure(MenuPermissionDenied(MenuEntityType.item));
+      }
+      if (body['error'] == 'not_found') {
+        return const Failure(MenuValidationRejected('not_found'));
+      }
+      return const Failure(MenuInvalidResponseFailure());
+    } on SyncTransportException catch (e) {
+      if (e.code == '42501') {
         return Failure(MenuValidationRejected(e.message ?? ''));
       }
       if (e.kind == SyncTransportErrorKind.transient) {

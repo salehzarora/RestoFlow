@@ -47,19 +47,25 @@ void main() {
       expect(order.status, OrderStatus.completed);
     });
 
-    test('takeaway ready -> completed requires paymentSettled = true', () {
-      final blocked = _readyTakeaway();
+    test('takeaway served -> completed requires paymentSettled = true', () {
+      final blocked = _readyTakeaway()..serve();
       expect(
         () => blocked.complete(paymentSettled: false),
         throwsA(isA<PaymentNotSettledException>()),
       );
+      expect(blocked.status, OrderStatus.served);
 
-      final order = _readyTakeaway()..complete(paymentSettled: true);
+      final order = _readyTakeaway()
+        ..serve()
+        ..complete(paymentSettled: true);
       expect(order.status, OrderStatus.completed);
     });
   });
 
-  group('takeaway skips served / dine-in does not (RF-032)', () {
+  // RESTAURANT-OPERATIONS-V1-001 (review B3): BOTH types pass through
+  // `served` — takeaway's is the customer pickup (displayed "Picked up");
+  // there is no persisted `picked_up` state and no type that skips `served`.
+  group('both types share ready -> served -> completed (review B3)', () {
     test('dine-in: full happy path ready -> served -> completed', () {
       final order = _readyDineIn();
       order.serve();
@@ -68,10 +74,12 @@ void main() {
       expect(order.status, OrderStatus.completed);
     });
 
-    test('takeaway: serve() is rejected (skips served)', () {
+    test('takeaway: full happy path ready -> served -> completed', () {
       final order = _readyTakeaway();
-      expect(order.serve, throwsA(isA<IllegalOrderTransitionException>()));
-      expect(order.status, OrderStatus.ready);
+      order.serve();
+      expect(order.status, OrderStatus.served);
+      order.complete(paymentSettled: true);
+      expect(order.status, OrderStatus.completed);
     });
 
     test('dine-in: ready -> completed is rejected (must pass served)', () {
@@ -83,8 +91,21 @@ void main() {
       expect(order.status, OrderStatus.ready);
     });
 
+    // The server DOES auto-complete a served+settled takeaway, but as a
+    // settlement SIDE EFFECT — never as a manual ready -> completed edge.
+    test('takeaway: ready -> completed is rejected (must pass served)', () {
+      final order = _readyTakeaway();
+      expect(
+        () => order.complete(paymentSettled: true),
+        throwsA(isA<IllegalOrderTransitionException>()),
+      );
+      expect(order.status, OrderStatus.ready);
+    });
+
     test('a completed order is terminal (no further transition)', () {
-      final order = _readyTakeaway()..complete(paymentSettled: true);
+      final order = _readyTakeaway()
+        ..serve()
+        ..complete(paymentSettled: true);
       expect(order.isTerminal, isTrue);
       expect(order.accept, throwsA(isA<IllegalOrderTransitionException>()));
     });

@@ -4090,4 +4090,171 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posOrdersConflictClose => 'إغلاق وإعادة الفتح';
+
+  @override
+  String get posOrdersStatusPickedUp => 'تم الاستلام';
+
+  @override
+  String get posMenuItemSoldOut => 'نفدت الكمية';
+
+  @override
+  String get posMenuItemPaused => 'غير متوفر مؤقتاً';
+
+  @override
+  String posSyncItemUnavailable(String items) {
+    return 'غير متوفر حالياً: $items. أعد إدخال الطلب بدون هذه الأصناف.';
+  }
+
+  @override
+  String get posSyncTableUnavailable =>
+      'الطاولة المحددة لم تعد متاحة. اختر طاولة أخرى وأعد إدخال الطلب.';
+
+  @override
+  String get posOrdersFilterTypeAll => 'كل الأنواع';
+
+  @override
+  String get posMoveTableAction => 'نقل الطاولة';
+
+  @override
+  String get posMoveTableTitle => 'نقل إلى طاولة أخرى';
+
+  @override
+  String posMoveTableCurrent(String table) {
+    return 'الطاولة الحالية: $table';
+  }
+
+  @override
+  String get posMoveTableNoTable => 'لا توجد طاولة معينة بعد';
+
+  @override
+  String get posMoveTableConfirm => 'نقل';
+
+  @override
+  String posMoveTableMoved(String table) {
+    return 'تم النقل إلى $table';
+  }
+
+  @override
+  String get posMoveTableConflict =>
+      'تغيّر هذا الطلب على جهاز آخر. أغلق ثم نفّذ الإجراء من الطلب المحدّث.';
+
+  @override
+  String get posMoveTableNotMovable => 'لم يعد بالإمكان نقل هذا الطلب.';
+
+  @override
+  String get posMoveTableTableUnavailable =>
+      'تلك الطاولة لم تعد متاحة. اختر طاولة أخرى.';
+
+  @override
+  String get posMoveTablePermissionDenied => 'ليست لديك صلاحية نقل هذا الطلب.';
+
+  @override
+  String get posMoveTableFailed =>
+      'تعذّر نقل الطاولة. تحقق من الاتصال وحاول مجدداً.';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلباً مفتوحاً',
+      few: '$count طلبات مفتوحة',
+      two: 'طلبان مفتوحان',
+      one: 'طلب مفتوح واحد',
+      zero: 'لا توجد طلبات مفتوحة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get kdsServedAction => 'تم التقديم';
+
+  @override
+  String get kdsPickedUpAction => 'تم الاستلام';
+
+  @override
+  String get ordersStatusPickedUp => 'تم الاستلام';
+
+  @override
+  String get menuAvailabilityLabel => 'التوفر';
+
+  @override
+  String get menuAvailabilityAvailable => 'متوفر';
+
+  @override
+  String get menuAvailabilityUnavailable => 'غير متوفر';
+
+  @override
+  String get menuAvailabilitySoldOut => 'نفدت الكمية';
+
+  @override
+  String get menuAvailabilityPaused => 'موقوف مؤقتاً';
+
+  @override
+  String get menuAvailabilityUpdated => 'تم تحديث التوفر';
+
+  @override
+  String get menuAvailabilityUpdateFailed => 'تعذّر تحديث التوفر';
+
+  @override
+  String get menuAvailabilityNeedsBranch => 'اختر فرعاً لإدارة التوفر';
+
+  @override
+  String tablesOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلباً مفتوحاً',
+      few: '$count طلبات مفتوحة',
+      two: 'طلبان مفتوحان',
+      one: 'طلب مفتوح واحد',
+      zero: 'لا توجد طلبات مفتوحة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get activityLogTitleMenuAvailabilityChanged =>
+      'تم تغيير توفر صنف القائمة';
+
+  @override
+  String get activityLogTitleMenuAvailabilityDenied =>
+      'تم رفض تغيير توفر القائمة';
+
+  @override
+  String get activityLogTitleOrderTableMoved => 'تم نقل الطلب إلى طاولة أخرى';
+
+  @override
+  String get activityLogTitleOrderTableMoveDenied => 'تم رفض نقل الطاولة';
+
+  @override
+  String get activityLogFieldAvailability => 'التوفر';
+
+  @override
+  String get activityLogFieldAvailabilityReason => 'السبب';
+
+  @override
+  String get activityLogFieldItemName => 'الصنف';
+
+  @override
+  String get activityLogFieldTableLabel => 'الطاولة';
+
+  @override
+  String get activityLogFieldFromTable => 'من طاولة';
+
+  @override
+  String get activityLogFieldToTable => 'إلى طاولة';
+
+  @override
+  String get activityLogDeniedTakeawayOrder =>
+      'طلبات السفري لا تستخدم الطاولات';
+
+  @override
+  String get activityLogDeniedOrderNotMovable => 'لم يعد بالإمكان نقل الطلب';
+
+  @override
+  String get activityLogDeniedTableNotAvailable => 'الطاولة غير متاحة';
+
+  @override
+  String get activityLogDeniedPermission => 'غير مسموح لهذا الدور';
 }

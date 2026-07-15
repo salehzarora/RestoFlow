@@ -48,9 +48,33 @@ enum OutboxSyncState {
   /// Queued locally, not yet (demo-)sent.
   bool get isPending => this == created || this == pending;
 
-  /// A failed delivery the cashier can retry.
+  /// A failed delivery. Whether a RETRY of the SAME operation identity is
+  /// meaningful additionally depends on the entry's error code — see
+  /// [OutboxEntry.isPermanentBusinessRejection].
   bool get isFailed => this == rejected || this == dead;
 }
+
+/// REVIEW B2 — error codes for which the server RECORDED a permanent business
+/// verdict under this operation's `(device_id, local_operation_id)` identity.
+/// sync_push replays a terminal ledger result verbatim, so re-pushing the SAME
+/// identity can never turn these into an acceptance — even if the underlying
+/// obstacle (a sold-out item, a vanished table) is later resolved. A new
+/// business attempt must be a DELIBERATE new order, never a "Retry" button.
+///
+///   * the four typed submit refusals (RESTAURANT-OPERATIONS-V1-001);
+///   * 'rejected' — the server's generic permanent collapse of a raised
+///     validation/auth failure (RF-056/MONEY-VOID-001), equally ledgered.
+///
+/// Client-side parse codes (malformed_response, missing_results, …) and `dead`
+/// entries stay retryable: no server verdict was positively recorded, so an
+/// idempotent re-push is both safe and meaningful.
+const Set<String> kPermanentRejectionCodes = {
+  'item_unavailable',
+  'table_required',
+  'table_not_allowed',
+  'table_not_available',
+  'rejected',
+};
 
 /// A selected modifier on an [OrderSubmissionItem] — mirrors an element of the
 /// per-item `modifiers[]` array `app.submit_order` validates and snapshots
@@ -300,6 +324,7 @@ class OutboxEntry {
     this.branchId,
     this.attemptCount = 0,
     this.lastErrorCode,
+    this.lastErrorDetail,
   });
 
   final String id;
@@ -329,6 +354,21 @@ class OutboxEntry {
   final int attemptCount;
   final String? lastErrorCode;
 
+  /// RESTAURANT-OPERATIONS-V1-001: SAFE display detail for a typed rejection —
+  /// today only `item_unavailable` uses it (the joined blocked-item names the
+  /// server echoed back from OUR OWN payload snapshots). Never raw backend
+  /// JSON; null for every other outcome.
+  final String? lastErrorDetail;
+
+  /// REVIEW B2: TRUE when the server durably rejected THIS operation identity
+  /// for a business reason — replaying the same identity returns the SAME
+  /// stored rejection forever, so no Retry control may be offered and no
+  /// auto-sweep may waste attempts on it. The honest recovery is the typed
+  /// explanation already shown plus a deliberate NEW order.
+  bool get isPermanentBusinessRejection =>
+      syncState == OutboxSyncState.rejected &&
+      kPermanentRejectionCodes.contains(lastErrorCode);
+
   /// RF-114 durable-outbox persistence. Stores ONLY what a retry needs: the
   /// idempotency identity `(deviceId, localOperationId)`, the op envelope, the
   /// server-shaped [payloadJson] (integer minor money only, D-007; no secrets,
@@ -351,6 +391,7 @@ class OutboxEntry {
     'branch_id': branchId,
     'attempt_count': attemptCount,
     'last_error_code': lastErrorCode,
+    if (lastErrorDetail != null) 'last_error_detail': lastErrorDetail,
   };
 
   /// Parses a persisted entry. Fail-safe: an unparseable/foreign-shape entry
@@ -391,6 +432,7 @@ class OutboxEntry {
       branchId: json['branch_id'] as String?,
       attemptCount: (json['attempt_count'] as num?)?.toInt() ?? 0,
       lastErrorCode: json['last_error_code'] as String?,
+      lastErrorDetail: json['last_error_detail'] as String?,
     );
   }
 
@@ -398,6 +440,7 @@ class OutboxEntry {
     OutboxSyncState? syncState,
     int? attemptCount,
     String? lastErrorCode,
+    String? lastErrorDetail,
     bool clearError = false,
   }) => OutboxEntry(
     id: id,
@@ -415,5 +458,8 @@ class OutboxEntry {
     branchId: branchId,
     attemptCount: attemptCount ?? this.attemptCount,
     lastErrorCode: clearError ? null : (lastErrorCode ?? this.lastErrorCode),
+    lastErrorDetail: clearError
+        ? null
+        : (lastErrorDetail ?? this.lastErrorDetail),
   );
 }
