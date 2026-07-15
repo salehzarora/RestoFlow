@@ -209,6 +209,9 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
               body: l10n.posShiftDemoNote,
             ),
           ),
+        // PILOT-OPERATIONS-CORRECTIONS-001: name the operator whose shift this is.
+        if (ref.watch(posSignedInStaffNameProvider) case final name?)
+          _row(context, l10n.posShiftEmployee, name),
         // Current shift state (opened time if known; opening float; estimate).
         if (view.openedAt != null)
           _row(context, l10n.posShiftOpenedAt, _hhmm(view.openedAt!)),

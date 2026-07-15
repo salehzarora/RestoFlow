@@ -352,6 +352,7 @@
   "posShiftNoOpenShiftHint": "تُفتح الوردية تلقائيًا عند تسجيل دخول الكاشير.",
   "posShiftDemoNote": "وضع تجريبي — الجرد محسوب محليًا ولا يُحفظ على الخادم.",
   "posShiftOpenedAt": "فُتحت الساعة",
+  "posShiftEmployee": "الموظف",
   "posShiftOpeningFloat": "الرصيد الافتتاحي",
   "posShiftExpectedCash": "النقد المتوقع",
   "posShiftExpectedAtClose": "يُحتسب النقد المتوقع على الخادم عند الإغلاق.",

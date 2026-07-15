@@ -2206,6 +2206,12 @@ abstract class AppLocalizations {
   /// **'Opened at'**
   String get posShiftOpenedAt;
 
+  /// No description provided for @posShiftEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee'**
+  String get posShiftEmployee;
+
   /// No description provided for @posShiftOpeningFloat.
   ///
   /// In en, this message translates to:

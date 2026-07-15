@@ -1115,6 +1115,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posShiftOpenedAt => 'נפתחה בשעה';
 
   @override
+  String get posShiftEmployee => 'עובד';
+
+  @override
   String get posShiftOpeningFloat => 'קופה פותחת';
 
   @override

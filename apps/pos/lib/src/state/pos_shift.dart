@@ -12,12 +12,21 @@ class PosOpenShift {
     required this.cashDrawerSessionId,
     required this.openingFloatMinor,
     required this.openedAt,
+    this.expectedCashMinor,
   });
 
   final String shiftId;
   final String cashDrawerSessionId;
   final int openingFloatMinor;
   final DateTime openedAt;
+
+  /// The SERVER-authoritative expected cash captured when this handle was
+  /// recovered (opening float + completed cash payments on the drawer, computed
+  /// by the same SQL as `app.close_shift`). Null on a fresh auto-open (no prior
+  /// payments) and when the server could not be reached. PILOT-OPERATIONS-CORRECTIONS-001:
+  /// the shift-close UI uses this as the base so expected survives an app restart
+  /// instead of collapsing to the opening float. Integer minor units (D-007).
+  final int? expectedCashMinor;
 }
 
 /// Holds the current real open-shift handle (or null). Set by

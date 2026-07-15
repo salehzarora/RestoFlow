@@ -306,37 +306,22 @@ void main() {
     expect(container.read(posSyncSessionProvider), isNull);
   });
 
-  test('RealShiftRepository.readOpenShift recovers the open shift + drawer '
-      'from a sync_pull envelope (refresh recovery)', () async {
+  test('PILOT-OPERATIONS-CORRECTIONS-001: readOpenShift recovers the SERVER '
+      'expected cash from get_open_shift_summary (survives restart)', () async {
+    // The get_open_shift_summary envelope carries the server-authoritative
+    // expected (opening float 1000 + 4000 persisted cash = 5000) — the figure the
+    // in-memory aggregation lost across a restart.
     final envelope = <String, dynamic>{
       'ok': true,
-      'server_ts': '2026-07-03T09:00:00Z',
-      'changes': <String, dynamic>{
-        'shifts': <String, dynamic>{
-          'rows': <dynamic>[
-            <String, dynamic>{
-              'id': 'shift-9',
-              'device_id': 'dev-1',
-              'status': 'open',
-              'deleted_at': null,
-              'opened_at': '2026-07-03T09:00:00Z',
-            },
-          ],
-          'next_cursor': null,
-          'has_more': false,
-        },
-        'cash_drawer_sessions': <String, dynamic>{
-          'rows': <dynamic>[
-            <String, dynamic>{
-              'id': 'cd-9',
-              'shift_id': 'shift-9',
-              'opening_float_minor': 0,
-            },
-          ],
-          'next_cursor': null,
-          'has_more': false,
-        },
-      },
+      'has_open_shift': true,
+      'shift_id': 'shift-9',
+      'cash_drawer_session_id': 'cd-9',
+      'status': 'open',
+      'revision': 1,
+      'opened_at': '2026-07-03T09:00:00Z',
+      'opening_float_minor': 1000,
+      'cash_sales_minor': 4000,
+      'expected_cash_minor': 5000,
     };
     final repo = RealShiftRepository(
       _FakeTransport(envelope),
@@ -347,26 +332,75 @@ void main() {
     expect(info, isNotNull);
     expect(info!.shiftId, 'shift-9');
     expect(info.cashDrawerSessionId, 'cd-9');
-    expect(info.openingFloatMinor, 0);
+    expect(info.openingFloatMinor, 1000);
+    expect(info.expectedCashMinor, 5000);
   });
 
-  test('RealShiftRepository.readOpenShift returns null when no shift is open '
+  test('readOpenShift returns null when the server reports no open shift '
       '(honest, no fake handle)', () async {
-    final envelope = <String, dynamic>{
-      'ok': true,
-      'changes': <String, dynamic>{
-        'shifts': <String, dynamic>{
-          'rows': <dynamic>[],
-          'next_cursor': null,
-          'has_more': false,
-        },
-      },
-    };
     final repo = RealShiftRepository(
-      _FakeTransport(envelope),
+      _FakeTransport(<String, dynamic>{'ok': true, 'has_open_shift': false}),
       const SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1'),
       RandomClientIdGenerator(),
     );
     expect(await repo.readOpenShift(), isNull);
   });
+
+  testWidgets('PILOT-OPERATIONS-CORRECTIONS-001: after restart the shift-close '
+      'expected shows the SERVER figure (not 0) so a correct close is accepted', (
+    tester,
+  ) async {
+    // A recovered handle carrying the server expected (₪500.00) with NO in-memory
+    // session sales — the exact post-restart state that used to collapse to 0.
+    final container = ProviderContainer(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(
+          RuntimeConfig.test(isDemoMode: false),
+        ),
+        posSessionControllerProvider.overrideWith(_SeededSession.new),
+        posOpenShiftProvider.overrideWith(
+          () => _SeededHandleExpected(50000),
+        ),
+        shiftRepositoryProvider.overrideWithValue(_FakeShiftRepo()),
+      ],
+    );
+    addTearDown(container.dispose);
+    await _pumpContainer(tester, container);
+    // Expected shows ₪500.00 (server), not ₪0.00 — counting that amount balances.
+    expect(find.text('₪500.00'), findsWidgets);
+  });
+
+  testWidgets('PILOT-OPERATIONS-CORRECTIONS-001: the shift-close sheet names the '
+      'signed-in employee', (tester) async {
+    final l10n = await _en();
+    final container = ProviderContainer(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(
+          RuntimeConfig.test(isDemoMode: false),
+        ),
+        posSessionControllerProvider.overrideWith(_SeededSession.new),
+        posOpenShiftProvider.overrideWith(_SeededHandle.new),
+        shiftRepositoryProvider.overrideWithValue(_FakeShiftRepo()),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(posSignedInStaffNameProvider.notifier).set('Dana Cohen');
+    await _pumpContainer(tester, container);
+    expect(find.text(l10n.posShiftEmployee), findsOneWidget);
+    expect(find.text('Dana Cohen'), findsOneWidget);
+  });
+}
+
+/// A recovered open-shift handle carrying a server expected cash figure.
+class _SeededHandleExpected extends PosOpenShiftController {
+  _SeededHandleExpected(this.expectedMinor);
+  final int expectedMinor;
+  @override
+  PosOpenShift? build() => PosOpenShift(
+    shiftId: 'shift-1',
+    cashDrawerSessionId: 'cd-1',
+    openingFloatMinor: 0,
+    openedAt: DateTime(2026, 7, 3, 9, 15),
+    expectedCashMinor: expectedMinor,
+  );
 }

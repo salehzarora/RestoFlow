@@ -352,6 +352,7 @@
   "posShiftNoOpenShiftHint": "משמרת נפתחת אוטומטית בכניסת קופאי.",
   "posShiftDemoNote": "הדגמה — ההתאמה מחושבת מקומית ואינה נשמרת בשרת.",
   "posShiftOpenedAt": "נפתחה בשעה",
+  "posShiftEmployee": "עובד",
   "posShiftOpeningFloat": "קופה פותחת",
   "posShiftExpectedCash": "מזומן צפוי",
   "posShiftExpectedAtClose": "המזומן הצפוי מחושב בשרת בעת הסגירה.",

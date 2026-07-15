@@ -12,12 +12,19 @@ class OpenShiftInfo {
     required this.cashDrawerSessionId,
     required this.openingFloatMinor,
     required this.openedAt,
+    this.expectedCashMinor,
   });
 
   final String shiftId;
   final String cashDrawerSessionId;
   final int openingFloatMinor;
   final DateTime openedAt;
+
+  /// The SERVER-authoritative expected cash (opening float + completed cash
+  /// payments on the drawer) computed by `app.get_open_shift_summary` with the
+  /// exact `app.close_shift` formula. Null when the server did not supply it.
+  /// PILOT-OPERATIONS-CORRECTIONS-001. Integer minor units (D-007).
+  final int? expectedCashMinor;
 }
 
 /// The result of closing a shift: the server-authoritative cash reconciliation.
@@ -144,47 +151,39 @@ class RealShiftRepository implements ShiftRepository {
     final transport = _transport;
     final session = _session;
     if (transport == null || session == null) return null;
-    final result = await SyncPullApi(transport).pull(
-      session,
-      const SyncPullRequest(entities: ['shifts', 'cash_drawer_sessions']),
+    // PILOT-OPERATIONS-CORRECTIONS-001: recover the open shift through the
+    // dedicated read RPC `get_open_shift_summary`, which returns the
+    // SERVER-authoritative expected cash (opening float + completed cash payments
+    // on the drawer, the SAME SQL as app.close_shift) — unlike sync_pull, whose
+    // expected_total_minor is NULL for a live shift. This is what lets the
+    // shift-close UI show the real expected after an app restart instead of 0.
+    final Object? raw;
+    try {
+      raw = await transport.invoke('get_open_shift_summary', <String, dynamic>{
+        'p_pin_session_id': session.pinSessionId,
+        'p_device_id': session.deviceId,
+      });
+    } on SyncTransportException {
+      return null; // fail-closed: no recovery -> honest "no open shift"
+    }
+    if (raw is! Map) return null;
+    if (raw['ok'] == false) return null;
+    if (raw['has_open_shift'] != true) return null;
+    final shiftId = raw['shift_id']?.toString();
+    if (shiftId == null || shiftId.isEmpty) return null;
+
+    int? asInt(Object? v) => v is int ? v : int.tryParse('$v');
+    final openingFloatMinor = asInt(raw['opening_float_minor']) ?? 0;
+    final expectedCashMinor = asInt(raw['expected_cash_minor']);
+    final openedAt =
+        DateTime.tryParse('${raw['opened_at']}')?.toLocal() ?? DateTime.now();
+    return OpenShiftInfo(
+      shiftId: shiftId,
+      cashDrawerSessionId: raw['cash_drawer_session_id']?.toString() ?? '',
+      openingFloatMinor: openingFloatMinor,
+      openedAt: openedAt,
+      expectedCashMinor: expectedCashMinor,
     );
-    return result.fold<OpenShiftInfo?>((response) {
-      final shiftRows = response.changes['shifts']?.rows ?? const [];
-      Map<String, dynamic>? open;
-      for (final row in shiftRows) {
-        if (row['status'] == 'open' &&
-            row['device_id'] == session.deviceId &&
-            row['deleted_at'] == null) {
-          open = row;
-          break;
-        }
-      }
-      if (open == null) return null;
-      final shiftId = open['id']?.toString();
-      if (shiftId == null || shiftId.isEmpty) return null;
-      Map<String, dynamic>? drawer;
-      for (final row
-          in response.changes['cash_drawer_sessions']?.rows ??
-              const <Map<String, dynamic>>[]) {
-        if (row['shift_id'] == shiftId) {
-          drawer = row;
-          break;
-        }
-      }
-      final rawFloat = drawer?['opening_float_minor'];
-      final openingFloatMinor = rawFloat is int
-          ? rawFloat
-          : int.tryParse('$rawFloat') ?? 0;
-      final openedAt =
-          DateTime.tryParse('${open['opened_at']}')?.toLocal() ??
-          DateTime.now();
-      return OpenShiftInfo(
-        shiftId: shiftId,
-        cashDrawerSessionId: drawer?['id']?.toString() ?? '',
-        openingFloatMinor: openingFloatMinor,
-        openedAt: openedAt,
-      );
-    }, (failure) => null); // fail-closed: no recovery -> honest "no open shift"
   }
 
   /// Maps a `public.sync_push` envelope to a [ShiftCloseOutcome], FAIL-CLOSED.

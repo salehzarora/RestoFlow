@@ -1128,6 +1128,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posShiftOpenedAt => 'Opened at';
 
   @override
+  String get posShiftEmployee => 'Employee';
+
+  @override
   String get posShiftOpeningFloat => 'Opening float';
 
   @override

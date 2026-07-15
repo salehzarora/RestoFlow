@@ -419,6 +419,9 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
                 cashDrawerSessionId: info.cashDrawerSessionId,
                 openingFloatMinor: info.openingFloatMinor,
                 openedAt: info.openedAt,
+                // PILOT-OPERATIONS-CORRECTIONS-001: carry the server-authoritative
+                // expected cash so the close UI shows the real figure after restart.
+                expectedCashMinor: info.expectedCashMinor,
               ),
             );
       }
@@ -456,6 +459,7 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     required String deviceSessionId,
     required String employeeProfileId,
     required String pin,
+    String? employeeDisplayName,
   }) async {
     final transport = ref.read(posAuthTransportProvider);
     if (transport == null) return PinLoginError.unavailable;
@@ -481,6 +485,11 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         _startedAt = clock(); // RF-118: start the client expiry window.
         _pausedAt = null;
         state = AsyncData(session);
+        // PILOT-OPERATIONS-CORRECTIONS-001: remember whose shift this is (identity
+        // text only) so the shift-close surface can name the operator.
+        ref
+            .read(posSignedInStaffNameProvider.notifier)
+            .set(employeeDisplayName);
         // A cashier needs an open shift before payments (RF-055); best-effort.
         unawaited(_openShiftBestEffort(transport, session));
         return null;
@@ -499,12 +508,31 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   /// captured open-shift handle (RF-113) so a new sign-in starts fresh.
   void endSession() {
     ref.read(posOpenShiftProvider.notifier).clear();
+    ref.read(posSignedInStaffNameProvider.notifier).clear();
     _binding = null;
     _startedAt = null; // RF-118: close the client expiry window.
     _pausedAt = null;
     state = const AsyncData(null);
   }
 }
+
+/// The display name of the currently signed-in POS employee (from the PIN roster),
+/// or null when unknown. PILOT-OPERATIONS-CORRECTIONS-001: shown on the shift-close
+/// surface so the operator sees whose shift they are closing. Set at PIN sign-in,
+/// cleared on sign-out. Money-free identity text only; never a stale previous
+/// operator (cleared before a new session is established).
+class PosSignedInStaffName extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? name) =>
+      state = (name != null && name.trim().isNotEmpty) ? name.trim() : null;
+
+  void clear() => state = null;
+}
+
+final posSignedInStaffNameProvider =
+    NotifierProvider<PosSignedInStaffName, String?>(PosSignedInStaffName.new);
 
 /// RF-118: the POS staff PIN-session expiry policy (client-side). Defaults to an
 /// 8-hour absolute max age (mirroring the SERVER `pin_sessions.expires_at`

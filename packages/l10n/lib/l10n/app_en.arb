@@ -951,6 +951,7 @@
   "posShiftNoOpenShiftHint": "A shift opens automatically when a cashier signs in.",
   "posShiftDemoNote": "Demo — reconciliation is computed locally and not saved to a server.",
   "posShiftOpenedAt": "Opened at",
+  "posShiftEmployee": "Employee",
   "posShiftOpeningFloat": "Opening float",
   "posShiftExpectedCash": "Expected cash",
   "posShiftExpectedAtClose": "Expected cash is calculated on the server at close.",

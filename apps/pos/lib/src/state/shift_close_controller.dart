@@ -73,11 +73,18 @@ final currentShiftViewProvider = Provider<CurrentShiftView>((ref) {
     );
   }
   final cashSales = _sessionCashSalesMinor(paymentState.payments.values);
+  // PILOT-OPERATIONS-CORRECTIONS-001: the BASE is the SERVER-authoritative expected
+  // captured when the handle was recovered (opening float + all persisted cash to
+  // that point). On a fresh auto-open there are no prior payments so it is null and
+  // we fall back to the opening float; either way we add THIS session's in-memory
+  // cash sales, which are exactly the payments made SINCE the handle was captured —
+  // so expected survives an app restart (was collapsing to 0) without double-counting.
+  final base = handle.expectedCashMinor ?? handle.openingFloatMinor;
   return CurrentShiftView(
     isOpen: true,
     isDemo: false,
     openingFloatMinor: handle.openingFloatMinor,
-    expectedSoFarMinor: handle.openingFloatMinor + cashSales,
+    expectedSoFarMinor: base + cashSales,
     openedAt: handle.openedAt,
     currencyCode: 'ILS',
   );

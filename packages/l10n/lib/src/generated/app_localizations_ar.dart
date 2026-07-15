@@ -1123,6 +1123,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posShiftOpenedAt => 'فُتحت الساعة';
 
   @override
+  String get posShiftEmployee => 'الموظف';
+
+  @override
   String get posShiftOpeningFloat => 'الرصيد الافتتاحي';
 
   @override
