@@ -3193,6 +3193,12 @@ class AppLocalizationsHe extends AppLocalizations {
   String get tablesStatusOutOfService => 'לא בשירות';
 
   @override
+  String get tablesLinked => 'מקושר';
+
+  @override
+  String get tablesEffective => 'בפועל';
+
+  @override
   String get tablesSetStatus => 'הגדרת סטטוס';
 
   @override

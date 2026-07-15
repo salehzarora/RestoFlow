@@ -1005,6 +1005,8 @@
   "tablesStatusOccupied": "תפוס",
   "tablesStatusReserved": "שמור",
   "tablesStatusOutOfService": "לא בשירות",
+  "tablesLinked": "מקושר",
+  "tablesEffective": "בפועל",
   "tablesSetStatus": "הגדרת סטטוס",
   "tablesSaved": "השולחן נשמר",
   "adminRevokeConfirm": "לבטל את המכשיר הזה? הצימוד וההפעלות שלו יסתיימו מיד והמכשיר יחזור למסך הצימוד.",

@@ -223,6 +223,10 @@ class SupabaseTablesRepository implements TablesAdminRepository {
     // RESTAURANT-OPERATIONS-V1-001: server-derived occupancy; missing/malformed
     // degrades to 0 (display truth, never a gate).
     final activeOrders = row['active_order_count'];
+    // PILOT-OPERATIONS-CORRECTIONS-001: the server-computed effective state +
+    // active link group (display-only on the Dashboard; the POS owns link/unlink).
+    final effective = row['effective_state'];
+    final groupId = row['group_id'];
     return DashboardTable(
       id: (row['id'] ?? '').toString(),
       label: (row['label'] ?? '').toString(),
@@ -234,6 +238,10 @@ class SupabaseTablesRepository implements TablesAdminRepository {
       activeOrderCount: activeOrders is int && activeOrders > 0
           ? activeOrders
           : 0,
+      effectiveState: effective is String && effective.isNotEmpty
+          ? effective
+          : null,
+      groupId: groupId is String && groupId.isNotEmpty ? groupId : null,
     );
   }
 

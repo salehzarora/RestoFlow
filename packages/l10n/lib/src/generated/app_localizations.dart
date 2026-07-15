@@ -6094,6 +6094,18 @@ abstract class AppLocalizations {
   /// **'Out of service'**
   String get tablesStatusOutOfService;
 
+  /// No description provided for @tablesLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked'**
+  String get tablesLinked;
+
+  /// No description provided for @tablesEffective.
+  ///
+  /// In en, this message translates to:
+  /// **'Effective'**
+  String get tablesEffective;
+
   /// Per-table action that opens the status menu.
   ///
   /// In en, this message translates to:

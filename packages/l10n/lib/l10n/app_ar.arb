@@ -1005,6 +1005,8 @@
   "tablesStatusOccupied": "مشغولة",
   "tablesStatusReserved": "محجوزة",
   "tablesStatusOutOfService": "خارج الخدمة",
+  "tablesLinked": "مرتبطة",
+  "tablesEffective": "الفعلية",
   "tablesSetStatus": "تعيين الحالة",
   "tablesSaved": "تم حفظ الطاولة",
   "adminRevokeConfirm": "هل تريد إلغاء هذا الجهاز؟ سينتهي اقترانه وجلساته فورًا وسيعود الجهاز إلى شاشة الاقتران.",

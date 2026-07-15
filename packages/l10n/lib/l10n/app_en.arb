@@ -2349,6 +2349,8 @@
   "tablesStatusReserved": "Reserved",
   "@tablesStatusReserved": {"description": "Table status pill: held for a reservation."},
   "tablesStatusOutOfService": "Out of service",
+  "tablesLinked": "Linked",
+  "tablesEffective": "Effective",
   "@tablesStatusOutOfService": {"description": "Table status pill: not usable (broken/blocked)."},
   "tablesSetStatus": "Set status",
   "@tablesSetStatus": {"description": "Per-table action that opens the status menu."},

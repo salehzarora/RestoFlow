@@ -48,6 +48,29 @@ class _EmptyTablesRepo implements TablesAdminRepository {
   Future<AdminResult<void>> deleteTable(String id) async => const Success(null);
 }
 
+/// A repository returning a FIXED table list (for presentation tests).
+class _StaticTablesRepo implements TablesAdminRepository {
+  _StaticTablesRepo(this.tables);
+  final List<DashboardTable> tables;
+  @override
+  Future<AdminResult<List<DashboardTable>>> load() async => Success(tables);
+  @override
+  Future<AdminResult<void>> upsertTable({
+    String? id,
+    required String label,
+    int? seats,
+    String? area,
+    required bool isActive,
+  }) async => const Success(null);
+  @override
+  Future<AdminResult<void>> setStatus(
+    String id,
+    DiningTableStatus status,
+  ) async => const Success(null);
+  @override
+  Future<AdminResult<void>> deleteTable(String id) async => const Success(null);
+}
+
 AdminScope get _scope => AdminScope.demo;
 
 final RegExp _uuidShape = RegExp(
@@ -104,6 +127,36 @@ void main() {
       expect(tables.last.area, isNull);
       expect(tables.last.status, DiningTableStatus.outOfService);
       expect(tables.last.isActive, isFalse);
+    });
+
+    test('PILOT-OPERATIONS-CORRECTIONS-001: load parses effective_state + '
+        'group_id', () async {
+      final t = _FakeTransport(
+        (fn, p) => {
+          'ok': true,
+          'tables': [
+            {
+              'id': 't-1',
+              'label': 'T1',
+              'status': 'available',
+              'is_active': true,
+              'branch_id': 'b-1',
+              'active_order_count': 1,
+              'effective_state': 'occupied',
+              'group_id': 'g-1',
+            },
+          ],
+        },
+      );
+      final repo = SupabaseTablesRepository(
+        transport: t,
+        scope: _scope,
+        currentUserId: () => 'u',
+      );
+      final tables = (await repo.load()).fold((s) => s, (f) => fail('$f'));
+      expect(tables.single.effectiveState, 'occupied');
+      expect(tables.single.groupId, 'g-1');
+      expect(tables.single.isGrouped, isTrue);
     });
 
     test('upsert sends the contract params (p_label/p_seats/p_area/'
@@ -352,6 +405,57 @@ void main() {
       // Demo mode keeps its honest demo banner + the seeded demo tables.
       expect(find.text(l10n.adminDemoBanner), findsOneWidget);
       expect(find.text('T1'), findsOneWidget);
+    });
+
+    testWidgets('PILOT-OPERATIONS-CORRECTIONS-001: linked group + effective '
+        'state shown read-only', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      tester.view.physicalSize = const Size(1400, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: Scaffold(
+            body: TablesScreen(
+              repository: _StaticTablesRepo(const [
+                DashboardTable(
+                  id: 't-1',
+                  label: 'T1',
+                  status: DiningTableStatus.available, // manual
+                  isActive: true,
+                  branchId: 'b',
+                  activeOrderCount: 1,
+                  effectiveState: 'occupied', // differs -> shown
+                  groupId: 'g-1',
+                ),
+                DashboardTable(
+                  id: 't-2',
+                  label: 'T2',
+                  status: DiningTableStatus.available,
+                  isActive: true,
+                  branchId: 'b',
+                  groupId: 'g-1',
+                ),
+              ]),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The combined group label appears on BOTH grouped tiles (read-only; no
+      // link/unlink control on the Dashboard).
+      expect(find.text('${l10n.tablesLinked}: T1 + T2'), findsNWidgets(2));
+      expect(find.byKey(const Key('table-linked-t-1')), findsOneWidget);
+      // The effective state (Occupied) is surfaced where it differs from manual.
+      expect(
+        find.textContaining(
+          '${l10n.tablesEffective}: ${l10n.tablesStatusOccupied}',
+        ),
+        findsOneWidget,
+      );
     });
   });
 }

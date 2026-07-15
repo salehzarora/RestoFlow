@@ -3235,6 +3235,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tablesStatusOutOfService => 'Out of service';
 
   @override
+  String get tablesLinked => 'Linked';
+
+  @override
+  String get tablesEffective => 'Effective';
+
+  @override
   String get tablesSetStatus => 'Set status';
 
   @override

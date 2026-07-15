@@ -38,6 +38,8 @@ class DashboardTable {
     this.seats,
     this.area,
     this.activeOrderCount = 0,
+    this.effectiveState,
+    this.groupId,
   });
 
   final String id;
@@ -63,4 +65,17 @@ class DashboardTable {
   /// (`list_tables.active_order_count`). Multiple active orders per table are
   /// valid; the stored manual [status] is a separate, manual floor control.
   final int activeOrderCount;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: the SERVER-authoritative effective state
+  /// (`app.table_effective_state` — manual [status] fused with derived
+  /// occupancy). Null when an older server did not supply it (falls back to the
+  /// manual status for display).
+  final String? effectiveState;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: the active link-group id, or null when the
+  /// table is not part of a group. The Dashboard shows linked members read-only;
+  /// the POS remains the operational link/unlink surface for this phase.
+  final String? groupId;
+
+  bool get isGrouped => groupId != null;
 }

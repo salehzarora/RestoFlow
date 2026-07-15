@@ -3215,6 +3215,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tablesStatusOutOfService => 'خارج الخدمة';
 
   @override
+  String get tablesLinked => 'مرتبطة';
+
+  @override
+  String get tablesEffective => 'الفعلية';
+
+  @override
   String get tablesSetStatus => 'تعيين الحالة';
 
   @override
