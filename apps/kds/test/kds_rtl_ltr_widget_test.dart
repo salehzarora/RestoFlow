@@ -45,8 +45,9 @@ void main() {
   ) async {
     final r = await _pump(tester, const Locale('en'));
     expect(r.direction, TextDirection.ltr);
-    // Localized chrome renders (bump action on a ready ticket).
-    expect(find.text(r.l10n.kdsBumpAction), findsOneWidget);
+    // Localized chrome renders (the type-aware serve action on a ready
+    // dine-in ticket, RESTAURANT-OPERATIONS-V1-001).
+    expect(find.text(r.l10n.kdsServedAction), findsOneWidget);
     // Ticket data content renders.
     expect(find.textContaining('grill'), findsWidgets);
     expect(find.textContaining('Burger'), findsOneWidget);
@@ -55,16 +56,16 @@ void main() {
   testWidgets('ar renders RTL with localized chrome', (tester) async {
     final r = await _pump(tester, const Locale('ar'));
     expect(r.direction, TextDirection.rtl);
-    expect(r.l10n.kdsBumpAction, isNot('Bump'));
-    expect(find.text(r.l10n.kdsBumpAction), findsOneWidget);
+    expect(r.l10n.kdsServedAction, isNot('Served'));
+    expect(find.text(r.l10n.kdsServedAction), findsOneWidget);
     expect(find.textContaining('Burger'), findsOneWidget);
   });
 
   testWidgets('he renders RTL with localized chrome', (tester) async {
     final r = await _pump(tester, const Locale('he'));
     expect(r.direction, TextDirection.rtl);
-    expect(r.l10n.kdsBumpAction, isNot('Bump'));
-    expect(find.text(r.l10n.kdsBumpAction), findsOneWidget);
+    expect(r.l10n.kdsServedAction, isNot('Served'));
+    expect(find.text(r.l10n.kdsServedAction), findsOneWidget);
   });
 
   testWidgets('empty ticket list renders the localized empty state', (

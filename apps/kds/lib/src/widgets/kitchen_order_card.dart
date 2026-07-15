@@ -139,6 +139,7 @@ class KitchenOrderCard extends StatelessWidget {
               _ActionButton(
                 status: ticket.status,
                 l10n: l10n,
+                takeaway: ticket.orderType == OrderType.takeaway,
                 onStart: onStart,
                 onMarkReady: onMarkReady,
                 onComplete: onComplete,
@@ -227,10 +228,16 @@ class _ActionButton extends StatelessWidget {
     required this.onMarkReady,
     required this.onComplete,
     required this.onRecall,
+    required this.takeaway,
   });
 
   final KitchenTicketStatus status;
   final AppLocalizations l10n;
+
+  /// RESTAURANT-OPERATIONS-V1-001: type-aware ready-stage wording — the demo
+  /// board speaks the same words as the live one (Served / Picked up). The
+  /// local demo transition is unchanged.
+  final bool takeaway;
   final VoidCallback onStart;
   final VoidCallback onMarkReady;
   final VoidCallback onComplete;
@@ -254,8 +261,8 @@ class _ActionButton extends StatelessWidget {
         );
       case KitchenTicketStatus.ready:
         return _Forward(
-          icon: Icons.done_all,
-          label: l10n.kdsCompleteAction,
+          icon: takeaway ? Icons.takeout_dining_outlined : Icons.room_service,
+          label: takeaway ? l10n.kdsPickedUpAction : l10n.kdsServedAction,
           style: RestoflowButtonStyles.big(context),
           onPressed: onComplete,
         );

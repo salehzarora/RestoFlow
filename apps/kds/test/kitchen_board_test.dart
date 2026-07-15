@@ -126,7 +126,9 @@ void main() {
     final l10n = await _en();
     await _pump(tester);
 
-    await _tapAction(tester, 'K-1005', l10n.kdsCompleteAction);
+    // K-1005 is DINE-IN: the ready-stage action reads Served
+    // (RESTAURANT-OPERATIONS-V1-001 type-aware wording).
+    await _tapAction(tester, 'K-1005', l10n.kdsServedAction);
     expect(_inColumn('ready', 'K-1005'), findsNothing);
     expect(_inColumn('cleared', 'K-1005'), findsOneWidget);
 
