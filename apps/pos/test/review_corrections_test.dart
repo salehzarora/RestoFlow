@@ -29,7 +29,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Every one of these reaches the REAL production seam that was defective. None of
 /// them hand the code a pre-computed answer and then congratulate it for agreeing.
 void main() {
-  final t0 = DateTime.utc(2026, 7, 14, 12);
+  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2)); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   PosOrderSnapshot snap({
     String id = 'o-1',

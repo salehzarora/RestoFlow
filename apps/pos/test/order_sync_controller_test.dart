@@ -22,7 +22,13 @@ import 'package:restoflow_pos/src/data/order_identity.dart';
 
 /// POS-OPERATIONS-SYNC-001 — the coordinator wired into real providers.
 void main() {
-  final t0 = DateTime.utc(2026, 7, 14, 10);
+  // PILOT-OPERATIONS-CORRECTIONS-001 (stabilization): the SUT windows recent
+  // orders to `real-today − 1 day` (recent_orders_controller.dart, via
+  // DateTime.now()), so a HARDCODED fixture date silently falls outside the window
+  // once the calendar advances past it — deterministically failing these tests on
+  // every later day. Anchor the fixture to the real clock so it is always inside
+  // the retention window; the assertions (revision/identity/ok) are date-agnostic.
+  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2));
 
   PosOrderSnapshot snap({
     String orderId = 'o-1',
