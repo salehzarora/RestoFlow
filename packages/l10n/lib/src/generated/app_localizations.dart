@@ -7701,6 +7701,264 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close and reopen'**
   String get posOrdersConflictClose;
+
+  /// Order lifecycle status label shown for TAKEAWAY orders whose persisted status is served (the customer collected the order).
+  ///
+  /// In en, this message translates to:
+  /// **'Picked up'**
+  String get posOrdersStatusPickedUp;
+
+  /// Overlay pill on a POS menu tile whose item is marked sold out in this branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold out'**
+  String get posMenuItemSoldOut;
+
+  /// Overlay pill on a POS menu tile whose item is temporarily paused in this branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporarily unavailable'**
+  String get posMenuItemPaused;
+
+  /// Sync-status note when the server refused an order because items are unavailable in this branch; {items} is the joined item names.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available right now: {items}. Re-enter the order without these items.'**
+  String posSyncItemUnavailable(String items);
+
+  /// Sync-status note when the server refused an order because its table is no longer a live active table of this branch.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected table is no longer available. Pick another table and re-enter the order.'**
+  String get posSyncTableUnavailable;
+
+  /// POS orders centre: order-type filter chip that clears the dine-in/takeaway filter.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get posOrdersFilterTypeAll;
+
+  /// Orders-centre action opening the move-table sheet for an active dine-in order.
+  ///
+  /// In en, this message translates to:
+  /// **'Move table'**
+  String get posMoveTableAction;
+
+  /// Title of the move-table sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to another table'**
+  String get posMoveTableTitle;
+
+  /// Move-table sheet subtitle naming the order’s current table.
+  ///
+  /// In en, this message translates to:
+  /// **'Current table: {table}'**
+  String posMoveTableCurrent(String table);
+
+  /// Move-table sheet subtitle for a legacy dine-in order that has no table yet (the move doubles as assign).
+  ///
+  /// In en, this message translates to:
+  /// **'No table assigned yet'**
+  String get posMoveTableNoTable;
+
+  /// Confirm button of the move-table sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Move'**
+  String get posMoveTableConfirm;
+
+  /// Snackbar after a successful table move; {table} is the new table label.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved to {table}'**
+  String posMoveTableMoved(String table);
+
+  /// Move-table refusal: optimistic-concurrency conflict; the sheet retires (Confirm becomes Close).
+  ///
+  /// In en, this message translates to:
+  /// **'This order changed on another device. Close and act again from the updated order.'**
+  String get posMoveTableConflict;
+
+  /// Move-table refusal: the order is terminal (completed/cancelled/voided); the sheet retires.
+  ///
+  /// In en, this message translates to:
+  /// **'This order can no longer be moved.'**
+  String get posMoveTableNotMovable;
+
+  /// Move-table refusal: the target table is no longer a live active table of this branch; the list refreshes and the cashier may pick again.
+  ///
+  /// In en, this message translates to:
+  /// **'That table is no longer available. Pick another.'**
+  String get posMoveTableTableUnavailable;
+
+  /// Move-table refusal: the server role gate refused the actor.
+  ///
+  /// In en, this message translates to:
+  /// **'You don’t have permission to move this order.'**
+  String get posMoveTablePermissionDenied;
+
+  /// Move-table generic transport/unknown failure; retryable.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t move the table. Check the connection and try again.'**
+  String get posMoveTableFailed;
+
+  /// Occupancy chip on a POS table tile: how many live active orders currently sit on the table.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 open order} other{{count} open orders}}'**
+  String posTableOpenOrders(int count);
+
+  /// KDS ready-stage action for a DINE-IN ticket: marks the order served (food reached the table).
+  ///
+  /// In en, this message translates to:
+  /// **'Served'**
+  String get kdsServedAction;
+
+  /// KDS ready-stage action for a TAKEAWAY ticket: the customer collected the order (persisted status remains served).
+  ///
+  /// In en, this message translates to:
+  /// **'Picked up'**
+  String get kdsPickedUpAction;
+
+  /// Dashboard order status label shown for TAKEAWAY orders whose persisted status is served.
+  ///
+  /// In en, this message translates to:
+  /// **'Picked up'**
+  String get ordersStatusPickedUp;
+
+  /// Label of the per-branch menu item availability control.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability'**
+  String get menuAvailabilityLabel;
+
+  /// Menu item availability state: sellable in this branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get menuAvailabilityAvailable;
+
+  /// Menu item availability state: not sellable in this branch (generic; the reason says why).
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get menuAvailabilityUnavailable;
+
+  /// Menu item availability reason: sold out in this branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold out'**
+  String get menuAvailabilitySoldOut;
+
+  /// Menu item availability reason: temporarily paused in this branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get menuAvailabilityPaused;
+
+  /// Snackbar after a successful branch availability change.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability updated'**
+  String get menuAvailabilityUpdated;
+
+  /// Snackbar when a branch availability change failed (permission/transport).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t update availability'**
+  String get menuAvailabilityUpdateFailed;
+
+  /// Hint shown when the menu screen has no branch scope: availability is per-branch, so the control is hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a branch to manage availability'**
+  String get menuAvailabilityNeedsBranch;
+
+  /// Dashboard table card: derived occupancy — live active orders currently on the table.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No open orders} =1{1 open order} other{{count} open orders}}'**
+  String tablesOpenOrders(int count);
+
+  /// Activity Log title for menu.menu_item.availability_changed.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu item availability changed'**
+  String get activityLogTitleMenuAvailabilityChanged;
+
+  /// Activity Log title for menu.menu_item.availability_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu availability change denied'**
+  String get activityLogTitleMenuAvailabilityDenied;
+
+  /// Activity Log title for order.table_moved.
+  ///
+  /// In en, this message translates to:
+  /// **'Order moved to another table'**
+  String get activityLogTitleOrderTableMoved;
+
+  /// Activity Log title for order.table_move_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Table move denied'**
+  String get activityLogTitleOrderTableMoveDenied;
+
+  /// Activity Log field label for the availability before/after value.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability'**
+  String get activityLogFieldAvailability;
+
+  /// Activity Log field label for the structured availability reason (sold out / paused).
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get activityLogFieldAvailabilityReason;
+
+  /// Activity Log field label for the menu item display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Item'**
+  String get activityLogFieldItemName;
+
+  /// Activity Log field label for a table floor label.
+  ///
+  /// In en, this message translates to:
+  /// **'Table'**
+  String get activityLogFieldTableLabel;
+
+  /// Activity Log field label for the source table of a move.
+  ///
+  /// In en, this message translates to:
+  /// **'From table'**
+  String get activityLogFieldFromTable;
+
+  /// Activity Log field label for the target table of a move.
+  ///
+  /// In en, this message translates to:
+  /// **'To table'**
+  String get activityLogFieldToTable;
+
+  /// Localized denied_reason value: a table move was refused because the order is takeaway.
+  ///
+  /// In en, this message translates to:
+  /// **'Takeaway orders don’t use tables'**
+  String get activityLogDeniedTakeawayOrder;
+
+  /// Localized denied_reason value: a table move was refused because the order is terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'The order can no longer be moved'**
+  String get activityLogDeniedOrderNotMovable;
+
+  /// Localized denied_reason value: the target table is not a live active table of the branch.
+  ///
+  /// In en, this message translates to:
+  /// **'The table isn’t available'**
+  String get activityLogDeniedTableNotAvailable;
 }
 
 class _AppLocalizationsDelegate

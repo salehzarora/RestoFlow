@@ -4065,4 +4065,163 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posOrdersConflictClose => 'סגור ופתח מחדש';
+
+  @override
+  String get posOrdersStatusPickedUp => 'נאסף';
+
+  @override
+  String get posMenuItemSoldOut => 'אזל מהמלאי';
+
+  @override
+  String get posMenuItemPaused => 'לא זמין זמנית';
+
+  @override
+  String posSyncItemUnavailable(String items) {
+    return 'לא זמין כרגע: $items. הזן את ההזמנה מחדש ללא פריטים אלה.';
+  }
+
+  @override
+  String get posSyncTableUnavailable =>
+      'השולחן שנבחר אינו זמין עוד. בחר שולחן אחר והזן את ההזמנה מחדש.';
+
+  @override
+  String get posOrdersFilterTypeAll => 'כל הסוגים';
+
+  @override
+  String get posMoveTableAction => 'העברת שולחן';
+
+  @override
+  String get posMoveTableTitle => 'העברה לשולחן אחר';
+
+  @override
+  String posMoveTableCurrent(String table) {
+    return 'שולחן נוכחי: $table';
+  }
+
+  @override
+  String get posMoveTableNoTable => 'עדיין לא הוקצה שולחן';
+
+  @override
+  String get posMoveTableConfirm => 'העבר';
+
+  @override
+  String posMoveTableMoved(String table) {
+    return 'הועבר אל $table';
+  }
+
+  @override
+  String get posMoveTableConflict =>
+      'הזמנה זו השתנתה במכשיר אחר. סגור ופעל שוב מתוך ההזמנה המעודכנת.';
+
+  @override
+  String get posMoveTableNotMovable => 'לא ניתן עוד להעביר הזמנה זו.';
+
+  @override
+  String get posMoveTableTableUnavailable =>
+      'השולחן הזה אינו זמין עוד. בחר אחר.';
+
+  @override
+  String get posMoveTablePermissionDenied => 'אין לך הרשאה להעביר הזמנה זו.';
+
+  @override
+  String get posMoveTableFailed =>
+      'לא ניתן היה להעביר את השולחן. בדוק את החיבור ונסה שוב.';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count הזמנות פתוחות',
+      one: 'הזמנה פתוחה אחת',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get kdsServedAction => 'הוגש';
+
+  @override
+  String get kdsPickedUpAction => 'נאסף';
+
+  @override
+  String get ordersStatusPickedUp => 'נאסף';
+
+  @override
+  String get menuAvailabilityLabel => 'זמינות';
+
+  @override
+  String get menuAvailabilityAvailable => 'זמין';
+
+  @override
+  String get menuAvailabilityUnavailable => 'לא זמין';
+
+  @override
+  String get menuAvailabilitySoldOut => 'אזל מהמלאי';
+
+  @override
+  String get menuAvailabilityPaused => 'מושהה';
+
+  @override
+  String get menuAvailabilityUpdated => 'הזמינות עודכנה';
+
+  @override
+  String get menuAvailabilityUpdateFailed => 'לא ניתן היה לעדכן את הזמינות';
+
+  @override
+  String get menuAvailabilityNeedsBranch => 'בחר סניף כדי לנהל זמינות';
+
+  @override
+  String tablesOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count הזמנות פתוחות',
+      one: 'הזמנה פתוחה אחת',
+      zero: 'אין הזמנות פתוחות',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get activityLogTitleMenuAvailabilityChanged =>
+      'זמינות פריט התפריט שונתה';
+
+  @override
+  String get activityLogTitleMenuAvailabilityDenied =>
+      'שינוי זמינות התפריט נדחה';
+
+  @override
+  String get activityLogTitleOrderTableMoved => 'ההזמנה הועברה לשולחן אחר';
+
+  @override
+  String get activityLogTitleOrderTableMoveDenied => 'העברת השולחן נדחתה';
+
+  @override
+  String get activityLogFieldAvailability => 'זמינות';
+
+  @override
+  String get activityLogFieldAvailabilityReason => 'סיבה';
+
+  @override
+  String get activityLogFieldItemName => 'פריט';
+
+  @override
+  String get activityLogFieldTableLabel => 'שולחן';
+
+  @override
+  String get activityLogFieldFromTable => 'משולחן';
+
+  @override
+  String get activityLogFieldToTable => 'לשולחן';
+
+  @override
+  String get activityLogDeniedTakeawayOrder =>
+      'הזמנות טייק-אווי אינן משתמשות בשולחנות';
+
+  @override
+  String get activityLogDeniedOrderNotMovable => 'לא ניתן עוד להעביר את ההזמנה';
+
+  @override
+  String get activityLogDeniedTableNotAvailable => 'השולחן אינו זמין';
 }
