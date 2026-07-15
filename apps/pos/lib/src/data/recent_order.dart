@@ -250,8 +250,22 @@ class PosRecentOrder {
   String get currencyCode =>
       order?.currencyCode ?? snapshot?.currencyCode ?? '';
 
-  /// The dine-in table label, when the server or the local view knows one.
-  String? get tableLabel => order?.tableLabel ?? snapshot?.tableLabel;
+  /// The dine-in table label. SERVER FIRST (RESTAURANT-OPERATIONS-V1-001): a
+  /// table move on another till arrives through the snapshot, and the order-time
+  /// label must not mask it. The order-time label remains the fallback for rows
+  /// the server has not spoken about yet.
+  String? get tableLabel => snapshot?.tableLabel ?? order?.tableLabel;
+
+  /// THE order type (RESTAURANT-OPERATIONS-V1-001): the server's word when it
+  /// has spoken, else the order-time selection. Wire values are the canonical
+  /// 'dine_in'/'takeaway'; an unknown token falls back to the local view rather
+  /// than inventing a type. Null only for a discovered row whose snapshot
+  /// somehow carried none.
+  OrderType? get orderType => switch (snapshot?.orderType) {
+    'dine_in' => OrderType.dineIn,
+    'takeaway' => OrderType.takeaway,
+    _ => order?.orderType,
+  };
 
   /// True when a receipt can actually be rebuilt: it needs the ORDER-TIME lines,
   /// which only a device-owned order has, plus a real payment. A discovered order
@@ -303,6 +317,9 @@ class PosRecentOrder {
       subtotalMinor: snap.subtotalMinor,
       discountTotalMinor: snap.discountTotalMinor,
       taxTotalMinor: snap.taxTotalMinor,
+      // RESTAURANT-OPERATIONS-V1-001: a table move realigns the view's table
+      // like money — a reprint must name the CURRENT table. Lines stay D-008.
+      tableLabel: snap.tableLabel,
     ),
     submittedAt: _submittedAt,
     payment: payment,

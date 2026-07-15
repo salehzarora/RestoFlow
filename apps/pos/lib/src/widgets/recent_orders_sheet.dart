@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
@@ -24,6 +25,7 @@ import '../state/recent_orders_controller.dart';
 import 'cancel_order_sheet.dart';
 import 'cash_payment_sheet.dart';
 import 'discount_sheet.dart';
+import 'move_table_sheet.dart';
 import 'order_status_pills.dart';
 import 'receipt_print_preview.dart';
 
@@ -77,6 +79,7 @@ class RecentOrdersSheet extends ConsumerStatefulWidget {
 class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
   PosOrderSection _section = PosOrderSection.open;
   PosSettlementFilter _settlement = PosSettlementFilter.all;
+  PosOrderTypeFilter _type = PosOrderTypeFilter.all;
   PosOrderSort _sort = PosOrderSort.newestFirst;
   String? _status;
   String _query = '';
@@ -155,6 +158,7 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
       orders,
       section: _section,
       settlement: _settlement,
+      type: _type,
       status: _status,
       query: _query,
       sort: _sort,
@@ -197,9 +201,11 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
           _Filters(
             l10n: l10n,
             settlement: _settlement,
+            type: _type,
             status: _status,
             sort: _sort,
             onSettlement: (s) => setState(() => _settlement = s),
+            onType: (t) => setState(() => _type = t),
             onStatus: (s) => setState(() => _status = s),
             onSort: (s) => setState(() => _sort = s),
           ),
@@ -422,18 +428,22 @@ class _Filters extends StatelessWidget {
   const _Filters({
     required this.l10n,
     required this.settlement,
+    required this.type,
     required this.status,
     required this.sort,
     required this.onSettlement,
+    required this.onType,
     required this.onStatus,
     required this.onSort,
   });
 
   final AppLocalizations l10n;
   final PosSettlementFilter settlement;
+  final PosOrderTypeFilter type;
   final String? status;
   final PosOrderSort sort;
   final ValueChanged<PosSettlementFilter> onSettlement;
+  final ValueChanged<PosOrderTypeFilter> onType;
   final ValueChanged<String?> onStatus;
   final ValueChanged<PosOrderSort> onSort;
 
@@ -451,6 +461,15 @@ class _Filters extends StatelessWidget {
           label: Text(_settlementLabel(l10n, f)),
           selected: settlement == f,
           onSelected: (_) => onSettlement(f),
+        ),
+      const SizedBox(width: RestoflowSpacing.sm),
+      // ORDER TYPE - EXACT, like settlement (RESTAURANT-OPERATIONS-V1-001).
+      for (final t in PosOrderTypeFilter.values)
+        FilterChip(
+          key: Key('orders-type-' + t.name),
+          label: Text(_typeLabel(l10n, t)),
+          selected: type == t,
+          onSelected: (_) => onType(t),
         ),
       const SizedBox(width: RestoflowSpacing.sm),
       for (final s in <String?>[
@@ -607,6 +626,12 @@ class _OrderCard extends ConsumerWidget {
     final serverStatus = order.serverStatus;
 
     final meta = <String>[
+      // The order TYPE, always visible (RESTAURANT-OPERATIONS-V1-001): a floor
+      // under rush must tell a table order from a counter pickup at a glance.
+      if (order.orderType case final t?)
+        t == OrderType.dineIn
+            ? l10n.posOrderTypeDineIn
+            : l10n.posOrderTypeTakeaway,
       if (order.tableLabel case final t? when t.trim().isNotEmpty)
         '${l10n.posTableLabel} $t',
       if (order.order?.customerName case final c? when c.trim().isNotEmpty) c,
@@ -692,6 +717,9 @@ class _OrderCard extends ConsumerWidget {
                 serverStatus: serverStatus,
                 settlement: order.settlement,
                 keySuffix: order.orderNumber,
+                // A takeaway's `served` reads "Picked up" - same state machine,
+                // honest operational words (RESTAURANT-OPERATIONS-V1-001).
+                orderType: order.orderType,
               ),
               // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
               // "My payment is syncing" is a fact about this till, not the order.
@@ -817,6 +845,19 @@ class _ActionRow extends ConsumerWidget {
       );
     }
 
+    if (actions.canMoveTable) {
+      children.add(
+        _ActionButton(
+          child: OutlinedButton.icon(
+            key: Key('recent-move-table-${order.orderNumber}'),
+            onPressed: () => MoveTableSheet.show(context, order: order),
+            icon: const Icon(Icons.swap_horiz, size: 18),
+            label: Text(l10n.posMoveTableAction),
+          ),
+        ),
+      );
+    }
+
     if (actions.canOpenReceipt) {
       children.add(
         _ActionButton(
@@ -903,6 +944,12 @@ String _settlementLabel(AppLocalizations l10n, PosSettlementFilter f) =>
       PosSettlementFilter.paid => l10n.posOrdersSettlementPaid,
       PosSettlementFilter.noCharge => l10n.posOrdersSettlementNoCharge,
     };
+
+String _typeLabel(AppLocalizations l10n, PosOrderTypeFilter t) => switch (t) {
+  PosOrderTypeFilter.all => l10n.posOrdersFilterTypeAll,
+  PosOrderTypeFilter.dineIn => l10n.posOrderTypeDineIn,
+  PosOrderTypeFilter.takeaway => l10n.posOrderTypeTakeaway,
+};
 
 String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
   PosPendingKind.submit ||

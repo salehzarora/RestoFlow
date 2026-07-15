@@ -365,6 +365,18 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     ];
     await _repo.push(entryId);
     state = await _repo.recentEntries();
+    // RESTAURANT-OPERATIONS-V1-001: the server refusing an item as unavailable
+    // means OUR menu is stale — a manager flipped availability after our last
+    // load. Reload it so the grid greys the item out before the cashier
+    // re-enters the corrected order. Availability only travels with the menu
+    // (there is no realtime push), so this is the honest refresh point.
+    for (final e in state) {
+      if (e.id == entryId &&
+          e.syncState == OutboxSyncState.rejected &&
+          e.lastErrorCode == 'item_unavailable') {
+        ref.invalidate(posMenuProvider);
+      }
+    }
   }
 
   /// Re-queues a failed [entryId] and pushes it again.

@@ -24,10 +24,21 @@ enum TableStatusKind { available, occupied, blocked }
 
 /// Immutable UI view of a [DiningTable] plus its derived [TableStatusKind].
 class DemoTable {
-  const DemoTable({required this.table, required this.status});
+  const DemoTable({
+    required this.table,
+    required this.status,
+    this.activeOrderCount = 0,
+  });
 
   final DiningTable table;
   final TableStatusKind status;
+
+  /// RESTAURANT-OPERATIONS-V1-001: DERIVED occupancy — how many live
+  /// active-status orders currently sit on this table, as the SERVER counted
+  /// them (`pos_tables.active_order_count`). Multiple active orders per table
+  /// are VALID (second rounds); the count is shown honestly and does NOT by
+  /// itself block selection. Demo mode derives it from its seeded orders.
+  final int activeOrderCount;
 
   String get tableId => table.tableId;
   String get label => table.label;
@@ -66,7 +77,13 @@ class DemoTablesStore implements TablesRepository {
     final tables = _seedTables();
     final occupied = _seedOccupancy(tables);
     return tables
-        .map((t) => DemoTable(table: t, status: _statusFor(t, occupied)))
+        .map(
+          (t) => DemoTable(
+            table: t,
+            status: _statusFor(t, occupied),
+            activeOrderCount: occupied.contains(t.tableId) ? 1 : 0,
+          ),
+        )
         .toList(growable: false);
   }
 
@@ -191,6 +208,9 @@ class RealTablesRepository implements TablesRepository {
       if (id is! String || label is! String) continue;
       final seats = row['seats'];
       final area = row['area'];
+      // RESTAURANT-OPERATIONS-V1-001: honest server-derived occupancy. Missing/
+      // malformed degrades to 0 — the count is display truth, never a gate.
+      final activeOrders = row['active_order_count'];
       tables.add(
         DemoTable(
           table: DiningTable(
@@ -203,6 +223,9 @@ class RealTablesRepository implements TablesRepository {
             area: area is String && area.isNotEmpty ? area : null,
           ),
           status: _statusFor(row['status']),
+          activeOrderCount: activeOrders is int && activeOrders > 0
+              ? activeOrders
+              : 0,
         ),
       );
     }

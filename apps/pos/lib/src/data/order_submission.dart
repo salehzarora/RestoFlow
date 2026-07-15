@@ -300,6 +300,7 @@ class OutboxEntry {
     this.branchId,
     this.attemptCount = 0,
     this.lastErrorCode,
+    this.lastErrorDetail,
   });
 
   final String id;
@@ -329,6 +330,12 @@ class OutboxEntry {
   final int attemptCount;
   final String? lastErrorCode;
 
+  /// RESTAURANT-OPERATIONS-V1-001: SAFE display detail for a typed rejection —
+  /// today only `item_unavailable` uses it (the joined blocked-item names the
+  /// server echoed back from OUR OWN payload snapshots). Never raw backend
+  /// JSON; null for every other outcome.
+  final String? lastErrorDetail;
+
   /// RF-114 durable-outbox persistence. Stores ONLY what a retry needs: the
   /// idempotency identity `(deviceId, localOperationId)`, the op envelope, the
   /// server-shaped [payloadJson] (integer minor money only, D-007; no secrets,
@@ -351,6 +358,7 @@ class OutboxEntry {
     'branch_id': branchId,
     'attempt_count': attemptCount,
     'last_error_code': lastErrorCode,
+    if (lastErrorDetail != null) 'last_error_detail': lastErrorDetail,
   };
 
   /// Parses a persisted entry. Fail-safe: an unparseable/foreign-shape entry
@@ -391,6 +399,7 @@ class OutboxEntry {
       branchId: json['branch_id'] as String?,
       attemptCount: (json['attempt_count'] as num?)?.toInt() ?? 0,
       lastErrorCode: json['last_error_code'] as String?,
+      lastErrorDetail: json['last_error_detail'] as String?,
     );
   }
 
@@ -398,6 +407,7 @@ class OutboxEntry {
     OutboxSyncState? syncState,
     int? attemptCount,
     String? lastErrorCode,
+    String? lastErrorDetail,
     bool clearError = false,
   }) => OutboxEntry(
     id: id,
@@ -415,5 +425,8 @@ class OutboxEntry {
     branchId: branchId,
     attemptCount: attemptCount ?? this.attemptCount,
     lastErrorCode: clearError ? null : (lastErrorCode ?? this.lastErrorCode),
+    lastErrorDetail: clearError
+        ? null
+        : (lastErrorDetail ?? this.lastErrorDetail),
   );
 }

@@ -89,6 +89,11 @@ class MenuItemCard extends StatelessWidget {
       for (final tag in _kTagPillPriority)
         if (item.tags.contains(tag)) tag,
     ].take(_kMaxTagPills).toList();
+    // RESTAURANT-OPERATIONS-V1-001: an unavailable item stays VISIBLE (staff
+    // must see WHY it cannot be sold) but takes no tap and offers no add
+    // button. The server refuses the sale again at acceptance, so this gate is
+    // honesty, not security.
+    final unavailable = item.isUnavailable;
 
     return Card(
       elevation: 1.5,
@@ -100,7 +105,8 @@ class MenuItemCard extends StatelessWidget {
         side: const BorderSide(color: kRestoflowHairline),
       ),
       child: InkWell(
-        onTap: onAdd,
+        key: Key('menu-item-${item.id}'),
+        onTap: unavailable ? null : onAdd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -114,6 +120,7 @@ class MenuItemCard extends StatelessWidget {
                 l10n: l10n,
                 bandTags: bandTags,
                 inCartQuantity: inCartQuantity,
+                unavailable: unavailable,
               ),
             ),
             Expanded(
@@ -155,9 +162,11 @@ class MenuItemCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: RestoflowSpacing.sm),
-                        // The canonical add gesture: a 44px filled green button.
-                        _AddButton(onAdd: onAdd, tooltip: l10n.posAddToCart),
+                        if (!unavailable) ...[
+                          const SizedBox(width: RestoflowSpacing.sm),
+                          // The canonical add gesture: a 44px filled green button.
+                          _AddButton(onAdd: onAdd, tooltip: l10n.posAddToCart),
+                        ],
                       ],
                     ),
                   ],
@@ -181,6 +190,7 @@ class _ImageBand extends StatelessWidget {
     required this.l10n,
     required this.bandTags,
     required this.inCartQuantity,
+    required this.unavailable,
   });
 
   final DemoMenuItem item;
@@ -188,6 +198,7 @@ class _ImageBand extends StatelessWidget {
   final AppLocalizations l10n;
   final List<String> bandTags;
   final int inCartQuantity;
+  final bool unavailable;
 
   @override
   Widget build(BuildContext context) {
@@ -234,6 +245,32 @@ class _ImageBand extends StatelessWidget {
             start: RestoflowSpacing.sm,
             child: _InCartBadge(quantity: inCartQuantity),
           ),
+        // RESTAURANT-OPERATIONS-V1-001: the not-sellable treatment — a dimming
+        // scrim + a centred reason pill (Sold out / Temporarily unavailable).
+        // Text, never colour alone.
+        if (unavailable) ...[
+          const ColoredBox(color: Color(0x99FFFFFF)),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: RestoflowSpacing.sm,
+              ),
+              // Scale down rather than overflow: "Temporarily unavailable" (and
+              // its ar/he translations) must survive the narrowest tile.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: RestoflowStatusPill(
+                  key: Key('menu-item-unavailable-${item.id}'),
+                  label: item.availabilityReason == 'paused'
+                      ? l10n.posMenuItemPaused
+                      : l10n.posMenuItemSoldOut,
+                  tone: RestoflowTone.danger,
+                  icon: Icons.do_not_disturb_on_outlined,
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

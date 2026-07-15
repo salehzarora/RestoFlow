@@ -593,6 +593,20 @@ class _TableTile extends StatelessWidget {
                         ),
                       ),
                     ],
+                    // RESTAURANT-OPERATIONS-V1-001: honest DERIVED occupancy —
+                    // live active orders the SERVER counted on this table.
+                    // Display truth only; it never gates selection by itself
+                    // (second-round ordering on a seated table is valid).
+                    if (table.activeOrderCount > 0) ...[
+                      const SizedBox(height: RestoflowSpacing.xs),
+                      Text(
+                        l10n.posTableOpenOrders(table.activeOrderCount),
+                        key: Key('table-open-orders-${table.tableId}'),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: onFill.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: RestoflowSpacing.sm),
                     Text(
                       statusLabel,
