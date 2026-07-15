@@ -12,6 +12,7 @@ import '../format/payment_method_label.dart';
 import '../format/tax_math.dart';
 import '../pos_palette.dart';
 import '../state/cart_controller.dart';
+import '../state/draft_recovery_controller.dart';
 import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_branch_tax.dart';
@@ -346,6 +347,22 @@ Future<void> submitOrderFromCart({
     // fabricated, nothing is rolled back, and the original scope re-discovers the
     // accepted order through its own authoritative window pull.
     if (container.read(posSyncScopeProvider)?.key != scopeKey) return;
+
+    // PILOT-OPERATIONS-CORRECTIONS-001: capture the draft BEFORE submitOrder clears
+    // the cart, keyed to THIS submit's outbox entry. If the server permanently
+    // rejects it (item_unavailable), the confirmation offers "Back to cart" to
+    // restore this exact draft; an accepted order clears it (below/on acceptance).
+    container
+        .read(posDraftRecoveryProvider.notifier)
+        .capture(
+          PosDraftRecovery(
+            draft: cartController.captureDraft(),
+            orderType: setup.orderType,
+            table: setup.assignedTable,
+            customerName: setup.customerName,
+            outboxEntryId: result.entry.id,
+          ),
+        );
 
     cartController.submitOrder(
       orderType: setup.orderType,

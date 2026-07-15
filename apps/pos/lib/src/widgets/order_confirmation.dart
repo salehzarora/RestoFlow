@@ -15,7 +15,10 @@ import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/native_print_bridges.dart';
+import '../state/cart_controller.dart';
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
+import '../state/draft_recovery_controller.dart';
+import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/payment_controller.dart';
 import '../state/recent_orders_controller.dart';
@@ -58,6 +61,30 @@ class OrderConfirmation extends ConsumerWidget {
     final entries = ref.watch(outboxControllerProvider);
     final entry = _entryForId(entries, order.outboxEntryId);
     final outbox = ref.read(outboxControllerProvider.notifier);
+
+    // PILOT-OPERATIONS-CORRECTIONS-001 — a PERMANENTLY rejected item_unavailable
+    // NEW order has NO server order: it must NEVER offer payment / discount / void
+    // / receipt (those pretend an order exists). Instead the cashier recovers —
+    // restore the exact draft to the cart, or discard the attempt (no server void).
+    final isRejectedDraft =
+        entry != null &&
+        entry.isPermanentBusinessRejection &&
+        entry.lastErrorCode == 'item_unavailable';
+    final recovery = ref.watch(posDraftRecoveryProvider);
+    final canRestoreDraft =
+        isRejectedDraft &&
+        recovery != null &&
+        recovery.outboxEntryId == order.outboxEntryId;
+    // Clear the recovery when the order is authoritatively ACCEPTED (applied), so a
+    // stale draft can never be restored over a real order.
+    ref.listen(outboxControllerProvider, (previous, next) {
+      final e = _entryForId(next, order.outboxEntryId);
+      if (e != null && e.syncState == OutboxSyncState.applied) {
+        ref
+            .read(posDraftRecoveryProvider.notifier)
+            .clearIfFor(order.outboxEntryId ?? '');
+      }
+    });
 
     // RF-116: the recorded cash payment for THIS order, or null if unpaid. Looked up
     // by IDENTITY: keyed by the display code, a payment taken for another order that
@@ -112,10 +139,14 @@ class OrderConfirmation extends ConsumerWidget {
 
     // Actions come from the policy when we HAVE authority. Before the first snapshot
     // arrives we keep the existing, safe behaviour rather than blanking the screen.
-    final canPay = actions?.canPay ?? (payment == null);
-    final canDiscount =
-        actions?.canDiscount ??
-        (payment == null && order.discountTotalMinor == 0);
+    // A rejected draft has no order — NEVER offer payment or discount for it.
+    final canPay = isRejectedDraft
+        ? false
+        : (actions?.canPay ?? (payment == null));
+    final canDiscount = isRejectedDraft
+        ? false
+        : (actions?.canDiscount ??
+              (payment == null && order.discountTotalMinor == 0));
 
     // The money the screen SHOWS. Realigned to the server's figures so a comp applied
     // while this screen was open cannot keep printing the old total. The order LINES
@@ -340,7 +371,95 @@ class OrderConfirmation extends ConsumerWidget {
             padding: const EdgeInsets.all(RestoflowSpacing.lg),
             child: SafeArea(
               top: false,
-              child: payment == null
+              child: isRejectedDraft
+                  ? Column(
+                      key: const Key('recovery-actions'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: RestoflowSpacing.sm,
+                          ),
+                          child: RestoflowNoticeBanner(
+                            key: const Key('recovery-not-created'),
+                            tone: RestoflowTone.warning,
+                            icon: Icons.info_outline,
+                            body: l10n.posRecoveryOrderNotCreated,
+                          ),
+                        ),
+                        if (canRestoreDraft)
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              key: const Key('recovery-back-to-cart'),
+                              onPressed: () {
+                                ref
+                                    .read(cartControllerProvider.notifier)
+                                    .restoreDraft(recovery.draft);
+                                final setup = ref.read(
+                                  orderSetupControllerProvider.notifier,
+                                );
+                                setup.setOrderType(recovery.orderType);
+                                final table = recovery.table;
+                                if (table != null) setup.assignTable(table);
+                                // Restoring nulls the submitted order, so the cart
+                                // panel rebuilds to the restored cart (confirmation
+                                // dismissed). Clear the recovery so a repeated tap
+                                // cannot restore twice.
+                                ref
+                                    .read(posDraftRecoveryProvider.notifier)
+                                    .clear();
+                              },
+                              icon: const Icon(Icons.edit_outlined),
+                              label: Text(l10n.posRecoveryBackToCart),
+                              style: RestoflowButtonStyles.big(context),
+                            ),
+                          ),
+                        if (canRestoreDraft)
+                          const SizedBox(height: RestoflowSpacing.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            key: const Key('recovery-discard'),
+                            onPressed: () async {
+                              final ok = await showDialog<bool>(
+                                context: context,
+                                builder: (dctx) => AlertDialog(
+                                  title: Text(
+                                    l10n.posRecoveryDiscardConfirmTitle,
+                                  ),
+                                  content: Text(
+                                    l10n.posRecoveryDiscardConfirmBody,
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(dctx).pop(false),
+                                      child: Text(l10n.posShiftCancelAction),
+                                    ),
+                                    FilledButton(
+                                      onPressed: () =>
+                                          Navigator.of(dctx).pop(true),
+                                      child: Text(l10n.posRecoveryDiscardDraft),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (ok != true) return;
+                              // Local-only discard: NO server void (no order was
+                              // created). Clear the draft + dismiss to a clean cart.
+                              ref
+                                  .read(posDraftRecoveryProvider.notifier)
+                                  .clear();
+                              onNewOrder();
+                            },
+                            icon: const Icon(Icons.delete_outline),
+                            label: Text(l10n.posRecoveryDiscardDraft),
+                          ),
+                        ),
+                      ],
+                    )
+                  : payment == null
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
