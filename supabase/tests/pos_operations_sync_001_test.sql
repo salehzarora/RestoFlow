@@ -362,7 +362,12 @@ select is((app.pos_order_snapshots(p_pin_session_id => '90a00000-0000-0000-0000-
 
 
 -- ===== I. A READ IS NOT A WRITE ============================================ 38
-select is((select count(*)::int from audit_events), 0,
+-- REVIEW DELTA (hygiene): scope to THIS FILE'S orgs — the zero-rows-written
+-- meaning is identical, but append-only residue from the concurrency harness
+-- (its own org only) must not be absorbed by a whole-database count.
+select is((select count(*)::int from audit_events
+            where organization_id in ('90a00000-0000-0000-0000-0000000000a0',
+                                      '90b00000-0000-0000-0000-0000000000b0')), 0,
   'I1 the snapshot read emitted NO audit event — opening a screen, polling and reconciling are not operational actions');
 
 select * from finish();

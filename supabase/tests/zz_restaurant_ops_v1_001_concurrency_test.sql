@@ -14,8 +14,10 @@
 --   B. the setter locks/commits 'unavailable' first -> a submit that raced in
 --      BLOCKS, then re-evaluates under the lock and REFUSES item_unavailable;
 --      no order is created.
---   C. two concurrent setters serialize: the second observes the first's
---      COMMITTED state, so the audit before/after chain is never stale.
+--   C. two concurrent setters on one item: setter 1 holds its transaction
+--      open after the production function returns -> setter 2 BLOCKS on the
+--      canonical row lock, completes only after setter 1 commits, and audits
+--      setter 1's COMMITTED state as its BEFORE (never a stale pre-lock read).
 --
 -- HARNESS NOTES: dblink sessions cannot see uncommitted fixtures, so this file
 -- COMMITS its fixtures (fixed hex ids, upsert-tolerant so a re-run is safe)
@@ -28,13 +30,12 @@
 -- deletes EVERY committed 7d-prefixed fixture/scenario row it created —
 -- EXCEPT its audit_events rows, which are append-only by design (D-013,
 -- app.enforce_audit_append_only blocks DELETE for every role) and stay in the
--- local test db. Suites that assert FIXED GLOBAL audit_events counts
--- (audit_log_dashboard_001, pos_operations_sync_001) therefore only pass on a
--- freshly reset database IF they run BEFORE this file — the zz_ prefix pins
--- this file to the END of the alphabetical `supabase test db` run. The
--- canonical validation recipe (`supabase db reset` then one full
--- `supabase test db` pass) is unaffected; only a REPEATED full run without a
--- reset would see this file's leftover audit rows.
+-- local test db under THIS file's own 7d org only. Audit-count assertions in
+-- other suites are scoped to their own fixture orgs (review delta, test
+-- hygiene), so this residue is invisible to them: running this file
+-- standalone and then the full suite WITHOUT a reset stays green, as does the
+-- canonical `supabase db reset` + full-suite recipe. The zz_ prefix keeps the
+-- one committing file at the END of the alphabetical run as extra isolation.
 -- ============================================================================
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
@@ -78,12 +79,14 @@ insert into menu_categories (id, organization_id, restaurant_id, branch_id, name
   ('7d000000-0000-0000-0000-00000000ca01', '7d000000-0000-0000-0000-0000000000a0', '7d000000-0000-0000-0000-0000000000a1', null, 'Food', 1)
   on conflict (id) do nothing;
 insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
-  ('7d000000-0000-0000-0000-0000000000f1', '7d000000-0000-0000-0000-0000000000a0', '7d000000-0000-0000-0000-0000000000a1', null, '7d000000-0000-0000-0000-00000000ca01', 'Falafel', 2500, 'ILS', 1)
+  ('7d000000-0000-0000-0000-0000000000f1', '7d000000-0000-0000-0000-0000000000a0', '7d000000-0000-0000-0000-0000000000a1', null, '7d000000-0000-0000-0000-00000000ca01', 'Falafel', 2500, 'ILS', 1),
+  -- scenario C's own item: the setter-vs-setter chain must start from
+  -- 'available', and f1 ends scenario B as 'paused'.
+  ('7d000000-0000-0000-0000-0000000000f2', '7d000000-0000-0000-0000-0000000000a0', '7d000000-0000-0000-0000-0000000000a1', null, '7d000000-0000-0000-0000-00000000ca01', 'Shakshuka', 3800, 'ILS', 2)
   on conflict (id) do nothing;
 -- start every run from a clean availability state.
 delete from menu_item_branch_availability
-  where organization_id = '7d000000-0000-0000-0000-0000000000a0'
-    and menu_item_id = '7d000000-0000-0000-0000-0000000000f1';
+  where organization_id = '7d000000-0000-0000-0000-0000000000a0';
 
 -- helpers: per-run identities (no cross-run idempotency collisions) and the
 -- scenario clock floor for audit scoping.
@@ -129,7 +132,7 @@ begin
 end;
 $$;
 
-select plan(10);
+select plan(14);
 
 select dblink_connect('sess_a', (select cs from t_conn));
 select dblink_connect('sess_b', (select cs from t_conn));
@@ -216,28 +219,75 @@ select is(
   0, 'B: no order was created after the serialized unavailability change');
 
 -- ============================================================================
--- SCENARIO C — concurrent setters serialize BEFORE audit capture: the second
--- observes the first's committed state; before/after is never stale.
--- (Scenario A already wrote available->sold_out under a held submit lock; the
--- B-scenario setter then wrote sold_out->paused. Assert the serialized audit
--- chain of THIS RUN: no row claims a stale ''available'' BEFORE twice.)
+-- SCENARIO C — GENUINE setter-vs-setter concurrency (review delta MEDIUM).
+-- Setter 1 (sess_b) runs the PRODUCTION app.menu_set_item_availability inside
+-- an OPEN transaction (sold_out on the fresh item f2) and HOLDS the canonical
+-- menu_items FOR UPDATE lock. Setter 2 (sess_a) races the same production
+-- function (paused) from a separate session: it must BLOCK, complete only
+-- after setter 1 commits, and audit setter 1's COMMITTED state as its BEFORE.
 -- ============================================================================
+-- setter 2's session needs the same owner identity GUC the setter path checks.
+select x from dblink('sess_a',
+  'select set_config(''app.current_app_user_id'', ''7d000000-0000-0000-0000-00000000ee01'', false)')
+  as t(x text);
+
+-- setter 1: BEGIN + the real function; the transaction stays OPEN afterwards,
+-- so the f2 row lock is retained until the explicit COMMIT below.
+select dblink_exec('sess_b', 'begin');
+create temp table t_c_set1 as
+  select r::jsonb as res from dblink('sess_b', format(
+    'select app.menu_set_item_availability(%L, %L, %L, %L, %L, %L)::text',
+    '7d000000-0000-0000-0000-0000000000a0', '7d000000-0000-0000-0000-0000000000a1',
+    '7d000000-0000-0000-0000-00000000a1b1', '7d000000-0000-0000-0000-0000000000f2',
+    'unavailable', 'sold_out')) as t(r text);
+select is((select res->>'ok' from t_c_set1), 'true',
+  'C: setter 1 (sold_out) succeeded inside its still-OPEN transaction');
+
+-- setter 2 races from the OTHER session and must block on the same row lock.
+select dblink_send_query('sess_a', format(
+  'select app.menu_set_item_availability(%L, %L, %L, %L, %L, %L)::text',
+  '7d000000-0000-0000-0000-0000000000a0', '7d000000-0000-0000-0000-0000000000a1',
+  '7d000000-0000-0000-0000-00000000a1b1', '7d000000-0000-0000-0000-0000000000f2',
+  'unavailable', 'paused'));
+select pg_sleep(0.5);
+select is(dblink_is_busy('sess_a'), 1,
+  'C: setter 2 BLOCKS while setter 1''s transaction still holds the canonical item lock');
+
+-- setter 1 commits -> setter 2 unblocks and applies AFTER it.
+select dblink_exec('sess_b', 'commit');
+select is((pg_temp.drain('sess_a')::jsonb)->>'ok', 'true',
+  'C: setter 2 completes only after setter 1 commits');
+
+-- the serialized audit chain on f2: available -> sold_out -> paused, with each
+-- BEFORE captured under the lock (never a stale pre-lock read).
+select is(
+  (select coalesce(old_values->>'availability', 'available') || '>' || (new_values->>'availability_reason')
+     from audit_events
+    where organization_id = '7d000000-0000-0000-0000-0000000000a0'
+      and action = 'menu.menu_item.availability_changed'
+      and occurred_at >= (select started_at from t_ids)
+      and new_values->>'menu_item_id' = '7d000000-0000-0000-0000-0000000000f2'
+      and new_values->>'availability_reason' = 'sold_out'),
+  'available>sold_out',
+  'C: setter 1 audited BEFORE = available, AFTER = sold_out');
 select is(
   (select old_values->>'availability_reason' || '>' || (new_values->>'availability_reason')
      from audit_events
     where organization_id = '7d000000-0000-0000-0000-0000000000a0'
       and action = 'menu.menu_item.availability_changed'
       and occurred_at >= (select started_at from t_ids)
+      and new_values->>'menu_item_id' = '7d000000-0000-0000-0000-0000000000f2'
       and new_values->>'availability_reason' = 'paused'),
   'sold_out>paused',
-  'C: the second setter audited the FIRST setter''s committed state as its BEFORE (never stale)');
+  'C: setter 2 audited setter 1''s COMMITTED state as its BEFORE (captured under the lock, never stale)');
 select is(
   (select count(*)::int from audit_events
     where organization_id = '7d000000-0000-0000-0000-0000000000a0'
       and action = 'menu.menu_item.availability_changed'
       and occurred_at >= (select started_at from t_ids)
-      and old_values->>'availability' = 'available'),
-  1, 'C: exactly ONE audit row of this run started from available — the serialized chain has no fork');
+      and new_values->>'menu_item_id' = '7d000000-0000-0000-0000-0000000000f2'
+      and coalesce(old_values->>'availability', 'available') = 'available'),
+  1, 'C: exactly ONE f2 audit row of this run started from available — the serialized chain has no fork');
 
 select dblink_disconnect('sess_a');
 select dblink_disconnect('sess_b');

@@ -23,7 +23,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(49);
+select plan(55);
 
 -- ===== fixture: org A — Rest A1, branches B1 + B2; cashier stack on B1 ======
 insert into organizations (id, name, slug, default_currency) values
@@ -532,6 +532,53 @@ select is(
       and action = 'order.submitted'
       and new_values->>'local_operation_id' like 'rops-a1-%'),
   0, 'A1: no false order-created audit for any refusal');
+
+-- ===== REVIEW DELTA (HIGH) — same-org, DIFFERENT-restaurant category =========
+-- The schema permits an item of Restaurant A referencing a category of
+-- Restaurant B within the SAME organization. Such a hybrid item is NOT part of
+-- Restaurant A's effective menu: submit_order must refuse it (uniform
+-- 'unavailable' — no sibling-restaurant oracle) and pos_menu must not serve it.
+insert into restaurants (id, organization_id, name) values
+  ('7b000000-0000-0000-0000-0000000000a2', '7b000000-0000-0000-0000-0000000000a0', 'Rest A2');
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('7b000000-0000-0000-0000-00000000ca06', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a2', null, 'A2 Cat', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('7b000000-0000-0000-0000-000000000f10', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca06', 'Hybrid', 1000, 'ILS', 9);
+
+create temp table t_xr as select
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0031',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-xr-cat', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-000000000f10',
+      'menu_item_name_snapshot', 'Hybrid', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 0, 1000)) as hybrid,
+  (select app.pos_menu('7b000000-0000-0000-0000-00000000c501',
+                       '7b000000-0000-0000-0000-00000000da11')) as menu;
+select is((select hybrid->>'error' || '|' || (hybrid->'items'->0->>'reason') from t_xr),
+  'item_unavailable|unavailable',
+  'XR: an item whose category belongs to a SIBLING RESTAURANT of the same org is refused with the uniform reason (no oracle)');
+select is(
+  (select count(*)::int from orders
+    where organization_id = '7b000000-0000-0000-0000-0000000000a0'
+      and local_operation_id = 'rops-xr-cat'),
+  0, 'XR: the refused cross-restaurant submission created NO order row');
+select is(
+  (select count(*)::int from order_items oi
+    join orders o on o.id = oi.order_id
+    where o.organization_id = '7b000000-0000-0000-0000-0000000000a0'
+      and o.local_operation_id = 'rops-xr-cat'),
+  0, 'XR: no partial order_items rows either');
+select is(
+  (select count(*)::int from audit_events
+    where organization_id = '7b000000-0000-0000-0000-0000000000a0'
+      and action = 'order.submitted'
+      and new_values->>'local_operation_id' = 'rops-xr-cat'),
+  0, 'XR: no false order-created audit');
+select ok(
+  (select position('7b000000-0000-0000-0000-000000000f10' in (menu->'items')::text) = 0 from t_xr),
+  'XR: pos_menu does NOT serve the hybrid item — the read model and submit_order agree on the effective restaurant menu scope');
+select ok(
+  (select position('7b000000-0000-0000-0000-0000000000f1' in (menu->'items')::text) > 0 from t_xr),
+  'XR: a VALID same-restaurant item under a restaurant-scoped category is still served (the restaurant predicate does not over-reject)');
 
 -- ===== REVIEW B1 — historical takeaway rows never occupy tables ==============
 -- Pre-phase contract could store a table_id on a TAKEAWAY order. Insert one

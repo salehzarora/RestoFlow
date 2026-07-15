@@ -389,7 +389,12 @@ begin
     into v_items
     from public.menu_items i
     join public.menu_categories c
-      on c.organization_id = i.organization_id and c.id = i.menu_category_id
+      -- REVIEW DELTA (HIGH): the category must belong to the EXACT restaurant
+      -- scope — an item referencing a sibling restaurant's category (legal at
+      -- the schema level within one org) is NOT part of this menu.
+      on c.organization_id = i.organization_id
+     and c.restaurant_id   = v_rest
+     and c.id = i.menu_category_id
     left join public.menu_item_branch_availability a
       on a.organization_id = i.organization_id
      and a.branch_id       = v_branch
@@ -421,9 +426,16 @@ begin
     into v_sizes
     from public.item_sizes s
     join public.menu_items i
-      on i.organization_id = s.organization_id and i.id = s.menu_item_id
+      on i.organization_id = s.organization_id
+     and i.restaurant_id   = v_rest
+     and i.id = s.menu_item_id
     join public.menu_categories c
-      on c.organization_id = i.organization_id and c.id = i.menu_category_id
+      -- REVIEW DELTA (HIGH): the category must belong to the EXACT restaurant
+      -- scope — an item referencing a sibling restaurant's category (legal at
+      -- the schema level within one org) is NOT part of this menu.
+      on c.organization_id = i.organization_id
+     and c.restaurant_id   = v_rest
+     and c.id = i.menu_category_id
     where s.organization_id = v_org
       and s.restaurant_id = v_rest
       and s.is_active
@@ -448,9 +460,16 @@ begin
     into v_variants
     from public.item_variants v
     join public.menu_items i
-      on i.organization_id = v.organization_id and i.id = v.menu_item_id
+      on i.organization_id = v.organization_id
+     and i.restaurant_id   = v_rest
+     and i.id = v.menu_item_id
     join public.menu_categories c
-      on c.organization_id = i.organization_id and c.id = i.menu_category_id
+      -- REVIEW DELTA (HIGH): the category must belong to the EXACT restaurant
+      -- scope — an item referencing a sibling restaurant's category (legal at
+      -- the schema level within one org) is NOT part of this menu.
+      on c.organization_id = i.organization_id
+     and c.restaurant_id   = v_rest
+     and c.id = i.menu_category_id
     where v.organization_id = v_org
       and v.restaurant_id = v_rest
       and v.is_active
@@ -474,9 +493,16 @@ begin
     into v_modifiers
     from public.modifiers m
     join public.menu_items i
-      on i.organization_id = m.organization_id and i.id = m.menu_item_id
+      on i.organization_id = m.organization_id
+     and i.restaurant_id   = v_rest
+     and i.id = m.menu_item_id
     join public.menu_categories c
-      on c.organization_id = i.organization_id and c.id = i.menu_category_id
+      -- REVIEW DELTA (HIGH): the category must belong to the EXACT restaurant
+      -- scope — an item referencing a sibling restaurant's category (legal at
+      -- the schema level within one org) is NOT part of this menu.
+      on c.organization_id = i.organization_id
+     and c.restaurant_id   = v_rest
+     and c.id = i.menu_category_id
     where m.organization_id = v_org
       and m.restaurant_id = v_rest
       and m.is_active
@@ -506,9 +532,16 @@ begin
     join public.modifiers m
       on m.organization_id = mo.organization_id and m.id = mo.modifier_id
     join public.menu_items i
-      on i.organization_id = m.organization_id and i.id = m.menu_item_id
+      on i.organization_id = m.organization_id
+     and i.restaurant_id   = v_rest
+     and i.id = m.menu_item_id
     join public.menu_categories c
-      on c.organization_id = i.organization_id and c.id = i.menu_category_id
+      -- REVIEW DELTA (HIGH): the category must belong to the EXACT restaurant
+      -- scope — an item referencing a sibling restaurant's category (legal at
+      -- the schema level within one org) is NOT part of this menu.
+      on c.organization_id = i.organization_id
+     and c.restaurant_id   = v_rest
+     and c.id = i.menu_category_id
     where mo.organization_id = v_org
       and mo.restaurant_id = v_rest
       and mo.is_active

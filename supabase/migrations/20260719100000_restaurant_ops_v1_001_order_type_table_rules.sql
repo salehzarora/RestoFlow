@@ -373,8 +373,14 @@ begin
          and i.deleted_at is null
          and (i.branch_id is null or i.branch_id = v_branch)
         left join public.menu_categories c
-          on c.organization_id = i.organization_id
-         and c.id = i.menu_category_id
+          on c.id = i.menu_category_id
+         -- REVIEW DELTA (HIGH): the category must belong to the EXACT session
+         -- scope — org AND restaurant. The schema permits an item of
+         -- restaurant A referencing a category of restaurant B in the same
+         -- org; without the restaurant predicate such a hybrid item passed as
+         -- sellable here while pos_menu's category list is restaurant-scoped.
+         and c.organization_id = v_org
+         and c.restaurant_id   = v_rest
          and c.is_active
          and c.deleted_at is null
          and (c.branch_id is null or c.branch_id = v_branch)
