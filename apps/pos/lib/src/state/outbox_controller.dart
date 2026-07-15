@@ -88,7 +88,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     try {
       final failed = <String>[
         for (final e in state)
-          if (e.syncState.isFailed && e.attemptCount < _maxAutoAttempts) e.id,
+          // REVIEW B2: a permanent business rejection replays its stored
+          // verdict forever — sweeping it would burn attempts on a foregone
+          // conclusion and imply the order might still go through.
+          if (e.syncState.isFailed &&
+              !e.isPermanentBusinessRejection &&
+              e.attemptCount < _maxAutoAttempts)
+            e.id,
       ];
       final pending = <String>[
         for (final e in state)
@@ -129,11 +135,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
   /// rather than a second concurrent push.
   Future<void> pushQueued() => _sweep();
 
-  /// Manually re-queues + pushes every FAILED entry ("Sync failed — retry all").
+  /// Manually re-queues + pushes every RETRYABLE failed entry ("Sync failed —
+  /// retry all"). REVIEW B2: permanently-rejected business operations are
+  /// excluded — their verdict is ledgered and replay cannot change it.
   Future<void> retryAllFailed() async {
     final failed = <String>[
       for (final e in state)
-        if (e.syncState.isFailed) e.id,
+        if (e.syncState.isFailed && !e.isPermanentBusinessRejection) e.id,
     ];
     for (final id in failed) {
       try {

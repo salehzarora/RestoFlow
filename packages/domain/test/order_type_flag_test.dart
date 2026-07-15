@@ -39,35 +39,32 @@ void main() {
     });
   });
 
-  group('takeaway skip-served is consistent with RF-032 (read-only)', () {
-    test('takeaway: ready -> completed is legal (skips served)', () {
-      final order = _ready(OrderType.takeaway)..complete(paymentSettled: true);
-      expect(order.status, OrderStatus.completed);
-    });
+  // RESTAURANT-OPERATIONS-V1-001 (review B3): the lifecycle is SHARED — a
+  // takeaway is served at pickup (displayed "Picked up") exactly like a
+  // dine-in order is served at the table; neither type may jump ready ->
+  // completed directly (server auto-completion is a settlement side effect,
+  // not a manual transition).
+  group(
+    'the shared lifecycle is consistent with the aggregate (read-only)',
+    () {
+      for (final type in OrderType.values) {
+        test('${type.name}: ready -> served -> completed is legal', () {
+          final order = _ready(type)..serve();
+          expect(order.status, OrderStatus.served);
+          order.complete(paymentSettled: true);
+          expect(order.status, OrderStatus.completed);
+        });
 
-    test('takeaway: serve() (ready -> served) is rejected', () {
-      final order = _ready(OrderType.takeaway);
-      expect(order.serve, throwsA(isA<IllegalOrderTransitionException>()));
-      expect(order.status, OrderStatus.ready);
-    });
-  });
-
-  group('dine-in path is consistent with RF-032 (read-only)', () {
-    test('dine-in: ready -> served is legal', () {
-      final order = _ready(OrderType.dineIn)..serve();
-      expect(order.status, OrderStatus.served);
-    });
-
-    test(
-      'dine-in: ready -> completed directly is rejected (must pass served)',
-      () {
-        final order = _ready(OrderType.dineIn);
-        expect(
-          () => order.complete(paymentSettled: true),
-          throwsA(isA<IllegalOrderTransitionException>()),
-        );
-        expect(order.status, OrderStatus.ready);
-      },
-    );
-  });
+        test('${type.name}: direct ready -> completed is rejected '
+            '(must pass served)', () {
+          final order = _ready(type);
+          expect(
+            () => order.complete(paymentSettled: true),
+            throwsA(isA<IllegalOrderTransitionException>()),
+          );
+          expect(order.status, OrderStatus.ready);
+        });
+      }
+    },
+  );
 }

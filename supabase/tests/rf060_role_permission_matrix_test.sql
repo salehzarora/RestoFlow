@@ -62,6 +62,13 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
   ('00000000-0000-0000-0000-00000000ab1e', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'RF060 T1', true);
 
+-- Sellable menu fixture (RESTAURANT-OPERATIONS-V1-001 A1: submit_order now requires
+-- every payload menu_item_id to be a proven-sellable menu item in the submitting org).
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
+
 -- PAID order O1 + UNPAID order O2 via the RPC chain (cashier c501); completed-status O5 direct
 select app.open_shift('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a5f1','00000000-0000-0000-0000-00000000acd1','00000000-0000-0000-0000-00000000da11','op-open',5000);
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-s1','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,

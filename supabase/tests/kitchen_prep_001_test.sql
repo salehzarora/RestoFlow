@@ -45,6 +45,12 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
   ('d0000000-0000-0000-0000-00000000c501', 'd0000000-0000-0000-0000-0000000000a0', 'd0000000-0000-0000-0000-0000000000a1', 'd0000000-0000-0000-0000-00000000a1b1', 'd0000000-0000-0000-0000-0000000005a1', 'd0000000-0000-0000-0000-0000000ef001', 'd0000000-0000-0000-0000-00000000ab01', now() + interval '1 hour'),
   ('d0000000-0000-0000-0000-00000000c504', 'd0000000-0000-0000-0000-0000000000a0', 'd0000000-0000-0000-0000-0000000000a1', 'd0000000-0000-0000-0000-00000000a1b1', 'd0000000-0000-0000-0000-0000000005a2', 'd0000000-0000-0000-0000-0000000ef004', 'd0000000-0000-0000-0000-00000000ab04', now() + interval '1 hour');
 
+-- ---- sellable menu fixtures (submit_order now requires proven-sellable items)
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('d0000000-0000-0000-0000-00000000ca01', 'd0000000-0000-0000-0000-0000000000a0', 'd0000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('d0000000-0000-0000-0000-0000000000f1', 'd0000000-0000-0000-0000-0000000000a0', 'd0000000-0000-0000-0000-0000000000a1', null, 'd0000000-0000-0000-0000-00000000ca01', 'Double Burger', 1000, 'USD', 1);
+
 -- ---- helper: an order.submit whose single item carries an optional prep_snapshot.
 create or replace function pg_temp.kp_submit(
   p_op text, p_order_id uuid, p_prep jsonb

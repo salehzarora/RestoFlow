@@ -146,7 +146,7 @@ These narratives describe product behavior. Status values referenced are the PRO
 2. Items, sizes, variants, and modifiers are added; **item and modifier prices are snapshotted at order time** so the order never recomputes from live menu prices (**DECISION D-008**).
 3. Discounts may be applied at item or order level subject to authorization.
 4. The cashier submits the order (`draft -> submitted`); the order then progresses through acceptance and production states.
-5. Takeaway orders skip the `served` step (the canonical takeaway path ends `ready -> completed`), per [STATE_MACHINES.md](STATE_MACHINES.md).
+5. Takeaway orders follow the **same** lifecycle as dine-in — `ready -> served -> completed` — with `served` meaning the customer **picked the order up** (displayed "Picked up"; review B3), per [STATE_MACHINES.md](STATE_MACHINES.md).
 6. **DECISION D-025** — Payment and fulfillment are **independent**. Quick-service **pay-first** is supported: cash payment may be taken as soon as the order is submitted/accepted (and during preparing/ready/served) — it does **not** require the food to be ready or served first, and completing payment does **not** imply the food is prepared/ready/served or the order completed.
 
 ### 4.3 Route to kitchen

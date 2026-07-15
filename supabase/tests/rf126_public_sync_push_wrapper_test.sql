@@ -53,6 +53,13 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 -- now REQUIRE a valid table — RESTAURANT-OPERATIONS-V1-001 order-type/table rules)
 insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
   ('00000000-0000-0000-0000-00000000ab1e', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'T1', true);
+-- a PROVEN-SELLABLE menu item for the order.submit payloads (submit_order now
+-- refuses any line item that is not an active, non-deleted menu_items row under
+-- an active category in the submitting org/restaurant — RESTAURANT-OPERATIONS-V1-001 A1)
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
 
 -- ===== (1-8) introspection: existence / type / INVOKER / search_path / VOLATILE /
 -- ===== grants ================================================================

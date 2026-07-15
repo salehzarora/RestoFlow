@@ -46,6 +46,13 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
   ('c0000000-0000-0000-0000-00000000c501', 'c0000000-0000-0000-0000-0000000000a0', 'c0000000-0000-0000-0000-0000000000a1', 'c0000000-0000-0000-0000-00000000a1b1', 'c0000000-0000-0000-0000-0000000005a1', 'c0000000-0000-0000-0000-0000000ef001', 'c0000000-0000-0000-0000-00000000ab01', now() + interval '1 hour'),
   ('c0000000-0000-0000-0000-00000000c504', 'c0000000-0000-0000-0000-0000000000a0', 'c0000000-0000-0000-0000-0000000000a1', 'c0000000-0000-0000-0000-00000000a1b1', 'c0000000-0000-0000-0000-0000000005a2', 'c0000000-0000-0000-0000-0000000ef004', 'c0000000-0000-0000-0000-00000000ab04', now() + interval '1 hour');
 
+-- sellable menu fixture: submit_order now requires every payload menu_item_id
+-- to be a provably sellable menu item (active item + active category, same org).
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('c0000000-0000-0000-0000-00000000ca01', 'c0000000-0000-0000-0000-0000000000a0', 'c0000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('c0000000-0000-0000-0000-0000000000f1', 'c0000000-0000-0000-0000-0000000000a0', 'c0000000-0000-0000-0000-0000000000a1', null, 'c0000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
+
 -- ---- helper: build an order.submit ops array with an optional customer_name.
 -- Using jsonb_build_object avoids brittle string escaping for long/RTL names.
 create or replace function pg_temp.cn_submit(

@@ -14,9 +14,16 @@
 --       - dine_in without a table     -> {ok:false, error:'table_required'}
 --       - table not live/active in the SESSION branch
 --                                     -> {ok:false, error:'table_not_available'}
---       - any line item with an 'unavailable' branch override
---                                     -> {ok:false, error:'item_unavailable',
---                                         items:[{menu_item_id, name, reason}]}
+--       - any line item that is NOT a proven sellable item of the session
+--         menu (unknown / deleted / inactive / sibling-branch / foreign scope /
+--         dead-or-invisible category) OR carries an 'unavailable' branch
+--         override               -> {ok:false, error:'item_unavailable',
+--                                     items:[{menu_item_id, name, reason}]}
+--         (reason: sold_out|paused for explicit overrides, 'unavailable' for
+--          every non-sellable case -- ONE indistinguishable refusal, R-003).
+--         Evaluated under FOR UPDATE locks on the canonical menu_items rows
+--         (ascending id order) -- the SAME rows menu_set_item_availability
+--         locks -- closing the availability TOCTOU race (review A1+A2).
 --     All four are RETURN-refusals (MONEY-SETTLEMENT-CONSISTENCY-001 rule:
 --     they survive sync_push VERBATIM so the POS can name them); structural
 --     42501 raises are unchanged. Refusal happens BEFORE any insert — there is
@@ -57,6 +64,9 @@ create index orders_active_table_idx
   on orders (organization_id, branch_id, table_id)
   where deleted_at is null
     and table_id is not null
+    -- REVIEW CORRECTION (B1): the occupancy queries count DINE-IN only, so
+    -- the partial predicate matches; historical takeaway+table rows stay out.
+    and order_type = 'dine_in'
     and status in ('submitted', 'accepted', 'preparing', 'ready', 'served');
 
 -- ---------------------------------------------------------------------------
@@ -126,6 +136,7 @@ declare
   v_item_count    integer := 0;
   v_mod_count     integer := 0;
   v_unavailable   jsonb;
+  v_item_ids      uuid[];
 begin
   -- (1-5) PIN session: exists, valid (active/not-ended/not-expired), backing
   -- device session active + not revoked, pairing active. Scope + actor derived here.
@@ -297,31 +308,84 @@ begin
     return jsonb_build_object('ok', false, 'error', 'table_not_available', 'entity', 'order');
   end if;
 
-  -- (accept-2) every line item must be AVAILABLE in the session branch right
-  -- now (menu_item_branch_availability override; absence of a row = available).
-  -- The refusal names each blocked line (payload snapshot name — what the
-  -- cashier saw — plus the structured reason) so the cashier can correct the
-  -- order deliberately. D-008 is untouched: this reads the OVERRIDE table
-  -- only, never reprices from the live menu.
+  -- (accept-2) REVIEW CORRECTION (A1 + A2): every line item must be a REAL,
+  -- SELLABLE item of the session menu — proven, not presumed — and AVAILABLE
+  -- in the session branch, evaluated under a SHARED LOCK so an availability
+  -- flip can never race past acceptance.
+  --
+  -- A1 — the CANONICAL sellability predicate, identical to what app.pos_menu
+  -- serves the POS (order_items.menu_item_id is deliberately non-FK, so a
+  -- stale or manipulated cart could previously submit an unknown, deleted,
+  -- inactive, sibling-branch or foreign-scope id and still create an order):
+  --   item:     exists in v_org + v_rest, is_active, deleted_at IS NULL,
+  --             branch-visible (branch_id IS NULL OR = v_branch);
+  --   category: parent exists, is_active, deleted_at IS NULL, branch-visible;
+  --   effective availability: no 'unavailable' override for (v_branch, item).
+  -- Absence of an override means available ONLY once the item is proven
+  -- sellable. ALL non-sellable cases fail closed as ONE indistinguishable
+  -- refusal (error item_unavailable, reason 'unavailable') so nothing —
+  -- sibling-branch pins included — becomes an existence oracle (R-003).
+  -- Explicit overrides keep their structured reason (sold_out|paused). The
+  -- name echoed back is the CLIENT'S OWN payload snapshot, never DB data.
+  -- D-008 is untouched: nothing here reprices from the live menu.
+  --
+  -- A2 — the TOCTOU serialization point: lock the CANONICAL menu_items rows
+  -- (the same rows app.menu_set_item_availability locks) BEFORE evaluating.
+  -- Locking the override row would not work — it may not exist yet. Locks are
+  -- taken in one statement in DETERMINISTIC ascending id order, so two carts
+  -- sharing items can never deadlock (and the setter locks exactly one row).
+  -- Unknown/foreign ids match no row and take no lock — they fail the
+  -- sellability check regardless, and there is nothing to serialize with.
+  -- If the setter committed 'unavailable' first, this read (under lock) sees
+  -- it and refuses; if this submit locked first, the setter WAITS until the
+  -- accepted order commits and its change applies to later orders only.
+  select array_agg(distinct (e ->> 'menu_item_id')::uuid)
+    into v_item_ids
+    from jsonb_array_elements(p_order_items) e;
+  perform 1
+    from public.menu_items i
+    where i.organization_id = v_org
+      and i.id = any (v_item_ids)
+    order by i.id
+    for update;
+
   select jsonb_agg(jsonb_build_object(
            'menu_item_id', blocked.menu_item_id,
            'name',         blocked.name,
-           'reason',       blocked.reason))
+           'reason',       blocked.reason)
+           order by blocked.menu_item_id)
     into v_unavailable
     from (
-      select distinct on (a.menu_item_id)
-             a.menu_item_id, li.name, a.reason
-        from public.menu_item_branch_availability a
-        join (
+      select li.menu_item_id,
+             li.name,
+             coalesce(a.reason, 'unavailable') as reason
+        from (
           select (e ->> 'menu_item_id')::uuid as menu_item_id,
                  min(e ->> 'menu_item_name_snapshot') as name
             from jsonb_array_elements(p_order_items) e
             group by 1
-        ) li on li.menu_item_id = a.menu_item_id
-        where a.organization_id = v_org
-          and a.branch_id       = v_branch
-          and a.availability    = 'unavailable'
-        order by a.menu_item_id
+        ) li
+        left join public.menu_items i
+          on i.id = li.menu_item_id
+         and i.organization_id = v_org
+         and i.restaurant_id   = v_rest
+         and i.is_active
+         and i.deleted_at is null
+         and (i.branch_id is null or i.branch_id = v_branch)
+        left join public.menu_categories c
+          on c.organization_id = i.organization_id
+         and c.id = i.menu_category_id
+         and c.is_active
+         and c.deleted_at is null
+         and (c.branch_id is null or c.branch_id = v_branch)
+        left join public.menu_item_branch_availability a
+          on a.organization_id = v_org
+         and a.branch_id       = v_branch
+         and a.menu_item_id    = li.menu_item_id
+         and a.availability    = 'unavailable'
+        where i.id is null            -- unknown / foreign / inactive / deleted / pinned elsewhere
+           or c.id is null            -- category missing / inactive / deleted / not visible here
+           or a.menu_item_id is not null  -- explicitly unavailable in this branch
     ) blocked;
   if v_unavailable is not null then
     return jsonb_build_object('ok', false, 'error', 'item_unavailable',
@@ -438,7 +502,7 @@ end;
 $$;
 
 comment on function app.submit_order(uuid, uuid, uuid, text, text, uuid, uuid, text, text, jsonb, bigint, bigint, bigint, bigint, timestamptz) is
-  'RF-052 SECURITY DEFINER submit_order + KITCHEN-PREP/MEAT snapshots + RESTAURANT-OPERATIONS-V1-001 acceptance rules. Signature UNCHANGED. Shape rules (before replay): takeaway+table -> table_not_allowed; dine_in without table -> table_required. Acceptance rules (after replay, before any insert — no partial order): dine-in table must be live+active in the SESSION branch -> table_not_available (foreign/tombstoned/inactive/unknown identical, R-003); every line item must be branch-available -> item_unavailable with items:[{menu_item_id, name, reason}]. All four RETURN through sync_push verbatim (§4.35). Historical rows untouched (rules bind NEW acceptance only); money recompute/idempotency/audit byte-unchanged (D-007/D-008).';
+  'RF-052 SECURITY DEFINER submit_order + KITCHEN-PREP/MEAT snapshots + RESTAURANT-OPERATIONS-V1-001 acceptance rules (review-corrected). Signature UNCHANGED. Shape rules (before replay): takeaway+table -> table_not_allowed; dine_in without table -> table_required. Acceptance rules (after replay, before any insert — no partial order): dine-in table must be live+active+in-service in the SESSION branch -> table_not_available (foreign/tombstoned/inactive/out-of-service/unknown identical, R-003); every line item must be a PROVEN SELLABLE item of the session menu (exists in org+restaurant, is_active, not deleted, branch-visible, parent category live+visible — the app.pos_menu predicate) AND branch-available, evaluated under FOR UPDATE locks on the canonical menu_items rows in ascending-id order (the same rows app.menu_set_item_availability locks — the availability TOCTOU serialization point) -> item_unavailable with items:[{menu_item_id, name, reason}] where reason is sold_out|paused for explicit overrides and the uniform ''unavailable'' for every non-sellable case (no existence oracle). All RETURN through sync_push verbatim (§4.35). Historical rows untouched (rules bind NEW acceptance only); money recompute/idempotency/audit byte-unchanged (D-007/D-008).';
 
 -- Grants re-issued for the UNCHANGED signature (parity; CREATE OR REPLACE keeps
 -- ACLs). Authenticated only -- never anon / public / service_role.
@@ -524,6 +588,10 @@ begin
         from public.orders o
         where o.organization_id = v_org
           and o.branch_id       = v_branch
+          -- REVIEW CORRECTION (B1): only DINE-IN orders occupy a table.
+          -- Historical takeaway rows may carry a table_id from the pre-phase
+          -- contract; they must never count toward floor occupancy.
+          and o.order_type      = 'dine_in'
           and o.table_id is not null
           and o.deleted_at is null
           and o.status in ('submitted', 'accepted', 'preparing', 'ready', 'served')
@@ -544,7 +612,7 @@ end;
 $$;
 
 comment on function app.pos_tables(uuid, uuid) is
-  'MVP POS/KDS device table read (D-011; session-derived scope, 42501 fail-closed). RESTAURANT-OPERATIONS-V1-001: rows additionally carry active_order_count — occupancy DERIVED from live active-status orders (submitted..served) on the table. Multiple active orders per table are valid (second-round ordering); the stored manual status (available/occupied/reserved/out_of_service) is returned unchanged. Money-free; all PIN roles.';
+  'MVP POS/KDS device table read (D-011; session-derived scope, 42501 fail-closed). RESTAURANT-OPERATIONS-V1-001: rows additionally carry active_order_count — occupancy DERIVED from live active-status DINE-IN orders (submitted..served) on the table (review B1: historical takeaway rows carrying a pre-phase table_id never count). Multiple active orders per table are valid (second-round ordering); the stored manual status (available/occupied/reserved/out_of_service) is returned unchanged. Money-free; all PIN roles.';
 
 -- ---------------------------------------------------------------------------
 -- 4. app.list_tables — CREATE OR REPLACE (keeps ACLs). FAITHFUL re-creation of
@@ -594,6 +662,8 @@ begin
         from public.orders o
         where o.organization_id = p_organization_id
           and (p_branch_id is null or o.branch_id = p_branch_id)
+          -- REVIEW CORRECTION (B1): dine-in only — see pos_tables.
+          and o.order_type      = 'dine_in'
           and o.table_id is not null
           and o.deleted_at is null
           and o.status in ('submitted', 'accepted', 'preparing', 'ready', 'served')
@@ -609,7 +679,7 @@ end;
 $$;
 
 comment on function app.list_tables(uuid, uuid, uuid) is
-  'MVP (D-033, RF-160 template): GUC-free dining-table LIST for the owner/manager dashboard. RESTAURANT-OPERATIONS-V1-001: rows additionally carry active_order_count — occupancy DERIVED from live active-status orders (submitted..served) on the table; the stored manual status is unchanged. Tombstones EXCLUDED, is_active=false INCLUDED (management view); ordered by label; read-only; scope-safe (R-003); money-free.';
+  'MVP (D-033, RF-160 template): GUC-free dining-table LIST for the owner/manager dashboard. RESTAURANT-OPERATIONS-V1-001: rows additionally carry active_order_count — occupancy DERIVED from live active-status DINE-IN orders (submitted..served) on the table (review B1: historical takeaway+table_id rows never count); the stored manual status is unchanged. Tombstones EXCLUDED, is_active=false INCLUDED (management view); ordered by label; read-only; scope-safe (R-003); money-free.';
 
 -- ============================================================================
 -- DOWN (manual; Supabase is forward-only — `supabase db reset` replays):

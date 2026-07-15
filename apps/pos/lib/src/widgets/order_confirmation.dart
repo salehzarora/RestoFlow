@@ -284,7 +284,18 @@ class OrderConfirmation extends ConsumerWidget {
                   onSync: entry != null && entry.syncState.isPending
                       ? () => outbox.pushEntry(entry.id)
                       : null,
-                  onRetry: entry != null && entry.syncState.isFailed
+                  // REVIEW B2: no Retry for a PERMANENT business rejection —
+                  // the server ledgered the verdict under this operation
+                  // identity and replays it verbatim; a button claiming
+                  // otherwise is a lie. The typed note above (item names,
+                  // menu refreshed) already directs the cashier to re-enter
+                  // the order deliberately. Transport-ish failures (no
+                  // recorded verdict) keep Retry: an idempotent re-push is
+                  // safe and meaningful there.
+                  onRetry:
+                      entry != null &&
+                          entry.syncState.isFailed &&
+                          !entry.isPermanentBusinessRejection
                       ? () => outbox.retryEntry(entry.id)
                       : null,
                 ),

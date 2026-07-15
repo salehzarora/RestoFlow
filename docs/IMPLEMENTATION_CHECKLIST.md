@@ -324,12 +324,12 @@ Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.
 ### RF-032 — Order submission + order/order-item state machines — local
 - **Milestone:** M1 · **Workstream:** Frontend/POS · **Owner:** Claude Code · **Reviewer:** Codex · **Priority:** High
 - **Dependencies:** RF-031
-- **Scope:** Enforce the proposed enumerations locally (**DECISION D-018**; PROPOSED, approved into the frozen M0A baseline (RF-004)). Order: `draft -> submitted -> accepted -> preparing -> ready -> served -> completed` (+ `cancelled`, `voided`); takeaway skips `served` (`ready -> completed`). Order item: `pending -> queued -> preparing -> ready -> served` (+ `voided`, `cancelled`). Transitions owned by [STATE_MACHINES.md](STATE_MACHINES.md).
+- **Scope:** Enforce the proposed enumerations locally (**DECISION D-018**; PROPOSED, approved into the frozen M0A baseline (RF-004)). Order: `draft -> submitted -> accepted -> preparing -> ready -> served -> completed` (+ `cancelled`, `voided`) — ONE shared chain for both order types (the draft "takeaway skips `served`" clause is **superseded** by RESTAURANT-OPERATIONS-V1-001, review B3). Order item: `pending -> queued -> preparing -> ready -> served` (+ `voided`, `cancelled`). Transitions owned by [STATE_MACHINES.md](STATE_MACHINES.md).
 - **Acceptance criteria:**
   1. Illegal transitions are rejected (e.g. `draft -> completed` throws) — table-driven test covers all legal/illegal transitions.
   2. `voided` requires authorization + reason even in the local prototype (placeholder authorization), and is post-submission only.
   3. `cancelled` is only reachable pre-production; terminal states (`completed`, `cancelled`, `voided`) accept no further transitions.
-  4. Takeaway orders never enter `served`.
+  4. *(Superseded by review B3 — was "Takeaway orders never enter `served`".)* Takeaway orders pass through `served` (customer pickup, displayed "Picked up") exactly like dine-in; direct `ready -> completed` is rejected for every order type.
 - **Required tests:** Exhaustive state-transition test for order and order-item enumerations.
 - **Allowed files/areas:** `packages/models` (state machine), POS app. *Guidance.*
 - **Architecture impact:** medium.
@@ -366,7 +366,7 @@ Indicative timeline is **PROPOSED** and owned by [PROJECT_PLAN.md](PROJECT_PLAN.
 - **Dependencies:** RF-031
 - **Scope:** `tables` plus order type (dine-in/takeaway) selection.
 - **Acceptance criteria:**
-  1. An order is assignable to a `table` (dine-in) or marked takeaway; takeaway orders are flagged to skip `served` (consistent with RF-032).
+  1. An order is assignable to a `table` (dine-in) or marked takeaway. *(Superseded by review B3 — the clause "takeaway orders are flagged to skip `served`" no longer applies: both types share `ready -> served -> completed`, takeaway `served` = pickup, displayed "Picked up".)*
   2. `tables` carry `organization_id`, `restaurant_id`, `branch_id`.
   3. A table cannot host two concurrent open dine-in orders unless explicitly allowed by config (test).
 - **Required tests:** Table-assignment test; order-type-flag test.

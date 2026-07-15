@@ -173,12 +173,22 @@ begin
   -- the item must be live and visible in the target branch. A tombstoned item,
   -- a foreign-restaurant item, or an item pinned to a DIFFERENT branch is the
   -- same typed refusal — the caller learns nothing about siblings (R-003).
+  --
+  -- REVIEW CORRECTION (A2): FOR UPDATE — this is the availability
+  -- serialization point, shared with app.submit_order (which locks the same
+  -- canonical menu_items rows before validating sellability). Locking the
+  -- OVERRIDE row would not serialize anything: it may not exist yet. Under
+  -- this lock the old-state read below is the TRUE serialized BEFORE state,
+  -- so concurrent setters can never record stale audit before/after values —
+  -- and a submit that locked first commits its accepted order before this
+  -- setter's change applies to later orders.
   select i.restaurant_id, i.branch_id, i.name
     into v_item_rest, v_item_branch, v_item_name
     from public.menu_items i
     where i.id = p_menu_item_id
       and i.organization_id = p_organization_id
-      and i.deleted_at is null;
+      and i.deleted_at is null
+    for update;
   if not found
      or v_item_rest <> p_restaurant_id
      or (v_item_branch is not null and v_item_branch <> p_branch_id) then

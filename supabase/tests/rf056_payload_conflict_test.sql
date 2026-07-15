@@ -35,6 +35,11 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
   ('00000000-0000-0000-0000-000000ab1e01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'T1', true);
 
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
+
 -- first push of op-1 (order.submit, grand 1000) -> applied ------------------- 1
 select is(
   (app.sync_push('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000da11',

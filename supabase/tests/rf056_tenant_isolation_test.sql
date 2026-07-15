@@ -35,6 +35,10 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
   ('00000000-0000-0000-0000-00000000c50a', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef00a', '00000000-0000-0000-0000-00000000ab0a', now() + interval '1 hour');
 insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
   ('00000000-0000-0000-0000-0000000ab1e1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'T1', true);
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-0000000ca10a', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-0000000ca10a', 'Item', 1000, 'USD', 1);
 -- ---- Org B ----
 insert into organizations (id, name, slug, default_currency) values
   ('00000000-0000-0000-0000-0000000000b0', 'Org B', 'rf056t-b', 'USD');
@@ -57,6 +61,10 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
   ('00000000-0000-0000-0000-00000000c50b', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000b1d1', '00000000-0000-0000-0000-0000000005b1', '00000000-0000-0000-0000-0000000ef00b', '00000000-0000-0000-0000-00000000ab0b', now() + interval '1 hour');
 insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
   ('00000000-0000-0000-0000-0000000ab1e2', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000b1d1', 'T1', true);
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-0000000ca10b', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', null, '00000000-0000-0000-0000-0000000ca10b', 'Item', 1000, 'USD', 1);
 
 -- the SAME local_operation_id ('op-1') pushed by org A and org B ------------- 1-2
 select is(

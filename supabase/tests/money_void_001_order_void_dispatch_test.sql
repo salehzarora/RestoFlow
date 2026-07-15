@@ -60,6 +60,12 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
   ('a0000000-0000-0000-0000-0000000ad004', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', 'a0000000-0000-0000-0000-000000000a03', 'a0000000-0000-0000-0000-0000000000e1', 'a0000000-0000-0000-0000-0000000ac004', 'a0000000-0000-0000-0000-0000000ab004', now() + interval '1 hour'),
   ('b0000000-0000-0000-0000-0000000bd001', 'b0000000-0000-0000-0000-000000000b01', 'b0000000-0000-0000-0000-000000000b02', 'b0000000-0000-0000-0000-000000000b03', 'b0000000-0000-0000-0000-0000000000e1', 'b0000000-0000-0000-0000-0000000bc001', 'b0000000-0000-0000-0000-0000000bb001', now() + interval '1 hour');
 
+-- Sellable menu fixture for org A (submit_order now proves item sellability).
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('a0000000-0000-0000-0000-0000000000c9', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('a0000000-0000-0000-0000-0000000000f9', 'a0000000-0000-0000-0000-000000000a01', 'a0000000-0000-0000-0000-000000000a02', null, 'a0000000-0000-0000-0000-0000000000c9', 'Item', 1000, 'USD', 1);
+
 -- ---- helpers: submit an order.submit op, and push an order.void op ----------
 create or replace function pg_temp.vsubmit(p_pin uuid, p_dev uuid, p_op text, p_order uuid) returns jsonb language sql as $$
   select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(

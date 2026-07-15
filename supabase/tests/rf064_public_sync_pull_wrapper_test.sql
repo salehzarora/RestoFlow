@@ -56,6 +56,13 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
   ('00000000-0000-0000-0000-00000000ab1e', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'RF064-T1', true);
 
+-- a sellable menu category + item for the submitted line (RESTAURANT-OPERATIONS-V1-001:
+-- submit_order now requires every payload menu_item_id to be a proven-sellable menu item)
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
+
 -- a real order WITH a modifier (order_item_modifiers carries price_minor_snapshot)
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-sub','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","option_name_snapshot":"Extra Cheese","price_minor_snapshot":100,"quantity":1}]}]'::jsonb,

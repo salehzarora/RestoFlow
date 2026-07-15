@@ -60,6 +60,14 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
   ('00000000-0000-0000-0000-00000000ab1e'::uuid, '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'T1', true);
 
+-- a sellable menu category + item for the payload's menu_item_id
+-- (RESTAURANT-OPERATIONS-V1-001 A1: submit_order now requires every payload
+-- menu_item_id to be a proven sellable menu item in the submitting tenant)
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-00000000ca11', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca11', 'Item', 1000, 'USD', 1);
+
 -- a minimal valid 1-line payload (qty 1 @ 1000; subtotal/grand 1000)
 -- ===== valid cashier succeeds =============================================== 1
 select ok(

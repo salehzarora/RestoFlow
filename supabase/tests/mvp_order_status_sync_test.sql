@@ -52,6 +52,10 @@ insert into tables (id, organization_id, restaurant_id, branch_id, label, is_act
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('10000000-0000-0000-0000-00000000c501', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-00000000a1b1', '10000000-0000-0000-0000-0000000005a1', '10000000-0000-0000-0000-0000000ef001', '10000000-0000-0000-0000-00000000ab01', now() + interval '1 hour'),
   ('10000000-0000-0000-0000-00000000c504', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-00000000a1b1', '10000000-0000-0000-0000-0000000005a2', '10000000-0000-0000-0000-0000000ef004', '10000000-0000-0000-0000-00000000ab04', now() + interval '1 hour');
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('10000000-0000-0000-0000-00000000ca01', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('10000000-0000-0000-0000-0000000000f1', '10000000-0000-0000-0000-0000000000a0', '10000000-0000-0000-0000-0000000000a1', null, '10000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
 
 -- ===== fixtures: org B (its own device + cashier session + order) ============
 insert into organizations (id, name, slug, default_currency) values
@@ -76,6 +80,10 @@ insert into tables (id, organization_id, restaurant_id, branch_id, label, is_act
   ('20000000-0000-0000-0000-00000000e0b1', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-00000000b1b1', 'T1', true);
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('20000000-0000-0000-0000-00000000c502', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', '20000000-0000-0000-0000-00000000b1b1', '20000000-0000-0000-0000-0000000005b1', '20000000-0000-0000-0000-0000000ef002', '20000000-0000-0000-0000-00000000ab02', now() + interval '1 hour');
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('20000000-0000-0000-0000-00000000cb01', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('20000000-0000-0000-0000-0000000000f1', '20000000-0000-0000-0000-0000000000b0', '20000000-0000-0000-0000-0000000000b1', null, '20000000-0000-0000-0000-00000000cb01', 'B Item', 900, 'EUR', 1);
 
 -- ===== setup: three submitted orders via app.submit_order (status 'submitted')
 select app.submit_order('10000000-0000-0000-0000-00000000c501', '10000000-0000-0000-0000-00000000a0d1',

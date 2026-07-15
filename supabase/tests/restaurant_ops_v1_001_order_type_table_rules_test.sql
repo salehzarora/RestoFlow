@@ -23,7 +23,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(34);
+select plan(49);
 
 -- ===== fixture: org A — Rest A1, branches B1 + B2; cashier stack on B1 ======
 insert into organizations (id, name, slug, default_currency) values
@@ -60,13 +60,40 @@ insert into tables (id, organization_id, restaurant_id, branch_id, label, status
   ('7b000000-0000-0000-0000-0000000c0b06', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', 'T6', 'out_of_service', true, null);
 
 -- menu: category + I1 (sellable) + I2 (sold out in B1 via a fixture override row).
-insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
-  ('7b000000-0000-0000-0000-00000000ca01', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, 'Food', 1);
-insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
-  ('7b000000-0000-0000-0000-0000000000f1', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca01', 'Falafel', 2500, 'ILS', 1),
-  ('7b000000-0000-0000-0000-0000000000f2', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca01', 'Shakshuka', 3800, 'ILS', 2);
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order, is_active, deleted_at) values
+  ('7b000000-0000-0000-0000-00000000ca01', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, 'Food', 1, true, null),
+  -- REVIEW A1 fixture categories: tombstoned, inactive, pinned to SIBLING B2.
+  ('7b000000-0000-0000-0000-00000000ca02', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, 'Dead Cat', 2, true, now()),
+  ('7b000000-0000-0000-0000-00000000ca03', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, 'Off Cat', 3, false, null),
+  ('7b000000-0000-0000-0000-00000000ca04', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b2', 'B2 Cat', 4, true, null);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order, is_active, deleted_at) values
+  ('7b000000-0000-0000-0000-0000000000f1', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca01', 'Falafel', 2500, 'ILS', 1, true, null),
+  ('7b000000-0000-0000-0000-0000000000f2', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca01', 'Shakshuka', 3800, 'ILS', 2, true, null),
+  -- REVIEW A1 fixture items: PAUSED override (below), tombstoned, inactive,
+  -- pinned to SIBLING B2 (with its own B2 override — must NOT leak), under a
+  -- tombstoned category, under an inactive category, under a B2-pinned category.
+  ('7b000000-0000-0000-0000-0000000000f3', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca01', 'Hummus', 2000, 'ILS', 3, true, null),
+  ('7b000000-0000-0000-0000-0000000000f4', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca01', 'Retired', 1000, 'ILS', 4, true, now()),
+  ('7b000000-0000-0000-0000-0000000000f5', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca01', 'Off Menu', 1100, 'ILS', 5, false, null),
+  ('7b000000-0000-0000-0000-0000000000f6', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b2', '7b000000-0000-0000-0000-00000000ca01', 'B2 Special', 1200, 'ILS', 6, true, null),
+  ('7b000000-0000-0000-0000-0000000000f7', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca02', 'Dead Cat Item', 1300, 'ILS', 7, true, null),
+  ('7b000000-0000-0000-0000-0000000000f8', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca03', 'Off Cat Item', 1400, 'ILS', 8, true, null),
+  ('7b000000-0000-0000-0000-0000000000f9', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', null, '7b000000-0000-0000-0000-00000000ca04', 'B2 Cat Item', 1500, 'ILS', 9, true, null);
 insert into menu_item_branch_availability (organization_id, restaurant_id, branch_id, menu_item_id, availability, reason) values
-  ('7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', '7b000000-0000-0000-0000-0000000000f2', 'unavailable', 'sold_out');
+  ('7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', '7b000000-0000-0000-0000-0000000000f2', 'unavailable', 'sold_out'),
+  ('7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', '7b000000-0000-0000-0000-0000000000f3', 'unavailable', 'paused'),
+  -- I6's SIBLING-BRANCH override: submitting I6 in B1 must NOT surface this.
+  ('7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b2', '7b000000-0000-0000-0000-0000000000f6', 'unavailable', 'sold_out');
+-- REVIEW A1: a FOREIGN ORGANIZATION with its own sellable item — submitting its
+-- id through org A's session must fail closed exactly like an unknown id.
+insert into organizations (id, name, slug, default_currency) values
+  ('7b000000-0000-0000-0000-0000000000b0', 'Org B', 'ropsv1b-b', 'ILS');
+insert into restaurants (id, organization_id, name) values
+  ('7b000000-0000-0000-0000-0000000000b1', '7b000000-0000-0000-0000-0000000000b0', 'Rest B1');
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('7b000000-0000-0000-0000-00000000cb01', '7b000000-0000-0000-0000-0000000000b0', '7b000000-0000-0000-0000-0000000000b1', null, 'B Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('7b000000-0000-0000-0000-00000000fb01', '7b000000-0000-0000-0000-0000000000b0', '7b000000-0000-0000-0000-0000000000b1', null, '7b000000-0000-0000-0000-00000000cb01', 'B Tea', 900, 'ILS', 1);
 
 -- ===== (1-4) dine-in acceptance: valid table required and validated ==========
 create temp table t_b1 as select app.submit_order(
@@ -409,6 +436,131 @@ select ok(
   and (select (e->>'active_order_count')::int = 0 from t_lt, jsonb_array_elements(res->'tables') e
     where e->>'id' = '7b000000-0000-0000-0000-0000000c0b02'),
   'list_tables carries the same derived counts (management view incl. the inactive table at 0)');
+
+-- ===== REVIEW A1 — the canonical sellability matrix ==========================
+-- A refused non-sellable item reads reason 'unavailable' — ONE indistinguishable
+-- token for unknown/deleted/inactive/sibling/foreign/dead-category cases (no
+-- existence oracle); explicit overrides keep their structured reason.
+create temp table t_a1 as select
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0021',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-paused', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-0000000000f3',
+      'menu_item_name_snapshot', 'Hummus', 'quantity', 1, 'unit_price_minor_snapshot', 2000)),
+    2000, 0, 0, 2000)) as paused,
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0022',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-unknown', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-00000000dead',
+      'menu_item_name_snapshot', 'Ghost', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 0, 1000)) as unknown,
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0023',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-deleted', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-0000000000f4',
+      'menu_item_name_snapshot', 'Retired', 'quantity', 1, 'unit_price_minor_snapshot', 1000)),
+    1000, 0, 0, 1000)) as deleted_item,
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0024',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-inactive', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-0000000000f5',
+      'menu_item_name_snapshot', 'Off Menu', 'quantity', 1, 'unit_price_minor_snapshot', 1100)),
+    1100, 0, 0, 1100)) as inactive_item,
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0025',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-sibling', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-0000000000f6',
+      'menu_item_name_snapshot', 'B2 Special', 'quantity', 1, 'unit_price_minor_snapshot', 1200)),
+    1200, 0, 0, 1200)) as sibling_item,
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0026',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-foreign', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-00000000fb01',
+      'menu_item_name_snapshot', 'B Tea', 'quantity', 1, 'unit_price_minor_snapshot', 900)),
+    900, 0, 0, 900)) as foreign_item,
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0027',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-deadcat', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-0000000000f7',
+      'menu_item_name_snapshot', 'Dead Cat Item', 'quantity', 1, 'unit_price_minor_snapshot', 1300)),
+    1300, 0, 0, 1300)) as dead_category,
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0028',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-offcat', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-0000000000f8',
+      'menu_item_name_snapshot', 'Off Cat Item', 'quantity', 1, 'unit_price_minor_snapshot', 1400)),
+    1400, 0, 0, 1400)) as inactive_category,
+  (select app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0029',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-a1-b2cat', 'takeaway', null, null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-0000000000f9',
+      'menu_item_name_snapshot', 'B2 Cat Item', 'quantity', 1, 'unit_price_minor_snapshot', 1500)),
+    1500, 0, 0, 1500)) as invisible_category;
+select is((select paused->>'error' from t_a1), 'item_unavailable',
+  'A1: an explicitly PAUSED item is refused');
+select is((select paused->'items'->0->>'reason' from t_a1), 'paused',
+  'A1: the explicit override keeps its structured reason (paused)');
+select is((select unknown->>'error' || '|' || (unknown->'items'->0->>'reason') from t_a1),
+  'item_unavailable|unavailable',
+  'A1: an UNKNOWN uuid fails closed with the uniform reason');
+select is((select deleted_item->>'error' || '|' || (deleted_item->'items'->0->>'reason') from t_a1),
+  'item_unavailable|unavailable',
+  'A1: a TOMBSTONED item fails closed');
+select is((select inactive_item->>'error' || '|' || (inactive_item->'items'->0->>'reason') from t_a1),
+  'item_unavailable|unavailable',
+  'A1: an INACTIVE item fails closed');
+select is((select sibling_item->>'error' || '|' || (sibling_item->'items'->0->>'reason') from t_a1),
+  'item_unavailable|unavailable',
+  'A1: a SIBLING-BRANCH-pinned item fails closed WITHOUT leaking its B2 sold_out override (no oracle)');
+select is((select foreign_item->>'error' || '|' || (foreign_item->'items'->0->>'reason') from t_a1),
+  'item_unavailable|unavailable',
+  'A1: a FOREIGN-ORGANIZATION item fails closed exactly like an unknown id');
+select is((select dead_category->>'error' || '|' || (dead_category->'items'->0->>'reason') from t_a1),
+  'item_unavailable|unavailable',
+  'A1: an item under a TOMBSTONED category fails closed');
+select is((select inactive_category->>'error' || '|' || (inactive_category->'items'->0->>'reason') from t_a1),
+  'item_unavailable|unavailable',
+  'A1: an item under an INACTIVE category fails closed');
+select is((select invisible_category->>'error' || '|' || (invisible_category->'items'->0->>'reason') from t_a1),
+  'item_unavailable|unavailable',
+  'A1: an item whose category is NOT VISIBLE in this branch fails closed');
+select is(
+  (select count(*)::int from orders
+    where organization_id = '7b000000-0000-0000-0000-0000000000a0'
+      and local_operation_id like 'rops-a1-%'),
+  0, 'A1: NONE of the refused submissions created an order row');
+select is(
+  (select count(*)::int from order_items oi
+    join orders o on o.id = oi.order_id
+    where o.organization_id = '7b000000-0000-0000-0000-0000000000a0'
+      and o.local_operation_id like 'rops-a1-%'),
+  0, 'A1: no partial order_items rows either');
+select is(
+  (select count(*)::int from audit_events
+    where organization_id = '7b000000-0000-0000-0000-0000000000a0'
+      and action = 'order.submitted'
+      and new_values->>'local_operation_id' like 'rops-a1-%'),
+  0, 'A1: no false order-created audit for any refusal');
+
+-- ===== REVIEW B1 — historical takeaway rows never occupy tables ==============
+-- Pre-phase contract could store a table_id on a TAKEAWAY order. Insert one
+-- directly (bypassing today's acceptance rules, exactly like hosted history)
+-- on the EMPTY table T5 and prove neither read model counts it.
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id,
+                    opened_by_employee_profile_id, resolved_membership_id, table_id, order_type, status,
+                    currency_code, subtotal_minor, discount_total_minor, tax_total_minor,
+                    grand_total_minor, local_operation_id, revision) values
+  ('7b000000-0000-0000-0000-0000000d0030', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1',
+   '7b000000-0000-0000-0000-00000000a1b1', '7b000000-0000-0000-0000-00000000da11', '7b000000-0000-0000-0000-00000000c501',
+   '7b000000-0000-0000-0000-0000000ef003', '7b000000-0000-0000-0000-00000000ab03', '7b000000-0000-0000-0000-0000000c0b05',
+   'takeaway', 'served', 'ILS', 600, 0, 0, 600, 'rops-b1-legacy-tw', 1);
+create temp table t_b1_occ as select app.pos_tables(
+  '7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-00000000da11') as res;
+select is(
+  (select (e->>'active_order_count')::int from t_b1_occ, jsonb_array_elements(res->'tables') e
+    where e->>'id' = '7b000000-0000-0000-0000-0000000c0b05'),
+  0, 'B1: an ACTIVE historical TAKEAWAY+table_id row does NOT occupy the table (pos_tables)');
+set local role authenticated;
+set local app.current_app_user_id = '7b000000-0000-0000-0000-00000000ee01';
+create temp table t_b1_lt as select app.list_tables(
+  '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1',
+  '7b000000-0000-0000-0000-00000000a1b1') as res;
+reset role;
+select is(
+  (select (e->>'active_order_count')::int from t_b1_lt, jsonb_array_elements(res->'tables') e
+    where e->>'id' = '7b000000-0000-0000-0000-0000000c0b05'),
+  0, 'B1: the dashboard read excludes it too (list_tables)');
 
 -- ===== (33-34) catalog ========================================================
 select ok(

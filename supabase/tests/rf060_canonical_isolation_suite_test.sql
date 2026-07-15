@@ -57,6 +57,12 @@ insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pi
 -- dine_in submits now require a live, active same-scope table)
 insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
   ('00000000-0000-0000-0000-000000007ab1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'RF060 T1', true);
+-- sellable menu fixture for the Org A submit_order payload (RESTAURANT-OPERATIONS-V1-001:
+-- submit_order now refuses line items that are not proven-sellable menu items)
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
 
 -- ===== idempotency / replay (exactly-once) via submit_order ================== 1-3
 select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0e1','00000000-0000-0000-0000-00000000da11','op-rep','dine_in','00000000-0000-0000-0000-000000007ab1',null,'USD',null,

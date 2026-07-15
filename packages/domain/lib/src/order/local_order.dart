@@ -82,13 +82,17 @@ class LocalOrder {
   void startPreparing() => _to(OrderStatus.preparing);
   void markReady() => _to(OrderStatus.ready);
 
-  /// Serve the order. Legal only `ready -> served` for dine-in; a takeaway
-  /// order is rejected here (it skips `served`).
+  /// Serve the order: `ready -> served` for BOTH types (review B3). For a
+  /// takeaway order this is the customer pickup — the UI displays it as
+  /// "Picked up", but the persisted state is `served` either way.
   void serve() => _to(OrderStatus.served);
 
-  /// Complete the order: `served -> completed` (dine-in) or `ready -> completed`
-  /// (takeaway). Requires the injected [paymentSettled] precondition — RF-032
-  /// has no payment model; the authoritative gate is server-side (D-025).
+  /// Complete the order: `served -> completed` for BOTH types (review B3) —
+  /// `ready -> completed` is never a legal direct transition (the server's
+  /// auto-completion of a served+settled order is a settlement side effect,
+  /// not a manual transition). Requires the injected [paymentSettled]
+  /// precondition — RF-032 has no payment model; the authoritative gate is
+  /// server-side (D-025).
   void complete({required bool paymentSettled}) {
     OrderStateMachine.transition(_status, OrderStatus.completed, orderType);
     if (!paymentSettled) {
