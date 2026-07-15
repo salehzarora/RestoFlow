@@ -22,7 +22,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(52);
+select plan(53);
 
 -- ===== fixtures: Org A (Rest A1: branches A1a, A1b, dead A1x), Org B =========
 insert into organizations (id, name, slug, default_currency) values
@@ -308,10 +308,17 @@ select ok(
 select is(
   jsonb_array_length(app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables'),
   1, 'the session branch has exactly ONE live active table (inactive/tombstoned/other-branch/other-org excluded)');
+-- PILOT-OPERATIONS-CORRECTIONS-001 expanded the pos_tables row contract with two
+-- keys: effective_state (manual status fused with derived occupancy) + group_id
+-- (the active link group, null when ungrouped). Eight keys now, both new ones present.
 select is(
   (select count(*) from (select jsonb_object_keys(
      app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0) as k) s)::int,
-  6, 'a pos_tables row carries exactly the six keys {id,label,seats,area,status,active_order_count}');
+  8, 'a pos_tables row carries the eight keys {id,label,seats,area,status,active_order_count,effective_state,group_id}');
+select ok(
+  (select (r ? 'effective_state') and (r ? 'group_id')
+   from (select app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0 as r) s),
+  'the pos_tables row carries the new effective_state + group_id keys (PILOT-OPERATIONS-CORRECTIONS-001)');
 select ok(
   (select r->>'label' = 'Alpha' and (r->>'seats')::int = 4 and r->>'area' = 'Main' and r->>'status' = 'available'
    from (select app.pos_tables('50000000-0000-0000-0000-00000000c501', '50000000-0000-0000-0000-00000000da11') -> 'tables' -> 0 as r) s),
