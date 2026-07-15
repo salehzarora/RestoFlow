@@ -40,6 +40,8 @@ insert into employee_profiles (id, organization_id, restaurant_id, branch_id, ap
   ('00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee01', '00000000-0000-0000-0000-00000000ab01'),
   ('00000000-0000-0000-0000-0000000ef002', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee02', '00000000-0000-0000-0000-00000000ab02'),
   ('00000000-0000-0000-0000-0000000ef004', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee04', '00000000-0000-0000-0000-00000000ab04');
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('00000000-0000-0000-0000-00000000ab1e', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'RF059 T1', true);
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('00000000-0000-0000-0000-00000000c501', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-00000000ab01', now() + interval '1 hour'),
   ('00000000-0000-0000-0000-00000000c502', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef002', '00000000-0000-0000-0000-00000000ab02', now() + interval '1 hour'),
@@ -48,14 +50,14 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 -- ===== full mutation flow via the SECURITY DEFINER RPCs ====================== 1-8
 select is((app.open_shift('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a5f1','00000000-0000-0000-0000-00000000acd1','00000000-0000-0000-0000-00000000da11','op-open',5000) ->> 'ok')::boolean, true,
   'open_shift still works under RF-059 policies');                                                                                            -- 1
-select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-subX','dine_in',null,null,'USD',null,
+select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-subX','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,1000,0,0,1000,null) ->> 'ok')::boolean, true,
   'submit_order still works');                                                                                                                -- 2
 select is((app.apply_discount('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-disc','order',null,'fixed',100,'promo',null) ->> 'ok')::boolean, true,
   'apply_discount (manager) still works');                                                                                                    -- 3
 select is((app.record_payment('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-pay','cash',900,null) ->> 'ok')::boolean, true,
   'record_payment still works (grand 900 after 100 discount)');                                                                               -- 4
-select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d2','00000000-0000-0000-0000-00000000da11','op-subY','dine_in',null,null,'USD',null,
+select is((app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d2','00000000-0000-0000-0000-00000000da11','op-subY','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,1000,0,0,1000,null) ->> 'ok')::boolean, true,
   'submit_order (second order) still works');                                                                                                 -- 5
 select is((app.void_order('00000000-0000-0000-0000-00000000c502','00000000-0000-0000-0000-00000000a0d2','00000000-0000-0000-0000-00000000da11','op-void','mistake',null) ->> 'ok')::boolean, true,
@@ -91,7 +93,7 @@ select ok(
 -- ===== sync_push still dispatches under the new policies ===================== 15-16
 select is(
   (app.sync_push('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000da11',
-    '[{"local_operation_id":"op-z","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-00000000a0d3","order_type":"dine_in","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
+    '[{"local_operation_id":"op-z","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-00000000a0d3","order_type":"dine_in","table_id":"00000000-0000-0000-0000-00000000ab1e","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
    -> 'results' -> 0 ->> 'status'), 'applied', 'sync_push still dispatches order.submit -> applied under RF-059');                              -- 15
 select is(
   jsonb_array_length(app.sync_pull('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000da11',array['orders'],'{}'::jsonb,500) -> 'changes' -> 'orders' -> 'rows')::int,

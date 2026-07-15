@@ -21,6 +21,8 @@ insert into restaurants (id, organization_id, name) values
   ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a0', 'Rest A1');
 insert into branches (id, organization_id, restaurant_id, name) values
   ('00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', 'Branch A1');
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('00000000-0000-0000-0000-0000000ab1e1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'T-RF052AU', true);
 insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
   ('00000000-0000-0000-0000-00000000da11', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'pos');
 insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
@@ -37,7 +39,7 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
 
 -- ---- submit: 2 x 500 + modifier 100 => subtotal/grand 1100 -----------------
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1',
-  '00000000-0000-0000-0000-00000000da11','op-audit','takeaway','00000000-0000-0000-0000-0000000ab1e1','00000000-0000-0000-0000-0000000585f1','USD',null,
+  '00000000-0000-0000-0000-00000000da11','op-audit','dine_in','00000000-0000-0000-0000-0000000ab1e1','00000000-0000-0000-0000-0000000585f1','USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"option_name_snapshot":"Extra"}]}]'::jsonb,
   1100, 0, 0, 1100, null);
 
@@ -74,7 +76,7 @@ select is((select new_values ->> 'status'                      from audit_events
 select is((select (new_values ->> 'discount_total_minor')::bigint from audit_events), 0::bigint, 'new_values.discount_total_minor');
 select is((select (new_values ->> 'tax_total_minor')::bigint    from audit_events), 0::bigint,    'new_values.tax_total_minor');
 select is((select new_values ->> 'device_id'                   from audit_events), '00000000-0000-0000-0000-00000000da11', 'new_values.device_id');
-select is((select new_values ->> 'order_type'                  from audit_events), 'takeaway',   'new_values.order_type');
+select is((select new_values ->> 'order_type'                  from audit_events), 'dine_in',    'new_values.order_type');
 select is((select new_values ->> 'table_id'                    from audit_events), '00000000-0000-0000-0000-0000000ab1e1', 'new_values.table_id');
 select is((select new_values ->> 'shift_id'                    from audit_events), '00000000-0000-0000-0000-0000000585f1', 'new_values.shift_id');
 select is((select new_values ->> 'resolved_membership_id'      from audit_events), '00000000-0000-0000-0000-00000000ab01', 'new_values.resolved_membership_id');
@@ -83,7 +85,7 @@ select is((select (new_values ->> 'modifier_count')::int       from audit_events
 
 -- idempotent replay writes NO second audit row ------------------------------- 25
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1',
-  '00000000-0000-0000-0000-00000000da11','op-audit','takeaway','00000000-0000-0000-0000-0000000ab1e1','00000000-0000-0000-0000-0000000585f1','USD',null,
+  '00000000-0000-0000-0000-00000000da11','op-audit','dine_in','00000000-0000-0000-0000-0000000ab1e1','00000000-0000-0000-0000-0000000585f1','USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"option_name_snapshot":"Extra"}]}]'::jsonb,
   1100, 0, 0, 1100, null);
 select is((select count(*) from audit_events)::int, 1, 'a clean idempotency replay does NOT write a second audit_events row');

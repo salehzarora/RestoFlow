@@ -70,6 +70,10 @@ insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_
   ('70000000-0000-0000-0000-000000000702', '70000000-0000-0000-0000-0000000000a0', '70000000-0000-0000-0000-0000000000a1', null, '70000000-0000-0000-0000-0000000000f1', 'Plain', 'single', 0, null, false, 2, true);
 insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor, display_order) values
   ('70000000-0000-0000-0000-000000000801', '70000000-0000-0000-0000-0000000000a0', '70000000-0000-0000-0000-0000000000a1', null, '70000000-0000-0000-0000-000000000701', 'Cheese', 100, 1);
+-- RESTAURANT-OPERATIONS-V1-001: dine_in submits now require a live active table
+-- in the PIN session's org/restaurant/branch.
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('70000000-0000-0000-0000-00000000ab1e', '70000000-0000-0000-0000-0000000000a0', '70000000-0000-0000-0000-0000000000a1', '70000000-0000-0000-0000-00000000a1b1', 'MQ-T1', true);
 
 -- ===== (1-5) columns exist; nullability; defaults false/null ==================
 select has_column('public', 'modifiers', 'allow_quantity', 'modifiers.allow_quantity column exists');
@@ -207,7 +211,7 @@ select ok(
 -- The item carries a kitchen note in order_items[].notes.
 create temp table t_submit as select app.submit_order(
   '70000000-0000-0000-0000-00000000c501','70000000-0000-0000-0000-00000000a0d1',
-  '70000000-0000-0000-0000-00000000da11','op-mq1','dine_in',null,null,'ILS',null,
+  '70000000-0000-0000-0000-00000000da11','op-mq1','dine_in','70000000-0000-0000-0000-00000000ab1e',null,'ILS',null,
   '[{"menu_item_id":"70000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":5000,"menu_item_name_snapshot":"Burger","notes":"no onions","modifiers":[{"modifier_option_id":"70000000-0000-0000-0000-000000000801","price_minor_snapshot":100,"quantity":3,"modifier_name_snapshot":"Extras","option_name_snapshot":"Cheese"}]}]'::jsonb,
   5300, 0, 0, 5300, null) as res;
 select is((select (res->>'ok')::boolean from t_submit), true,
@@ -222,7 +226,7 @@ select is(
   'the order_item_modifiers row stores quantity = 3');
 select throws_ok($$ select app.submit_order(
   '70000000-0000-0000-0000-00000000c501','70000000-0000-0000-0000-00000000a0d2',
-  '70000000-0000-0000-0000-00000000da11','op-mq2','dine_in',null,null,'ILS',null,
+  '70000000-0000-0000-0000-00000000da11','op-mq2','dine_in','70000000-0000-0000-0000-00000000ab1e',null,'ILS',null,
   '[{"menu_item_id":"70000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":5000,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"70000000-0000-0000-0000-000000000801","price_minor_snapshot":100,"quantity":3,"modifier_name_snapshot":"Extras","option_name_snapshot":"Cheese"}]}]'::jsonb,
   5100, 0, 0, 5100, null) $$, '42501', NULL,
   'a subtotal computed AS IF quantity were 1 (5100) is REJECTED (anti-tamper recompute multiplies the modifier quantity)');

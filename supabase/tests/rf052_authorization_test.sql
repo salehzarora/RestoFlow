@@ -55,11 +55,16 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
   ('00000000-0000-0000-0000-00000000c5a4', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef0a0', '00000000-0000-0000-0000-00000000ab01', now() - interval '1 hour'),
   ('00000000-0000-0000-0000-00000000c5a5', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef0d0', '00000000-0000-0000-0000-00000000ab04', now() + interval '1 hour');
 
+-- a live, active dining table in the SAME org/restaurant/branch as the PIN
+-- session (RESTAURANT-OPERATIONS-V1-001: dine_in submits now REQUIRE one)
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('00000000-0000-0000-0000-00000000ab1e'::uuid, '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'T1', true);
+
 -- a minimal valid 1-line payload (qty 1 @ 1000; subtotal/grand 1000)
 -- ===== valid cashier succeeds =============================================== 1
 select ok(
   (app.submit_order('00000000-0000-0000-0000-00000000c5a1','00000000-0000-0000-0000-00000000a0d1',
-    '00000000-0000-0000-0000-00000000da11','op-ok','dine_in',null,null,'USD',null,
+    '00000000-0000-0000-0000-00000000da11','op-ok','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
     '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}]'::jsonb,
     1000,0,0,1000,null) ->> 'order_id') is not null,
   'valid cashier on a paired+active device submits an order');

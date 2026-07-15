@@ -51,8 +51,13 @@ insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_
   ('00000000-0000-0000-0000-00000000c5d3', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a3', '00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-00000000ab01', now() + interval '1 hour'),  -- on the device to revoke (PIN itself valid)
   ('00000000-0000-0000-0000-00000000c5e1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef001', '00000000-0000-0000-0000-00000000ab01', now() - interval '1 hour');  -- EXPIRED (past the window)
 
+-- a live active dining table in the same org/restaurant/branch as the PIN session
+-- (RESTAURANT-OPERATIONS-V1-001: dine_in submits now REQUIRE a valid table)
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('00000000-0000-0000-0000-00000000ab1e', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'RF064-T1', true);
+
 -- a real order WITH a modifier (order_item_modifiers carries price_minor_snapshot)
-select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-sub','dine_in',null,null,'USD',null,
+select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-sub','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","option_name_snapshot":"Extra Cheese","price_minor_snapshot":100,"quantity":1}]}]'::jsonb,
   1100,0,0,1100,null);
 

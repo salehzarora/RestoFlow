@@ -94,10 +94,10 @@ select is(
   (select old_values from audit_events
     where organization_id = '7a000000-0000-0000-0000-0000000000a0'
       and action = 'menu.menu_item.availability_changed'),
-  jsonb_build_object('availability', 'available', 'reason', null),
+  jsonb_build_object('availability', 'available', 'availability_reason', null),
   'BEFORE = {available, reason null} (absence of a row is available)');
 select is(
-  (select (new_values->>'availability') || '|' || (new_values->>'reason') || '|' || (new_values->>'item_name')
+  (select (new_values->>'availability') || '|' || (new_values->>'availability_reason') || '|' || (new_values->>'item_name')
      from audit_events
     where organization_id = '7a000000-0000-0000-0000-0000000000a0'
       and action = 'menu.menu_item.availability_changed'),
@@ -168,10 +168,10 @@ create temp table t_set2b as select app.menu_set_item_availability(
   'unavailable', 'paused') as res;
 reset role;
 select is(
-  (select old_values->>'reason' || '>' || (new_values->>'reason') from audit_events
+  (select old_values->>'availability_reason' || '>' || (new_values->>'availability_reason') from audit_events
     where organization_id = '7a000000-0000-0000-0000-0000000000a0'
       and action = 'menu.menu_item.availability_changed'
-      and new_values->>'reason' = 'paused'),
+      and new_values->>'availability_reason' = 'paused'),
   'sold_out>paused', 'a reason change audits sold_out -> paused with honest before/after');
 select is((select (res->>'no_change')::boolean from t_set2b), true,
   'repeating the same state returns ok + no_change');
@@ -200,7 +200,7 @@ select is(
     where organization_id = '7a000000-0000-0000-0000-0000000000a0'
       and action = 'menu.menu_item.availability_changed'
       and new_values->>'availability' = 'available'),
-  jsonb_build_object('availability', 'available', 'reason', null,
+  jsonb_build_object('availability', 'available', 'availability_reason', null,
                      'item_name', 'Falafel',
                      'menu_item_id', '7a000000-0000-0000-0000-0000000000f1'),
   'the re-enable audit AFTER = {available, reason null} + item identity');

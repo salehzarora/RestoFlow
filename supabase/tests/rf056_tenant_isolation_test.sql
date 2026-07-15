@@ -33,6 +33,8 @@ insert into employee_profiles (id, organization_id, restaurant_id, branch_id, ap
   ('00000000-0000-0000-0000-0000000ef00a', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-00000000ee0a', '00000000-0000-0000-0000-00000000ab0a');
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('00000000-0000-0000-0000-00000000c50a', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', '00000000-0000-0000-0000-0000000005a1', '00000000-0000-0000-0000-0000000ef00a', '00000000-0000-0000-0000-00000000ab0a', now() + interval '1 hour');
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('00000000-0000-0000-0000-0000000ab1e1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000a1b1', 'T1', true);
 -- ---- Org B ----
 insert into organizations (id, name, slug, default_currency) values
   ('00000000-0000-0000-0000-0000000000b0', 'Org B', 'rf056t-b', 'USD');
@@ -53,15 +55,17 @@ insert into employee_profiles (id, organization_id, restaurant_id, branch_id, ap
   ('00000000-0000-0000-0000-0000000ef00b', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000b1d1', '00000000-0000-0000-0000-00000000ee0b', '00000000-0000-0000-0000-00000000ab0b');
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('00000000-0000-0000-0000-00000000c50b', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000b1d1', '00000000-0000-0000-0000-0000000005b1', '00000000-0000-0000-0000-0000000ef00b', '00000000-0000-0000-0000-00000000ab0b', now() + interval '1 hour');
+insert into tables (id, organization_id, restaurant_id, branch_id, label, is_active) values
+  ('00000000-0000-0000-0000-0000000ab1e2', '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000b1d1', 'T1', true);
 
 -- the SAME local_operation_id ('op-1') pushed by org A and org B ------------- 1-2
 select is(
   (app.sync_push('00000000-0000-0000-0000-00000000c50a','00000000-0000-0000-0000-00000000da11',
-    '[{"local_operation_id":"op-1","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-0000000000da","order_type":"dine_in","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
+    '[{"local_operation_id":"op-1","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-0000000000da","order_type":"dine_in","table_id":"00000000-0000-0000-0000-0000000ab1e1","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
    -> 'results' -> 0 ->> 'status'), 'applied', 'org A push of op-1 applies');
 select is(
   (app.sync_push('00000000-0000-0000-0000-00000000c50b','00000000-0000-0000-0000-00000000db11',
-    '[{"local_operation_id":"op-1","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-0000000000db","order_type":"dine_in","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f2","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
+    '[{"local_operation_id":"op-1","operation_type":"order.submit","payload":{"order_id":"00000000-0000-0000-0000-0000000000db","order_type":"dine_in","table_id":"00000000-0000-0000-0000-0000000ab1e2","currency_code":"USD","order_items":[{"menu_item_id":"00000000-0000-0000-0000-0000000000f2","quantity":1,"unit_price_minor_snapshot":1000,"menu_item_name_snapshot":"Item"}],"subtotal_minor":1000,"discount_total_minor":0,"tax_total_minor":0,"grand_total_minor":1000}}]'::jsonb)
    -> 'results' -> 0 ->> 'status'), 'applied', 'org B push of the SAME op-1 applies independently (org-scoped identity)');
 
 -- two separate ledger rows, two separate orgs -- no cross-org leak/replay ---- 3-4

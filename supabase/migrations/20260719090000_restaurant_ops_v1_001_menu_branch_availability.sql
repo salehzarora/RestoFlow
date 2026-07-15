@@ -222,8 +222,8 @@ begin
   values
     (p_organization_id, p_restaurant_id, p_branch_id, app.current_app_user_id(), null,
      'menu.menu_item.availability_changed', v_reason,
-     jsonb_build_object('availability', v_old_avail, 'reason', v_old_reason),
-     jsonb_build_object('availability', p_availability, 'reason', v_reason,
+     jsonb_build_object('availability', v_old_avail, 'availability_reason', v_old_reason),
+     jsonb_build_object('availability', p_availability, 'availability_reason', v_reason,
                         'item_name', v_item_name, 'menu_item_id', p_menu_item_id));
 
   return jsonb_build_object('ok', true, 'entity', 'menu_item_availability',
@@ -525,10 +525,11 @@ comment on function app.pos_menu(uuid, uuid) is
 
 -- ---------------------------------------------------------------------------
 -- 5. app.list_menu — CREATE OR REPLACE (same signature, keeps ACLs). FAITHFUL
---    re-creation of the D-033 body with ONE change: when p_branch_id IS
---    passed, item rows carry `availability` + `availability_reason` for that
---    branch (management view of the override). With no branch there is no
---    single truthful answer, so the keys are simply ABSENT (wire-compatible).
+--    re-creation of the NEWEST (KITCHEN-MEAT-001, 20260709090000) body — incl.
+--    image_path, the six rich attribute keys, allow_quantity/max_quantity and
+--    kitchen_meat — with ONE change: when p_branch_id IS passed, item rows
+--    carry `availability` + `availability_reason` for that branch (management
+--    view of the override).
 -- ---------------------------------------------------------------------------
 create or replace function app.list_menu(
   p_organization_id uuid,
@@ -611,9 +612,13 @@ begin
       and (p_branch_id is null or c.branch_id is null or c.branch_id = p_branch_id);
 
   -- items: same filters; base_price_minor is integer minor bigint (D-007);
-  -- NO redaction (manager+ only surface).
-  -- RESTAURANT-OPERATIONS-V1-001: when a branch is requested, each item carries
-  -- its availability override for THAT branch (absent row = available).
+  -- NO redaction (manager+ only surface). MVP: + image_path + the six rich
+  -- attribute keys (each nullable — the keys are always present so the Dart
+  -- parser reads them uniformly).
+  -- RESTAURANT-OPERATIONS-V1-001: when a branch is requested, each item
+  -- additionally carries its availability override for THAT branch (absent
+  -- row = available). With no branch there is no single truthful answer, so
+  -- the keys are simply ABSENT (wire-compatible).
   if p_branch_id is not null then
     select coalesce(jsonb_agg(jsonb_build_object(
              'id', i.id, 'organization_id', i.organization_id, 'restaurant_id', i.restaurant_id,
@@ -621,6 +626,9 @@ begin
              'description', i.description, 'base_price_minor', i.base_price_minor,
              'currency_code', i.currency_code, 'default_station_id', i.default_station_id,
              'display_order', i.display_order, 'is_active', i.is_active,
+             'image_path', i.image_path,
+             'item_type', i.item_type, 'tags', i.tags, 'prep_minutes', i.prep_minutes,
+             'sku', i.sku, 'kitchen_note', i.kitchen_note, 'attributes', i.attributes,
              'availability', coalesce(a.availability, 'available'),
              'availability_reason', a.reason)
              order by i.display_order, i.name), '[]'::jsonb)
@@ -640,7 +648,10 @@ begin
              'branch_id', i.branch_id, 'menu_category_id', i.menu_category_id, 'name', i.name,
              'description', i.description, 'base_price_minor', i.base_price_minor,
              'currency_code', i.currency_code, 'default_station_id', i.default_station_id,
-             'display_order', i.display_order, 'is_active', i.is_active)
+             'display_order', i.display_order, 'is_active', i.is_active,
+             'image_path', i.image_path,
+             'item_type', i.item_type, 'tags', i.tags, 'prep_minutes', i.prep_minutes,
+             'sku', i.sku, 'kitchen_note', i.kitchen_note, 'attributes', i.attributes)
              order by i.display_order, i.name), '[]'::jsonb)
       into v_items
       from public.menu_items i
@@ -688,12 +699,14 @@ begin
       and v.deleted_at is null
       and (p_branch_id is null or v.branch_id is null or v.branch_id = p_branch_id);
 
-  -- modifiers: children of the RETURNED item set.
+  -- modifiers: children of the RETURNED item set. MVP: + allow_quantity /
+  -- max_quantity (COUNT settings, never money — D-007).
   select coalesce(jsonb_agg(jsonb_build_object(
            'id', m.id, 'organization_id', m.organization_id, 'restaurant_id', m.restaurant_id,
            'branch_id', m.branch_id, 'menu_item_id', m.menu_item_id, 'name', m.name,
            'selection_type', m.selection_type, 'min_select', m.min_select,
            'max_select', m.max_select, 'is_required', m.is_required,
+           'allow_quantity', m.allow_quantity, 'max_quantity', m.max_quantity,
            'display_order', m.display_order, 'is_active', m.is_active)
            order by m.display_order, m.name), '[]'::jsonb)
     into v_modifiers
@@ -714,7 +727,7 @@ begin
            'id', mo.id, 'organization_id', mo.organization_id, 'restaurant_id', mo.restaurant_id,
            'branch_id', mo.branch_id, 'modifier_id', mo.modifier_id, 'name', mo.name,
            'price_delta_minor', mo.price_delta_minor,
-           'display_order', mo.display_order, 'is_active', mo.is_active)
+           'display_order', mo.display_order, 'is_active', mo.is_active, 'kitchen_meat', mo.kitchen_meat)
            order by mo.display_order, mo.name), '[]'::jsonb)
     into v_options
     from public.modifier_options mo
@@ -748,7 +761,7 @@ end;
 $$;
 
 comment on function app.list_menu(uuid, uuid, uuid) is
-  'MVP (D-033; API_CONTRACT §4.23): GUC-free menu MANAGEMENT read for the owner/manager dashboard. RESTAURANT-OPERATIONS-V1-001: when p_branch_id is passed, item rows additionally carry availability (available|unavailable) + availability_reason (sold_out|paused|null) for THAT branch — with no branch requested the keys are absent (there is no single truthful restaurant-wide answer). Everything else unchanged: manager+ only (permission_denied below manager), 42501 for unauthenticated/non-member/IDOR, deleted_at excluded, is_active=false INCLUDED, branch-visible rows, tenant keys on every row (D-001), money integer minor bigint (D-007). Read-only; scope-safe (R-003).';
+  'RF-109/D-033 GUC-free menu MANAGEMENT read (manager+) + KITCHEN-MEAT-001 kitchen_meat. RESTAURANT-OPERATIONS-V1-001: when p_branch_id is passed, item rows additionally carry availability (available|unavailable) + availability_reason (sold_out|paused|null) for THAT branch — with no branch requested the keys are absent (no single truthful restaurant-wide answer). Everything else is the NEWEST body verbatim: image_path + six rich attribute keys on items, allow_quantity/max_quantity on modifiers, kitchen_meat on options, tenant keys on every row (D-001), money integer minor bigint (D-007). Read-only; scope-safe (R-003).';
 
 -- ---------------------------------------------------------------------------
 -- 6. Thin public SECURITY INVOKER wrapper + grants (authenticated only; the
