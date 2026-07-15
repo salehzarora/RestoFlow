@@ -818,6 +818,21 @@ For each new action, define:
 
 The enforcement is automated: `auditRegistryViolations` (Dashboard unit test) fails when a registered action has no category / lands in "other" / lacks a title it declares / a category lacks an ar-he-en label / a displayable field lacks a localized label. `app.audit_category` pgTAP asserts server classification. A deliberate deferral (e.g. `printer.*`) is marked `intentionalOther` and documented — never a silent fall-through.
 
+### 4.37 Restaurant operations V1 — branch menu availability (RESTAURANT-OPERATIONS-V1-001)
+
+**Model.** `menu_item_branch_availability` holds at most ONE override row per `(branch, menu item)`: `availability in ('available','unavailable')` with a **structured** `reason in ('sold_out','paused')` — reason is REQUIRED exactly when unavailable and NULL exactly when available (DB CHECK). **Absence of a row means available.** The override is branch-scoped by definition (an item can be sold out in branch A and sellable in branch B), is distinct from `menu_items.is_active` (whole-scope config switch) and `deleted_at` (tombstone), and never touches historical orders (D-008 snapshots are immutable).
+
+**Mutation — `public.menu_set_item_availability(p_organization_id, p_restaurant_id, p_branch_id, p_menu_item_id, p_availability, p_reason default null)`** (wrapper → `app.*`, SECURITY DEFINER, `search_path=''`, authenticated-only, anon revoked):
+- Authorization: `app.menu_guard` — **manager / restaurant_owner / org_owner** over the passed scope (GUC-free JWT path, same as every menu mutation). A covering member below manager gets `{ok:false, error:'permission_denied'}` + a committed `menu.menu_item.availability_denied` audit row. Non-member / cross-org / sibling-branch actor → RAISE `42501` (cross-branch mutation is unreachable).
+- Target rules: item must be live (`deleted_at is null`) in the passed restaurant and **visible in the target branch** (`branch_id is null or = p_branch_id`); a branch-pinned sibling item, tombstoned item, or unknown id is the SAME `{ok:false, error:'not_found'}` (no sibling leak, R-003).
+- Shape errors (unavailable without a structured reason, free-form reason, bad availability token, null branch) RAISE `42501` — the dashboard UI cannot produce them.
+- No-change calls return `{ok:true, no_change:true}` and write NO audit row. State changes upsert the override row and audit **`menu.menu_item.availability_changed`** — `old_values`/`new_values` = `{availability, reason}` (+ `item_name`, `menu_item_id` in new), the structured reason token in the audit `reason` column; normal operational sensitivity; AR/HE/EN labels required (§4.33). Activity Log detail classification for the action ships in the phase's table-move migration (single stacked re-create).
+
+**Reads.**
+- `pos_menu` item rows now ALWAYS carry `availability` (`'available'|'unavailable'`, coalesced available when no override exists) + `availability_reason` (`'sold_out'|'paused'|null`) for the **session branch**. Unavailable items STAY in the payload — the POS shows them non-sellable with the reason instead of hiding them. All existing redaction (T-003 money keys, T-014 image_path for kitchen) unchanged.
+- `list_menu` item rows carry the same two keys **only when `p_branch_id` is passed** (management view of that branch's overrides); with no branch requested the keys are absent (there is no single truthful restaurant-wide answer).
+- POS refresh semantics are unchanged and HONEST: the menu (and therefore availability) reloads when the PIN session starts/changes or on manual retry — there is no realtime availability push. Enforcement does NOT rely on the client: `app.submit_order` re-validates availability at acceptance time (§4.38).
+
 ## 5. Cross-References
 - Decisions: [DECISIONS](DECISIONS.md) (D-001, D-003, D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-013, D-015, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-026, D-028, D-029, D-031, D-032, D-033, D-034).
 - Open questions: [OPEN_QUESTIONS](OPEN_QUESTIONS.md) (subset of the Q-001..Q-024 range: Q-004, Q-007, Q-008, Q-009, Q-010, Q-011, Q-012, Q-014, Q-017).
