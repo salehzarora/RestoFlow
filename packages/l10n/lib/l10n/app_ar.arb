@@ -1315,5 +1315,6 @@
   "activityLogFieldToTable": "إلى طاولة",
   "activityLogDeniedTakeawayOrder": "طلبات السفري لا تستخدم الطاولات",
   "activityLogDeniedOrderNotMovable": "لم يعد بالإمكان نقل الطلب",
-  "activityLogDeniedTableNotAvailable": "الطاولة غير متاحة"
+  "activityLogDeniedTableNotAvailable": "الطاولة غير متاحة",
+  "activityLogDeniedPermission": "غير مسموح لهذا الدور"
 }

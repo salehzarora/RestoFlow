@@ -104,11 +104,11 @@ select is(
   'unavailable|sold_out|Falafel',
   'AFTER carries availability + reason + the item name');
 select is(
-  (select reason || '|' || branch_id::text from audit_events
+  (select coalesce(reason, 'NULL') || '|' || branch_id::text from audit_events
     where organization_id = '7a000000-0000-0000-0000-0000000000a0'
       and action = 'menu.menu_item.availability_changed'),
-  'sold_out|7a000000-0000-0000-0000-00000000a1b1',
-  'the reason COLUMN carries the structured token and the row is branch-scoped');
+  'NULL|7a000000-0000-0000-0000-00000000a1b1',
+  'the reason COLUMN stays NULL (free text only — the structured token lives in the values, localized client-side) and the row is branch-scoped');
 
 -- ===== (10-12) POS read: unavailable item STAYS visible, session branch only =
 create temp table t_pos as select app.pos_menu(

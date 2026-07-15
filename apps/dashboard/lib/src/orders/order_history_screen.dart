@@ -459,7 +459,11 @@ class OrderHistoryCard extends ConsumerWidget {
                       runSpacing: RestoflowSpacing.xs,
                       children: [
                         RestoflowStatusPill(
-                          label: statusLabelFor(l10n, row.status, row.orderType),
+                          label: statusLabelFor(
+                            l10n,
+                            row.status,
+                            row.orderType,
+                          ),
                           tone: statusTone(row.status),
                         ),
                         settlementPill(l10n, row.settlement),
@@ -511,14 +515,14 @@ String statusLabelFor(AppLocalizations l10n, String status, String? orderType) {
     return l10n.ordersStatusPickedUp;
   }
   return switch (status) {
-  'draft' => l10n.ordersStatusDraft,
-  'submitted' => l10n.ordersStatusSubmitted,
-  'accepted' => l10n.ordersStatusAccepted,
-  'preparing' => l10n.ordersStatusPreparing,
-  'ready' => l10n.ordersStatusReady,
-  'served' => l10n.ordersStatusServed,
-  'completed' => l10n.ordersStatusCompleted,
-  'cancelled' => l10n.ordersStatusCancelled,
+    'draft' => l10n.ordersStatusDraft,
+    'submitted' => l10n.ordersStatusSubmitted,
+    'accepted' => l10n.ordersStatusAccepted,
+    'preparing' => l10n.ordersStatusPreparing,
+    'ready' => l10n.ordersStatusReady,
+    'served' => l10n.ordersStatusServed,
+    'completed' => l10n.ordersStatusCompleted,
+    'cancelled' => l10n.ordersStatusCancelled,
     'voided' => l10n.ordersStatusVoided,
     _ => status,
   };

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/ids.dart';
 import 'package:restoflow_pos/src/data/order_actions.dart';
 import 'package:restoflow_pos/src/data/order_center_view.dart';
@@ -233,6 +234,40 @@ void main() {
       });
       expect(denied.permissionDenied, isTrue);
     });
+
+    test(
+      'D6 the DEMO store refuses an order the demo feed does not hold '
+      '(stabilization: no success snackbar over a write that lands nowhere)',
+      () async {
+        final snapshots = DemoOrderSnapshotRepository(
+          seed: [_snapshot(id: 'held-1')],
+        );
+        final demo = DemoMoveTableStore(snapshots);
+        // A held order moves fine...
+        final moved = await demo.moveTable(
+          orderId: 'held-1',
+          tableId: 't-2',
+          tableLabel: 'T2',
+          expectedRevision: 2,
+        );
+        expect(moved.tableLabel, 'T2');
+        expect(
+          (await snapshots.fetchOrders(['held-1'])).orders.single.tableLabel,
+          'T2',
+        );
+        // ...but an unknown (device-submitted) demo order is REFUSED, honestly.
+        await expectLater(
+          demo.moveTable(orderId: 'ghost', tableId: 't-2', tableLabel: 'T2'),
+          throwsA(
+            isA<MoveTableException>().having(
+              (e) => e.notMovable,
+              'notMovable',
+              isTrue,
+            ),
+          ),
+        );
+      },
+    );
 
     test(
       'D5 a same-table no-op reports no_change + the unchanged revision',

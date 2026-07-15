@@ -7959,6 +7959,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The table isn’t available'**
   String get activityLogDeniedTableNotAvailable;
+
+  /// Localized denied_reason value: the actor role was not permitted to perform the mutation (availability change / table move).
+  ///
+  /// In en, this message translates to:
+  /// **'Not permitted for this role'**
+  String get activityLogDeniedPermission;
 }
 
 class _AppLocalizationsDelegate

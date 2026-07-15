@@ -3041,5 +3041,7 @@
   "activityLogDeniedOrderNotMovable": "The order can no longer be moved",
   "@activityLogDeniedOrderNotMovable": {"description": "Localized denied_reason value: a table move was refused because the order is terminal."},
   "activityLogDeniedTableNotAvailable": "The table isn’t available",
-  "@activityLogDeniedTableNotAvailable": {"description": "Localized denied_reason value: the target table is not a live active table of the branch."}
+  "@activityLogDeniedTableNotAvailable": {"description": "Localized denied_reason value: the target table is not a live active table of the branch."},
+  "activityLogDeniedPermission": "Not permitted for this role",
+  "@activityLogDeniedPermission": {"description": "Localized denied_reason value: the actor role was not permitted to perform the mutation (availability change / table move)."}
 }

@@ -52,10 +52,7 @@ void main() {
 
     test('A3 every other status is untouched by the type', () async {
       final l10n = await _l('en');
-      expect(
-        statusLabelFor(l10n, 'ready', 'takeaway'),
-        l10n.ordersStatusReady,
-      );
+      expect(statusLabelFor(l10n, 'ready', 'takeaway'), l10n.ordersStatusReady);
       expect(
         statusLabelFor(l10n, 'completed', 'takeaway'),
         l10n.ordersStatusCompleted,
@@ -101,10 +98,7 @@ void main() {
     test('B2 availability_denied has its own title', () async {
       final l10n = await _l('en');
       final v = AuditEventPresenter(l10n, 'ILS').present(
-        _event(
-          action: 'menu.menu_item.availability_denied',
-          category: 'menu',
-        ),
+        _event(action: 'menu.menu_item.availability_denied', category: 'menu'),
       );
       expect(v.title, l10n.activityLogTitleMenuAvailabilityDenied);
     });
@@ -162,6 +156,9 @@ void main() {
       for (final (token, label) in [
         ('order_not_movable', l10n.activityLogDeniedOrderNotMovable),
         ('table_not_available', l10n.activityLogDeniedTableNotAvailable),
+        // Stabilization regression: this phase is the FIRST to emit
+        // permission_denied as a denied_reason VALUE — it must localize.
+        ('permission_denied', l10n.activityLogDeniedPermission),
       ]) {
         final v = AuditEventPresenter(l10n, 'ILS').present(
           _event(

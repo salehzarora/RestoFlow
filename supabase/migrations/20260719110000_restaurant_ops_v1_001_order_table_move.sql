@@ -221,10 +221,11 @@ begin
                               'server_ts', now(), 'idempotency_replay', false);
   end if;
 
-  -- (h) the TARGET table must be a live, active table of the SESSION branch —
-  --     the same rule submit_order enforces (foreign / tombstoned / inactive /
-  --     unknown are indistinguishable, R-003). Moving ONTO an occupied table is
-  --     allowed (parties merge in real restaurants; occupancy counts stay honest).
+  -- (h) the TARGET table must be a live, active, IN-SERVICE table of the
+  --     SESSION branch — the same rule submit_order enforces (foreign /
+  --     tombstoned / inactive / out-of-service / unknown are indistinguishable,
+  --     R-003). Moving ONTO an occupied or reserved table is allowed (parties
+  --     merge in real restaurants; occupancy counts stay honest).
   select t.label into v_new_label
     from public.tables t
     where t.id              = p_table_id
@@ -232,6 +233,7 @@ begin
       and t.restaurant_id   = v_rest
       and t.branch_id       = v_branch
       and t.is_active
+      and t.status <> 'out_of_service'
       and t.deleted_at is null;
   if not found then
     insert into public.audit_events (

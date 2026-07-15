@@ -214,14 +214,16 @@ begin
   on conflict (organization_id, branch_id, menu_item_id)
   do update set availability = excluded.availability, reason = excluded.reason;
 
-  -- WHAT/WHO/WHEN/SCOPE/BEFORE/AFTER/REASON: reason column = the structured
-  -- availability reason token (normal operational sensitivity).
+  -- WHAT/WHO/WHEN/SCOPE/BEFORE/AFTER/REASON. STABILIZATION: the reason COLUMN
+  -- stays NULL — it is free-text for operators and the Activity Log renders it
+  -- verbatim; the STRUCTURED token lives in old/new values, where the client
+  -- localizes it (sold_out -> "Sold out" in ar/he/en, never a raw token).
   insert into public.audit_events
     (organization_id, restaurant_id, branch_id, actor_app_user_id, device_id,
      action, reason, old_values, new_values)
   values
     (p_organization_id, p_restaurant_id, p_branch_id, app.current_app_user_id(), null,
-     'menu.menu_item.availability_changed', v_reason,
+     'menu.menu_item.availability_changed', null,
      jsonb_build_object('availability', v_old_avail, 'availability_reason', v_old_reason),
      jsonb_build_object('availability', p_availability, 'availability_reason', v_reason,
                         'item_name', v_item_name, 'menu_item_id', p_menu_item_id));

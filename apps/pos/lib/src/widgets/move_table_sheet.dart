@@ -412,6 +412,17 @@ class _TableTile extends StatelessWidget {
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: RestoflowTone.warning.styleOf(theme).accent,
                     ),
+                  )
+                else if (table.status == TableStatusKind.occupied)
+                  // STABILIZATION: a manual occupied/RESERVED floor state with
+                  // no live order still deserves a cue — the server accepts
+                  // the move, but the cashier must not pick a reserved table
+                  // blind.
+                  Text(
+                    l10n.posTableStatusOccupied,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: RestoflowTone.warning.styleOf(theme).accent,
+                    ),
                   ),
               ],
             ),

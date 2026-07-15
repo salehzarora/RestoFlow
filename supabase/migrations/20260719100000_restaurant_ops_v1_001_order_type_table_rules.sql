@@ -278,9 +278,13 @@ begin
   -- replaying even if its table or an item's availability changed since) and
   -- BEFORE any insert (a refusal never leaves a partial order).
   --
-  -- (accept-1) the dine-in table must be a LIVE, ACTIVE table of the SESSION
-  -- branch. A foreign-branch, tombstoned, deactivated, or unknown table is the
-  -- SAME refusal — the device learns nothing about other branches (R-003).
+  -- (accept-1) the dine-in table must be a LIVE, ACTIVE, IN-SERVICE table of
+  -- the SESSION branch. A foreign-branch, tombstoned, deactivated,
+  -- out-of-service, or unknown table is the SAME refusal — the device learns
+  -- nothing about other branches (R-003). STABILIZATION: out_of_service is a
+  -- HARD manual floor state (a broken table); under a stale client list the
+  -- picker's block is not enough, so the server refuses it too. reserved/
+  -- occupied remain seatable (the reserving party arriving IS the seating).
   if p_order_type = 'dine_in' and not exists (
        select 1 from public.tables t
        where t.id              = p_table_id
@@ -288,6 +292,7 @@ begin
          and t.restaurant_id   = v_rest
          and t.branch_id       = v_branch
          and t.is_active
+         and t.status <> 'out_of_service'
          and t.deleted_at is null) then
     return jsonb_build_object('ok', false, 'error', 'table_not_available', 'entity', 'order');
   end if;

@@ -42,16 +42,19 @@ class DemoOrderSnapshotRepository implements OrderSnapshotRepository {
   /// RESTAURANT-OPERATIONS-V1-001: the demo "server accepted a table move"
   /// lever. Rewrites the held snapshot's table label + revision and advances
   /// its sync_at (so the change flows out through the SAME cursor/refresh
-  /// machinery the real feed uses). Unknown orders are ignored — the demo
-  /// mirrors the real contract, where a move of an unknown order is refused
-  /// before any state changes.
-  void recordTableMove({
+  /// machinery the real feed uses).
+  ///
+  /// Returns FALSE when the demo server does not hold the order (a
+  /// device-submitted demo order never enters this feed) — the caller must
+  /// then refuse honestly rather than claim a success nothing will reflect,
+  /// mirroring the real contract's refusal of an unknown order.
+  bool recordTableMove({
     required String orderId,
     required String tableLabel,
     required int revision,
   }) {
     final held = _byOrderId[orderId];
-    if (held == null) return;
+    if (held == null) return false;
     clock = clock.add(const Duration(seconds: 1));
     _byOrderId[orderId] = PosOrderSnapshot(
       orderId: held.orderId,
@@ -70,6 +73,7 @@ class DemoOrderSnapshotRepository implements OrderSnapshotRepository {
       tableLabel: tableLabel,
       currencyCode: held.currencyCode,
     );
+    return true;
   }
 
   /// Everything the demo server currently holds, oldest change first — the same

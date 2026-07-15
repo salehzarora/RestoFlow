@@ -23,7 +23,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(30);
+select plan(31);
 
 -- ===== fixture: org A — Rest A1, branches B1 + B2 ============================
 insert into organizations (id, name, slug, default_currency) values
@@ -65,7 +65,8 @@ insert into tables (id, organization_id, restaurant_id, branch_id, label, status
   ('7c000000-0000-0000-0000-0000000c0b01', '7c000000-0000-0000-0000-0000000000a0', '7c000000-0000-0000-0000-0000000000a1', '7c000000-0000-0000-0000-00000000a1b1', 'T1', 'available', true,  null),
   ('7c000000-0000-0000-0000-0000000c0b02', '7c000000-0000-0000-0000-0000000000a0', '7c000000-0000-0000-0000-0000000000a1', '7c000000-0000-0000-0000-00000000a1b1', 'T2', 'available', true,  null),
   ('7c000000-0000-0000-0000-0000000c0b03', '7c000000-0000-0000-0000-0000000000a0', '7c000000-0000-0000-0000-0000000000a1', '7c000000-0000-0000-0000-00000000a1b1', 'T3', 'available', false, null),
-  ('7c000000-0000-0000-0000-0000000c0b04', '7c000000-0000-0000-0000-0000000000a0', '7c000000-0000-0000-0000-0000000000a1', '7c000000-0000-0000-0000-00000000a1b2', 'T4', 'available', true,  null);
+  ('7c000000-0000-0000-0000-0000000c0b04', '7c000000-0000-0000-0000-0000000000a0', '7c000000-0000-0000-0000-0000000000a1', '7c000000-0000-0000-0000-00000000a1b2', 'T4', 'available', true,  null),
+  ('7c000000-0000-0000-0000-0000000c0b05', '7c000000-0000-0000-0000-0000000000a0', '7c000000-0000-0000-0000-0000000000a1', '7c000000-0000-0000-0000-00000000a1b1', 'T5', 'out_of_service', true, null);
 
 -- orders: O1 dine-in active on T1; O2 takeaway active; O3 dine-in COMPLETED on
 -- T1; O4 LEGACY tableless dine-in active; O5 dine-in active in SIBLING B2.
@@ -190,6 +191,12 @@ select is((select foreign_tbl->>'error' from t_ref), 'table_not_available',
   'a SIBLING-BRANCH target table is table_not_available (cross-branch unreachable)');
 select is((select inactive_tbl->>'error' from t_ref), 'table_not_available',
   'an inactive target table is the SAME refusal (no probe oracle, R-003)');
+-- STABILIZATION: an OUT-OF-SERVICE target is refused too (hard floor state).
+select is(
+  (select (app.move_order_table('7c000000-0000-0000-0000-00000000c501', '7c000000-0000-0000-0000-0000000d0001',
+    '7c000000-0000-0000-0000-00000000da11', 'ropsc-mv-oos', '7c000000-0000-0000-0000-0000000c0b05', null)) ->> 'error'),
+  'table_not_available',
+  'an out-of-service target table is refused at move');
 
 -- ===== (14-15) same-table no-op ==============================================
 create temp table t_noop as select app.move_order_table(

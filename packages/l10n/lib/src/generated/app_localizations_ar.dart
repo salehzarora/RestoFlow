@@ -4254,4 +4254,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogDeniedTableNotAvailable => 'الطاولة غير متاحة';
+
+  @override
+  String get activityLogDeniedPermission => 'غير مسموح لهذا الدور';
 }

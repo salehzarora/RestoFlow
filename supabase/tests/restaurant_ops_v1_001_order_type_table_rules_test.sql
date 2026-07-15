@@ -23,7 +23,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(33);
+select plan(34);
 
 -- ===== fixture: org A — Rest A1, branches B1 + B2; cashier stack on B1 ======
 insert into organizations (id, name, slug, default_currency) values
@@ -56,7 +56,8 @@ insert into tables (id, organization_id, restaurant_id, branch_id, label, status
   ('7b000000-0000-0000-0000-0000000c0b02', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', 'T2', 'available', false, null),
   ('7b000000-0000-0000-0000-0000000c0b03', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', 'T3', 'available', true,  now()),
   ('7b000000-0000-0000-0000-0000000c0b04', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b2', 'T4', 'available', true,  null),
-  ('7b000000-0000-0000-0000-0000000c0b05', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', 'T5', 'available', true,  null);
+  ('7b000000-0000-0000-0000-0000000c0b05', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', 'T5', 'available', true,  null),
+  ('7b000000-0000-0000-0000-0000000c0b06', '7b000000-0000-0000-0000-0000000000a0', '7b000000-0000-0000-0000-0000000000a1', '7b000000-0000-0000-0000-00000000a1b1', 'T6', 'out_of_service', true, null);
 
 -- menu: category + I1 (sellable) + I2 (sold out in B1 via a fixture override row).
 insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
@@ -166,6 +167,17 @@ select is((select tombstoned->>'error' from t_bad_tables), 'table_not_available'
   'a tombstoned table is refused');
 select is((select unknown->>'error' from t_bad_tables), 'table_not_available',
   'an unknown table id gets the SAME refusal (no existence oracle, R-003)');
+-- STABILIZATION: out_of_service is a HARD floor state — a stale picker must
+-- not be able to seat a party on a broken table.
+select is(
+  (select (app.submit_order('7b000000-0000-0000-0000-00000000c501', '7b000000-0000-0000-0000-0000000d0014',
+    '7b000000-0000-0000-0000-00000000da11', 'rops-b-13', 'dine_in',
+    '7b000000-0000-0000-0000-0000000c0b06', null, 'ILS', null,
+    jsonb_build_array(jsonb_build_object('menu_item_id', '7b000000-0000-0000-0000-0000000000f1',
+      'menu_item_name_snapshot', 'Falafel', 'quantity', 1, 'unit_price_minor_snapshot', 2500)),
+    2500, 0, 0, 2500)) ->> 'error'),
+  'table_not_available',
+  'an OUT-OF-SERVICE table is refused at submit (same indistinguishable refusal)');
 select is(
   (select count(*)::int from orders
     where organization_id = '7b000000-0000-0000-0000-0000000000a0'

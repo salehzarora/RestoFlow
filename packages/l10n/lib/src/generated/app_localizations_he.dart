@@ -4224,4 +4224,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogDeniedTableNotAvailable => 'השולחן אינו זמין';
+
+  @override
+  String get activityLogDeniedPermission => 'אין הרשאה לתפקיד זה';
 }

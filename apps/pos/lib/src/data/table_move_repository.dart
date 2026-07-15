@@ -95,11 +95,24 @@ class DemoMoveTableStore implements MoveTableRepository {
     int? expectedRevision,
   }) async {
     final revision = (expectedRevision ?? 1) + 1;
-    _snapshots?.recordTableMove(
-      orderId: orderId,
-      tableLabel: tableLabel,
-      revision: revision,
-    );
+    final snapshots = _snapshots;
+    if (snapshots != null) {
+      final recorded = snapshots.recordTableMove(
+        orderId: orderId,
+        tableLabel: tableLabel,
+        revision: revision,
+      );
+      // STABILIZATION: a device-submitted demo order never enters the demo
+      // snapshot feed, so a "successful" move of it would land nowhere and the
+      // snackbar would lie. Refuse honestly instead — the real contract
+      // refuses an unknown order too.
+      if (!recorded) {
+        throw const MoveTableException(
+          'demo: order not in the demo branch feed',
+          notMovable: true,
+        );
+      }
+    }
     return MoveTableResult(tableLabel: tableLabel, revision: revision);
   }
 }

@@ -4285,4 +4285,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogDeniedTableNotAvailable => 'The table isn’t available';
+
+  @override
+  String get activityLogDeniedPermission => 'Not permitted for this role';
 }

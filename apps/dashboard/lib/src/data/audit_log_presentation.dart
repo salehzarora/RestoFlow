@@ -496,7 +496,11 @@ class AuditEventPresenter {
     'discount_exceeds_order_total' =>
       l10n.activityLogDeniedDiscountExceedsOrderTotal,
     'order_not_voidable' => l10n.activityLogDeniedOrderNotVoidable,
-    // RESTAURANT-OPERATIONS-V1-001: table-move refusals.
+    // RESTAURANT-OPERATIONS-V1-001: table-move / availability refusals.
+    // 'permission_denied' first appears as a denied_reason VALUE in this
+    // phase's two denial audits — without a case it rendered raw in all
+    // three locales (stabilization fix).
+    'permission_denied' => l10n.activityLogDeniedPermission,
     'takeaway_order' => l10n.activityLogDeniedTakeawayOrder,
     'order_not_movable' => l10n.activityLogDeniedOrderNotMovable,
     'table_not_available' => l10n.activityLogDeniedTableNotAvailable,

@@ -1315,5 +1315,6 @@
   "activityLogFieldToTable": "לשולחן",
   "activityLogDeniedTakeawayOrder": "הזמנות טייק-אווי אינן משתמשות בשולחנות",
   "activityLogDeniedOrderNotMovable": "לא ניתן עוד להעביר את ההזמנה",
-  "activityLogDeniedTableNotAvailable": "השולחן אינו זמין"
+  "activityLogDeniedTableNotAvailable": "השולחן אינו זמין",
+  "activityLogDeniedPermission": "אין הרשאה לתפקיד זה"
 }
