@@ -68,6 +68,8 @@ InMemoryMenuStore buildDemoMenuStore({
     String? description,
     bool global = false,
     bool isActive = true,
+    String? availability,
+    String? availabilityReason,
   }) => MenuItem(
     id: id,
     organizationId: org,
@@ -81,6 +83,8 @@ InMemoryMenuStore buildDemoMenuStore({
     defaultStationId: null,
     displayOrder: order,
     isActive: isActive,
+    availability: availability,
+    availabilityReason: availabilityReason,
   );
 
   ItemSize size(
@@ -187,7 +191,17 @@ InMemoryMenuStore buildDemoMenuStore({
         2,
         isActive: false,
       ),
-      item('item-iced-latte', 'cat-cold', 'Iced Latte', 500, 0),
+      // RESTAURANT-OPERATIONS-V1-001: a SOLD-OUT branch availability example
+      // (visible + badged; the manager can flip it live from the row menu).
+      item(
+        'item-iced-latte',
+        'cat-cold',
+        'Iced Latte',
+        500,
+        0,
+        availability: 'unavailable',
+        availabilityReason: 'sold_out',
+      ),
       // A restaurant-scoped (global) item.
       item(
         'item-croissant',

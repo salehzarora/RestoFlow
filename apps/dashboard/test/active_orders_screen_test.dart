@@ -428,7 +428,9 @@ void main() {
     await tester.pumpWidget(_wrap(_repo()));
     await tester.pumpAndSettle();
 
-    expect(find.text(l10n.ordersStatusServed), findsWidgets);
+    // The served fixture is a TAKEAWAY: its persisted `served` renders as
+    // "Picked up" (RESTAURANT-OPERATIONS-V1-001 type-aware wording).
+    expect(find.text(l10n.ordersStatusPickedUp), findsWidgets);
     expect(find.text(l10n.ordersStatusReady), findsWidgets);
     expect(find.text(l10n.ordersStatusPreparing), findsWidgets);
     expect(find.text(l10n.dashboardUnpaid), findsWidgets);

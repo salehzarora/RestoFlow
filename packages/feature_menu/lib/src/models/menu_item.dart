@@ -47,6 +47,8 @@ class MenuItem {
     this.kitchenNote,
     this.attributes = const {},
     this.deletedAt,
+    this.availability,
+    this.availabilityReason,
   });
 
   final String id;
@@ -94,6 +96,16 @@ class MenuItem {
   /// [kMenuAttrPattyWeightGrams]. HARD RULE (D-007): money never lives here.
   final Map<String, dynamic> attributes;
   final DateTime? deletedAt;
+
+  /// RESTAURANT-OPERATIONS-V1-001: the item's availability override in the
+  /// REQUESTED BRANCH ('available' | 'unavailable'), or null when the menu was
+  /// loaded without a branch scope (there is no single truthful restaurant-wide
+  /// answer, so `list_menu` omits the keys entirely). [availabilityReason] is
+  /// the structured reason ('sold_out' | 'paused') when unavailable.
+  final String? availability;
+  final String? availabilityReason;
+
+  bool get isUnavailableInBranch => availability == 'unavailable';
 
   bool get isDeleted => deletedAt != null;
 
@@ -161,6 +173,36 @@ class MenuItem {
     kitchenNote: optString(json, 'kitchen_note'),
     attributes: optJsonMap(json, 'attributes'),
     deletedAt: parseTimestamp(json['deleted_at']),
+    availability: optString(json, 'availability'),
+    availabilityReason: optString(json, 'availability_reason'),
+  );
+
+  /// RESTAURANT-OPERATIONS-V1-001: the same item carrying a different branch
+  /// availability (in-memory demo/test stores only — the server computes the
+  /// real value per requested branch).
+  MenuItem withAvailability(String availability, String? reason) => MenuItem(
+    id: id,
+    organizationId: organizationId,
+    restaurantId: restaurantId,
+    branchId: branchId,
+    menuCategoryId: menuCategoryId,
+    name: name,
+    description: description,
+    basePriceMinor: basePriceMinor,
+    currencyCode: currencyCode,
+    defaultStationId: defaultStationId,
+    displayOrder: displayOrder,
+    isActive: isActive,
+    imagePath: imagePath,
+    itemType: itemType,
+    tags: tags,
+    prepMinutes: prepMinutes,
+    sku: sku,
+    kitchenNote: kitchenNote,
+    attributes: attributes,
+    deletedAt: deletedAt,
+    availability: availability,
+    availabilityReason: reason,
   );
 
   MenuItem copyWith({DateTime? deletedAt}) => MenuItem(
@@ -184,5 +226,7 @@ class MenuItem {
     kitchenNote: kitchenNote,
     attributes: attributes,
     deletedAt: deletedAt ?? this.deletedAt,
+    availability: availability,
+    availabilityReason: availabilityReason,
   );
 }

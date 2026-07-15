@@ -278,6 +278,22 @@ class MenuWriteController {
       id: id,
     ),
   );
+
+  /// RESTAURANT-OPERATIONS-V1-001: flips the item's PER-BRANCH availability.
+  /// Only callable when the active scope names a branch (availability is
+  /// per-branch by definition — the UI hides the control otherwise).
+  Future<MenuWriteOutcome> setItemAvailability({
+    required String menuItemId,
+    required String availability,
+    String? reason,
+  }) => _run(
+    () => _repository.setItemAvailability(
+      scope: _scope,
+      menuItemId: menuItemId,
+      availability: availability,
+      reason: reason,
+    ),
+  );
 }
 
 /// The write controller for the active scope.

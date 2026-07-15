@@ -37,6 +37,7 @@ class DashboardTable {
     required this.branchId,
     this.seats,
     this.area,
+    this.activeOrderCount = 0,
   });
 
   final String id;
@@ -56,4 +57,10 @@ class DashboardTable {
   final bool isActive;
 
   final String branchId;
+
+  /// RESTAURANT-OPERATIONS-V1-001: DERIVED occupancy — live active-status
+  /// orders currently on this table, as the SERVER counted them
+  /// (`list_tables.active_order_count`). Multiple active orders per table are
+  /// valid; the stored manual [status] is a separate, manual floor control.
+  final int activeOrderCount;
 }

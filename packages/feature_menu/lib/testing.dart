@@ -127,4 +127,20 @@ class ScriptedMenuWriter implements MenuWriter {
     required MenuEntityType entity,
     required String id,
   }) => _record('softDelete');
+
+  /// The most recent [setItemAvailability] arguments (for assertions).
+  String? lastAvailability;
+  String? lastAvailabilityReason;
+
+  @override
+  Future<MenuWriteOutcome> setItemAvailability({
+    required MenuScope scope,
+    required String menuItemId,
+    required String availability,
+    String? reason,
+  }) {
+    lastAvailability = availability;
+    lastAvailabilityReason = reason;
+    return _record('setItemAvailability');
+  }
 }

@@ -86,6 +86,8 @@ enum _Kind {
   completionTrigger,
   deniedReason,
   chargeState,
+  availability,
+  availabilityReason,
 }
 
 /// The EXPLICIT allowlist of payload keys that may ever be shown, and how to
@@ -148,6 +150,15 @@ const Map<String, _Kind> _displayableKeys = {
   // A closed enum of STATE tokens (currently `not_chargeable`), so both the label
   // and the value are localized — never money, never an identifier (T-003 holds).
   'resulting_charge_state': _Kind.chargeState,
+  // RESTAURANT-OPERATIONS-V1-001: branch menu availability (closed enums —
+  // both label AND value localized) + the item's display name, and the
+  // table-move floor labels (safe display text, already printed on tickets).
+  'availability': _Kind.availability,
+  'availability_reason': _Kind.availabilityReason,
+  'item_name': _Kind.text,
+  'table_label': _Kind.text,
+  'from_table_label': _Kind.text,
+  'to_table_label': _Kind.text,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -192,6 +203,12 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'completion_trigger' => l10n.activityLogFieldCompletionTrigger,
   'denied_reason' => l10n.activityLogFieldDeniedReason,
   'resulting_charge_state' => l10n.activityLogFieldResultingChargeState,
+  'availability' => l10n.activityLogFieldAvailability,
+  'availability_reason' => l10n.activityLogFieldAvailabilityReason,
+  'item_name' => l10n.activityLogFieldItemName,
+  'table_label' => l10n.activityLogFieldTableLabel,
+  'from_table_label' => l10n.activityLogFieldFromTable,
+  'to_table_label' => l10n.activityLogFieldToTable,
   _ => key,
 };
 
@@ -350,6 +367,13 @@ class AuditEventPresenter {
     'settings.restaurant.updated' => l10n.activityLogTitleRestaurantSettings,
     'settings.organization.updated' =>
       l10n.activityLogTitleOrganizationSettings,
+    // RESTAURANT-OPERATIONS-V1-001: branch availability + table moves.
+    'menu.menu_item.availability_changed' =>
+      l10n.activityLogTitleMenuAvailabilityChanged,
+    'menu.menu_item.availability_denied' =>
+      l10n.activityLogTitleMenuAvailabilityDenied,
+    'order.table_moved' => l10n.activityLogTitleOrderTableMoved,
+    'order.table_move_denied' => l10n.activityLogTitleOrderTableMoveDenied,
     _ => null,
   };
 
@@ -436,9 +460,25 @@ class AuditEventPresenter {
       _Kind.completionTrigger => _completionTriggerLabel(value.toString()),
       _Kind.deniedReason => _deniedReasonLabel(value.toString()),
       _Kind.chargeState => _chargeStateLabel(value.toString()),
+      _Kind.availability => _availabilityLabel(value.toString()),
+      _Kind.availabilityReason => _availabilityReasonLabel(value.toString()),
       _Kind.text => value.toString(),
     };
   }
+
+  /// Branch menu availability — a closed enum; an unknown token shows raw.
+  String _availabilityLabel(String value) => switch (value) {
+    'available' => l10n.menuAvailabilityAvailable,
+    'unavailable' => l10n.menuAvailabilityUnavailable,
+    _ => value,
+  };
+
+  /// The structured availability reason (sold_out | paused).
+  String _availabilityReasonLabel(String value) => switch (value) {
+    'sold_out' => l10n.menuAvailabilitySoldOut,
+    'paused' => l10n.menuAvailabilityPaused,
+    _ => value,
+  };
 
   /// WHY a mutation was refused. An unknown token is shown raw rather than guessed —
   /// an honest unknown beats a confident mislabel.
@@ -456,6 +496,10 @@ class AuditEventPresenter {
     'discount_exceeds_order_total' =>
       l10n.activityLogDeniedDiscountExceedsOrderTotal,
     'order_not_voidable' => l10n.activityLogDeniedOrderNotVoidable,
+    // RESTAURANT-OPERATIONS-V1-001: table-move refusals.
+    'takeaway_order' => l10n.activityLogDeniedTakeawayOrder,
+    'order_not_movable' => l10n.activityLogDeniedOrderNotMovable,
+    'table_not_available' => l10n.activityLogDeniedTableNotAvailable,
     _ => reason,
   };
 

@@ -459,7 +459,7 @@ class OrderHistoryCard extends ConsumerWidget {
                       runSpacing: RestoflowSpacing.xs,
                       children: [
                         RestoflowStatusPill(
-                          label: statusLabel(l10n, row.status),
+                          label: statusLabelFor(l10n, row.status, row.orderType),
                           tone: statusTone(row.status),
                         ),
                         settlementPill(l10n, row.settlement),
@@ -500,7 +500,17 @@ RestoflowTone statusTone(String status) => switch (status) {
 };
 
 /// The localized label for an order status value (display, all statuses).
-String statusLabel(AppLocalizations l10n, String status) => switch (status) {
+String statusLabel(AppLocalizations l10n, String status) =>
+    statusLabelFor(l10n, status, null);
+
+/// TYPE-AWARE status label (RESTAURANT-OPERATIONS-V1-001): a TAKEAWAY order's
+/// persisted `served` renders "Picked up" — the customer collected it. One
+/// state machine, two operational meanings; the wire value is unchanged.
+String statusLabelFor(AppLocalizations l10n, String status, String? orderType) {
+  if (status == 'served' && orderType == 'takeaway') {
+    return l10n.ordersStatusPickedUp;
+  }
+  return switch (status) {
   'draft' => l10n.ordersStatusDraft,
   'submitted' => l10n.ordersStatusSubmitted,
   'accepted' => l10n.ordersStatusAccepted,
@@ -509,9 +519,10 @@ String statusLabel(AppLocalizations l10n, String status) => switch (status) {
   'served' => l10n.ordersStatusServed,
   'completed' => l10n.ordersStatusCompleted,
   'cancelled' => l10n.ordersStatusCancelled,
-  'voided' => l10n.ordersStatusVoided,
-  _ => status,
-};
+    'voided' => l10n.ordersStatusVoided,
+    _ => status,
+  };
+}
 
 /// The localized label for a status FILTER option (adds "All").
 String statusFilterLabel(AppLocalizations l10n, OrderStatusFilter f) =>

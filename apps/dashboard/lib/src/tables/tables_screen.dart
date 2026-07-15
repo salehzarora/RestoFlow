@@ -243,6 +243,10 @@ class _TableCard extends StatelessWidget {
     final detail = [
       if (table.seats != null) '${l10n.tablesFieldSeats}: ${table.seats}',
       if (table.area != null) table.area!,
+      // RESTAURANT-OPERATIONS-V1-001: DERIVED occupancy, always shown — a
+      // floor manager reads "1 open order" here the moment a POS seats a
+      // party, independently of the manual floor status above.
+      l10n.tablesOpenOrders(table.activeOrderCount),
     ].join(' · ');
 
     return Container(

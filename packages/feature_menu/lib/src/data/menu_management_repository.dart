@@ -79,6 +79,19 @@ class MenuManagementRepository implements MenuWriter {
   );
 
   @override
+  Future<MenuWriteOutcome> setItemAvailability({
+    required MenuScope scope,
+    required String menuItemId,
+    required String availability,
+    String? reason,
+  }) => _writer.setItemAvailability(
+    scope: scope,
+    menuItemId: menuItemId,
+    availability: availability,
+    reason: reason,
+  );
+
+  @override
   Future<MenuWriteOutcome> upsertSize({
     required MenuScope scope,
     String? id,
