@@ -103,6 +103,27 @@ class DemoMenuItem {
 
   bool get isUnavailable => availability == 'unavailable';
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001: a copy with only the branch availability
+  /// changed (used by the demo availability overlay and by real-mode optimistic
+  /// tile reconciliation before the authoritative menu re-fetch lands).
+  DemoMenuItem withAvailability(String availability, String? reason) =>
+      DemoMenuItem(
+        id: id,
+        name: name,
+        priceMinor: priceMinor,
+        categoryId: categoryId,
+        categoryName: categoryName,
+        imagePath: imagePath,
+        imageUrl: imageUrl,
+        itemType: itemType,
+        tags: tags,
+        prepMinutes: prepMinutes,
+        kitchenNote: kitchenNote,
+        attributes: attributes,
+        availability: availability,
+        availabilityReason: availability == 'unavailable' ? reason : null,
+      );
+
   /// KITCHEN-PREP-001: the item's configured PER-UNIT kitchen prep components,
   /// parsed from the generic [attributes] bag (`prep_components`). Non-money;
   /// empty when unconfigured. Snapshotted into the order at submit time so the

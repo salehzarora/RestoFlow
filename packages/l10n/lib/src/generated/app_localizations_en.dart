@@ -1131,6 +1131,145 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posShiftEmployee => 'Employee';
 
   @override
+  String get posMenuChangeAvailability => 'Change availability';
+
+  @override
+  String get posMenuAvailAvailable => 'Available';
+
+  @override
+  String get posMenuAvailabilityOffline =>
+      'Availability could not be changed while offline';
+
+  @override
+  String get posMenuAvailabilityDenied =>
+      'This action requires menu-availability permission';
+
+  @override
+  String get posMenuAvailabilityFailed => 'Availability could not be changed';
+
+  @override
+  String get posRecoveryOrderNotCreated => 'Order was not created';
+
+  @override
+  String get posRecoveryUnavailableItems =>
+      'These items are no longer available:';
+
+  @override
+  String get posRecoveryMenuRefreshed => 'The menu has been refreshed.';
+
+  @override
+  String get posRecoveryBackToCart => 'Back to cart';
+
+  @override
+  String get posRecoveryEditOrder => 'Edit order';
+
+  @override
+  String get posRecoveryDiscardDraft => 'Discard draft';
+
+  @override
+  String get posRecoveryDiscardConfirmTitle => 'Discard this order attempt?';
+
+  @override
+  String get posRecoveryDiscardConfirmBody =>
+      'The order was not created, so nothing is cancelled on the server. Your draft will be cleared.';
+
+  @override
+  String get posRecoveryRemoveUnavailableHint =>
+      'Remove the unavailable items, then send again.';
+
+  @override
+  String get posTableOperations => 'Table operations';
+
+  @override
+  String get posTableManualStatus => 'Manual status';
+
+  @override
+  String get posTableEffectiveStatus => 'Effective status';
+
+  @override
+  String get posTableMarkAvailable => 'Mark available';
+
+  @override
+  String get posTableMarkReserved => 'Mark reserved';
+
+  @override
+  String get posTableMarkOccupied => 'Mark occupied';
+
+  @override
+  String get posTableMarkOutOfService => 'Mark out of service';
+
+  @override
+  String get posTableStateAvailable => 'Available';
+
+  @override
+  String get posTableStateReserved => 'Reserved';
+
+  @override
+  String get posTableStateOccupied => 'Occupied';
+
+  @override
+  String get posTableStateOutOfService => 'Out of service';
+
+  @override
+  String get posTableLinkAnother => 'Link another table';
+
+  @override
+  String get posTableSelectToLink => 'Select a table to link';
+
+  @override
+  String get posTableLinked => 'Linked tables';
+
+  @override
+  String get posTableUnlink => 'Unlink tables';
+
+  @override
+  String get posTableUnlinkConfirmTitle => 'Unlink these tables?';
+
+  @override
+  String get posTableActiveOrders => 'Active orders';
+
+  @override
+  String get posTableOccupiedByOrder => 'Occupied by an active order';
+
+  @override
+  String get posTableRequiresPermission =>
+      'This action requires table-management permission';
+
+  @override
+  String get posTableOutOfServiceCannotOrder =>
+      'An out-of-service table cannot receive an order';
+
+  @override
+  String get posTableStatusOffline =>
+      'Table status could not be changed while offline';
+
+  @override
+  String get posTableStatusFailed => 'Table status could not be changed';
+
+  @override
+  String get posTableLinkFailed => 'Tables could not be linked';
+
+  @override
+  String get posTableUnlinkFailed => 'Tables could not be unlinked';
+
+  @override
+  String get posTableAlreadyGrouped => 'This table is already in a group';
+
+  @override
+  String get posTableGroup => 'Table group';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count open orders',
+      one: '1 open order',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get posShiftOpeningFloat => 'Opening float';
 
   @override
@@ -4194,17 +4333,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posMoveTableFailed =>
       'Couldn’t move the table. Check the connection and try again.';
-
-  @override
-  String posTableOpenOrders(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count open orders',
-      one: '1 open order',
-    );
-    return '$_temp0';
-  }
 
   @override
   String get kdsServedAction => 'Served';

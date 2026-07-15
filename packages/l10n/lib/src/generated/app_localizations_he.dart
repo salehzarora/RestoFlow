@@ -1118,6 +1118,143 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posShiftEmployee => 'עובד';
 
   @override
+  String get posMenuChangeAvailability => 'שינוי זמינות';
+
+  @override
+  String get posMenuAvailAvailable => 'זמין';
+
+  @override
+  String get posMenuAvailabilityOffline =>
+      'לא ניתן היה לשנות זמינות במצב לא מקוון';
+
+  @override
+  String get posMenuAvailabilityDenied =>
+      'פעולה זו דורשת הרשאת ניהול זמינות תפריט';
+
+  @override
+  String get posMenuAvailabilityFailed => 'לא ניתן היה לשנות את הזמינות';
+
+  @override
+  String get posRecoveryOrderNotCreated => 'ההזמנה לא נוצרה';
+
+  @override
+  String get posRecoveryUnavailableItems => 'הפריטים הבאים אינם זמינים עוד:';
+
+  @override
+  String get posRecoveryMenuRefreshed => 'התפריט עודכן.';
+
+  @override
+  String get posRecoveryBackToCart => 'חזרה לעגלה';
+
+  @override
+  String get posRecoveryEditOrder => 'עריכת הזמנה';
+
+  @override
+  String get posRecoveryDiscardDraft => 'מחיקת טיוטה';
+
+  @override
+  String get posRecoveryDiscardConfirmTitle => 'למחוק את ניסיון ההזמנה?';
+
+  @override
+  String get posRecoveryDiscardConfirmBody =>
+      'ההזמנה לא נוצרה, ולכן שום דבר לא מבוטל בשרת. הטיוטה שלך תימחק.';
+
+  @override
+  String get posRecoveryRemoveUnavailableHint =>
+      'הסר את הפריטים שאינם זמינים ושלח שוב.';
+
+  @override
+  String get posTableOperations => 'פעולות שולחנות';
+
+  @override
+  String get posTableManualStatus => 'סטטוס ידני';
+
+  @override
+  String get posTableEffectiveStatus => 'סטטוס בפועל';
+
+  @override
+  String get posTableMarkAvailable => 'סמן כפנוי';
+
+  @override
+  String get posTableMarkReserved => 'סמן כשמור';
+
+  @override
+  String get posTableMarkOccupied => 'סמן כתפוס';
+
+  @override
+  String get posTableMarkOutOfService => 'סמן כלא זמין';
+
+  @override
+  String get posTableStateAvailable => 'פנוי';
+
+  @override
+  String get posTableStateReserved => 'שמור';
+
+  @override
+  String get posTableStateOccupied => 'תפוס';
+
+  @override
+  String get posTableStateOutOfService => 'לא זמין';
+
+  @override
+  String get posTableLinkAnother => 'קישור שולחן נוסף';
+
+  @override
+  String get posTableSelectToLink => 'בחר שולחן לקישור';
+
+  @override
+  String get posTableLinked => 'שולחנות מקושרים';
+
+  @override
+  String get posTableUnlink => 'ביטול קישור שולחנות';
+
+  @override
+  String get posTableUnlinkConfirmTitle => 'לבטל את קישור השולחנות?';
+
+  @override
+  String get posTableActiveOrders => 'הזמנות פעילות';
+
+  @override
+  String get posTableOccupiedByOrder => 'תפוס בהזמנה פעילה';
+
+  @override
+  String get posTableRequiresPermission => 'פעולה זו דורשת הרשאת ניהול שולחנות';
+
+  @override
+  String get posTableOutOfServiceCannotOrder =>
+      'שולחן שאינו זמין אינו יכול לקבל הזמנה';
+
+  @override
+  String get posTableStatusOffline =>
+      'לא ניתן היה לשנות את סטטוס השולחן במצב לא מקוון';
+
+  @override
+  String get posTableStatusFailed => 'לא ניתן היה לשנות את סטטוס השולחן';
+
+  @override
+  String get posTableLinkFailed => 'לא ניתן היה לקשר את השולחנות';
+
+  @override
+  String get posTableUnlinkFailed => 'לא ניתן היה לבטל את קישור השולחנות';
+
+  @override
+  String get posTableAlreadyGrouped => 'שולחן זה כבר בקבוצה';
+
+  @override
+  String get posTableGroup => 'קבוצת שולחנות';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count הזמנות פתוחות',
+      one: 'הזמנה פתוחה אחת',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get posShiftOpeningFloat => 'קופה פותחת';
 
   @override
@@ -4135,17 +4272,6 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posMoveTableFailed =>
       'לא ניתן היה להעביר את השולחן. בדוק את החיבור ונסה שוב.';
-
-  @override
-  String posTableOpenOrders(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count הזמנות פתוחות',
-      one: 'הזמנה פתוחה אחת',
-    );
-    return '$_temp0';
-  }
 
   @override
   String get kdsServedAction => 'הוגש';

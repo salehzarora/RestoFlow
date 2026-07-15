@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/order_sync_controller.dart';
+import '../state/pos_menu_provider.dart';
 
 /// POS-OPERATIONS-SYNC-001 — the app-lifecycle seam for authoritative sync.
 ///
@@ -52,6 +53,13 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     // sync, so a platform that fires `resumed` more than once cannot start three
     // racing pulls whose losers overwrite the winner.
     ref.read(posOrderSyncControllerProvider.notifier).onResume();
+    // PILOT-OPERATIONS-CORRECTIONS-001: also refresh the MENU (and therefore
+    // availability) on resume — a Dashboard availability change made while the POS
+    // was backgrounded would otherwise stay invisible until the session changed.
+    // posMenuProvider is scope-derived (it watches the PIN/device session), so the
+    // re-fetch always targets the CURRENT scope and a stale old-scope result can
+    // never apply. One bounded invalidation per resume (no polling loop).
+    ref.invalidate(posMenuProvider);
   }
 
   @override

@@ -1126,6 +1126,147 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posShiftEmployee => 'الموظف';
 
   @override
+  String get posMenuChangeAvailability => 'تغيير التوفر';
+
+  @override
+  String get posMenuAvailAvailable => 'متوفر';
+
+  @override
+  String get posMenuAvailabilityOffline =>
+      'تعذّر تغيير التوفر أثناء عدم الاتصال';
+
+  @override
+  String get posMenuAvailabilityDenied =>
+      'يتطلب هذا الإجراء صلاحية إدارة توفر القائمة';
+
+  @override
+  String get posMenuAvailabilityFailed => 'تعذّر تغيير التوفر';
+
+  @override
+  String get posRecoveryOrderNotCreated => 'لم يتم إنشاء الطلب';
+
+  @override
+  String get posRecoveryUnavailableItems => 'هذه الأصناف لم تعد متوفرة:';
+
+  @override
+  String get posRecoveryMenuRefreshed => 'تم تحديث القائمة.';
+
+  @override
+  String get posRecoveryBackToCart => 'العودة إلى السلة';
+
+  @override
+  String get posRecoveryEditOrder => 'تعديل الطلب';
+
+  @override
+  String get posRecoveryDiscardDraft => 'تجاهل المسودة';
+
+  @override
+  String get posRecoveryDiscardConfirmTitle => 'تجاهل محاولة الطلب هذه؟';
+
+  @override
+  String get posRecoveryDiscardConfirmBody =>
+      'لم يتم إنشاء الطلب، لذا لن يُلغى شيء على الخادم. سيتم مسح مسودتك.';
+
+  @override
+  String get posRecoveryRemoveUnavailableHint =>
+      'أزل الأصناف غير المتوفرة ثم أعد الإرسال.';
+
+  @override
+  String get posTableOperations => 'عمليات الطاولات';
+
+  @override
+  String get posTableManualStatus => 'الحالة اليدوية';
+
+  @override
+  String get posTableEffectiveStatus => 'الحالة الفعلية';
+
+  @override
+  String get posTableMarkAvailable => 'تعيين كمتاحة';
+
+  @override
+  String get posTableMarkReserved => 'تعيين كمحجوزة';
+
+  @override
+  String get posTableMarkOccupied => 'تعيين كمشغولة';
+
+  @override
+  String get posTableMarkOutOfService => 'تعيين كخارج الخدمة';
+
+  @override
+  String get posTableStateAvailable => 'متاحة';
+
+  @override
+  String get posTableStateReserved => 'محجوزة';
+
+  @override
+  String get posTableStateOccupied => 'مشغولة';
+
+  @override
+  String get posTableStateOutOfService => 'خارج الخدمة';
+
+  @override
+  String get posTableLinkAnother => 'ربط طاولة أخرى';
+
+  @override
+  String get posTableSelectToLink => 'اختر طاولة للربط';
+
+  @override
+  String get posTableLinked => 'طاولات مرتبطة';
+
+  @override
+  String get posTableUnlink => 'إلغاء ربط الطاولات';
+
+  @override
+  String get posTableUnlinkConfirmTitle => 'إلغاء ربط هذه الطاولات؟';
+
+  @override
+  String get posTableActiveOrders => 'الطلبات النشطة';
+
+  @override
+  String get posTableOccupiedByOrder => 'مشغولة بطلب نشط';
+
+  @override
+  String get posTableRequiresPermission =>
+      'يتطلب هذا الإجراء صلاحية إدارة الطاولات';
+
+  @override
+  String get posTableOutOfServiceCannotOrder =>
+      'لا يمكن لطاولة خارج الخدمة استقبال طلب';
+
+  @override
+  String get posTableStatusOffline =>
+      'تعذّر تغيير حالة الطاولة أثناء عدم الاتصال';
+
+  @override
+  String get posTableStatusFailed => 'تعذّر تغيير حالة الطاولة';
+
+  @override
+  String get posTableLinkFailed => 'تعذّر ربط الطاولات';
+
+  @override
+  String get posTableUnlinkFailed => 'تعذّر إلغاء ربط الطاولات';
+
+  @override
+  String get posTableAlreadyGrouped => 'هذه الطاولة ضمن مجموعة بالفعل';
+
+  @override
+  String get posTableGroup => 'مجموعة طاولات';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلباً مفتوحاً',
+      few: '$count طلبات مفتوحة',
+      two: 'طلبان مفتوحان',
+      one: 'طلب مفتوح واحد',
+      zero: 'لا توجد طلبات مفتوحة',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get posShiftOpeningFloat => 'الرصيد الافتتاحي';
 
   @override
@@ -4160,20 +4301,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posMoveTableFailed =>
       'تعذّر نقل الطاولة. تحقق من الاتصال وحاول مجدداً.';
-
-  @override
-  String posTableOpenOrders(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count طلباً مفتوحاً',
-      few: '$count طلبات مفتوحة',
-      two: 'طلبان مفتوحان',
-      one: 'طلب مفتوح واحد',
-      zero: 'لا توجد طلبات مفتوحة',
-    );
-    return '$_temp0';
-  }
 
   @override
   String get kdsServedAction => 'تم التقديم';

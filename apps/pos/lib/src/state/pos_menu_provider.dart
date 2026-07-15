@@ -6,6 +6,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/demo_menu.dart';
+import 'menu_availability_controller.dart';
 import 'pos_session.dart';
 
 /// The menu the POS sells from: categories + items + the currency.
@@ -213,9 +214,21 @@ const List<(IconData, Color)> _kCategoryPalette = [
 final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   final cfg = ref.watch(runtimeConfigProvider);
   if (cfg.isDemoMode) {
-    return const PosMenuData(
+    // PILOT-OPERATIONS-CORRECTIONS-001: apply the in-memory demo availability
+    // overlay so a demo cashier's Sold-out/Paused change is honestly reflected.
+    final overrides = ref.watch(demoAvailabilityOverridesProvider);
+    final items = overrides.isEmpty
+        ? kDemoMenu
+        : <DemoMenuItem>[
+            for (final item in kDemoMenu)
+              if (overrides[item.id] case final o?)
+                item.withAvailability(o.availability, o.reason)
+              else
+                item,
+          ];
+    return PosMenuData(
       categories: kDemoCategories,
-      items: kDemoMenu,
+      items: items,
       currencyCode: kDemoCurrencyCode,
       modifierGroups: kDemoModifierGroups,
     );

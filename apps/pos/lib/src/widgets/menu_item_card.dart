@@ -58,11 +58,18 @@ class MenuItemCard extends StatelessWidget {
     this.currencyCode = kDemoCurrencyCode,
     this.optionGroupCount = 0,
     this.inCartQuantity = 0,
+    this.onManageAvailability,
     super.key,
   });
 
   final DemoMenuItem item;
   final VoidCallback onAdd;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: a DELIBERATE (long-press) availability
+  /// management action, shown ONLY to an operator with `manage_menu_availability`.
+  /// Null hides it. It is INDEPENDENT of the add gate — an unavailable item (whose
+  /// normal tap is disabled) can still be reopened to make it Available again.
+  final VoidCallback? onManageAvailability;
 
   /// The owning category of the ACTIVE menu (real categories carry their own
   /// palette entry); null falls back to the demo lookup.
@@ -94,7 +101,40 @@ class MenuItemCard extends StatelessWidget {
     // button. The server refuses the sale again at acceptance, so this gate is
     // honesty, not security.
     final unavailable = item.isUnavailable;
+    // Accessibility: the unavailable state (and its reason) is announced, not just
+    // shown as a colour scrim + pill (A3 — not colour alone).
+    final unavailableLabel = unavailable
+        ? (item.availabilityReason == 'paused'
+              ? l10n.posMenuItemPaused
+              : l10n.posMenuItemSoldOut)
+        : null;
 
+    return Semantics(
+      container: true,
+      label: unavailableLabel == null
+          ? item.name
+          : '${item.name}, $unavailableLabel',
+      child: _buildCard(
+        context,
+        l10n,
+        theme,
+        category,
+        priceText,
+        bandTags,
+        unavailable,
+      ),
+    );
+  }
+
+  Widget _buildCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    ThemeData theme,
+    DemoCategory category,
+    String priceText,
+    List<String> bandTags,
+    bool unavailable,
+  ) {
     return Card(
       elevation: 1.5,
       color: theme.colorScheme.surface,
@@ -107,6 +147,10 @@ class MenuItemCard extends StatelessWidget {
       child: InkWell(
         key: Key('menu-item-${item.id}'),
         onTap: unavailable ? null : onAdd,
+        // Deliberate management gesture — capability-gated by the caller (null =
+        // hidden). Independent of the disabled add tap, so an unavailable item can
+        // still be reopened to make it Available.
+        onLongPress: onManageAvailability,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

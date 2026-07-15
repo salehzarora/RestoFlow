@@ -15,12 +15,16 @@ class PosStaffCapabilities {
   const PosStaffCapabilities({
     required this.applyDiscount,
     required this.applyFullComp,
+    this.manageMenuAvailability = false,
+    this.manageTableOperations = false,
   });
 
   /// FAIL-CLOSED default: knowing nothing, we assume nothing is granted.
   static const PosStaffCapabilities none = PosStaffCapabilities(
     applyDiscount: false,
     applyFullComp: false,
+    manageMenuAvailability: false,
+    manageTableOperations: false,
   );
 
   /// May apply ordinary discounts.
@@ -29,15 +33,25 @@ class PosStaffCapabilities {
   /// May apply a discount that brings the order total to exactly zero.
   final bool applyFullComp;
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001: may change a menu item's per-branch
+  /// availability (Sold out / Paused) from the POS. Server-authoritative.
+  final bool manageMenuAvailability;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: may run operational table control (manual
+  /// status, link/unlink) from the POS. Server-authoritative.
+  final bool manageTableOperations;
+
   /// Parses the `capabilities` object from `public.pin_session_capabilities`.
   ///
-  /// Both use `== true`, so a missing field, an old server that does not send the
+  /// All use `== true`, so a missing field, an old server that does not send the
   /// key, a null, or any malformed value resolves to DENIED. The client never
   /// invents a permission it was not explicitly given.
   static PosStaffCapabilities fromJson(Map<Object?, Object?> json) =>
       PosStaffCapabilities(
         applyDiscount: json['apply_discount'] == true,
         applyFullComp: json['apply_full_comp'] == true,
+        manageMenuAvailability: json['manage_menu_availability'] == true,
+        manageTableOperations: json['manage_table_operations'] == true,
       );
 }
 
@@ -61,8 +75,15 @@ class DemoStaffCapabilitiesRepository implements StaffCapabilitiesRepository {
   const DemoStaffCapabilitiesRepository();
 
   @override
-  Future<PosStaffCapabilities?> fetch() async =>
-      const PosStaffCapabilities(applyDiscount: true, applyFullComp: false);
+  Future<PosStaffCapabilities?> fetch() async => const PosStaffCapabilities(
+    applyDiscount: true,
+    applyFullComp: false,
+    // PILOT-OPERATIONS-CORRECTIONS-001: the demo cashier can manage availability
+    // and tables (default-ON in the real deny-only model) so the demo exercises
+    // the operational controls.
+    manageMenuAvailability: true,
+    manageTableOperations: true,
+  );
 }
 
 /// REAL capabilities, read from `public.pin_session_capabilities` over the same

@@ -2212,6 +2212,252 @@ abstract class AppLocalizations {
   /// **'Employee'**
   String get posShiftEmployee;
 
+  /// No description provided for @posMenuChangeAvailability.
+  ///
+  /// In en, this message translates to:
+  /// **'Change availability'**
+  String get posMenuChangeAvailability;
+
+  /// No description provided for @posMenuAvailAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get posMenuAvailAvailable;
+
+  /// No description provided for @posMenuAvailabilityOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability could not be changed while offline'**
+  String get posMenuAvailabilityOffline;
+
+  /// No description provided for @posMenuAvailabilityDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'This action requires menu-availability permission'**
+  String get posMenuAvailabilityDenied;
+
+  /// No description provided for @posMenuAvailabilityFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability could not be changed'**
+  String get posMenuAvailabilityFailed;
+
+  /// No description provided for @posRecoveryOrderNotCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Order was not created'**
+  String get posRecoveryOrderNotCreated;
+
+  /// No description provided for @posRecoveryUnavailableItems.
+  ///
+  /// In en, this message translates to:
+  /// **'These items are no longer available:'**
+  String get posRecoveryUnavailableItems;
+
+  /// No description provided for @posRecoveryMenuRefreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'The menu has been refreshed.'**
+  String get posRecoveryMenuRefreshed;
+
+  /// No description provided for @posRecoveryBackToCart.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to cart'**
+  String get posRecoveryBackToCart;
+
+  /// No description provided for @posRecoveryEditOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit order'**
+  String get posRecoveryEditOrder;
+
+  /// No description provided for @posRecoveryDiscardDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard draft'**
+  String get posRecoveryDiscardDraft;
+
+  /// No description provided for @posRecoveryDiscardConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this order attempt?'**
+  String get posRecoveryDiscardConfirmTitle;
+
+  /// No description provided for @posRecoveryDiscardConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The order was not created, so nothing is cancelled on the server. Your draft will be cleared.'**
+  String get posRecoveryDiscardConfirmBody;
+
+  /// No description provided for @posRecoveryRemoveUnavailableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the unavailable items, then send again.'**
+  String get posRecoveryRemoveUnavailableHint;
+
+  /// No description provided for @posTableOperations.
+  ///
+  /// In en, this message translates to:
+  /// **'Table operations'**
+  String get posTableOperations;
+
+  /// No description provided for @posTableManualStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual status'**
+  String get posTableManualStatus;
+
+  /// No description provided for @posTableEffectiveStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Effective status'**
+  String get posTableEffectiveStatus;
+
+  /// No description provided for @posTableMarkAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark available'**
+  String get posTableMarkAvailable;
+
+  /// No description provided for @posTableMarkReserved.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark reserved'**
+  String get posTableMarkReserved;
+
+  /// No description provided for @posTableMarkOccupied.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark occupied'**
+  String get posTableMarkOccupied;
+
+  /// No description provided for @posTableMarkOutOfService.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark out of service'**
+  String get posTableMarkOutOfService;
+
+  /// No description provided for @posTableStateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get posTableStateAvailable;
+
+  /// No description provided for @posTableStateReserved.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserved'**
+  String get posTableStateReserved;
+
+  /// No description provided for @posTableStateOccupied.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied'**
+  String get posTableStateOccupied;
+
+  /// No description provided for @posTableStateOutOfService.
+  ///
+  /// In en, this message translates to:
+  /// **'Out of service'**
+  String get posTableStateOutOfService;
+
+  /// No description provided for @posTableLinkAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Link another table'**
+  String get posTableLinkAnother;
+
+  /// No description provided for @posTableSelectToLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a table to link'**
+  String get posTableSelectToLink;
+
+  /// No description provided for @posTableLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked tables'**
+  String get posTableLinked;
+
+  /// No description provided for @posTableUnlink.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink tables'**
+  String get posTableUnlink;
+
+  /// No description provided for @posTableUnlinkConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink these tables?'**
+  String get posTableUnlinkConfirmTitle;
+
+  /// No description provided for @posTableActiveOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Active orders'**
+  String get posTableActiveOrders;
+
+  /// No description provided for @posTableOccupiedByOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied by an active order'**
+  String get posTableOccupiedByOrder;
+
+  /// No description provided for @posTableRequiresPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'This action requires table-management permission'**
+  String get posTableRequiresPermission;
+
+  /// No description provided for @posTableOutOfServiceCannotOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'An out-of-service table cannot receive an order'**
+  String get posTableOutOfServiceCannotOrder;
+
+  /// No description provided for @posTableStatusOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Table status could not be changed while offline'**
+  String get posTableStatusOffline;
+
+  /// No description provided for @posTableStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Table status could not be changed'**
+  String get posTableStatusFailed;
+
+  /// No description provided for @posTableLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables could not be linked'**
+  String get posTableLinkFailed;
+
+  /// No description provided for @posTableUnlinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables could not be unlinked'**
+  String get posTableUnlinkFailed;
+
+  /// No description provided for @posTableAlreadyGrouped.
+  ///
+  /// In en, this message translates to:
+  /// **'This table is already in a group'**
+  String get posTableAlreadyGrouped;
+
+  /// No description provided for @posTableGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Table group'**
+  String get posTableGroup;
+
+  /// Occupancy chip on a POS table tile: how many live active orders currently sit on the table.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 open order} other{{count} open orders}}'**
+  String posTableOpenOrders(int count);
+
   /// No description provided for @posShiftOpeningFloat.
   ///
   /// In en, this message translates to:
@@ -7821,12 +8067,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn’t move the table. Check the connection and try again.'**
   String get posMoveTableFailed;
-
-  /// Occupancy chip on a POS table tile: how many live active orders currently sit on the table.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 open order} other{{count} open orders}}'**
-  String posTableOpenOrders(int count);
 
   /// KDS ready-stage action for a DINE-IN ticket: marks the order served (food reached the table).
   ///
