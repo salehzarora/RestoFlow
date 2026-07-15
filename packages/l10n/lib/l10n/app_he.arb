@@ -942,6 +942,8 @@
   "staffCapApplyDiscount": "יכול להחיל הנחות",
   "staffCapVoidOrder": "יכול לבטל הזמנות שלא שולמו",
   "staffCapCloseShift": "יכול לסגור את המשמרת שלו",
+  "staffCapManageMenuAvailability": "יכול לנהל זמינות תפריט",
+  "staffCapManageTableOperations": "יכול לנהל פעולות שולחנות",
   "staffCapabilitiesAction": "הרשאות",
   "staffCapabilitiesSaved": "ההרשאות עודכנו",
   "tablesTitle": "שולחנות",

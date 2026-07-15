@@ -3035,6 +3035,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get staffCapCloseShift => 'Can close own shift';
 
   @override
+  String get staffCapManageMenuAvailability => 'Can manage menu availability';
+
+  @override
+  String get staffCapManageTableOperations => 'Can manage table operations';
+
+  @override
   String get staffCapabilitiesAction => 'Capabilities';
 
   @override

@@ -5716,6 +5716,18 @@ abstract class AppLocalizations {
   /// **'Can close own shift'**
   String get staffCapCloseShift;
 
+  /// No description provided for @staffCapManageMenuAvailability.
+  ///
+  /// In en, this message translates to:
+  /// **'Can manage menu availability'**
+  String get staffCapManageMenuAvailability;
+
+  /// No description provided for @staffCapManageTableOperations.
+  ///
+  /// In en, this message translates to:
+  /// **'Can manage table operations'**
+  String get staffCapManageTableOperations;
+
   /// STAFF-CASHIER-PERMISSIONS-001: staff card button that opens the cashier capability switches.
   ///
   /// In en, this message translates to:

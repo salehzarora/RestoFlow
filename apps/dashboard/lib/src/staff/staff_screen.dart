@@ -553,6 +553,27 @@ class _CapabilitiesSwitches extends StatelessWidget {
               ? (v) => onChanged(value.copyWith(closeShift: v))
               : null,
         ),
+        // PILOT-OPERATIONS-CORRECTIONS-001: two default-ON operational capabilities.
+        SwitchListTile(
+          key: const Key('cap-manage-menu-availability'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(l10n.staffCapManageMenuAvailability),
+          value: value.manageMenuAvailability,
+          onChanged: enabled
+              ? (v) => onChanged(value.copyWith(manageMenuAvailability: v))
+              : null,
+        ),
+        SwitchListTile(
+          key: const Key('cap-manage-table-operations'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(l10n.staffCapManageTableOperations),
+          value: value.manageTableOperations,
+          onChanged: enabled
+              ? (v) => onChanged(value.copyWith(manageTableOperations: v))
+              : null,
+        ),
         const SizedBox(height: RestoflowSpacing.xxs),
         // Honest: these switches are cashier-only. A manager/owner already holds
         // every one of these rights BY ROLE and is unaffected by them.

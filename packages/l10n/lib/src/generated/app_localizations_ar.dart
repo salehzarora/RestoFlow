@@ -3016,6 +3016,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get staffCapCloseShift => 'يمكنه إغلاق ورديته';
 
   @override
+  String get staffCapManageMenuAvailability => 'يمكنه إدارة توفر القائمة';
+
+  @override
+  String get staffCapManageTableOperations => 'يمكنه إدارة عمليات الطاولات';
+
+  @override
   String get staffCapabilitiesAction => 'الصلاحيات';
 
   @override

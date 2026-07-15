@@ -17,6 +17,8 @@ class StaffCapabilities {
     this.voidOrder = true,
     this.closeShift = true,
     this.applyFullComp = false,
+    this.manageMenuAvailability = true,
+    this.manageTableOperations = true,
   });
 
   /// Applying order/item discounts. Default ON.
@@ -33,10 +35,23 @@ class StaffCapabilities {
   /// owner/manager grants it explicitly.
   final bool applyFullComp;
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001: changing a menu item's per-branch
+  /// availability (Sold out / Paused) from the POS. Default ON.
+  final bool manageMenuAvailability;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: operational table control from the POS
+  /// (manual status, link/unlink). Default ON.
+  final bool manageTableOperations;
+
   /// True when none of the DEFAULT-ON capabilities is disabled (a new cashier's
   /// preset). [applyFullComp] is deliberately NOT part of this: it is default-OFF,
   /// so a fresh cashier having it off is the norm, not a deviation.
-  bool get allEnabled => applyDiscount && voidOrder && closeShift;
+  bool get allEnabled =>
+      applyDiscount &&
+      voidOrder &&
+      closeShift &&
+      manageMenuAvailability &&
+      manageTableOperations;
 
   /// FULL-COMP-PERMISSION-001: a stored full-comp grant is INERT while ordinary
   /// discounts are denied — the server checks [applyDiscount] first and refuses
@@ -48,11 +63,17 @@ class StaffCapabilities {
     bool? voidOrder,
     bool? closeShift,
     bool? applyFullComp,
+    bool? manageMenuAvailability,
+    bool? manageTableOperations,
   }) => StaffCapabilities(
     applyDiscount: applyDiscount ?? this.applyDiscount,
     voidOrder: voidOrder ?? this.voidOrder,
     closeShift: closeShift ?? this.closeShift,
     applyFullComp: applyFullComp ?? this.applyFullComp,
+    manageMenuAvailability:
+        manageMenuAvailability ?? this.manageMenuAvailability,
+    manageTableOperations:
+        manageTableOperations ?? this.manageTableOperations,
   );
 
   /// Parses the `capabilities` object from `list_staff` (effective booleans).
@@ -67,6 +88,10 @@ class StaffCapabilities {
         voidOrder: json['void_order'] != false,
         closeShift: json['close_shift'] != false,
         applyFullComp: json['apply_full_comp'] == true,
+        // PILOT-OPERATIONS-CORRECTIONS-001: DEFAULT-ON, so a MISSING key (an older
+        // server that does not send it) resolves to ON, matching the role default.
+        manageMenuAvailability: json['manage_menu_availability'] != false,
+        manageTableOperations: json['manage_table_operations'] != false,
       );
 }
 

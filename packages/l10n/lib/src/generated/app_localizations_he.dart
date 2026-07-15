@@ -2995,6 +2995,12 @@ class AppLocalizationsHe extends AppLocalizations {
   String get staffCapCloseShift => 'יכול לסגור את המשמרת שלו';
 
   @override
+  String get staffCapManageMenuAvailability => 'יכול לנהל זמינות תפריט';
+
+  @override
+  String get staffCapManageTableOperations => 'יכול לנהל פעולות שולחנות';
+
+  @override
   String get staffCapabilitiesAction => 'הרשאות';
 
   @override

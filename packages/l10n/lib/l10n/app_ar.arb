@@ -942,6 +942,8 @@
   "staffCapApplyDiscount": "يمكنه تطبيق الخصومات",
   "staffCapVoidOrder": "يمكنه إلغاء الطلبات غير المدفوعة",
   "staffCapCloseShift": "يمكنه إغلاق ورديته",
+  "staffCapManageMenuAvailability": "يمكنه إدارة توفر القائمة",
+  "staffCapManageTableOperations": "يمكنه إدارة عمليات الطاولات",
   "staffCapabilitiesAction": "الصلاحيات",
   "staffCapabilitiesSaved": "تم تحديث الصلاحيات",
   "tablesTitle": "الطاولات",

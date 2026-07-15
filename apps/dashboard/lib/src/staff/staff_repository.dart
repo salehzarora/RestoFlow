@@ -251,6 +251,11 @@ class SupabaseStaffRepository implements StaffRepository {
         if (!capabilities.voidOrder) 'void_order': 'false',
         if (!capabilities.closeShift) 'close_shift': 'false',
         if (capabilities.applyFullComp) 'apply_full_comp': 'true',
+        // PILOT-OPERATIONS-CORRECTIONS-001: default-ON, so only a DENY is sent.
+        if (!capabilities.manageMenuAvailability)
+          'manage_menu_availability': 'false',
+        if (!capabilities.manageTableOperations)
+          'manage_table_operations': 'false',
       },
     };
     final params = <String, dynamic>{
@@ -336,12 +341,19 @@ class SupabaseStaffRepository implements StaffRepository {
           '${capabilities.voidOrder}',
           '${capabilities.closeShift}',
           '${capabilities.applyFullComp}',
+          // PILOT-OPERATIONS-CORRECTIONS-001: the two new toggles are part of the
+          // request id (and the server fingerprint), so flipping only one is a real
+          // write, not a stale replay.
+          '${capabilities.manageMenuAvailability}',
+          '${capabilities.manageTableOperations}',
         ]),
         'p_employee_profile_id': employeeProfileId,
         'p_apply_discount': capabilities.applyDiscount,
         'p_void_order': capabilities.voidOrder,
         'p_close_shift': capabilities.closeShift,
         'p_apply_full_comp': capabilities.applyFullComp,
+        'p_manage_menu_availability': capabilities.manageMenuAvailability,
+        'p_manage_table_operations': capabilities.manageTableOperations,
       });
     } on SyncTransportException catch (e) {
       return Failure(_mapTransport(e));

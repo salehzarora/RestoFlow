@@ -2258,6 +2258,8 @@
     "description": "STAFF-CASHIER-PERMISSIONS-001: switch label - the cashier may cancel/void an UNPAID order (paid stays blocked)."
   },
   "staffCapCloseShift": "Can close own shift",
+  "staffCapManageMenuAvailability": "Can manage menu availability",
+  "staffCapManageTableOperations": "Can manage table operations",
   "@staffCapCloseShift": {
     "description": "STAFF-CASHIER-PERMISSIONS-001: switch label - the cashier may close their OWN/current shift."
   },
