@@ -1259,17 +1259,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posTableGroup => 'Table group';
 
   @override
-  String posTableOpenOrders(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count open orders',
-      one: '1 open order',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get posShiftOpeningFloat => 'Opening float';
 
   @override
@@ -4333,6 +4322,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posMoveTableFailed =>
       'Couldn’t move the table. Check the connection and try again.';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count open orders',
+      one: '1 open order',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get kdsServedAction => 'Served';

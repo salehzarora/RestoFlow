@@ -2452,12 +2452,6 @@ abstract class AppLocalizations {
   /// **'Table group'**
   String get posTableGroup;
 
-  /// Occupancy chip on a POS table tile: how many live active orders currently sit on the table.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 open order} other{{count} open orders}}'**
-  String posTableOpenOrders(int count);
-
   /// No description provided for @posShiftOpeningFloat.
   ///
   /// In en, this message translates to:
@@ -8067,6 +8061,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn’t move the table. Check the connection and try again.'**
   String get posMoveTableFailed;
+
+  /// Occupancy chip on a POS table tile: how many live active orders currently sit on the table.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 open order} other{{count} open orders}}'**
+  String posTableOpenOrders(int count);
 
   /// KDS ready-stage action for a DINE-IN ticket: marks the order served (food reached the table).
   ///

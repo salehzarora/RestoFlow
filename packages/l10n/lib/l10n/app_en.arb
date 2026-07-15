@@ -992,8 +992,6 @@
   "posTableUnlinkFailed": "Tables could not be unlinked",
   "posTableAlreadyGrouped": "This table is already in a group",
   "posTableGroup": "Table group",
-  "posTableOpenOrders": "{count, plural, =0{No open orders} =1{1 open order} other{{count} open orders}}",
-  "@posTableOpenOrders": { "placeholders": { "count": { "type": "int" } } },
   "posShiftOpeningFloat": "Opening float",
   "posShiftExpectedCash": "Expected cash",
   "posShiftExpectedAtClose": "Expected cash is calculated on the server at close.",

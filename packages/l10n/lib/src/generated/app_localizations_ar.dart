@@ -1253,20 +1253,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posTableGroup => 'مجموعة طاولات';
 
   @override
-  String posTableOpenOrders(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count طلباً مفتوحاً',
-      few: '$count طلبات مفتوحة',
-      two: 'طلبان مفتوحان',
-      one: 'طلب مفتوح واحد',
-      zero: 'لا توجد طلبات مفتوحة',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get posShiftOpeningFloat => 'الرصيد الافتتاحي';
 
   @override
@@ -4301,6 +4287,20 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posMoveTableFailed =>
       'تعذّر نقل الطاولة. تحقق من الاتصال وحاول مجدداً.';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count طلباً مفتوحاً',
+      few: '$count طلبات مفتوحة',
+      two: 'طلبان مفتوحان',
+      one: 'طلب مفتوح واحد',
+      zero: 'لا توجد طلبات مفتوحة',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get kdsServedAction => 'تم التقديم';

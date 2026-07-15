@@ -393,8 +393,6 @@
   "posTableUnlinkFailed": "לא ניתן היה לבטל את קישור השולחנות",
   "posTableAlreadyGrouped": "שולחן זה כבר בקבוצה",
   "posTableGroup": "קבוצת שולחנות",
-  "posTableOpenOrders": "{count, plural, =0{אין הזמנות פתוחות} =1{הזמנה פתוחה אחת} other{{count} הזמנות פתוחות}}",
-  "@posTableOpenOrders": { "placeholders": { "count": { "type": "int" } } },
   "posShiftOpeningFloat": "קופה פותחת",
   "posShiftExpectedCash": "מזומן צפוי",
   "posShiftExpectedAtClose": "המזומן הצפוי מחושב בשרת בעת הסגירה.",

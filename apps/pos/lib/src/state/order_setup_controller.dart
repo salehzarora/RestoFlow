@@ -5,6 +5,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import '../data/demo_tables.dart';
 import '../data/order_submission.dart' show normalizeCustomerName;
 import 'pos_session.dart';
+import 'table_operations_controller.dart';
 
 /// Immutable selection state for the active order's service mode (RF-114): the
 /// chosen [OrderType] and, for dine-in, the assigned [DemoTable].
@@ -109,7 +110,15 @@ final orderSetupControllerProvider =
 /// override this provider or [runtimeConfigProvider] to force a mode.
 final tablesRepositoryProvider = Provider<TablesRepository>((ref) {
   final cfg = ref.watch(runtimeConfigProvider);
-  if (cfg.isDemoMode) return DemoTablesStore();
+  if (cfg.isDemoMode) {
+    // PILOT-OPERATIONS-CORRECTIONS-001: feed the demo table-ops overlay so a demo
+    // manual-status change / link / unlink is reflected on the next load.
+    final ops = ref.watch(demoTableOpsProvider);
+    return DemoTablesStore(
+      manualOverrides: ops.manualStatus,
+      groupOverrides: ops.groupOf,
+    );
+  }
   return RealTablesRepository(
     ref.watch(posAuthTransportProvider),
     ref.watch(posSyncSessionProvider),

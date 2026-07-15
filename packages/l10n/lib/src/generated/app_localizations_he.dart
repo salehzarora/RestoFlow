@@ -1244,17 +1244,6 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posTableGroup => 'קבוצת שולחנות';
 
   @override
-  String posTableOpenOrders(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count הזמנות פתוחות',
-      one: 'הזמנה פתוחה אחת',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get posShiftOpeningFloat => 'קופה פותחת';
 
   @override
@@ -4272,6 +4261,17 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posMoveTableFailed =>
       'לא ניתן היה להעביר את השולחן. בדוק את החיבור ונסה שוב.';
+
+  @override
+  String posTableOpenOrders(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count הזמנות פתוחות',
+      one: 'הזמנה פתוחה אחת',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get kdsServedAction => 'הוגש';

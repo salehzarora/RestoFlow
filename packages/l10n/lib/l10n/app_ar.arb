@@ -393,8 +393,6 @@
   "posTableUnlinkFailed": "تعذّر إلغاء ربط الطاولات",
   "posTableAlreadyGrouped": "هذه الطاولة ضمن مجموعة بالفعل",
   "posTableGroup": "مجموعة طاولات",
-  "posTableOpenOrders": "{count, plural, =0{لا طلبات مفتوحة} =1{طلب مفتوح واحد} other{{count} طلبات مفتوحة}}",
-  "@posTableOpenOrders": { "placeholders": { "count": { "type": "int" } } },
   "posShiftOpeningFloat": "الرصيد الافتتاحي",
   "posShiftExpectedCash": "النقد المتوقع",
   "posShiftExpectedAtClose": "يُحتسب النقد المتوقع على الخادم عند الإغلاق.",
