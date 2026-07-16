@@ -15,10 +15,8 @@ import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/native_print_bridges.dart';
-import '../state/cart_controller.dart';
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/draft_recovery_controller.dart';
-import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/payment_controller.dart';
 import '../state/recent_orders_controller.dart';
@@ -29,6 +27,7 @@ import '../state/submitted_order_view.dart';
 import 'cash_payment_sheet.dart';
 import 'discount_sheet.dart';
 import 'order_status_pills.dart';
+import 'recovery_coordinator.dart';
 import 'receipt_preview.dart';
 import 'receipt_print_preview.dart';
 
@@ -80,17 +79,10 @@ class OrderConfirmation extends ConsumerWidget {
       return (r != null && r.binding.matches(binding)) ? r : null;
     }();
     final canRestoreDraft = isRejectedDraft && recovery != null;
-    // Clear the recovery when the order is authoritatively ACCEPTED (applied), so a
-    // stale draft can never be restored over a real order. Clears ONLY this submit's
-    // record (multi-slot) — a newer attempt's recovery is untouched.
-    ref.listen(outboxControllerProvider, (previous, next) {
-      final e = _entryForId(next, order.outboxEntryId);
-      if (e != null && e.syncState == OutboxSyncState.applied) {
-        ref
-            .read(posDraftRecoveryProvider.notifier)
-            .clearIfFor(order.outboxEntryId ?? '');
-      }
-    });
+    // Finding 3: clearing an accepted recovery now lives in the recovery CONTROLLER
+    // (it watches the outbox), so an applied order clears its recovery even if this
+    // confirmation is never opened / is unmounted / the app navigated away. No widget
+    // listener here — a stale draft can never be restored over a real order regardless.
 
     // RF-116: the recorded cash payment for THIS order, or null if unpaid. Looked up
     // by IDENTITY: keyed by the display code, a payment taken for another order that
@@ -398,8 +390,22 @@ class OrderConfirmation extends ConsumerWidget {
                             width: double.infinity,
                             child: FilledButton.icon(
                               key: const Key('recovery-back-to-cart'),
-                              onPressed: () =>
-                                  _restoreDraft(context, ref, recovery),
+                              // Finding 1B: the ONE shared coordinator. On the
+                              // confirmation the cart is empty, so it restores directly
+                              // (restoreDraft dismisses this confirmation); if a cart is
+                              // present it enforces the Replace / Keep-current / Cancel
+                              // decision — identically to the Recent Orders entry point.
+                              onPressed: () async {
+                                final outcome = await PosRecoveryCoordinator(
+                                  ref,
+                                ).restore(context, recovery);
+                                // Keep-current retired the shell but left the cart; the
+                                // confirmation still shows the (retired) order, so
+                                // dismiss it to that kept cart.
+                                if (outcome == PosRecoveryOutcome.keptCurrent) {
+                                  onNewOrder();
+                                }
+                              },
                               icon: const Icon(Icons.edit_outlined),
                               label: Text(l10n.posRecoveryBackToCart),
                               style: RestoflowButtonStyles.big(context),
@@ -436,18 +442,18 @@ class OrderConfirmation extends ConsumerWidget {
                                 ),
                               );
                               if (ok != true) return;
-                              // Local-only discard: NO server void, NO order-cancelled
-                              // audit event (no order was created). Retire the rejected
-                              // recent-order shell, clear ONLY this submit's recovery
-                              // record (multi-slot), and dismiss to a clean cart.
-                              ref
-                                  .read(
-                                    posRecentOrdersControllerProvider.notifier,
-                                  )
-                                  .retireLocalRejected(order.identity);
-                              ref
-                                  .read(posDraftRecoveryProvider.notifier)
-                                  .clear(order.outboxEntryId ?? '');
+                              // Finding 1B: the shared coordinator retires the shell +
+                              // clears ONLY this submit's recovery — NO server void, NO
+                              // order-cancelled audit (no order was created). With no
+                              // matching recovery (already cleared, or a scope mismatch)
+                              // it still retires the orphan shell. Then dismiss.
+                              final coordinator = PosRecoveryCoordinator(ref);
+                              final r = recovery;
+                              if (r != null) {
+                                coordinator.discard(r);
+                              } else {
+                                coordinator.discardOrphanShell(order.identity);
+                              }
                               onNewOrder();
                             },
                             icon: const Icon(Icons.delete_outline),
@@ -548,89 +554,7 @@ class OrderConfirmation extends ConsumerWidget {
       ),
     );
   }
-
-  /// PILOT-OPERATIONS-CORRECTIONS-001 (A2): restores the rejected draft into the cart
-  /// for deliberate correction — with CURRENT-CART PROTECTION. An empty cart is
-  /// restored directly; a NON-EMPTY cart (work the operator built while this attempt was
-  /// pending) is never silently overwritten — the operator explicitly chooses to
-  /// Replace it or to Keep it and discard the rejected draft. Restores ALL supported
-  /// setup state (order type, table, customer name); a resubmit runs a fresh
-  /// [submitOrderFromCart] and so mints a NEW operation identity — never a retry of the
-  /// rejected ledger. Retires the rejected recent-order shell and clears ONLY this
-  /// submit's recovery record so a repeated tap cannot restore twice.
-  Future<void> _restoreDraft(
-    BuildContext context,
-    WidgetRef ref,
-    PosDraftRecovery recovery,
-  ) async {
-    final l10n = AppLocalizations.of(context);
-    final recent = ref.read(posRecentOrdersControllerProvider.notifier);
-    final drafts = ref.read(posDraftRecoveryProvider.notifier);
-
-    if (ref.read(cartControllerProvider).isNotEmpty) {
-      final choice = await _askRestoreChoice(context, l10n);
-      if (!context.mounted ||
-          choice == null ||
-          choice == _RestoreChoice.cancel) {
-        return;
-      }
-      if (choice == _RestoreChoice.keepCurrent) {
-        // Keep the current cart untouched; discard the rejected draft + shell.
-        recent.retireLocalRejected(order.identity);
-        drafts.clear(order.outboxEntryId ?? '');
-        onNewOrder();
-        return;
-      }
-      // _RestoreChoice.replace falls through to the restore below.
-    }
-
-    ref.read(cartControllerProvider.notifier).restoreDraft(recovery.draft);
-    final setup = ref.read(orderSetupControllerProvider.notifier);
-    setup.setOrderType(recovery.orderType);
-    final table = recovery.table;
-    if (table != null) setup.assignTable(table);
-    // A2: restore the customer name too (it was captured but never restored before).
-    setup.setCustomerName(recovery.customerName);
-    // Restoring nulls the submitted order, so the cart panel rebuilds to the restored
-    // cart (confirmation dismissed). Retire the shell + clear this record so a repeated
-    // tap cannot restore twice.
-    recent.retireLocalRejected(order.identity);
-    drafts.clear(order.outboxEntryId ?? '');
-  }
-
-  /// The explicit three-way choice when Back to cart would overwrite a non-empty cart.
-  Future<_RestoreChoice?> _askRestoreChoice(
-    BuildContext context,
-    AppLocalizations l10n,
-  ) => showDialog<_RestoreChoice>(
-    context: context,
-    builder: (dctx) => AlertDialog(
-      key: const Key('recovery-replace-dialog'),
-      title: Text(l10n.posRecoveryReplaceCartTitle),
-      content: Text(l10n.posRecoveryReplaceCartBody),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dctx).pop(_RestoreChoice.cancel),
-          child: Text(l10n.posShiftCancelAction),
-        ),
-        TextButton(
-          key: const Key('recovery-keep-cart'),
-          onPressed: () => Navigator.of(dctx).pop(_RestoreChoice.keepCurrent),
-          child: Text(l10n.posRecoveryKeepCartAction),
-        ),
-        FilledButton(
-          key: const Key('recovery-replace-cart'),
-          onPressed: () => Navigator.of(dctx).pop(_RestoreChoice.replace),
-          child: Text(l10n.posRecoveryReplaceCartAction),
-        ),
-      ],
-    ),
-  );
 }
-
-/// The operator's explicit choice when restoring a rejected draft would overwrite a
-/// non-empty current cart (A2 current-cart protection).
-enum _RestoreChoice { replace, keepCurrent, cancel }
 
 /// Design-polish: a compact HORIZONTAL success header (true-green tone) —
 /// the confirmation is a ~10-second interaction, so the old 72px hero circle

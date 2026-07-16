@@ -1194,6 +1194,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posRecentOrderNotCreated => 'Not created';
 
   @override
+  String get posRecoveryOtherSession =>
+      'This rejected draft belongs to another session';
+
+  @override
   String get posTableOperations => 'Table operations';
 
   @override
@@ -1335,6 +1339,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posShiftOwnerMismatch =>
       'A shift is already open on this device, opened by another employee. Only its owner or a manager can close it — sign out so they can sign in.';
+
+  @override
+  String get posShiftCloseNotAllowed =>
+      'You do not have permission to close this shift. Ask a manager to close it, or to enable shift-close for your account.';
 
   @override
   String get posShiftReturnToPin => 'Sign out';

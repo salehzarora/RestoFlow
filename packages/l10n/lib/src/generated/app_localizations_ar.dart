@@ -1188,6 +1188,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posRecentOrderNotCreated => 'لم يُنشأ';
 
   @override
+  String get posRecoveryOtherSession => 'هذه المسودة المرفوضة تخص جلسة أخرى';
+
+  @override
   String get posTableOperations => 'عمليات الطاولات';
 
   @override
@@ -1328,6 +1331,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posShiftOwnerMismatch =>
       'توجد وردية مفتوحة على هذا الجهاز فتحها موظف آخر. لا يمكن إغلاقها إلا بواسطة صاحبها أو مدير — سجّل الخروج ليتمكن من الدخول.';
+
+  @override
+  String get posShiftCloseNotAllowed =>
+      'ليست لديك صلاحية إغلاق هذه الوردية. اطلب من مدير إغلاقها أو تفعيل صلاحية إغلاق الوردية لحسابك.';
 
   @override
   String get posShiftReturnToPin => 'تسجيل الخروج';

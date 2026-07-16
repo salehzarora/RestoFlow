@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 
+import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/demo_tables.dart';
 import 'cart_controller.dart';
+import 'outbox_controller.dart';
 import 'pos_session.dart' show posSyncSessionProvider;
 import 'pos_sync_scope_provider.dart';
 
@@ -63,7 +65,8 @@ class PosDraftRecovery {
   final CartDraftSnapshot draft;
   final OrderType orderType;
 
-  /// The outbox entry id of the submit this draft belongs to — the record's key.
+  /// The outbox entry id of the submit this draft belongs to — the record's key AND the
+  /// exact identity used to locate a rejected shell in Recent Orders.
   final String outboxEntryId;
 
   /// The exact scope + PIN session this recovery may be restored in (A2).
@@ -78,14 +81,36 @@ class PosDraftRecovery {
 class PosDraftRecoveryController
     extends Notifier<Map<String, PosDraftRecovery>> {
   @override
-  Map<String, PosDraftRecovery> build() => const <String, PosDraftRecovery>{};
+  Map<String, PosDraftRecovery> build() {
+    // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 3): CONTROLLER-SEAM cleanup of accepted
+    // recoveries. Watching the outbox here — not a widget listener — means an order that
+    // becomes APPLIED clears its recovery even if its confirmation was never opened, is
+    // unmounted, or the app navigated away. This covers the "capture then applied" order
+    // (a recovery stored while pending, later applied); the "applied before capture"
+    // order is handled in [capture] below.
+    ref.listen(outboxControllerProvider, (previous, next) {
+      _clearApplied(next);
+    });
+    return const <String, PosDraftRecovery>{};
+  }
 
   /// Capture the draft of a just-started submit under its own key. NEVER overwrites a
   /// different attempt — two pending submits keep independent records.
-  void capture(PosDraftRecovery recovery) => state = <String, PosDraftRecovery>{
-    ...state,
-    recovery.outboxEntryId: recovery,
-  };
+  ///
+  /// Finding 3: if the submit is ALREADY applied by the time we capture (real-mode
+  /// auto-push returned after the entry transitioned to applied), there is nothing to
+  /// recover — do NOT store it. This closes the "applied before capture" race the
+  /// outbox listener alone cannot see.
+  void capture(PosDraftRecovery recovery) {
+    final entry = ref
+        .read(outboxControllerProvider.notifier)
+        .entryById(recovery.outboxEntryId);
+    if (entry != null && entry.syncState == OutboxSyncState.applied) return;
+    state = <String, PosDraftRecovery>{
+      ...state,
+      recovery.outboxEntryId: recovery,
+    };
+  }
 
   /// Clear ONLY the record for [outboxEntryId] (after its restore, discard, or an
   /// accepted order). Other attempts' records are untouched.
@@ -114,6 +139,22 @@ class PosDraftRecoveryController
     if (r == null) return null;
     return r.binding.matches(current) ? r : null;
   }
+
+  /// Finding 3: clear the recovery of every APPLIED submit. Idempotent — a duplicate
+  /// applied delivery finds nothing to clear. NEVER touches a pending, retryable-failed,
+  /// or permanently-rejected (item_unavailable) entry, whose recovery must be retained.
+  void _clearApplied(List<OutboxEntry> entries) {
+    final applied = <String>{
+      for (final e in entries)
+        if (e.syncState == OutboxSyncState.applied) e.id,
+    };
+    if (applied.isEmpty) return;
+    final next = <String, PosDraftRecovery>{
+      for (final e in state.entries)
+        if (!applied.contains(e.key)) e.key: e.value,
+    };
+    if (next.length != state.length) state = next;
+  }
 }
 
 final posDraftRecoveryProvider =
@@ -122,9 +163,10 @@ final posDraftRecoveryProvider =
     );
 
 /// The CURRENT operational binding — the scope + PIN session a recovery may be
-/// captured against and restored in. Watched by the confirmation so that a PIN switch
-/// or branch/device re-pair immediately makes a prior employee's recovery inaccessible
-/// (its binding no longer matches). Null components in demo / unpaired mode.
+/// captured against and restored in. Watched by the confirmation and the recent-orders
+/// surface so that a PIN switch or branch/device re-pair immediately makes a prior
+/// employee's recovery inaccessible (its binding no longer matches). Null components in
+/// demo / unpaired mode.
 final posRecoveryBindingProvider = Provider<PosRecoveryBinding>((ref) {
   final scopeKey = ref.watch(posSyncScopeProvider)?.key;
   final pinSessionId = ref.watch(posSyncSessionProvider)?.pinSessionId;

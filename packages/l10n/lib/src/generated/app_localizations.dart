@@ -2326,6 +2326,12 @@ abstract class AppLocalizations {
   /// **'Not created'**
   String get posRecentOrderNotCreated;
 
+  /// No description provided for @posRecoveryOtherSession.
+  ///
+  /// In en, this message translates to:
+  /// **'This rejected draft belongs to another session'**
+  String get posRecoveryOtherSession;
+
   /// No description provided for @posTableOperations.
   ///
   /// In en, this message translates to:
@@ -2589,6 +2595,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A shift is already open on this device, opened by another employee. Only its owner or a manager can close it — sign out so they can sign in.'**
   String get posShiftOwnerMismatch;
+
+  /// No description provided for @posShiftCloseNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to close this shift. Ask a manager to close it, or to enable shift-close for your account.'**
+  String get posShiftCloseNotAllowed;
 
   /// No description provided for @posShiftReturnToPin.
   ///

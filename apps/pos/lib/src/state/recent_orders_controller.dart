@@ -463,6 +463,19 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     if (next.length != state.length) _apply(next);
   }
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1): retire a permanently-rejected shell
+  /// by its EXACT submit/outbox entry identity — the identity a draft recovery is keyed
+  /// by. Removes ONLY a [PosRecentOrder.isNeverCreated] row whose order-time view was
+  /// submitted under [outboxEntryId], so the recovery action from Recent Orders can
+  /// never drop a different shell or a real accepted order.
+  void retireLocalRejectedByOutboxEntry(String outboxEntryId) {
+    final next = <PosRecentOrder>[
+      for (final o in state)
+        if (!(o.isNeverCreated && o.order?.outboxEntryId == outboxEntryId)) o,
+    ];
+    if (next.length != state.length) _apply(next);
+  }
+
   void _syncPayments(PaymentState ps) {
     var changed = false;
     final next = <PosRecentOrder>[];

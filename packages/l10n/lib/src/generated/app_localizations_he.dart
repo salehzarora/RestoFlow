@@ -1180,6 +1180,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posRecentOrderNotCreated => 'לא נוצרה';
 
   @override
+  String get posRecoveryOtherSession => 'טיוטה דחויה זו שייכת להפעלה אחרת';
+
+  @override
   String get posTableOperations => 'פעולות שולחנות';
 
   @override
@@ -1317,6 +1320,10 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posShiftOwnerMismatch =>
       'כבר פתוחה משמרת במכשיר זה, שנפתחה על ידי עובד אחר. רק בעליה או מנהל יכולים לסגור אותה — התנתק כדי שיוכלו להיכנס.';
+
+  @override
+  String get posShiftCloseNotAllowed =>
+      'אין לך הרשאה לסגור משמרת זו. בקש ממנהל לסגור אותה או להפעיל עבורך הרשאת סגירת משמרת.';
 
   @override
   String get posShiftReturnToPin => 'התנתקות';

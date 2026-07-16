@@ -18,6 +18,7 @@ import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
 import '../state/discount_controller.dart';
+import '../state/draft_recovery_controller.dart';
 import '../state/order_sync_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/receipt_print_controller.dart';
@@ -28,6 +29,7 @@ import 'discount_sheet.dart';
 import 'move_table_sheet.dart';
 import 'order_status_pills.dart';
 import 'receipt_print_preview.dart';
+import 'recovery_coordinator.dart';
 
 /// POS-ORDERS-AND-PAYMENT-001: an app-bar button that opens the operational orders
 /// surface, badged with the current unpaid count.
@@ -765,12 +767,113 @@ class _OrderCard extends ConsumerWidget {
               ),
             ),
           ],
-          if (!actions.isEmpty) ...[
+          // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1A): a permanently-rejected shell
+          // exposes its recovery actions (Edit / Restore + Discard) HERE — never
+          // payment / discount / void / receipt (the central policy already returns
+          // none of those). So a rejected draft stays recoverable even after the
+          // confirmation was cleared by starting the next order.
+          if (order.isNeverCreated) ...[
+            const SizedBox(height: RestoflowSpacing.sm),
+            _RejectedRecoveryActions(order: order, l10n: l10n),
+          ] else if (!actions.isEmpty) ...[
             const SizedBox(height: RestoflowSpacing.sm),
             _ActionRow(order: order, l10n: l10n, actions: actions),
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Finding 1A: the recovery actions for a permanently-rejected shell in Recent Orders.
+/// If a scope-valid recovery exists (the exact submit/outbox identity, restorable in
+/// THIS context) it offers Edit / Restore + Discard; otherwise (e.g. after a restart,
+/// or a scope/PIN mismatch) only a safe local Discard. Both go through the ONE shared
+/// [PosRecoveryCoordinator]. NEVER any accepted-order action; NEVER a server void.
+class _RejectedRecoveryActions extends ConsumerWidget {
+  const _RejectedRecoveryActions({required this.order, required this.l10n});
+
+  final PosRecentOrder order;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final outboxEntryId = order.order?.outboxEntryId;
+    // Rebuild when the recovery map changes (a capture/clear).
+    final recoveries = ref.watch(posDraftRecoveryProvider);
+    final recovery = ref
+        .read(posDraftRecoveryProvider.notifier)
+        .recoverable(outboxEntryId, ref.watch(posRecoveryBindingProvider));
+    // A recovery EXISTS for this shell but is NOT valid in the current context (a PIN
+    // switch / re-pair): another session owns it. We must not let this actor restore it.
+    final otherSession =
+        recovery == null &&
+        outboxEntryId != null &&
+        recoveries.containsKey(outboxEntryId);
+    final coordinator = PosRecoveryCoordinator(ref);
+
+    return Wrap(
+      spacing: RestoflowSpacing.sm,
+      runSpacing: RestoflowSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (otherSession)
+          Text(
+            key: Key('recent-other-session-${order.orderNumber}'),
+            l10n.posRecoveryOtherSession,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        if (recovery != null)
+          _ActionButton(
+            child: FilledButton.icon(
+              key: Key('recent-restore-${order.orderNumber}'),
+              onPressed: () async {
+                final outcome = await coordinator.restore(context, recovery);
+                // Restored or kept-current both resolve the shell — close the sheet so
+                // the operator is back on the (restored or kept) cart. Cancel stays.
+                if (context.mounted &&
+                    outcome != PosRecoveryOutcome.cancelled) {
+                  Navigator.of(context).maybePop();
+                }
+              },
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: Text(l10n.posRecoveryBackToCart),
+            ),
+          ),
+        _ActionButton(
+          child: OutlinedButton.icon(
+            key: Key('recent-discard-${order.orderNumber}'),
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (dctx) => AlertDialog(
+                  title: Text(l10n.posRecoveryDiscardConfirmTitle),
+                  content: Text(l10n.posRecoveryDiscardConfirmBody),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dctx).pop(false),
+                      child: Text(l10n.posShiftCancelAction),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(dctx).pop(true),
+                      child: Text(l10n.posRecoveryDiscardDraft),
+                    ),
+                  ],
+                ),
+              );
+              if (ok != true) return;
+              // Retire the shell + clear its recovery (if any). No server void.
+              if (recovery != null) {
+                coordinator.discard(recovery);
+              } else {
+                coordinator.discardOrphanShell(order.identity);
+              }
+            },
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: Text(l10n.posRecoveryDiscardDraft),
+          ),
+        ),
+      ],
     );
   }
 }
