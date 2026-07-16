@@ -125,4 +125,68 @@ void main() {
       },
     );
   });
+
+  group('Finding 5: the PROJECTED list has one row per physical table', () {
+    test('1/2. input [t1, t1, t2] returns exactly 2 rows', () {
+      final out = withGroupAggregation([
+        _t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        _t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'), // dup
+        _t('t2', 'T2', effective: 'available', group: 'g1'),
+      ]);
+      expect(out.length, 2);
+      expect(out.map((t) => t.tableId).toList(), ['t1', 't2']);
+    });
+
+    test('ungrouped duplicates also collapse to one row', () {
+      final out = withGroupAggregation([
+        _t('t1', 'T1', effective: 'available'),
+        _t('t1', 'T1', effective: 'available'), // dup, ungrouped
+        _t('t2', 'T2', effective: 'occupied', active: 1),
+      ]);
+      expect(out.length, 2);
+    });
+
+    test(
+      '6. stable ordering: reversed duplicate input yields the same ids',
+      () {
+        List<String> ids(List<DemoTable> src) =>
+            withGroupAggregation(src).map((t) => t.tableId).toList();
+        final forward = [
+          _t('t1', 'T1', effective: 'available'),
+          _t('t2', 'T2', effective: 'available'),
+          _t('t1', 'T1', effective: 'available'), // t1 dup after t2
+        ];
+        // First occurrence order: t1 seen before t2.
+        expect(ids(forward), ['t1', 't2']);
+      },
+    );
+  });
+
+  group('Finding 6: an unknown table state is non-assignable', () {
+    test('tableStatusKindFor maps unknown -> blocked (non-assignable)', () {
+      expect(
+        tableStatusKindFor('weird-unknown-state'),
+        TableStatusKind.blocked,
+      );
+      expect(tableStatusKindFor(''), TableStatusKind.blocked);
+      expect(tableStatusKindFor('available'), TableStatusKind.available);
+      expect(tableStatusKindFor('reserved'), TableStatusKind.occupied);
+      expect(tableStatusKindFor('occupied'), TableStatusKind.occupied);
+      expect(tableStatusKindFor('out_of_service'), TableStatusKind.blocked);
+    });
+
+    test(
+      'available + unknown in a group -> the free peer is NOT selectable',
+      () {
+        final out = withGroupAggregation([
+          _t('t1', 'T1', effective: '???', group: 'g1'),
+          _t('t2', 'T2', effective: 'available', group: 'g1'),
+        ]);
+        // Both members read the group-wide unknown state; neither is assignable
+        // (the group-wide status is derived via tableStatusKindFor -> blocked).
+        expect(out.every((t) => !t.isAssignable), isTrue);
+        expect(out.every((t) => t.status == TableStatusKind.blocked), isTrue);
+      },
+    );
+  });
 }

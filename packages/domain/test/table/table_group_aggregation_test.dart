@@ -84,13 +84,71 @@ void main() {
               tableEffectiveStateRank('available'),
           isTrue,
         );
-        // Unknown fails to the lowest rank (never masks a real hold).
-        expect(
-          tableEffectiveStateRank('???'),
-          tableEffectiveStateRank('available'),
-        );
       },
     );
+  });
+
+  group('Finding 6: unknown state is deterministic + fail-closed', () {
+    test('unknown ranks MORE restrictive than available (not equal)', () {
+      expect(
+        tableEffectiveStateRank('???') > tableEffectiveStateRank('available'),
+        isTrue,
+      );
+      // ...but LESS than a known hold (a known state is more informative).
+      expect(
+        tableEffectiveStateRank('reserved') > tableEffectiveStateRank('???'),
+        isTrue,
+      );
+    });
+
+    test('normalize maps any unrecognized value to unknown', () {
+      expect(normalizeTableEffectiveState('foo'), 'unknown');
+      expect(normalizeTableEffectiveState(''), 'unknown');
+      expect(normalizeTableEffectiveState('available'), 'available');
+      expect(normalizeTableEffectiveState('occupied'), 'occupied');
+    });
+
+    test(
+      'available + unknown resolves to unknown REGARDLESS of input order',
+      () {
+        final a = aggregateTableGroup([
+          _m('t1', 'available', 0),
+          _m('t2', '???', 0),
+        ]);
+        final b = aggregateTableGroup([
+          _m('t2', '???', 0),
+          _m('t1', 'available', 0),
+        ]);
+        expect(a.effectiveState, 'unknown');
+        expect(b.effectiveState, 'unknown');
+        expect(a.isAvailable, isFalse);
+        expect(b.isAvailable, isFalse); // never selectable
+      },
+    );
+
+    test('unknown never wins over a known hold, either order', () {
+      for (final known in ['occupied', 'reserved', 'out_of_service']) {
+        final a = aggregateTableGroup([_m('t1', known, 0), _m('t2', '???', 0)]);
+        final b = aggregateTableGroup([_m('t2', '???', 0), _m('t1', known, 0)]);
+        expect(a.effectiveState, known);
+        expect(b.effectiveState, known);
+      }
+    });
+
+    test('a duplicate-unknown table row never becomes available', () {
+      final agg = aggregateTableGroup([
+        _m('t1', '???', 0),
+        _m('t1', 'available', 0), // same table, conflicting
+      ]);
+      expect(agg.effectiveState, 'unknown'); // restrictive, order-independent
+    });
+
+    test('mostRestrictiveTableState is commutative + normalized', () {
+      expect(mostRestrictiveTableState('available', '???'), 'unknown');
+      expect(mostRestrictiveTableState('???', 'available'), 'unknown');
+      expect(mostRestrictiveTableState('reserved', '???'), 'reserved');
+      expect(mostRestrictiveTableState('???', 'reserved'), 'reserved');
+    });
   });
 
   group('Finding 4: deduplicate physical table rows', () {

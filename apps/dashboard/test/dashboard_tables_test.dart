@@ -161,6 +161,29 @@ void main() {
         expect(x.activeOrderCount, 1); // never 2
       }
     });
+
+    // Finding 5: the projected list has ONE tile per physical table id.
+    test('Finding 5: input [t1, t1, t2] returns exactly 2 tiles', () {
+      final out = withDashboardGroupAggregation([
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'), // dup
+        t('t2', 'T2', effective: 'available', group: 'g1'),
+      ]);
+      expect(out.length, 2);
+      expect(out.map((x) => x.id).toList(), ['t1', 't2']);
+    });
+
+    // Finding 6: an unknown effective state is preserved as unknown (never available).
+    test(
+      'Finding 6: available + unknown resolves to unknown for the group',
+      () {
+        final out = withDashboardGroupAggregation([
+          t('t1', 'T1', effective: 'mystery', group: 'g1'),
+          t('t2', 'T2', effective: 'available', group: 'g1'),
+        ]);
+        expect(out.every((x) => x.effectiveState == 'unknown'), isTrue);
+      },
+    );
   });
 
   group('SupabaseTablesRepository', () {

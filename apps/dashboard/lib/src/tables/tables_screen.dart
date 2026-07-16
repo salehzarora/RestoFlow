@@ -214,7 +214,10 @@ class _TablesScreenState extends State<TablesScreen> {
 /// state string, reusing the manual-status vocabulary.
 String _effectiveLabel(BuildContext context, String effective) {
   final status = DiningTableStatus.fromWire(effective);
-  return status == null ? effective : _statusVisual(context, status).label;
+  // Finding 6: an unknown/unrecognized effective state gets an HONEST localized label
+  // (never shown raw, never as Available).
+  if (status == null) return AppLocalizations.of(context).tablesStatusUnknown;
+  return _statusVisual(context, status).label;
 }
 
 ({String label, RestoflowTone tone, IconData icon}) _statusVisual(

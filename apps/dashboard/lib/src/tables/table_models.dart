@@ -7,7 +7,11 @@
 library;
 
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show aggregateTableGroup, TableGroupAggregate, TableGroupMember;
+    show
+        aggregateTableGroup,
+        TableGroupAggregate,
+        TableGroupMember,
+        mostRestrictiveTableState;
 
 /// `dining_tables.status` (CHECK: available | occupied | reserved |
 /// out_of_service).
@@ -102,16 +106,44 @@ class DashboardTable {
   );
 }
 
-/// PILOT-OPERATIONS-CORRECTIONS-001 (A4): projects the ONE canonical group aggregation
-/// ([aggregateTableGroup]) onto every grouped table, so the Dashboard presents a linked
-/// group as one coherent operational unit — every member showing the SAME group-wide
-/// effective state and active dine-in count. Ungrouped tables are unchanged; a member
-/// with no server effective state (older backend) is left as-is.
+/// PILOT-OPERATIONS-CORRECTIONS-001 (A4 + Finding 5): projects the ONE canonical group
+/// aggregation ([aggregateTableGroup]) onto every table AND deduplicates the projected
+/// list by physical table id, so the Dashboard presents a linked group as one coherent
+/// unit AND renders each physical table exactly once (a table id duplicated upstream
+/// yields ONE tile). Ungrouped tables keep their own (deduplicated) state; a table with
+/// no server effective state (older backend) is left as-is.
 List<DashboardTable> withDashboardGroupAggregation(
   List<DashboardTable> tables,
 ) {
-  final byGroup = <String, List<TableGroupMember>>{};
+  // Finding 5: one row per physical table id (stable first-occurrence order), merging
+  // duplicates deterministically (MAX count, most RESTRICTIVE effective state).
+  final byId = <String, DashboardTable>{};
   for (final t in tables) {
+    final existing = byId[t.id];
+    if (existing == null) {
+      byId[t.id] = t;
+      continue;
+    }
+    final ee = existing.effectiveState;
+    final te = t.effectiveState;
+    final merged = ee == null
+        ? te
+        : (te == null ? ee : mostRestrictiveTableState(ee, te));
+    final count = t.activeOrderCount > existing.activeOrderCount
+        ? t.activeOrderCount
+        : existing.activeOrderCount;
+    byId[t.id] = merged == null
+        // Both rows are older-backend (no effective state): keep the first as-is.
+        ? existing
+        : existing.copyWithGroupState(
+            effectiveState: merged,
+            activeOrderCount: count,
+          );
+  }
+  final deduped = byId.values.toList(growable: false);
+
+  final byGroup = <String, List<TableGroupMember>>{};
+  for (final t in deduped) {
     final g = t.groupId;
     final e = t.effectiveState;
     if (g == null || e == null) continue;
@@ -123,12 +155,12 @@ List<DashboardTable> withDashboardGroupAggregation(
       activeOrderCount: t.activeOrderCount,
     ));
   }
-  if (byGroup.isEmpty) return tables;
+  if (byGroup.isEmpty) return deduped;
   final aggByGroup = <String, TableGroupAggregate>{
     for (final e in byGroup.entries) e.key: aggregateTableGroup(e.value),
   };
   return <DashboardTable>[
-    for (final t in tables)
+    for (final t in deduped)
       if (t.groupId case final g? when aggByGroup[g] != null)
         t.copyWithGroupState(
           effectiveState: aggByGroup[g]!.effectiveState,

@@ -87,24 +87,53 @@ class DemoTable {
   );
 }
 
-/// Maps a GROUP-WIDE effective state to the picker's assignability model (mirrors the
-/// per-table mappings: reserved/occupied are non-assignable, out_of_service blocked).
+/// Maps a GROUP-WIDE effective state to the picker's assignability model. NORMALIZES
+/// first (Finding 6): available -> available; reserved/occupied -> occupied (non-
+/// assignable); out_of_service AND unknown -> blocked (non-assignable, fail-closed —
+/// an unknown/unrecognized state never presents as selectable capacity).
 TableStatusKind tableStatusKindFor(String effectiveState) =>
-    switch (effectiveState) {
+    switch (normalizeTableEffectiveState(effectiveState)) {
       'available' => TableStatusKind.available,
-      'out_of_service' => TableStatusKind.blocked,
-      _ => TableStatusKind.occupied, // occupied / reserved -> non-assignable
+      'reserved' || 'occupied' => TableStatusKind.occupied,
+      _ => TableStatusKind.blocked, // out_of_service + unknown
     };
 
-/// PILOT-OPERATIONS-CORRECTIONS-001 (A4): projects the ONE canonical group aggregation
-/// ([aggregateTableGroup]) onto every grouped table, so a linked group presents as one
-/// operational unit — every member shows the SAME group-wide effective state and the
-/// SAME group-wide active dine-in count. Ungrouped tables are returned unchanged. This
-/// is the SINGLE place the POS applies group aggregation, feeding the floor read, the
-/// picker, and the table-operations sheet alike.
+/// PILOT-OPERATIONS-CORRECTIONS-001 (A4 + Finding 5): projects the ONE canonical group
+/// aggregation ([aggregateTableGroup]) onto every table, so a linked group presents as
+/// one operational unit — every member shows the SAME group-wide effective state and
+/// active dine-in count. It ALSO deduplicates the projected list by physical table id:
+/// a table id duplicated upstream yields exactly ONE tile/option (stable first-occurrence
+/// order), so the floor, the picker, and the table-operations sheet never render a
+/// physical table twice. This is the SINGLE place the POS applies both.
 List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
-  final byGroup = <String, List<TableGroupMember>>{};
+  // Finding 5: collapse duplicate physical-table rows FIRST — one row per table id,
+  // stable first-occurrence order, merged deterministically (MAX count, most RESTRICTIVE
+  // effective state). A LinkedHashMap preserves insertion order.
+  final byId = <String, DemoTable>{};
   for (final t in tables) {
+    final existing = byId[t.tableId];
+    if (existing == null) {
+      byId[t.tableId] = t;
+    } else {
+      final effective = mostRestrictiveTableState(
+        t.effectiveState,
+        existing.effectiveState,
+      );
+      final count = t.activeOrderCount > existing.activeOrderCount
+          ? t.activeOrderCount
+          : existing.activeOrderCount;
+      // Keep the FIRST row's identity fields (label/manual/group); merge state + count.
+      byId[t.tableId] = existing.copyWithGroupState(
+        effectiveState: effective,
+        activeOrderCount: count,
+        status: tableStatusKindFor(effective),
+      );
+    }
+  }
+  final deduped = byId.values.toList(growable: false);
+
+  final byGroup = <String, List<TableGroupMember>>{};
+  for (final t in deduped) {
     final g = t.groupId;
     if (g == null) continue;
     // Finding 4: carry the PHYSICAL table id so aggregateTableGroup deduplicates by
@@ -115,12 +144,12 @@ List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
       activeOrderCount: t.activeOrderCount,
     ));
   }
-  if (byGroup.isEmpty) return tables;
+  if (byGroup.isEmpty) return deduped;
   final aggByGroup = <String, TableGroupAggregate>{
     for (final e in byGroup.entries) e.key: aggregateTableGroup(e.value),
   };
   return <DemoTable>[
-    for (final t in tables)
+    for (final t in deduped)
       if (t.groupId case final g? when aggByGroup[g] != null)
         t.copyWithGroupState(
           effectiveState: aggByGroup[g]!.effectiveState,
