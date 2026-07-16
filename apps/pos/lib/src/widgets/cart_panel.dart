@@ -6,6 +6,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
+import '../data/demo_tables.dart';
 import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
@@ -320,57 +321,81 @@ Future<void> submitOrderFromCart({
   // Captured BEFORE the await: the widget's ref dies with the tree (an unpair
   // unmounts the POS), but the container and the notifiers it owns do not.
   final container = ProviderScope.containerOf(context, listen: false);
-  // The scope this order is being submitted IN. If the till's pairing context
-  // changes while the push is in flight, the RESULT still belongs to the scope
-  // that submitted it — not to whichever scope the till lands in next.
-  final scopeKey = container.read(posSyncScopeProvider)?.key;
+  // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1A): the COMPLETE submit-attempt identity,
+  // captured BEFORE the first await. The FULL operational binding — org/restaurant/branch/
+  // device scope AND the PIN session — not the scope alone, plus the exact draft, order
+  // type, table, and customer name being submitted. A PIN handover on the SAME till keeps
+  // the scope but changes the binding; the old scope-only guard missed it and applied
+  // employee A's delayed result under employee B. The container and the notifiers it owns
+  // outlive the widget's ref, so the result is resolved against the container.
+  final bindingBefore = container.read(posRecoveryBindingProvider);
+  final scopeKeyBefore = container.read(posSyncScopeProvider)?.key;
+  final draftBefore = cartController.captureDraft();
+  final orderTypeBefore = setup.orderType;
+  final tableBefore = setup.assignedTable;
+  final customerNameBefore = setup.customerName;
   try {
     final result = await outbox.submit(
       lines: cart.lines,
       subtotalMinor: cart.subtotalMinor,
       currencyCode: cart.currencyCode,
-      orderType: setup.orderType,
-      tableId: setup.assignedTable?.tableId,
-      tableLabel: setup.assignedTable?.label,
+      orderType: orderTypeBefore,
+      tableId: tableBefore?.tableId,
+      tableLabel: tableBefore?.label,
       taxTotalMinor: taxTotalMinor,
       // ORDER-CUSTOMER-001: the optional customer name (null when not entered).
-      customerName: setup.customerName,
+      customerName: customerNameBefore,
     );
-    // THE MUTATION BOUNDARY. Everything below this line mutates state a NEW scope
-    // would see — the cart's submitted-order view, the confirmation screen, the
-    // order-setup reset, the recent-orders row. If the scope moved while the
-    // submit was in flight, NONE of it may run: the server may genuinely have
-    // accepted the order (for the ORIGINAL scope — the outbox entry is durable and
-    // is not deleted), but showing branch A's confirmation with live payment and
-    // discount actions inside branch B would be presenting one branch's order as
-    // another's. This is an OBSOLETE UI RESULT, not a failure: nothing is
-    // fabricated, nothing is rolled back, and the original scope re-discovers the
+    // Finding 1B — THE FULL-IDENTITY MUTATION BOUNDARY. Everything below this line mutates
+    // state the CURRENT session would see — the cart's submitted-order view, the
+    // confirmation screen, the order-setup reset, the recent-orders row, the recovery
+    // binding. If the BINDING changed while the submit was in flight — a PIN handover
+    // (same till, new employee) OR a re-pair — NONE of it may run for the current session:
+    // do NOT clear its cart / setup / customer name, do NOT show a confirmation, do NOT
+    // navigate, do NOT apply the result to its UI, do NOT attach recovery to its binding.
+    // The departed session's result is handled separately and is never fabricated or
+    // rolled back — the outbox entry is durable, and the original session re-discovers an
     // accepted order through its own authoritative window pull.
-    if (container.read(posSyncScopeProvider)?.key != scopeKey) return;
+    if (container.read(posRecoveryBindingProvider) != bindingBefore) {
+      _retainDepartedSessionResult(
+        container: container,
+        cartController: cartController,
+        result: result,
+        scopeKeyBefore: scopeKeyBefore,
+        bindingBefore: bindingBefore,
+        draft: draftBefore,
+        orderType: orderTypeBefore,
+        table: tableBefore,
+        customerName: customerNameBefore,
+        taxTotalMinor: taxTotalMinor,
+        taxRateBp: taxRateBp,
+      );
+      return; // Finding 1C: never a generic current-cart clear after a session switch.
+    }
 
-    // PILOT-OPERATIONS-CORRECTIONS-001: capture the draft BEFORE submitOrder clears
-    // the cart, keyed to THIS submit's outbox entry. If the server permanently
-    // rejects it (item_unavailable), the confirmation offers "Back to cart" to
-    // restore this exact draft; an accepted order clears it (below/on acceptance).
+    // SAME SESSION. PILOT-OPERATIONS-CORRECTIONS-001: capture the draft (taken BEFORE the
+    // await, keyed to THIS submit's outbox entry) bound to THE SUBMITTING session's exact
+    // binding. If the server permanently rejects it (item_unavailable), the confirmation
+    // offers "Back to cart" to restore this exact draft; an accepted order clears it.
     container
         .read(posDraftRecoveryProvider.notifier)
         .capture(
           PosDraftRecovery(
-            draft: cartController.captureDraft(),
-            orderType: setup.orderType,
-            table: setup.assignedTable,
-            customerName: setup.customerName,
+            draft: draftBefore,
+            orderType: orderTypeBefore,
+            table: tableBefore,
+            customerName: customerNameBefore,
             outboxEntryId: result.entry.id,
-            // A2: bind the recovery to THIS exact context (scope + PIN session) so a
-            // later employee / branch / device can never see or restore this draft.
-            binding: container.read(posRecoveryBindingProvider),
+            // A2: bind to THIS exact context (scope + PIN session) so a later employee /
+            // branch / device can never see or restore this draft.
+            binding: bindingBefore,
           ),
         );
 
     cartController.submitOrder(
-      orderType: setup.orderType,
-      tableLabel: setup.assignedTable?.label,
-      customerName: setup.customerName,
+      orderType: orderTypeBefore,
+      tableLabel: tableBefore?.label,
+      customerName: customerNameBefore,
       orderNumber: result.orderNumber,
       outboxEntryId: result.entry.id,
       localOperationId: result.entry.localOperationId,
@@ -401,10 +426,81 @@ Future<void> submitOrderFromCart({
     }
     setupController.reset();
   } on OrderSubmissionException {
-    // A failure that belongs to a scope we have LEFT is not this scope's failure;
-    // showing it here would blame the new branch for the old one's submit.
-    if (container.read(posSyncScopeProvider)?.key != scopeKey) return;
+    // A failure that belongs to a session we have LEFT is not this session's failure;
+    // showing it here would blame the new employee/branch for the old one's submit.
+    if (container.read(posRecoveryBindingProvider) != bindingBefore) return;
     messenger.showSnackBar(SnackBar(content: Text(l10n.posSubmitFailed)));
+  }
+}
+
+/// PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1B/1C): a submit RESULT that returned AFTER
+/// the submitting session departed — a PIN handover (same till, new employee) or a re-pair
+/// — belongs to the ORIGINAL session, never to whoever holds the till now. This NEVER
+/// touches the current session's cart, setup, or confirmation.
+///
+/// It retains the departed session's recovery under ITS ORIGINAL [bindingBefore] +
+/// outbox identity, so the draft is inaccessible to the current operator (binding
+/// mismatch) yet recoverable when its owner returns. `capture` no-ops when the order
+/// already applied (accepted → nothing to recover); an accepted order's recovery is
+/// additionally cleared by the controller-seam acceptance listeners.
+///
+/// Only when the till is still in the SAME operational scope (a PIN handover, so the
+/// scope-keyed recent-orders list is SHARED with the original session) does it record the
+/// departed order's row — built from the captured draft WITHOUT mutating the live cart —
+/// so its owner finds it on return; a permanent rejection is retired to a non-actionable
+/// shell now. A scope CHANGE (re-pair) means a different branch's list, so recording is
+/// skipped to avoid leaking the order across branches — the original scope re-discovers an
+/// accepted order through its own authoritative window pull.
+void _retainDepartedSessionResult({
+  required ProviderContainer container,
+  required CartController cartController,
+  required OrderSubmitResult result,
+  required String? scopeKeyBefore,
+  required PosRecoveryBinding bindingBefore,
+  required CartDraftSnapshot draft,
+  required OrderType orderType,
+  required DemoTable? table,
+  required String? customerName,
+  required int taxTotalMinor,
+  required int taxRateBp,
+}) {
+  container
+      .read(posDraftRecoveryProvider.notifier)
+      .capture(
+        PosDraftRecovery(
+          draft: draft,
+          orderType: orderType,
+          table: table,
+          customerName: customerName,
+          outboxEntryId: result.entry.id,
+          binding:
+              bindingBefore, // the ORIGINAL session's binding, never the current one
+        ),
+      );
+
+  // A scope change means the recent-orders list is a DIFFERENT branch's world — recording
+  // would leak the order across branches. Retain only the (scope-independent) recovery.
+  if (container.read(posSyncScopeProvider)?.key != scopeKeyBefore) return;
+
+  final recent = container.read(posRecentOrdersControllerProvider.notifier);
+  final view = cartController.viewFromDraft(
+    draft: draft,
+    orderType: orderType,
+    tableLabel: table?.label,
+    customerName: customerName,
+    orderNumber: result.orderNumber,
+    outboxEntryId: result.entry.id,
+    localOperationId: result.entry.localOperationId,
+    orderId: result.entry.targetId,
+    taxTotalMinor: taxTotalMinor,
+    taxRateBp: taxRateBp,
+  );
+  recent.recordSubmitted(view);
+  final entry = container
+      .read(outboxControllerProvider.notifier)
+      .entryById(result.entry.id);
+  if (entry != null && entry.isPermanentBusinessRejection) {
+    recent.markLocallyRejected(view.identity);
   }
 }
 

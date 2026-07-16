@@ -74,12 +74,28 @@ class PosRecoveryCoordinator {
   /// cancellation audit, the current cart untouched, other recoveries untouched.
   void discard(PosDraftRecovery recovery) => _retire(recovery);
 
-  /// Finding 1A: dismiss a rejected shell that has NO matching (scope-valid) recovery —
-  /// e.g. after a restart, when the in-memory recovery is gone but the persisted shell
-  /// remains. Retires ONLY the shell; no server void, no cancellation audit.
-  void discardOrphanShell(PosOrderIdentity identity) => ref
-      .read(posRecentOrdersControllerProvider.notifier)
-      .retireLocalRejected(identity);
+  /// Finding 1A + Finding 2: dismiss a rejected shell that is a TRUE ORPHAN — no recovery
+  /// record exists for it under ANY binding (e.g. after a restart, when the in-memory
+  /// recovery is gone but the persisted shell remains). Retires ONLY the shell; no server
+  /// void, no cancellation audit.
+  ///
+  /// FAIL CLOSED (Finding 2): when a recovery still exists for [outboxEntryId] — this
+  /// session's, or ANOTHER PIN session's — this refuses and returns false. A matching
+  /// recovery must be resolved through [discard]/[restore]; a NON-matching one belongs to
+  /// another session, and retiring its shell would strip that operator's only handle back
+  /// to their rejected draft. Only its owner may resolve it. Returns true iff the orphan
+  /// shell was actually retired.
+  bool discardOrphanShell(PosOrderIdentity identity, {String? outboxEntryId}) {
+    if (ref
+        .read(posDraftRecoveryProvider.notifier)
+        .hasRecoveryFor(outboxEntryId)) {
+      return false; // a recovery is still held (possibly another session's) — keep it
+    }
+    ref
+        .read(posRecentOrdersControllerProvider.notifier)
+        .retireLocalRejected(identity);
+    return true;
+  }
 
   void _retire(PosDraftRecovery recovery) {
     // Retire the neverCreated shell by the EXACT submit/outbox identity, then clear the

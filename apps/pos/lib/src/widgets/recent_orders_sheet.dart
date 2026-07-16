@@ -840,39 +840,51 @@ class _RejectedRecoveryActions extends ConsumerWidget {
               label: Text(l10n.posRecoveryBackToCart),
             ),
           ),
-        _ActionButton(
-          child: OutlinedButton.icon(
-            key: Key('recent-discard-${order.orderNumber}'),
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (dctx) => AlertDialog(
-                  title: Text(l10n.posRecoveryDiscardConfirmTitle),
-                  content: Text(l10n.posRecoveryDiscardConfirmBody),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(dctx).pop(false),
-                      child: Text(l10n.posShiftCancelAction),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.of(dctx).pop(true),
-                      child: Text(l10n.posRecoveryDiscardDraft),
-                    ),
-                  ],
-                ),
-              );
-              if (ok != true) return;
-              // Retire the shell + clear its recovery (if any). No server void.
-              if (recovery != null) {
-                coordinator.discard(recovery);
-              } else {
-                coordinator.discardOrphanShell(order.identity);
-              }
-            },
-            icon: const Icon(Icons.delete_outline, size: 18),
-            label: Text(l10n.posRecoveryDiscardDraft),
+        // Finding 2: the Discard action is offered ONLY when this actor may safely act —
+        // either the recovery is THIS session's (discard clears its shell + record) or the
+        // shell is a TRUE orphan (no recovery held anywhere). When the recovery belongs to
+        // ANOTHER session (otherSession), NO Discard button is shown: the shell must remain
+        // so its owner can still recover their rejected draft. The coordinator ALSO fails
+        // closed if asked to orphan-dismiss a shell that still has any recovery.
+        if (!otherSession)
+          _ActionButton(
+            child: OutlinedButton.icon(
+              key: Key('recent-discard-${order.orderNumber}'),
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (dctx) => AlertDialog(
+                    title: Text(l10n.posRecoveryDiscardConfirmTitle),
+                    content: Text(l10n.posRecoveryDiscardConfirmBody),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dctx).pop(false),
+                        child: Text(l10n.posShiftCancelAction),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(dctx).pop(true),
+                        child: Text(l10n.posRecoveryDiscardDraft),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok != true) return;
+                // Retire the shell + clear its recovery (if any). No server void.
+                if (recovery != null) {
+                  coordinator.discard(recovery);
+                } else {
+                  // A true orphan — the coordinator fails closed if a recovery under any
+                  // binding somehow still exists for this outbox entry.
+                  coordinator.discardOrphanShell(
+                    order.identity,
+                    outboxEntryId: outboxEntryId,
+                  );
+                }
+              },
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: Text(l10n.posRecoveryDiscardDraft),
+            ),
           ),
-        ),
       ],
     );
   }

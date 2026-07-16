@@ -452,7 +452,13 @@ class OrderConfirmation extends ConsumerWidget {
                               if (r != null) {
                                 coordinator.discard(r);
                               } else {
-                                coordinator.discardOrphanShell(order.identity);
+                                // Finding 2: fail-closed orphan dismissal — the coordinator
+                                // refuses if a recovery under ANY binding still exists for
+                                // this outbox entry (another session's draft stays intact).
+                                coordinator.discardOrphanShell(
+                                  order.identity,
+                                  outboxEntryId: order.outboxEntryId,
+                                );
                               }
                               onNewOrder();
                             },

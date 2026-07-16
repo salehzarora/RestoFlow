@@ -120,6 +120,23 @@ void main() {
       expect(_branchA.matches(_empBOnA), isFalse);
       expect(_demoBinding.matches(_demoBinding), isTrue);
     });
+
+    test('Finding 2: hasRecoveryFor is true for a record under ANY binding (guards '
+        'orphan dismissal), false only when truly absent', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(posDraftRecoveryProvider.notifier);
+      n.capture(_rec('A', binding: _branchA));
+      // Held under employee A's binding — present regardless of who asks. This is the
+      // signal that fail-closes discardOrphanShell against ANOTHER session's shell.
+      expect(n.hasRecoveryFor('A'), isTrue);
+      // Truly absent — the ONLY case a rejected shell may be dismissed as an orphan.
+      expect(n.hasRecoveryFor('missing'), isFalse);
+      expect(n.hasRecoveryFor(null), isFalse);
+      // ...and it is NOT recoverable by a different PIN session, which is exactly why
+      // the shell must survive rather than be discarded by that other session.
+      expect(n.recoverable('A', _empBOnA), isNull);
+    });
   });
 
   group('A2 complete restoration + exact-once', () {

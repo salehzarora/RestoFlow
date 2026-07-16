@@ -3,10 +3,12 @@ import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/demo_tables.dart';
+import '../data/recent_order.dart' show PosRecentOrder;
 import 'cart_controller.dart';
 import 'outbox_controller.dart';
 import 'pos_session.dart' show posSyncSessionProvider;
 import 'pos_sync_scope_provider.dart';
+import 'recent_orders_controller.dart';
 
 /// PILOT-OPERATIONS-CORRECTIONS-001 (A2) — the exact operational context a draft
 /// recovery belongs to. A recovery is offered ONLY when the CURRENT context matches
@@ -91,6 +93,14 @@ class PosDraftRecoveryController
     ref.listen(outboxControllerProvider, (previous, next) {
       _clearApplied(next);
     });
+    // Finding 4: an AUTHORITATIVE server snapshot for a device-owned order proves the
+    // order exists (was accepted) — clear its recovery even when the local outbox entry
+    // never reached `applied` (e.g. a lost submit response). A second controller-seam
+    // listener, so no widget is required and the two acceptance signals (outbox-applied
+    // AND server-snapshot) are both honoured.
+    ref.listen(posRecentOrdersControllerProvider, (previous, next) {
+      _clearAcceptedBySnapshot(next);
+    });
     return const <String, PosDraftRecovery>{};
   }
 
@@ -140,6 +150,14 @@ class PosDraftRecoveryController
     return r.binding.matches(current) ? r : null;
   }
 
+  /// Finding 2: whether a recovery record exists for [outboxEntryId] under ANY binding
+  /// (not only the current one). This distinguishes a TRUE orphan shell — no recovery
+  /// held anywhere, e.g. after a restart cleared the in-memory map — from a shell whose
+  /// recovery belongs to ANOTHER session (a different PIN/scope). Only the former may be
+  /// locally dismissed; the latter must stay intact so its owner can still recover it.
+  bool hasRecoveryFor(String? outboxEntryId) =>
+      outboxEntryId != null && state.containsKey(outboxEntryId);
+
   /// Finding 3: clear the recovery of every APPLIED submit. Idempotent — a duplicate
   /// applied delivery finds nothing to clear. NEVER touches a pending, retryable-failed,
   /// or permanently-rejected (item_unavailable) entry, whose recovery must be retained.
@@ -152,6 +170,25 @@ class PosDraftRecoveryController
     final next = <String, PosDraftRecovery>{
       for (final e in state.entries)
         if (!applied.contains(e.key)) e.key: e.value,
+    };
+    if (next.length != state.length) state = next;
+  }
+
+  /// Finding 4: clear the recovery of every order the SERVER has authoritatively
+  /// snapshotted (the order exists → it was accepted), keyed by the EXACT outbox entry
+  /// the submit view carries. A permanently-rejected shell has NO snapshot (the order
+  /// was never created), so its recovery is never cleared here. Idempotent — a duplicate
+  /// snapshot finds nothing to clear — and it touches only the matching entries.
+  void _clearAcceptedBySnapshot(List<PosRecentOrder> orders) {
+    final accepted = <String>{
+      for (final o in orders)
+        if (o.snapshot != null && o.order?.outboxEntryId != null)
+          o.order!.outboxEntryId!,
+    };
+    if (accepted.isEmpty) return;
+    final next = <String, PosDraftRecovery>{
+      for (final e in state.entries)
+        if (!accepted.contains(e.key)) e.key: e.value,
     };
     if (next.length != state.length) state = next;
   }

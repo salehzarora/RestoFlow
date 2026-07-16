@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,9 +20,21 @@ import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
 
+/// A session controller whose established session can be FLIPPED mid-test — used to
+/// simulate a real PIN handover on the SAME till (employee A signs out, employee B signs
+/// in) so `posRecoveryBindingProvider` recomputes without changing the operational scope.
+class _SwitchableSession extends PosSessionController {
+  _SwitchableSession(this._initial);
+  final SyncSession? _initial;
+  @override
+  FutureOr<SyncSession?> build() => _initial;
+  void switchTo(SyncSession? session) => state = AsyncData(session);
+}
+
 /// PILOT-OPERATIONS-CORRECTIONS-001 — Finding 1A: a permanently-rejected shell exposes
 /// its recovery actions (Restore + Discard) FROM Recent Orders — and NEVER any
-/// accepted-order action (payment / discount / void / receipt).
+/// accepted-order action (payment / discount / void / receipt). Finding 2: a shell whose
+/// recovery belongs to ANOTHER session is NOT discardable by this actor.
 void main() {
   final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2));
 
@@ -127,4 +141,84 @@ void main() {
     expect(find.byKey(const Key('recent-discard-DEMO-eB')), findsOneWidget);
     expect(find.byKey(const Key('recent-pay-DEMO-eB')), findsNothing);
   });
+
+  testWidgets(
+    'Finding 2 (A→B→A): employee B canNOT discard employee A\'s rejected shell — '
+    'it belongs to another session; the shell + recovery survive so A recovers it '
+    'when they return',
+    (tester) async {
+      const sessionA = SyncSession(pinSessionId: 'pinA', deviceId: 'dev1');
+      const sessionB = SyncSession(pinSessionId: 'pinB', deviceId: 'dev1');
+      final store = InMemoryRecentOrdersStore();
+      await store.persist(kDemoSyncScope.key, [rejectedShell('eX')]);
+      final switchable = _SwitchableSession(sessionA);
+      final c = ProviderContainer(
+        overrides: [
+          // A REAL session controller we can flip A→B→A (same till, new PIN).
+          posSessionControllerProvider.overrideWith(() => switchable),
+          posRecentOrdersStoreProvider.overrideWithValue(store),
+          posSyncCursorStoreProvider.overrideWithValue(
+            InMemorySyncCursorStore(),
+          ),
+          posSyncClockProvider.overrideWithValue(() => t0),
+          posSyncPollIntervalProvider.overrideWithValue(null),
+          orderSnapshotRepositoryProvider.overrideWithValue(
+            DemoOrderSnapshotRepository()..clock = t0,
+          ),
+        ],
+      );
+      addTearDown(c.dispose);
+
+      // Employee A captures a recovery for the shell under A's binding.
+      final bindingA = c.read(posRecoveryBindingProvider);
+      c
+          .read(posDraftRecoveryProvider.notifier)
+          .capture(
+            PosDraftRecovery(
+              draft: const CartDraftSnapshot(currencyCode: 'ILS', lines: []),
+              orderType: OrderType.dineIn,
+              outboxEntryId: 'eX',
+              binding: bindingA,
+            ),
+          );
+      // Sanity: under A the recovery is recoverable.
+      expect(
+        c.read(posDraftRecoveryProvider.notifier).recoverable('eX', bindingA),
+        isNotNull,
+      );
+
+      // Employee A signs out; employee B signs in on the SAME till (new PIN session).
+      switchable.switchTo(sessionB);
+      await pump(tester, c);
+      await tester.tap(find.byKey(const Key('orders-section-all')));
+      await tester.pumpAndSettle();
+
+      // B sees the shell honestly marked as another session's — NO Restore, and
+      // CRUCIALLY NO Discard: B must not be able to retire A's shell.
+      expect(
+        find.byKey(const Key('recent-other-session-DEMO-eX')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('recent-restore-DEMO-eX')), findsNothing);
+      expect(find.byKey(const Key('recent-discard-DEMO-eX')), findsNothing);
+
+      // Employee A returns (signs back in): the recovery is recoverable again and the
+      // shell SURVIVED B's session — Restore + Discard are back for the rightful owner.
+      switchable.switchTo(sessionA);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('recent-other-session-DEMO-eX')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('recent-restore-DEMO-eX')), findsOneWidget);
+      expect(find.byKey(const Key('recent-discard-DEMO-eX')), findsOneWidget);
+      // A's recovery record is intact (B never mutated it).
+      expect(
+        c
+            .read(posDraftRecoveryProvider.notifier)
+            .recoverable('eX', c.read(posRecoveryBindingProvider)),
+        isNotNull,
+      );
+    },
+  );
 }

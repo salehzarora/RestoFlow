@@ -471,6 +471,62 @@ class CartController extends Notifier<CartViewState> {
     _emit();
   }
 
+  /// Finding 1 (PILOT-OPERATIONS-CORRECTIONS-001): build a [SubmittedOrderView] from a
+  /// previously-captured [CartDraftSnapshot] WITHOUT mutating the live cart. This is used
+  /// only when a submit result lands AFTER a PIN handover on the same till: the ORIGINAL
+  /// session's recent-orders row is materialized from ITS captured draft, so the CURRENT
+  /// session's cart, setup, and confirmation are never touched. The money arithmetic
+  /// mirrors [submitOrder] EXACTLY — integer minor units, base price × line quantity plus
+  /// each modifier delta counted once per line (D-007) — so a recovered row shows the same
+  /// figures it would have shown in its own session.
+  SubmittedOrderView viewFromDraft({
+    required CartDraftSnapshot draft,
+    OrderType orderType = OrderType.takeaway,
+    String? tableLabel,
+    String? customerName,
+    String? orderNumber,
+    String? outboxEntryId,
+    String? localOperationId,
+    String? orderId,
+    int taxTotalMinor = 0,
+    int taxRateBp = 0,
+  }) {
+    var subtotal = 0;
+    final lines = <SubmittedLineView>[];
+    for (final l in draft.lines) {
+      final modSum = l.modifiers.fold<int>(
+        0,
+        (sum, m) => sum + m.totalDeltaMinor,
+      );
+      final lineTotal = l.basePriceMinor * l.quantity + modSum;
+      subtotal += lineTotal;
+      lines.add(
+        SubmittedLineView(
+          name: l.name,
+          quantity: l.quantity,
+          lineTotalMinor: lineTotal,
+          currencyCode: draft.currencyCode,
+          modifiers: [for (final m in l.modifiers) m.displayName],
+          note: l.note,
+        ),
+      );
+    }
+    return SubmittedOrderView(
+      orderNumber: orderNumber ?? 'DEMO-0000',
+      orderType: orderType,
+      tableLabel: tableLabel,
+      customerName: customerName,
+      outboxEntryId: outboxEntryId,
+      localOperationId: localOperationId,
+      orderId: orderId,
+      currencyCode: draft.currencyCode,
+      subtotalMinor: subtotal,
+      taxTotalMinor: taxTotalMinor,
+      taxRateBp: taxRateBp,
+      lines: lines,
+    );
+  }
+
   /// Updates the confirmed order's totals after an order-level discount is
   /// applied (RF-117 part C). In real mode the values are the
   /// SERVER-AUTHORITATIVE `discount_total_minor` (+ recomputed grand) from
