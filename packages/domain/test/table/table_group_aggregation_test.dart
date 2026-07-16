@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 
 /// PILOT-OPERATIONS-CORRECTIONS-001 — A4: the ONE canonical linked-table group
