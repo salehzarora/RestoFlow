@@ -13,7 +13,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(24);
+select plan(30);
 
 insert into organizations (id, name, slug, default_currency) values
   ('9e000000-0000-0000-0000-0000000000a0', 'Org E', 'pilottbl-a', 'ILS');
@@ -153,6 +153,65 @@ select is(
 select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('pos_set_table_status','pos_link_tables','pos_unlink_tables')),
   0, 'the POS table RPCs have NO public wrapper (reached only via sync_push)');
+
+-- ===== (25-30) B2: composite structural FKs prove exact scope consistency =====
+-- Self-contained fixtures (a second restaurant + branch + fresh tables + groups) so a
+-- DIRECT (privileged/internal) write that mixes restaurant/branch is rejected by the
+-- composite FKs, independently of the RPCs above.
+insert into restaurants (id, organization_id, name) values
+  ('9e000000-0000-0000-0000-0000000000a2', '9e000000-0000-0000-0000-0000000000a0', 'Rest A2');
+insert into branches (id, organization_id, restaurant_id, name) values
+  ('9e000000-0000-0000-0000-00000000a2b1', '9e000000-0000-0000-0000-0000000000a0', '9e000000-0000-0000-0000-0000000000a2', 'Branch A2B1');
+insert into tables (id, organization_id, restaurant_id, branch_id, label, status) values
+  ('9e000000-0000-0000-0000-0000000000f1', '9e000000-0000-0000-0000-0000000000a0', '9e000000-0000-0000-0000-0000000000a1', '9e000000-0000-0000-0000-00000000a1b1', 'GB1', 'available'),
+  ('9e000000-0000-0000-0000-0000000000f2', '9e000000-0000-0000-0000-0000000000a0', '9e000000-0000-0000-0000-0000000000a1', '9e000000-0000-0000-0000-00000000a1b2', 'GB2', 'available'),
+  ('9e000000-0000-0000-0000-0000000000f3', '9e000000-0000-0000-0000-0000000000a0', '9e000000-0000-0000-0000-0000000000a2', '9e000000-0000-0000-0000-00000000a2b1', 'GR2', 'available'),
+  -- a FRESH ungrouped B1 table for the group-mismatch throws (so ONLY the composite
+  -- group FK can fire, never the unique(org, table_id) from an already-grouped table).
+  ('9e000000-0000-0000-0000-0000000000f4', '9e000000-0000-0000-0000-0000000000a0', '9e000000-0000-0000-0000-0000000000a1', '9e000000-0000-0000-0000-00000000a1b1', 'GB1b', 'available');
+-- groups in three distinct scopes (direct insert; admin bypasses the deny RLS).
+insert into table_groups (id, organization_id, restaurant_id, branch_id) values
+  ('9e000000-0000-0000-0000-000000000f01', '9e000000-0000-0000-0000-0000000000a0', '9e000000-0000-0000-0000-0000000000a1', '9e000000-0000-0000-0000-00000000a1b1'),  -- grpB1
+  ('9e000000-0000-0000-0000-000000000f02', '9e000000-0000-0000-0000-0000000000a0', '9e000000-0000-0000-0000-0000000000a1', '9e000000-0000-0000-0000-00000000a1b2'),  -- grpB2 (sibling branch)
+  ('9e000000-0000-0000-0000-000000000f03', '9e000000-0000-0000-0000-0000000000a0', '9e000000-0000-0000-0000-0000000000a2', '9e000000-0000-0000-0000-00000000a2b1');  -- grpA2 (sibling restaurant)
+
+-- (25) a VALID same-scope membership (B1 group + B1 table) is accepted.
+select lives_ok(
+  $$insert into table_group_members (organization_id, restaurant_id, branch_id, group_id, table_id)
+    values ('9e000000-0000-0000-0000-0000000000a0','9e000000-0000-0000-0000-0000000000a1','9e000000-0000-0000-0000-00000000a1b1','9e000000-0000-0000-0000-000000000f01','9e000000-0000-0000-0000-0000000000f1')$$,
+  'a same-scope membership (group + table both in B1) is accepted');
+
+-- (26) a member whose GROUP is in a sibling RESTAURANT is rejected (composite group
+-- FK). g4 is a fresh ungrouped B1 table so FK_table passes and ONLY FK_group fires.
+select throws_ok(
+  $$insert into table_group_members (organization_id, restaurant_id, branch_id, group_id, table_id)
+    values ('9e000000-0000-0000-0000-0000000000a0','9e000000-0000-0000-0000-0000000000a1','9e000000-0000-0000-0000-00000000a1b1','9e000000-0000-0000-0000-000000000f03','9e000000-0000-0000-0000-0000000000f4')$$,
+  '23503', null, 'a group from a sibling RESTAURANT is rejected by the composite FK');
+
+-- (27) a member whose GROUP is in a sibling BRANCH is rejected (composite group FK).
+select throws_ok(
+  $$insert into table_group_members (organization_id, restaurant_id, branch_id, group_id, table_id)
+    values ('9e000000-0000-0000-0000-0000000000a0','9e000000-0000-0000-0000-0000000000a1','9e000000-0000-0000-0000-00000000a1b1','9e000000-0000-0000-0000-000000000f02','9e000000-0000-0000-0000-0000000000f4')$$,
+  '23503', null, 'a group from a sibling BRANCH is rejected by the composite FK');
+
+-- (28) a member whose TABLE is in a sibling BRANCH is rejected (composite table FK).
+select throws_ok(
+  $$insert into table_group_members (organization_id, restaurant_id, branch_id, group_id, table_id)
+    values ('9e000000-0000-0000-0000-0000000000a0','9e000000-0000-0000-0000-0000000000a1','9e000000-0000-0000-0000-00000000a1b1','9e000000-0000-0000-0000-000000000f01','9e000000-0000-0000-0000-0000000000f2')$$,
+  '23503', null, 'a table from a sibling BRANCH is rejected by the composite FK');
+
+-- (29) a member whose TABLE is in a sibling RESTAURANT is rejected (composite table FK).
+select throws_ok(
+  $$insert into table_group_members (organization_id, restaurant_id, branch_id, group_id, table_id)
+    values ('9e000000-0000-0000-0000-0000000000a0','9e000000-0000-0000-0000-0000000000a1','9e000000-0000-0000-0000-00000000a1b1','9e000000-0000-0000-0000-000000000f01','9e000000-0000-0000-0000-0000000000f3')$$,
+  '23503', null, 'a table from a sibling RESTAURANT is rejected by the composite FK');
+
+-- (30) the "one table in at most one group" uniqueness is preserved. Same-scope
+-- (grpB1 + g1) so the composite FKs PASS and ONLY the unique(org, table_id) fires.
+select throws_ok(
+  $$insert into table_group_members (organization_id, restaurant_id, branch_id, group_id, table_id)
+    values ('9e000000-0000-0000-0000-0000000000a0','9e000000-0000-0000-0000-0000000000a1','9e000000-0000-0000-0000-00000000a1b1','9e000000-0000-0000-0000-000000000f01','9e000000-0000-0000-0000-0000000000f1')$$,
+  '23505', null, 'a table already in a group cannot join another (unique preserved)');
 
 select * from finish();
 rollback;

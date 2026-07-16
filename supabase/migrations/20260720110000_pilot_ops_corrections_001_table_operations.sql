@@ -57,6 +57,11 @@ create table table_groups (
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
   unique (organization_id, id),
+  -- B2 (PILOT-OPERATIONS-CORRECTIONS-001): the FK TARGET for a member's
+  -- (organization_id, restaurant_id, branch_id, group_id) composite reference, so a
+  -- member row's scope must match its group's EXACT (org, restaurant, branch) — the
+  -- schema defends itself against a privileged/internal write that mixes scopes.
+  unique (organization_id, restaurant_id, branch_id, id),
   foreign key (organization_id, restaurant_id, branch_id)
     references branches (organization_id, restaurant_id, id),
   foreign key (organization_id, created_by_employee_profile_id)
@@ -65,6 +70,16 @@ create table table_groups (
 
 comment on table table_groups is
   'PILOT-OPERATIONS-CORRECTIONS-001: an operational LINK group of >= 2 dining tables at ONE branch (e.g. "Table 4 + Table 5"). Orders are NEVER merged -- each order keeps its own orders.table_id; the group is a read-model overlay for occupancy/reservation display and the POS picker. Operational state, not a synced entity (no tombstone; not in sync_pull) -- the POS receives group_id through app.pos_tables. Written only via app.pos_link_tables / app.pos_unlink_tables (manage_table_operations, D-011); direct DML is RLS-denied + unGRANTed.';
+
+-- B2: the composite FK TARGET on the (shipped) tables table so a member's
+-- (organization_id, restaurant_id, branch_id, table_id) reference proves the member's
+-- scope matches the TABLE's EXACT (org, restaurant, branch). `id` is already the PK
+-- (unique), so this composite unique adds a structural FK target without changing any
+-- existing constraint. Added in THIS unshipped phase migration (never editing the
+-- shipped tables migration).
+alter table public.tables
+  add constraint tables_org_rest_branch_id_key
+  unique (organization_id, restaurant_id, branch_id, id);
 
 create table table_group_members (
   id              uuid primary key default gen_random_uuid(),
@@ -78,16 +93,23 @@ create table table_group_members (
   -- a table belongs to AT MOST ONE group (there is no soft-deleted group row, so
   -- this is the "at most one ACTIVE group" invariant, D-012 layer 4).
   unique (organization_id, table_id),
-  foreign key (organization_id, group_id)
-    references table_groups (organization_id, id) on delete cascade,
-  foreign key (organization_id, table_id)
-    references tables (organization_id, id),
+  -- B2 (PILOT-OPERATIONS-CORRECTIONS-001): COMPOSITE structural FKs prove the member's
+  -- (org, restaurant, branch) matches BOTH its group AND its table exactly -- so a
+  -- privileged/internal write can never place a member under a group or a table from a
+  -- sibling restaurant/branch. The group FK keeps ON DELETE CASCADE (unlink deletes the
+  -- group -> its members go atomically).
+  foreign key (organization_id, restaurant_id, branch_id, group_id)
+    references table_groups (organization_id, restaurant_id, branch_id, id) on delete cascade,
+  foreign key (organization_id, restaurant_id, branch_id, table_id)
+    references tables (organization_id, restaurant_id, branch_id, id),
+  -- Retained (explicit defence): the member's scope is a real branch. Transitively
+  -- implied by the composite group FK, kept for clarity.
   foreign key (organization_id, restaurant_id, branch_id)
     references branches (organization_id, restaurant_id, id)
 );
 
 comment on table table_group_members is
-  'PILOT-OPERATIONS-CORRECTIONS-001: membership of a dining table in exactly one table_groups row. unique(organization_id, table_id) enforces "a table is in at most one group". ON DELETE CASCADE from table_groups so unlink (delete the group) removes its members atomically. Same org/restaurant/branch as its group + table (composite FKs). Written only by app.pos_link_tables / app.pos_unlink_tables.';
+  'PILOT-OPERATIONS-CORRECTIONS-001: membership of a dining table in exactly one table_groups row. unique(organization_id, table_id) enforces "a table is in at most one group". B2: COMPOSITE FKs on (organization_id, restaurant_id, branch_id, group_id) -> table_groups and (organization_id, restaurant_id, branch_id, table_id) -> tables prove the member''s restaurant/branch match BOTH its group AND its table exactly (D-012 layer 4 -- the schema defends itself against a privileged/internal cross-scope write). ON DELETE CASCADE from table_groups so unlink (delete the group) removes its members atomically. Written only by app.pos_link_tables / app.pos_unlink_tables.';
 
 create index table_group_members_group_idx on table_group_members (organization_id, group_id);
 create index table_groups_branch_idx on table_groups (organization_id, restaurant_id, branch_id);
@@ -1388,4 +1410,5 @@ comment on function app.audit_safe_detail(text, jsonb) is
 --   drop function if exists app.pos_unlink_tables(uuid,uuid,uuid);
 --   drop function if exists app.table_effective_state(text,integer);
 --   drop table if exists table_group_members; drop table if exists table_groups;
+--   alter table public.tables drop constraint if exists tables_org_rest_branch_id_key;  -- B2
 -- ============================================================================
