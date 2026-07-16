@@ -15,6 +15,7 @@ class OpenShiftInfo {
     this.expectedCashMinor,
     this.canClose = true,
     this.ownerMismatch = false,
+    this.closeNotAllowed = false,
     this.openedByEmployeeProfileId,
   });
 
@@ -39,6 +40,13 @@ class OpenShiftInfo {
   /// the same device) — the server returned `shift_owner_mismatch`. The close UI then
   /// shows an owner-mismatch state instead of a close form under the wrong name.
   final bool ownerMismatch;
+
+  /// Finding 2 (PILOT-OPERATIONS-CORRECTIONS-001): true when the current actor OWNS the
+  /// shift but lacks the `close_shift` capability — the server returned
+  /// `shift_close_not_allowed`. The close UI then shows a capability-denied state (no
+  /// close form, no money, no counted-cash input) — never the same as an owner
+  /// mismatch, and never a retry that could bypass the capability.
+  final bool closeNotAllowed;
 
   /// B1: the actual shift owner's employee-profile id (display only; never a secret).
   final String? openedByEmployeeProfileId;
@@ -194,11 +202,14 @@ class RealShiftRepository implements ShiftRepository {
     final expectedCashMinor = asInt(raw['expected_cash_minor']);
     final openedAt =
         DateTime.tryParse('${raw['opened_at']}')?.toLocal() ?? DateTime.now();
-    // B1: an older server omits `can_close` -> default true (unchanged behaviour). A
-    // `shift_owner_mismatch` (a new cashier on another employee's shift) reports
-    // can_close=false + the owner id, and NO money keys.
+    // B1 + Finding 2: an older server omits `can_close` -> default true (unchanged
+    // behaviour). A denial reports can_close=false + the owner id and NO money keys,
+    // with an honest reason: `shift_owner_mismatch` (a different employee owns it) or
+    // `shift_close_not_allowed` (the owning cashier lacks the close capability).
     final ownerMismatch = raw['error'] == 'shift_owner_mismatch';
-    final canClose = raw['can_close'] != false && !ownerMismatch;
+    final closeNotAllowed = raw['error'] == 'shift_close_not_allowed';
+    final canClose =
+        raw['can_close'] != false && !ownerMismatch && !closeNotAllowed;
     return OpenShiftInfo(
       shiftId: shiftId,
       cashDrawerSessionId: raw['cash_drawer_session_id']?.toString() ?? '',
@@ -207,6 +218,7 @@ class RealShiftRepository implements ShiftRepository {
       expectedCashMinor: expectedCashMinor,
       canClose: canClose,
       ownerMismatch: ownerMismatch,
+      closeNotAllowed: closeNotAllowed,
       openedByEmployeeProfileId: raw['opened_by_employee_profile_id']
           ?.toString(),
     );

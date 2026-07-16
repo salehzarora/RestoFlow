@@ -93,13 +93,14 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
     // handle was lost (refresh) AND could not be recovered -> honest recovery
     // state instead of a misleading "no open shift".
     final sessionActive = ref.watch(posSyncSessionProvider) != null;
-    // B1 (PILOT-OPERATIONS-CORRECTIONS-001): the open shift on this device belongs to a
-    // DIFFERENT employee (a new cashier signing into the same till). The current actor
-    // cannot close it — show an owner-mismatch state, never a close form under their
-    // own name.
-    final ownerMismatch =
-        !view.isDemo &&
-        (ref.watch(posOpenShiftProvider)?.ownerMismatch ?? false);
+    // B1 + Finding 2 (PILOT-OPERATIONS-CORRECTIONS-001): the current actor cannot close
+    // the open shift on this device — either it belongs to a DIFFERENT employee
+    // (owner mismatch) or the owning cashier lacks the close_shift capability. Either
+    // way, show an honest cannot-close state (no close form, no money), never a form
+    // the server would refuse.
+    final handle = ref.watch(posOpenShiftProvider);
+    final ownerMismatch = !view.isDemo && (handle?.ownerMismatch ?? false);
+    final closeNotAllowed = !view.isDemo && (handle?.closeNotAllowed ?? false);
 
     return SafeArea(
       child: Padding(
@@ -125,6 +126,8 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
                 _result(context, l10n, closeState.value!)
               else if (ownerMismatch)
                 _ownerMismatch(context, l10n)
+              else if (closeNotAllowed)
+                _closeNotAllowed(context, l10n)
               else if (!view.isOpen)
                 (sessionActive && !view.isDemo)
                     ? _couldNotRestore(context, l10n)
@@ -218,6 +221,31 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
           },
           icon: const Icon(Icons.logout),
           label: Text(l10n.posShiftReturnToPin),
+        ),
+      ],
+    );
+  }
+
+  /// Finding 2: the current actor OWNS the open shift but lacks the close_shift
+  /// capability. Show an honest permission state — NO close form, NO expected/counted
+  /// cash, NO variance/balanced, NO retry that could bypass the capability. If the
+  /// Dashboard later enables the capability, the normal flow returns only after an
+  /// authoritative session refresh (the handle carries the server verdict, never a
+  /// stale local capability).
+  Widget _closeNotAllowed(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      key: const Key('shift-close-not-allowed'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowNoticeBanner(
+          tone: RestoflowTone.warning,
+          icon: Icons.lock_outline,
+          body: l10n.posShiftCloseNotAllowed,
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        FilledButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: Text(l10n.posShiftDoneAction),
         ),
       ],
     );

@@ -422,11 +422,12 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
                 // PILOT-OPERATIONS-CORRECTIONS-001: carry the server-authoritative
                 // expected cash so the close UI shows the real figure after restart.
                 expectedCashMinor: info.expectedCashMinor,
-                // B1: carry the ownership verdict so the close UI shows an
-                // owner-mismatch state (not a close form) when the open shift on this
-                // device belongs to a different employee.
+                // B1 + Finding 2: carry the authorization verdict so the close UI shows
+                // an owner-mismatch OR a capability-denied state (not a close form)
+                // rather than a form the server would refuse.
                 canClose: info.canClose,
                 ownerMismatch: info.ownerMismatch,
+                closeNotAllowed: info.closeNotAllowed,
                 openedByEmployeeProfileId: info.openedByEmployeeProfileId,
               ),
             );

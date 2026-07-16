@@ -15,6 +15,7 @@ class PosOpenShift {
     this.expectedCashMinor,
     this.canClose = true,
     this.ownerMismatch = false,
+    this.closeNotAllowed = false,
     this.openedByEmployeeProfileId,
   });
 
@@ -31,6 +32,10 @@ class PosOpenShift {
 
   /// B1: the open shift on this device belongs to a DIFFERENT employee.
   final bool ownerMismatch;
+
+  /// Finding 2: the current actor owns the shift but lacks the close_shift capability —
+  /// the close UI shows a capability-denied state (no close form, no money).
+  final bool closeNotAllowed;
 
   /// B1: the actual owner's employee-profile id (display only).
   final String? openedByEmployeeProfileId;

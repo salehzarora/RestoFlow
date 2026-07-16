@@ -95,6 +95,20 @@ class _MismatchHandle extends PosOpenShiftController {
   );
 }
 
+/// Finding 2: the current actor OWNS the shift but lacks the close_shift capability.
+class _NoCapabilityHandle extends PosOpenShiftController {
+  @override
+  PosOpenShift? build() => PosOpenShift(
+    shiftId: 'shift-1',
+    cashDrawerSessionId: 'cd-1',
+    openingFloatMinor: 0,
+    openedAt: DateTime(2026, 7, 3, 9, 15),
+    canClose: false,
+    closeNotAllowed: true,
+    openedByEmployeeProfileId: 'emp-self',
+  );
+}
+
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
 
@@ -436,6 +450,61 @@ void main() {
       expect(container.read(posOpenShiftProvider), isNull);
     },
   );
+
+  test(
+    'F2: readOpenShift parses shift_close_not_allowed (owner, no capability, '
+    'no money)',
+    () async {
+      final repo = RealShiftRepository(
+        _FakeTransport(<String, dynamic>{
+          'ok': true,
+          'has_open_shift': true,
+          'can_close': false,
+          'error': 'shift_close_not_allowed',
+          'shift_id': 'shift-1',
+          'status': 'open',
+          'revision': 1,
+          'opened_at': '2026-07-03T09:00:00Z',
+          'opened_by_employee_profile_id': 'emp-self',
+        }),
+        const SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1'),
+        RandomClientIdGenerator(),
+      );
+      final info = await repo.readOpenShift();
+      expect(info, isNotNull);
+      expect(info!.closeNotAllowed, isTrue);
+      expect(info.ownerMismatch, isFalse); // NOT misreported as owner mismatch
+      expect(info.canClose, isFalse);
+      expect(info.expectedCashMinor, isNull); // no money
+    },
+  );
+
+  testWidgets('F2: an owner cashier WITHOUT the close_shift capability sees a '
+      'permission state — no close form, no money', (tester) async {
+    final l10n = await _en();
+    final container = ProviderContainer(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(
+          RuntimeConfig.test(isDemoMode: false),
+        ),
+        posSessionControllerProvider.overrideWith(_SeededSession.new),
+        // The server verdict (handle), not any local capability, drives the UI.
+        posOpenShiftProvider.overrideWith(_NoCapabilityHandle.new),
+        shiftRepositoryProvider.overrideWithValue(_FakeShiftRepo()),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(posSignedInStaffNameProvider.notifier).set('Owner Cashier');
+    await _pumpContainer(tester, container);
+    // The capability-denied state, NOT a close form.
+    expect(find.byKey(const Key('shift-close-not-allowed')), findsOneWidget);
+    expect(find.text(l10n.posShiftCloseNotAllowed), findsOneWidget);
+    // No close form, no counted-cash input, no expected/counted money, no submit.
+    expect(find.byKey(const Key('counted-cash-input')), findsNothing);
+    expect(find.byKey(const Key('shift-close-submit')), findsNothing);
+    expect(find.text(l10n.posShiftExpectedCash), findsNothing);
+    expect(find.byKey(const Key('shift-close-difference')), findsNothing);
+  });
 
   testWidgets('PILOT-OPERATIONS-CORRECTIONS-001: after restart the shift-close '
       'expected shows the SERVER figure (not 0) so a correct close is accepted', (

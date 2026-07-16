@@ -12,7 +12,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(16);
+select plan(22);
 
 insert into organizations (id, name, slug, default_currency) values
   ('9f000000-0000-0000-0000-0000000000a0', 'Org F', 'pilotshift-a', 'ILS');
@@ -124,6 +124,52 @@ select is((select res->>'opened_by_employee_profile_id' from tb1), '9f000000-000
 select is(
   (select (app.get_open_shift_summary('9f000000-0000-0000-0000-00000000c505','9f000000-0000-0000-0000-00000000da11') ->> 'can_close')::boolean),
   true, 'a manager may recover (and close) any shift on the device — can_close=true');
+
+-- ===== (17-22) Finding 2: summary authorization MATCHES close_shift capability ====
+-- The DEFAULT owner cashier (ef003, close_shift default-ON) may recover + close.
+select is(
+  (select (app.get_open_shift_summary('9f000000-0000-0000-0000-00000000c503','9f000000-0000-0000-0000-00000000da11') ->> 'can_close')::boolean),
+  true, 'a default owner cashier (close_shift default-ON) gets can_close=true');
+
+-- A cashier who OWNS the shift but has close_shift EXPLICITLY DISABLED. Own device
+-- da33 + shift 5f03 + a completed cash payment, so any money leak would be visible.
+insert into app_users (id, email) values
+  ('9f000000-0000-0000-0000-00000000ee06', 'pilotshift-nocap@example.test');
+insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
+  ('9f000000-0000-0000-0000-00000000ab06', '9f000000-0000-0000-0000-00000000ee06', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'cashier', '{"close_shift":"false"}'::jsonb);
+insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
+  ('9f000000-0000-0000-0000-00000000da33', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'pos');
+insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
+  ('9f000000-0000-0000-0000-00000000fa33', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da33', 'active');
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id) values
+  ('9f000000-0000-0000-0000-0000000005a3', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da33', '9f000000-0000-0000-0000-00000000fa33');
+insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
+  ('9f000000-0000-0000-0000-0000000ef006', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000ee06', '9f000000-0000-0000-0000-00000000ab06');
+insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
+  ('9f000000-0000-0000-0000-00000000c506', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-0000000005a3', '9f000000-0000-0000-0000-0000000ef006', '9f000000-0000-0000-0000-00000000ab06', now() + interval '1 hour');
+insert into shifts (id, organization_id, restaurant_id, branch_id, device_id, opened_by_employee_profile_id, resolved_membership_id, local_operation_id, status) values
+  ('9f000000-0000-0000-0000-000000005f03', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da33', '9f000000-0000-0000-0000-0000000ef006', '9f000000-0000-0000-0000-00000000ab06', 'shift-open-3', 'open');
+insert into cash_drawer_sessions (id, organization_id, restaurant_id, branch_id, device_id, shift_id, opened_by_employee_profile_id, opening_float_minor, local_operation_id) values
+  ('9f000000-0000-0000-0000-000000005d03', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da33', '9f000000-0000-0000-0000-000000005f03', '9f000000-0000-0000-0000-0000000ef006', 5000, 'drawer-open-3');
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, currency_code, subtotal_minor, grand_total_minor, local_operation_id, status) values
+  ('9f000000-0000-0000-0000-00000000a006', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da33', '9f000000-0000-0000-0000-00000000c506', '9f000000-0000-0000-0000-0000000ef006', '9f000000-0000-0000-0000-00000000ab06', 'takeaway', 'ILS', 4000, 4000, 'ord-6', 'submitted');
+insert into payments (id, organization_id, restaurant_id, branch_id, order_id, device_id, taken_by_employee_profile_id, resolved_membership_id, cash_drawer_session_id, method, status, amount_minor, tendered_minor, change_minor, currency_code, local_operation_id) values
+  ('9f000000-0000-0000-0000-00000000ba06', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000a006', '9f000000-0000-0000-0000-00000000da33', '9f000000-0000-0000-0000-0000000ef006', '9f000000-0000-0000-0000-00000000ab06', '9f000000-0000-0000-0000-000000005d03', 'cash', 'completed', 4000, 4000, 0, 'ILS', 'pay-6');
+
+create temp table tb2 as
+  select app.get_open_shift_summary('9f000000-0000-0000-0000-00000000c506','9f000000-0000-0000-0000-00000000da33') as res;
+select is((select res->>'error' from tb2), 'shift_close_not_allowed',
+  'an OWNER cashier with close_shift disabled gets shift_close_not_allowed (NOT owner_mismatch)');
+select is((select (res->>'can_close')::boolean from tb2), false,
+  'the capability-denied owner cannot close (matches app.close_shift)');
+select is((select res ? 'expected_cash_minor' from tb2), false,
+  'the capability-denied owner receives NO expected_cash_minor');
+select is((select res ? 'opening_float_minor' from tb2), false,
+  'the capability-denied owner receives NO opening_float_minor (no money leak)');
+-- app.close_shift refuses the SAME disabled cashier -> matching authorization parity.
+select is(
+  (select app.close_shift('9f000000-0000-0000-0000-00000000c506','9f000000-0000-0000-0000-000000005f03','9f000000-0000-0000-0000-00000000da33','close-op-6', 9000::bigint, 'x') ->> 'error'),
+  'permission_denied', 'app.close_shift denies the same capability-disabled cashier (parity)');
 
 select * from finish();
 rollback;
