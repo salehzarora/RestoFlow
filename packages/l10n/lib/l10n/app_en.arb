@@ -1017,6 +1017,7 @@
   "posShiftCouldNotRestore": "Couldn't restore the shift state. Sign in again to open a shift.",
   "posShiftOwnerMismatch": "A shift is already open on this device, opened by another employee. Only its owner or a manager can close it — sign out so they can sign in.",
   "posShiftCloseNotAllowed": "You do not have permission to close this shift. Ask a manager to close it, or to enable shift-close for your account.",
+  "posShiftAuthorizationPending": "Checking shift permissions… Close is unavailable until this is confirmed.",
   "posShiftReturnToPin": "Sign out",
   "@posShiftRealNote": {
     "description": "REAL-mode shift bar note: the RF-055 auto-opened server shift holds the cash truth; local drawer figures are never invented."
@@ -2357,6 +2358,8 @@
   "tablesStatusReserved": "Reserved",
   "@tablesStatusReserved": {"description": "Table status pill: held for a reservation."},
   "tablesStatusOutOfService": "Out of service",
+  "tablesStatusUnknown": "Refresh required",
+  "@tablesStatusUnknown": {"description": "Table status pill: an unrecognized/unknown effective state (fail-closed, not selectable)."},
   "tablesLinked": "Linked",
   "tablesEffective": "Effective",
   "@tablesStatusOutOfService": {"description": "Table status pill: not usable (broken/blocked)."},

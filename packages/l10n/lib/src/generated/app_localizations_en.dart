@@ -1345,6 +1345,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'You do not have permission to close this shift. Ask a manager to close it, or to enable shift-close for your account.';
 
   @override
+  String get posShiftAuthorizationPending =>
+      'Checking shift permissions… Close is unavailable until this is confirmed.';
+
+  @override
   String get posShiftReturnToPin => 'Sign out';
 
   @override
@@ -3261,6 +3265,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tablesStatusOutOfService => 'Out of service';
+
+  @override
+  String get tablesStatusUnknown => 'Refresh required';
 
   @override
   String get tablesLinked => 'Linked';

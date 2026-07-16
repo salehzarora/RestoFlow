@@ -1326,6 +1326,10 @@ class AppLocalizationsHe extends AppLocalizations {
       'אין לך הרשאה לסגור משמרת זו. בקש ממנהל לסגור אותה או להפעיל עבורך הרשאת סגירת משמרת.';
 
   @override
+  String get posShiftAuthorizationPending =>
+      'בודק הרשאות משמרת… סגירה אינה זמינה עד לאישור.';
+
+  @override
   String get posShiftReturnToPin => 'התנתקות';
 
   @override
@@ -3218,6 +3222,9 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get tablesStatusOutOfService => 'לא בשירות';
+
+  @override
+  String get tablesStatusUnknown => 'נדרש רענון';
 
   @override
   String get tablesLinked => 'מקושר';

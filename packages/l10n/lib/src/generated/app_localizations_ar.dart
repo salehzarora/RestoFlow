@@ -1337,6 +1337,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'ليست لديك صلاحية إغلاق هذه الوردية. اطلب من مدير إغلاقها أو تفعيل صلاحية إغلاق الوردية لحسابك.';
 
   @override
+  String get posShiftAuthorizationPending =>
+      'جارٍ التحقق من صلاحيات الوردية… الإغلاق غير متاح حتى يتم التأكيد.';
+
+  @override
   String get posShiftReturnToPin => 'تسجيل الخروج';
 
   @override
@@ -3240,6 +3244,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get tablesStatusOutOfService => 'خارج الخدمة';
+
+  @override
+  String get tablesStatusUnknown => 'يلزم التحديث';
 
   @override
   String get tablesLinked => 'مرتبطة';

@@ -2602,6 +2602,12 @@ abstract class AppLocalizations {
   /// **'You do not have permission to close this shift. Ask a manager to close it, or to enable shift-close for your account.'**
   String get posShiftCloseNotAllowed;
 
+  /// No description provided for @posShiftAuthorizationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking shift permissions… Close is unavailable until this is confirmed.'**
+  String get posShiftAuthorizationPending;
+
   /// No description provided for @posShiftReturnToPin.
   ///
   /// In en, this message translates to:
@@ -6141,6 +6147,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Out of service'**
   String get tablesStatusOutOfService;
+
+  /// Table status pill: an unrecognized/unknown effective state (fail-closed, not selectable).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh required'**
+  String get tablesStatusUnknown;
 
   /// No description provided for @tablesLinked.
   ///
