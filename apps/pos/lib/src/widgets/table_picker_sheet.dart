@@ -8,6 +8,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import '../data/demo_tables.dart';
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/order_setup_controller.dart';
+import 'table_group_detail_sheet.dart';
 import 'table_operations_sheet.dart';
 
 /// Modal table picker (RF-114) — a simple floor-map layout: tables grouped into
@@ -108,6 +109,19 @@ class TablePickerSheet extends ConsumerWidget {
                               .assignTable(t);
                           Navigator.of(context).pop();
                         },
+                        // PSC-001B: a combined group card opens the group-detail
+                        // sheet; a NEW order still requires an EXPLICIT physical
+                        // member choice there — the card itself never assigns.
+                        onOpenGroup: (group) => TableGroupDetailSheet.show(
+                          context,
+                          group: group,
+                          onSelectMember: (member) {
+                            ref
+                                .read(orderSetupControllerProvider.notifier)
+                                .assignTable(member);
+                            Navigator.of(context).pop();
+                          },
+                        ),
                         // PILOT-OPERATIONS-CORRECTIONS-001: a long-press opens the
                         // operational table sheet — ONLY for an operator the server
                         // says holds manage_table_operations. It carries the full
@@ -169,9 +183,133 @@ List<({String areaKey, List<DemoTable> tables})> groupTablesByArea(
   return [for (final k in keys) (areaKey: k, tables: byArea[k]!)];
 }
 
+/// PSC-001B: one entry of the picker floor layout — either a single physical
+/// table tile, or a linked group rendered as ONE combined card.
+sealed class TablePickerEntry {
+  const TablePickerEntry();
+}
+
+/// A plain physical table tile (ungrouped, or the fail-safe presentation of a
+/// data-anomaly "group" with a single visible member — it keeps its linked
+/// badge rather than pretending to be a combined card).
+class TablePickerSingle extends TablePickerEntry {
+  const TablePickerSingle(this.table);
+
+  final DemoTable table;
+}
+
+/// One linked group presented as one combined card.
+class TablePickerGroup extends TablePickerEntry {
+  const TablePickerGroup(this.group);
+
+  final TableGroupCardData group;
+}
+
+/// PSC-001B: the view model for ONE linked group in the picker. [members] are
+/// sorted deterministically by (label, tableId) — never backend arrival order.
+/// The group-wide effective state / active-order count / status are read from
+/// any member: [withGroupAggregation] already projected the identical aggregate
+/// onto every member (A4), so this introduces NO second precedence rule.
+class TableGroupCardData {
+  const TableGroupCardData({required this.groupId, required this.members});
+
+  final String groupId;
+  final List<DemoTable> members;
+
+  DemoTable get _representative => members.first;
+
+  /// Group-wide (projected) state — identical on every member.
+  String get effectiveState => _representative.effectiveState;
+  int get activeOrderCount => _representative.activeOrderCount;
+  TableStatusKind get status => _representative.status;
+
+  /// "T4 + T5" (members already label-sorted); [joiner] is localized.
+  String combinedLabel(String joiner) =>
+      members.map((m) => m.label).join(joiner);
+}
+
+/// PSC-001B: the complete picker floor layout. Same-area groups render inside
+/// their area (at the first member's position in the area's existing order);
+/// cross-zone groups render exactly once in the dedicated Linked-tables
+/// section, never under an arbitrary member area and never duplicated.
+class TablePickerLayout {
+  const TablePickerLayout({required this.areas, required this.crossZoneGroups});
+
+  final List<({String areaKey, List<TablePickerEntry> entries})> areas;
+  final List<TableGroupCardData> crossZoneGroups;
+}
+
+/// The SAME null/empty-area fallback [groupTablesByArea] applies, so a group's
+/// zone classification can never disagree with where its tiles would render.
+String _normalizedAreaOf(DemoTable t) {
+  final area = t.area;
+  return (area == null || area.trim().isEmpty) ? 'Main' : area;
+}
+
+int _byLabelThenId(DemoTable a, DemoTable b) {
+  final byLabel = a.label.compareTo(b.label);
+  return byLabel != 0 ? byLabel : a.tableId.compareTo(b.tableId);
+}
+
+/// PSC-001B: builds the picker layout from the (already deduplicated +
+/// group-projected) table list. Pure and deterministic: member order is
+/// (label, tableId), cross-zone groups sort by their first member, and a
+/// duplicate-free input is guaranteed upstream by [withGroupAggregation].
+TablePickerLayout buildTablePickerLayout(List<DemoTable> tables) {
+  // Collect group members. Only a group with >= 2 visible members becomes a
+  // combined card; a singleton (anomaly — the backend guarantees >= 2) stays a
+  // plain tile with its linked badge, so no table can ever disappear.
+  final membersByGroup = <String, List<DemoTable>>{};
+  for (final t in tables) {
+    final g = t.groupId;
+    if (g != null) (membersByGroup[g] ??= <DemoTable>[]).add(t);
+  }
+  final cards = <String, TableGroupCardData>{};
+  for (final e in membersByGroup.entries) {
+    if (e.value.length < 2) continue;
+    final members = [...e.value]..sort(_byLabelThenId);
+    cards[e.key] = TableGroupCardData(groupId: e.key, members: members);
+  }
+
+  final sameAreaGroupIds = <String>{};
+  final crossZone = <TableGroupCardData>[];
+  for (final g in cards.values) {
+    final areas = g.members.map(_normalizedAreaOf).toSet();
+    if (areas.length > 1) {
+      crossZone.add(g);
+    } else {
+      sameAreaGroupIds.add(g.groupId);
+    }
+  }
+  crossZone.sort((a, b) => _byLabelThenId(a.members.first, b.members.first));
+
+  // Walk the existing area layout; emit a same-area group card at its first
+  // member's position, skip every other grouped member, drop areas left empty.
+  final areas = <({String areaKey, List<TablePickerEntry> entries})>[];
+  final emitted = <String>{};
+  for (final area in groupTablesByArea(tables)) {
+    final entries = <TablePickerEntry>[];
+    for (final t in area.tables) {
+      final g = t.groupId;
+      if (g != null && cards.containsKey(g)) {
+        if (sameAreaGroupIds.contains(g) && emitted.add(g)) {
+          entries.add(TablePickerGroup(cards[g]!));
+        }
+        continue; // grouped members never render as top-level tiles
+      }
+      entries.add(TablePickerSingle(t));
+    }
+    if (entries.isNotEmpty) {
+      areas.add((areaKey: area.areaKey, entries: entries));
+    }
+  }
+  return TablePickerLayout(areas: areas, crossZoneGroups: crossZone);
+}
+
 /// Localized display name for a demo area key. Falls back to the raw key for an
-/// unknown area (demo-only; the seed only uses "Main"/"Patio").
-String _localizedArea(String areaKey, AppLocalizations l10n) {
+/// unknown area (demo-only; the seed only uses "Main"/"Patio"). Public so the
+/// group-detail sheet labels each member's zone with the same wording.
+String localizedTableArea(String areaKey, AppLocalizations l10n) {
   switch (areaKey) {
     case 'Main':
       return l10n.posTableAreaMain;
@@ -184,42 +322,127 @@ String _localizedArea(String areaKey, AppLocalizations l10n) {
 
 /// The grouped, scrollable floor map: one bordered zone per area, with a
 /// labelled walkway divider between consecutive zones.
+///
+/// PSC-001B: linked groups render as ONE combined card each — inside their
+/// area when all members share it, or exactly once in the dedicated
+/// Linked-tables section (after the areas) when the members span zones.
 class _FloorMap extends StatelessWidget {
   const _FloorMap({
     required this.tables,
     required this.assignedId,
     required this.onAssign,
+    required this.onOpenGroup,
     this.onManage,
   });
 
   final List<DemoTable> tables;
   final String? assignedId;
   final void Function(DemoTable) onAssign;
+  final void Function(TableGroupCardData) onOpenGroup;
   final void Function(DemoTable)? onManage;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final groups = groupTablesByArea(tables);
+    final layout = buildTablePickerLayout(tables);
+    final areas = layout.areas;
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < groups.length; i++) ...[
+          for (var i = 0; i < areas.length; i++) ...[
             if (i > 0) const _AisleDivider(),
             _AreaZone(
-              areaName: _localizedArea(groups[i].areaKey, l10n),
+              areaName: localizedTableArea(areas[i].areaKey, l10n),
               edgeLabel: i == 0
                   ? l10n.posTablesEdgeEntrance
                   : (i == 1 ? l10n.posTablesEdgeCounter : null),
-              tables: groups[i].tables,
+              entries: areas[i].entries,
               assignedId: assignedId,
               onAssign: onAssign,
+              onOpenGroup: onOpenGroup,
               onManage: onManage,
             ),
           ],
+          if (layout.crossZoneGroups.isNotEmpty) ...[
+            if (areas.isNotEmpty) const _AisleDivider(),
+            _LinkedTablesSection(
+              groups: layout.crossZoneGroups,
+              assignedId: assignedId,
+              onOpenGroup: onOpenGroup,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// PSC-001B: the dedicated section for CROSS-ZONE linked groups. Rendered only
+/// when at least one such group exists; a same-area group never appears here.
+class _LinkedTablesSection extends StatelessWidget {
+  const _LinkedTablesSection({
+    required this.groups,
+    required this.assignedId,
+    required this.onOpenGroup,
+  });
+
+  final List<TableGroupCardData> groups;
+  final String? assignedId;
+  final void Function(TableGroupCardData) onOpenGroup;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
+    return Container(
+      key: const Key('table-groups-section'),
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
+      padding: const EdgeInsets.all(RestoflowSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.link, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: RestoflowSpacing.xs),
+              Expanded(
+                child: Text(
+                  l10n.posTableGroupSectionTitle,
+                  key: const Key('table-groups-section-title'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.md),
+          Wrap(
+            spacing: RestoflowSpacing.md,
+            runSpacing: RestoflowSpacing.md,
+            children: [
+              for (final g in groups)
+                _GroupTile(
+                  key: ValueKey('table-group-tile-${g.groupId}'),
+                  group: g,
+                  assignedId: assignedId,
+                  onOpen: () => onOpenGroup(g),
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -232,17 +455,19 @@ class _AreaZone extends StatelessWidget {
   const _AreaZone({
     required this.areaName,
     required this.edgeLabel,
-    required this.tables,
+    required this.entries,
     required this.assignedId,
     required this.onAssign,
+    required this.onOpenGroup,
     this.onManage,
   });
 
   final String areaName;
   final String? edgeLabel;
-  final List<DemoTable> tables;
+  final List<TablePickerEntry> entries;
   final String? assignedId;
   final void Function(DemoTable) onAssign;
+  final void Function(TableGroupCardData) onOpenGroup;
   final void Function(DemoTable)? onManage;
 
   @override
@@ -291,14 +516,24 @@ class _AreaZone extends StatelessWidget {
             spacing: RestoflowSpacing.md,
             runSpacing: RestoflowSpacing.md,
             children: [
-              for (final t in tables)
-                _TableTile(
-                  key: ValueKey('table-tile-${t.tableId}'),
-                  table: t,
-                  selected: t.tableId == assignedId,
-                  onTap: t.isAssignable ? () => onAssign(t) : null,
-                  onLongPress: onManage == null ? null : () => onManage!(t),
-                ),
+              for (final entry in entries)
+                switch (entry) {
+                  TablePickerSingle(:final table) => _TableTile(
+                    key: ValueKey('table-tile-${table.tableId}'),
+                    table: table,
+                    selected: table.tableId == assignedId,
+                    onTap: table.isAssignable ? () => onAssign(table) : null,
+                    onLongPress: onManage == null
+                        ? null
+                        : () => onManage!(table),
+                  ),
+                  TablePickerGroup(:final group) => _GroupTile(
+                    key: ValueKey('table-group-tile-${group.groupId}'),
+                    group: group,
+                    assignedId: assignedId,
+                    onOpen: () => onOpenGroup(group),
+                  ),
+                },
             ],
           ),
         ],
@@ -640,6 +875,8 @@ class _TableTile extends StatelessWidget {
                     ],
                     // PILOT-OPERATIONS-CORRECTIONS-001: a table in a link group is
                     // shown as linked (icon + label, not colour alone).
+                    // PSC-001B: the label is Flexible + ellipsized — a long
+                    // translation must truncate, never overflow the tile.
                     if (table.isGrouped) ...[
                       const SizedBox(height: RestoflowSpacing.xs),
                       Row(
@@ -648,13 +885,149 @@ class _TableTile extends StatelessWidget {
                         children: [
                           Icon(Icons.link, size: 14, color: onFill),
                           const SizedBox(width: 2),
-                          Text(
+                          Flexible(
+                            child: Text(
+                              l10n.posTableLinked,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: onFill.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: RestoflowSpacing.sm),
+                    Text(
+                      statusLabel,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: onFill,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// PSC-001B: ONE combined card for a linked group. Shows every member label
+/// (deterministic order), a linked indicator, the group-wide effective state
+/// (most restrictive — fail-closed on unknown), and the group-wide active-order
+/// total. ALWAYS tappable — it opens the group-detail sheet for inspection and
+/// explicit physical-member selection, even when no member is assignable. It
+/// never assigns a table by itself.
+class _GroupTile extends StatelessWidget {
+  const _GroupTile({
+    required this.group,
+    required this.assignedId,
+    required this.onOpen,
+    super.key,
+  });
+
+  final TableGroupCardData group;
+  final String? assignedId;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final selected = group.members.any((m) => m.tableId == assignedId);
+    final base = _statusFill(group.status, theme);
+    final Color fill = selected ? scheme.primaryContainer : base.fill;
+    final Color onFill = selected ? scheme.onPrimaryContainer : base.onFill;
+    final Color borderColor = selected ? scheme.primary : base.border;
+    final double borderWidth = selected ? 2 : 1;
+    final String statusLabel = selected
+        ? l10n.posTableStatusSelected
+        : _statusLabel(group.status, l10n);
+    final combinedLabel = group.combinedLabel(l10n.posTableGroupJoiner);
+
+    return Semantics(
+      button: true,
+      enabled: true,
+      selected: selected,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 150, maxWidth: 220),
+        child: AnimatedContainer(
+          duration: RestoflowDurations.fast,
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(RestoflowRadii.md),
+            border: Border.all(color: borderColor, width: borderWidth),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onOpen,
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              child: Padding(
+                padding: const EdgeInsets.all(RestoflowSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.link, size: 18, color: onFill),
+                        const SizedBox(width: RestoflowSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            combinedLabel,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: onFill,
+                            ),
+                          ),
+                        ),
+                        if (selected) ...[
+                          const SizedBox(width: RestoflowSpacing.xs),
+                          Icon(
+                            Icons.check_circle,
+                            size: 20,
+                            color: scheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: RestoflowSpacing.xs),
+                    Row(
+                      key: Key('table-group-linked-${group.groupId}'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.link, size: 14, color: onFill),
+                        const SizedBox(width: 2),
+                        Flexible(
+                          child: Text(
                             l10n.posTableLinked,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: onFill.withValues(alpha: 0.9),
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    if (group.activeOrderCount > 0) ...[
+                      const SizedBox(height: RestoflowSpacing.xs),
+                      Text(
+                        l10n.posTableOpenOrders(group.activeOrderCount),
+                        key: Key('group-open-orders-${group.groupId}'),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: onFill.withValues(alpha: 0.8),
+                        ),
                       ),
                     ],
                     const SizedBox(height: RestoflowSpacing.sm),
