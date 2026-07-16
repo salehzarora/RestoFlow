@@ -12,7 +12,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(11);
+select plan(16);
 
 insert into organizations (id, name, slug, default_currency) values
   ('9f000000-0000-0000-0000-0000000000a0', 'Org F', 'pilotshift-a', 'ILS');
@@ -22,9 +22,13 @@ insert into branches (id, organization_id, restaurant_id, name) values
   ('9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', 'Branch B1');
 insert into app_users (id, email) values
   ('9f000000-0000-0000-0000-00000000ee03', 'pilotshift-cashier@example.test'),
+  ('9f000000-0000-0000-0000-00000000ee04', 'pilotshift-cashier2@example.test'),
+  ('9f000000-0000-0000-0000-00000000ee05', 'pilotshift-manager@example.test'),
   ('9f000000-0000-0000-0000-00000000ee09', 'pilotshift-kitchen@example.test');
 insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role) values
   ('9f000000-0000-0000-0000-00000000ab03', '9f000000-0000-0000-0000-00000000ee03', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'cashier'),
+  ('9f000000-0000-0000-0000-00000000ab04', '9f000000-0000-0000-0000-00000000ee04', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'cashier'),
+  ('9f000000-0000-0000-0000-00000000ab05', '9f000000-0000-0000-0000-00000000ee05', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'manager'),
   ('9f000000-0000-0000-0000-00000000ab09', '9f000000-0000-0000-0000-00000000ee09', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', 'kitchen_staff');
 -- two POS devices: da11 (will have an open shift), da22 (none)
 insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
@@ -38,9 +42,13 @@ insert into device_sessions (id, organization_id, restaurant_id, branch_id, devi
   ('9f000000-0000-0000-0000-0000000005a2', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000da22', '9f000000-0000-0000-0000-00000000fa22');
 insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
   ('9f000000-0000-0000-0000-0000000ef003', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000ee03', '9f000000-0000-0000-0000-00000000ab03'),
+  ('9f000000-0000-0000-0000-0000000ef004', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000ee04', '9f000000-0000-0000-0000-00000000ab04'),
+  ('9f000000-0000-0000-0000-0000000ef005', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000ee05', '9f000000-0000-0000-0000-00000000ab05'),
   ('9f000000-0000-0000-0000-0000000ef009', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-00000000ee09', '9f000000-0000-0000-0000-00000000ab09');
 insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
   ('9f000000-0000-0000-0000-00000000c503', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-0000000005a1', '9f000000-0000-0000-0000-0000000ef003', '9f000000-0000-0000-0000-00000000ab03', now() + interval '1 hour'),
+  ('9f000000-0000-0000-0000-00000000c504', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-0000000005a1', '9f000000-0000-0000-0000-0000000ef004', '9f000000-0000-0000-0000-00000000ab04', now() + interval '1 hour'),
+  ('9f000000-0000-0000-0000-00000000c505', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-0000000005a1', '9f000000-0000-0000-0000-0000000ef005', '9f000000-0000-0000-0000-00000000ab05', now() + interval '1 hour'),
   ('9f000000-0000-0000-0000-00000000c522', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-0000000005a2', '9f000000-0000-0000-0000-0000000ef003', '9f000000-0000-0000-0000-00000000ab03', now() + interval '1 hour'),
   ('9f000000-0000-0000-0000-00000000c509', '9f000000-0000-0000-0000-0000000000a0', '9f000000-0000-0000-0000-0000000000a1', '9f000000-0000-0000-0000-00000000a1b1', '9f000000-0000-0000-0000-0000000005a1', '9f000000-0000-0000-0000-0000000ef009', '9f000000-0000-0000-0000-00000000ab09', now() + interval '1 hour');
 
@@ -98,6 +106,24 @@ select is(
 select is(
   (select has_function_privilege('anon', 'public.get_open_shift_summary(uuid,uuid)', 'execute')),
   false, 'anon may NOT execute public.get_open_shift_summary');
+
+-- ===== (12-16) B1: recovery ownership mirrors app.close_shift =================
+-- A DIFFERENT cashier (ef004, c504) on the SAME device does NOT get ef003's shift as
+-- their own: has_open_shift=true but can_close=false + a typed owner-mismatch + NO money.
+create temp table tb1 as
+  select app.get_open_shift_summary('9f000000-0000-0000-0000-00000000c504','9f000000-0000-0000-0000-00000000da11') as res;
+select is((select res->>'error' from tb1), 'shift_owner_mismatch',
+  'a non-owner cashier gets a typed shift_owner_mismatch, not another employee''s shift');
+select is((select (res->>'can_close')::boolean from tb1), false,
+  'a non-owner cashier cannot close the shift (mirrors app.close_shift)');
+select is((select res ? 'expected_cash_minor' from tb1), false,
+  'a non-owner cashier receives NO money figure (the drawer belongs to the owner)');
+select is((select res->>'opened_by_employee_profile_id' from tb1), '9f000000-0000-0000-0000-0000000ef003',
+  'the mismatch names the ACTUAL owner (ef003), never the current actor');
+-- A MANAGER (ef005, c505) may recover ANY shift on the device (can_close=true + money).
+select is(
+  (select (app.get_open_shift_summary('9f000000-0000-0000-0000-00000000c505','9f000000-0000-0000-0000-00000000da11') ->> 'can_close')::boolean),
+  true, 'a manager may recover (and close) any shift on the device — can_close=true');
 
 select * from finish();
 rollback;

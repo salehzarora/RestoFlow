@@ -109,6 +109,25 @@ begin
     return jsonb_build_object('ok', true, 'entity', 'shift', 'has_open_shift', false);
   end if;
 
+  -- (b2) B1 (PILOT-OPERATIONS-CORRECTIONS-001): recovery OWNERSHIP mirrors the EXACT
+  --      app.close_shift authorization rule -- manager/restaurant_owner/org_owner may
+  --      close (and therefore recover) ANY shift; a cashier may close/recover ONLY
+  --      their OWN shift (opened_by = actor). If a DIFFERENT employee owns the open
+  --      shift on this device (a new cashier signing into the same till), we return a
+  --      TYPED owner-mismatch: has_open_shift=true, can_close=false, NO money (the
+  --      drawer figure is the owner's, not this actor's), and the actual owner id so
+  --      the UI can name it. This stops a new cashier being handed employee A's shift
+  --      and its expected cash under employee B's name -- and close_shift rejecting it.
+  --      kitchen_staff / accountant (non-close roles) also fall here (can_close=false).
+  if not ((v_role in ('manager', 'restaurant_owner', 'org_owner'))
+          or (v_role = 'cashier' and v_opened_by = v_emp)) then
+    return jsonb_build_object('ok', true, 'entity', 'shift', 'has_open_shift', true,
+      'can_close', false, 'error', 'shift_owner_mismatch',
+      'shift_id', v_shift_id, 'status', v_status, 'revision', v_rev,
+      'opened_at', v_opened_at, 'opened_by_employee_profile_id', v_opened_by,
+      'server_ts', now());
+  end if;
+
   -- (c) the bound cash drawer (1:1). Opening float is on the drawer.
   select cds.id, cds.opening_float_minor
     into v_drawer_id, v_opening
@@ -129,15 +148,12 @@ begin
     v_expected := v_opening + v_cash_sales;
   end if;
 
-  if v_role = 'kitchen_staff' then
-    -- money-free projection (defence in depth; the KDS does not call this RPC).
-    return jsonb_build_object('ok', true, 'entity', 'shift', 'has_open_shift', true,
-      'shift_id', v_shift_id, 'cash_drawer_session_id', v_drawer_id,
-      'status', v_status, 'revision', v_rev, 'opened_at', v_opened_at,
-      'opened_by_employee_profile_id', v_opened_by);
-  end if;
-
+  -- Only an actor AUTHORIZED to close this shift (manager+ or the owning cashier)
+  -- reaches here -- (b2) already returned the money-free owner-mismatch for anyone
+  -- else, so kitchen_staff / accountant never see a drawer figure (T-003 preserved,
+  -- defence in depth). can_close=true is explicit so the UI can offer the close form.
   return jsonb_build_object('ok', true, 'entity', 'shift', 'has_open_shift', true,
+    'can_close', true,
     'shift_id', v_shift_id, 'cash_drawer_session_id', v_drawer_id,
     'status', v_status, 'revision', v_rev, 'opened_at', v_opened_at,
     'opened_by_employee_profile_id', v_opened_by,
@@ -149,7 +165,7 @@ end;
 $$;
 
 comment on function app.get_open_shift_summary(uuid, uuid) is
-  'PILOT-OPERATIONS-CORRECTIONS-001 (D-011): READ-ONLY current open-shift summary for the session''s (organization, branch, device) -- the canonical shift-ownership tuple app.close_shift validates (one non-terminal shift per (org,branch,device)). Returns has_open_shift=false when none. Otherwise returns shift_id, cash_drawer_session_id, status, revision, opened_at, opened_by_employee_profile_id, and expected_cash_minor computed with the EXACT SAME SQL as app.close_shift (opening_float + sum of completed CASH payments on the bound drawer; integer minor units, D-007) -- so the POS shift-close UI shows the server-authoritative expected that close_shift will enforce, surviving app restart / controller recreation / PIN re-login. A kitchen_staff principal receives NO money keys (T-003). Canonical PIN-session preamble; every invalid/expired/revoked/mismatched session collapses to ONE 42501 (no R-003 oracle). Mutates nothing.';
+  'PILOT-OPERATIONS-CORRECTIONS-001 (D-011): READ-ONLY current open-shift summary for the session''s (organization, branch, device) -- the canonical shift-ownership tuple app.close_shift validates (one non-terminal shift per (org,branch,device)). Returns has_open_shift=false when none. B1: recovery ownership MIRRORS app.close_shift authorization -- manager/restaurant_owner/org_owner may recover any shift; a cashier may recover ONLY their own (opened_by = actor). A different owner (or a non-close role) gets a TYPED owner-mismatch (has_open_shift=true, can_close=false, error=shift_owner_mismatch, opened_by_employee_profile_id, and NO money keys) so a new cashier is never handed employee A''s shift + drawer figure under their own name. An AUTHORIZED actor gets can_close=true plus expected_cash_minor computed with the EXACT SAME SQL as app.close_shift (opening_float + sum of completed CASH payments on the bound drawer; integer minor units, D-007). kitchen_staff/accountant receive NO money keys (T-003; caught by the owner/authorization guard). Canonical PIN-session preamble; every invalid/expired/revoked/mismatched session collapses to ONE 42501 (no R-003 oracle). Mutates nothing.';
 
 -- Thin public SECURITY INVOKER wrapper (PostgREST entrypoint; the POS reaches it
 -- with the anon key + its PIN/device session, like public.sync_pull). No authority

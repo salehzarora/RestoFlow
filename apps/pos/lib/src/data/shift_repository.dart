@@ -13,6 +13,9 @@ class OpenShiftInfo {
     required this.openingFloatMinor,
     required this.openedAt,
     this.expectedCashMinor,
+    this.canClose = true,
+    this.ownerMismatch = false,
+    this.openedByEmployeeProfileId,
   });
 
   final String shiftId;
@@ -22,9 +25,23 @@ class OpenShiftInfo {
 
   /// The SERVER-authoritative expected cash (opening float + completed cash
   /// payments on the drawer) computed by `app.get_open_shift_summary` with the
-  /// exact `app.close_shift` formula. Null when the server did not supply it.
-  /// PILOT-OPERATIONS-CORRECTIONS-001. Integer minor units (D-007).
+  /// exact `app.close_shift` formula. Null when the server did not supply it —
+  /// notably on an owner-mismatch (the drawer figure belongs to the owner, not this
+  /// actor). PILOT-OPERATIONS-CORRECTIONS-001. Integer minor units (D-007).
   final int? expectedCashMinor;
+
+  /// B1 (PILOT-OPERATIONS-CORRECTIONS-001): whether the CURRENT actor is authorized to
+  /// close this shift, mirroring `app.close_shift` (manager+ any; a cashier only their
+  /// own). Defaults true so an older server (no `can_close` key) is unaffected.
+  final bool canClose;
+
+  /// B1: true when the open shift belongs to a DIFFERENT employee (a new cashier on
+  /// the same device) — the server returned `shift_owner_mismatch`. The close UI then
+  /// shows an owner-mismatch state instead of a close form under the wrong name.
+  final bool ownerMismatch;
+
+  /// B1: the actual shift owner's employee-profile id (display only; never a secret).
+  final String? openedByEmployeeProfileId;
 }
 
 /// The result of closing a shift: the server-authoritative cash reconciliation.
@@ -177,12 +194,21 @@ class RealShiftRepository implements ShiftRepository {
     final expectedCashMinor = asInt(raw['expected_cash_minor']);
     final openedAt =
         DateTime.tryParse('${raw['opened_at']}')?.toLocal() ?? DateTime.now();
+    // B1: an older server omits `can_close` -> default true (unchanged behaviour). A
+    // `shift_owner_mismatch` (a new cashier on another employee's shift) reports
+    // can_close=false + the owner id, and NO money keys.
+    final ownerMismatch = raw['error'] == 'shift_owner_mismatch';
+    final canClose = raw['can_close'] != false && !ownerMismatch;
     return OpenShiftInfo(
       shiftId: shiftId,
       cashDrawerSessionId: raw['cash_drawer_session_id']?.toString() ?? '',
       openingFloatMinor: openingFloatMinor,
       openedAt: openedAt,
       expectedCashMinor: expectedCashMinor,
+      canClose: canClose,
+      ownerMismatch: ownerMismatch,
+      openedByEmployeeProfileId: raw['opened_by_employee_profile_id']
+          ?.toString(),
     );
   }
 

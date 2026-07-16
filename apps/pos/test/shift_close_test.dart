@@ -16,10 +16,15 @@ import 'package:restoflow_pos/src/widgets/shift_close_sheet.dart';
 /// A fake shift repository returning a canned outcome (or throwing) so the real
 /// close path can be tested without a transport.
 class _FakeShiftRepo implements ShiftRepository {
-  _FakeShiftRepo({this.outcome, this.error});
+  _FakeShiftRepo({this.outcome, this.error, this.openShift});
   final ShiftCloseOutcome? outcome;
   final ShiftException? error;
+
+  /// The SERVER-authoritative open-shift summary the fresh expected-cash read
+  /// (A5) returns; null = the server reports no readable summary.
+  final OpenShiftInfo? openShift;
   int calls = 0;
+  int readCalls = 0;
 
   @override
   Future<ShiftCloseOutcome> closeShift({
@@ -34,8 +39,20 @@ class _FakeShiftRepo implements ShiftRepository {
   }
 
   @override
-  Future<OpenShiftInfo?> readOpenShift() async => null;
+  Future<OpenShiftInfo?> readOpenShift() async {
+    readCalls++;
+    return openShift;
+  }
 }
+
+OpenShiftInfo _summary(int expectedMinor, {int openingFloatMinor = 0}) =>
+    OpenShiftInfo(
+      shiftId: 'shift-1',
+      cashDrawerSessionId: 'cd-1',
+      openingFloatMinor: openingFloatMinor,
+      openedAt: DateTime(2026, 7, 3, 9, 15),
+      expectedCashMinor: expectedMinor,
+    );
 
 /// A transport returning a canned envelope for any RPC (for the sync_pull read).
 class _FakeTransport implements SyncRpcTransport {
@@ -61,6 +78,20 @@ class _SeededHandle extends PosOpenShiftController {
     cashDrawerSessionId: 'cd-1',
     openingFloatMinor: 0,
     openedAt: DateTime(2026, 7, 3, 9, 15),
+  );
+}
+
+/// B1: an open-shift handle owned by ANOTHER employee (can_close=false).
+class _MismatchHandle extends PosOpenShiftController {
+  @override
+  PosOpenShift? build() => PosOpenShift(
+    shiftId: 'shift-A',
+    cashDrawerSessionId: 'cd-A',
+    openingFloatMinor: 0,
+    openedAt: DateTime(2026, 7, 3, 9, 15),
+    canClose: false,
+    ownerMismatch: true,
+    openedByEmployeeProfileId: 'emp-A',
   );
 }
 
@@ -346,22 +377,83 @@ void main() {
     expect(await repo.readOpenShift(), isNull);
   });
 
+  test('B1: readOpenShift parses an owner-mismatch (can_close=false, no money, '
+      'the actual owner id)', () async {
+    final repo = RealShiftRepository(
+      _FakeTransport(<String, dynamic>{
+        'ok': true,
+        'has_open_shift': true,
+        'can_close': false,
+        'error': 'shift_owner_mismatch',
+        'shift_id': 'shift-A',
+        'status': 'open',
+        'revision': 1,
+        'opened_at': '2026-07-03T09:00:00Z',
+        'opened_by_employee_profile_id': 'emp-A',
+      }),
+      const SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1'),
+      RandomClientIdGenerator(),
+    );
+    final info = await repo.readOpenShift();
+    expect(info, isNotNull);
+    expect(info!.ownerMismatch, isTrue);
+    expect(info.canClose, isFalse);
+    expect(info.expectedCashMinor, isNull); // NO money for a non-owner
+    expect(info.openedByEmployeeProfileId, 'emp-A');
+  });
+
+  testWidgets(
+    'B1: an owner-mismatch shift shows the mismatch state, NOT a close '
+    'form under the current employee',
+    (tester) async {
+      final l10n = await _en();
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posSessionControllerProvider.overrideWith(_SeededSession.new),
+          posOpenShiftProvider.overrideWith(_MismatchHandle.new),
+          shiftRepositoryProvider.overrideWithValue(_FakeShiftRepo()),
+        ],
+      );
+      addTearDown(container.dispose);
+      // Even though a different employee's name is set on this device...
+      container.read(posSignedInStaffNameProvider.notifier).set('Employee B');
+      await _pumpContainer(tester, container);
+      // ...the sheet shows the owner-mismatch state, not a close form.
+      expect(
+        find.byKey(const Key('shift-close-owner-mismatch')),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.posShiftOwnerMismatch), findsOneWidget);
+      expect(find.byKey(const Key('counted-cash-input')), findsNothing);
+      expect(find.byKey(const Key('shift-close-submit')), findsNothing);
+      // Signing out clears the stale owner state and ends the session.
+      await tester.tap(find.byKey(const Key('shift-close-owner-signout')));
+      await tester.pumpAndSettle();
+      expect(container.read(posSyncSessionProvider), isNull);
+      expect(container.read(posOpenShiftProvider), isNull);
+    },
+  );
+
   testWidgets('PILOT-OPERATIONS-CORRECTIONS-001: after restart the shift-close '
       'expected shows the SERVER figure (not 0) so a correct close is accepted', (
     tester,
   ) async {
-    // A recovered handle carrying the server expected (₪500.00) with NO in-memory
-    // session sales — the exact post-restart state that used to collapse to 0.
+    // A5: the expected now comes from a FRESH server summary read (not a stale handle
+    // field). The server reports ₪500.00 — the exact post-restart figure that used to
+    // collapse to 0.
     final container = ProviderContainer(
       overrides: [
         runtimeConfigProvider.overrideWithValue(
           RuntimeConfig.test(isDemoMode: false),
         ),
         posSessionControllerProvider.overrideWith(_SeededSession.new),
-        posOpenShiftProvider.overrideWith(
-          () => _SeededHandleExpected(50000),
+        posOpenShiftProvider.overrideWith(_SeededHandle.new),
+        shiftRepositoryProvider.overrideWithValue(
+          _FakeShiftRepo(openShift: _summary(50000)),
         ),
-        shiftRepositoryProvider.overrideWithValue(_FakeShiftRepo()),
       ],
     );
     addTearDown(container.dispose);
@@ -370,37 +462,119 @@ void main() {
     expect(find.text('₪500.00'), findsWidgets);
   });
 
-  testWidgets('PILOT-OPERATIONS-CORRECTIONS-001: the shift-close sheet names the '
-      'signed-in employee', (tester) async {
-    final l10n = await _en();
-    final container = ProviderContainer(
-      overrides: [
-        runtimeConfigProvider.overrideWithValue(
-          RuntimeConfig.test(isDemoMode: false),
-        ),
-        posSessionControllerProvider.overrideWith(_SeededSession.new),
-        posOpenShiftProvider.overrideWith(_SeededHandle.new),
-        shiftRepositoryProvider.overrideWithValue(_FakeShiftRepo()),
-      ],
-    );
-    addTearDown(container.dispose);
-    container.read(posSignedInStaffNameProvider.notifier).set('Dana Cohen');
-    await _pumpContainer(tester, container);
-    expect(find.text(l10n.posShiftEmployee), findsOneWidget);
-    expect(find.text('Dana Cohen'), findsOneWidget);
-  });
-}
+  group('A5: expected cash has ONE authoritative source (no double count)', () {
+    test('1-5. race: server summary includes the mid-recovery payment; the '
+        'client shows it ONCE, never server + local', () async {
+      // The server summary already includes a cash payment that completed while the
+      // summary was loading (expected 5000 = float 1000 + 4000 cash). The local
+      // payment state ALSO holds that payment. The OLD code returned 5000 + 4000 =
+      // 9000 (double-count). The provider must return exactly the server 5000.
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posSessionControllerProvider.overrideWith(_SeededSession.new),
+          posOpenShiftProvider.overrideWith(_SeededHandle.new),
+          shiftRepositoryProvider.overrideWithValue(
+            _FakeShiftRepo(openShift: _summary(5000, openingFloatMinor: 1000)),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final expected = await container.read(shiftExpectedCashProvider.future);
+      expect(expected, 5000); // exactly the server figure — not 9000
+    });
 
-/// A recovered open-shift handle carrying a server expected cash figure.
-class _SeededHandleExpected extends PosOpenShiftController {
-  _SeededHandleExpected(this.expectedMinor);
-  final int expectedMinor;
-  @override
-  PosOpenShift? build() => PosOpenShift(
-    shiftId: 'shift-1',
-    cashDrawerSessionId: 'cd-1',
-    openingFloatMinor: 0,
-    openedAt: DateTime(2026, 7, 3, 9, 15),
-    expectedCashMinor: expectedMinor,
+    test('9/failure: a failed/absent server read yields null (never a false 0 '
+        'or a local figure)', () async {
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posSessionControllerProvider.overrideWith(_SeededSession.new),
+          posOpenShiftProvider.overrideWith(_SeededHandle.new),
+          // readOpenShift returns null (transport failure fails closed).
+          shiftRepositoryProvider.overrideWithValue(_FakeShiftRepo()),
+        ],
+      );
+      addTearDown(container.dispose);
+      expect(await container.read(shiftExpectedCashProvider.future), isNull);
+    });
+
+    test(
+      'real currentShiftView never carries a combined expected (null)',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            runtimeConfigProvider.overrideWithValue(
+              RuntimeConfig.test(isDemoMode: false),
+            ),
+            posOpenShiftProvider.overrideWith(_SeededHandle.new),
+          ],
+        );
+        addTearDown(container.dispose);
+        expect(
+          container.read(currentShiftViewProvider).expectedSoFarMinor,
+          isNull,
+        );
+      },
+    );
+
+    test('8. a true-zero shift reads 0 from the server (not null)', () async {
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posOpenShiftProvider.overrideWith(_SeededHandle.new),
+          shiftRepositoryProvider.overrideWithValue(
+            _FakeShiftRepo(openShift: _summary(0)),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      expect(await container.read(shiftExpectedCashProvider.future), 0);
+    });
+
+    test(
+      '7/11. demo expected is the in-memory drawer total (integer minor)',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            runtimeConfigProvider.overrideWithValue(
+              RuntimeConfig.test(isDemoMode: true),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        // Demo opens with a ₪200.00 float, no sales -> 20000 minor.
+        expect(await container.read(shiftExpectedCashProvider.future), 20000);
+      },
+    );
+  });
+
+  testWidgets(
+    'PILOT-OPERATIONS-CORRECTIONS-001: the shift-close sheet names the '
+    'signed-in employee',
+    (tester) async {
+      final l10n = await _en();
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posSessionControllerProvider.overrideWith(_SeededSession.new),
+          posOpenShiftProvider.overrideWith(_SeededHandle.new),
+          shiftRepositoryProvider.overrideWithValue(_FakeShiftRepo()),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(posSignedInStaffNameProvider.notifier).set('Dana Cohen');
+      await _pumpContainer(tester, container);
+      expect(find.text(l10n.posShiftEmployee), findsOneWidget);
+      expect(find.text('Dana Cohen'), findsOneWidget);
+    },
   );
 }

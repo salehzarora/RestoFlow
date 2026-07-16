@@ -13,12 +13,27 @@ class PosOpenShift {
     required this.openingFloatMinor,
     required this.openedAt,
     this.expectedCashMinor,
+    this.canClose = true,
+    this.ownerMismatch = false,
+    this.openedByEmployeeProfileId,
   });
 
   final String shiftId;
   final String cashDrawerSessionId;
   final int openingFloatMinor;
   final DateTime openedAt;
+
+  /// B1 (PILOT-OPERATIONS-CORRECTIONS-001): whether the CURRENT actor may close this
+  /// shift (mirrors app.close_shift). False when the open shift belongs to another
+  /// employee — the close UI then shows an owner-mismatch state, never a close form
+  /// under the wrong name.
+  final bool canClose;
+
+  /// B1: the open shift on this device belongs to a DIFFERENT employee.
+  final bool ownerMismatch;
+
+  /// B1: the actual owner's employee-profile id (display only).
+  final String? openedByEmployeeProfileId;
 
   /// The SERVER-authoritative expected cash captured when this handle was
   /// recovered (opening float + completed cash payments on the drawer, computed

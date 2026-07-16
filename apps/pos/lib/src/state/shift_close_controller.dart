@@ -5,16 +5,20 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 
 import '../data/ids.dart';
-import '../data/payment.dart';
 import '../data/shift_repository.dart';
 import 'payment_controller.dart';
 import 'pos_session.dart';
 import 'pos_shift.dart';
 
 /// A read-only view of the current shift for the close/reconcile panel (RF-113).
-/// All money is integer minor units (DECISION D-007). [expectedSoFarMinor] is a
-/// client-side ESTIMATE (opening float + this session's completed cash sales) to
-/// guide counting; the SERVER computes the authoritative expected at close.
+/// All money is integer minor units (DECISION D-007).
+///
+/// [expectedSoFarMinor] is populated in DEMO mode only — the in-memory demo drawer is
+/// its own authority. In REAL mode it is NULL here on purpose: the authoritative
+/// expected comes from a FRESH server summary via [shiftExpectedCashProvider], never
+/// from a client combination of a server snapshot and local payments (that was the
+/// A5 double-count — a mid-recovery cash payment counted once in the snapshot and again
+/// locally).
 class CurrentShiftView {
   const CurrentShiftView({
     required this.isOpen,
@@ -29,29 +33,20 @@ class CurrentShiftView {
   final bool isDemo;
   final int openingFloatMinor;
 
-  /// The estimated expected cash so far, or null when it cannot be computed
-  /// (honest "not available" state rather than a fake total).
+  /// The demo drawer total (demo mode only); NULL in real mode — see the class doc.
   final int? expectedSoFarMinor;
   final DateTime? openedAt;
   final String currencyCode;
 }
 
-/// Sum of this session's completed CASH payments (integer minor units).
-int _sessionCashSalesMinor(Iterable<CashPayment> payments) => payments
-    .where(
-      (p) =>
-          p.method == PaymentMethod.cash && p.status == PaymentStatus.completed,
-    )
-    .fold<int>(0, (sum, p) => sum + p.amountMinor);
-
 /// The current shift for the panel. In demo mode it reflects the in-memory demo
-/// shift/drawer; in real mode it reflects the captured open-shift handle plus the
-/// session's recorded cash payments.
+/// shift/drawer; in real mode it reflects the captured open-shift handle (identity +
+/// opening float + opened-at) — NOT any expected-cash figure, which is served
+/// separately and authoritatively by [shiftExpectedCashProvider].
 final currentShiftViewProvider = Provider<CurrentShiftView>((ref) {
   final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
-  final paymentState = ref.watch(paymentControllerProvider);
   if (isDemo) {
-    final shift = paymentState.shift;
+    final shift = ref.watch(paymentControllerProvider).shift;
     return CurrentShiftView(
       isOpen: shift.shiftOpen,
       isDemo: true,
@@ -72,22 +67,44 @@ final currentShiftViewProvider = Provider<CurrentShiftView>((ref) {
       currencyCode: 'ILS',
     );
   }
-  final cashSales = _sessionCashSalesMinor(paymentState.payments.values);
-  // PILOT-OPERATIONS-CORRECTIONS-001: the BASE is the SERVER-authoritative expected
-  // captured when the handle was recovered (opening float + all persisted cash to
-  // that point). On a fresh auto-open there are no prior payments so it is null and
-  // we fall back to the opening float; either way we add THIS session's in-memory
-  // cash sales, which are exactly the payments made SINCE the handle was captured —
-  // so expected survives an app restart (was collapsing to 0) without double-counting.
-  final base = handle.expectedCashMinor ?? handle.openingFloatMinor;
   return CurrentShiftView(
     isOpen: true,
     isDemo: false,
     openingFloatMinor: handle.openingFloatMinor,
-    expectedSoFarMinor: base + cashSales,
+    // Never combined with local cash — see the class doc (A5).
+    expectedSoFarMinor: null,
     openedAt: handle.openedAt,
     currencyCode: 'ILS',
   );
+});
+
+/// PILOT-OPERATIONS-CORRECTIONS-001 (A5): the ONE authoritative expected-cash source
+/// for the shift-close panel.
+///
+/// REAL mode: a FRESH `app.get_open_shift_summary` — the SAME server SQL as
+/// `app.close_shift` (opening float + completed cash payments on the drawer). It is the
+/// single source: the panel NEVER adds a local cash total on top of it, so a cash
+/// payment that completes while the summary is loading cannot be counted twice. It is
+/// re-fetched when the panel opens, and again whenever the payment state changes (a
+/// completed cash payment bumps the server total) — so the displayed expected tracks the
+/// server without ever double-counting. A failed/absent read returns null and the panel
+/// shows a safe loading/unavailable state — never a fabricated 0 or a local figure.
+///
+/// DEMO mode: the in-memory demo drawer total, which is the demo's own authority (there
+/// is no server and no race).
+final shiftExpectedCashProvider = FutureProvider.autoDispose<int?>((ref) async {
+  final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+  if (isDemo) {
+    return ref.watch(paymentControllerProvider).shift.cashInDrawerMinor;
+  }
+  // Re-fetch when a payment lands: a completed cash payment changes the server total,
+  // and this is how the display stays fresh without a local add-on.
+  ref.watch(paymentControllerProvider);
+  final handle = ref.watch(posOpenShiftProvider);
+  if (handle == null) return null;
+  final info = await ref.watch(shiftRepositoryProvider).readOpenShift();
+  // Null on a failed/absent read — the caller must NOT fall back to a local figure.
+  return info?.expectedCashMinor;
 });
 
 /// The REAL shift-close repository (real mode only). Reuses the shared transport +
