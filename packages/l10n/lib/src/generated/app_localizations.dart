@@ -2488,6 +2488,48 @@ abstract class AppLocalizations {
   /// **'Table group'**
   String get posTableGroup;
 
+  /// No description provided for @posTableGroupSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked tables'**
+  String get posTableGroupSectionTitle;
+
+  /// No description provided for @posTableGroupDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked group'**
+  String get posTableGroupDetailTitle;
+
+  /// No description provided for @posTableGroupMembers.
+  ///
+  /// In en, this message translates to:
+  /// **'Group members'**
+  String get posTableGroupMembers;
+
+  /// No description provided for @posTableGroupChoosePrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a table for the new order'**
+  String get posTableGroupChoosePrompt;
+
+  /// No description provided for @posTableGroupNoAssignable.
+  ///
+  /// In en, this message translates to:
+  /// **'No table in this group can take a new order right now'**
+  String get posTableGroupNoAssignable;
+
+  /// No description provided for @posTableGroupSelectAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get posTableGroupSelectAction;
+
+  /// No description provided for @posTableGroupJoiner.
+  ///
+  /// In en, this message translates to:
+  /// **' + '**
+  String get posTableGroupJoiner;
+
   /// No description provided for @posShiftOpeningFloat.
   ///
   /// In en, this message translates to:
