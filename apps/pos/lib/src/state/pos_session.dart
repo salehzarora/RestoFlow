@@ -375,6 +375,11 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
       // already open with a different id) leaves the handle null -> the close UI
       // shows an honest "no open shift on this device" state (never a fake one).
       if (_shiftOpenApplied(raw)) {
+        // Finding 3: a fresh shift-open is NOT proof of close authorization. Publish a
+        // FAIL-CLOSED, authorization-pending handle first (a shift IS open, but no close
+        // form / no money until we know), then fetch the AUTHORITATIVE summary and
+        // replace it with the server verdict (canClose / capability-denied / owner
+        // mismatch + money). NEVER a permissive canClose=true handle.
         ref
             .read(posOpenShiftProvider.notifier)
             .set(
@@ -383,8 +388,25 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
                 cashDrawerSessionId: cashDrawerSessionId,
                 openingFloatMinor: openingFloatMinor,
                 openedAt: DateTime.now(),
+                authorizationPending: true, // canClose defaults false
               ),
             );
+        final published = await _recoverOpenShift(transport, session);
+        if (!published) {
+          // The authoritative summary could not be read: keep a fail-closed handle
+          // (shift open, authorization unknown) — never assume close permission.
+          ref
+              .read(posOpenShiftProvider.notifier)
+              .set(
+                PosOpenShift(
+                  shiftId: shiftId,
+                  cashDrawerSessionId: cashDrawerSessionId,
+                  openingFloatMinor: openingFloatMinor,
+                  openedAt: DateTime.now(),
+                  authorizationPending: true,
+                ),
+              );
+        }
       } else {
         // The open did NOT apply — almost always because a shift is ALREADY
         // open for this (org, branch, device) from before a refresh/re-sign-in.
@@ -397,10 +419,11 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     }
   }
 
-  /// Recover the current server-open shift's handle for this device (RF-113).
-  /// Fail-soft: on any read failure the handle stays null and the panel shows an
-  /// honest "couldn't restore — sign in again" state (never a fake shift).
-  Future<void> _recoverOpenShift(
+  /// Recover the current server-open shift's handle for this device (RF-113) from the
+  /// AUTHORITATIVE summary. Returns true iff a handle was published from a server verdict
+  /// (Finding 3: the caller re-publishes a fail-closed handle when this returns false
+  /// after a fresh open). Fail-soft: on any read failure nothing is published here.
+  Future<bool> _recoverOpenShift(
     SyncRpcTransport transport,
     SyncSession session,
   ) async {
@@ -410,30 +433,31 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         session,
         RandomClientIdGenerator(),
       ).readOpenShift();
-      if (info != null) {
-        ref
-            .read(posOpenShiftProvider.notifier)
-            .set(
-              PosOpenShift(
-                shiftId: info.shiftId,
-                cashDrawerSessionId: info.cashDrawerSessionId,
-                openingFloatMinor: info.openingFloatMinor,
-                openedAt: info.openedAt,
-                // PILOT-OPERATIONS-CORRECTIONS-001: carry the server-authoritative
-                // expected cash so the close UI shows the real figure after restart.
-                expectedCashMinor: info.expectedCashMinor,
-                // B1 + Finding 2: carry the authorization verdict so the close UI shows
-                // an owner-mismatch OR a capability-denied state (not a close form)
-                // rather than a form the server would refuse.
-                canClose: info.canClose,
-                ownerMismatch: info.ownerMismatch,
-                closeNotAllowed: info.closeNotAllowed,
-                openedByEmployeeProfileId: info.openedByEmployeeProfileId,
-              ),
-            );
-      }
+      if (info == null) return false;
+      ref
+          .read(posOpenShiftProvider.notifier)
+          .set(
+            PosOpenShift(
+              shiftId: info.shiftId,
+              cashDrawerSessionId: info.cashDrawerSessionId,
+              openingFloatMinor: info.openingFloatMinor,
+              openedAt: info.openedAt,
+              // PILOT-OPERATIONS-CORRECTIONS-001: carry the server-authoritative
+              // expected cash so the close UI shows the real figure after restart.
+              expectedCashMinor: info.expectedCashMinor,
+              // B1 + Finding 2 + Finding 3: the AUTHORITATIVE close-authorization
+              // verdict — the ONLY thing that publishes a closable handle. Its arrival
+              // clears authorizationPending.
+              canClose: info.canClose,
+              ownerMismatch: info.ownerMismatch,
+              closeNotAllowed: info.closeNotAllowed,
+              openedByEmployeeProfileId: info.openedByEmployeeProfileId,
+            ),
+          );
+      return true;
     } catch (_) {
-      // Fail-soft: leave the handle null.
+      // Fail-soft: publish nothing (the caller decides the fail-closed fallback).
+      return false;
     }
   }
 

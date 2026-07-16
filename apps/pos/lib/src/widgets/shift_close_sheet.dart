@@ -101,6 +101,13 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
     final handle = ref.watch(posOpenShiftProvider);
     final ownerMismatch = !view.isDemo && (handle?.ownerMismatch ?? false);
     final closeNotAllowed = !view.isDemo && (handle?.closeNotAllowed ?? false);
+    // Finding 3: the close FORM (money, counted input, close action) shows ONLY when
+    // the AUTHORITATIVE server verdict says the current actor may close. Demo mode is
+    // its own authority. A fresh shift-open, a loading/failed summary, or any
+    // canClose=false without a specific reason falls to a fail-closed pending state —
+    // never a permissive form the server would refuse.
+    final authPending = !view.isDemo && (handle?.authorizationPending ?? false);
+    final canClose = view.isDemo || (handle?.canClose ?? false);
 
     return SafeArea(
       child: Padding(
@@ -132,6 +139,8 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
                 (sessionActive && !view.isDemo)
                     ? _couldNotRestore(context, l10n)
                     : _noOpenShift(context, l10n)
+              else if (authPending || !canClose)
+                _authorizationPending(context, l10n)
               else
                 _closeForm(
                   context,
@@ -246,6 +255,33 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
         FilledButton(
           onPressed: () => Navigator.of(context).maybePop(),
           child: Text(l10n.posShiftDoneAction),
+        ),
+      ],
+    );
+  }
+
+  /// Finding 3: a shift IS open but the AUTHORITATIVE close-authorization verdict is not
+  /// yet known (a fresh open awaiting the summary, or a summary that failed to load). A
+  /// fail-closed state: NO close form, NO expected/counted cash, NO variance, NO close
+  /// action — only a Refresh that re-fetches the authoritative verdict. Never a form.
+  Widget _authorizationPending(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      key: const Key('shift-close-authorization-pending'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowNoticeBanner(
+          tone: RestoflowTone.info,
+          icon: Icons.hourglass_empty,
+          body: l10n.posShiftAuthorizationPending,
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        FilledButton.icon(
+          key: const Key('shift-close-authorization-refresh'),
+          // Re-fetch the fresh authoritative summary (money) — the handle's verdict is
+          // refreshed by the session controller; this gives the operator a manual retry.
+          onPressed: () => ref.invalidate(shiftExpectedCashProvider),
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.posSyncRetry),
         ),
       ],
     );

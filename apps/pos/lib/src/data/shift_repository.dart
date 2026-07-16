@@ -202,14 +202,17 @@ class RealShiftRepository implements ShiftRepository {
     final expectedCashMinor = asInt(raw['expected_cash_minor']);
     final openedAt =
         DateTime.tryParse('${raw['opened_at']}')?.toLocal() ?? DateTime.now();
-    // B1 + Finding 2: an older server omits `can_close` -> default true (unchanged
-    // behaviour). A denial reports can_close=false + the owner id and NO money keys,
-    // with an honest reason: `shift_owner_mismatch` (a different employee owns it) or
-    // `shift_close_not_allowed` (the owning cashier lacks the close capability).
+    // B1 + Finding 2/3: the close-authorization verdict is FAIL-CLOSED at the parse
+    // layer — `can_close` must be EXPLICITLY true (never a missing/malformed key
+    // defaulting to closable). `get_open_shift_summary` always returns it for an open
+    // shift, so an absent value is an anomaly and is treated as NOT closable. A denial
+    // reports can_close=false + the owner id and NO money keys, with an honest reason:
+    // `shift_owner_mismatch` (a different employee owns it) or `shift_close_not_allowed`
+    // (the owning cashier lacks the close capability).
     final ownerMismatch = raw['error'] == 'shift_owner_mismatch';
     final closeNotAllowed = raw['error'] == 'shift_close_not_allowed';
     final canClose =
-        raw['can_close'] != false && !ownerMismatch && !closeNotAllowed;
+        raw['can_close'] == true && !ownerMismatch && !closeNotAllowed;
     return OpenShiftInfo(
       shiftId: shiftId,
       cashDrawerSessionId: raw['cash_drawer_session_id']?.toString() ?? '',

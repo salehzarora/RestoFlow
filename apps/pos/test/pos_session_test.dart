@@ -145,7 +145,9 @@ void main() {
     test('real mode: a started PIN session yields SyncSession(pinSessionId, '
         'deviceId) and calls public.start_pin_session (never app.*)', () async {
       // start_pin_session yields the pin-session id; the best-effort shift.open
-      // push APPLIES (a fresh shift), so no sync_pull recovery is needed (RF-113).
+      // push APPLIES (a fresh shift). Finding 3 (PILOT-OPERATIONS-CORRECTIONS-001): a
+      // fresh open is NOT proof of close authorization, so the POS then fetches the
+      // AUTHORITATIVE `get_open_shift_summary` verdict before enabling any close UI.
       final transport = _RecordingTransport((function, _) async {
         if (function == 'sync_push') {
           return <String, dynamic>{
@@ -177,10 +179,14 @@ void main() {
       await pumpEventQueue();
 
       // The sign-in call hits the PUBLIC wrapper - never the app schema - and
-      // is followed by the best-effort shift.open push (payments require an
-      // open shift since RF-055; the POS has no shift UI yet).
+      // is followed by the best-effort shift.open push (payments require an open
+      // shift since RF-055) and then the Finding 3 authoritative summary read.
       expect(transport.functions.first, 'start_pin_session');
-      expect(transport.functions, <String>['start_pin_session', 'sync_push']);
+      expect(transport.functions, <String>[
+        'start_pin_session',
+        'sync_push',
+        'get_open_shift_summary',
+      ]);
       expect(transport.functions.any((f) => f.contains('app.')), isFalse);
 
       final params = transport.params.first;

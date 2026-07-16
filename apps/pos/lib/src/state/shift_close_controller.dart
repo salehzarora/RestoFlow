@@ -92,6 +92,15 @@ final currentShiftViewProvider = Provider<CurrentShiftView>((ref) {
 ///
 /// DEMO mode: the in-memory demo drawer total, which is the demo's own authority (there
 /// is no server and no race).
+///
+/// Finding 3 (F3C): this money figure is NOT a second, independent authority. It is
+/// consumed ONLY inside `_closeForm`, which the sheet renders solely when the handle's
+/// SERVER-authoritative `canClose` verdict is true. Authorization (the handle, published
+/// by `_recoverOpenShift` from the SAME `get_open_shift_summary`) and this money therefore
+/// derive from one server summary formula and cannot disagree in the UI: a denied or
+/// pending actor never reaches `_closeForm`, so no money is ever shown without the
+/// authoritative close permission, and a mid-session denial makes this read return null
+/// (the denial omits money) rather than a stale figure.
 final shiftExpectedCashProvider = FutureProvider.autoDispose<int?>((ref) async {
   final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
   if (isDemo) {
