@@ -1178,6 +1178,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Remove the unavailable items, then send again.';
 
   @override
+  String get posRecoveryReplaceCartTitle => 'Replace the current cart?';
+
+  @override
+  String get posRecoveryReplaceCartBody =>
+      'The cart already has items. Restoring this draft will replace them.';
+
+  @override
+  String get posRecoveryReplaceCartAction => 'Replace current cart';
+
+  @override
+  String get posRecoveryKeepCartAction => 'Keep current cart';
+
+  @override
+  String get posRecentOrderNotCreated => 'Not created';
+
+  @override
   String get posTableOperations => 'Table operations';
 
   @override
@@ -1315,6 +1331,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posShiftCouldNotRestore =>
       'Couldn\'t restore the shift state. Sign in again to open a shift.';
+
+  @override
+  String get posShiftOwnerMismatch =>
+      'A shift is already open on this device, opened by another employee. Only its owner or a manager can close it — sign out so they can sign in.';
 
   @override
   String get posShiftReturnToPin => 'Sign out';
@@ -4399,6 +4419,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogTitleOrderTableMoveDenied => 'Table move denied';
+
+  @override
+  String get activityLogTitleTableStatusChanged => 'Table status changed';
+
+  @override
+  String get activityLogTitleTableStatusDenied => 'Table status change denied';
+
+  @override
+  String get activityLogTitleTablesLinked => 'Tables linked';
+
+  @override
+  String get activityLogTitleTableLinkDenied => 'Table link denied';
+
+  @override
+  String get activityLogTitleTablesUnlinked => 'Tables unlinked';
+
+  @override
+  String get activityLogTitleTableUnlinkDenied => 'Table unlink denied';
+
+  @override
+  String get activityLogFieldFromStatus => 'From status';
+
+  @override
+  String get activityLogFieldToStatus => 'To status';
+
+  @override
+  String get activityLogFieldGroupLabel => 'Linked tables';
 
   @override
   String get activityLogFieldAvailability => 'Availability';

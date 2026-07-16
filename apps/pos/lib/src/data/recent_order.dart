@@ -40,6 +40,7 @@ class PosRecentOrder {
     this.syncState = PosOrderSyncState.synchronized,
     this.origin = PosOrderOrigin.deviceOwned,
     this.lastSyncError,
+    this.neverCreated = false,
   }) : assert(
          order != null || snapshot != null,
          'an order is either something this device submitted or something the '
@@ -81,6 +82,21 @@ class PosRecentOrder {
   /// `order_not_chargeable`) — never raw server text, never JSON, never a secret.
   /// Retained so the UI can explain the refusal instead of silently retrying it.
   final String? lastSyncError;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001 (A3): this row is the shell of a NEW submit
+  /// the server PERMANENTLY refused (item_unavailable) — so NO server order was ever
+  /// created. Its locally-generated order id is NOT proof of acceptance: the
+  /// authoritative submit result was a permanent rejection. A row in this state must
+  /// fail closed for every accepted-order action (pay / discount / comp / void / move
+  /// / receipt / lifecycle / KDS) and must never be counted as open, needs-payment,
+  /// completed, or table occupancy. It is retired (removed) once the cashier recovers
+  /// its draft (Back to cart) or discards it. Never true for an accepted order (a
+  /// server snapshot arriving would clear it — see [withServerSnapshot]).
+  final bool neverCreated;
+
+  /// True while this row is a permanently-rejected submit shell (see [neverCreated]).
+  /// The ONE predicate the action policy and the operational sections read.
+  bool get isNeverCreated => neverCreated;
 
   /// The server revision, or null if never synced. The POS stored NONE before
   /// this ticket, which is why `expected_revision` was dead code.
@@ -282,6 +298,7 @@ class PosRecentOrder {
     PosOrderOrigin? origin,
     String? lastSyncError,
     bool clearSyncError = false,
+    bool? neverCreated,
   }) => PosRecentOrder(
     order: order,
     submittedAt: _submittedAt,
@@ -295,6 +312,7 @@ class PosRecentOrder {
     lastSyncError: clearSyncError
         ? null
         : (lastSyncError ?? this.lastSyncError),
+    neverCreated: neverCreated ?? this.neverCreated,
   );
 
   /// Adopts an AUTHORITATIVE server snapshot.
@@ -347,6 +365,9 @@ class PosRecentOrder {
     'sync_state': syncState.name,
     'origin': origin.name,
     if (lastSyncError != null) 'last_sync_error': lastSyncError,
+    // A3: persist the rejected-shell flag so a permanently-rejected submit stays
+    // non-actionable across a restart (never reloading as a live phantom order).
+    if (neverCreated) 'never_created': true,
   };
 
   /// Parses a persisted recent order. Throws [FormatException] on a
@@ -409,6 +430,10 @@ class PosRecentOrder {
             : PosOrderOrigin.branchDiscovered,
       ),
       lastSyncError: _strOrNull(json['last_sync_error']),
+      // A3: a permanently-rejected submit shell (absent key = false, so older
+      // records are unaffected). A snapshot cannot coexist with it — a stored
+      // snapshot means the order exists — so ignore the flag if one is present.
+      neverCreated: json['never_created'] == true && snapshot == null,
     );
   }
 }

@@ -147,21 +147,25 @@ void main() {
   });
 
   group('PosDraftRecoveryController', () {
-    PosDraftRecovery mk(String entryId) => PosDraftRecovery(
+    PosDraftRecovery mk(
+      String entryId, {
+      PosRecoveryBinding binding = const PosRecoveryBinding(),
+    }) => PosDraftRecovery(
       draft: const CartDraftSnapshot(currencyCode: 'ILS', lines: []),
       orderType: OrderType.takeaway,
       outboxEntryId: entryId,
+      binding: binding,
     );
 
-    test('capture / clear', () {
+    test('capture / clear (keyed by outbox entry id)', () {
       final c = ProviderContainer();
       addTearDownContainer(c);
       final n = c.read(posDraftRecoveryProvider.notifier);
-      expect(c.read(posDraftRecoveryProvider), isNull);
+      expect(c.read(posDraftRecoveryProvider), isEmpty);
       n.capture(mk('e1'));
-      expect(c.read(posDraftRecoveryProvider)?.outboxEntryId, 'e1');
-      n.clear();
-      expect(c.read(posDraftRecoveryProvider), isNull);
+      expect(c.read(posDraftRecoveryProvider).containsKey('e1'), isTrue);
+      n.clear('e1');
+      expect(c.read(posDraftRecoveryProvider), isEmpty);
     });
 
     test('clearIfFor only clears the matching entry', () {
@@ -170,20 +174,28 @@ void main() {
       final n = c.read(posDraftRecoveryProvider.notifier);
       n.capture(mk('e2'));
       n.clearIfFor('other'); // does not match -> keep
-      expect(c.read(posDraftRecoveryProvider)?.outboxEntryId, 'e2');
+      expect(c.read(posDraftRecoveryProvider).containsKey('e2'), isTrue);
       n.clearIfFor('e2'); // matches -> cleared
-      expect(c.read(posDraftRecoveryProvider), isNull);
+      expect(c.read(posDraftRecoveryProvider), isEmpty);
     });
 
     test(
-      'a new capture overwrites the previous (only the latest is recoverable)',
+      'MULTI-SLOT: two pending submits keep independent records (not latest-only)',
       () {
         final c = ProviderContainer();
         addTearDownContainer(c);
         final n = c.read(posDraftRecoveryProvider.notifier);
         n.capture(mk('e1'));
         n.capture(mk('e2'));
-        expect(c.read(posDraftRecoveryProvider)?.outboxEntryId, 'e2');
+        // Both survive — B never erased A.
+        final map = c.read(posDraftRecoveryProvider);
+        expect(map.containsKey('e1'), isTrue);
+        expect(map.containsKey('e2'), isTrue);
+        // Clearing one leaves the other.
+        n.clear('e1');
+        final after = c.read(posDraftRecoveryProvider);
+        expect(after.containsKey('e1'), isFalse);
+        expect(after.containsKey('e2'), isTrue);
       },
     );
   });
@@ -211,8 +223,8 @@ void main() {
         container
             .read(posDraftRecoveryProvider.notifier)
             .capture(
-              const PosDraftRecovery(
-                draft: CartDraftSnapshot(
+              PosDraftRecovery(
+                draft: const CartDraftSnapshot(
                   currencyCode: 'ILS',
                   lines: [
                     CartDraftLine(
@@ -225,6 +237,9 @@ void main() {
                 ),
                 orderType: OrderType.takeaway,
                 outboxEntryId: 'e1',
+                // Bind to the SAME context the confirmation computes (the demo scope
+                // key + null PIN session) — exactly how the real capture site does.
+                binding: container.read(posRecoveryBindingProvider),
               ),
             );
       }
@@ -261,7 +276,7 @@ void main() {
       await tester.tap(find.byKey(const Key('recovery-back-to-cart')));
       await tester.pump();
       expect(container.read(cartControllerProvider).lines.length, 1);
-      expect(container.read(posDraftRecoveryProvider), isNull);
+      expect(container.read(posDraftRecoveryProvider), isEmpty);
     });
 
     testWidgets('an ACCEPTED (applied) order shows payment and NO recovery '

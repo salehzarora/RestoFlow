@@ -78,7 +78,17 @@ PosOrderActions resolveOrderActions(
 }) {
   // A LOCAL DRAFT has no server order. Nothing can be done to it here; it is not a
   // server order at all and must never be presented as one.
-  if (order.origin == PosOrderOrigin.localDraft || order.orderId == null) {
+  //
+  // PILOT-OPERATIONS-CORRECTIONS-001 (A3): a PERMANENTLY-REJECTED submit
+  // ([PosRecentOrder.isNeverCreated]) is the same situation dressed as a real order:
+  // it carries a NON-NULL locally-generated order id, but the authoritative submit
+  // result was a permanent rejection (item_unavailable), so no server order exists.
+  // Deciding eligibility from `orderId != null` alone is exactly the bug — a local id
+  // is not proof of acceptance — so this fails closed here, in the ONE policy, rather
+  // than in scattered per-button checks.
+  if (order.origin == PosOrderOrigin.localDraft ||
+      order.isNeverCreated ||
+      order.orderId == null) {
     return const PosOrderActions(
       canPay: false,
       canDiscount: false,

@@ -1172,6 +1172,22 @@ class AppLocalizationsAr extends AppLocalizations {
       'أزل الأصناف غير المتوفرة ثم أعد الإرسال.';
 
   @override
+  String get posRecoveryReplaceCartTitle => 'استبدال السلة الحالية؟';
+
+  @override
+  String get posRecoveryReplaceCartBody =>
+      'تحتوي السلة على أصناف بالفعل. استعادة هذه المسودة ستستبدلها.';
+
+  @override
+  String get posRecoveryReplaceCartAction => 'استبدال السلة الحالية';
+
+  @override
+  String get posRecoveryKeepCartAction => 'الإبقاء على السلة الحالية';
+
+  @override
+  String get posRecentOrderNotCreated => 'لم يُنشأ';
+
+  @override
   String get posTableOperations => 'عمليات الطاولات';
 
   @override
@@ -1308,6 +1324,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get posShiftCouldNotRestore =>
       'تعذّر استرجاع حالة الوردية. سجّل الدخول مجددًا لفتح وردية.';
+
+  @override
+  String get posShiftOwnerMismatch =>
+      'توجد وردية مفتوحة على هذا الجهاز فتحها موظف آخر. لا يمكن إغلاقها إلا بواسطة صاحبها أو مدير — سجّل الخروج ليتمكن من الدخول.';
 
   @override
   String get posShiftReturnToPin => 'تسجيل الخروج';
@@ -4368,6 +4388,33 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogTitleOrderTableMoveDenied => 'تم رفض نقل الطاولة';
+
+  @override
+  String get activityLogTitleTableStatusChanged => 'تغيّرت حالة الطاولة';
+
+  @override
+  String get activityLogTitleTableStatusDenied => 'تم رفض تغيير حالة الطاولة';
+
+  @override
+  String get activityLogTitleTablesLinked => 'تم ربط الطاولات';
+
+  @override
+  String get activityLogTitleTableLinkDenied => 'تم رفض ربط الطاولة';
+
+  @override
+  String get activityLogTitleTablesUnlinked => 'تم فك ربط الطاولات';
+
+  @override
+  String get activityLogTitleTableUnlinkDenied => 'تم رفض فك ربط الطاولة';
+
+  @override
+  String get activityLogFieldFromStatus => 'من الحالة';
+
+  @override
+  String get activityLogFieldToStatus => 'إلى الحالة';
+
+  @override
+  String get activityLogFieldGroupLabel => 'الطاولات المرتبطة';
 
   @override
   String get activityLogFieldAvailability => 'التوفر';

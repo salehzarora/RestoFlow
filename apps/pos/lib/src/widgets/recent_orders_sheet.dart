@@ -710,17 +710,28 @@ class _OrderCard extends ConsumerWidget {
             spacing: RestoflowSpacing.xs,
             runSpacing: RestoflowSpacing.xs,
             children: [
-              // LIFECYCLE + SETTLEMENT, from the ONE shared vocabulary both order
-              // surfaces speak (see order_status_pills.dart). The confirmation screen
-              // renders exactly these.
-              OrderStatusPills(
-                serverStatus: serverStatus,
-                settlement: order.settlement,
-                keySuffix: order.orderNumber,
-                // A takeaway's `served` reads "Picked up" - same state machine,
-                // honest operational words (RESTAURANT-OPERATIONS-V1-001).
-                orderType: order.orderType,
-              ),
+              // A3: a PERMANENTLY-REJECTED submit created no server order. It shows ONE
+              // honest "Not created" marker instead of a lifecycle/settlement that would
+              // imply a real order — and it carries no actions (the policy fails closed).
+              if (order.isNeverCreated)
+                RestoflowStatusPill(
+                  key: Key('recent-not-created-${order.orderNumber}'),
+                  label: l10n.posRecentOrderNotCreated,
+                  tone: RestoflowTone.danger,
+                  icon: Icons.error_outline,
+                )
+              else
+                // LIFECYCLE + SETTLEMENT, from the ONE shared vocabulary both order
+                // surfaces speak (see order_status_pills.dart). The confirmation screen
+                // renders exactly these.
+                OrderStatusPills(
+                  serverStatus: serverStatus,
+                  settlement: order.settlement,
+                  keySuffix: order.orderNumber,
+                  // A takeaway's `served` reads "Picked up" - same state machine,
+                  // honest operational words (RESTAURANT-OPERATIONS-V1-001).
+                  orderType: order.orderType,
+                ),
               // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
               // "My payment is syncing" is a fact about this till, not the order.
               if (actions.pendingKind case final p?)

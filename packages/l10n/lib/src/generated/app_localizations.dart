@@ -2296,6 +2296,36 @@ abstract class AppLocalizations {
   /// **'Remove the unavailable items, then send again.'**
   String get posRecoveryRemoveUnavailableHint;
 
+  /// No description provided for @posRecoveryReplaceCartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace the current cart?'**
+  String get posRecoveryReplaceCartTitle;
+
+  /// No description provided for @posRecoveryReplaceCartBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The cart already has items. Restoring this draft will replace them.'**
+  String get posRecoveryReplaceCartBody;
+
+  /// No description provided for @posRecoveryReplaceCartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace current cart'**
+  String get posRecoveryReplaceCartAction;
+
+  /// No description provided for @posRecoveryKeepCartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep current cart'**
+  String get posRecoveryKeepCartAction;
+
+  /// No description provided for @posRecentOrderNotCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Not created'**
+  String get posRecentOrderNotCreated;
+
   /// No description provided for @posTableOperations.
   ///
   /// In en, this message translates to:
@@ -2553,6 +2583,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t restore the shift state. Sign in again to open a shift.'**
   String get posShiftCouldNotRestore;
+
+  /// No description provided for @posShiftOwnerMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'A shift is already open on this device, opened by another employee. Only its owner or a manager can close it — sign out so they can sign in.'**
+  String get posShiftOwnerMismatch;
 
   /// No description provided for @posShiftReturnToPin.
   ///
@@ -8175,6 +8211,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Table move denied'**
   String get activityLogTitleOrderTableMoveDenied;
+
+  /// Activity Log title for table.status_set.
+  ///
+  /// In en, this message translates to:
+  /// **'Table status changed'**
+  String get activityLogTitleTableStatusChanged;
+
+  /// Activity Log title for table.status_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Table status change denied'**
+  String get activityLogTitleTableStatusDenied;
+
+  /// Activity Log title for table.tables_linked.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables linked'**
+  String get activityLogTitleTablesLinked;
+
+  /// Activity Log title for table.link_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Table link denied'**
+  String get activityLogTitleTableLinkDenied;
+
+  /// Activity Log title for table.tables_unlinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables unlinked'**
+  String get activityLogTitleTablesUnlinked;
+
+  /// Activity Log title for table.unlink_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Table unlink denied'**
+  String get activityLogTitleTableUnlinkDenied;
+
+  /// Activity Log field label for the table manual status before a change.
+  ///
+  /// In en, this message translates to:
+  /// **'From status'**
+  String get activityLogFieldFromStatus;
+
+  /// Activity Log field label for the table manual status after a change.
+  ///
+  /// In en, this message translates to:
+  /// **'To status'**
+  String get activityLogFieldToStatus;
+
+  /// Activity Log field label for a linked table group's combined label.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked tables'**
+  String get activityLogFieldGroupLabel;
 
   /// Activity Log field label for the availability before/after value.
   ///

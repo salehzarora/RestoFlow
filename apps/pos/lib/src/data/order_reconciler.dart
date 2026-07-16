@@ -174,6 +174,9 @@ int unpaidOrderCount(Iterable<PosRecentOrder> orders) =>
 /// the filters and (in Commit 3) the sections all ask the SAME question.
 bool isCountedUnpaid(PosRecentOrder order) {
   if (order.syncState == PosOrderSyncState.localDraft) return false;
+  // A3: a permanently-rejected submit created no server order — it owes nothing and
+  // must never sit in the cashier's unpaid badge.
+  if (order.isNeverCreated) return false;
   if (order.isTerminal) return false;
   return order.settlement.owesMoney;
 }

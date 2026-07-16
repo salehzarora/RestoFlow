@@ -1164,6 +1164,22 @@ class AppLocalizationsHe extends AppLocalizations {
       'הסר את הפריטים שאינם זמינים ושלח שוב.';
 
   @override
+  String get posRecoveryReplaceCartTitle => 'להחליף את העגלה הנוכחית?';
+
+  @override
+  String get posRecoveryReplaceCartBody =>
+      'בעגלה כבר יש פריטים. שחזור טיוטה זו יחליף אותם.';
+
+  @override
+  String get posRecoveryReplaceCartAction => 'החלף עגלה נוכחית';
+
+  @override
+  String get posRecoveryKeepCartAction => 'השאר עגלה נוכחית';
+
+  @override
+  String get posRecentOrderNotCreated => 'לא נוצרה';
+
+  @override
   String get posTableOperations => 'פעולות שולחנות';
 
   @override
@@ -1297,6 +1313,10 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posShiftCouldNotRestore =>
       'לא ניתן לשחזר את מצב המשמרת. היכנס שוב כדי לפתוח משמרת.';
+
+  @override
+  String get posShiftOwnerMismatch =>
+      'כבר פתוחה משמרת במכשיר זה, שנפתחה על ידי עובד אחר. רק בעליה או מנהל יכולים לסגור אותה — התנתק כדי שיוכלו להיכנס.';
 
   @override
   String get posShiftReturnToPin => 'התנתקות';
@@ -4337,6 +4357,33 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogTitleOrderTableMoveDenied => 'העברת השולחן נדחתה';
+
+  @override
+  String get activityLogTitleTableStatusChanged => 'סטטוס השולחן שונה';
+
+  @override
+  String get activityLogTitleTableStatusDenied => 'שינוי סטטוס השולחן נדחה';
+
+  @override
+  String get activityLogTitleTablesLinked => 'השולחנות קושרו';
+
+  @override
+  String get activityLogTitleTableLinkDenied => 'קישור השולחן נדחה';
+
+  @override
+  String get activityLogTitleTablesUnlinked => 'קישור השולחנות בוטל';
+
+  @override
+  String get activityLogTitleTableUnlinkDenied => 'ביטול קישור השולחן נדחה';
+
+  @override
+  String get activityLogFieldFromStatus => 'מסטטוס';
+
+  @override
+  String get activityLogFieldToStatus => 'לסטטוס';
+
+  @override
+  String get activityLogFieldGroupLabel => 'שולחנות מקושרים';
 
   @override
   String get activityLogFieldAvailability => 'זמינות';

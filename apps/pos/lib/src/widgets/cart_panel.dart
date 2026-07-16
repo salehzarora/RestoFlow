@@ -361,6 +361,9 @@ Future<void> submitOrderFromCart({
             table: setup.assignedTable,
             customerName: setup.customerName,
             outboxEntryId: result.entry.id,
+            // A2: bind the recovery to THIS exact context (scope + PIN session) so a
+            // later employee / branch / device can never see or restore this draft.
+            binding: container.read(posRecoveryBindingProvider),
           ),
         );
 
@@ -382,9 +385,19 @@ Future<void> submitOrderFromCart({
     // throw ref-after-dispose.
     final submitted = container.read(cartControllerProvider).submittedOrder;
     if (submitted != null) {
-      container
-          .read(posRecentOrdersControllerProvider.notifier)
-          .recordSubmitted(submitted);
+      final recent = container.read(posRecentOrdersControllerProvider.notifier);
+      recent.recordSubmitted(submitted);
+      // PILOT-OPERATIONS-CORRECTIONS-001 (A3): in REAL mode the submit auto-pushed
+      // INSIDE outbox.submit, so a permanent rejection (item_unavailable) may have
+      // ALREADY landed before this row was recorded. If so, retire it to a
+      // non-actionable rejected shell immediately — a locally-generated order id is
+      // never proof the server accepted it.
+      final entry = container
+          .read(outboxControllerProvider.notifier)
+          .entryById(result.entry.id);
+      if (entry != null && entry.isPermanentBusinessRejection) {
+        recent.markLocallyRejected(submitted.identity);
+      }
     }
     setupController.reset();
   } on OrderSubmissionException {
