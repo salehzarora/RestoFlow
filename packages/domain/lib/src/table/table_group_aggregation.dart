@@ -30,6 +30,18 @@ int tableEffectiveStateRank(String effectiveState) => switch (effectiveState) {
   _ => 1, // available / unknown fails to the lowest (never masks a real hold)
 };
 
+/// One member row fed to [aggregateTableGroup]: the PHYSICAL table id plus that
+/// table's own (already-fused) effective state and derived active dine-in count.
+///
+/// PILOT-OPERATIONS-CORRECTIONS-001 (Finding 4): the [tableId] is REQUIRED so the
+/// aggregation can deduplicate by physical table — a row duplicated by an upstream
+/// join/projection must never double a table's occupancy.
+typedef TableGroupMember = ({
+  String tableId,
+  String effectiveState,
+  int activeOrderCount,
+});
+
 /// The aggregated group-wide state + count that every member of a group projects.
 class TableGroupAggregate {
   const TableGroupAggregate({
@@ -40,7 +52,7 @@ class TableGroupAggregate {
   /// The group-wide effective state (highest-precedence member state).
   final String effectiveState;
 
-  /// The group-wide active dine-in order count (the SUM across members).
+  /// The group-wide active dine-in order count (the SUM across DISTINCT tables).
   final int activeOrderCount;
 
   /// A group is selectable for a NEW dine-in order only when it is fully available.
@@ -49,24 +61,53 @@ class TableGroupAggregate {
 
 /// Aggregates the members of ONE group into a single group-wide state + count.
 ///
-/// [members] are `(effectiveState, activeOrderCount)` for every table sharing the
-/// group id. The effective state is the highest-precedence member state; the count is
-/// the SUM — each active order sits on exactly one physical table, so summing the
-/// per-member counts can never double-count the same order. Historical takeaway rows
-/// never carry dine-in occupancy, so they never contribute (the per-member counts are
-/// already dine-in-only, per the backend).
-TableGroupAggregate aggregateTableGroup(
-  Iterable<({String effectiveState, int activeOrderCount})> members,
-) {
+/// STEP 1 — DEDUP BY PHYSICAL TABLE ID (Finding 4). A physical table contributes to a
+/// group AT MOST ONCE, so a row duplicated upstream cannot double-count its orders.
+/// When the same [TableGroupMember.tableId] appears more than once, its rows are merged
+/// deterministically and SAFELY: the effective state becomes the most RESTRICTIVE of
+/// them (highest precedence rank) and the active-order count becomes the MAX of them
+/// (never the sum) — conflicting duplicates never turn into extra capacity or a
+/// contradictory state.
+///
+/// STEP 2 — aggregate the DISTINCT physical members: the group effective state is the
+/// highest-precedence per-table state; the count is the SUM across the distinct tables.
+/// Each active dine-in order sits on exactly one physical table, so summing distinct
+/// per-table counts can never double-count the same order. Historical takeaway rows
+/// never carry dine-in occupancy, so they never contribute.
+TableGroupAggregate aggregateTableGroup(Iterable<TableGroupMember> members) {
+  // Step 1: collapse duplicate rows per physical table.
+  final byTable = <String, ({String effectiveState, int activeOrderCount})>{};
+  for (final m in members) {
+    final existing = byTable[m.tableId];
+    if (existing == null) {
+      byTable[m.tableId] = (
+        effectiveState: m.effectiveState,
+        activeOrderCount: m.activeOrderCount,
+      );
+    } else {
+      // Restrictive merge: keep the higher-precedence state and the MAX count.
+      final effective =
+          tableEffectiveStateRank(m.effectiveState) >
+              tableEffectiveStateRank(existing.effectiveState)
+          ? m.effectiveState
+          : existing.effectiveState;
+      final count = m.activeOrderCount > existing.activeOrderCount
+          ? m.activeOrderCount
+          : existing.activeOrderCount;
+      byTable[m.tableId] = (effectiveState: effective, activeOrderCount: count);
+    }
+  }
+
+  // Step 2: aggregate the distinct physical members.
   var bestRank = 0;
   var effective = 'available';
   var count = 0;
-  for (final m in members) {
-    count += m.activeOrderCount;
-    final rank = tableEffectiveStateRank(m.effectiveState);
+  for (final t in byTable.values) {
+    count += t.activeOrderCount;
+    final rank = tableEffectiveStateRank(t.effectiveState);
     if (rank > bestRank) {
       bestRank = rank;
-      effective = m.effectiveState;
+      effective = t.effectiveState;
     }
   }
   return TableGroupAggregate(

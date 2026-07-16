@@ -103,12 +103,14 @@ TableStatusKind tableStatusKindFor(String effectiveState) =>
 /// is the SINGLE place the POS applies group aggregation, feeding the floor read, the
 /// picker, and the table-operations sheet alike.
 List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
-  final byGroup =
-      <String, List<({String effectiveState, int activeOrderCount})>>{};
+  final byGroup = <String, List<TableGroupMember>>{};
   for (final t in tables) {
     final g = t.groupId;
     if (g == null) continue;
+    // Finding 4: carry the PHYSICAL table id so aggregateTableGroup deduplicates by
+    // table — a row duplicated upstream cannot double a table's occupancy.
     (byGroup[g] ??= []).add((
+      tableId: t.tableId,
       effectiveState: t.effectiveState,
       activeOrderCount: t.activeOrderCount,
     ));

@@ -147,6 +147,20 @@ void main() {
       ]);
       expect(out.every((x) => x.effectiveState == 'out_of_service'), isTrue);
     });
+
+    // Finding 4: a duplicate physical-table row must not double the group count.
+    test('9/10. a duplicate physical row does not double the group count', () {
+      final out = withDashboardGroupAggregation([
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'), // dup
+        t('t2', 'T2', effective: 'available', active: 0, group: 'g1'),
+      ]);
+      // Every grouped tile shows the deduplicated group truth: Occupied, count 1.
+      for (final x in out) {
+        expect(x.effectiveState, 'occupied');
+        expect(x.activeOrderCount, 1); // never 2
+      }
+    });
   });
 
   group('SupabaseTablesRepository', () {

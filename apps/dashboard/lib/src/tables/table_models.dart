@@ -7,7 +7,7 @@
 library;
 
 import 'package:restoflow_domain/restoflow_domain.dart'
-    show aggregateTableGroup, TableGroupAggregate;
+    show aggregateTableGroup, TableGroupAggregate, TableGroupMember;
 
 /// `dining_tables.status` (CHECK: available | occupied | reserved |
 /// out_of_service).
@@ -110,13 +110,15 @@ class DashboardTable {
 List<DashboardTable> withDashboardGroupAggregation(
   List<DashboardTable> tables,
 ) {
-  final byGroup =
-      <String, List<({String effectiveState, int activeOrderCount})>>{};
+  final byGroup = <String, List<TableGroupMember>>{};
   for (final t in tables) {
     final g = t.groupId;
     final e = t.effectiveState;
     if (g == null || e == null) continue;
+    // Finding 4: carry the PHYSICAL table id so a duplicate row cannot double a
+    // group's count.
     (byGroup[g] ??= []).add((
+      tableId: t.id,
       effectiveState: e,
       activeOrderCount: t.activeOrderCount,
     ));

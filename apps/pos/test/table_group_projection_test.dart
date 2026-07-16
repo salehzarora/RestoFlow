@@ -97,5 +97,32 @@ void main() {
       );
       expect(out.firstWhere((t) => t.tableId == 't2').isAssignable, isTrue);
     });
+
+    // Finding 4: a duplicate physical-table row (upstream join/projection) must not
+    // double the group's displayed active-order count, nor make it contradictory.
+    test('6/7. a duplicate physical row does not double the group count', () {
+      final out = withGroupAggregation([
+        _t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        _t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'), // dup
+        _t('t2', 'T2', effective: 'available', active: 0, group: 'g1'),
+      ]);
+      // Every projected row shows the deduplicated group count of 1, never 2.
+      for (final t in out) {
+        expect(t.activeOrderCount, 1);
+        expect(t.effectiveState, 'occupied');
+      }
+    });
+
+    test(
+      '8. a projected member still carries its own real physical table_id',
+      () {
+        final out = withGroupAggregation([
+          _t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+          _t('t2', 'T2', effective: 'available', group: 'g1'),
+        ]);
+        // The picker selects a real physical table id, never a group id.
+        expect(out.map((t) => t.tableId).toSet(), {'t1', 't2'});
+      },
+    );
   });
 }
