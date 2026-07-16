@@ -31,7 +31,10 @@ class DemoTable {
     this.manualStatus = 'available',
     this.effectiveState = 'available',
     this.groupId,
-  });
+    String? memberEffectiveState,
+    int? memberActiveOrderCount,
+  }) : _memberEffectiveState = memberEffectiveState,
+       _memberActiveOrderCount = memberActiveOrderCount;
 
   final DiningTable table;
   final TableStatusKind status;
@@ -58,6 +61,20 @@ class DemoTable {
   /// table is not part of a group. Client renders same-group tables as one unit.
   final String? groupId;
 
+  /// PSC-001B: this member's OWN (pre-group-projection) truth, preserved through
+  /// [withGroupAggregation] so the group-detail sheet can honestly show which
+  /// physical table owns which state/activity while [effectiveState] and
+  /// [activeOrderCount] carry the group-wide projection. For an ungrouped (or
+  /// never-projected) row they fall back to the row's own values.
+  final String? _memberEffectiveState;
+  final int? _memberActiveOrderCount;
+
+  /// This physical table's OWN effective state (never the group projection).
+  String get memberEffectiveState => _memberEffectiveState ?? effectiveState;
+
+  /// This physical table's OWN active dine-in order count (never the group sum).
+  int get memberActiveOrderCount => _memberActiveOrderCount ?? activeOrderCount;
+
   String get tableId => table.tableId;
   String get label => table.label;
   int? get seats => table.seats;
@@ -73,10 +90,17 @@ class DemoTable {
   /// PILOT-OPERATIONS-CORRECTIONS-001 (A4): a copy with the GROUP-WIDE effective
   /// state, count and derived status projected onto this member. Used only by
   /// [withGroupAggregation]; every other field is preserved.
+  ///
+  /// PSC-001B: the member's OWN truth survives the projection. When the optional
+  /// member values are omitted the copy keeps this row's current member truth
+  /// (the group-projection step); the dedup merge passes them explicitly so a
+  /// duplicate physical row's merged state/count becomes the member truth.
   DemoTable copyWithGroupState({
     required String effectiveState,
     required int activeOrderCount,
     required TableStatusKind status,
+    String? memberEffectiveState,
+    int? memberActiveOrderCount,
   }) => DemoTable(
     table: table,
     status: status,
@@ -84,6 +108,9 @@ class DemoTable {
     manualStatus: manualStatus,
     effectiveState: effectiveState,
     groupId: groupId,
+    memberEffectiveState: memberEffectiveState ?? this.memberEffectiveState,
+    memberActiveOrderCount:
+        memberActiveOrderCount ?? this.memberActiveOrderCount,
   );
 }
 
@@ -123,10 +150,14 @@ List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
           ? t.activeOrderCount
           : existing.activeOrderCount;
       // Keep the FIRST row's identity fields (label/manual/group); merge state + count.
+      // PSC-001B: the merged values are ALSO this physical table's member truth,
+      // so a later group projection cannot resurrect a stale duplicate's state.
       byId[t.tableId] = existing.copyWithGroupState(
         effectiveState: effective,
         activeOrderCount: count,
         status: tableStatusKindFor(effective),
+        memberEffectiveState: effective,
+        memberActiveOrderCount: count,
       );
     }
   }

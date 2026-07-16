@@ -162,6 +162,45 @@ void main() {
     );
   });
 
+  group('PSC-001B: member truth survives the group projection', () {
+    test('a projected member keeps its OWN state and count', () {
+      final out = withGroupAggregation([
+        _t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        _t('t2', 'T2', effective: 'available', active: 0, group: 'g1'),
+      ]);
+      final t1 = out.firstWhere((t) => t.tableId == 't1');
+      final t2 = out.firstWhere((t) => t.tableId == 't2');
+      // Group-wide projection (A4) is unchanged...
+      expect(t2.effectiveState, 'occupied');
+      expect(t2.activeOrderCount, 1);
+      // ...but each member's OWN truth is preserved for the detail sheet.
+      expect(t2.memberEffectiveState, 'available');
+      expect(t2.memberActiveOrderCount, 0);
+      expect(t1.memberEffectiveState, 'occupied');
+      expect(t1.memberActiveOrderCount, 1);
+    });
+
+    test('duplicate physical rows merge INTO the member truth', () {
+      final out = withGroupAggregation([
+        _t('t1', 'T1', effective: 'available', active: 0, group: 'g1'),
+        _t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'), // dup
+        _t('t2', 'T2', effective: 'available', active: 0, group: 'g1'),
+      ]);
+      final t1 = out.firstWhere((t) => t.tableId == 't1');
+      // The merged (restrictive/max) values ARE t1's own truth.
+      expect(t1.memberEffectiveState, 'occupied');
+      expect(t1.memberActiveOrderCount, 1);
+    });
+
+    test('an ungrouped table\'s member truth equals its own values', () {
+      final out = withGroupAggregation([
+        _t('t1', 'T1', effective: 'reserved', active: 0),
+      ]);
+      expect(out.single.memberEffectiveState, 'reserved');
+      expect(out.single.memberActiveOrderCount, 0);
+    });
+  });
+
   group('Finding 6: an unknown table state is non-assignable', () {
     test('tableStatusKindFor maps unknown -> blocked (non-assignable)', () {
       expect(
