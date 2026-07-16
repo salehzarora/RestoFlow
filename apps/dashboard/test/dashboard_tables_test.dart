@@ -103,6 +103,52 @@ Map<String, dynamic> _listOk() => {
 };
 
 void main() {
+  group('withDashboardGroupAggregation (A4)', () {
+    DashboardTable t(
+      String id,
+      String label, {
+      DiningTableStatus status = DiningTableStatus.available,
+      String effective = 'available',
+      int active = 0,
+      String? group,
+    }) => DashboardTable(
+      id: id,
+      label: label,
+      status: status,
+      isActive: true,
+      branchId: 'b',
+      activeOrderCount: active,
+      effectiveState: effective,
+      groupId: group,
+    );
+
+    test('7. a linked group shows ONE coherent effective state + count', () {
+      final out = withDashboardGroupAggregation([
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        t('t2', 'T2', effective: 'available', active: 0, group: 'g1'),
+        t('t3', 'T3', effective: 'available', active: 0), // ungrouped control
+      ]);
+      final t1 = out.firstWhere((x) => x.id == 't1');
+      final t2 = out.firstWhere((x) => x.id == 't2');
+      final t3 = out.firstWhere((x) => x.id == 't3');
+      // Both grouped members read the group-wide truth: Occupied, count 1.
+      expect(t1.effectiveState, 'occupied');
+      expect(t2.effectiveState, 'occupied');
+      expect(t1.activeOrderCount, 1);
+      expect(t2.activeOrderCount, 1);
+      // The ungrouped table is untouched.
+      expect(t3.effectiveState, 'available');
+    });
+
+    test('out-of-service member propagates across the group', () {
+      final out = withDashboardGroupAggregation([
+        t('t1', 'T1', effective: 'out_of_service', group: 'g1'),
+        t('t2', 'T2', effective: 'available', group: 'g1'),
+      ]);
+      expect(out.every((x) => x.effectiveState == 'out_of_service'), isTrue);
+    });
+  });
+
   group('SupabaseTablesRepository', () {
     test('load parses the tables list (inactive included)', () async {
       final t = _FakeTransport((fn, p) => _listOk());
@@ -449,12 +495,14 @@ void main() {
       // link/unlink control on the Dashboard).
       expect(find.text('${l10n.tablesLinked}: T1 + T2'), findsNWidgets(2));
       expect(find.byKey(const Key('table-linked-t-1')), findsOneWidget);
-      // The effective state (Occupied) is surfaced where it differs from manual.
+      // A4: the group-wide effective state (Occupied) is now surfaced on BOTH
+      // members — t-2 is manually Available but the LINKED GROUP is occupied, so it
+      // must not read as free. This is the aggregation fix: one coherent group truth.
       expect(
         find.textContaining(
           '${l10n.tablesEffective}: ${l10n.tablesStatusOccupied}',
         ),
-        findsOneWidget,
+        findsNWidgets(2),
       );
     });
   });

@@ -83,5 +83,6 @@ export 'src/shift/shift_status.dart';
 export 'src/table/dining_table.dart';
 export 'src/table/order_placement.dart';
 export 'src/table/table_assignment_service.dart';
+export 'src/table/table_group_aggregation.dart';
 export 'src/table/table_exceptions.dart';
 export 'src/table/table_policy.dart';

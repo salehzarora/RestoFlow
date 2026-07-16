@@ -89,8 +89,13 @@ class _TablesScreenState extends State<TablesScreen> {
     );
   }
 
-  Widget _list(BuildContext context, List<DashboardTable> tables) {
+  Widget _list(BuildContext context, List<DashboardTable> rawTables) {
     final l10n = AppLocalizations.of(context);
+    // PILOT-OPERATIONS-CORRECTIONS-001 (A4): project the group-wide effective state +
+    // active dine-in count onto every grouped member, so a free-looking peer of an
+    // occupied group never appears Available. One canonical aggregation, shared with
+    // the POS (packages/domain).
+    final tables = withDashboardGroupAggregation(rawTables);
     if (tables.isEmpty) {
       return AdminStateView(
         icon: Icons.table_restaurant_outlined,

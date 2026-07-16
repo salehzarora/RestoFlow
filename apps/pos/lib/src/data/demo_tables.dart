@@ -69,6 +69,65 @@ class DemoTable {
 
   /// A table can be assigned to a dine-in order only when it is available.
   bool get isAssignable => status == TableStatusKind.available;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001 (A4): a copy with the GROUP-WIDE effective
+  /// state, count and derived status projected onto this member. Used only by
+  /// [withGroupAggregation]; every other field is preserved.
+  DemoTable copyWithGroupState({
+    required String effectiveState,
+    required int activeOrderCount,
+    required TableStatusKind status,
+  }) => DemoTable(
+    table: table,
+    status: status,
+    activeOrderCount: activeOrderCount,
+    manualStatus: manualStatus,
+    effectiveState: effectiveState,
+    groupId: groupId,
+  );
+}
+
+/// Maps a GROUP-WIDE effective state to the picker's assignability model (mirrors the
+/// per-table mappings: reserved/occupied are non-assignable, out_of_service blocked).
+TableStatusKind tableStatusKindFor(String effectiveState) =>
+    switch (effectiveState) {
+      'available' => TableStatusKind.available,
+      'out_of_service' => TableStatusKind.blocked,
+      _ => TableStatusKind.occupied, // occupied / reserved -> non-assignable
+    };
+
+/// PILOT-OPERATIONS-CORRECTIONS-001 (A4): projects the ONE canonical group aggregation
+/// ([aggregateTableGroup]) onto every grouped table, so a linked group presents as one
+/// operational unit — every member shows the SAME group-wide effective state and the
+/// SAME group-wide active dine-in count. Ungrouped tables are returned unchanged. This
+/// is the SINGLE place the POS applies group aggregation, feeding the floor read, the
+/// picker, and the table-operations sheet alike.
+List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
+  final byGroup =
+      <String, List<({String effectiveState, int activeOrderCount})>>{};
+  for (final t in tables) {
+    final g = t.groupId;
+    if (g == null) continue;
+    (byGroup[g] ??= []).add((
+      effectiveState: t.effectiveState,
+      activeOrderCount: t.activeOrderCount,
+    ));
+  }
+  if (byGroup.isEmpty) return tables;
+  final aggByGroup = <String, TableGroupAggregate>{
+    for (final e in byGroup.entries) e.key: aggregateTableGroup(e.value),
+  };
+  return <DemoTable>[
+    for (final t in tables)
+      if (t.groupId case final g? when aggByGroup[g] != null)
+        t.copyWithGroupState(
+          effectiveState: aggByGroup[g]!.effectiveState,
+          activeOrderCount: aggByGroup[g]!.activeOrderCount,
+          status: tableStatusKindFor(aggByGroup[g]!.effectiveState),
+        )
+      else
+        t,
+  ];
 }
 
 /// The repository seam for tables (RF-114). Its method maps 1:1 to the future

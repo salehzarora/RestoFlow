@@ -6,6 +6,9 @@
 /// operational data only (label/seats/area/status) — never a secret.
 library;
 
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show aggregateTableGroup, TableGroupAggregate;
+
 /// `dining_tables.status` (CHECK: available | occupied | reserved |
 /// out_of_service).
 enum DiningTableStatus {
@@ -78,4 +81,58 @@ class DashboardTable {
   final String? groupId;
 
   bool get isGrouped => groupId != null;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001 (A4): a copy carrying the GROUP-WIDE effective
+  /// state + active dine-in count projected onto this member. Only these two fields
+  /// change (the manual [status] the owner set is a separate, per-table axis).
+  DashboardTable copyWithGroupState({
+    required String effectiveState,
+    required int activeOrderCount,
+  }) => DashboardTable(
+    id: id,
+    label: label,
+    status: status,
+    isActive: isActive,
+    branchId: branchId,
+    seats: seats,
+    area: area,
+    activeOrderCount: activeOrderCount,
+    effectiveState: effectiveState,
+    groupId: groupId,
+  );
+}
+
+/// PILOT-OPERATIONS-CORRECTIONS-001 (A4): projects the ONE canonical group aggregation
+/// ([aggregateTableGroup]) onto every grouped table, so the Dashboard presents a linked
+/// group as one coherent operational unit — every member showing the SAME group-wide
+/// effective state and active dine-in count. Ungrouped tables are unchanged; a member
+/// with no server effective state (older backend) is left as-is.
+List<DashboardTable> withDashboardGroupAggregation(
+  List<DashboardTable> tables,
+) {
+  final byGroup =
+      <String, List<({String effectiveState, int activeOrderCount})>>{};
+  for (final t in tables) {
+    final g = t.groupId;
+    final e = t.effectiveState;
+    if (g == null || e == null) continue;
+    (byGroup[g] ??= []).add((
+      effectiveState: e,
+      activeOrderCount: t.activeOrderCount,
+    ));
+  }
+  if (byGroup.isEmpty) return tables;
+  final aggByGroup = <String, TableGroupAggregate>{
+    for (final e in byGroup.entries) e.key: aggregateTableGroup(e.value),
+  };
+  return <DashboardTable>[
+    for (final t in tables)
+      if (t.groupId case final g? when aggByGroup[g] != null)
+        t.copyWithGroupState(
+          effectiveState: aggByGroup[g]!.effectiveState,
+          activeOrderCount: aggByGroup[g]!.activeOrderCount,
+        )
+      else
+        t,
+  ];
 }

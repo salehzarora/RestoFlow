@@ -127,6 +127,13 @@ final tablesRepositoryProvider = Provider<TablesRepository>((ref) {
 
 /// Loads the branch's tables for the picker. Async to mirror the future backend
 /// read; resolves immediately for the demo store.
+///
+/// PILOT-OPERATIONS-CORRECTIONS-001 (A4): the SINGLE point where linked-table GROUP
+/// aggregation is applied, so every consumer (floor read, picker, table-operations
+/// sheet) sees each group as ONE unit — every member carrying the group-wide effective
+/// state and active dine-in count, never a free-looking peer of an occupied group.
 final tablesProvider = FutureProvider.autoDispose<List<DemoTable>>(
-  (ref) => ref.watch(tablesRepositoryProvider).loadTables(),
+  (ref) async => withGroupAggregation(
+    await ref.watch(tablesRepositoryProvider).loadTables(),
+  ),
 );
