@@ -39,7 +39,9 @@ import 'package:restoflow_pos/src/widgets/cart_panel.dart';
 /// Every test drives the production seam: the real session controller, the real
 /// gate, the real scope provider, the real sync coordinator, the real sheets.
 void main() {
-  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2)); // stabilization: anchor to real clock (recent-orders 1-day window)
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   const ctxA = DeviceContext(
     organizationId: 'org-1',

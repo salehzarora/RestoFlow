@@ -34,7 +34,9 @@ import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 /// real applySnapshots/_recover paths, with only TIMING and persistence outcomes
 /// controlled from outside.
 void main() {
-  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2)); // stabilization: anchor to real clock (recent-orders 1-day window)
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   const ctxA = DeviceContext(
     organizationId: 'org-1',

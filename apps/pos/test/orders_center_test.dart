@@ -15,7 +15,9 @@ import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 /// three things that makes hard: which orders appear, which section they land in,
 /// and — above all — which actions are offered on them.
 void main() {
-  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2)); // stabilization: anchor to real clock (recent-orders 1-day window)
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   PosOrderSnapshot snap({
     String id = 'o-1',

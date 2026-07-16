@@ -159,6 +159,13 @@ const Map<String, _Kind> _displayableKeys = {
   'table_label': _Kind.text,
   'from_table_label': _Kind.text,
   'to_table_label': _Kind.text,
+  // PILOT-OPERATIONS-CORRECTIONS-001 (B4): the operational table payload's safe
+  // scalar keys (app.audit_safe_detail): the manual floor-status before/after and the
+  // combined linked-group label ("T4 + T5"). Safe display text — never money, never an
+  // identifier (T-003 holds).
+  'from_status': _Kind.text,
+  'to_status': _Kind.text,
+  'group_label': _Kind.text,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -209,6 +216,9 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'table_label' => l10n.activityLogFieldTableLabel,
   'from_table_label' => l10n.activityLogFieldFromTable,
   'to_table_label' => l10n.activityLogFieldToTable,
+  'from_status' => l10n.activityLogFieldFromStatus,
+  'to_status' => l10n.activityLogFieldToStatus,
+  'group_label' => l10n.activityLogFieldGroupLabel,
   _ => key,
 };
 
@@ -374,6 +384,13 @@ class AuditEventPresenter {
       l10n.activityLogTitleMenuAvailabilityDenied,
     'order.table_moved' => l10n.activityLogTitleOrderTableMoved,
     'order.table_move_denied' => l10n.activityLogTitleOrderTableMoveDenied,
+    // PILOT-OPERATIONS-CORRECTIONS-001 (B4): POS operational table actions.
+    'table.status_set' => l10n.activityLogTitleTableStatusChanged,
+    'table.status_denied' => l10n.activityLogTitleTableStatusDenied,
+    'table.tables_linked' => l10n.activityLogTitleTablesLinked,
+    'table.link_denied' => l10n.activityLogTitleTableLinkDenied,
+    'table.tables_unlinked' => l10n.activityLogTitleTablesUnlinked,
+    'table.unlink_denied' => l10n.activityLogTitleTableUnlinkDenied,
     _ => null,
   };
 

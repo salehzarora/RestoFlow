@@ -13,7 +13,9 @@ import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 /// These tests pin the rules that end that, and in particular the exact production
 /// failures that motivated the phase.
 void main() {
-  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2)); // stabilization: anchor to real clock (recent-orders 1-day window)
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   PosOrderSnapshot snap({
     String orderId = 'o-1',

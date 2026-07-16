@@ -40,7 +40,9 @@ import 'package:restoflow_pos/src/widgets/order_confirmation.dart';
 /// the code a pre-computed key, a pre-deduped list or a pre-decided eligibility and
 /// then congratulates it for agreeing.
 void main() {
-  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2)); // stabilization: anchor to real clock (recent-orders 1-day window)
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   // The SAME till, moved between two branches. This is the whole point: the device id
   // is identical, so nothing but the full scope can tell the two situations apart.

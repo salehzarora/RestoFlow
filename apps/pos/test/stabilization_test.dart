@@ -41,7 +41,9 @@ import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
 /// Every test drives the production seam that was defective. None hands the code a
 /// pre-computed answer.
 void main() {
-  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2)); // stabilization: anchor to real clock (recent-orders 1-day window)
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   PosOrderSnapshot snap({
     String id = 'o-1',

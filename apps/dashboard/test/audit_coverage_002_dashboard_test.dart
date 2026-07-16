@@ -161,6 +161,90 @@ void main() {
     },
   );
 
+  // ===== PILOT-OPERATIONS-CORRECTIONS-001 (B4): operational table actions =====
+  test(
+    'B4 every new table action is registered under Tables with a title',
+    () async {
+      final en = await _l('en');
+      const successActions = {
+        'table.status_set': null,
+        'table.tables_linked': null,
+        'table.tables_unlinked': null,
+      };
+      const deniedActions = {
+        'table.status_denied',
+        'table.link_denied',
+        'table.unlink_denied',
+      };
+      for (final action in [...successActions.keys, ...deniedActions]) {
+        // registered under the Tables category...
+        expect(
+          kAuditActionRegistry[action]?.category,
+          'tables',
+          reason: '$action not registered under tables',
+        );
+        final v = AuditEventPresenter(
+          en,
+          'ILS',
+        ).present(_event(action: action, category: 'tables'));
+        // ...renders a SPECIFIC title (never the generic category fallback)...
+        expect(
+          v.isKnownAction,
+          isTrue,
+          reason: '$action has no specific title',
+        );
+        expect(v.categoryLabel, en.activityLogCategoryTables);
+      }
+      // ...and a denial reads as denied.
+      final denied = AuditEventPresenter(en, 'ILS').present(
+        _event(
+          action: 'table.status_denied',
+          category: 'tables',
+          newValues: {
+            'denied_reason': 'permission_denied',
+            'to_status': 'reserved',
+          },
+        ),
+      );
+      expect(denied.isDenied, isTrue);
+    },
+  );
+
+  test(
+    'B4 the table payload renders from/to status + group label safely',
+    () async {
+      final en = await _l('en');
+      final statusChange = AuditEventPresenter(en, 'ILS').present(
+        _event(
+          action: 'table.status_set',
+          category: 'tables',
+          oldValues: {'status': 'available'},
+          newValues: {
+            'status': 'reserved',
+            'from_status': 'available',
+            'to_status': 'reserved',
+            'table_label': 'T4',
+          },
+        ),
+      );
+      expect(
+        statusChange.changes.any((c) => c.label == en.activityLogFieldToStatus),
+        isTrue,
+      );
+      final link = AuditEventPresenter(en, 'ILS').present(
+        _event(
+          action: 'table.tables_linked',
+          category: 'tables',
+          newValues: {'group_label': 'T4 + T5', 'table_label': 'T4'},
+        ),
+      );
+      final group = link.changes.firstWhere(
+        (c) => c.label == en.activityLogFieldGroupLabel,
+      );
+      expect(group.newValue, 'T4 + T5');
+    },
+  );
+
   // ===== the coverage GUARD =================================================
   test('G1 the real audit registry has NO coverage violations', () async {
     final en = await _l('en');

@@ -142,6 +142,15 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
   ),
   'table.created': AuditActionSpec(category: 'tables'),
   'table.delete_denied': AuditActionSpec(category: 'tables'),
+  // PILOT-OPERATIONS-CORRECTIONS-001 (B4): the POS operational table actions — manual
+  // floor-status changes and link/unlink — success AND denied variants, each with a
+  // clear localized title (the actual server action names, verified in the migration).
+  'table.status_set': AuditActionSpec(category: 'tables', hasTitle: true),
+  'table.status_denied': AuditActionSpec(category: 'tables', hasTitle: true),
+  'table.tables_linked': AuditActionSpec(category: 'tables', hasTitle: true),
+  'table.link_denied': AuditActionSpec(category: 'tables', hasTitle: true),
+  'table.tables_unlinked': AuditActionSpec(category: 'tables', hasTitle: true),
+  'table.unlink_denied': AuditActionSpec(category: 'tables', hasTitle: true),
   'organization.created': AuditActionSpec(
     category: 'organization',
     hasTitle: true,

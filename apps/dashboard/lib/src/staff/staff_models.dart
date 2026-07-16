@@ -72,8 +72,7 @@ class StaffCapabilities {
     applyFullComp: applyFullComp ?? this.applyFullComp,
     manageMenuAvailability:
         manageMenuAvailability ?? this.manageMenuAvailability,
-    manageTableOperations:
-        manageTableOperations ?? this.manageTableOperations,
+    manageTableOperations: manageTableOperations ?? this.manageTableOperations,
   );
 
   /// Parses the `capabilities` object from `list_staff` (effective booleans).
@@ -82,17 +81,18 @@ class StaffCapabilities {
   /// default, ON). [applyFullComp] uses the INVERSE — `== true` — so a missing
   /// key, an old server that does not send the field at all, or any malformed
   /// value all resolve to DENIED. Fail-closed: the client never invents a grant.
-  static StaffCapabilities fromJson(Map<Object?, Object?> json) =>
-      StaffCapabilities(
-        applyDiscount: json['apply_discount'] != false,
-        voidOrder: json['void_order'] != false,
-        closeShift: json['close_shift'] != false,
-        applyFullComp: json['apply_full_comp'] == true,
-        // PILOT-OPERATIONS-CORRECTIONS-001: DEFAULT-ON, so a MISSING key (an older
-        // server that does not send it) resolves to ON, matching the role default.
-        manageMenuAvailability: json['manage_menu_availability'] != false,
-        manageTableOperations: json['manage_table_operations'] != false,
-      );
+  static StaffCapabilities fromJson(
+    Map<Object?, Object?> json,
+  ) => StaffCapabilities(
+    applyDiscount: json['apply_discount'] != false,
+    voidOrder: json['void_order'] != false,
+    closeShift: json['close_shift'] != false,
+    applyFullComp: json['apply_full_comp'] == true,
+    // PILOT-OPERATIONS-CORRECTIONS-001: DEFAULT-ON, so a MISSING key (an older
+    // server that does not send it) resolves to ON, matching the role default.
+    manageMenuAvailability: json['manage_menu_availability'] != false,
+    manageTableOperations: json['manage_table_operations'] != false,
+  );
 }
 
 /// A staff member (an `employee_profiles` row + its authoritative membership

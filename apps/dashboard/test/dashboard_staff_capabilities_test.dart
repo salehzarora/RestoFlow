@@ -146,20 +146,17 @@ void main() {
       },
     );
 
-    test(
-      'PILOT-OPERATIONS-CORRECTIONS-001: sends the two new operational '
-      'capability booleans (default ON; a deny is false)',
-      () async {
-        final t = _FakeTransport((fn, p) => {'ok': true});
-        await _repo(t).setCapabilities(
-          employeeProfileId: 'emp-9',
-          capabilities: const StaffCapabilities(manageTableOperations: false),
-        );
-        final p = t.calls.single.$2;
-        expect(p['p_manage_menu_availability'], true); // default ON
-        expect(p['p_manage_table_operations'], false); // explicitly denied
-      },
-    );
+    test('PILOT-OPERATIONS-CORRECTIONS-001: sends the two new operational '
+        'capability booleans (default ON; a deny is false)', () async {
+      final t = _FakeTransport((fn, p) => {'ok': true});
+      await _repo(t).setCapabilities(
+        employeeProfileId: 'emp-9',
+        capabilities: const StaffCapabilities(manageTableOperations: false),
+      );
+      final p = t.calls.single.$2;
+      expect(p['p_manage_menu_availability'], true); // default ON
+      expect(p['p_manage_table_operations'], false); // explicitly denied
+    });
 
     test('maps permission_denied to AdminPermissionDenied', () async {
       final t = _FakeTransport(

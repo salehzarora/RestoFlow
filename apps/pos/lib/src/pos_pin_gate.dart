@@ -126,17 +126,14 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
         // Best-effort and non-blocking — sign-in never depends on it.
         String? displayName;
         final roster = await staff.listStaff();
-        roster.fold(
-          (members) {
-            for (final m in members) {
-              if (m.employeeProfileId == employeeProfileId) {
-                displayName = m.displayName;
-                break;
-              }
+        roster.fold((members) {
+          for (final m in members) {
+            if (m.employeeProfileId == employeeProfileId) {
+              displayName = m.displayName;
+              break;
             }
-          },
-          (_) {},
-        );
+          }
+        }, (_) {});
         return ref
             .read(posSessionControllerProvider.notifier)
             .signInWithPin(

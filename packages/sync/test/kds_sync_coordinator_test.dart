@@ -313,81 +313,73 @@ void main() {
     },
   );
 
-  test(
-    'PILOT-OPERATIONS-CORRECTIONS-001: resume() un-latches a reauth-stopped '
-    'board, recovers on the next pull, and re-enables polling',
-    () async {
-      final ticks = StreamController<void>.broadcast();
-      final transport = _ScriptedTransport([
-        () => _env(
-          _ordersPage([
-            {'id': 'o1', 'status': 'preparing'},
-          ]),
-        ),
-        _throws(SyncTransportErrorKind.auth, code: '42501'),
-        () => _env(
-          _ordersPage([
-            {'id': 'o2', 'status': 'ready'},
-          ]),
-        ),
-        () => _env(
-          _ordersPage([
-            {'id': 'o3', 'status': 'ready'},
-          ]),
-        ),
-      ]);
-      final c = build(transport, ticks: ticks);
-      addTearDown(c.dispose);
-      addTearDown(ticks.close);
+  test('PILOT-OPERATIONS-CORRECTIONS-001: resume() un-latches a reauth-stopped '
+      'board, recovers on the next pull, and re-enables polling', () async {
+    final ticks = StreamController<void>.broadcast();
+    final transport = _ScriptedTransport([
+      () => _env(
+        _ordersPage([
+          {'id': 'o1', 'status': 'preparing'},
+        ]),
+      ),
+      _throws(SyncTransportErrorKind.auth, code: '42501'),
+      () => _env(
+        _ordersPage([
+          {'id': 'o2', 'status': 'ready'},
+        ]),
+      ),
+      () => _env(
+        _ordersPage([
+          {'id': 'o3', 'status': 'ready'},
+        ]),
+      ),
+    ]);
+    final c = build(transport, ticks: ticks);
+    addTearDown(c.dispose);
+    addTearDown(ticks.close);
 
-      await c.start(); // ok -> data
-      ticks.add(null); // -> 42501 -> reauthRequired + latched stop
-      await _settleUntil(() => c.state.status == KdsSyncStatus.reauthRequired);
-      final callsAtReauth = transport.calls;
+    await c.start(); // ok -> data
+    ticks.add(null); // -> 42501 -> reauthRequired + latched stop
+    await _settleUntil(() => c.state.status == KdsSyncStatus.reauthRequired);
+    final callsAtReauth = transport.calls;
 
-      // The fix: resume re-evaluates and pulls fresh (step 3 = data), so the board
-      // recovers WITHOUT an app restart.
-      await c.resume();
-      expect(transport.calls, greaterThan(callsAtReauth));
-      expect(c.state.status, KdsSyncStatus.data);
+    // The fix: resume re-evaluates and pulls fresh (step 3 = data), so the board
+    // recovers WITHOUT an app restart.
+    await c.resume();
+    expect(transport.calls, greaterThan(callsAtReauth));
+    expect(c.state.status, KdsSyncStatus.data);
 
-      // Polling is re-enabled: a subsequent tick pulls again (was permanently
-      // stopped before).
-      final callsAfterResume = transport.calls;
-      ticks.add(null);
-      await _settleUntil(() => transport.calls > callsAfterResume);
-      expect(transport.calls, greaterThan(callsAfterResume));
-    },
-  );
+    // Polling is re-enabled: a subsequent tick pulls again (was permanently
+    // stopped before).
+    final callsAfterResume = transport.calls;
+    ticks.add(null);
+    await _settleUntil(() => transport.calls > callsAfterResume);
+    expect(transport.calls, greaterThan(callsAfterResume));
+  });
 
-  test(
-    'PILOT-OPERATIONS-CORRECTIONS-001: resume() triggers an immediate '
-    'authoritative pull from a healthy state',
-    () async {
-      final transport = _ScriptedTransport([
-        () => _env(
-          _ordersPage([
-            {'id': 'o1', 'status': 'preparing'},
-          ]),
-        ),
-      ]);
-      final c = build(transport);
-      addTearDown(c.dispose);
+  test('PILOT-OPERATIONS-CORRECTIONS-001: resume() triggers an immediate '
+      'authoritative pull from a healthy state', () async {
+    final transport = _ScriptedTransport([
+      () => _env(
+        _ordersPage([
+          {'id': 'o1', 'status': 'preparing'},
+        ]),
+      ),
+    ]);
+    final c = build(transport);
+    addTearDown(c.dispose);
 
-      await c.start();
-      expect(transport.calls, 1);
-      await c.resume();
-      expect(transport.calls, 2); // resume pulled again on foreground
-      expect(c.state.status, KdsSyncStatus.data);
-    },
-  );
+    await c.start();
+    expect(transport.calls, 1);
+    await c.resume();
+    expect(transport.calls, 2); // resume pulled again on foreground
+    expect(c.state.status, KdsSyncStatus.data);
+  });
 
   test(
     'PILOT-OPERATIONS-CORRECTIONS-001: resume() before start is a no-op',
     () async {
-      final transport = _ScriptedTransport([
-        () => _env(_ordersPage(const [])),
-      ]);
+      final transport = _ScriptedTransport([() => _env(_ordersPage(const []))]);
       final c = build(transport);
       addTearDown(c.dispose);
 
