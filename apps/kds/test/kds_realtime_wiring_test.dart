@@ -26,6 +26,9 @@ class _RefreshCountingSource implements KdsSyncSource {
   Future<void> start() async {}
   @override
   Future<void> refresh() async => refreshCalls++;
+
+  @override
+  Future<void> resume() async {}
   @override
   Future<void> dispose() async => _c.close();
 }

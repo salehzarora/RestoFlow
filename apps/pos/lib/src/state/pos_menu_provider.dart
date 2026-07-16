@@ -6,6 +6,7 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/demo_menu.dart';
+import 'menu_availability_controller.dart';
 import 'pos_session.dart';
 
 /// The menu the POS sells from: categories + items + the currency.
@@ -213,9 +214,21 @@ const List<(IconData, Color)> _kCategoryPalette = [
 final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   final cfg = ref.watch(runtimeConfigProvider);
   if (cfg.isDemoMode) {
-    return const PosMenuData(
+    // PILOT-OPERATIONS-CORRECTIONS-001: apply the in-memory demo availability
+    // overlay so a demo cashier's Sold-out/Paused change is honestly reflected.
+    final overrides = ref.watch(demoAvailabilityOverridesProvider);
+    final items = overrides.isEmpty
+        ? kDemoMenu
+        : <DemoMenuItem>[
+            for (final item in kDemoMenu)
+              if (overrides[item.id] case final o?)
+                item.withAvailability(o.availability, o.reason)
+              else
+                item,
+          ];
+    return PosMenuData(
       categories: kDemoCategories,
-      items: kDemoMenu,
+      items: items,
       currencyCode: kDemoCurrencyCode,
       modifierGroups: kDemoModifierGroups,
     );
@@ -333,21 +346,12 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       items = [
         for (final item in items)
           item.imagePath != null && urls.containsKey(item.imagePath)
-              ? DemoMenuItem(
-                  id: item.id,
-                  name: item.name,
-                  priceMinor: item.priceMinor,
-                  categoryId: item.categoryId,
-                  categoryName: item.categoryName,
-                  imagePath: item.imagePath,
-                  imageUrl: urls[item.imagePath],
-                  // Carry the rich attributes through the URL rebuild.
-                  itemType: item.itemType,
-                  tags: item.tags,
-                  prepMinutes: item.prepMinutes,
-                  kitchenNote: item.kitchenNote,
-                  attributes: item.attributes,
-                )
+              // PILOT-OPERATIONS-CORRECTIONS-001: attach the resolved signed URL
+              // with a FIELD-PRESERVING copy. A partial DemoMenuItem() rebuild
+              // here silently reset availability to 'available', turning a
+              // Sold-out/Paused item back into a sellable tile once its image
+              // resolved — copyWith carries every authoritative field through.
+              ? item.copyWith(imageUrl: urls[item.imagePath])
               : item,
       ];
     }

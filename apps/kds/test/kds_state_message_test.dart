@@ -30,6 +30,9 @@ class _FakeKdsSyncSource implements KdsSyncSource {
   Future<void> refresh() async {}
 
   @override
+  Future<void> resume() async {}
+
+  @override
   Future<void> dispose() async => _controller.close();
 }
 

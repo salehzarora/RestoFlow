@@ -427,6 +427,55 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     if (changed) _apply(next);
   }
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001 (A3): marks a just-submitted row as a
+  /// PERMANENTLY-REJECTED shell — the server refused the submit (item_unavailable) and
+  /// NO server order was created. The row becomes non-actionable (the central action
+  /// policy fails closed), drops out of the open/needs-payment/completed sections and
+  /// the unpaid badge, and stays visible only under "All", clearly marked Not created.
+  /// No-op for an already-accepted (snapshotted) or already-marked row. Matched by
+  /// IDENTITY, never by display code.
+  void markLocallyRejected(PosOrderIdentity identity) {
+    var changed = false;
+    final next = <PosRecentOrder>[];
+    for (final o in state) {
+      if (!changed &&
+          o.identity == identity &&
+          o.snapshot == null &&
+          !o.neverCreated) {
+        next.add(o.copyWith(neverCreated: true));
+        changed = true;
+      } else {
+        next.add(o);
+      }
+    }
+    if (changed) _apply(next);
+  }
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001 (A3): retire (remove) a permanently-rejected
+  /// shell — on Back to cart (its draft is restored) or Discard. Removes ONLY a
+  /// [PosRecentOrder.isNeverCreated] row (never an accepted order that merely shares
+  /// the identity), so no server order can be dropped from the list.
+  void retireLocalRejected(PosOrderIdentity identity) {
+    final next = <PosRecentOrder>[
+      for (final o in state)
+        if (!(o.identity == identity && o.isNeverCreated)) o,
+    ];
+    if (next.length != state.length) _apply(next);
+  }
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1): retire a permanently-rejected shell
+  /// by its EXACT submit/outbox entry identity — the identity a draft recovery is keyed
+  /// by. Removes ONLY a [PosRecentOrder.isNeverCreated] row whose order-time view was
+  /// submitted under [outboxEntryId], so the recovery action from Recent Orders can
+  /// never drop a different shell or a real accepted order.
+  void retireLocalRejectedByOutboxEntry(String outboxEntryId) {
+    final next = <PosRecentOrder>[
+      for (final o in state)
+        if (!(o.isNeverCreated && o.order?.outboxEntryId == outboxEntryId)) o,
+    ];
+    if (next.length != state.length) _apply(next);
+  }
+
   void _syncPayments(PaymentState ps) {
     var changed = false;
     final next = <PosRecentOrder>[];

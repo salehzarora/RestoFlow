@@ -120,16 +120,32 @@ class _PosPinGateState extends ConsumerState<PosPinGate>
       attemptScope: (member) => '$deviceId:${member.employeeProfileId}',
       // RF-118: shown after an inactivity/max-age expiry signed the operator out.
       expiredNotice: _expiredNotice,
-      onStartSession: (employeeProfileId, pin) => ref
-          .read(posSessionControllerProvider.notifier)
-          .signInWithPin(
-            // The full pairing context the new session will be BOUND to.
-            device: device,
-            deviceId: deviceId,
-            deviceSessionId: deviceSessionId,
-            employeeProfileId: employeeProfileId,
-            pin: pin,
-          ),
+      onStartSession: (employeeProfileId, pin) async {
+        // PILOT-OPERATIONS-CORRECTIONS-001: resolve the operator's display name
+        // from the money-free PIN roster so the shift-close surface can name them.
+        // Best-effort and non-blocking — sign-in never depends on it.
+        String? displayName;
+        final roster = await staff.listStaff();
+        roster.fold((members) {
+          for (final m in members) {
+            if (m.employeeProfileId == employeeProfileId) {
+              displayName = m.displayName;
+              break;
+            }
+          }
+        }, (_) {});
+        return ref
+            .read(posSessionControllerProvider.notifier)
+            .signInWithPin(
+              // The full pairing context the new session will be BOUND to.
+              device: device,
+              deviceId: deviceId,
+              deviceSessionId: deviceSessionId,
+              employeeProfileId: employeeProfileId,
+              pin: pin,
+              employeeDisplayName: displayName,
+            );
+      },
     );
   }
 }

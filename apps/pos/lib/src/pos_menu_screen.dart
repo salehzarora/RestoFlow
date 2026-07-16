@@ -5,12 +5,14 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import 'pos_palette.dart';
 import 'state/cart_controller.dart';
+import 'state/discount_controller.dart' show staffCapabilitiesProvider;
 import 'state/menu_filter.dart';
 import 'state/pos_menu_provider.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/device_settings_menu.dart';
 import 'widgets/language_selector.dart';
+import 'widgets/menu_availability_sheet.dart';
 import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
 import 'widgets/outbox_status_indicator.dart';
@@ -322,6 +324,15 @@ class _MenuGrid extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(cartControllerProvider.notifier);
+    // PILOT-OPERATIONS-CORRECTIONS-001: the deliberate availability-management
+    // action is shown ONLY to an operator the SERVER says holds
+    // manage_menu_availability (unknown => hidden; the server enforces anyway).
+    final canManageAvailability =
+        ref
+            .watch(staffCapabilitiesProvider)
+            .valueOrNull
+            ?.manageMenuAvailability ??
+        false;
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final query = ref.watch(searchQueryProvider);
     final items = filterMenuItems(menu.items, selectedCategory, query);
@@ -392,6 +403,12 @@ class _MenuGrid extends ConsumerWidget {
                           currencyCode: menu.currencyCode,
                           optionGroupCount: groups.length,
                           inCartQuantity: inCart[item.id] ?? 0,
+                          onManageAvailability: canManageAvailability
+                              ? () => MenuAvailabilitySheet.show(
+                                  context,
+                                  item: item,
+                                )
+                              : null,
                           onAdd: groups.isEmpty
                               ? () => controller.addItem(item)
                               : () => ModifierSelectionSheet.show(

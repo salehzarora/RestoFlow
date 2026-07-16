@@ -1115,6 +1115,154 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posShiftOpenedAt => 'נפתחה בשעה';
 
   @override
+  String get posShiftEmployee => 'עובד';
+
+  @override
+  String get posMenuChangeAvailability => 'שינוי זמינות';
+
+  @override
+  String get posMenuAvailAvailable => 'זמין';
+
+  @override
+  String get posMenuAvailabilityOffline =>
+      'לא ניתן היה לשנות זמינות במצב לא מקוון';
+
+  @override
+  String get posMenuAvailabilityDenied =>
+      'פעולה זו דורשת הרשאת ניהול זמינות תפריט';
+
+  @override
+  String get posMenuAvailabilityFailed => 'לא ניתן היה לשנות את הזמינות';
+
+  @override
+  String get posRecoveryOrderNotCreated => 'ההזמנה לא נוצרה';
+
+  @override
+  String get posRecoveryUnavailableItems => 'הפריטים הבאים אינם זמינים עוד:';
+
+  @override
+  String get posRecoveryMenuRefreshed => 'התפריט עודכן.';
+
+  @override
+  String get posRecoveryBackToCart => 'חזרה לעגלה';
+
+  @override
+  String get posRecoveryEditOrder => 'עריכת הזמנה';
+
+  @override
+  String get posRecoveryDiscardDraft => 'מחיקת טיוטה';
+
+  @override
+  String get posRecoveryDiscardConfirmTitle => 'למחוק את ניסיון ההזמנה?';
+
+  @override
+  String get posRecoveryDiscardConfirmBody =>
+      'ההזמנה לא נוצרה, ולכן שום דבר לא מבוטל בשרת. הטיוטה שלך תימחק.';
+
+  @override
+  String get posRecoveryRemoveUnavailableHint =>
+      'הסר את הפריטים שאינם זמינים ושלח שוב.';
+
+  @override
+  String get posRecoveryReplaceCartTitle => 'להחליף את העגלה הנוכחית?';
+
+  @override
+  String get posRecoveryReplaceCartBody =>
+      'בעגלה כבר יש פריטים. שחזור טיוטה זו יחליף אותם.';
+
+  @override
+  String get posRecoveryReplaceCartAction => 'החלף עגלה נוכחית';
+
+  @override
+  String get posRecoveryKeepCartAction => 'השאר עגלה נוכחית';
+
+  @override
+  String get posRecentOrderNotCreated => 'לא נוצרה';
+
+  @override
+  String get posRecoveryOtherSession => 'טיוטה דחויה זו שייכת להפעלה אחרת';
+
+  @override
+  String get posTableOperations => 'פעולות שולחנות';
+
+  @override
+  String get posTableManualStatus => 'סטטוס ידני';
+
+  @override
+  String get posTableEffectiveStatus => 'סטטוס בפועל';
+
+  @override
+  String get posTableMarkAvailable => 'סמן כפנוי';
+
+  @override
+  String get posTableMarkReserved => 'סמן כשמור';
+
+  @override
+  String get posTableMarkOccupied => 'סמן כתפוס';
+
+  @override
+  String get posTableMarkOutOfService => 'סמן כלא זמין';
+
+  @override
+  String get posTableStateAvailable => 'פנוי';
+
+  @override
+  String get posTableStateReserved => 'שמור';
+
+  @override
+  String get posTableStateOccupied => 'תפוס';
+
+  @override
+  String get posTableStateOutOfService => 'לא זמין';
+
+  @override
+  String get posTableLinkAnother => 'קישור שולחן נוסף';
+
+  @override
+  String get posTableSelectToLink => 'בחר שולחן לקישור';
+
+  @override
+  String get posTableLinked => 'שולחנות מקושרים';
+
+  @override
+  String get posTableUnlink => 'ביטול קישור שולחנות';
+
+  @override
+  String get posTableUnlinkConfirmTitle => 'לבטל את קישור השולחנות?';
+
+  @override
+  String get posTableActiveOrders => 'הזמנות פעילות';
+
+  @override
+  String get posTableOccupiedByOrder => 'תפוס בהזמנה פעילה';
+
+  @override
+  String get posTableRequiresPermission => 'פעולה זו דורשת הרשאת ניהול שולחנות';
+
+  @override
+  String get posTableOutOfServiceCannotOrder =>
+      'שולחן שאינו זמין אינו יכול לקבל הזמנה';
+
+  @override
+  String get posTableStatusOffline =>
+      'לא ניתן היה לשנות את סטטוס השולחן במצב לא מקוון';
+
+  @override
+  String get posTableStatusFailed => 'לא ניתן היה לשנות את סטטוס השולחן';
+
+  @override
+  String get posTableLinkFailed => 'לא ניתן היה לקשר את השולחנות';
+
+  @override
+  String get posTableUnlinkFailed => 'לא ניתן היה לבטל את קישור השולחנות';
+
+  @override
+  String get posTableAlreadyGrouped => 'שולחן זה כבר בקבוצה';
+
+  @override
+  String get posTableGroup => 'קבוצת שולחנות';
+
+  @override
   String get posShiftOpeningFloat => 'קופה פותחת';
 
   @override
@@ -1168,6 +1316,18 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get posShiftCouldNotRestore =>
       'לא ניתן לשחזר את מצב המשמרת. היכנס שוב כדי לפתוח משמרת.';
+
+  @override
+  String get posShiftOwnerMismatch =>
+      'כבר פתוחה משמרת במכשיר זה, שנפתחה על ידי עובד אחר. רק בעליה או מנהל יכולים לסגור אותה — התנתק כדי שיוכלו להיכנס.';
+
+  @override
+  String get posShiftCloseNotAllowed =>
+      'אין לך הרשאה לסגור משמרת זו. בקש ממנהל לסגור אותה או להפעיל עבורך הרשאת סגירת משמרת.';
+
+  @override
+  String get posShiftAuthorizationPending =>
+      'בודק הרשאות משמרת… סגירה אינה זמינה עד לאישור.';
 
   @override
   String get posShiftReturnToPin => 'התנתקות';
@@ -2992,6 +3152,12 @@ class AppLocalizationsHe extends AppLocalizations {
   String get staffCapCloseShift => 'יכול לסגור את המשמרת שלו';
 
   @override
+  String get staffCapManageMenuAvailability => 'יכול לנהל זמינות תפריט';
+
+  @override
+  String get staffCapManageTableOperations => 'יכול לנהל פעולות שולחנות';
+
+  @override
   String get staffCapabilitiesAction => 'הרשאות';
 
   @override
@@ -3056,6 +3222,15 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get tablesStatusOutOfService => 'לא בשירות';
+
+  @override
+  String get tablesStatusUnknown => 'נדרש רענון';
+
+  @override
+  String get tablesLinked => 'מקושר';
+
+  @override
+  String get tablesEffective => 'בפועל';
 
   @override
   String get tablesSetStatus => 'הגדרת סטטוס';
@@ -4196,6 +4371,33 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogTitleOrderTableMoveDenied => 'העברת השולחן נדחתה';
+
+  @override
+  String get activityLogTitleTableStatusChanged => 'סטטוס השולחן שונה';
+
+  @override
+  String get activityLogTitleTableStatusDenied => 'שינוי סטטוס השולחן נדחה';
+
+  @override
+  String get activityLogTitleTablesLinked => 'השולחנות קושרו';
+
+  @override
+  String get activityLogTitleTableLinkDenied => 'קישור השולחן נדחה';
+
+  @override
+  String get activityLogTitleTablesUnlinked => 'קישור השולחנות בוטל';
+
+  @override
+  String get activityLogTitleTableUnlinkDenied => 'ביטול קישור השולחן נדחה';
+
+  @override
+  String get activityLogFieldFromStatus => 'מסטטוס';
+
+  @override
+  String get activityLogFieldToStatus => 'לסטטוס';
+
+  @override
+  String get activityLogFieldGroupLabel => 'שולחנות מקושרים';
 
   @override
   String get activityLogFieldAvailability => 'זמינות';

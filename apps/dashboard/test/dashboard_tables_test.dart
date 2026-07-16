@@ -48,6 +48,29 @@ class _EmptyTablesRepo implements TablesAdminRepository {
   Future<AdminResult<void>> deleteTable(String id) async => const Success(null);
 }
 
+/// A repository returning a FIXED table list (for presentation tests).
+class _StaticTablesRepo implements TablesAdminRepository {
+  _StaticTablesRepo(this.tables);
+  final List<DashboardTable> tables;
+  @override
+  Future<AdminResult<List<DashboardTable>>> load() async => Success(tables);
+  @override
+  Future<AdminResult<void>> upsertTable({
+    String? id,
+    required String label,
+    int? seats,
+    String? area,
+    required bool isActive,
+  }) async => const Success(null);
+  @override
+  Future<AdminResult<void>> setStatus(
+    String id,
+    DiningTableStatus status,
+  ) async => const Success(null);
+  @override
+  Future<AdminResult<void>> deleteTable(String id) async => const Success(null);
+}
+
 AdminScope get _scope => AdminScope.demo;
 
 final RegExp _uuidShape = RegExp(
@@ -80,6 +103,89 @@ Map<String, dynamic> _listOk() => {
 };
 
 void main() {
+  group('withDashboardGroupAggregation (A4)', () {
+    DashboardTable t(
+      String id,
+      String label, {
+      DiningTableStatus status = DiningTableStatus.available,
+      String effective = 'available',
+      int active = 0,
+      String? group,
+    }) => DashboardTable(
+      id: id,
+      label: label,
+      status: status,
+      isActive: true,
+      branchId: 'b',
+      activeOrderCount: active,
+      effectiveState: effective,
+      groupId: group,
+    );
+
+    test('7. a linked group shows ONE coherent effective state + count', () {
+      final out = withDashboardGroupAggregation([
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        t('t2', 'T2', effective: 'available', active: 0, group: 'g1'),
+        t('t3', 'T3', effective: 'available', active: 0), // ungrouped control
+      ]);
+      final t1 = out.firstWhere((x) => x.id == 't1');
+      final t2 = out.firstWhere((x) => x.id == 't2');
+      final t3 = out.firstWhere((x) => x.id == 't3');
+      // Both grouped members read the group-wide truth: Occupied, count 1.
+      expect(t1.effectiveState, 'occupied');
+      expect(t2.effectiveState, 'occupied');
+      expect(t1.activeOrderCount, 1);
+      expect(t2.activeOrderCount, 1);
+      // The ungrouped table is untouched.
+      expect(t3.effectiveState, 'available');
+    });
+
+    test('out-of-service member propagates across the group', () {
+      final out = withDashboardGroupAggregation([
+        t('t1', 'T1', effective: 'out_of_service', group: 'g1'),
+        t('t2', 'T2', effective: 'available', group: 'g1'),
+      ]);
+      expect(out.every((x) => x.effectiveState == 'out_of_service'), isTrue);
+    });
+
+    // Finding 4: a duplicate physical-table row must not double the group count.
+    test('9/10. a duplicate physical row does not double the group count', () {
+      final out = withDashboardGroupAggregation([
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'), // dup
+        t('t2', 'T2', effective: 'available', active: 0, group: 'g1'),
+      ]);
+      // Every grouped tile shows the deduplicated group truth: Occupied, count 1.
+      for (final x in out) {
+        expect(x.effectiveState, 'occupied');
+        expect(x.activeOrderCount, 1); // never 2
+      }
+    });
+
+    // Finding 5: the projected list has ONE tile per physical table id.
+    test('Finding 5: input [t1, t1, t2] returns exactly 2 tiles', () {
+      final out = withDashboardGroupAggregation([
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'),
+        t('t1', 'T1', effective: 'occupied', active: 1, group: 'g1'), // dup
+        t('t2', 'T2', effective: 'available', group: 'g1'),
+      ]);
+      expect(out.length, 2);
+      expect(out.map((x) => x.id).toList(), ['t1', 't2']);
+    });
+
+    // Finding 6: an unknown effective state is preserved as unknown (never available).
+    test(
+      'Finding 6: available + unknown resolves to unknown for the group',
+      () {
+        final out = withDashboardGroupAggregation([
+          t('t1', 'T1', effective: 'mystery', group: 'g1'),
+          t('t2', 'T2', effective: 'available', group: 'g1'),
+        ]);
+        expect(out.every((x) => x.effectiveState == 'unknown'), isTrue);
+      },
+    );
+  });
+
   group('SupabaseTablesRepository', () {
     test('load parses the tables list (inactive included)', () async {
       final t = _FakeTransport((fn, p) => _listOk());
@@ -104,6 +210,36 @@ void main() {
       expect(tables.last.area, isNull);
       expect(tables.last.status, DiningTableStatus.outOfService);
       expect(tables.last.isActive, isFalse);
+    });
+
+    test('PILOT-OPERATIONS-CORRECTIONS-001: load parses effective_state + '
+        'group_id', () async {
+      final t = _FakeTransport(
+        (fn, p) => {
+          'ok': true,
+          'tables': [
+            {
+              'id': 't-1',
+              'label': 'T1',
+              'status': 'available',
+              'is_active': true,
+              'branch_id': 'b-1',
+              'active_order_count': 1,
+              'effective_state': 'occupied',
+              'group_id': 'g-1',
+            },
+          ],
+        },
+      );
+      final repo = SupabaseTablesRepository(
+        transport: t,
+        scope: _scope,
+        currentUserId: () => 'u',
+      );
+      final tables = (await repo.load()).fold((s) => s, (f) => fail('$f'));
+      expect(tables.single.effectiveState, 'occupied');
+      expect(tables.single.groupId, 'g-1');
+      expect(tables.single.isGrouped, isTrue);
     });
 
     test('upsert sends the contract params (p_label/p_seats/p_area/'
@@ -352,6 +488,59 @@ void main() {
       // Demo mode keeps its honest demo banner + the seeded demo tables.
       expect(find.text(l10n.adminDemoBanner), findsOneWidget);
       expect(find.text('T1'), findsOneWidget);
+    });
+
+    testWidgets('PILOT-OPERATIONS-CORRECTIONS-001: linked group + effective '
+        'state shown read-only', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      tester.view.physicalSize = const Size(1400, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: Scaffold(
+            body: TablesScreen(
+              repository: _StaticTablesRepo(const [
+                DashboardTable(
+                  id: 't-1',
+                  label: 'T1',
+                  status: DiningTableStatus.available, // manual
+                  isActive: true,
+                  branchId: 'b',
+                  activeOrderCount: 1,
+                  effectiveState: 'occupied', // differs -> shown
+                  groupId: 'g-1',
+                ),
+                DashboardTable(
+                  id: 't-2',
+                  label: 'T2',
+                  status: DiningTableStatus.available,
+                  isActive: true,
+                  branchId: 'b',
+                  groupId: 'g-1',
+                ),
+              ]),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The combined group label appears on BOTH grouped tiles (read-only; no
+      // link/unlink control on the Dashboard).
+      expect(find.text('${l10n.tablesLinked}: T1 + T2'), findsNWidgets(2));
+      expect(find.byKey(const Key('table-linked-t-1')), findsOneWidget);
+      // A4: the group-wide effective state (Occupied) is now surfaced on BOTH
+      // members — t-2 is manually Available but the LINKED GROUP is occupied, so it
+      // must not read as free. This is the aggregation fix: one coherent group truth.
+      expect(
+        find.textContaining(
+          '${l10n.tablesEffective}: ${l10n.tablesStatusOccupied}',
+        ),
+        findsNWidgets(2),
+      );
     });
   });
 }

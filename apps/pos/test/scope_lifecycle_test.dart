@@ -21,6 +21,7 @@ import 'package:restoflow_pos/src/data/sync_cursor_store.dart'
 import 'package:restoflow_pos/src/data/void_repository.dart';
 import 'package:restoflow_pos/src/pos_pin_gate.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
+import 'package:restoflow_pos/src/state/draft_recovery_controller.dart';
 import 'package:restoflow_pos/src/state/order_setup_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
@@ -39,7 +40,9 @@ import 'package:restoflow_pos/src/widgets/cart_panel.dart';
 /// Every test drives the production seam: the real session controller, the real
 /// gate, the real scope provider, the real sync coordinator, the real sheets.
 void main() {
-  final t0 = DateTime.utc(2026, 7, 14, 12);
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   const ctxA = DeviceContext(
     organizationId: 'org-1',
@@ -413,6 +416,115 @@ void main() {
 
       expect(c.read(cartControllerProvider).submittedOrder, isNotNull);
       expect(c.read(posRecentOrdersControllerProvider), hasLength(1));
+    });
+
+    testWidgets("Finding 1 (A->B->A): a submit result that lands after a PIN handover on "
+        "the SAME till never mutates B's session; A's recovery is retained under "
+        "A's binding, recoverable only when A returns", (tester) async {
+      final outbox = _GatedOutbox();
+      final c = harness(outbox: outbox, store: InMemoryRecentOrdersStore());
+      c.read(posDeviceContextProvider.notifier).set(ctxA);
+      await settle();
+      await signIn(c, ctxA); // employee A — PIN session 1
+
+      // A's exact submit-attempt binding (scope + PIN session), captured up front.
+      final bindingA = c.read(posRecoveryBindingProvider);
+      final scopeA = c.read(posSyncScopeProvider)?.key;
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      late WidgetRef capturedRef;
+      late BuildContext capturedContext;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Consumer(
+              builder: (context, ref, _) {
+                capturedRef = ref;
+                capturedContext = context;
+                return const Scaffold(body: SizedBox());
+              },
+            ),
+          ),
+        ),
+      );
+
+      // Employee A builds a cart and submits it through the REAL handler (gated
+      // in flight).
+      final cartController = c.read(cartControllerProvider.notifier);
+      cartController.addItem(
+        const DemoMenuItem(
+          id: 'item-1',
+          name: 'Burger',
+          priceMinor: 4000,
+          categoryId: 'cat',
+          categoryName: 'Mains',
+        ),
+      );
+      final pending = submitOrderFromCart(
+        ref: capturedRef,
+        context: capturedContext,
+        cart: c.read(cartControllerProvider),
+        setup: c.read(orderSetupControllerProvider),
+        cartController: cartController,
+        setupController: c.read(orderSetupControllerProvider.notifier),
+        l10n: l10n,
+      );
+      await tester.pump();
+
+      // THE HANDOVER: employee A signs out and a NEW PIN session signs in on the
+      // SAME till (same operational scope) while A's submit is still in flight.
+      c.read(posSessionControllerProvider.notifier).endSession();
+      await settle();
+      await signIn(c, ctxA); // employee B — PIN session 2, SAME scope
+      final bindingB = c.read(posRecoveryBindingProvider);
+      expect(
+        bindingB == bindingA,
+        isFalse,
+        reason: 'a new PIN session is a new session binding',
+      );
+      expect(
+        c.read(posSyncScopeProvider)?.key,
+        scopeA,
+        reason: 'the operational scope is unchanged — the same till',
+      );
+
+      // NOW A's submit completes.
+      outbox.gate.complete();
+      await pending;
+      await tester.pumpAndSettle();
+
+      // B's session is UNTOUCHED: A's confirmation is never installed under B.
+      expect(
+        c.read(cartControllerProvider).submittedOrder,
+        isNull,
+        reason: "A's confirmation must not be shown under B's session",
+      );
+
+      final entryId = outbox.enqueued.single.id;
+      final recovery = c.read(posDraftRecoveryProvider.notifier);
+      // B can neither see nor restore A's draft (binding mismatch).
+      expect(
+        recovery.recoverable(entryId, bindingB),
+        isNull,
+        reason: "employee B must not be able to restore employee A's draft",
+      );
+      // A's recovery IS retained under A's ORIGINAL binding — recoverable when A
+      // returns, and inaccessible to anyone else.
+      expect(
+        recovery.recoverable(entryId, bindingA),
+        isNotNull,
+        reason: "A's draft must survive the handover, recoverable only by A",
+      );
+      // The shared (same-scope) recent list holds A's row so A finds it on return.
+      expect(
+        c
+            .read(posRecentOrdersControllerProvider)
+            .where((o) => o.order?.outboxEntryId == entryId),
+        hasLength(1),
+      );
     });
   });
 

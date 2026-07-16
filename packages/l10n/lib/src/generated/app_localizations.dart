@@ -2206,6 +2206,288 @@ abstract class AppLocalizations {
   /// **'Opened at'**
   String get posShiftOpenedAt;
 
+  /// No description provided for @posShiftEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee'**
+  String get posShiftEmployee;
+
+  /// No description provided for @posMenuChangeAvailability.
+  ///
+  /// In en, this message translates to:
+  /// **'Change availability'**
+  String get posMenuChangeAvailability;
+
+  /// No description provided for @posMenuAvailAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get posMenuAvailAvailable;
+
+  /// No description provided for @posMenuAvailabilityOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability could not be changed while offline'**
+  String get posMenuAvailabilityOffline;
+
+  /// No description provided for @posMenuAvailabilityDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'This action requires menu-availability permission'**
+  String get posMenuAvailabilityDenied;
+
+  /// No description provided for @posMenuAvailabilityFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability could not be changed'**
+  String get posMenuAvailabilityFailed;
+
+  /// No description provided for @posRecoveryOrderNotCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Order was not created'**
+  String get posRecoveryOrderNotCreated;
+
+  /// No description provided for @posRecoveryUnavailableItems.
+  ///
+  /// In en, this message translates to:
+  /// **'These items are no longer available:'**
+  String get posRecoveryUnavailableItems;
+
+  /// No description provided for @posRecoveryMenuRefreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'The menu has been refreshed.'**
+  String get posRecoveryMenuRefreshed;
+
+  /// No description provided for @posRecoveryBackToCart.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to cart'**
+  String get posRecoveryBackToCart;
+
+  /// No description provided for @posRecoveryEditOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit order'**
+  String get posRecoveryEditOrder;
+
+  /// No description provided for @posRecoveryDiscardDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard draft'**
+  String get posRecoveryDiscardDraft;
+
+  /// No description provided for @posRecoveryDiscardConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this order attempt?'**
+  String get posRecoveryDiscardConfirmTitle;
+
+  /// No description provided for @posRecoveryDiscardConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The order was not created, so nothing is cancelled on the server. Your draft will be cleared.'**
+  String get posRecoveryDiscardConfirmBody;
+
+  /// No description provided for @posRecoveryRemoveUnavailableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the unavailable items, then send again.'**
+  String get posRecoveryRemoveUnavailableHint;
+
+  /// No description provided for @posRecoveryReplaceCartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace the current cart?'**
+  String get posRecoveryReplaceCartTitle;
+
+  /// No description provided for @posRecoveryReplaceCartBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The cart already has items. Restoring this draft will replace them.'**
+  String get posRecoveryReplaceCartBody;
+
+  /// No description provided for @posRecoveryReplaceCartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace current cart'**
+  String get posRecoveryReplaceCartAction;
+
+  /// No description provided for @posRecoveryKeepCartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep current cart'**
+  String get posRecoveryKeepCartAction;
+
+  /// No description provided for @posRecentOrderNotCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Not created'**
+  String get posRecentOrderNotCreated;
+
+  /// No description provided for @posRecoveryOtherSession.
+  ///
+  /// In en, this message translates to:
+  /// **'This rejected draft belongs to another session'**
+  String get posRecoveryOtherSession;
+
+  /// No description provided for @posTableOperations.
+  ///
+  /// In en, this message translates to:
+  /// **'Table operations'**
+  String get posTableOperations;
+
+  /// No description provided for @posTableManualStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual status'**
+  String get posTableManualStatus;
+
+  /// No description provided for @posTableEffectiveStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Effective status'**
+  String get posTableEffectiveStatus;
+
+  /// No description provided for @posTableMarkAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark available'**
+  String get posTableMarkAvailable;
+
+  /// No description provided for @posTableMarkReserved.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark reserved'**
+  String get posTableMarkReserved;
+
+  /// No description provided for @posTableMarkOccupied.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark occupied'**
+  String get posTableMarkOccupied;
+
+  /// No description provided for @posTableMarkOutOfService.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark out of service'**
+  String get posTableMarkOutOfService;
+
+  /// No description provided for @posTableStateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get posTableStateAvailable;
+
+  /// No description provided for @posTableStateReserved.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserved'**
+  String get posTableStateReserved;
+
+  /// No description provided for @posTableStateOccupied.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied'**
+  String get posTableStateOccupied;
+
+  /// No description provided for @posTableStateOutOfService.
+  ///
+  /// In en, this message translates to:
+  /// **'Out of service'**
+  String get posTableStateOutOfService;
+
+  /// No description provided for @posTableLinkAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Link another table'**
+  String get posTableLinkAnother;
+
+  /// No description provided for @posTableSelectToLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a table to link'**
+  String get posTableSelectToLink;
+
+  /// No description provided for @posTableLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked tables'**
+  String get posTableLinked;
+
+  /// No description provided for @posTableUnlink.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink tables'**
+  String get posTableUnlink;
+
+  /// No description provided for @posTableUnlinkConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink these tables?'**
+  String get posTableUnlinkConfirmTitle;
+
+  /// No description provided for @posTableActiveOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Active orders'**
+  String get posTableActiveOrders;
+
+  /// No description provided for @posTableOccupiedByOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied by an active order'**
+  String get posTableOccupiedByOrder;
+
+  /// No description provided for @posTableRequiresPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'This action requires table-management permission'**
+  String get posTableRequiresPermission;
+
+  /// No description provided for @posTableOutOfServiceCannotOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'An out-of-service table cannot receive an order'**
+  String get posTableOutOfServiceCannotOrder;
+
+  /// No description provided for @posTableStatusOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Table status could not be changed while offline'**
+  String get posTableStatusOffline;
+
+  /// No description provided for @posTableStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Table status could not be changed'**
+  String get posTableStatusFailed;
+
+  /// No description provided for @posTableLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables could not be linked'**
+  String get posTableLinkFailed;
+
+  /// No description provided for @posTableUnlinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables could not be unlinked'**
+  String get posTableUnlinkFailed;
+
+  /// No description provided for @posTableAlreadyGrouped.
+  ///
+  /// In en, this message translates to:
+  /// **'This table is already in a group'**
+  String get posTableAlreadyGrouped;
+
+  /// No description provided for @posTableGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Table group'**
+  String get posTableGroup;
+
   /// No description provided for @posShiftOpeningFloat.
   ///
   /// In en, this message translates to:
@@ -2307,6 +2589,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t restore the shift state. Sign in again to open a shift.'**
   String get posShiftCouldNotRestore;
+
+  /// No description provided for @posShiftOwnerMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'A shift is already open on this device, opened by another employee. Only its owner or a manager can close it — sign out so they can sign in.'**
+  String get posShiftOwnerMismatch;
+
+  /// No description provided for @posShiftCloseNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to close this shift. Ask a manager to close it, or to enable shift-close for your account.'**
+  String get posShiftCloseNotAllowed;
+
+  /// No description provided for @posShiftAuthorizationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking shift permissions… Close is unavailable until this is confirmed.'**
+  String get posShiftAuthorizationPending;
 
   /// No description provided for @posShiftReturnToPin.
   ///
@@ -5710,6 +6010,18 @@ abstract class AppLocalizations {
   /// **'Can close own shift'**
   String get staffCapCloseShift;
 
+  /// No description provided for @staffCapManageMenuAvailability.
+  ///
+  /// In en, this message translates to:
+  /// **'Can manage menu availability'**
+  String get staffCapManageMenuAvailability;
+
+  /// No description provided for @staffCapManageTableOperations.
+  ///
+  /// In en, this message translates to:
+  /// **'Can manage table operations'**
+  String get staffCapManageTableOperations;
+
   /// STAFF-CASHIER-PERMISSIONS-001: staff card button that opens the cashier capability switches.
   ///
   /// In en, this message translates to:
@@ -5835,6 +6147,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Out of service'**
   String get tablesStatusOutOfService;
+
+  /// Table status pill: an unrecognized/unknown effective state (fail-closed, not selectable).
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh required'**
+  String get tablesStatusUnknown;
+
+  /// No description provided for @tablesLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked'**
+  String get tablesLinked;
+
+  /// No description provided for @tablesEffective.
+  ///
+  /// In en, this message translates to:
+  /// **'Effective'**
+  String get tablesEffective;
 
   /// Per-table action that opens the status menu.
   ///
@@ -7905,6 +8235,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Table move denied'**
   String get activityLogTitleOrderTableMoveDenied;
+
+  /// Activity Log title for table.status_set.
+  ///
+  /// In en, this message translates to:
+  /// **'Table status changed'**
+  String get activityLogTitleTableStatusChanged;
+
+  /// Activity Log title for table.status_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Table status change denied'**
+  String get activityLogTitleTableStatusDenied;
+
+  /// Activity Log title for table.tables_linked.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables linked'**
+  String get activityLogTitleTablesLinked;
+
+  /// Activity Log title for table.link_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Table link denied'**
+  String get activityLogTitleTableLinkDenied;
+
+  /// Activity Log title for table.tables_unlinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Tables unlinked'**
+  String get activityLogTitleTablesUnlinked;
+
+  /// Activity Log title for table.unlink_denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Table unlink denied'**
+  String get activityLogTitleTableUnlinkDenied;
+
+  /// Activity Log field label for the table manual status before a change.
+  ///
+  /// In en, this message translates to:
+  /// **'From status'**
+  String get activityLogFieldFromStatus;
+
+  /// Activity Log field label for the table manual status after a change.
+  ///
+  /// In en, this message translates to:
+  /// **'To status'**
+  String get activityLogFieldToStatus;
+
+  /// Activity Log field label for a linked table group's combined label.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked tables'**
+  String get activityLogFieldGroupLabel;
 
   /// Activity Log field label for the availability before/after value.
   ///

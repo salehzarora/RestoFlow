@@ -1128,6 +1128,157 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posShiftOpenedAt => 'Opened at';
 
   @override
+  String get posShiftEmployee => 'Employee';
+
+  @override
+  String get posMenuChangeAvailability => 'Change availability';
+
+  @override
+  String get posMenuAvailAvailable => 'Available';
+
+  @override
+  String get posMenuAvailabilityOffline =>
+      'Availability could not be changed while offline';
+
+  @override
+  String get posMenuAvailabilityDenied =>
+      'This action requires menu-availability permission';
+
+  @override
+  String get posMenuAvailabilityFailed => 'Availability could not be changed';
+
+  @override
+  String get posRecoveryOrderNotCreated => 'Order was not created';
+
+  @override
+  String get posRecoveryUnavailableItems =>
+      'These items are no longer available:';
+
+  @override
+  String get posRecoveryMenuRefreshed => 'The menu has been refreshed.';
+
+  @override
+  String get posRecoveryBackToCart => 'Back to cart';
+
+  @override
+  String get posRecoveryEditOrder => 'Edit order';
+
+  @override
+  String get posRecoveryDiscardDraft => 'Discard draft';
+
+  @override
+  String get posRecoveryDiscardConfirmTitle => 'Discard this order attempt?';
+
+  @override
+  String get posRecoveryDiscardConfirmBody =>
+      'The order was not created, so nothing is cancelled on the server. Your draft will be cleared.';
+
+  @override
+  String get posRecoveryRemoveUnavailableHint =>
+      'Remove the unavailable items, then send again.';
+
+  @override
+  String get posRecoveryReplaceCartTitle => 'Replace the current cart?';
+
+  @override
+  String get posRecoveryReplaceCartBody =>
+      'The cart already has items. Restoring this draft will replace them.';
+
+  @override
+  String get posRecoveryReplaceCartAction => 'Replace current cart';
+
+  @override
+  String get posRecoveryKeepCartAction => 'Keep current cart';
+
+  @override
+  String get posRecentOrderNotCreated => 'Not created';
+
+  @override
+  String get posRecoveryOtherSession =>
+      'This rejected draft belongs to another session';
+
+  @override
+  String get posTableOperations => 'Table operations';
+
+  @override
+  String get posTableManualStatus => 'Manual status';
+
+  @override
+  String get posTableEffectiveStatus => 'Effective status';
+
+  @override
+  String get posTableMarkAvailable => 'Mark available';
+
+  @override
+  String get posTableMarkReserved => 'Mark reserved';
+
+  @override
+  String get posTableMarkOccupied => 'Mark occupied';
+
+  @override
+  String get posTableMarkOutOfService => 'Mark out of service';
+
+  @override
+  String get posTableStateAvailable => 'Available';
+
+  @override
+  String get posTableStateReserved => 'Reserved';
+
+  @override
+  String get posTableStateOccupied => 'Occupied';
+
+  @override
+  String get posTableStateOutOfService => 'Out of service';
+
+  @override
+  String get posTableLinkAnother => 'Link another table';
+
+  @override
+  String get posTableSelectToLink => 'Select a table to link';
+
+  @override
+  String get posTableLinked => 'Linked tables';
+
+  @override
+  String get posTableUnlink => 'Unlink tables';
+
+  @override
+  String get posTableUnlinkConfirmTitle => 'Unlink these tables?';
+
+  @override
+  String get posTableActiveOrders => 'Active orders';
+
+  @override
+  String get posTableOccupiedByOrder => 'Occupied by an active order';
+
+  @override
+  String get posTableRequiresPermission =>
+      'This action requires table-management permission';
+
+  @override
+  String get posTableOutOfServiceCannotOrder =>
+      'An out-of-service table cannot receive an order';
+
+  @override
+  String get posTableStatusOffline =>
+      'Table status could not be changed while offline';
+
+  @override
+  String get posTableStatusFailed => 'Table status could not be changed';
+
+  @override
+  String get posTableLinkFailed => 'Tables could not be linked';
+
+  @override
+  String get posTableUnlinkFailed => 'Tables could not be unlinked';
+
+  @override
+  String get posTableAlreadyGrouped => 'This table is already in a group';
+
+  @override
+  String get posTableGroup => 'Table group';
+
+  @override
   String get posShiftOpeningFloat => 'Opening float';
 
   @override
@@ -1184,6 +1335,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get posShiftCouldNotRestore =>
       'Couldn\'t restore the shift state. Sign in again to open a shift.';
+
+  @override
+  String get posShiftOwnerMismatch =>
+      'A shift is already open on this device, opened by another employee. Only its owner or a manager can close it — sign out so they can sign in.';
+
+  @override
+  String get posShiftCloseNotAllowed =>
+      'You do not have permission to close this shift. Ask a manager to close it, or to enable shift-close for your account.';
+
+  @override
+  String get posShiftAuthorizationPending =>
+      'Checking shift permissions… Close is unavailable until this is confirmed.';
 
   @override
   String get posShiftReturnToPin => 'Sign out';
@@ -3032,6 +3195,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get staffCapCloseShift => 'Can close own shift';
 
   @override
+  String get staffCapManageMenuAvailability => 'Can manage menu availability';
+
+  @override
+  String get staffCapManageTableOperations => 'Can manage table operations';
+
+  @override
   String get staffCapabilitiesAction => 'Capabilities';
 
   @override
@@ -3096,6 +3265,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tablesStatusOutOfService => 'Out of service';
+
+  @override
+  String get tablesStatusUnknown => 'Refresh required';
+
+  @override
+  String get tablesLinked => 'Linked';
+
+  @override
+  String get tablesEffective => 'Effective';
 
   @override
   String get tablesSetStatus => 'Set status';
@@ -4256,6 +4434,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogTitleOrderTableMoveDenied => 'Table move denied';
+
+  @override
+  String get activityLogTitleTableStatusChanged => 'Table status changed';
+
+  @override
+  String get activityLogTitleTableStatusDenied => 'Table status change denied';
+
+  @override
+  String get activityLogTitleTablesLinked => 'Tables linked';
+
+  @override
+  String get activityLogTitleTableLinkDenied => 'Table link denied';
+
+  @override
+  String get activityLogTitleTablesUnlinked => 'Tables unlinked';
+
+  @override
+  String get activityLogTitleTableUnlinkDenied => 'Table unlink denied';
+
+  @override
+  String get activityLogFieldFromStatus => 'From status';
+
+  @override
+  String get activityLogFieldToStatus => 'To status';
+
+  @override
+  String get activityLogFieldGroupLabel => 'Linked tables';
 
   @override
   String get activityLogFieldAvailability => 'Availability';

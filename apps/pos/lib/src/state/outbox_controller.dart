@@ -7,12 +7,14 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/durable_outbox_store.dart';
 import '../data/ids.dart';
+import '../data/order_identity.dart';
 import '../data/order_submission.dart';
 import '../data/outbox_repository.dart';
 import 'cart_controller.dart';
 import 'pos_device_context.dart';
 import 'pos_menu_provider.dart';
 import 'pos_session.dart';
+import 'recent_orders_controller.dart';
 
 /// Demo tenant/device scope for submitted orders (DECISION D-001/D-002/D-022).
 /// Self-consistent demo values — NOT wired to real auth/org/device context.
@@ -379,10 +381,24 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // re-enters the corrected order. Availability only travels with the menu
     // (there is no realtime push), so this is the honest refresh point.
     for (final e in state) {
-      if (e.id == entryId &&
-          e.syncState == OutboxSyncState.rejected &&
-          e.lastErrorCode == 'item_unavailable') {
-        ref.invalidate(posMenuProvider);
+      if (e.id == entryId && e.isPermanentBusinessRejection) {
+        if (e.lastErrorCode == 'item_unavailable') {
+          ref.invalidate(posMenuProvider);
+        }
+        // PILOT-OPERATIONS-CORRECTIONS-001 (A3): the submit created NO server order.
+        // Retire the phantom recent-order row to a non-actionable rejected shell so it
+        // never offers payment/void/receipt for an order that does not exist. Matched
+        // by the SAME identity the submit row was recorded under (target order id).
+        ref
+            .read(posRecentOrdersControllerProvider.notifier)
+            .markLocallyRejected(
+              PosOrderIdentity.of(
+                orderId: e.targetId,
+                localOperationId: e.localOperationId,
+                outboxEntryId: e.id,
+                orderNumber: e.summary.orderNumber,
+              ),
+            );
       }
     }
   }

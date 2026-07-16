@@ -28,6 +28,9 @@ class DemoTable {
     required this.table,
     required this.status,
     this.activeOrderCount = 0,
+    this.manualStatus = 'available',
+    this.effectiveState = 'available',
+    this.groupId,
   });
 
   final DiningTable table;
@@ -40,13 +43,122 @@ class DemoTable {
   /// itself block selection. Demo mode derives it from its seeded orders.
   final int activeOrderCount;
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001: the raw MANUAL floor status the operator
+  /// set (`available` | `reserved` | `occupied` | `out_of_service`). Distinct
+  /// from [effectiveState] — a table manually `available` can still be
+  /// effectively `occupied` because a live dine-in order sits on it.
+  final String manualStatus;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: the SERVER-authoritative effective state
+  /// (`app.table_effective_state` — manual status fused with derived occupancy):
+  /// out_of_service > active dine-in occupancy > reserved > occupied > available.
+  final String effectiveState;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: the active link-group id, or null when the
+  /// table is not part of a group. Client renders same-group tables as one unit.
+  final String? groupId;
+
   String get tableId => table.tableId;
   String get label => table.label;
   int? get seats => table.seats;
   String? get area => table.area;
 
+  bool get isGrouped => groupId != null;
+  bool get isOutOfService => effectiveState == 'out_of_service';
+  bool get isReserved => manualStatus == 'reserved' && activeOrderCount == 0;
+
   /// A table can be assigned to a dine-in order only when it is available.
   bool get isAssignable => status == TableStatusKind.available;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001 (A4): a copy with the GROUP-WIDE effective
+  /// state, count and derived status projected onto this member. Used only by
+  /// [withGroupAggregation]; every other field is preserved.
+  DemoTable copyWithGroupState({
+    required String effectiveState,
+    required int activeOrderCount,
+    required TableStatusKind status,
+  }) => DemoTable(
+    table: table,
+    status: status,
+    activeOrderCount: activeOrderCount,
+    manualStatus: manualStatus,
+    effectiveState: effectiveState,
+    groupId: groupId,
+  );
+}
+
+/// Maps a GROUP-WIDE effective state to the picker's assignability model. NORMALIZES
+/// first (Finding 6): available -> available; reserved/occupied -> occupied (non-
+/// assignable); out_of_service AND unknown -> blocked (non-assignable, fail-closed —
+/// an unknown/unrecognized state never presents as selectable capacity).
+TableStatusKind tableStatusKindFor(String effectiveState) =>
+    switch (normalizeTableEffectiveState(effectiveState)) {
+      'available' => TableStatusKind.available,
+      'reserved' || 'occupied' => TableStatusKind.occupied,
+      _ => TableStatusKind.blocked, // out_of_service + unknown
+    };
+
+/// PILOT-OPERATIONS-CORRECTIONS-001 (A4 + Finding 5): projects the ONE canonical group
+/// aggregation ([aggregateTableGroup]) onto every table, so a linked group presents as
+/// one operational unit — every member shows the SAME group-wide effective state and
+/// active dine-in count. It ALSO deduplicates the projected list by physical table id:
+/// a table id duplicated upstream yields exactly ONE tile/option (stable first-occurrence
+/// order), so the floor, the picker, and the table-operations sheet never render a
+/// physical table twice. This is the SINGLE place the POS applies both.
+List<DemoTable> withGroupAggregation(List<DemoTable> tables) {
+  // Finding 5: collapse duplicate physical-table rows FIRST — one row per table id,
+  // stable first-occurrence order, merged deterministically (MAX count, most RESTRICTIVE
+  // effective state). A LinkedHashMap preserves insertion order.
+  final byId = <String, DemoTable>{};
+  for (final t in tables) {
+    final existing = byId[t.tableId];
+    if (existing == null) {
+      byId[t.tableId] = t;
+    } else {
+      final effective = mostRestrictiveTableState(
+        t.effectiveState,
+        existing.effectiveState,
+      );
+      final count = t.activeOrderCount > existing.activeOrderCount
+          ? t.activeOrderCount
+          : existing.activeOrderCount;
+      // Keep the FIRST row's identity fields (label/manual/group); merge state + count.
+      byId[t.tableId] = existing.copyWithGroupState(
+        effectiveState: effective,
+        activeOrderCount: count,
+        status: tableStatusKindFor(effective),
+      );
+    }
+  }
+  final deduped = byId.values.toList(growable: false);
+
+  final byGroup = <String, List<TableGroupMember>>{};
+  for (final t in deduped) {
+    final g = t.groupId;
+    if (g == null) continue;
+    // Finding 4: carry the PHYSICAL table id so aggregateTableGroup deduplicates by
+    // table — a row duplicated upstream cannot double a table's occupancy.
+    (byGroup[g] ??= []).add((
+      tableId: t.tableId,
+      effectiveState: t.effectiveState,
+      activeOrderCount: t.activeOrderCount,
+    ));
+  }
+  if (byGroup.isEmpty) return deduped;
+  final aggByGroup = <String, TableGroupAggregate>{
+    for (final e in byGroup.entries) e.key: aggregateTableGroup(e.value),
+  };
+  return <DemoTable>[
+    for (final t in deduped)
+      if (t.groupId case final g? when aggByGroup[g] != null)
+        t.copyWithGroupState(
+          effectiveState: aggByGroup[g]!.effectiveState,
+          activeOrderCount: aggByGroup[g]!.activeOrderCount,
+          status: tableStatusKindFor(aggByGroup[g]!.effectiveState),
+        )
+      else
+        t,
+  ];
 }
 
 /// The repository seam for tables (RF-114). Its method maps 1:1 to the future
@@ -67,31 +179,60 @@ abstract class TablesRepository {
 ///
 /// NO backend, NO Supabase, NO persistence. Nothing here is synced or audited.
 class DemoTablesStore implements TablesRepository {
-  DemoTablesStore({TablePolicy policy = const TablePolicy()})
-    : _service = TableAssignmentService(policy: policy);
+  DemoTablesStore({
+    TablePolicy policy = const TablePolicy(),
+    Map<String, String> manualOverrides = const {},
+    Map<String, String> groupOverrides = const {},
+  }) : _service = TableAssignmentService(policy: policy),
+       _manualOverrides = manualOverrides,
+       _groupOverrides = groupOverrides;
 
   final TableAssignmentService _service;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: the demo table-ops overlay (tableId ->
+  /// manual status / group id) so a demo cashier's floor control is honestly
+  /// reflected. Empty in a plain demo; supplied by the repository seam otherwise.
+  final Map<String, String> _manualOverrides;
+  final Map<String, String> _groupOverrides;
 
   @override
   Future<List<DemoTable>> loadTables() async {
     final tables = _seedTables();
     final occupied = _seedOccupancy(tables);
     return tables
-        .map(
-          (t) => DemoTable(
+        .map((t) {
+          final active = occupied.contains(t.tableId) ? 1 : 0;
+          final manual =
+              _manualOverrides[t.tableId] ??
+              (t.isActive ? 'available' : 'out_of_service');
+          final effective = _effectiveState(manual, active);
+          return DemoTable(
             table: t,
-            status: _statusFor(t, occupied),
-            activeOrderCount: occupied.contains(t.tableId) ? 1 : 0,
-          ),
-        )
+            status: _kindFor(effective),
+            activeOrderCount: active,
+            manualStatus: manual,
+            effectiveState: effective,
+            groupId: _groupOverrides[t.tableId],
+          );
+        })
         .toList(growable: false);
   }
 
-  TableStatusKind _statusFor(DiningTable t, Set<String> occupiedTableIds) {
-    if (!t.isActive) return TableStatusKind.blocked;
-    if (occupiedTableIds.contains(t.tableId)) return TableStatusKind.occupied;
-    return TableStatusKind.available;
+  /// The SAME precedence as `app.table_effective_state`.
+  String _effectiveState(String manual, int activeCount) {
+    if (manual == 'out_of_service') return 'out_of_service';
+    if (activeCount > 0) return 'occupied';
+    if (manual == 'reserved') return 'reserved';
+    if (manual == 'occupied') return 'occupied';
+    return 'available';
   }
+
+  TableStatusKind _kindFor(String effective) => switch (effective) {
+    'available' => TableStatusKind.available,
+    'out_of_service' => TableStatusKind.blocked,
+    _ =>
+      TableStatusKind.occupied, // occupied / reserved -> non-assignable visual
+  };
 
   /// Ten tables across two areas, one out of service — a realistic mix so the
   /// picker shows available, occupied (seeded below), and blocked states.
@@ -211,6 +352,17 @@ class RealTablesRepository implements TablesRepository {
       // RESTAURANT-OPERATIONS-V1-001: honest server-derived occupancy. Missing/
       // malformed degrades to 0 — the count is display truth, never a gate.
       final activeOrders = row['active_order_count'];
+      // PILOT-OPERATIONS-CORRECTIONS-001: the raw manual status + server-computed
+      // effective_state + active link group id.
+      final manual = row['status'] is String
+          ? row['status'] as String
+          : 'available';
+      final effective = row['effective_state'] is String
+          ? row['effective_state'] as String
+          : manual;
+      final groupId = row['group_id'] is String
+          ? row['group_id'] as String
+          : null;
       tables.add(
         DemoTable(
           table: DiningTable(
@@ -222,10 +374,15 @@ class RealTablesRepository implements TablesRepository {
             seats: seats is int ? seats : int.tryParse('$seats'),
             area: area is String && area.isNotEmpty ? area : null,
           ),
-          status: _statusFor(row['status']),
+          // The picker's assignability model derives from the EFFECTIVE state
+          // (the honest fusion), not the raw manual status.
+          status: _statusFor(effective),
           activeOrderCount: activeOrders is int && activeOrders > 0
               ? activeOrders
               : 0,
+          manualStatus: manual,
+          effectiveState: effective,
+          groupId: groupId,
         ),
       );
     }

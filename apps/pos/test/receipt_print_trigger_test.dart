@@ -59,7 +59,7 @@ class _OffAutoPrint extends PosAutoPrintReceiptController {
   Future<bool?> build() async => false;
 }
 
-final _snapAt = DateTime.utc(2026, 7, 14, 12);
+final _snapAt = DateTime.now().toUtc().subtract(const Duration(hours: 2));
 
 const _order = SubmittedOrderView(
   orderNumber: '#3F7A2C',

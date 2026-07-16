@@ -14,6 +14,10 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 /// ISO 4217 currency for the demo, locked to ILS / ₪ for RF-100.
 const String kDemoCurrencyCode = 'ILS';
 
+/// Sentinel distinguishing "argument omitted" from an explicit `null` in
+/// [DemoMenuItem.copyWith] (so a nullable field can be cleared, not only kept).
+const Object _unset = Object();
+
 /// A menu category used for the filter chips and per-item iconography.
 class DemoCategory {
   const DemoCategory({
@@ -102,6 +106,60 @@ class DemoMenuItem {
   final String? availabilityReason;
 
   bool get isUnavailable => availability == 'unavailable';
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: a field-preserving copy. Every field is
+  /// carried through unless explicitly overridden — so a partial rebuild (e.g.
+  /// attaching a resolved signed image URL) can NEVER silently drop an
+  /// authoritative field such as [availability]/[availabilityReason] and turn a
+  /// Sold-out/Paused item back into a normally-sellable one. New fields added to
+  /// this model are preserved automatically; keep this method exhaustive.
+  ///
+  /// [availabilityReason] uses a sentinel so it can be explicitly cleared to
+  /// null (returning an item to available) — omitting it preserves the current
+  /// value, passing `null` clears it.
+  DemoMenuItem copyWith({
+    String? id,
+    String? name,
+    int? priceMinor,
+    String? categoryId,
+    String? categoryName,
+    String? imagePath,
+    String? imageUrl,
+    String? itemType,
+    List<String>? tags,
+    int? prepMinutes,
+    String? kitchenNote,
+    Map<String, dynamic>? attributes,
+    String? availability,
+    Object? availabilityReason = _unset,
+  }) => DemoMenuItem(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    priceMinor: priceMinor ?? this.priceMinor,
+    categoryId: categoryId ?? this.categoryId,
+    categoryName: categoryName ?? this.categoryName,
+    imagePath: imagePath ?? this.imagePath,
+    imageUrl: imageUrl ?? this.imageUrl,
+    itemType: itemType ?? this.itemType,
+    tags: tags ?? this.tags,
+    prepMinutes: prepMinutes ?? this.prepMinutes,
+    kitchenNote: kitchenNote ?? this.kitchenNote,
+    attributes: attributes ?? this.attributes,
+    availability: availability ?? this.availability,
+    availabilityReason: identical(availabilityReason, _unset)
+        ? this.availabilityReason
+        : availabilityReason as String?,
+  );
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: a copy with only the branch availability
+  /// changed (used by the demo availability overlay and by real-mode optimistic
+  /// tile reconciliation before the authoritative menu re-fetch lands). Clears
+  /// the reason when returning to available.
+  DemoMenuItem withAvailability(String availability, String? reason) =>
+      copyWith(
+        availability: availability,
+        availabilityReason: availability == 'unavailable' ? reason : null,
+      );
 
   /// KITCHEN-PREP-001: the item's configured PER-UNIT kitchen prep components,
   /// parsed from the generic [attributes] bag (`prep_components`). Non-money;

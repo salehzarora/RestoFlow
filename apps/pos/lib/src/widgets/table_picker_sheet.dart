@@ -6,7 +6,9 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_tables.dart';
+import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/order_setup_controller.dart';
+import 'table_operations_sheet.dart';
 
 /// Modal table picker (RF-114) — a simple floor-map layout: tables grouped into
 /// area "zones" (Main dining / Patio) framed as bordered regions and separated
@@ -106,6 +108,22 @@ class TablePickerSheet extends ConsumerWidget {
                               .assignTable(t);
                           Navigator.of(context).pop();
                         },
+                        // PILOT-OPERATIONS-CORRECTIONS-001: a long-press opens the
+                        // operational table sheet — ONLY for an operator the server
+                        // says holds manage_table_operations. It carries the full
+                        // table list so link-candidate filtering is honest.
+                        onManage:
+                            (ref
+                                    .watch(staffCapabilitiesProvider)
+                                    .valueOrNull
+                                    ?.manageTableOperations ??
+                                false)
+                            ? (t) => TableOperationsSheet.show(
+                                context,
+                                table: t,
+                                allTables: tables,
+                              )
+                            : null,
                       ),
               ),
             ),
@@ -171,11 +189,13 @@ class _FloorMap extends StatelessWidget {
     required this.tables,
     required this.assignedId,
     required this.onAssign,
+    this.onManage,
   });
 
   final List<DemoTable> tables;
   final String? assignedId;
   final void Function(DemoTable) onAssign;
+  final void Function(DemoTable)? onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +217,7 @@ class _FloorMap extends StatelessWidget {
               tables: groups[i].tables,
               assignedId: assignedId,
               onAssign: onAssign,
+              onManage: onManage,
             ),
           ],
         ],
@@ -214,6 +235,7 @@ class _AreaZone extends StatelessWidget {
     required this.tables,
     required this.assignedId,
     required this.onAssign,
+    this.onManage,
   });
 
   final String areaName;
@@ -221,6 +243,7 @@ class _AreaZone extends StatelessWidget {
   final List<DemoTable> tables;
   final String? assignedId;
   final void Function(DemoTable) onAssign;
+  final void Function(DemoTable)? onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -274,6 +297,7 @@ class _AreaZone extends StatelessWidget {
                   table: t,
                   selected: t.tableId == assignedId,
                   onTap: t.isAssignable ? () => onAssign(t) : null,
+                  onLongPress: onManage == null ? null : () => onManage!(t),
                 ),
             ],
           ),
@@ -503,12 +527,18 @@ class _TableTile extends StatelessWidget {
     required this.table,
     required this.selected,
     required this.onTap,
+    this.onLongPress,
     super.key,
   });
 
   final DemoTable table;
   final bool selected;
   final VoidCallback? onTap;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: deliberate operational management gesture
+  /// (capability-gated by the caller; null = hidden). Independent of [onTap] so an
+  /// occupied/blocked table can still be managed.
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -563,6 +593,7 @@ class _TableTile extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               onTap: onTap,
+              onLongPress: onLongPress,
               borderRadius: BorderRadius.circular(RestoflowRadii.md),
               child: Padding(
                 padding: const EdgeInsets.all(RestoflowSpacing.md),
@@ -605,6 +636,25 @@ class _TableTile extends StatelessWidget {
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: onFill.withValues(alpha: 0.8),
                         ),
+                      ),
+                    ],
+                    // PILOT-OPERATIONS-CORRECTIONS-001: a table in a link group is
+                    // shown as linked (icon + label, not colour alone).
+                    if (table.isGrouped) ...[
+                      const SizedBox(height: RestoflowSpacing.xs),
+                      Row(
+                        key: Key('table-linked-${table.tableId}'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.link, size: 14, color: onFill),
+                          const SizedBox(width: 2),
+                          Text(
+                            l10n.posTableLinked,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: onFill.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     const SizedBox(height: RestoflowSpacing.sm),

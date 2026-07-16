@@ -29,6 +29,11 @@ dependencies:
   # the app imports them cleanly); no new external package is introduced.
   restoflow_core:
     path: ../../packages/core
+  # PILOT-OPERATIONS-CORRECTIONS-001 (A4): the ONE canonical linked-table GROUP
+  # aggregation (aggregateTableGroup) lives in the pure, money-free domain package so
+  # the Dashboard and the POS share exactly one precedence rule — no duplicated logic.
+  restoflow_domain:
+    path: ../../packages/domain
   restoflow_data_remote:
     path: ../../packages/data_remote
   supabase: '>=2.0.0 <3.0.0'

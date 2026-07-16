@@ -20,16 +20,31 @@ import 'sync_rpc_transport.dart';
 /// The schema is configurable for tests/alternate deployments, but production
 /// targets `public`.
 class SupabaseSyncRpcTransport implements SyncRpcTransport {
-  const SupabaseSyncRpcTransport(this._client, {String schema = 'public'})
-    : _schema = schema;
+  const SupabaseSyncRpcTransport(
+    this._client, {
+    String schema = 'public',
+    Duration timeout = const Duration(seconds: 15),
+  }) : _schema = schema,
+       _timeout = timeout;
 
   final SupabaseClient _client;
   final String _schema;
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001: a BOUNDED request timeout. After an app
+  /// resume the underlying TCP socket can be half-open (it died during suspend);
+  /// without this the pull would hang on the SDK's default timeout, so a KDS/POS
+  /// resume "stuck" window could stretch indefinitely. A bounded timeout turns
+  /// that into a fast TimeoutException -> transient -> offlineStale + retry, so a
+  /// resume-triggered refresh recovers promptly instead of hanging.
+  final Duration _timeout;
+
   @override
   Future<Object?> invoke(String function, Map<String, dynamic> params) async {
     try {
-      return await _client.schema(_schema).rpc(function, params: params);
+      return await _client
+          .schema(_schema)
+          .rpc(function, params: params)
+          .timeout(_timeout);
     } on PostgrestException catch (e) {
       throw SyncTransportException(
         classifyPostgrestCode(e.code),

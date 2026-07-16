@@ -7,6 +7,7 @@ import '../data/shift_repository.dart';
 import '../format/cash_input.dart';
 import '../format/money_format.dart';
 import '../state/pos_session.dart';
+import '../state/pos_shift.dart';
 import '../state/shift_close_controller.dart';
 
 /// The POS shift close / cash reconciliation panel (RF-113).
@@ -92,6 +93,21 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
     // handle was lost (refresh) AND could not be recovered -> honest recovery
     // state instead of a misleading "no open shift".
     final sessionActive = ref.watch(posSyncSessionProvider) != null;
+    // B1 + Finding 2 (PILOT-OPERATIONS-CORRECTIONS-001): the current actor cannot close
+    // the open shift on this device — either it belongs to a DIFFERENT employee
+    // (owner mismatch) or the owning cashier lacks the close_shift capability. Either
+    // way, show an honest cannot-close state (no close form, no money), never a form
+    // the server would refuse.
+    final handle = ref.watch(posOpenShiftProvider);
+    final ownerMismatch = !view.isDemo && (handle?.ownerMismatch ?? false);
+    final closeNotAllowed = !view.isDemo && (handle?.closeNotAllowed ?? false);
+    // Finding 3: the close FORM (money, counted input, close action) shows ONLY when
+    // the AUTHORITATIVE server verdict says the current actor may close. Demo mode is
+    // its own authority. A fresh shift-open, a loading/failed summary, or any
+    // canClose=false without a specific reason falls to a fail-closed pending state —
+    // never a permissive form the server would refuse.
+    final authPending = !view.isDemo && (handle?.authorizationPending ?? false);
+    final canClose = view.isDemo || (handle?.canClose ?? false);
 
     return SafeArea(
       child: Padding(
@@ -115,12 +131,24 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
               const SizedBox(height: RestoflowSpacing.md),
               if (closeState.value != null)
                 _result(context, l10n, closeState.value!)
+              else if (ownerMismatch)
+                _ownerMismatch(context, l10n)
+              else if (closeNotAllowed)
+                _closeNotAllowed(context, l10n)
               else if (!view.isOpen)
                 (sessionActive && !view.isDemo)
                     ? _couldNotRestore(context, l10n)
                     : _noOpenShift(context, l10n)
+              else if (authPending || !canClose)
+                _authorizationPending(context, l10n)
               else
-                _closeForm(context, l10n, view, closeState),
+                _closeForm(
+                  context,
+                  l10n,
+                  view,
+                  closeState,
+                  ref.watch(shiftExpectedCashProvider),
+                ),
             ],
           ),
         ),
@@ -179,16 +207,103 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
     );
   }
 
+  /// B1: a shift is open on this device but it belongs to ANOTHER employee. The
+  /// current actor cannot close it (mirrors app.close_shift) — an honest, non-editable
+  /// state that never names the shift with the current PIN user, and never a close
+  /// form. Signing out returns to PIN so the owner (or a manager) can sign in to close.
+  Widget _ownerMismatch(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      key: const Key('shift-close-owner-mismatch'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowNoticeBanner(
+          tone: RestoflowTone.warning,
+          icon: Icons.person_off_outlined,
+          body: l10n.posShiftOwnerMismatch,
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        FilledButton.icon(
+          key: const Key('shift-close-owner-signout'),
+          onPressed: () {
+            ref.read(posSessionControllerProvider.notifier).endSession();
+            Navigator.of(context).maybePop();
+          },
+          icon: const Icon(Icons.logout),
+          label: Text(l10n.posShiftReturnToPin),
+        ),
+      ],
+    );
+  }
+
+  /// Finding 2: the current actor OWNS the open shift but lacks the close_shift
+  /// capability. Show an honest permission state — NO close form, NO expected/counted
+  /// cash, NO variance/balanced, NO retry that could bypass the capability. If the
+  /// Dashboard later enables the capability, the normal flow returns only after an
+  /// authoritative session refresh (the handle carries the server verdict, never a
+  /// stale local capability).
+  Widget _closeNotAllowed(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      key: const Key('shift-close-not-allowed'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowNoticeBanner(
+          tone: RestoflowTone.warning,
+          icon: Icons.lock_outline,
+          body: l10n.posShiftCloseNotAllowed,
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        FilledButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: Text(l10n.posShiftDoneAction),
+        ),
+      ],
+    );
+  }
+
+  /// Finding 3: a shift IS open but the AUTHORITATIVE close-authorization verdict is not
+  /// yet known (a fresh open awaiting the summary, or a summary that failed to load). A
+  /// fail-closed state: NO close form, NO expected/counted cash, NO variance, NO close
+  /// action — only a Refresh that re-fetches the authoritative verdict. Never a form.
+  Widget _authorizationPending(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      key: const Key('shift-close-authorization-pending'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RestoflowNoticeBanner(
+          tone: RestoflowTone.info,
+          icon: Icons.hourglass_empty,
+          body: l10n.posShiftAuthorizationPending,
+        ),
+        const SizedBox(height: RestoflowSpacing.lg),
+        FilledButton.icon(
+          key: const Key('shift-close-authorization-refresh'),
+          // Re-fetch the fresh authoritative summary (money) — the handle's verdict is
+          // refreshed by the session controller; this gives the operator a manual retry.
+          onPressed: () => ref.invalidate(shiftExpectedCashProvider),
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.posSyncRetry),
+        ),
+      ],
+    );
+  }
+
   Widget _closeForm(
     BuildContext context,
     AppLocalizations l10n,
     CurrentShiftView view,
     AsyncValue<ShiftCloseOutcome?> closeState,
+    AsyncValue<int?> expectedAsync,
   ) {
     final theme = Theme.of(context);
     final currency = view.currencyCode;
     final counted = _countedMinor;
-    final expected = view.expectedSoFarMinor;
+    // PILOT-OPERATIONS-CORRECTIONS-001 (A5): the AUTHORITATIVE expected comes ONLY from
+    // the fresh server summary (demo drawer in demo mode) — never a local combination.
+    // Null while loading OR when a real read failed: the estimate/difference are then
+    // simply not shown (no fabricated 0, no false "balanced"); the close RPC still
+    // computes the true reconciliation server-side.
+    final expected = expectedAsync.valueOrNull;
+    final expectedLoading = expectedAsync.isLoading;
     final estimatedDiff = (counted != null && expected != null)
         ? counted - expected
         : null;
@@ -209,6 +324,9 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
               body: l10n.posShiftDemoNote,
             ),
           ),
+        // PILOT-OPERATIONS-CORRECTIONS-001: name the operator whose shift this is.
+        if (ref.watch(posSignedInStaffNameProvider) case final name?)
+          _row(context, l10n.posShiftEmployee, name),
         // Current shift state (opened time if known; opening float; estimate).
         if (view.openedAt != null)
           _row(context, l10n.posShiftOpenedAt, _hhmm(view.openedAt!)),
@@ -217,7 +335,25 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
           l10n.posShiftOpeningFloat,
           MoneyFormatter.formatMinor(view.openingFloatMinor, currency),
         ),
-        if (expected != null)
+        // A5: the authoritative expected — a fresh server figure. While it loads, a
+        // safe placeholder (never a stale 0); if it could not be read, the honest
+        // "computed at close" note + a Refresh (the close RPC stays authoritative).
+        if (expectedLoading)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
+            child: Row(
+              key: const Key('shift-expected-loading'),
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  l10n.posShiftExpectedCash,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const RestoflowInlineSpinner(size: 16),
+              ],
+            ),
+          )
+        else if (expected != null)
           _row(
             context,
             l10n.posShiftExpectedCash,
@@ -227,11 +363,23 @@ class _PosShiftCloseSheetState extends ConsumerState<PosShiftCloseSheet> {
         else
           Padding(
             padding: const EdgeInsets.symmetric(vertical: RestoflowSpacing.xs),
-            child: Text(
-              l10n.posShiftExpectedAtClose,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.posShiftExpectedAtClose,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  key: const Key('shift-expected-refresh'),
+                  onPressed: () => ref.invalidate(shiftExpectedCashProvider),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: Text(l10n.posSyncRetry),
+                ),
+              ],
             ),
           ),
         const Divider(height: RestoflowSpacing.lg),

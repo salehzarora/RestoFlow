@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
+import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 
 import 'state/kds_session.dart';
 import 'widgets/language_selector.dart';
@@ -51,6 +54,21 @@ class _KdsSessionLifecycleObserverState
       final policy = ref.read(kdsPinSessionExpiryPolicyProvider);
       if (controller.endSessionIfExpired(policy)) {
         ref.read(kdsExpiredNoticeProvider.notifier).show();
+        return; // session legitimately expired -> PIN gate; nothing to resume
+      }
+      // PILOT-OPERATIONS-CORRECTIONS-001: the PIN session survived the background.
+      // Trigger the sync coordinator to re-evaluate reachability and pull fresh,
+      // un-latching any transient terminal stop caused by the outage — so the
+      // board recovers on resume instead of staying stuck until a full app
+      // restart. Only when a live sync session exists (the board is up); the
+      // source provider is unavailable otherwise, so guard fail-soft.
+      if (ref.read(kdsSyncSessionProvider) != null) {
+        try {
+          unawaited(ref.read(kdsRepositoryProvider).resume());
+        } catch (_) {
+          // No sync source in this context (e.g. not the live board) — nothing
+          // to resume; the honest state is unchanged.
+        }
       }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {

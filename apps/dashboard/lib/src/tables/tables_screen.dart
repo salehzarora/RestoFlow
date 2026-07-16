@@ -89,8 +89,13 @@ class _TablesScreenState extends State<TablesScreen> {
     );
   }
 
-  Widget _list(BuildContext context, List<DashboardTable> tables) {
+  Widget _list(BuildContext context, List<DashboardTable> rawTables) {
     final l10n = AppLocalizations.of(context);
+    // PILOT-OPERATIONS-CORRECTIONS-001 (A4): project the group-wide effective state +
+    // active dine-in count onto every grouped member, so a free-looking peer of an
+    // occupied group never appears Available. One canonical aggregation, shared with
+    // the POS (packages/domain).
+    final tables = withDashboardGroupAggregation(rawTables);
     if (tables.isEmpty) {
       return AdminStateView(
         icon: Icons.table_restaurant_outlined,
@@ -103,6 +108,19 @@ class _TablesScreenState extends State<TablesScreen> {
         ),
       );
     }
+    // PILOT-OPERATIONS-CORRECTIONS-001: combined member label per active link
+    // group ("T4 + T5"), so each grouped tile can name the whole group (display
+    // only — the POS owns link/unlink).
+    final groupLabels = <String, String>{};
+    final groupMembers = <String, List<String>>{};
+    for (final t in tables) {
+      final g = t.groupId;
+      if (g != null) (groupMembers[g] ??= <String>[]).add(t.label);
+    }
+    groupMembers.forEach((g, labels) {
+      labels.sort();
+      groupLabels[g] = labels.join(' + ');
+    });
     // A floor-manager grid: one status-coloured tile per table.
     return ListView(
       padding: const EdgeInsetsDirectional.fromSTEB(
@@ -121,6 +139,9 @@ class _TablesScreenState extends State<TablesScreen> {
                 width: 280,
                 child: _TableCard(
                   table: table,
+                  groupLabel: table.groupId == null
+                      ? null
+                      : groupLabels[table.groupId],
                   onSetStatus: (status) =>
                       _run(() => widget.repository.setStatus(table.id, status)),
                   onEdit: () => _showTableDialog(context, table: table),
@@ -189,6 +210,16 @@ class _TablesScreenState extends State<TablesScreen> {
 /// The localized label + semantic tone + icon for a table status. Tones ride
 /// the shared TRUE semantic palette (success/warning/info/danger), so the
 /// tiles stay themeable (no hardcoded palette).
+/// PILOT-OPERATIONS-CORRECTIONS-001: the localized label for a server effective
+/// state string, reusing the manual-status vocabulary.
+String _effectiveLabel(BuildContext context, String effective) {
+  final status = DiningTableStatus.fromWire(effective);
+  // Finding 6: an unknown/unrecognized effective state gets an HONEST localized label
+  // (never shown raw, never as Available).
+  if (status == null) return AppLocalizations.of(context).tablesStatusUnknown;
+  return _statusVisual(context, status).label;
+}
+
 ({String label, RestoflowTone tone, IconData icon}) _statusVisual(
   BuildContext context,
   DiningTableStatus status,
@@ -226,12 +257,17 @@ class _TableCard extends StatelessWidget {
     required this.onSetStatus,
     required this.onEdit,
     required this.onDelete,
+    this.groupLabel,
   });
 
   final DashboardTable table;
   final ValueChanged<DiningTableStatus> onSetStatus;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: the combined label of this table's active
+  /// link group ("T4 + T5"), or null when not grouped. Display only.
+  final String? groupLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -240,6 +276,12 @@ class _TableCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final status = _statusVisual(context, table.status);
     final statusStyle = status.tone.styleOf(theme);
+    // PILOT-OPERATIONS-CORRECTIONS-001: the SERVER effective state, shown when it
+    // differs from the manual status (e.g. manually Available but effectively
+    // Occupied by a live order) so the floor read is honest.
+    final effectiveDiffers =
+        table.effectiveState != null &&
+        table.effectiveState != table.status.wire;
     final detail = [
       if (table.seats != null) '${l10n.tablesFieldSeats}: ${table.seats}',
       if (table.area != null) table.area!,
@@ -247,6 +289,8 @@ class _TableCard extends StatelessWidget {
       // floor manager reads "1 open order" here the moment a POS seats a
       // party, independently of the manual floor status above.
       l10n.tablesOpenOrders(table.activeOrderCount),
+      if (effectiveDiffers)
+        '${l10n.tablesEffective}: ${_effectiveLabel(context, table.effectiveState!)}',
     ].join(' · ');
 
     return Container(
@@ -301,6 +345,31 @@ class _TableCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               detail,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    // PILOT-OPERATIONS-CORRECTIONS-001: linked-group membership,
+                    // read-only (the POS owns link/unlink for this phase).
+                    if (groupLabel != null) ...[
+                      const SizedBox(height: RestoflowSpacing.xxs),
+                      Row(
+                        key: Key('table-linked-${table.id}'),
+                        children: [
+                          Icon(
+                            Icons.link,
+                            size: RestoflowIconSizes.xs,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: RestoflowSpacing.xs),
+                          Expanded(
+                            child: Text(
+                              '${l10n.tablesLinked}: $groupLabel',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: scheme.onSurfaceVariant,
                               ),

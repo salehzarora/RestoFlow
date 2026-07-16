@@ -96,6 +96,14 @@ abstract class KdsSyncSource {
   /// Trigger an out-of-band pull now (manual refresh).
   Future<void> refresh();
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001: re-evaluate reachability after an
+  /// app foreground/resume. Un-latches a terminal stop caused by a TRANSIENT
+  /// outage during suspend (so the board is never left permanently dead), restarts
+  /// paused polling, and performs an immediate authoritative pull whose result
+  /// drives the UI — success clears stale/error state, a real failure keeps the
+  /// honest offline/reauth state. Safe to call repeatedly (no duplicate pollers).
+  Future<void> resume();
+
   /// Stop polling and release resources.
   Future<void> dispose();
 }

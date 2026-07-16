@@ -113,6 +113,38 @@ class KdsSyncCoordinator implements KdsSyncSource {
     await _pullCycle();
   }
 
+  @override
+  Future<void> resume() async {
+    if (_disposed) return;
+    // Only meaningful once the board has started; a resume before start is a
+    // no-op (start() will do the initial pull).
+    if (!_started) return;
+    // Un-latch a terminal stop (reauthRequired latches _stopped permanently). A
+    // transient outage that happened to surface as reauth/error while the isolate
+    // was suspended must NOT leave the board dead forever: re-evaluate from
+    // scratch. If it is a GENUINE expiry, the pull below reauths again and the
+    // reauth screen returns honestly (C3 — never mislabelled as a network error).
+    final wasStopped = _stopped;
+    _stopped = false;
+    _retryPending = false;
+    _transientAttempts = 0;
+    // Restart the poll loop if it had been stopped (exactly one active
+    // subscription — cancel any prior before re-listening, so repeated resumes
+    // never stack pollers).
+    if (wasStopped) {
+      await _tickSub?.cancel();
+      _tickSub = null;
+      if (!_disposed && !_stopped) {
+        final tickStream = _ticks ?? Stream<void>.periodic(_pollInterval);
+        _tickSub = tickStream.listen((_) => _onTick());
+      }
+    }
+    // Immediate authoritative refresh; its outcome drives the UI (success clears
+    // stale/error; a real failure keeps the honest offline/reauth state). The
+    // _cycleInFlight guard inside _pullCycle prevents overlapping a live pull.
+    if (!_cycleInFlight) await _pullCycle();
+  }
+
   Future<void> _pullCycle() async {
     if (_cycleInFlight || _stopped || _disposed) return;
     _cycleInFlight = true;

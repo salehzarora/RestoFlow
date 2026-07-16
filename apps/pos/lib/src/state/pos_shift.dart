@@ -12,12 +12,49 @@ class PosOpenShift {
     required this.cashDrawerSessionId,
     required this.openingFloatMinor,
     required this.openedAt,
+    this.expectedCashMinor,
+    this.canClose = false,
+    this.ownerMismatch = false,
+    this.closeNotAllowed = false,
+    this.authorizationPending = false,
+    this.openedByEmployeeProfileId,
   });
 
   final String shiftId;
   final String cashDrawerSessionId;
   final int openingFloatMinor;
   final DateTime openedAt;
+
+  /// B1 (PILOT-OPERATIONS-CORRECTIONS-001): whether the CURRENT actor may close this
+  /// shift (mirrors app.close_shift). Finding 3: this DEFAULTS FALSE — a handle is
+  /// closable ONLY when the AUTHORITATIVE server summary says so. A freshly opened shift
+  /// is NOT proof of close authorization, so it publishes a fail-closed handle until the
+  /// summary verdict lands.
+  final bool canClose;
+
+  /// B1: the open shift on this device belongs to a DIFFERENT employee.
+  final bool ownerMismatch;
+
+  /// Finding 2: the current actor owns the shift but lacks the close_shift capability —
+  /// the close UI shows a capability-denied state (no close form, no money).
+  final bool closeNotAllowed;
+
+  /// Finding 3: a shift IS open but its AUTHORITATIVE close-authorization verdict has
+  /// not yet been obtained (the summary is loading, or its fetch failed after a fresh
+  /// open). The close UI then shows a fail-closed "checking permissions / refresh" state
+  /// — no close form, no money, no counted-cash input — never a permissive form.
+  final bool authorizationPending;
+
+  /// B1: the actual owner's employee-profile id (display only).
+  final String? openedByEmployeeProfileId;
+
+  /// The SERVER-authoritative expected cash captured when this handle was
+  /// recovered (opening float + completed cash payments on the drawer, computed
+  /// by the same SQL as `app.close_shift`). Null on a fresh auto-open (no prior
+  /// payments) and when the server could not be reached. PILOT-OPERATIONS-CORRECTIONS-001:
+  /// the shift-close UI uses this as the base so expected survives an app restart
+  /// instead of collapsing to the opening float. Integer minor units (D-007).
+  final int? expectedCashMinor;
 }
 
 /// Holds the current real open-shift handle (or null). Set by

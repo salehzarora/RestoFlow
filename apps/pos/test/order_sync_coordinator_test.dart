@@ -15,7 +15,9 @@ import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 /// advancing it past data we failed to apply loses that data permanently — the
 /// server will never offer it again. These pin that it cannot happen.
 void main() {
-  final t0 = DateTime.utc(2026, 7, 14, 10);
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   PosOrderSnapshot snap({
     String orderId = 'o-1',

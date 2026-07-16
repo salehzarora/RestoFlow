@@ -40,7 +40,9 @@ import 'package:restoflow_pos/src/widgets/order_confirmation.dart';
 /// the code a pre-computed key, a pre-deduped list or a pre-decided eligibility and
 /// then congratulates it for agreeing.
 void main() {
-  final t0 = DateTime.utc(2026, 7, 14, 12);
+  final t0 = DateTime.now().toUtc().subtract(
+    const Duration(hours: 2),
+  ); // stabilization: anchor to real clock (recent-orders 1-day window)
 
   // The SAME till, moved between two branches. This is the whole point: the device id
   // is identical, so nothing but the full scope can tell the two situations apart.
@@ -1086,7 +1088,7 @@ class _GatedRepo implements OrderSnapshotRepository {
 /// Serves a bounded window page and records the cursor it was asked for.
 class _PagingRepo implements OrderSnapshotRepository {
   final List<PosSyncCursor?> sentBefore = <PosSyncCursor?>[];
-  final DateTime _t = DateTime.utc(2026, 7, 14, 12);
+  final DateTime _t = DateTime.now().toUtc().subtract(const Duration(hours: 2));
 
   @override
   Future<PosSnapshotPage> fetchWindow({

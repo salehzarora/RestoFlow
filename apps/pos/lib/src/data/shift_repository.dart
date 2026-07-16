@@ -12,12 +12,44 @@ class OpenShiftInfo {
     required this.cashDrawerSessionId,
     required this.openingFloatMinor,
     required this.openedAt,
+    this.expectedCashMinor,
+    this.canClose = true,
+    this.ownerMismatch = false,
+    this.closeNotAllowed = false,
+    this.openedByEmployeeProfileId,
   });
 
   final String shiftId;
   final String cashDrawerSessionId;
   final int openingFloatMinor;
   final DateTime openedAt;
+
+  /// The SERVER-authoritative expected cash (opening float + completed cash
+  /// payments on the drawer) computed by `app.get_open_shift_summary` with the
+  /// exact `app.close_shift` formula. Null when the server did not supply it —
+  /// notably on an owner-mismatch (the drawer figure belongs to the owner, not this
+  /// actor). PILOT-OPERATIONS-CORRECTIONS-001. Integer minor units (D-007).
+  final int? expectedCashMinor;
+
+  /// B1 (PILOT-OPERATIONS-CORRECTIONS-001): whether the CURRENT actor is authorized to
+  /// close this shift, mirroring `app.close_shift` (manager+ any; a cashier only their
+  /// own). Defaults true so an older server (no `can_close` key) is unaffected.
+  final bool canClose;
+
+  /// B1: true when the open shift belongs to a DIFFERENT employee (a new cashier on
+  /// the same device) — the server returned `shift_owner_mismatch`. The close UI then
+  /// shows an owner-mismatch state instead of a close form under the wrong name.
+  final bool ownerMismatch;
+
+  /// Finding 2 (PILOT-OPERATIONS-CORRECTIONS-001): true when the current actor OWNS the
+  /// shift but lacks the `close_shift` capability — the server returned
+  /// `shift_close_not_allowed`. The close UI then shows a capability-denied state (no
+  /// close form, no money, no counted-cash input) — never the same as an owner
+  /// mismatch, and never a retry that could bypass the capability.
+  final bool closeNotAllowed;
+
+  /// B1: the actual shift owner's employee-profile id (display only; never a secret).
+  final String? openedByEmployeeProfileId;
 }
 
 /// The result of closing a shift: the server-authoritative cash reconciliation.
@@ -144,47 +176,55 @@ class RealShiftRepository implements ShiftRepository {
     final transport = _transport;
     final session = _session;
     if (transport == null || session == null) return null;
-    final result = await SyncPullApi(transport).pull(
-      session,
-      const SyncPullRequest(entities: ['shifts', 'cash_drawer_sessions']),
+    // PILOT-OPERATIONS-CORRECTIONS-001: recover the open shift through the
+    // dedicated read RPC `get_open_shift_summary`, which returns the
+    // SERVER-authoritative expected cash (opening float + completed cash payments
+    // on the drawer, the SAME SQL as app.close_shift) — unlike sync_pull, whose
+    // expected_total_minor is NULL for a live shift. This is what lets the
+    // shift-close UI show the real expected after an app restart instead of 0.
+    final Object? raw;
+    try {
+      raw = await transport.invoke('get_open_shift_summary', <String, dynamic>{
+        'p_pin_session_id': session.pinSessionId,
+        'p_device_id': session.deviceId,
+      });
+    } on SyncTransportException {
+      return null; // fail-closed: no recovery -> honest "no open shift"
+    }
+    if (raw is! Map) return null;
+    if (raw['ok'] == false) return null;
+    if (raw['has_open_shift'] != true) return null;
+    final shiftId = raw['shift_id']?.toString();
+    if (shiftId == null || shiftId.isEmpty) return null;
+
+    int? asInt(Object? v) => v is int ? v : int.tryParse('$v');
+    final openingFloatMinor = asInt(raw['opening_float_minor']) ?? 0;
+    final expectedCashMinor = asInt(raw['expected_cash_minor']);
+    final openedAt =
+        DateTime.tryParse('${raw['opened_at']}')?.toLocal() ?? DateTime.now();
+    // B1 + Finding 2/3: the close-authorization verdict is FAIL-CLOSED at the parse
+    // layer — `can_close` must be EXPLICITLY true (never a missing/malformed key
+    // defaulting to closable). `get_open_shift_summary` always returns it for an open
+    // shift, so an absent value is an anomaly and is treated as NOT closable. A denial
+    // reports can_close=false + the owner id and NO money keys, with an honest reason:
+    // `shift_owner_mismatch` (a different employee owns it) or `shift_close_not_allowed`
+    // (the owning cashier lacks the close capability).
+    final ownerMismatch = raw['error'] == 'shift_owner_mismatch';
+    final closeNotAllowed = raw['error'] == 'shift_close_not_allowed';
+    final canClose =
+        raw['can_close'] == true && !ownerMismatch && !closeNotAllowed;
+    return OpenShiftInfo(
+      shiftId: shiftId,
+      cashDrawerSessionId: raw['cash_drawer_session_id']?.toString() ?? '',
+      openingFloatMinor: openingFloatMinor,
+      openedAt: openedAt,
+      expectedCashMinor: expectedCashMinor,
+      canClose: canClose,
+      ownerMismatch: ownerMismatch,
+      closeNotAllowed: closeNotAllowed,
+      openedByEmployeeProfileId: raw['opened_by_employee_profile_id']
+          ?.toString(),
     );
-    return result.fold<OpenShiftInfo?>((response) {
-      final shiftRows = response.changes['shifts']?.rows ?? const [];
-      Map<String, dynamic>? open;
-      for (final row in shiftRows) {
-        if (row['status'] == 'open' &&
-            row['device_id'] == session.deviceId &&
-            row['deleted_at'] == null) {
-          open = row;
-          break;
-        }
-      }
-      if (open == null) return null;
-      final shiftId = open['id']?.toString();
-      if (shiftId == null || shiftId.isEmpty) return null;
-      Map<String, dynamic>? drawer;
-      for (final row
-          in response.changes['cash_drawer_sessions']?.rows ??
-              const <Map<String, dynamic>>[]) {
-        if (row['shift_id'] == shiftId) {
-          drawer = row;
-          break;
-        }
-      }
-      final rawFloat = drawer?['opening_float_minor'];
-      final openingFloatMinor = rawFloat is int
-          ? rawFloat
-          : int.tryParse('$rawFloat') ?? 0;
-      final openedAt =
-          DateTime.tryParse('${open['opened_at']}')?.toLocal() ??
-          DateTime.now();
-      return OpenShiftInfo(
-        shiftId: shiftId,
-        cashDrawerSessionId: drawer?['id']?.toString() ?? '',
-        openingFloatMinor: openingFloatMinor,
-        openedAt: openedAt,
-      );
-    }, (failure) => null); // fail-closed: no recovery -> honest "no open shift"
   }
 
   /// Maps a `public.sync_push` envelope to a [ShiftCloseOutcome], FAIL-CLOSED.

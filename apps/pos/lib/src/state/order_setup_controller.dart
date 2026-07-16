@@ -5,6 +5,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import '../data/demo_tables.dart';
 import '../data/order_submission.dart' show normalizeCustomerName;
 import 'pos_session.dart';
+import 'table_operations_controller.dart';
 
 /// Immutable selection state for the active order's service mode (RF-114): the
 /// chosen [OrderType] and, for dine-in, the assigned [DemoTable].
@@ -109,7 +110,15 @@ final orderSetupControllerProvider =
 /// override this provider or [runtimeConfigProvider] to force a mode.
 final tablesRepositoryProvider = Provider<TablesRepository>((ref) {
   final cfg = ref.watch(runtimeConfigProvider);
-  if (cfg.isDemoMode) return DemoTablesStore();
+  if (cfg.isDemoMode) {
+    // PILOT-OPERATIONS-CORRECTIONS-001: feed the demo table-ops overlay so a demo
+    // manual-status change / link / unlink is reflected on the next load.
+    final ops = ref.watch(demoTableOpsProvider);
+    return DemoTablesStore(
+      manualOverrides: ops.manualStatus,
+      groupOverrides: ops.groupOf,
+    );
+  }
   return RealTablesRepository(
     ref.watch(posAuthTransportProvider),
     ref.watch(posSyncSessionProvider),
@@ -118,6 +127,13 @@ final tablesRepositoryProvider = Provider<TablesRepository>((ref) {
 
 /// Loads the branch's tables for the picker. Async to mirror the future backend
 /// read; resolves immediately for the demo store.
+///
+/// PILOT-OPERATIONS-CORRECTIONS-001 (A4): the SINGLE point where linked-table GROUP
+/// aggregation is applied, so every consumer (floor read, picker, table-operations
+/// sheet) sees each group as ONE unit — every member carrying the group-wide effective
+/// state and active dine-in count, never a free-looking peer of an occupied group.
 final tablesProvider = FutureProvider.autoDispose<List<DemoTable>>(
-  (ref) => ref.watch(tablesRepositoryProvider).loadTables(),
+  (ref) async => withGroupAggregation(
+    await ref.watch(tablesRepositoryProvider).loadTables(),
+  ),
 );

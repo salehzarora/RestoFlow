@@ -157,6 +157,36 @@ class CartViewState {
 /// The domain [Cart] is mutable with `void` mutators, so after each mutation we
 /// re-emit a fresh [CartViewState] for Riverpod to diff. In-memory demo only —
 /// no Supabase, no auth, no order submission, no payments, no persistence.
+/// PILOT-OPERATIONS-CORRECTIONS-001 — an immutable snapshot of a cart draft,
+/// captured at submit time so a rejected (item_unavailable) attempt can be
+/// restored for deliberate correction. Carries the rebuildable truth per line.
+class CartDraftSnapshot {
+  const CartDraftSnapshot({required this.currencyCode, required this.lines});
+
+  final String currencyCode;
+  final List<CartDraftLine> lines;
+
+  bool get isEmpty => lines.isEmpty;
+}
+
+class CartDraftLine {
+  const CartDraftLine({
+    required this.menuItemId,
+    required this.name,
+    required this.basePriceMinor,
+    required this.quantity,
+    this.modifiers = const <SelectedModifier>[],
+    this.note,
+  });
+
+  final String menuItemId;
+  final String name;
+  final int basePriceMinor;
+  final int quantity;
+  final List<SelectedModifier> modifiers;
+  final String? note;
+}
+
 class CartController extends Notifier<CartViewState> {
   late Cart _cart;
   int _lineSeq = 0;
@@ -319,6 +349,61 @@ class CartController extends Notifier<CartViewState> {
     _emit();
   }
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001: capture the current cart as an immutable
+  /// draft snapshot BEFORE a submit clears it, so a permanently-rejected submit
+  /// (item_unavailable) can be RESTORED for deliberate correction rather than
+  /// forcing the cashier to re-key the whole order.
+  CartDraftSnapshot captureDraft() => CartDraftSnapshot(
+    currencyCode: _cart.currencyCode,
+    lines: <CartDraftLine>[
+      for (final line in _cart.lines)
+        CartDraftLine(
+          menuItemId: line.menuItemId,
+          name: line.itemNameSnapshot,
+          basePriceMinor: line.basePriceMinorSnapshot,
+          quantity: line.quantity,
+          modifiers: _lineModifiers[line.lineId] ?? const <SelectedModifier>[],
+          note: _lineNotes[line.lineId],
+        ),
+    ],
+  );
+
+  /// PILOT-OPERATIONS-CORRECTIONS-001: rebuild the cart from a [CartDraftSnapshot]
+  /// (products, quantities, modifiers, notes). Idempotent replacement — it always
+  /// REPLACES the current cart, so a repeated "Back to cart" cannot duplicate
+  /// lines. Line ids keep advancing so they stay unique.
+  void restoreDraft(CartDraftSnapshot draft) {
+    _cart = Cart(
+      orderId: 'demo-order',
+      organizationId: 'demo-org',
+      restaurantId: 'demo-restaurant',
+      branchId: 'demo-branch',
+      currencyCode: draft.currencyCode,
+    );
+    _lineModifiers.clear();
+    _lineNotes.clear();
+    for (final l in draft.lines) {
+      final lineId = 'line-${_lineSeq++}';
+      _cart.addLine(
+        CartLine.snapshot(
+          lineId: lineId,
+          menuItemId: l.menuItemId,
+          itemNameSnapshot: l.name,
+          basePriceMinorSnapshot: l.basePriceMinor,
+          currencyCodeSnapshot: draft.currencyCode,
+        ),
+      );
+      if (l.quantity > 1) _cart.changeQuantity(lineId, l.quantity);
+      if (l.modifiers.isNotEmpty) {
+        _lineModifiers[lineId] = List.unmodifiable(l.modifiers);
+      }
+      final note = l.note;
+      if (note != null && note.isNotEmpty) _lineNotes[lineId] = note;
+    }
+    _submittedOrder = null;
+    _emit();
+  }
+
   /// Locally "submits" the current cart (RF-101): materializes an in-memory
   /// [LocalOrder] from the cart, snapshots it into a [SubmittedOrderView] with a
   /// local/provisional demo number, then empties the cart so the confirmation
@@ -384,6 +469,62 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _emit();
+  }
+
+  /// Finding 1 (PILOT-OPERATIONS-CORRECTIONS-001): build a [SubmittedOrderView] from a
+  /// previously-captured [CartDraftSnapshot] WITHOUT mutating the live cart. This is used
+  /// only when a submit result lands AFTER a PIN handover on the same till: the ORIGINAL
+  /// session's recent-orders row is materialized from ITS captured draft, so the CURRENT
+  /// session's cart, setup, and confirmation are never touched. The money arithmetic
+  /// mirrors [submitOrder] EXACTLY — integer minor units, base price × line quantity plus
+  /// each modifier delta counted once per line (D-007) — so a recovered row shows the same
+  /// figures it would have shown in its own session.
+  SubmittedOrderView viewFromDraft({
+    required CartDraftSnapshot draft,
+    OrderType orderType = OrderType.takeaway,
+    String? tableLabel,
+    String? customerName,
+    String? orderNumber,
+    String? outboxEntryId,
+    String? localOperationId,
+    String? orderId,
+    int taxTotalMinor = 0,
+    int taxRateBp = 0,
+  }) {
+    var subtotal = 0;
+    final lines = <SubmittedLineView>[];
+    for (final l in draft.lines) {
+      final modSum = l.modifiers.fold<int>(
+        0,
+        (sum, m) => sum + m.totalDeltaMinor,
+      );
+      final lineTotal = l.basePriceMinor * l.quantity + modSum;
+      subtotal += lineTotal;
+      lines.add(
+        SubmittedLineView(
+          name: l.name,
+          quantity: l.quantity,
+          lineTotalMinor: lineTotal,
+          currencyCode: draft.currencyCode,
+          modifiers: [for (final m in l.modifiers) m.displayName],
+          note: l.note,
+        ),
+      );
+    }
+    return SubmittedOrderView(
+      orderNumber: orderNumber ?? 'DEMO-0000',
+      orderType: orderType,
+      tableLabel: tableLabel,
+      customerName: customerName,
+      outboxEntryId: outboxEntryId,
+      localOperationId: localOperationId,
+      orderId: orderId,
+      currencyCode: draft.currencyCode,
+      subtotalMinor: subtotal,
+      taxTotalMinor: taxTotalMinor,
+      taxRateBp: taxRateBp,
+      lines: lines,
+    );
   }
 
   /// Updates the confirmed order's totals after an order-level discount is

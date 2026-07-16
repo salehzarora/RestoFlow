@@ -75,6 +75,12 @@ enum PosOrderSort { newestFirst, oldestFirst }
 bool sectionContains(PosOrderSection section, PosRecentOrder o) {
   if (o.origin == PosOrderOrigin.localDraft) return false;
 
+  // A3: a PERMANENTLY-REJECTED submit created no server order. It is not open work,
+  // not needs-payment, not completed — it never happened. It stays visible ONLY in
+  // the "All" tab, clearly marked "Not created", so the cashier can see (and discard)
+  // the failed attempt without it masquerading as a live order anywhere operational.
+  if (o.isNeverCreated) return section == PosOrderSection.all;
+
   final status = o.serverStatus;
   return switch (section) {
     // An order with no known status yet (submitted offline, never synced) counts as

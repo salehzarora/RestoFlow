@@ -23,7 +23,10 @@ import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 
 /// POS-OPERATIONS-SYNC-001 (Commit 3) — the operational centre, on screen.
 void main() {
-  final t0 = DateTime.utc(2026, 7, 14, 12);
+  // PILOT-OPERATIONS-CORRECTIONS-001 (stabilization): anchor the fixture to the
+  // real clock — the recent-orders view windows to `real-today − 1 day`, so a
+  // hardcoded date silently falls out of the window as the calendar advances.
+  final t0 = DateTime.now().toUtc().subtract(const Duration(hours: 2));
 
   PosOrderSnapshot snap({
     required String id,

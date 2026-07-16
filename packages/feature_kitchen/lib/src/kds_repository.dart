@@ -47,6 +47,10 @@ class KdsRepository {
   /// Trigger an immediate pull.
   Future<void> refresh() => _source.refresh();
 
+  /// PILOT-OPERATIONS-CORRECTIONS-001: recover after an app foreground/resume
+  /// (re-evaluate reachability, un-latch a transient terminal stop, pull fresh).
+  Future<void> resume() => _source.resume();
+
   /// Release the underlying source.
   Future<void> dispose() => _source.dispose();
 
