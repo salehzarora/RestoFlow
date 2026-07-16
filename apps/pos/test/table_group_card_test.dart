@@ -56,14 +56,23 @@ class _FakeTablesRepo implements TablesRepository {
 }
 
 class _FakeOpsRepo implements TableOperationsRepository {
-  _FakeOpsRepo({this.onUnlink});
+  _FakeOpsRepo({this.onUnlink, this.onSetStatus});
 
   final Future<void> Function(String tableId)? onUnlink;
+  final Future<void> Function(String tableId, String status)? onSetStatus;
   final List<String> unlinked = <String>[];
+  final List<(String, String)> statusSet = <(String, String)>[];
 
   @override
-  Future<void> setStatus({required String tableId, required String status}) =>
-      throw UnimplementedError();
+  Future<void> setStatus({
+    required String tableId,
+    required String status,
+  }) async {
+    statusSet.add((tableId, status));
+    final handler = onSetStatus;
+    if (handler == null) throw UnimplementedError();
+    await handler(tableId, status);
+  }
 
   @override
   Future<void> link({required String tableIdA, required String tableIdB}) =>
@@ -75,6 +84,12 @@ class _FakeOpsRepo implements TableOperationsRepository {
     await onUnlink?.call(tableId);
   }
 }
+
+const _managerCaps = PosStaffCapabilities(
+  applyDiscount: false,
+  applyFullComp: false,
+  manageTableOperations: true,
+);
 
 class _Launcher extends StatelessWidget {
   const _Launcher();
@@ -468,6 +483,251 @@ void main() {
         expect(find.byKey(const Key('group-unlink')), findsNothing);
         // The sheet still works for inspection + selection.
         expect(find.byKey(const Key('group-member-select-t4')), findsOneWidget);
+      },
+    );
+  });
+
+  group('correction 1: per-member management from the group detail', () {
+    testWidgets('C1-1. an authorized user sees Manage per member', (
+      tester,
+    ) async {
+      await _pumpPicker(
+        tester,
+        repo: _FakeTablesRepo([
+          _t('t4', 'T4', group: 'g1'),
+          _t('t5', 'T5', group: 'g1'),
+        ]),
+        caps: _managerCaps,
+      );
+      await tester.tap(find.byKey(const Key('table-group-tile-g1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('group-member-manage-t4')), findsOneWidget);
+      expect(find.byKey(const Key('group-member-manage-t5')), findsOneWidget);
+    });
+
+    testWidgets(
+      'C1-2. without manage_table_operations no manage control exists (not '
+      'hidden - not built), while selection still works',
+      (tester) async {
+        await _pumpPicker(
+          tester,
+          repo: _FakeTablesRepo([
+            _t('t4', 'T4', group: 'g1'),
+            _t('t5', 'T5', group: 'g1'),
+          ]),
+          caps: PosStaffCapabilities.none,
+        );
+        await tester.tap(find.byKey(const Key('table-group-tile-g1')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('group-member-manage-t4')), findsNothing);
+        expect(find.byKey(const Key('group-member-manage-t5')), findsNothing);
+        // Selection remains governed only by assignability.
+        expect(find.byKey(const Key('group-member-select-t5')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'C1-3/C1-4. Manage for T5 opens the canonical operations surface for '
+      'physical T5 and assigns NOTHING',
+      (tester) async {
+        final l10n = await _l10n();
+        final container = await _pumpPicker(
+          tester,
+          repo: _FakeTablesRepo([
+            _t('t4', 'T4', group: 'g1'),
+            _t('t5', 'T5', group: 'g1'),
+          ]),
+          caps: _managerCaps,
+        );
+        await tester.tap(find.byKey(const Key('table-group-tile-g1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('group-member-manage-t5')));
+        await tester.pumpAndSettle();
+        // The EXISTING TableOperationsSheet, titled for the exact member.
+        expect(find.text('${l10n.posTableOperations} · T5'), findsOneWidget);
+        expect(find.byKey(const Key('table-ops-available')), findsOneWidget);
+        // Opening management never assigns a table.
+        expect(
+          container.read(orderSetupControllerProvider).assignedTable,
+          isNull,
+        );
+      },
+    );
+
+    testWidgets(
+      'C1-5. a non-assignable (occupied) member is still manageable by an '
+      'authorized user',
+      (tester) async {
+        final l10n = await _l10n();
+        await _pumpPicker(
+          tester,
+          repo: _FakeTablesRepo([
+            _t('t4', 'T4', effective: 'occupied', active: 1, group: 'g1'),
+            _t('t5', 'T5', group: 'g1'),
+          ]),
+          caps: _managerCaps,
+        );
+        await tester.tap(find.byKey(const Key('table-group-tile-g1')));
+        await tester.pumpAndSettle();
+        // No selection anywhere (group occupied), but manage is offered.
+        expect(find.byKey(const Key('group-member-select-t4')), findsNothing);
+        expect(find.byKey(const Key('group-member-manage-t4')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('group-member-manage-t4')));
+        await tester.pumpAndSettle();
+        expect(find.text('${l10n.posTableOperations} · T4'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'C1-6. a status change made in the management surface reconciles the '
+      'group sheet through the canonical provider seam',
+      (tester) async {
+        final l10n = await _l10n();
+        final repo = _FakeTablesRepo([
+          _t('t4', 'T4', group: 'g1'),
+          _t('t5', 'T5', group: 'g1'),
+        ]);
+        final ops = _FakeOpsRepo(
+          onSetStatus: (tableId, status) async {
+            // The authoritative read model after the server applied it.
+            repo.rows = [
+              _t('t4', 'T4', group: 'g1'),
+              _t('t5', 'T5', effective: 'reserved', group: 'g1'),
+            ];
+          },
+        );
+        await _pumpPicker(tester, repo: repo, ops: ops, caps: _managerCaps);
+        await tester.tap(find.byKey(const Key('table-group-tile-g1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('group-member-manage-t5')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('table-ops-reserved')));
+        await tester.pumpAndSettle();
+        // The write went through the existing seam for the exact member...
+        expect(ops.statusSet, [('t5', 'reserved')]);
+        // ...the ops sheet closed itself, and the STILL-OPEN group sheet now
+        // shows T5's refreshed own state (live members, same invalidation).
+        final t5Sub = tester.widget<Text>(
+          find.byKey(const Key('group-member-state-t5')),
+        );
+        expect(t5Sub.data, contains(l10n.posTableStateReserved));
+      },
+    );
+
+    testWidgets(
+      'C1-7. a status-change failure stays honest: typed error in the ops '
+      'sheet, nothing mutated locally',
+      (tester) async {
+        final l10n = await _l10n();
+        final repo = _FakeTablesRepo([
+          _t('t4', 'T4', group: 'g1'),
+          _t('t5', 'T5', group: 'g1'),
+        ]);
+        final ops = _FakeOpsRepo(
+          onSetStatus: (_, _) async =>
+              throw const TableOperationException('offline'),
+        );
+        await _pumpPicker(tester, repo: repo, ops: ops, caps: _managerCaps);
+        await tester.tap(find.byKey(const Key('table-group-tile-g1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('group-member-manage-t5')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('table-ops-reserved')));
+        await tester.pumpAndSettle();
+        // The existing honest failure surface, and no local state invention.
+        expect(find.byKey(const Key('table-ops-error')), findsOneWidget);
+        expect(find.text(l10n.posTableStatusOffline), findsOneWidget);
+        final t5Sub = tester.widget<Text>(
+          find.byKey(const Key('group-member-state-t5')),
+        );
+        expect(t5Sub.data, isNot(contains(l10n.posTableStateReserved)));
+      },
+    );
+  });
+
+  group('correction 2: unlink failure preserves the group honestly', () {
+    testWidgets(
+      'C2. a typed unlink failure shows the error, keeps the sheet, and the '
+      'group card + counts survive',
+      (tester) async {
+        final l10n = await _l10n();
+        final repo = _FakeTablesRepo([
+          _t('t4', 'T4', effective: 'occupied', active: 1, group: 'g1'),
+          _t('t5', 'T5', group: 'g1'),
+        ]);
+        final ops = _FakeOpsRepo(
+          onUnlink: (_) async => throw const TableOperationException('offline'),
+        );
+        await _pumpPicker(tester, repo: repo, ops: ops, caps: _managerCaps);
+        await tester.tap(find.byKey(const Key('table-group-tile-g1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('group-unlink')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithText(FilledButton, l10n.posTableUnlink),
+        );
+        await tester.pumpAndSettle();
+        // Honest failure: localized banner, sheet still open, members listed.
+        expect(find.byKey(const Key('group-detail-error')), findsOneWidget);
+        expect(find.text(l10n.posTableStatusOffline), findsOneWidget);
+        expect(find.byKey(const Key('group-member-t4')), findsOneWidget);
+        expect(find.byKey(const Key('group-member-t5')), findsOneWidget);
+        // Dismiss the sheet: the group card is intact, count preserved, and
+        // the members did NOT return as independent cards.
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('table-group-tile-g1')), findsOneWidget);
+        expect(find.byKey(const Key('table-tile-t4')), findsNothing);
+        expect(find.byKey(const Key('table-tile-t5')), findsNothing);
+        final count = tester.widget<Text>(
+          find.byKey(const Key('group-open-orders-g1')),
+        );
+        expect(count.data, l10n.posTableOpenOrders(1));
+      },
+    );
+  });
+
+  group('correction 3+4: emptied areas and caption identity', () {
+    testWidgets(
+      'C3. a cross-zone group consuming BOTH areas leaves no empty shells and '
+      'exactly one card in the Linked tables section',
+      (tester) async {
+        final l10n = await _l10n();
+        await _pumpPicker(
+          tester,
+          repo: _FakeTablesRepo([
+            _t('t4', 'T4', group: 'g1'),
+            _t('t7', 'T7', area: 'Patio', group: 'g1'),
+          ]),
+        );
+        expect(find.byKey(const Key('table-groups-section')), findsOneWidget);
+        expect(find.byKey(const Key('table-group-tile-g1')), findsOneWidget);
+        // No member top-level tiles, no empty area shells.
+        expect(find.byKey(const Key('table-tile-t4')), findsNothing);
+        expect(find.byKey(const Key('table-tile-t7')), findsNothing);
+        expect(find.text(l10n.posTableAreaMain), findsNothing);
+        expect(find.text(l10n.posTableAreaPatio), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'C4. the remaining area keeps ITS OWN decorative caption when a prior '
+      'area is emptied by grouping',
+      (tester) async {
+        final l10n = await _l10n();
+        await _pumpPicker(
+          tester,
+          repo: _FakeTablesRepo([
+            // Main's ONLY table joins a cross-zone group -> Main is dropped.
+            _t('t4', 'T4', group: 'g1'),
+            _t('t7', 'T7', area: 'Patio', group: 'g1'),
+            _t('t8', 'T8', area: 'Patio'),
+          ]),
+        );
+        // Patio must keep "Counter" (its original identity) and must NOT
+        // inherit "Entrance" merely because Main disappeared.
+        expect(find.text(l10n.posTablesEdgeCounter), findsOneWidget);
+        expect(find.text(l10n.posTablesEdgeEntrance), findsNothing);
       },
     );
   });
