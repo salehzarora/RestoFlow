@@ -1279,6 +1279,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posTableGroup => 'Table group';
 
   @override
+  String get posTableGroupSectionTitle => 'Linked tables';
+
+  @override
+  String get posTableGroupDetailTitle => 'Linked group';
+
+  @override
+  String get posTableGroupMembers => 'Group members';
+
+  @override
+  String get posTableGroupChoosePrompt => 'Choose a table for the new order';
+
+  @override
+  String get posTableGroupNoAssignable =>
+      'No table in this group can take a new order right now';
+
+  @override
+  String get posTableGroupSelectAction => 'Select';
+
+  @override
+  String get posTableGroupJoiner => ' + ';
+
+  @override
   String get posShiftOpeningFloat => 'Opening float';
 
   @override

@@ -1272,6 +1272,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posTableGroup => 'مجموعة طاولات';
 
   @override
+  String get posTableGroupSectionTitle => 'طاولات مرتبطة';
+
+  @override
+  String get posTableGroupDetailTitle => 'مجموعة مرتبطة';
+
+  @override
+  String get posTableGroupMembers => 'طاولات المجموعة';
+
+  @override
+  String get posTableGroupChoosePrompt => 'اختر طاولة للطلب الجديد';
+
+  @override
+  String get posTableGroupNoAssignable =>
+      'لا يمكن لأي طاولة في هذه المجموعة استقبال طلب جديد حاليًا';
+
+  @override
+  String get posTableGroupSelectAction => 'اختيار';
+
+  @override
+  String get posTableGroupJoiner => ' + ';
+
+  @override
   String get posShiftOpeningFloat => 'الرصيد الافتتاحي';
 
   @override

@@ -1263,6 +1263,28 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posTableGroup => 'קבוצת שולחנות';
 
   @override
+  String get posTableGroupSectionTitle => 'שולחנות מקושרים';
+
+  @override
+  String get posTableGroupDetailTitle => 'קבוצה מקושרת';
+
+  @override
+  String get posTableGroupMembers => 'שולחנות בקבוצה';
+
+  @override
+  String get posTableGroupChoosePrompt => 'בחרו שולחן להזמנה החדשה';
+
+  @override
+  String get posTableGroupNoAssignable =>
+      'אף שולחן בקבוצה זו אינו יכול לקבל הזמנה חדשה כעת';
+
+  @override
+  String get posTableGroupSelectAction => 'בחירה';
+
+  @override
+  String get posTableGroupJoiner => ' + ';
+
+  @override
   String get posShiftOpeningFloat => 'קופה פותחת';
 
   @override
