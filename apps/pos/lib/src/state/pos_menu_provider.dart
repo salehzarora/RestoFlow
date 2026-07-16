@@ -346,21 +346,12 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
       items = [
         for (final item in items)
           item.imagePath != null && urls.containsKey(item.imagePath)
-              ? DemoMenuItem(
-                  id: item.id,
-                  name: item.name,
-                  priceMinor: item.priceMinor,
-                  categoryId: item.categoryId,
-                  categoryName: item.categoryName,
-                  imagePath: item.imagePath,
-                  imageUrl: urls[item.imagePath],
-                  // Carry the rich attributes through the URL rebuild.
-                  itemType: item.itemType,
-                  tags: item.tags,
-                  prepMinutes: item.prepMinutes,
-                  kitchenNote: item.kitchenNote,
-                  attributes: item.attributes,
-                )
+              // PILOT-OPERATIONS-CORRECTIONS-001: attach the resolved signed URL
+              // with a FIELD-PRESERVING copy. A partial DemoMenuItem() rebuild
+              // here silently reset availability to 'available', turning a
+              // Sold-out/Paused item back into a sellable tile once its image
+              // resolved — copyWith carries every authoritative field through.
+              ? item.copyWith(imageUrl: urls[item.imagePath])
               : item,
       ];
     }
