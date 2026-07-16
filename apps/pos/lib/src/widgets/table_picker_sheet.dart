@@ -112,9 +112,12 @@ class TablePickerSheet extends ConsumerWidget {
                         // PSC-001B: a combined group card opens the group-detail
                         // sheet; a NEW order still requires an EXPLICIT physical
                         // member choice there — the card itself never assigns.
+                        // The full table list rides along so the per-member
+                        // management surface can offer honest link candidates.
                         onOpenGroup: (group) => TableGroupDetailSheet.show(
                           context,
                           group: group,
+                          allTables: tables,
                           onSelectMember: (member) {
                             ref
                                 .read(orderSetupControllerProvider.notifier)
@@ -246,7 +249,9 @@ String _normalizedAreaOf(DemoTable t) {
   return (area == null || area.trim().isEmpty) ? 'Main' : area;
 }
 
-int _byLabelThenId(DemoTable a, DemoTable b) {
+/// Deterministic member ordering: (label, tableId). Public so the group-detail
+/// sheet re-derives live member lists with the SAME order as the picker.
+int compareTablesByLabelThenId(DemoTable a, DemoTable b) {
   final byLabel = a.label.compareTo(b.label);
   return byLabel != 0 ? byLabel : a.tableId.compareTo(b.tableId);
 }
@@ -267,7 +272,7 @@ TablePickerLayout buildTablePickerLayout(List<DemoTable> tables) {
   final cards = <String, TableGroupCardData>{};
   for (final e in membersByGroup.entries) {
     if (e.value.length < 2) continue;
-    final members = [...e.value]..sort(_byLabelThenId);
+    final members = [...e.value]..sort(compareTablesByLabelThenId);
     cards[e.key] = TableGroupCardData(groupId: e.key, members: members);
   }
 
@@ -281,7 +286,9 @@ TablePickerLayout buildTablePickerLayout(List<DemoTable> tables) {
       sameAreaGroupIds.add(g.groupId);
     }
   }
-  crossZone.sort((a, b) => _byLabelThenId(a.members.first, b.members.first));
+  crossZone.sort(
+    (a, b) => compareTablesByLabelThenId(a.members.first, b.members.first),
+  );
 
   // Walk the existing area layout; emit a same-area group card at its first
   // member's position, skip every other grouped member, drop areas left empty.
@@ -346,6 +353,23 @@ class _FloorMap extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final layout = buildTablePickerLayout(tables);
     final areas = layout.areas;
+    // PSC-001B correction 4: the decorative Entrance/Counter captions belong to
+    // the ORIGINAL first/second physical zones, not to whatever index an area
+    // lands on after empty (fully-grouped) zones are filtered out. Key them by
+    // the PRE-FILTER area identity so dropping an emptied zone can never shift
+    // a caption onto the wrong zone.
+    final originalAreaKeys = [
+      for (final a in groupTablesByArea(tables)) a.areaKey,
+    ];
+    String? edgeLabelFor(String areaKey) {
+      if (originalAreaKeys.isNotEmpty && areaKey == originalAreaKeys[0]) {
+        return l10n.posTablesEdgeEntrance;
+      }
+      if (originalAreaKeys.length > 1 && areaKey == originalAreaKeys[1]) {
+        return l10n.posTablesEdgeCounter;
+      }
+      return null;
+    }
 
     return SingleChildScrollView(
       child: Column(
@@ -356,9 +380,7 @@ class _FloorMap extends StatelessWidget {
             if (i > 0) const _AisleDivider(),
             _AreaZone(
               areaName: localizedTableArea(areas[i].areaKey, l10n),
-              edgeLabel: i == 0
-                  ? l10n.posTablesEdgeEntrance
-                  : (i == 1 ? l10n.posTablesEdgeCounter : null),
+              edgeLabel: edgeLabelFor(areas[i].areaKey),
               entries: areas[i].entries,
               assignedId: assignedId,
               onAssign: onAssign,
