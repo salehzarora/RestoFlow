@@ -445,6 +445,14 @@ class AuditEventPresenter {
   /// two allowlisted nested objects). Never emits a sensitive-looking key.
   List<AuditChange> _changes(AuditEvent e) {
     final out = <AuditChange>[];
+    // PSC-001C correction (Finding 6): the four service-round actions are
+    // MONEY-FREE by approved contract. Even a HOSTILE / manually inserted
+    // payload must never render a money value for them — the exclusion is
+    // ACTION-SPECIFIC, so approved money-carrying actions (payments,
+    // discounts, shifts, order.submitted, completion) keep their rows.
+    final moneyFree =
+        e.action.startsWith('order.items_add') ||
+        e.action.startsWith('order.round_status');
     // The union of keys present in either side, in a stable order (new first).
     final keys = <String>{...e.newValues.keys, ...e.oldValues.keys};
     for (final key in keys) {
@@ -456,6 +464,7 @@ class AuditEventPresenter {
       }
       final kind = _displayableKeys[key];
       if (kind == null) continue;
+      if (moneyFree && kind == _Kind.money) continue;
       final oldV = _format(kind, e.oldValues[key]);
       final newV = _format(kind, e.newValues[key]);
       if (newV == null && oldV == null) continue;

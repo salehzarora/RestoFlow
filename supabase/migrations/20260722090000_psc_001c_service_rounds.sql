@@ -668,16 +668,19 @@ begin
     set subtotal_minor = v_new_sub, grand_total_minor = v_new_grand, revision = v_new_rev
     where id = p_order_id;
 
-  -- (m) audit order.items_added (D-013): safe scalars only.
+  -- (m) audit order.items_added (D-013): safe scalars only — and MONEY-FREE
+  -- (PSC-001C correction, Finding 6): the approved contract for the four new
+  -- service-round actions carries NO monetary field. What was added and to
+  -- which order is the operational record; the money moved is derivable from
+  -- the order's own authoritative rows, never from this trail.
   insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
   values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'order.items_added', null,
-          jsonb_build_object('order_id', p_order_id, 'revision', v_o_rev,
-                             'subtotal_minor', v_o_sub),
+          jsonb_build_object('order_id', p_order_id, 'revision', v_o_rev),
           jsonb_build_object('order_id', p_order_id, 'order_code', v_order_code,
                              'round_number', v_round_no, 'added_item_count', v_item_count,
                              'order_status', v_o_status, 'role', v_role,
-                             'revision', v_new_rev, 'subtotal_minor', v_new_sub,
-                             'grand_total_minor', v_new_grand,
+                             'device_type', v_device_type,
+                             'revision', v_new_rev,
                              'local_operation_id', p_local_operation_id,
                              'resolved_membership_id', v_membership));
 
@@ -1702,6 +1705,11 @@ declare
   v_ex_result    jsonb;
   v_ex_optype    text;
   v_ex_fp        text;
+  -- PSC-001C correction (Finding 1): the existing row's id when the atomic
+  -- ledger claim loses, and whether this request ADOPTED a stale non-terminal
+  -- row (the only case that bumps retry_count — the pre-fix contract).
+  v_ex_id        uuid;
+  v_adopted      boolean;
   v_so_id        uuid;
   v_dispatch     jsonb;
   v_dispatch_ok  boolean;
@@ -1833,14 +1841,34 @@ begin
         v_fingerprint := md5(v_op_type || '|' || v_payload::text);
       end if;
 
-      -- dedup/replay: a stored op with the SAME identity that is TERMINAL replays its
-      -- result (a legitimately-APPLIED op before revocation is NOT re-rejected); a
-      -- different identity is a conflict; otherwise record the op as rejected (revoked_device).
-      select so.status, so.result, so.operation_type, so.payload_fingerprint
-        into v_ex_status, v_ex_result, v_ex_optype, v_ex_fp
-        from public.sync_operations so
-        where so.organization_id = v_org and so.device_id = p_device_id and so.local_operation_id = v_local_op;
-      if found then
+      -- dedup/replay (PSC-001C correction, Finding 1 — ATOMIC CLAIM): the
+      -- rejected/revoked_device recording is now claimed with ONE
+      -- INSERT .. ON CONFLICT DO NOTHING on the transport identity. When the
+      -- claim loses, the existing row is LOCKED (waiting out any concurrent
+      -- claimant's COMMIT) and decided from its COMMITTED state: a TERMINAL
+      -- row replays its stored result (a legitimately-APPLIED op before
+      -- revocation is NOT re-rejected — and can no longer be OVERWRITTEN by
+      -- this path racing a valid-device apply); a different identity is a
+      -- conflict; only a genuinely stale NON-terminal row is re-recorded as
+      -- rejected (the pre-fix retry contract, bump included).
+      v_so_id := null;
+      insert into public.sync_operations as so (
+        organization_id, restaurant_id, branch_id, device_id, local_operation_id, operation_type,
+        target_entity, target_id, payload, payload_fingerprint, depends_on, status,
+        last_error_code, last_error_class, rejection_reason,
+        result, client_created_at)
+      values (v_org, v_rest, v_branch, p_device_id, v_local_op, v_op_type,
+              v_target_ent, v_target_id, v_payload, v_fingerprint, v_depends, 'rejected',
+              'revoked_device', 'permanent', 'revoked_device',
+              jsonb_build_object('ok', false, 'error', 'rejected', 'detail', 'revoked_device'), v_client_ts)
+      on conflict (organization_id, device_id, local_operation_id) do nothing
+      returning so.id into v_so_id;
+      if v_so_id is null then
+        select so.id, so.status, so.result, so.operation_type, so.payload_fingerprint
+          into v_ex_id, v_ex_status, v_ex_result, v_ex_optype, v_ex_fp
+          from public.sync_operations so
+          where so.organization_id = v_org and so.device_id = p_device_id and so.local_operation_id = v_local_op
+          for update;
         if v_ex_optype <> v_op_type or v_ex_fp <> v_fingerprint then
           insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
           values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_conflict', null, null,
@@ -1855,23 +1883,15 @@ begin
             || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'status', v_ex_status, 'idempotency_replay', true));
           continue;
         end if;
+        -- a stale NON-terminal row: re-record it as rejected (revoked_device)
+        -- under the held lock — the pre-fix on-conflict contract, verbatim.
+        update public.sync_operations as so
+          set status = 'rejected', last_error_code = 'revoked_device', last_error_class = 'permanent',
+              rejection_reason = 'revoked_device',
+              result = jsonb_build_object('ok', false, 'error', 'rejected', 'detail', 'revoked_device'),
+              retry_count = so.retry_count + 1, updated_at = now()
+          where so.id = v_ex_id;
       end if;
-
-      -- record the op as rejected (revoked_device); NO business mutation, NO dispatch.
-      insert into public.sync_operations as so (
-        organization_id, restaurant_id, branch_id, device_id, local_operation_id, operation_type,
-        target_entity, target_id, payload, payload_fingerprint, depends_on, status,
-        last_error_code, last_error_class, rejection_reason,
-        result, client_created_at)
-      values (v_org, v_rest, v_branch, p_device_id, v_local_op, v_op_type,
-              v_target_ent, v_target_id, v_payload, v_fingerprint, v_depends, 'rejected',
-              'revoked_device', 'permanent', 'revoked_device',
-              jsonb_build_object('ok', false, 'error', 'rejected', 'detail', 'revoked_device'), v_client_ts)
-      on conflict (organization_id, device_id, local_operation_id) do update
-        set status = 'rejected', last_error_code = 'revoked_device', last_error_class = 'permanent',
-            rejection_reason = 'revoked_device',
-            result = jsonb_build_object('ok', false, 'error', 'rejected', 'detail', 'revoked_device'),
-            retry_count = so.retry_count + 1, updated_at = now();
       insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
       values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_rejected', 'revoked_device', null,
               jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'reason', 'revoked_device'));
@@ -1972,12 +1992,41 @@ begin
       v_fingerprint := md5(v_op_type || '|' || v_payload::text);
     end if;
 
-    -- (b2) dedup / replay (transport identity = org + device + local_operation_id).
-    select so.status, so.result, so.operation_type, so.payload_fingerprint
-      into v_ex_status, v_ex_result, v_ex_optype, v_ex_fp
-      from public.sync_operations so
-      where so.organization_id = v_org and so.device_id = p_device_id and so.local_operation_id = v_local_op;
-    if found then
+    -- (b2) ATOMIC LEDGER CLAIM (PSC-001C correction, Finding 1). The pre-fix
+    -- shape read the ledger and only LATER upserted it, so two concurrent
+    -- requests with the SAME (org, device, local_operation_id) + fingerprint
+    -- could both pass the read; the loser's upsert then dragged the winner's
+    -- COMMITTED terminal row back to in_flight, re-dispatched (now an
+    -- invalid_transition), and finalized the previously-successful row as
+    -- rejected. The claim is now ONE INSERT .. ON CONFLICT DO NOTHING on the
+    -- transport identity, computed AFTER envelope validation + identity
+    -- canonicalization + the fingerprint:
+    --   * claim WON  -> this transaction owns dispatch (fresh row, in_flight,
+    --     retry_count 0) and finalizes it exactly once at (b6);
+    --   * claim LOST -> the existing row is LOCKED (FOR UPDATE — waiting out a
+    --     concurrent claimant's COMMIT) and decided from COMMITTED state: a
+    --     fingerprint/op mismatch keeps the exact idempotency-conflict
+    --     contract; a TERMINAL row replays its stored result (and can never be
+    --     overwritten or reset to in_flight again); only a genuinely stale
+    --     NON-terminal row (pending / crashed in_flight) is ADOPTED — the
+    --     pre-fix retry contract, bump included. A losing concurrent caller
+    --     therefore converges on the winner's stored terminal result.
+    v_adopted := false;
+    v_so_id   := null;
+    insert into public.sync_operations as so (
+      organization_id, restaurant_id, branch_id, device_id, local_operation_id, operation_type,
+      target_entity, target_id, payload, payload_fingerprint, depends_on, status, client_created_at)
+    values (v_org, v_rest, v_branch, p_device_id, v_local_op, v_op_type,
+            v_target_ent, v_target_id, v_payload, v_fingerprint, v_depends, 'in_flight', v_client_ts)
+    on conflict (organization_id, device_id, local_operation_id) do nothing
+    returning so.id into v_so_id;
+
+    if v_so_id is null then
+      select so.id, so.status, so.result, so.operation_type, so.payload_fingerprint
+        into v_ex_id, v_ex_status, v_ex_result, v_ex_optype, v_ex_fp
+        from public.sync_operations so
+        where so.organization_id = v_org and so.device_id = p_device_id and so.local_operation_id = v_local_op
+        for update;
       if v_ex_optype <> v_op_type or v_ex_fp <> v_fingerprint then
         insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
         values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_conflict', null, null,
@@ -1992,9 +2041,13 @@ begin
           || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'status', v_ex_status, 'idempotency_replay', true));
         continue;
       end if;
+      v_so_id   := v_ex_id;
+      v_adopted := true;
     end if;
 
-    -- (b3) dependency guard.
+    -- (b3) dependency guard (still BEFORE any dispatch; the claimed/adopted
+    -- row is parked as pending exactly like the pre-fix contract — a fresh
+    -- claim keeps retry_count 0, an adopted re-attempt bumps it).
     v_dep_ok := true;
     for v_dep in select jsonb_array_elements_text(v_depends)
     loop
@@ -2009,30 +2062,24 @@ begin
     end loop;
 
     if not v_dep_ok then
-      insert into public.sync_operations as so (
-        organization_id, restaurant_id, branch_id, device_id, local_operation_id, operation_type,
-        target_entity, target_id, payload, payload_fingerprint, depends_on, status,
-        last_error_code, last_error_class, client_created_at)
-      values (v_org, v_rest, v_branch, p_device_id, v_local_op, v_op_type,
-              v_target_ent, v_target_id, v_payload, v_fingerprint, v_depends, 'pending',
-              'dependency_not_ready', 'transient', v_client_ts)
-      on conflict (organization_id, device_id, local_operation_id) do update
+      update public.sync_operations as so
         set status = 'pending', last_error_code = 'dependency_not_ready', last_error_class = 'transient',
-            retry_count = so.retry_count + 1, updated_at = now();
+            retry_count = so.retry_count + (case when v_adopted then 1 else 0 end),
+            updated_at = now()
+        where so.id = v_so_id;
       v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'ok', false,
         'error', 'dependency_not_ready', 'retryable', true, 'status', 'pending', 'idempotency_replay', false);
       continue;
     end if;
 
-    -- (b4) mark in_flight (insert new, or bump a re-attempt)
-    insert into public.sync_operations as so (
-      organization_id, restaurant_id, branch_id, device_id, local_operation_id, operation_type,
-      target_entity, target_id, payload, payload_fingerprint, depends_on, status, client_created_at)
-    values (v_org, v_rest, v_branch, p_device_id, v_local_op, v_op_type,
-            v_target_ent, v_target_id, v_payload, v_fingerprint, v_depends, 'in_flight', v_client_ts)
-    on conflict (organization_id, device_id, local_operation_id) do update
-      set status = 'in_flight', retry_count = so.retry_count + 1, updated_at = now()
-    returning so.id into v_so_id;
+    -- (b4) an ADOPTED stale re-attempt returns to in_flight with the retry
+    -- bump (the pre-fix on-conflict contract); a fresh claim is already
+    -- in_flight and is never re-written here.
+    if v_adopted then
+      update public.sync_operations as so
+        set status = 'in_flight', retry_count = so.retry_count + 1, updated_at = now()
+        where so.id = v_so_id;
+    end if;
 
     -- (b5) dispatch to the matching business RPC inside a per-op EXCEPTION subtransaction.
     begin
@@ -2323,7 +2370,7 @@ end;
 $$;
 
 comment on function app.sync_push(uuid, uuid, jsonb) is
-  'RF-056/RF-061 + ... + PSC-001D + PSC-001C (D-010/D-022) SECURITY DEFINER batch push. Faithful re-creation of the 20260721090000 body + TWO added dispatch branches: order.items_add -> app.add_order_items (POS-class device + cashier+ role set + eligibility + submit_order-parity pricing enforced inside; payload carries order_id + order_items) and order.round_status -> app.update_round_status (LOCKED device/role matrix + parent guards + single-step legality enforced inside; payload carries round_id + new_status) — 15 canonical operations. IDENTITY HARDENING (the PSC-001D contract, now covering order.void_ack + order.items_add + order.round_status): the target uuid is parsed inside a PROTECTED per-operation boundary (a malformed target rejects only its own operation, never the batch); the envelope must carry a matching uuid target_id + payload identity (payload.order_id, or payload.round_id for order.round_status; a missing/malformed/contradictory pair is a malformed envelope — rejected with NO ledger row, BEFORE the fingerprint and the terminal-replay lookup); and each hardened operation''s fingerprint BINDS the canonical target identity, so a terminal replay is valid only for the same local_operation_id + type + payload + target. The identity contract is enforced identically in BOTH the valid-device and the revoked-device paths (a revoked device gains no permission to submit ambiguous identity). The 12 pre-PSC operations keep their exact parse/fingerprint semantics. All prior behaviour verbatim (batch cap, revoked-device recording, dedup/replay, dependency guard, per-op subtransactions, finalization, customer_name stamp). Authorization INGEST-TIME; scope from the session, never the payload.';
+  'RF-056/RF-061 + ... + PSC-001D + PSC-001C (D-010/D-022) SECURITY DEFINER batch push. Faithful re-creation of the 20260721090000 body + TWO added dispatch branches: order.items_add -> app.add_order_items (POS-class device + cashier+ role set + eligibility + submit_order-parity pricing enforced inside; payload carries order_id + order_items) and order.round_status -> app.update_round_status (LOCKED device/role matrix + parent guards + single-step legality enforced inside; payload carries round_id + new_status) — 15 canonical operations. IDENTITY HARDENING (the PSC-001D contract, now covering order.void_ack + order.items_add + order.round_status): the target uuid is parsed inside a PROTECTED per-operation boundary (a malformed target rejects only its own operation, never the batch); the envelope must carry a matching uuid target_id + payload identity (payload.order_id, or payload.round_id for order.round_status; a missing/malformed/contradictory pair is a malformed envelope — rejected with NO ledger row, BEFORE the fingerprint and the terminal-replay lookup); and each hardened operation''s fingerprint BINDS the canonical target identity, so a terminal replay is valid only for the same local_operation_id + type + payload + target. The identity contract is enforced identically in BOTH the valid-device and the revoked-device paths (a revoked device gains no permission to submit ambiguous identity). The 12 pre-PSC operations keep their exact parse/fingerprint semantics. ATOMIC LEDGER CLAIM (PSC-001C correction, Finding 1): the shared ledger write for ALL 15 operations is ONE INSERT .. ON CONFLICT DO NOTHING on the transport identity, computed after validation + canonicalization + fingerprint; a losing claim LOCKS the existing row (waiting out a concurrent claimant''s commit) and decides from COMMITTED state — mismatch keeps the idempotency-conflict contract, a TERMINAL row replays its stored result and can never be reset to in_flight or overwritten, and only a genuinely stale non-terminal row is adopted under the pre-fix retry contract. The same claim shape guards the revoked-device recording. All prior behaviour verbatim (batch cap, result ordering, dependency guard, per-op subtransactions, finalization, customer_name stamp). Authorization INGEST-TIME; scope from the session, never the payload.';
 
 -- ACL parity (CREATE OR REPLACE preserves grants; re-issued explicitly).
 revoke all on function app.sync_push(uuid, uuid, jsonb) from public;
@@ -2779,6 +2826,15 @@ begin
     -- never identifiers (T-003 holds).
     'round_number','added_item_count'
   ] loop
+    -- PSC-001C correction (Finding 6): the four service-round actions are
+    -- MONEY-FREE by approved contract — any *_minor key (hostile, manual, or
+    -- accidental) is dropped for EXACTLY these actions, action-specifically:
+    -- the approved money-carrying actions (payments / discounts / shifts /
+    -- order.submitted / completion) keep their allowlisted money keys.
+    if (p_action like 'order.items_add%' or p_action like 'order.round_status%')
+       and v_key like '%\_minor' escape '\' then
+      continue;
+    end if;
     if p_values ? v_key
        and jsonb_typeof(p_values -> v_key) in ('string','number','boolean') then
       v_out := v_out || jsonb_build_object(v_key, p_values -> v_key);
@@ -2803,7 +2859,7 @@ end;
 $$;
 
 comment on function app.audit_safe_detail(text, jsonb) is
-  'ALLOWLIST projection of one audit payload to canonical safe fields + PSC-001D (voided_from_status / device_type / kitchen_ack_required) + PSC-001C (round_number / added_item_count — a position and a line count, never money, never identifiers; T-003 holds). Faithful re-creation of the 20260721090000 body. Every un-listed key/structure dropped; malformed -> ''{}''; never throws.';
+  'ALLOWLIST projection of one audit payload to canonical safe fields + PSC-001D (voided_from_status / device_type / kitchen_ack_required) + PSC-001C (round_number / added_item_count — a position and a line count, never money, never identifiers; T-003 holds). PSC-001C Finding-6 hardening: the four service-round actions (order.items_add% / order.round_status%) are MONEY-FREE by approved contract — every *_minor key is dropped for exactly those actions even when hostile or manually inserted, while approved money-carrying actions keep their allowlisted keys. Faithful re-creation of the 20260721090000 body. Every un-listed key/structure dropped; malformed -> ''{}''; never throws.';
 
 -- ----------------------------------------------------------------------------
 -- 13. app.pos_order_detail + public.pos_order_detail — the AUTHORITATIVE POS
