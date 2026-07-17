@@ -35,6 +35,23 @@ class KdsSyncedHome extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // PSC-001D correction: after every FRESH authoritative pull, drop
+    // acknowledgement pending/failed entries for orders no longer among the
+    // server's pending-ack cancellations (acknowledged here or elsewhere).
+    // Deliberately gated on genuine data: a stale last-good snapshot, an
+    // error, a reauth stop or the loading placeholder never cleans anything,
+    // so a still-visible card keeps its state and the regular poll converges.
+    // The set is derived from the COMPLETE ticket list, never one column.
+    ref.listen(kdsViewStateProvider, (previous, next) {
+      final vs = next.valueOrNull;
+      if (vs == null || vs.isStale || vs.isError || vs.isReauthRequired) {
+        return;
+      }
+      ref.read(kdsVoidAckControllerProvider.notifier).reconcile([
+        for (final t in vs.tickets)
+          if (t.requiresAck && t.orderId != null) t.orderId!,
+      ]);
+    });
     final async = ref.watch(kdsViewStateProvider);
     return async.when(
       loading: () => _scaffold(

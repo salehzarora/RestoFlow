@@ -93,15 +93,46 @@ class KdsVoidAckController extends Notifier<KdsVoidAckState> {
     );
   }
 
-  /// Fail-closed per-op result parse (the POS table-operations convention):
-  /// only an explicit `status == 'applied'` with `ok != false` counts.
+  /// PSC-001D correction (independent review): reconcile against the
+  /// AUTHORITATIVE pending-ack set from a successful pull. Once an order no
+  /// longer appears among the server's pending-ack cancellations (it was
+  /// acknowledged — here or on another device), its pending/failed entry is
+  /// dropped so a long-running KDS session never accumulates stale ids. The
+  /// caller (the synced home) invokes this ONLY on a fresh authoritative data
+  /// state — never on a transport failure, a stale last-good snapshot, or a
+  /// loading placeholder — so a still-visible cancellation is never cleaned
+  /// prematurely and local state never overrides server truth.
+  void reconcile(Iterable<String> authoritativePendingAckOrderIds) {
+    final live = authoritativePendingAckOrderIds.toSet();
+    final pending = {
+      for (final id in state.pending)
+        if (live.contains(id)) id,
+    };
+    final failed = {
+      for (final id in state.failed)
+        if (live.contains(id)) id,
+    };
+    if (pending.length == state.pending.length &&
+        failed.length == state.failed.length) {
+      return; // nothing stale — no state churn
+    }
+    state = KdsVoidAckState(pending: pending, failed: failed);
+  }
+
+  /// STRICT fail-closed per-op result parse (independent-review correction):
+  /// success requires an explicit `status == 'applied'` AND an explicit
+  /// `ok == true`. A missing/null/false `ok`, a malformed results shape, or an
+  /// absent matching op all count as FAILURE — the card stays visible and
+  /// retryable rather than sitting permanently pending on a malformed
+  /// response. (`already_acknowledged` replays arrive as applied + ok=true,
+  /// so they remain a successful subtype.)
   static bool _appliedOk(Object? raw, String localOperationId) {
     if (raw is! Map) return false;
     final results = raw['results'];
     if (results is! List) return false;
     for (final r in results) {
       if (r is Map && r['local_operation_id'] == localOperationId) {
-        return r['status'] == 'applied' && r['ok'] != false;
+        return r['status'] == 'applied' && r['ok'] == true;
       }
     }
     return false;
