@@ -755,12 +755,39 @@ begin
         continue;
       end if;
 
-      -- PSC-001D correction (F2): the SAME conditional fingerprint as the
-      -- valid path, so a legitimately-applied order.void_ack still replays
-      -- its stored result after a revocation (identical identity -> identical
-      -- fingerprint), while the 12 prior operations are unchanged.
+      -- PSC-001D correction (final pass): the SAME canonical order.void_ack
+      -- identity contract as the valid path, enforced BEFORE the fingerprint,
+      -- the terminal-replay lookup, the idempotency-conflict comparison and
+      -- the ledger write. A revoked device must not gain permission to submit
+      -- ambiguous or contradictory operation identity: a missing, malformed
+      -- or CONTRADICTORY target_id/payload.order_id pair is a hostile or
+      -- malformed envelope — rejected with NO ledger row (the malformed-
+      -- envelope convention), the batch continues. Only this op is affected.
       if v_op_type = 'order.void_ack' then
-        v_fingerprint := md5(v_op_type || '|' || v_payload::text || '|' || coalesce(v_target_id::text, ''));
+        v_ack_ok := v_target_id is not null;
+        begin
+          v_ack_order := nullif(v_payload ->> 'order_id', '')::uuid;
+        exception when others then
+          v_ack_order := null;
+        end;
+        if v_ack_order is null or not v_ack_ok or v_target_id <> v_ack_order then
+          v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type,
+            'ok', false, 'error', 'invalid_payload',
+            'detail', 'order.void_ack requires matching uuid target_id and payload.order_id',
+            'status', 'rejected', 'idempotency_replay', false);
+          continue;
+        end if;
+      end if;
+
+      -- PSC-001D correction (F2 + final pass): the SAME target-bound
+      -- fingerprint SHAPE as the valid path — the target component is the
+      -- PARSED uuid's text (guaranteed non-null and equal to the parsed
+      -- payload.order_id by the identity check above), so a legitimately-
+      -- applied order.void_ack still replays its stored result after a
+      -- revocation (identical identity -> identical fingerprint), while the
+      -- 12 prior operations are unchanged.
+      if v_op_type = 'order.void_ack' then
+        v_fingerprint := md5(v_op_type || '|' || v_payload::text || '|' || v_target_id::text);
       else
         v_fingerprint := md5(v_op_type || '|' || v_payload::text);
       end if;
@@ -1205,7 +1232,7 @@ end;
 $$;
 
 comment on function app.sync_push(uuid, uuid, jsonb) is
-  'RF-056/RF-061 + ... + PILOT-OPERATIONS-CORRECTIONS-001 + PSC-001D (D-010/D-022) SECURITY DEFINER batch push. Faithful re-creation of the 20260720110000 body + ONE added dispatch branch: order.void_ack -> app.kitchen_ack_void (PIN session + KDS-class device + kitchen role set enforced inside; payload carries only order_id). ORDER.VOID_ACK IDENTITY HARDENING (independent-review corrections): the target uuid is parsed inside a PROTECTED per-operation boundary (a malformed target rejects only its own operation, never the batch); the envelope must carry a matching uuid target_id + payload.order_id (a missing/malformed/contradictory pair is a malformed envelope — rejected with NO ledger row, BEFORE the fingerprint and the terminal-replay lookup); and the operation''s fingerprint BINDS the canonical target identity, so a terminal replay is valid only for the same local_operation_id + type + payload + target. The 12 prior operations keep their exact parse/fingerprint semantics. All prior behaviour verbatim (batch cap, revoked-device recording, dedup/replay, dependency guard, per-op subtransactions, finalization, customer_name stamp). Authorization INGEST-TIME; scope from the session, never the payload.';
+  'RF-056/RF-061 + ... + PILOT-OPERATIONS-CORRECTIONS-001 + PSC-001D (D-010/D-022) SECURITY DEFINER batch push. Faithful re-creation of the 20260720110000 body + ONE added dispatch branch: order.void_ack -> app.kitchen_ack_void (PIN session + KDS-class device + kitchen role set enforced inside; payload carries only order_id). ORDER.VOID_ACK IDENTITY HARDENING (independent-review corrections): the target uuid is parsed inside a PROTECTED per-operation boundary (a malformed target rejects only its own operation, never the batch); the envelope must carry a matching uuid target_id + payload.order_id (a missing/malformed/contradictory pair is a malformed envelope — rejected with NO ledger row, BEFORE the fingerprint and the terminal-replay lookup); and the operation''s fingerprint BINDS the canonical target identity, so a terminal replay is valid only for the same local_operation_id + type + payload + target. The identity contract is enforced identically in BOTH the valid-device and the revoked-device paths (a revoked device gains no permission to submit ambiguous identity). The 12 prior operations keep their exact parse/fingerprint semantics. All prior behaviour verbatim (batch cap, revoked-device recording, dedup/replay, dependency guard, per-op subtransactions, finalization, customer_name stamp). Authorization INGEST-TIME; scope from the session, never the payload.';
 
 -- ACL parity (CREATE OR REPLACE preserves grants; re-issued explicitly).
 revoke all on function app.sync_push(uuid, uuid, jsonb) from public;
