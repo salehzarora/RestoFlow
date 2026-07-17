@@ -7,6 +7,7 @@ import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show hasNativePrinterProvider;
+import 'package:restoflow_sync/restoflow_sync.dart' show KdsSyncStatus;
 
 import 'kds_screen.dart';
 import 'print/kds_native_printer.dart';
@@ -38,15 +39,15 @@ class KdsSyncedHome extends ConsumerWidget {
     // PSC-001D correction: after every FRESH authoritative pull, drop
     // acknowledgement pending/failed entries for orders no longer among the
     // server's pending-ack cancellations (acknowledged here or elsewhere).
-    // Deliberately gated on genuine data: a stale last-good snapshot, an
-    // error, a reauth stop or the loading placeholder never cleans anything,
-    // so a still-visible card keeps its state and the regular poll converges.
+    // Gated on EXACTLY KdsSyncStatus.data (final-pass correction): initial
+    // and loading emissions carry a temporary EMPTY ticket list before any
+    // successful pull, and a stale snapshot / error / reauth stop is not
+    // server truth either — none of those may clean anything, so a
+    // still-visible card keeps its state and the regular poll converges.
     // The set is derived from the COMPLETE ticket list, never one column.
     ref.listen(kdsViewStateProvider, (previous, next) {
       final vs = next.valueOrNull;
-      if (vs == null || vs.isStale || vs.isError || vs.isReauthRequired) {
-        return;
-      }
+      if (vs == null || vs.status != KdsSyncStatus.data) return;
       ref.read(kdsVoidAckControllerProvider.notifier).reconcile([
         for (final t in vs.tickets)
           if (t.requiresAck && t.orderId != null) t.orderId!,
