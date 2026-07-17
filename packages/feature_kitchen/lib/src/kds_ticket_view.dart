@@ -58,6 +58,8 @@ class KdsTicketView {
     this.kitchenCounts = const <KitchenCount>[],
     this.voidedAt,
     this.voidedFromStatus,
+    this.roundId,
+    this.roundNumber,
   });
 
   final String kitchenTicketId;
@@ -119,6 +121,17 @@ class KdsTicketView {
   /// column placement (submitted -> New, accepted/preparing -> Preparing,
   /// ready -> Ready). Null on every normal ticket.
   final String? voidedFromStatus;
+
+  /// PSC-001C: the owning SERVICE ROUND id when this ticket is an ADDITION
+  /// ("Round N") rather than the original submission. A round ticket's status
+  /// comes from the ROUND row and its actions dispatch `order.round_status`
+  /// (target = this id) instead of `order.status`. Null on the original ticket
+  /// and on demo fixtures.
+  final String? roundId;
+
+  /// PSC-001C: the round's human number (2+; the original order is work unit
+  /// 1 and carries null). Drives the localized "Addition · Round N" label.
+  final int? roundNumber;
 
   /// PSC-001D: true for a cancellation card the kitchen must still acknowledge.
   /// The mapper ONLY ever emits cancelled tickets for pending acknowledgements,

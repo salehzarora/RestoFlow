@@ -53,22 +53,39 @@ class KdsStatusPusher {
     final orderId = ticket.orderId;
     final newStatus = orderStatusFor(to);
     if (orderId == null || newStatus == null) return false;
+    // PSC-001C: a ROUND ticket advances its OWN service-round lifecycle
+    // (`order.round_status`, target = the round id) — never the parent
+    // order's status. The original ticket keeps the `order.status` op.
+    final roundId = ticket.roundId;
     try {
       await _transport.invoke('sync_push', <String, dynamic>{
         'p_pin_session_id': _session.pinSessionId,
         'p_device_id': _session.deviceId,
         'p_operations': <dynamic>[
-          <String, dynamic>{
-            'local_operation_id': _newOperationId(),
-            'operation_type': 'order.status',
-            'target_entity': 'order',
-            'target_id': orderId,
-            'client_created_at': DateTime.now().toIso8601String(),
-            'payload': <String, dynamic>{
-              'order_id': orderId,
-              'new_status': newStatus,
+          if (roundId != null)
+            <String, dynamic>{
+              'local_operation_id': _newOperationId(),
+              'operation_type': 'order.round_status',
+              'target_entity': 'order_service_round',
+              'target_id': roundId,
+              'client_created_at': DateTime.now().toIso8601String(),
+              'payload': <String, dynamic>{
+                'round_id': roundId,
+                'new_status': newStatus,
+              },
+            }
+          else
+            <String, dynamic>{
+              'local_operation_id': _newOperationId(),
+              'operation_type': 'order.status',
+              'target_entity': 'order',
+              'target_id': orderId,
+              'client_created_at': DateTime.now().toIso8601String(),
+              'payload': <String, dynamic>{
+                'order_id': orderId,
+                'new_status': newStatus,
+              },
             },
-          },
         ],
       });
       return true;

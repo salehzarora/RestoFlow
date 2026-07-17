@@ -39,6 +39,7 @@ class KdsTicketMapper {
     required List<Map<String, dynamic>> orderItems,
     required List<Map<String, dynamic>> modifiers,
     List<Map<String, dynamic>> tables = const [],
+    List<Map<String, dynamic>> serviceRounds = const [],
   }) {
     // Dining-table labels (tables entity, money-free): id -> label.
     final tableLabels = <String, String>{};
@@ -48,6 +49,33 @@ class KdsTicketMapper {
       final label = t['label'];
       if (id is! String || label is! String) continue;
       tableLabels[id] = label;
+    }
+
+    // PSC-001C: ACTIVE service rounds ("Addition / Round N") — each becomes a
+    // SEPARATE ticket carrying the ROUND's own status and submit time. A
+    // served or voided round leaves the board exactly like a served/voided
+    // order (its ready history is server-side truth, not board state). Rounds
+    // are money-free rows by schema; explicit scalar plucks only (T-003).
+    const activeRoundStatuses = {'submitted', 'accepted', 'preparing', 'ready'};
+    final roundInfo = <String, _RoundInfo>{};
+    final ordersWithActiveRounds = <String>{};
+    for (final r in serviceRounds) {
+      if (r['deleted_at'] != null) continue;
+      final id = r['id'];
+      final roundOrderId = r['order_id'];
+      final roundStatus = r['status'];
+      if (id is! String || roundOrderId is! String || roundStatus is! String) {
+        continue;
+      }
+      if (!activeRoundStatuses.contains(roundStatus)) continue;
+      final numRaw = r['round_number'];
+      roundInfo[id] = _RoundInfo(
+        orderId: roundOrderId,
+        status: roundStatus,
+        roundNumber: numRaw is int ? numRaw : int.tryParse('$numRaw'),
+        submittedAt: _parseTimestamp(r['created_at'], r['client_created_at']),
+      );
+      ordersWithActiveRounds.add(roundOrderId);
     }
 
     // Active orders: not tombstoned, kitchen-relevant status. An EXPLICIT
@@ -72,7 +100,17 @@ class KdsTicketMapper {
           status == 'voided' &&
           o['kitchen_ack_required'] == true &&
           o['kitchen_ack_at'] == null;
-      if (!_activeOrderStatuses.contains(status) && !isPendingAckVoid) {
+      // PSC-001C: a SERVED parent whose additional round is still with the
+      // kitchen is admitted for ROUND TICKETS ONLY — its original items never
+      // return to the board (they were already bumped with the order).
+      final isRoundContextOnly =
+          !_activeOrderStatuses.contains(status) &&
+          !isPendingAckVoid &&
+          status == 'served' &&
+          ordersWithActiveRounds.contains(id);
+      if (!_activeOrderStatuses.contains(status) &&
+          !isPendingAckVoid &&
+          !isRoundContextOnly) {
         continue;
       }
       if (isPendingAckVoid) pendingAckOrders.add(id);
@@ -107,6 +145,7 @@ class KdsTicketMapper {
         voidedFromStatus: isPendingAckVoid && voidedFromRaw is String
             ? voidedFromRaw
             : null,
+        roundContextOnly: isRoundContextOnly,
       );
     }
 
@@ -159,6 +198,20 @@ class KdsTicketMapper {
       // the exclusion, so ordinary voided/cancelled/served items never leak
       // back onto working cards.
       final pendingAck = pendingAckOrders.contains(orderId);
+      // PSC-001C: round membership routes the item to its OWN ticket. On a
+      // pending-ack cancellation the round items stay on the ORDER-level red
+      // card (the kitchen sees everything that was canceled). On a live order
+      // an item of a non-active (served/voided) round leaves the board, and a
+      // served round-context-only parent never re-shows its original items.
+      final roundIdRaw = it['service_round_id'];
+      final roundId = !pendingAck && roundIdRaw is String ? roundIdRaw : null;
+      _RoundInfo? round;
+      if (roundId != null) {
+        round = roundInfo[roundId];
+        if (round == null) continue; // round served/voided/unknown -> off board
+      } else if (!pendingAck && info.roundContextOnly) {
+        continue; // original items of a served parent stay bumped
+      }
       final itemStatus = it['status'];
       if (!pendingAck &&
           itemStatus is String &&
@@ -180,7 +233,11 @@ class KdsTicketMapper {
       // parse — a missing/bad value yields an empty list (no prep row).
       final prepComponents = parseKitchenPrepComponents(it['prep_snapshot']);
 
-      final key = '$orderId:$station';
+      // PSC-001C: a round item builds a SEPARATE per-round ticket keyed by
+      // (order, station, round); the round's OWN status drives the column.
+      final key = round == null
+          ? '$orderId:$station'
+          : '$orderId:$station:r$roundId';
       final builder = grouped.putIfAbsent(
         key,
         () => _TicketBuilder(
@@ -188,11 +245,14 @@ class KdsTicketMapper {
           stationId: station,
           orderId: orderId,
           // PSC-001D: a pending-ack void renders as the CANCELLED ticket (red
-          // card, acknowledge-only); normal orders keep the status projection.
+          // card, acknowledge-only); normal orders keep the status projection —
+          // PSC-001C round tickets project from the ROUND row instead.
           status: pendingAck
               ? KitchenTicketStatus.cancelled
-              : _ticketStatusFor(info.status),
+              : _ticketStatusFor(round?.status ?? info.status),
           info: info,
+          roundId: roundId,
+          round: round,
         ),
       );
       builder.items.add(
@@ -262,7 +322,9 @@ class KdsTicketMapper {
                 tableLabel: b.info.tableLabel,
                 customerName: b.info.customerName,
                 notes: b.info.notes,
-                submittedAt: b.info.submittedAt,
+                // PSC-001C: a round ticket's honest FIFO/elapsed anchor is the
+                // ROUND's own submission time, not the parent order's.
+                submittedAt: b.round?.submittedAt ?? b.info.submittedAt,
                 // KDS-ALERTS-AND-KITCHEN-COUNTS-002: the unified whole-order
                 // count totals (patties + buns + …) shown at the top. Money-free.
                 kitchenCounts:
@@ -271,6 +333,10 @@ class KdsTicketMapper {
                 // every normal ticket).
                 voidedAt: b.info.voidedAt,
                 voidedFromStatus: b.info.voidedFromStatus,
+                // PSC-001C: round identity for "Addition · Round N" + the
+                // order.round_status action target. Null on original tickets.
+                roundId: b.roundId,
+                roundNumber: b.round?.roundNumber,
               ),
             )
             .toList()
@@ -321,6 +387,8 @@ class _TicketBuilder {
     required this.orderId,
     required this.status,
     required this.info,
+    this.roundId,
+    this.round,
   });
 
   final String kitchenTicketId;
@@ -328,7 +396,26 @@ class _TicketBuilder {
   final String orderId;
   final KitchenTicketStatus status;
   final _OrderInfo info;
+
+  /// PSC-001C: set when this ticket is an additional service round.
+  final String? roundId;
+  final _RoundInfo? round;
   final List<KdsItemView> items = [];
+}
+
+/// PSC-001C: the explicit money-free pluck of one ACTIVE service round.
+class _RoundInfo {
+  const _RoundInfo({
+    required this.orderId,
+    required this.status,
+    required this.roundNumber,
+    required this.submittedAt,
+  });
+
+  final String orderId;
+  final String status;
+  final int? roundNumber;
+  final DateTime? submittedAt;
 }
 
 /// The explicit money-free pluck of one active order's display fields.
@@ -342,6 +429,7 @@ class _OrderInfo {
     required this.submittedAt,
     this.voidedAt,
     this.voidedFromStatus,
+    this.roundContextOnly = false,
   });
 
   final String status;
@@ -354,4 +442,8 @@ class _OrderInfo {
   /// PSC-001D: set ONLY for a pending-acknowledgement void (the red card).
   final DateTime? voidedAt;
   final String? voidedFromStatus;
+
+  /// PSC-001C: TRUE for a SERVED parent admitted only so its still-active
+  /// rounds can render — its original (already bumped) items never re-appear.
+  final bool roundContextOnly;
 }
