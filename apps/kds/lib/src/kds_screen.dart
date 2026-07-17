@@ -25,6 +25,9 @@ class KdsScreen extends StatefulWidget {
     this.onReprint,
     this.enableNewArrivalAlert = false,
     this.newArrivalWindow = const Duration(seconds: 60),
+    this.onAcknowledgeCancellation,
+    this.ackPendingOrderIds = const <String>{},
+    this.ackFailedOrderIds = const <String>{},
     super.key,
   });
 
@@ -75,6 +78,17 @@ class KdsScreen extends StatefulWidget {
   /// immediately on acknowledge).
   final Duration newArrivalWindow;
 
+  /// PSC-001D: acknowledge a pending cancellation card (LIVE board pushes
+  /// `order.void_ack`); null (demo / bare tests) renders no ack action.
+  final void Function(KdsTicketView ticket)? onAcknowledgeCancellation;
+
+  /// PSC-001D: ORDER ids with an acknowledgement in flight / awaiting the
+  /// authoritative pull — the card shows its honest pending state.
+  final Set<String> ackPendingOrderIds;
+
+  /// PSC-001D: ORDER ids whose last acknowledgement attempt failed.
+  final Set<String> ackFailedOrderIds;
+
   @override
   State<KdsScreen> createState() => _KdsScreenState();
 }
@@ -122,6 +136,38 @@ class _KdsScreenState extends State<KdsScreen> {
     };
   }
 
+  /// PSC-001D: first-seen tracking for PENDING-ACK cancellation cards — one
+  /// finite danger pulse when a cancellation ARRIVES during this screen's life
+  /// (locked decision). Cards already present on the FIRST build are seeded in
+  /// the past (no pulse on page load / restart — the red card itself is the
+  /// persistent signal); same enable flag + window as the new-arrival alert.
+  final Map<String, DateTime> _firstSeenCancelled = <String, DateTime>{};
+  bool _cancelledArrivalInitialized = false;
+
+  Set<String> _computeCancelledArrivalIds() {
+    if (!widget.enableNewArrivalAlert) return const <String>{};
+    final now = DateTime.now();
+    final currentIds = <String>{
+      for (final t in widget.tickets)
+        if (t.requiresAck) t.kitchenTicketId,
+    };
+    if (!_cancelledArrivalInitialized) {
+      for (final id in currentIds) {
+        _firstSeenCancelled[id] = _seenInThePast;
+      }
+      _cancelledArrivalInitialized = true;
+    } else {
+      for (final id in currentIds) {
+        _firstSeenCancelled.putIfAbsent(id, () => now);
+      }
+    }
+    _firstSeenCancelled.removeWhere((id, _) => !currentIds.contains(id));
+    return <String>{
+      for (final entry in _firstSeenCancelled.entries)
+        if (now.difference(entry.value) < widget.newArrivalWindow) entry.key,
+    };
+  }
+
   /// Advance [ticket] to [to] via the existing forward state-machine edges
   /// (acknowledge / start / mark-ready / bump). Mutates the local view first
   /// (instant feedback), then notifies [KdsScreen.onAdvanced] so a LIVE board
@@ -152,6 +198,7 @@ class _KdsScreenState extends State<KdsScreen> {
     final l10n = AppLocalizations.of(context);
 
     final newArrivalIds = _computeNewArrivalIds();
+    final cancelledArrivalIds = _computeCancelledArrivalIds();
     final body = widget.tickets.isEmpty
         ? KdsStateMessage(
             icon: Icons.restaurant_outlined,
@@ -166,6 +213,10 @@ class _KdsScreenState extends State<KdsScreen> {
             onReprint: widget.onReprint,
             newArrivalIds: newArrivalIds,
             newArrivalWindow: widget.newArrivalWindow,
+            onAcknowledgeCancellation: widget.onAcknowledgeCancellation,
+            ackPendingOrderIds: widget.ackPendingOrderIds,
+            ackFailedOrderIds: widget.ackFailedOrderIds,
+            cancelledArrivalIds: cancelledArrivalIds,
           );
 
     return Scaffold(

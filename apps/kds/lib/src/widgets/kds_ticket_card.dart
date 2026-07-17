@@ -61,6 +61,10 @@ class KdsTicketCard extends StatelessWidget {
     this.highlightNew = false,
     this.newArrivalWindow = const Duration(seconds: 60),
     this.now,
+    this.onAcknowledgeCancellation,
+    this.ackPending = false,
+    this.ackFailed = false,
+    this.highlightCancelled = false,
     super.key,
   });
 
@@ -105,6 +109,24 @@ class KdsTicketCard extends StatelessWidget {
   /// renders nothing (demo boards). Never money — chrome only.
   final KdsTicketPrintStatus? printStatus;
 
+  /// PSC-001D: acknowledge this PENDING cancellation card (server-authoritative
+  /// `order.void_ack` on the LIVE board). Null (demo / bare tests) renders no
+  /// acknowledgement action — never a dead button.
+  final VoidCallback? onAcknowledgeCancellation;
+
+  /// PSC-001D: the acknowledgement is in flight — the button shows its honest
+  /// pending state and blocks duplicate taps. The card is NEVER hidden before
+  /// the authoritative pull confirms.
+  final bool ackPending;
+
+  /// PSC-001D: the last acknowledgement attempt failed — the card stays, a
+  /// localized failure line appears, and the action remains retryable.
+  final bool ackFailed;
+
+  /// PSC-001D: one finite, reduce-motion-aware DANGER pulse when the
+  /// cancellation card first appears (locked decision).
+  final bool highlightCancelled;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -147,20 +169,44 @@ class KdsTicketCard extends StatelessWidget {
     // its danger accent IS the signal.
     final dimmed = ticket.status == KitchenTicketStatus.bumped;
 
+    // PSC-001D: a PENDING-ACKNOWLEDGEMENT cancellation gets the FULL-CARD
+    // danger treatment — the whole card fills with the danger container tone
+    // and carries a strong danger ring, so the cancellation is unmistakable
+    // from across the pass (never colour alone: the banner says it in words).
+    final pendingAckCancellation = ticket.requiresAck;
+    final dangerStyle = RestoflowTone.danger.styleOf(theme);
+
     final card = Card(
       margin: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.md),
-      color: theme.colorScheme.surfaceContainerLow,
+      color: pendingAckCancellation
+          ? dangerStyle.container
+          : theme.colorScheme.surfaceContainerLow,
       child: Container(
         decoration: BoxDecoration(
-          border: BorderDirectional(
-            start: BorderSide(color: statusAccent, width: 4),
-          ),
+          border: pendingAckCancellation
+              // Full danger ring for the cancellation card…
+              ? Border.all(color: dangerStyle.accent, width: 2)
+              // …else the existing status-accent start edge, unchanged.
+              : BorderDirectional(
+                  start: BorderSide(color: statusAccent, width: 4),
+                ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(RestoflowSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // PSC-001D: the cancellation banner LEADS the card — a localized
+              // title, the stop-preparing instruction and the honest void time.
+              // Words, not colour alone. Money-free.
+              if (pendingAckCancellation) ...[
+                _CancelledBanner(
+                  key: Key('kds-cancelled-banner-${ticket.kitchenTicketId}'),
+                  l10n: l10n,
+                  voidedAt: ticket.voidedAt,
+                ),
+                const SizedBox(height: RestoflowSpacing.sm),
+              ],
               // KDS-ALERTS (C): a loud, unmistakable "New order" badge while the
               // ticket is freshly arrived, so the chef notices it from the pass —
               // paired with the stronger pulsing glow. Money-free chrome.
@@ -326,6 +372,57 @@ class KdsTicketCard extends StatelessWidget {
                 onAdvance: onAdvance,
                 onRecall: onRecall,
               ),
+              // PSC-001D: the ONE acknowledgement action for a pending
+              // cancellation (the cancelled status renders no normal
+              // progression action above). LIVE board only — a null callback
+              // (demo / bare tests) renders no button, never a dead control.
+              // Honest pending state; a failure keeps the card and the action.
+              if (pendingAckCancellation &&
+                  onAcknowledgeCancellation != null) ...[
+                if (ackFailed) ...[
+                  const SizedBox(height: RestoflowSpacing.xs),
+                  Text(
+                    l10n.kdsAckFailed,
+                    key: Key('kds-ack-failed-${ticket.kitchenTicketId}'),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: dangerStyle.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(
+                    top: RestoflowSpacing.sm,
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      key: Key('kds-ack-${ticket.kitchenTicketId}'),
+                      onPressed: ackPending ? null : onAcknowledgeCancellation,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        backgroundColor: theme.colorScheme.error,
+                        foregroundColor: theme.colorScheme.onError,
+                      ),
+                      // STATIC pending glyph (no spinner): the board's
+                      // animation doctrine is FINITE-only (pumpAndSettle
+                      // corpus; an indeterminate spinner never settles). The
+                      // disabled state + localized pending label carry the
+                      // signal.
+                      icon: Icon(
+                        ackPending
+                            ? Icons.hourglass_top
+                            : Icons.visibility_outlined,
+                      ),
+                      label: Text(
+                        ackPending
+                            ? l10n.kdsAckPending
+                            : l10n.kdsAcknowledgeCancellation,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -333,6 +430,17 @@ class KdsTicketCard extends StatelessWidget {
     );
 
     Widget result = card;
+    // PSC-001D: one finite, reduce-motion-aware DANGER pulse when the
+    // cancellation card first appears (reuses the shipped self-terminating
+    // highlight — never an infinite animation).
+    if (highlightCancelled) {
+      result = _NewArrivalHighlight(
+        key: Key('kds-cancel-arrival-${ticket.kitchenTicketId}'),
+        window: newArrivalWindow,
+        color: theme.colorScheme.error,
+        child: result,
+      );
+    }
     // A2: a subtle, self-terminating attention glow for a freshly-arrived
     // ticket (readable on the dark board; never a harsh blink).
     if (highlightNew) {
@@ -500,6 +608,86 @@ class _NewOrderBadge extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// PSC-001D: the leading banner of a PENDING-ACKNOWLEDGEMENT cancellation card.
+/// A danger-toned block that says IN WORDS what happened (the cashier canceled
+/// this order), tells the kitchen to stop, and shows the honest cancellation
+/// time (localized clock format; omitted when the wire carried no timestamp —
+/// never a fabricated time). Money-free chrome.
+class _CancelledBanner extends StatelessWidget {
+  const _CancelledBanner({
+    required this.l10n,
+    required this.voidedAt,
+    super.key,
+  });
+
+  final AppLocalizations l10n;
+  final DateTime? voidedAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final danger = RestoflowTone.danger.styleOf(theme);
+    final String? cancelledAt = voidedAt == null
+        ? null
+        : MaterialLocalizations.of(
+            context,
+          ).formatTimeOfDay(TimeOfDay.fromDateTime(voidedAt!.toLocal()));
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.md,
+        vertical: RestoflowSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: danger.accent,
+        borderRadius: BorderRadius.circular(RestoflowRadii.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.cancel_outlined,
+                size: RestoflowIconSizes.md,
+                color: theme.colorScheme.onError,
+              ),
+              const SizedBox(width: RestoflowSpacing.sm),
+              Expanded(
+                child: Text(
+                  l10n.kdsCancelledCardTitle,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: theme.colorScheme.onError,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: RestoflowSpacing.xs),
+          Text(
+            l10n.kdsCancelledCardBody,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onError,
+            ),
+          ),
+          if (cancelledAt != null) ...[
+            const SizedBox(height: RestoflowSpacing.xs),
+            Text(
+              '${l10n.kdsCancelledAtLabel}: $cancelledAt',
+              key: const Key('kds-cancelled-at'),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onError,
+              ),
+            ),
+          ],
         ],
       ),
     );

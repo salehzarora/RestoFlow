@@ -7,6 +7,7 @@ import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show hasNativePrinterProvider;
+import 'package:restoflow_sync/restoflow_sync.dart' show KdsSyncStatus;
 
 import 'kds_screen.dart';
 import 'print/kds_native_printer.dart';
@@ -15,6 +16,7 @@ import 'state/kds_kitchen_print_controller.dart';
 import 'state/kds_printer_assignments.dart';
 import 'state/kds_session.dart';
 import 'state/kds_status_pusher.dart';
+import 'state/kds_void_ack_controller.dart';
 import 'widgets/device_settings_menu.dart';
 import 'widgets/kds_state_message.dart';
 import 'widgets/kds_ticket_card.dart' show KdsTicketPrintStatus;
@@ -34,6 +36,23 @@ class KdsSyncedHome extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // PSC-001D correction: after every FRESH authoritative pull, drop
+    // acknowledgement pending/failed entries for orders no longer among the
+    // server's pending-ack cancellations (acknowledged here or elsewhere).
+    // Gated on EXACTLY KdsSyncStatus.data (final-pass correction): initial
+    // and loading emissions carry a temporary EMPTY ticket list before any
+    // successful pull, and a stale snapshot / error / reauth stop is not
+    // server truth either — none of those may clean anything, so a
+    // still-visible card keeps its state and the regular poll converges.
+    // The set is derived from the COMPLETE ticket list, never one column.
+    ref.listen(kdsViewStateProvider, (previous, next) {
+      final vs = next.valueOrNull;
+      if (vs == null || vs.status != KdsSyncStatus.data) return;
+      ref.read(kdsVoidAckControllerProvider.notifier).reconcile([
+        for (final t in vs.tickets)
+          if (t.requiresAck && t.orderId != null) t.orderId!,
+      ]);
+    });
     final async = ref.watch(kdsViewStateProvider);
     return async.when(
       loading: () => _scaffold(
@@ -100,6 +119,10 @@ class KdsSyncedHome extends ConsumerWidget {
         // Part D/F: the honest per-ticket kitchen print-job status, keyed by
         // order id so a ticket keeps its status across poll rebuilds.
         final printJobs = ref.watch(kdsKitchenPrintControllerProvider);
+        // PSC-001D: the per-order acknowledgement state for the red
+        // cancellation cards (pending until the authoritative pull clears the
+        // card; failed stays visible + retryable).
+        final ackState = ref.watch(kdsVoidAckControllerProvider);
         return KdsScreen(
           tickets: vs.tickets,
           allowRecall: false,
@@ -120,6 +143,18 @@ class KdsSyncedHome extends ConsumerWidget {
           // kitchen print pipeline — it creates no order and changes no status,
           // and preserves the native Wi-Fi/Bluetooth + Arabic/Hebrew raster path.
           onReprint: (ticket) => _retryPrint(ref, l10n, ticket),
+          // PSC-001D: acknowledge a pending cancellation — the server-
+          // authoritative order.void_ack through the existing sync path. The
+          // card stays until the authoritative pull returns kitchen_ack_at.
+          onAcknowledgeCancellation: (ticket) {
+            final orderId = ticket.orderId;
+            if (orderId == null) return;
+            ref
+                .read(kdsVoidAckControllerProvider.notifier)
+                .acknowledge(orderId);
+          },
+          ackPendingOrderIds: ackState.pending,
+          ackFailedOrderIds: ackState.failed,
           onAdvanced: pusher == null
               ? null
               : (ticket, to) async {

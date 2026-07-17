@@ -56,6 +56,8 @@ class KdsTicketView {
     this.notes,
     this.submittedAt,
     this.kitchenCounts = const <KitchenCount>[],
+    this.voidedAt,
+    this.voidedFromStatus,
   });
 
   final String kitchenTicketId;
@@ -106,6 +108,23 @@ class KdsTicketView {
   /// (Generalizes the earlier meat/prep summaries; only explicit owner config
   /// contributes — nothing is inferred from names or prices.)
   final List<KitchenCount> kitchenCounts;
+
+  /// PSC-001D: when the order was voided (orders.voided_at), for a PENDING-
+  /// ACKNOWLEDGEMENT cancellation card only — the red card shows the honest
+  /// cancellation time. Null on every normal ticket. Display only; never money.
+  final DateTime? voidedAt;
+
+  /// PSC-001D: the order's status at the moment of the void
+  /// (orders.voided_from_status, closed wire enum). Drives the red card's
+  /// column placement (submitted -> New, accepted/preparing -> Preparing,
+  /// ready -> Ready). Null on every normal ticket.
+  final String? voidedFromStatus;
+
+  /// PSC-001D: true for a cancellation card the kitchen must still acknowledge.
+  /// The mapper ONLY ever emits cancelled tickets for pending acknowledgements,
+  /// so cancelled + a stamped void source means "acknowledge me".
+  bool get requiresAck =>
+      status == KitchenTicketStatus.cancelled && voidedFromStatus != null;
 
   /// The current local status; mutated by bump/recall on the screen.
   KitchenTicketStatus status;

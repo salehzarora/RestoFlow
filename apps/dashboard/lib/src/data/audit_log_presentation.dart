@@ -166,6 +166,13 @@ const Map<String, _Kind> _displayableKeys = {
   'from_status': _Kind.text,
   'to_status': _Kind.text,
   'group_label': _Kind.text,
+  // PSC-001D: the kitchen cancellation acknowledgement's safe scalars — the
+  // order's pre-void status (closed enum), the acknowledging device class
+  // (closed pos|kds enum) and whether acknowledgement was required (boolean).
+  // Never money, never identifiers (T-003 holds).
+  'voided_from_status': _Kind.text,
+  'device_type': _Kind.text,
+  'kitchen_ack_required': _Kind.boolean,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -219,6 +226,9 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'from_status' => l10n.activityLogFieldFromStatus,
   'to_status' => l10n.activityLogFieldToStatus,
   'group_label' => l10n.activityLogFieldGroupLabel,
+  'voided_from_status' => l10n.activityLogFieldVoidedFromStatus,
+  'device_type' => l10n.activityLogFieldDeviceType,
+  'kitchen_ack_required' => l10n.activityLogFieldKitchenAckRequired,
   _ => key,
 };
 
@@ -349,6 +359,10 @@ class AuditEventPresenter {
   /// action is unmapped (the caller falls back to the category label).
   String? _title(AuditEvent e) => switch (e.action) {
     'order.voided' => l10n.activityLogTitleOrderVoided,
+    // PSC-001D: the kitchen's cancellation acknowledgement — success AND
+    // denial get specific titles (never a bare category fallback).
+    'order.void_acknowledged' => l10n.activityLogTitleVoidAcknowledged,
+    'order.void_ack_denied' => l10n.activityLogTitleVoidAckDenied,
     'order.discount_applied' => l10n.activityLogTitleDiscountApplied,
     // FULL-COMP-PERMISSION-001: a REFUSED discount had no title of its own, so it
     // fell back to the bare category label — the operator saw "Discounts" and had

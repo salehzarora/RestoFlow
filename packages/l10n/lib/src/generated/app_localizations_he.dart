@@ -147,6 +147,12 @@ class AppLocalizationsHe extends AppLocalizations {
   String get activityLogTitleOrderVoided => 'הזמנה בוטלה';
 
   @override
+  String get activityLogTitleVoidAcknowledged => 'המטבח אישר את צפייתו בביטול';
+
+  @override
+  String get activityLogTitleVoidAckDenied => 'אישור הצפייה בביטול נדחה';
+
+  @override
   String get activityLogTitleDiscountApplied => 'הנחה הוחלה';
 
   @override
@@ -520,6 +526,25 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get kdsStaleBanner => 'לא מחובר — מוצגים הכרטיסים האחרונים שסונכרנו';
+
+  @override
+  String get kdsCancelledCardTitle => 'ההזמנה בוטלה';
+
+  @override
+  String get kdsCancelledCardBody =>
+      'הקופאי ביטל את ההזמנה — הפסיקו להכין אותה.';
+
+  @override
+  String get kdsCancelledAtLabel => 'בוטלה בשעה';
+
+  @override
+  String get kdsAcknowledgeCancellation => 'אישור צפייה בביטול';
+
+  @override
+  String get kdsAckPending => 'שולח אישור…';
+
+  @override
+  String get kdsAckFailed => 'לא ניתן היה לאשר — בדקו את החיבור ונסו שוב.';
 
   @override
   String get kdsBumpAction => 'סיום';
@@ -4420,6 +4445,15 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogFieldGroupLabel => 'שולחנות מקושרים';
+
+  @override
+  String get activityLogFieldVoidedFromStatus => 'הסטטוס בעת הביטול';
+
+  @override
+  String get activityLogFieldDeviceType => 'סוג המכשיר';
+
+  @override
+  String get activityLogFieldKitchenAckRequired => 'נדרש אישור מטבח';
 
   @override
   String get activityLogFieldAvailability => 'זמינות';
