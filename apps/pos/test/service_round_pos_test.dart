@@ -77,6 +77,65 @@ CartLineView _line({String id = 'l1', String item = 'm1'}) => CartLineView(
   currencyCode: 'ILS',
 );
 
+/// The canonical FULL pos_order_detail envelope the parser tests start from.
+/// Inner maps are explicitly Object?-valued so mutation tests can null fields.
+Map<String, Object?> envelope() => {
+  'ok': true,
+  'order': <String, Object?>{
+    'order_id': 'o-1',
+    'order_code': '#O00001',
+    'order_type': 'dine_in',
+    'status': 'served',
+    'revision': 5,
+    'table_label': 'T1',
+    'customer_name': 'Dana',
+    'currency_code': 'ILS',
+    'subtotal_minor': 3500,
+    'discount_total_minor': 500,
+    'tax_total_minor': 0,
+    'grand_total_minor': 3000,
+    'receipt_number': '42',
+  },
+  'items': [
+    {
+      'menu_item_name_snapshot': 'Burger',
+      'quantity': 2,
+      'unit_price_minor_snapshot': 1000,
+      'line_discount_minor': 0,
+      'line_total_minor': 2500,
+      'status': 'pending',
+      'modifiers': [
+        {
+          'option_name_snapshot': 'Extra',
+          'price_minor_snapshot': 250,
+          'quantity': 2,
+        },
+      ],
+    },
+    {
+      'menu_item_name_snapshot': 'Fries',
+      'quantity': 1,
+      'unit_price_minor_snapshot': 1000,
+      'line_discount_minor': 0,
+      'line_total_minor': 1000,
+      'status': 'pending',
+      'service_round_id': 'r1',
+      'round_number': 2,
+    },
+  ],
+  'rounds': [
+    {'round_id': 'r1', 'round_number': 2, 'status': 'ready'},
+  ],
+  'payment': <String, Object?>{
+    'method': 'card',
+    'amount_minor': 3000,
+    'tendered_minor': 3000,
+    'change_minor': 0,
+    'receipt_number': '42',
+    'created_at': '2026-07-22T12:34:56.000Z',
+  },
+};
+
 class _FakeTransport implements SyncRpcTransport {
   _FakeTransport(this._responses);
   final List<Object? Function(Map<String, dynamic>)> _responses;
@@ -338,62 +397,6 @@ void main() {
   });
 
   group('C. pos_order_detail parse + combined receipt converters', () {
-    Map<String, Object?> envelope() => {
-      'ok': true,
-      'order': {
-        'order_id': 'o-1',
-        'order_code': '#O00001',
-        'order_type': 'dine_in',
-        'status': 'served',
-        'revision': 5,
-        'table_label': 'T1',
-        'customer_name': 'Dana',
-        'currency_code': 'ILS',
-        'subtotal_minor': 3500,
-        'discount_total_minor': 500,
-        'tax_total_minor': 0,
-        'grand_total_minor': 3000,
-        'receipt_number': '42',
-      },
-      'items': [
-        {
-          'menu_item_name_snapshot': 'Burger',
-          'quantity': 2,
-          'unit_price_minor_snapshot': 1000,
-          'line_discount_minor': 0,
-          'line_total_minor': 2500,
-          'status': 'pending',
-          'modifiers': [
-            {
-              'option_name_snapshot': 'Extra',
-              'price_minor_snapshot': 250,
-              'quantity': 2,
-            },
-          ],
-        },
-        {
-          'menu_item_name_snapshot': 'Fries',
-          'quantity': 1,
-          'unit_price_minor_snapshot': 1000,
-          'line_discount_minor': 0,
-          'line_total_minor': 1000,
-          'status': 'pending',
-          'service_round_id': 'r1',
-          'round_number': 2,
-        },
-      ],
-      'rounds': [
-        {'round_id': 'r1', 'round_number': 2, 'status': 'ready'},
-      ],
-      'payment': {
-        'method': 'card',
-        'amount_minor': 3000,
-        'tendered_minor': 3000,
-        'change_minor': 0,
-        'receipt_number': '42',
-      },
-    };
-
     test('C1 the combined authoritative detail parses (original + added)', () {
       final detail = PosOrderDetail.fromJson(envelope());
       expect(detail, isNotNull);
@@ -417,6 +420,9 @@ void main() {
       expect(payment!.method, PaymentMethod.card);
       expect(payment.receiptNumber, '42');
       expect(payment.amountMinor, 3000);
+      // Finding 4: the reprint carries the AUTHORITATIVE payment time (T1),
+      // never the fetch/view time — stable across devices and timezones.
+      expect(payment.paidAt, DateTime.parse('2026-07-22T12:34:56.000Z'));
     });
 
     test('C3 a malformed item row rejects the WHOLE detail (atomic)', () {
@@ -425,4 +431,261 @@ void main() {
       expect(PosOrderDetail.fromJson(bad), isNull);
     });
   });
+
+  group('D. frozen addition attempt (Finding 2)', () {
+    test('D1 an active addition cannot retarget to a DIFFERENT order', () {
+      final (container, _, _, _) = _harness([(p) => _applied(p)]);
+      final notifier = container.read(additionControllerProvider.notifier);
+      expect(notifier.enter(_detail()), AdditionEntryResult.entered);
+      expect(
+        notifier.enter(_detail(orderId: 'o-2')),
+        AdditionEntryResult.blockedDifferentTarget,
+      );
+      expect(container.read(additionControllerProvider).target?.orderId, 'o-1');
+    });
+
+    test('D2 a failed retry resends the FROZEN payload + SAME op id even when '
+        'the cart mutated (and never carries a table_id)', () async {
+      final (container, transport, _, _) = _harness([
+        (p) => _rejected(p, 'rejected'),
+        (p) => _applied(p),
+      ]);
+      final notifier = container.read(additionControllerProvider.notifier);
+      notifier.enter(_detail());
+      await notifier.submit([_line()]);
+      // The cart changed after the failure — the retry must IGNORE it.
+      final mutated = CartLineView(
+        lineId: 'l9',
+        menuItemId: 'm9',
+        name: 'Hacked',
+        quantity: 9,
+        unitPriceMinor: 9999,
+        lineTotalMinor: 89991,
+        currencyCode: 'ILS',
+      );
+      final retry = await notifier.submit([mutated]);
+      expect(retry.applied, isTrue);
+      expect(transport.calls, hasLength(2));
+      final op1 = (transport.calls[0]['p_operations'] as List).single as Map;
+      final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
+      expect(op2['local_operation_id'], op1['local_operation_id']);
+      expect(op2['payload'], op1['payload']); // canonical-equivalent snapshot
+      expect(op2['client_created_at'], op1['client_created_at']);
+      final items = (op2['payload'] as Map)['order_items'] as List;
+      expect((items.single as Map)['menu_item_id'], 'm1'); // never the mutation
+      expect((op2['payload'] as Map).containsKey('table_id'), isFalse);
+    });
+
+    test('D3 while an attempt is open, even the failed state blocks a new '
+        'target; explicit cancel unlocks with a NEW op id', () async {
+      final (container, transport, _, _) = _harness([
+        (p) => _rejected(p, 'rejected'),
+        (p) => _applied(p),
+      ]);
+      final notifier = container.read(additionControllerProvider.notifier);
+      notifier.enter(_detail());
+      await notifier.submit([_line()]);
+      expect(container.read(additionControllerProvider).hasOpenAttempt, isTrue);
+      expect(
+        notifier.enter(_detail(orderId: 'o-2')),
+        AdditionEntryResult.blockedPendingAttempt,
+      );
+      // EXPLICIT cancel discards the frozen attempt entirely.
+      notifier.exit();
+      expect(
+        container.read(additionControllerProvider).hasOpenAttempt,
+        isFalse,
+      );
+      notifier.enter(_detail(orderId: 'o-2'));
+      await notifier.submit([_line()]);
+      final op1 = (transport.calls[0]['p_operations'] as List).single as Map;
+      final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
+      expect(op2['local_operation_id'], isNot(op1['local_operation_id']));
+      expect(op2['target_id'], 'o-2');
+    });
+
+    test('D4 re-entering the SAME target is a harmless no-op', () {
+      final (container, _, _, _) = _harness([(p) => _applied(p)]);
+      final notifier = container.read(additionControllerProvider.notifier);
+      expect(notifier.enter(_detail()), AdditionEntryResult.entered);
+      expect(notifier.enter(_detail()), AdditionEntryResult.entered);
+      expect(container.read(additionControllerProvider).target?.orderId, 'o-1');
+    });
+
+    test('D5 authoritative success clears the frozen attempt; the next '
+        'submission gets a NEW op id', () async {
+      final (container, transport, _, _) = _harness([
+        (p) => _applied(p),
+        (p) => _applied(p),
+      ]);
+      final notifier = container.read(additionControllerProvider.notifier);
+      notifier.enter(_detail());
+      await notifier.submit([_line()]);
+      expect(
+        container.read(additionControllerProvider).hasOpenAttempt,
+        isFalse,
+      );
+      await notifier.submit([_line()]);
+      final op1 = (transport.calls[0]['p_operations'] as List).single as Map;
+      final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
+      expect(op2['local_operation_id'], isNot(op1['local_operation_id']));
+    });
+
+    test('D6 the PURE entry guard: a non-empty normal cart never silently '
+        'enters addition mode', () {
+      const idle = AdditionState();
+      expect(
+        canBeginAddition(addition: idle, cartIsEmpty: false, orderId: 'o-1'),
+        isFalse,
+      );
+      expect(
+        canBeginAddition(addition: idle, cartIsEmpty: true, orderId: 'o-1'),
+        isTrue,
+      );
+      // Re-entering the CURRENT target stays allowed regardless of the cart
+      // (the cart holds this addition's own pending lines).
+      final active = AdditionState(target: _detail());
+      expect(
+        canBeginAddition(addition: active, cartIsEmpty: false, orderId: 'o-1'),
+        isTrue,
+      );
+      expect(
+        canBeginAddition(addition: active, cartIsEmpty: true, orderId: 'o-2'),
+        isFalse,
+      );
+    });
+
+    test('D7 a malformed detail refresh after success keeps the previous '
+        'valid target (never a zero-valued replacement)', () async {
+      final detailRepo = _ThrowingDetailRepo();
+      final transport = _FakeTransport([(p) => _applied(p)]);
+      final cart = _ProbeCart();
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posAuthTransportProvider.overrideWithValue(transport),
+          posSyncSessionProvider.overrideWithValue(
+            const SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1'),
+          ),
+          cartControllerProvider.overrideWith(() => cart),
+          orderDetailRepositoryProvider.overrideWithValue(detailRepo),
+          orderSnapshotRepositoryProvider.overrideWithValue(
+            DemoOrderSnapshotRepository(),
+          ),
+          posSyncPollIntervalProvider.overrideWithValue(null),
+        ],
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(additionControllerProvider.notifier);
+      notifier.enter(_detail());
+      final result = await notifier.submit([_line()]);
+      expect(result.applied, isTrue);
+      // The refresh threw (malformed) — the PREVIOUS valid detail survives.
+      expect(container.read(additionControllerProvider).target?.orderId, 'o-1');
+    });
+  });
+
+  group('E. fail-closed detail parser (Finding 5)', () {
+    test(
+      'E1 each REQUIRED money field missing or mistyped fails the parse',
+      () {
+        for (final field in [
+          'subtotal_minor',
+          'discount_total_minor',
+          'tax_total_minor',
+          'grand_total_minor',
+        ]) {
+          final missing = envelope();
+          (missing['order']! as Map).remove(field);
+          expect(
+            PosOrderDetail.fromJson(missing),
+            isNull,
+            reason: '$field gone',
+          );
+          final mistyped = envelope();
+          (mistyped['order']! as Map)[field] = '3000';
+          expect(
+            PosOrderDetail.fromJson(mistyped),
+            isNull,
+            reason: '$field string',
+          );
+          final nulled = envelope();
+          (nulled['order']! as Map)[field] = null;
+          expect(
+            PosOrderDetail.fromJson(nulled),
+            isNull,
+            reason: '$field null',
+          );
+        }
+      },
+    );
+
+    test('E2 a malformed revision fails', () {
+      final zero = envelope();
+      (zero['order']! as Map)['revision'] = 0;
+      expect(PosOrderDetail.fromJson(zero), isNull);
+      final missing = envelope();
+      (missing['order']! as Map).remove('revision');
+      expect(PosOrderDetail.fromJson(missing), isNull);
+    });
+
+    test('E3 an UNKNOWN payment method fails (never defaults to cash)', () {
+      final bad = envelope();
+      (bad['payment']! as Map)['method'] = 'crypto';
+      expect(PosOrderDetail.fromJson(bad), isNull);
+    });
+
+    test('E4 a completed payment with a missing or malformed timestamp fails '
+        '(a reprint never substitutes now)', () {
+      final missing = envelope();
+      (missing['payment']! as Map).remove('created_at');
+      expect(PosOrderDetail.fromJson(missing), isNull);
+      final malformed = envelope();
+      (malformed['payment']! as Map)['created_at'] = 'yesterday-ish';
+      expect(PosOrderDetail.fromJson(malformed), isNull);
+    });
+
+    test('E5 a payment missing a REQUIRED amount fails', () {
+      final bad = envelope();
+      (bad['payment']! as Map).remove('amount_minor');
+      expect(PosOrderDetail.fromJson(bad), isNull);
+    });
+
+    test('E6 a modifier or line with missing money fails atomically', () {
+      final badMod = envelope();
+      ((((badMod['items']! as List).first as Map)['modifiers']) as List).add({
+        'option_name_snapshot': 'X',
+        'quantity': 1,
+      });
+      expect(PosOrderDetail.fromJson(badMod), isNull);
+      final badLine = envelope();
+      ((badLine['items']! as List).first as Map).remove('line_total_minor');
+      expect(PosOrderDetail.fromJson(badLine), isNull);
+    });
+
+    test('E7 a genuinely zero-valued order still parses (zero is authoritative '
+        'when explicit)', () {
+      final comped = envelope();
+      final order = comped['order']! as Map;
+      order['subtotal_minor'] = 0;
+      order['discount_total_minor'] = 0;
+      order['tax_total_minor'] = 0;
+      order['grand_total_minor'] = 0;
+      comped['items'] = <Object?>[];
+      comped['rounds'] = <Object?>[];
+      comped['payment'] = null;
+      final detail = PosOrderDetail.fromJson(comped);
+      expect(detail, isNotNull);
+      expect(detail!.grandTotalMinor, 0);
+      expect(detail.payment, isNull);
+    });
+  });
+}
+
+class _ThrowingDetailRepo implements OrderDetailRepository {
+  @override
+  Future<PosOrderDetail> fetch(String orderId) async =>
+      throw const PosOrderDetailException(PosOrderDetailFailure.malformed);
 }

@@ -147,4 +147,65 @@ void main() {
     expect(rendered, isNot(contains('op-secret')));
     expect(rendered, isNot(contains('1234')));
   });
+
+  test('F6: hostile MONEY never renders for ANY of the four service-round '
+      'actions — even though the keys are otherwise displayable', () async {
+    final l10n = await _l('en');
+    final presenter = AuditEventPresenter(l10n, 'ILS');
+    for (final action in [
+      'order.items_added',
+      'order.items_add_denied',
+      'order.round_status_updated',
+      'order.round_status_denied',
+    ]) {
+      final hostile = AuditEvent(
+        eventId: 'ae-money-$action',
+        action: action,
+        category: 'orders',
+        occurredAtLabel: '2026-07-22 14:00',
+        actorName: 'X',
+        restaurantName: 'R',
+        branchName: 'B',
+        oldValues: const {},
+        newValues: const {
+          'order_code': '#02A001',
+          'round_number': 2,
+          'denied_reason': 'permission_denied',
+          'subtotal_minor': 99911,
+          'grand_total_minor': 88822,
+          'amount_minor': 77733,
+        },
+      );
+      final view = presenter.present(hostile);
+      final rendered = [
+        for (final c in view.changes) '${c.label}:${c.oldValue}>${c.newValue}',
+      ].join('|');
+      expect(rendered, isNot(contains('999.11')), reason: action);
+      expect(rendered, isNot(contains('888.22')), reason: action);
+      expect(rendered, isNot(contains('777.33')), reason: action);
+      // The approved non-money fields survive the strip.
+      expect(rendered, contains('#02A001'), reason: action);
+    }
+  });
+
+  test('F6: the strip is ACTION-SPECIFIC — an approved money-carrying action '
+      'still renders its money row', () async {
+    final l10n = await _l('en');
+    const discount = AuditEvent(
+      eventId: 'ae-discount-money',
+      action: 'order.discount_applied',
+      category: 'discounts',
+      occurredAtLabel: '2026-07-22 14:05',
+      actorName: 'X',
+      restaurantName: 'R',
+      branchName: 'B',
+      oldValues: {},
+      newValues: {'order_code': '#02A001', 'discount_total_minor': 1234},
+    );
+    final view = AuditEventPresenter(l10n, 'ILS').present(discount);
+    final rendered = [
+      for (final c in view.changes) '${c.label}:${c.oldValue}>${c.newValue}',
+    ].join('|');
+    expect(rendered, contains('12.34'));
+  });
 }

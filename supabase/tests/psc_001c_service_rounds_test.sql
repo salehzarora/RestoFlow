@@ -30,7 +30,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(93);
+select plan(97);
 
 -- ===== fixtures: Org A (2 POS + 2 KDS devices) + Org B (1 POS) ===============
 insert into organizations (id, name, slug, default_currency) values
@@ -730,6 +730,38 @@ select is(
   (pg_temp.crst2('c0000000-0000-0000-0000-0000000ad007', 'c0000000-0000-0000-0000-0000000000d3', 'rvk-ok',
                  (select id from r2), (select id::text from r1), 'preparing') -> 'results' -> 0 ->> 'error'),
   'invalid_payload', '92. REVOKED path: a changed-target replay of a stored op is rejected before replay');
+
+-- ===== (94-97) CORRECTION Finding 6: the four service-round actions are ======
+-- ===== MONEY-FREE — in the REAL trail AND under hostile projection       ======
+select ok(
+  (select bool_and(coalesce(new_values, '{}'::jsonb)::text not like '%\_minor%'
+               and coalesce(old_values, '{}'::jsonb)::text not like '%\_minor%')
+     from audit_events
+     where action in ('order.items_added', 'order.items_add_denied',
+                      'order.round_status_updated', 'order.round_status_denied')),
+  '94. F6: NO real service-round audit row carries any monetary key');
+select is(
+  app.audit_safe_detail('order.items_added', jsonb_build_object(
+    'order_code', '#A1B2C3', 'round_number', 2, 'added_item_count', 3,
+    'order_status', 'preparing', 'role', 'cashier',
+    'subtotal_minor', 999, 'grand_total_minor', 999, 'amount_minor', 555)),
+  jsonb_build_object('order_code', '#A1B2C3', 'round_number', 2,
+                     'added_item_count', 3, 'order_status', 'preparing',
+                     'role', 'cashier'),
+  '95. F6: a HOSTILE items_added payload keeps the approved fields and drops every money key');
+select ok(
+  not (app.audit_safe_detail('order.items_add_denied',
+         jsonb_build_object('denied_reason', 'x', 'subtotal_minor', 1)) ? 'subtotal_minor')
+  and not (app.audit_safe_detail('order.round_status_updated',
+             jsonb_build_object('to_status', 'ready', 'grand_total_minor', 1)) ? 'grand_total_minor')
+  and not (app.audit_safe_detail('order.round_status_denied',
+             jsonb_build_object('denied_reason', 'x', 'amount_minor', 1)) ? 'amount_minor'),
+  '96. F6: hostile money is stripped for the denial and round-status actions too');
+select is(
+  app.audit_safe_detail('payment.recorded',
+    jsonb_build_object('amount_minor', 500, 'order_code', '#A1B2C3')) -> 'amount_minor',
+  '500'::jsonb,
+  '97. F6: the strip is ACTION-SPECIFIC — approved money-carrying actions keep their keys');
 
 select * from finish();
 rollback;
