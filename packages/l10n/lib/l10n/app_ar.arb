@@ -60,6 +60,7 @@
   "posSubmitAddition": "إرسال الإضافة",
   "posAdditionPending": "الإضافة قيد الإرسال…",
   "posAdditionApplied": "أُرسلت الإضافة إلى المطبخ",
+  "posAdditionClearCartFirst": "أكمل السلة الحالية أو ألغِها قبل الإضافة إلى طلب آخر",
   "posAdditionFailedRetry": "فشلت الإضافة — اضغط لإعادة المحاولة",
   "posAddItemsIneligiblePaid": "لا يمكن الإضافة إلى طلب مدفوع",
   "posAddItemsIneligibleStatus": "لم يعد بالإمكان الإضافة إلى هذا الطلب",

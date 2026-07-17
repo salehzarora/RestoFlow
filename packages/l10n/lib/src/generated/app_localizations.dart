@@ -460,6 +460,12 @@ abstract class AppLocalizations {
   /// **'Addition sent to the kitchen'**
   String get posAdditionApplied;
 
+  /// No description provided for @posAdditionClearCartFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish or cancel the current cart before adding to another order'**
+  String get posAdditionClearCartFirst;
+
   /// No description provided for @posAdditionFailedRetry.
   ///
   /// In en, this message translates to:

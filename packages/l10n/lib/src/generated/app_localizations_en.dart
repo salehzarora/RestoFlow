@@ -202,6 +202,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posAdditionApplied => 'Addition sent to the kitchen';
 
   @override
+  String get posAdditionClearCartFirst =>
+      'Finish or cancel the current cart before adding to another order';
+
+  @override
   String get posAdditionFailedRetry => 'Addition failed — tap to retry';
 
   @override

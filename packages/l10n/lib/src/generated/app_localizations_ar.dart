@@ -199,6 +199,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posAdditionApplied => 'أُرسلت الإضافة إلى المطبخ';
 
   @override
+  String get posAdditionClearCartFirst =>
+      'أكمل السلة الحالية أو ألغِها قبل الإضافة إلى طلب آخر';
+
+  @override
   String get posAdditionFailedRetry => 'فشلت الإضافة — اضغط لإعادة المحاولة';
 
   @override

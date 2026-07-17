@@ -86,6 +86,37 @@ class PosOrderDetail {
       if (round == null) return null;
       rounds.add(round);
     }
+    // FAIL CLOSED (PSC-001C correction, Finding 5): the financial header is
+    // REQUIRED — every money field and the revision must be present, exactly
+    // integer-typed (D-007) and in valid range. A missing or mistyped value
+    // is NEVER defaulted to zero: rendering a zero-valued "authoritative"
+    // order would be a financial lie.
+    final revision = _int(order['revision']);
+    final subtotal = _int(order['subtotal_minor']);
+    final discount = _int(order['discount_total_minor']);
+    final tax = _int(order['tax_total_minor']);
+    final grand = _int(order['grand_total_minor']);
+    if (revision == null ||
+        revision < 1 ||
+        subtotal == null ||
+        subtotal < 0 ||
+        discount == null ||
+        discount < 0 ||
+        tax == null ||
+        tax < 0 ||
+        grand == null ||
+        grand < 0) {
+      return null;
+    }
+    // A COMPLETED payment that arrives malformed fails the WHOLE detail —
+    // absent is legal (unpaid order); broken is not (Finding 4/5: a reprint
+    // must never guess payment facts).
+    final paymentRaw = raw['payment'];
+    PosOrderDetailPayment? payment;
+    if (paymentRaw != null) {
+      payment = PosOrderDetailPayment.fromJson(paymentRaw);
+      if (payment == null) return null;
+    }
     return PosOrderDetail(
       orderId: orderId,
       orderCode: orderCode,
@@ -93,12 +124,12 @@ class PosOrderDetail {
           ? order['order_type'] as String
           : null,
       status: status,
-      revision: _int(order['revision']) ?? 0,
+      revision: revision,
       currencyCode: currency,
-      subtotalMinor: _int(order['subtotal_minor']) ?? 0,
-      discountTotalMinor: _int(order['discount_total_minor']) ?? 0,
-      taxTotalMinor: _int(order['tax_total_minor']) ?? 0,
-      grandTotalMinor: _int(order['grand_total_minor']) ?? 0,
+      subtotalMinor: subtotal,
+      discountTotalMinor: discount,
+      taxTotalMinor: tax,
+      grandTotalMinor: grand,
       tableLabel: order['table_label'] is String
           ? order['table_label'] as String
           : null,
@@ -110,7 +141,7 @@ class PosOrderDetail {
           : null,
       items: items,
       rounds: rounds,
-      payment: PosOrderDetailPayment.fromJson(raw['payment']),
+      payment: payment,
     );
   }
 }
@@ -146,7 +177,21 @@ class PosOrderDetailItem {
     final name = raw['menu_item_name_snapshot'];
     final quantity = _int(raw['quantity']);
     final unit = _int(raw['unit_price_minor_snapshot']);
-    if (name is! String || quantity == null || unit == null) return null;
+    // Finding 5: the line's money fields are REQUIRED integers — the server
+    // always emits them; a zero default would misprice the combined receipt.
+    final lineDiscount = _int(raw['line_discount_minor']);
+    final lineTotal = _int(raw['line_total_minor']);
+    if (name is! String ||
+        quantity == null ||
+        quantity < 1 ||
+        unit == null ||
+        unit < 0 ||
+        lineDiscount == null ||
+        lineDiscount < 0 ||
+        lineTotal == null ||
+        lineTotal < 0) {
+      return null;
+    }
     final mods = <PosOrderDetailModifier>[];
     final modsRaw = raw['modifiers'];
     if (modsRaw is List) {
@@ -160,8 +205,8 @@ class PosOrderDetailItem {
       name: name,
       quantity: quantity,
       unitPriceMinor: unit,
-      lineDiscountMinor: _int(raw['line_discount_minor']) ?? 0,
-      lineTotalMinor: _int(raw['line_total_minor']) ?? 0,
+      lineDiscountMinor: lineDiscount,
+      lineTotalMinor: lineTotal,
       modifiers: mods,
       notes: raw['notes'] is String ? raw['notes'] as String : null,
       serviceRoundId: raw['service_round_id'] is String
@@ -188,11 +233,20 @@ class PosOrderDetailModifier {
   static PosOrderDetailModifier? fromJson(Object? raw) {
     if (raw is! Map) return null;
     final option = raw['option_name_snapshot'];
-    if (option is! String) return null;
+    // Finding 5: the modifier's price delta and quantity are REQUIRED — a
+    // silently-zeroed delta misprices the line it belongs to.
+    final price = _int(raw['price_minor_snapshot']);
+    final quantity = _int(raw['quantity']);
+    if (option is! String ||
+        price == null ||
+        quantity == null ||
+        quantity < 1) {
+      return null;
+    }
     return PosOrderDetailModifier(
       optionName: option,
-      priceMinor: _int(raw['price_minor_snapshot']) ?? 0,
-      quantity: _int(raw['quantity']) ?? 1,
+      priceMinor: price,
+      quantity: quantity,
       modifierName: raw['modifier_name_snapshot'] is String
           ? raw['modifier_name_snapshot'] as String
           : null,
@@ -233,6 +287,7 @@ class PosOrderDetailPayment {
     required this.amountMinor,
     required this.tenderedMinor,
     required this.changeMinor,
+    required this.paidAt,
     this.receiptNumber,
   });
 
@@ -240,17 +295,46 @@ class PosOrderDetailPayment {
   final int amountMinor;
   final int tenderedMinor;
   final int changeMinor;
+
+  /// The AUTHORITATIVE server payment timestamp (payments.created_at) —
+  /// Finding 4: a reprint must show WHEN the money was taken, never the time
+  /// of viewing. Required + parseable when a completed payment exists.
+  final DateTime paidAt;
   final String? receiptNumber;
+
+  /// The supported tender wire values (the payments.method CHECK).
+  static const Set<String> _methods = {'cash', 'card', 'bit', 'external'};
 
   static PosOrderDetailPayment? fromJson(Object? raw) {
     if (raw is! Map) return null;
+    // Finding 5: a COMPLETED payment's facts are all REQUIRED. An unknown
+    // method must FAIL (never default to cash); the amounts must be exact
+    // integers; the timestamp must parse — a reprint never guesses.
     final method = raw['method'];
-    if (method is! String) return null;
+    final amount = _int(raw['amount_minor']);
+    final tendered = _int(raw['tendered_minor']);
+    final change = _int(raw['change_minor']);
+    final createdAtRaw = raw['created_at'];
+    final paidAt = createdAtRaw is String
+        ? DateTime.tryParse(createdAtRaw)
+        : null;
+    if (method is! String ||
+        !_methods.contains(method) ||
+        amount == null ||
+        amount < 0 ||
+        tendered == null ||
+        tendered < 0 ||
+        change == null ||
+        change < 0 ||
+        paidAt == null) {
+      return null;
+    }
     return PosOrderDetailPayment(
       method: method,
-      amountMinor: _int(raw['amount_minor']) ?? 0,
-      tenderedMinor: _int(raw['tendered_minor']) ?? 0,
-      changeMinor: _int(raw['change_minor']) ?? 0,
+      amountMinor: amount,
+      tenderedMinor: tendered,
+      changeMinor: change,
+      paidAt: paidAt,
       receiptNumber: raw['receipt_number'] is String
           ? raw['receipt_number'] as String
           : null,
@@ -399,7 +483,9 @@ CashPayment? cashPaymentFromDetail(PosOrderDetail d) {
     changeMinor: p.changeMinor,
     currencyCode: d.currencyCode,
     receiptNumber: p.receiptNumber ?? d.receiptNumber ?? '',
-    paidAt: DateTime.now(),
+    // Finding 4: the AUTHORITATIVE payment time (payments.created_at) — the
+    // reprint shows when the money was taken, never the time of viewing.
+    paidAt: p.paidAt,
     orderId: d.orderId,
     orderStatus: d.status,
   );

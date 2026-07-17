@@ -68,6 +68,7 @@
   "posSubmitAddition": "Submit addition",
   "posAdditionPending": "Addition pending…",
   "posAdditionApplied": "Addition sent to the kitchen",
+  "posAdditionClearCartFirst": "Finish or cancel the current cart before adding to another order",
   "posAdditionFailedRetry": "Addition failed — tap to retry",
   "posAddItemsIneligiblePaid": "Paid orders can't take additions",
   "posAddItemsIneligibleStatus": "This order can no longer take additions",

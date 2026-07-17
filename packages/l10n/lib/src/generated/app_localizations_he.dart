@@ -196,6 +196,10 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posAdditionApplied => 'התוספת נשלחה למטבח';
 
   @override
+  String get posAdditionClearCartFirst =>
+      'סיימו או בטלו את הסל הנוכחי לפני הוספה להזמנה אחרת';
+
+  @override
   String get posAdditionFailedRetry => 'התוספת נכשלה — הקישו לניסיון חוזר';
 
   @override

@@ -20,6 +20,7 @@ import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
 import '../state/addition_controller.dart';
+import '../state/cart_controller.dart' show cartControllerProvider;
 import '../state/discount_controller.dart';
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import '../state/draft_recovery_controller.dart';
@@ -1048,11 +1049,27 @@ class _ActionRow extends ConsumerWidget {
   /// PSC-001C: enters ADDITION MODE for this order — loads the authoritative
   /// detail, hands it to the addition controller, and closes the sheet so the
   /// cashier lands on the menu with the "Adding to #CODE" cart banner.
+  ///
+  /// Finding-2 entry guards: a NON-EMPTY normal cart, an open (pending or
+  /// failed-retryable) attempt, or a DIFFERENT already-targeted order all
+  /// BLOCK entry with an honest message — a cart is never silently retargeted
+  /// and a frozen attempt's identity is immutable. Re-entering the SAME
+  /// target is a harmless no-op.
   Future<void> _startAddition(BuildContext context, WidgetRef ref) async {
     final orderId = order.orderId;
     if (orderId == null) return;
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    if (!canBeginAddition(
+      addition: ref.read(additionControllerProvider),
+      cartIsEmpty: ref.read(cartControllerProvider).isEmpty,
+      orderId: orderId,
+    )) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posAdditionClearCartFirst)),
+      );
+      return;
+    }
     final PosOrderDetail detail;
     try {
       detail = await ref.read(orderDetailRepositoryProvider).fetch(orderId);
@@ -1062,7 +1079,13 @@ class _ActionRow extends ConsumerWidget {
       );
       return;
     }
-    ref.read(additionControllerProvider.notifier).enter(detail);
+    final entry = ref.read(additionControllerProvider.notifier).enter(detail);
+    if (entry != AdditionEntryResult.entered) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posAdditionClearCartFirst)),
+      );
+      return;
+    }
     if (navigator.canPop()) navigator.pop();
   }
 

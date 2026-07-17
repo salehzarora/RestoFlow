@@ -60,6 +60,7 @@
   "posSubmitAddition": "שליחת התוספת",
   "posAdditionPending": "התוספת בשליחה…",
   "posAdditionApplied": "התוספת נשלחה למטבח",
+  "posAdditionClearCartFirst": "סיימו או בטלו את הסל הנוכחי לפני הוספה להזמנה אחרת",
   "posAdditionFailedRetry": "התוספת נכשלה — הקישו לניסיון חוזר",
   "posAddItemsIneligiblePaid": "אי אפשר להוסיף להזמנה ששולמה",
   "posAddItemsIneligibleStatus": "אי אפשר עוד להוסיף להזמנה הזו",
