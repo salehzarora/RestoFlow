@@ -19,7 +19,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(36);
+select plan(53);
 
 -- ===== fixtures: Org A (1 POS + 2 KDS devices, 5 operators) + Org B (KDS mgr) =
 insert into organizations (id, name, slug, default_currency) values
@@ -108,6 +108,13 @@ create or replace function pg_temp.kack(p_pin uuid, p_dev uuid, p_op text, p_ord
     'local_operation_id', p_op, 'operation_type', 'order.void_ack', 'target_entity', 'order',
     'target_id', p_order,
     'payload', jsonb_build_object('order_id', p_order))));
+$$;
+-- Adversarial variant: independent payload order and (possibly malformed) target.
+create or replace function pg_temp.kack2(p_pin uuid, p_dev uuid, p_op text, p_payload_order uuid, p_target text) returns jsonb language sql as $$
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+    'local_operation_id', p_op, 'operation_type', 'order.void_ack', 'target_entity', 'order',
+    'target_id', p_target,
+    'payload', jsonb_build_object('order_id', p_payload_order))));
 $$;
 
 -- Orders o1..o8 (POS cashier submits; kitchen advances where needed).
@@ -310,6 +317,110 @@ select is(
   app.audit_category('order.void_acknowledged'),
   'voids',
   '36. order.void_acknowledged classifies under voids (never Other)');
+
+-- ===== (37-40) CORRECTION F1: nonexistent vs foreign order are EXTERNALLY ====
+-- ===== INDISTINGUISHABLE — immediate result, ledger, AND the canonical  ====
+-- ===== operation_statuses read path                                      ====
+-- A REAL order in Org B (direct fixture insert) that Org A's kitchen probes.
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id,
+                    opened_by_employee_profile_id, resolved_membership_id, order_type, status,
+                    currency_code, subtotal_minor, grand_total_minor, local_operation_id) values
+  ('f0000000-0000-0000-0000-00000000b0d1', 'f0000000-0000-0000-0000-000000000f01', 'f0000000-0000-0000-0000-000000000f02', 'f0000000-0000-0000-0000-000000000f03', 'f0000000-0000-0000-0000-0000000000d1', 'f0000000-0000-0000-0000-0000000bd001',
+   'f0000000-0000-0000-0000-0000000bc001', 'f0000000-0000-0000-0000-0000000bb001', 'takeaway', 'submitted',
+   'USD', 1000, 1000, 'sub-b1');
+create temp table probe_results as
+  select
+    (pg_temp.kack('e0000000-0000-0000-0000-0000000ad003', 'e0000000-0000-0000-0000-0000000000d2', 'ack-ghost', '99999999-9999-4999-8999-999999999999') -> 'results' -> 0) - 'local_operation_id' as ghost,
+    (pg_temp.kack('e0000000-0000-0000-0000-0000000ad003', 'e0000000-0000-0000-0000-0000000000d2', 'ack-foreign', 'f0000000-0000-0000-0000-00000000b0d1') -> 'results' -> 0) - 'local_operation_id' as foreign_probe;
+select ok(
+  (select ghost = foreign_probe from probe_results),
+  '37. F1: the IMMEDIATE results for a nonexistent vs a foreign order are identical');
+select ok(
+  (select g.status = f.status and g.rejection_reason = f.rejection_reason
+     from sync_operations g, sync_operations f
+     where g.local_operation_id = 'ack-ghost' and f.local_operation_id = 'ack-foreign'),
+  '38. F1: the LEDGER status + rejection_reason are identical for both probes');
+select ok(
+  (select (g.result - 'local_operation_id') = (f.result - 'local_operation_id')
+     from sync_operations g, sync_operations f
+     where g.local_operation_id = 'ack-ghost' and f.local_operation_id = 'ack-foreign'),
+  '39. F1: the LEDGER result envelopes are identical for both probes');
+-- The canonical read path: this DEVICE's operation_statuses feed via sync_pull.
+create temp table probe_feed as
+  select value as row_j
+    from jsonb_array_elements(
+      public.sync_pull('e0000000-0000-0000-0000-0000000ad003', 'e0000000-0000-0000-0000-0000000000d2',
+                       array['operation_statuses']) -> 'operation_statuses' -> 'rows');
+select ok(
+  (select (a.row_j - array['local_operation_id','target_id','id','created_at','updated_at','applied_at','server_received_at','client_created_at'])
+        = (b.row_j - array['local_operation_id','target_id','id','created_at','updated_at','applied_at','server_received_at','client_created_at'])
+     from probe_feed a, probe_feed b
+     where a.row_j ->> 'local_operation_id' = 'ack-ghost'
+       and b.row_j ->> 'local_operation_id' = 'ack-foreign'),
+  '40. F1: the operation_statuses feed rows are indistinguishable (identity fields aside)');
+
+-- ===== (41-44) CORRECTION F2: a terminal replay is bound to the TARGET =======
+-- 'ack-o1' is the APPLIED acknowledgement of o1 (test 19). Replaying the same
+-- local_operation_id + same payload with a SWAPPED target must NOT return the
+-- stored applied result — it is a hostile envelope.
+select is(
+  (pg_temp.kack2('e0000000-0000-0000-0000-0000000ad003', 'e0000000-0000-0000-0000-0000000000d2', 'ack-o1',
+                 'e0000000-0000-0000-0000-00000000a0d1', 'e0000000-0000-0000-0000-00000000a0d7') -> 'results' -> 0 ->> 'error'),
+  'invalid_payload', '41. F2: a terminal replay with a swapped target_id is rejected, never replayed');
+select ok(
+  (select kitchen_ack_at is null from orders where id = 'e0000000-0000-0000-0000-00000000a0d7'),
+  '42. F2: the swapped-target order is untouched by the hostile replay');
+select is(
+  (select count(*)::int from audit_events where action = 'order.void_acknowledged'
+    and (new_values ->> 'order_id') = 'e0000000-0000-0000-0000-00000000a0d1'),
+  1, '43. F2: no additional success audit was written by the hostile replay');
+select is(
+  (select status from sync_operations where local_operation_id = 'ack-o1'),
+  'applied', '44. F2: the stored terminal ledger row is unchanged (still the original applied)');
+
+-- ===== (45-46) CORRECTION F2: a fresh payload/target mismatch is hostile =====
+select is(
+  (pg_temp.kack2('e0000000-0000-0000-0000-0000000ad003', 'e0000000-0000-0000-0000-0000000000d2', 'ack-mm2',
+                 'e0000000-0000-0000-0000-00000000a0d7', 'e0000000-0000-0000-0000-00000000a0d1') -> 'results' -> 0 ->> 'error'),
+  'invalid_payload', '45. F2: target A + payload B on a NEW op is a malformed envelope');
+select ok(
+  not exists (select 1 from sync_operations where local_operation_id = 'ack-mm2'),
+  '46. F2: a malformed envelope leaves NO ledger row (the malformed convention)');
+
+-- ===== (47-53) CORRECTION F3: a malformed target rejects ONLY its own op ====
+-- Mixed batch, VALID FIRST: a real order.status advance + a malformed void_ack.
+create temp table mixed1 as select public.sync_push(
+  'e0000000-0000-0000-0000-0000000ad003', 'e0000000-0000-0000-0000-0000000000d2',
+  jsonb_build_array(
+    jsonb_build_object('local_operation_id', 'st-mixed1', 'operation_type', 'order.status', 'target_entity', 'order',
+      'payload', jsonb_build_object('order_id', 'e0000000-0000-0000-0000-00000000a0d6', 'new_status', 'accepted')),
+    jsonb_build_object('local_operation_id', 'ack-bad1', 'operation_type', 'order.void_ack', 'target_entity', 'order',
+      'target_id', 'not-a-uuid',
+      'payload', jsonb_build_object('order_id', 'e0000000-0000-0000-0000-00000000a0d1')))) as r;
+select is((select r -> 'results' -> 0 ->> 'status' from mixed1), 'applied',
+  '47. F3: the valid sibling (a PRIOR dispatch arm, order.status) still applies');
+select is((select r -> 'results' -> 1 ->> 'error' from mixed1), 'invalid_payload',
+  '48. F3: the malformed target_id rejects ONLY its own operation');
+select is((select status from orders where id = 'e0000000-0000-0000-0000-00000000a0d6'), 'accepted',
+  '49. F3: the sibling mutation landed (o6 advanced) — the batch was not aborted');
+-- Mixed batch, MALFORMED FIRST: ordering must not matter.
+create temp table mixed2 as select public.sync_push(
+  'e0000000-0000-0000-0000-0000000ad003', 'e0000000-0000-0000-0000-0000000000d2',
+  jsonb_build_array(
+    jsonb_build_object('local_operation_id', 'ack-bad2', 'operation_type', 'order.void_ack', 'target_entity', 'order',
+      'target_id', 'also-not-a-uuid',
+      'payload', jsonb_build_object('order_id', 'e0000000-0000-0000-0000-00000000a0d1')),
+    jsonb_build_object('local_operation_id', 'st-mixed2', 'operation_type', 'order.status', 'target_entity', 'order',
+      'payload', jsonb_build_object('order_id', 'e0000000-0000-0000-0000-00000000a0d6', 'new_status', 'preparing')))) as r;
+select is((select r -> 'results' -> 0 ->> 'error' from mixed2), 'invalid_payload',
+  '50. F3: malformed-first is rejected per-operation');
+select is((select r -> 'results' -> 1 ->> 'status' from mixed2), 'applied',
+  '51. F3: the valid sibling AFTER the malformed op still applies');
+select is((select status from orders where id = 'e0000000-0000-0000-0000-00000000a0d6'), 'preparing',
+  '52. F3: the second sibling mutation landed too');
+select ok(
+  not exists (select 1 from sync_operations where local_operation_id in ('ack-bad1', 'ack-bad2')),
+  '53. F3: malformed void_ack envelopes leave NO ledger rows; no acknowledgement mutated');
 
 select * from finish();
 rollback;
