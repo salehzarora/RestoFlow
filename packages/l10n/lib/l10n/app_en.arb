@@ -45,6 +45,8 @@
   "activityLogFieldName": "Name",
   "activityLogFieldReceiptPrefix": "Receipt prefix",
   "activityLogTitleOrderVoided": "Order voided",
+  "activityLogTitleVoidAcknowledged": "Cancellation acknowledged by kitchen",
+  "activityLogTitleVoidAckDenied": "Cancellation acknowledgement denied",
   "activityLogTitleDiscountApplied": "Discount applied",
   "activityLogTitleOrderSubmitted": "Order submitted",
   "activityLogTitleOrderStatusUpdated": "Order status updated",
@@ -320,6 +322,12 @@
     "description": "Placeholder inside an empty KDS board column."
   },
   "kdsStaleBanner": "Offline — showing last synced tickets",
+  "kdsCancelledCardTitle": "Order canceled",
+  "kdsCancelledCardBody": "The cashier canceled this order — stop preparing it.",
+  "kdsCancelledAtLabel": "Canceled at",
+  "kdsAcknowledgeCancellation": "Acknowledge cancellation",
+  "kdsAckPending": "Sending acknowledgement…",
+  "kdsAckFailed": "Could not acknowledge — check the connection and try again.",
   "@kdsStaleBanner": {
     "description": "KDS warning pill when polling fails and the board shows cached (possibly stale) tickets."
   },
@@ -3104,6 +3112,9 @@
   "activityLogFieldToStatus": "To status",
   "@activityLogFieldToStatus": {"description": "Activity Log field label for the table manual status after a change."},
   "activityLogFieldGroupLabel": "Linked tables",
+  "activityLogFieldVoidedFromStatus": "Status when canceled",
+  "activityLogFieldDeviceType": "Device type",
+  "activityLogFieldKitchenAckRequired": "Kitchen acknowledgement required",
   "@activityLogFieldGroupLabel": {"description": "Activity Log field label for a linked table group's combined label."},
   "activityLogFieldAvailability": "Availability",
   "@activityLogFieldAvailability": {"description": "Activity Log field label for the availability before/after value."},

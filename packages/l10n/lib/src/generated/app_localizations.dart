@@ -370,6 +370,18 @@ abstract class AppLocalizations {
   /// **'Order voided'**
   String get activityLogTitleOrderVoided;
 
+  /// No description provided for @activityLogTitleVoidAcknowledged.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation acknowledged by kitchen'**
+  String get activityLogTitleVoidAcknowledged;
+
+  /// No description provided for @activityLogTitleVoidAckDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancellation acknowledgement denied'**
+  String get activityLogTitleVoidAckDenied;
+
   /// No description provided for @activityLogTitleDiscountApplied.
   ///
   /// In en, this message translates to:
@@ -1089,6 +1101,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Offline — showing last synced tickets'**
   String get kdsStaleBanner;
+
+  /// No description provided for @kdsCancelledCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Order canceled'**
+  String get kdsCancelledCardTitle;
+
+  /// No description provided for @kdsCancelledCardBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The cashier canceled this order — stop preparing it.'**
+  String get kdsCancelledCardBody;
+
+  /// No description provided for @kdsCancelledAtLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Canceled at'**
+  String get kdsCancelledAtLabel;
+
+  /// No description provided for @kdsAcknowledgeCancellation.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge cancellation'**
+  String get kdsAcknowledgeCancellation;
+
+  /// No description provided for @kdsAckPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending acknowledgement…'**
+  String get kdsAckPending;
+
+  /// No description provided for @kdsAckFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not acknowledge — check the connection and try again.'**
+  String get kdsAckFailed;
 
   /// KDS action that marks a ready ticket as bumped (done).
   ///
@@ -8331,6 +8379,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Linked tables'**
   String get activityLogFieldGroupLabel;
+
+  /// No description provided for @activityLogFieldVoidedFromStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status when canceled'**
+  String get activityLogFieldVoidedFromStatus;
+
+  /// No description provided for @activityLogFieldDeviceType.
+  ///
+  /// In en, this message translates to:
+  /// **'Device type'**
+  String get activityLogFieldDeviceType;
+
+  /// No description provided for @activityLogFieldKitchenAckRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen acknowledgement required'**
+  String get activityLogFieldKitchenAckRequired;
 
   /// Activity Log field label for the availability before/after value.
   ///

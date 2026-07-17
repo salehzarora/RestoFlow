@@ -150,6 +150,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get activityLogTitleOrderVoided => 'Order voided';
 
   @override
+  String get activityLogTitleVoidAcknowledged =>
+      'Cancellation acknowledged by kitchen';
+
+  @override
+  String get activityLogTitleVoidAckDenied =>
+      'Cancellation acknowledgement denied';
+
+  @override
   String get activityLogTitleDiscountApplied => 'Discount applied';
 
   @override
@@ -527,6 +535,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kdsStaleBanner => 'Offline — showing last synced tickets';
+
+  @override
+  String get kdsCancelledCardTitle => 'Order canceled';
+
+  @override
+  String get kdsCancelledCardBody =>
+      'The cashier canceled this order — stop preparing it.';
+
+  @override
+  String get kdsCancelledAtLabel => 'Canceled at';
+
+  @override
+  String get kdsAcknowledgeCancellation => 'Acknowledge cancellation';
+
+  @override
+  String get kdsAckPending => 'Sending acknowledgement…';
+
+  @override
+  String get kdsAckFailed =>
+      'Could not acknowledge — check the connection and try again.';
 
   @override
   String get kdsBumpAction => 'Bump';
@@ -4483,6 +4511,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogFieldGroupLabel => 'Linked tables';
+
+  @override
+  String get activityLogFieldVoidedFromStatus => 'Status when canceled';
+
+  @override
+  String get activityLogFieldDeviceType => 'Device type';
+
+  @override
+  String get activityLogFieldKitchenAckRequired =>
+      'Kitchen acknowledgement required';
 
   @override
   String get activityLogFieldAvailability => 'Availability';

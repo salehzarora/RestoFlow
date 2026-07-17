@@ -148,6 +148,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogTitleOrderVoided => 'تم إلغاء الطلب';
 
   @override
+  String get activityLogTitleVoidAcknowledged =>
+      'أكّد المطبخ الاطّلاع على الإلغاء';
+
+  @override
+  String get activityLogTitleVoidAckDenied =>
+      'تم رفض تأكيد الاطّلاع على الإلغاء';
+
+  @override
   String get activityLogTitleDiscountApplied => 'تم تطبيق خصم';
 
   @override
@@ -521,6 +529,26 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get kdsStaleBanner => 'غير متصل — تُعرض آخر التذاكر المتزامنة';
+
+  @override
+  String get kdsCancelledCardTitle => 'تم إلغاء الطلب';
+
+  @override
+  String get kdsCancelledCardBody =>
+      'ألغى الكاشير هذا الطلب — توقّفوا عن تحضيره.';
+
+  @override
+  String get kdsCancelledAtLabel => 'أُلغي في';
+
+  @override
+  String get kdsAcknowledgeCancellation => 'تأكيد الاطّلاع على الإلغاء';
+
+  @override
+  String get kdsAckPending => 'جارٍ إرسال التأكيد…';
+
+  @override
+  String get kdsAckFailed =>
+      'تعذّر تأكيد الاطّلاع — تحقّقوا من الاتصال وحاولوا مجددًا.';
 
   @override
   String get kdsBumpAction => 'إنهاء';
@@ -4451,6 +4479,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogFieldGroupLabel => 'الطاولات المرتبطة';
+
+  @override
+  String get activityLogFieldVoidedFromStatus => 'الحالة عند الإلغاء';
+
+  @override
+  String get activityLogFieldDeviceType => 'نوع الجهاز';
+
+  @override
+  String get activityLogFieldKitchenAckRequired => 'يتطلب تأكيد المطبخ';
 
   @override
   String get activityLogFieldAvailability => 'التوفر';
