@@ -420,8 +420,6 @@ declare
   v_role        text;
   v_m_status    text;
   v_m_deleted   timestamptz;
-  v_o_org       uuid;
-  v_o_branch    uuid;
   v_o_status    text;
   v_o_rev       integer;
   v_required    boolean;
@@ -460,20 +458,26 @@ begin
     raise exception 'kitchen_ack_void: resolved membership is not active' using errcode = '42501';
   end if;
 
-  -- (b) load the order FOR UPDATE; it MUST be in the actor's org + branch. A
-  --     nonexistent or cross-scope order is the SAME structural raise — the
-  --     device learns nothing about foreign orders (anti-oracle, R-003). The
-  --     row lock serializes concurrent acknowledgements (and the void itself).
-  select o.organization_id, o.branch_id, o.status, o.revision,
+  -- (b) load the order FOR UPDATE through ONE query that carries every
+  --     authoritative scope predicate (id + the session's org, restaurant AND
+  --     branch). A nonexistent order and a foreign-scope order are therefore
+  --     the LITERALLY IDENTICAL structural raise — same SQLSTATE, same
+  --     message, no differing detail — because SQLERRM is persisted as the
+  --     sync ledger's rejection_reason and later surfaced through the
+  --     operation_statuses feed; two different messages would let a device
+  --     probe whether a foreign order EXISTS (anti-oracle, R-003). The row
+  --     lock serializes concurrent acknowledgements (and the void itself).
+  select o.status, o.revision,
          o.kitchen_ack_required, o.kitchen_ack_at, o.voided_from_status
-    into v_o_org, v_o_branch, v_o_status, v_o_rev, v_required, v_acked_at, v_from_status
-    from public.orders o where o.id = p_order_id
+    into v_o_status, v_o_rev, v_required, v_acked_at, v_from_status
+    from public.orders o
+    where o.id              = p_order_id
+      and o.organization_id = v_org
+      and o.restaurant_id   = v_rest
+      and o.branch_id       = v_branch
     for update;
   if not found then
-    raise exception 'kitchen_ack_void: order not found' using errcode = '42501';
-  end if;
-  if v_o_org <> v_org or v_o_branch <> v_branch then
-    raise exception 'kitchen_ack_void: order is not in the caller scope' using errcode = '42501';
+    raise exception 'kitchen_ack_void: order_not_found_or_not_accessible' using errcode = '42501';
   end if;
 
   -- (c) KDS-CLASS DEVICE ONLY (locked decision). The device type comes from the
@@ -670,6 +674,8 @@ declare
   v_op_result    jsonb;
   v_device_revoked boolean := false;
   v_customer_name text;
+  v_ack_order    uuid;
+  v_ack_ok       boolean;
 begin
   -- (0) batch shape + a conservative size cap (no frozen limit in docs; 100 is the
   --     interim cap, surfaced here and in the tests — keeps a push transaction bounded).
@@ -717,7 +723,19 @@ begin
       v_payload    := v_op -> 'payload';
       v_depends    := coalesce(v_op -> 'depends_on', '[]'::jsonb);
       v_target_ent := v_op ->> 'target_entity';
-      v_target_id  := nullif(v_op ->> 'target_id', '')::uuid;
+      -- PSC-001D correction (F3): for order.void_ack the target id is parsed
+      -- inside a PROTECTED boundary — a malformed uuid must reject only ITS
+      -- operation, never abort the whole batch. The 12 prior operations keep
+      -- their exact existing parse semantics.
+      if v_op_type = 'order.void_ack' then
+        begin
+          v_target_id := nullif(v_op ->> 'target_id', '')::uuid;
+        exception when others then
+          v_target_id := null;
+        end;
+      else
+        v_target_id := nullif(v_op ->> 'target_id', '')::uuid;
+      end if;
       v_client_ts  := nullif(v_op ->> 'client_created_at', '')::timestamptz;
 
       -- envelope validation (same as the valid path): malformed -> rejected result, NO ledger row
@@ -737,7 +755,15 @@ begin
         continue;
       end if;
 
-      v_fingerprint := md5(v_op_type || '|' || v_payload::text);
+      -- PSC-001D correction (F2): the SAME conditional fingerprint as the
+      -- valid path, so a legitimately-applied order.void_ack still replays
+      -- its stored result after a revocation (identical identity -> identical
+      -- fingerprint), while the 12 prior operations are unchanged.
+      if v_op_type = 'order.void_ack' then
+        v_fingerprint := md5(v_op_type || '|' || v_payload::text || '|' || coalesce(v_target_id::text, ''));
+      else
+        v_fingerprint := md5(v_op_type || '|' || v_payload::text);
+      end if;
 
       -- dedup/replay: a stored op with the SAME identity that is TERMINAL replays its
       -- result (a legitimately-APPLIED op before revocation is NOT re-rejected); a
@@ -801,7 +827,18 @@ begin
     v_payload    := v_op -> 'payload';
     v_depends    := coalesce(v_op -> 'depends_on', '[]'::jsonb);
     v_target_ent := v_op ->> 'target_entity';
-    v_target_id  := nullif(v_op ->> 'target_id', '')::uuid;
+    -- PSC-001D correction (F3): protected parse for order.void_ack — a
+    -- malformed target uuid rejects only ITS operation (below), never the
+    -- batch. The 12 prior operations keep their exact existing semantics.
+    if v_op_type = 'order.void_ack' then
+      begin
+        v_target_id := nullif(v_op ->> 'target_id', '')::uuid;
+      exception when others then
+        v_target_id := null;
+      end;
+    else
+      v_target_id := nullif(v_op ->> 'target_id', '')::uuid;
+    end if;
     v_client_ts  := nullif(v_op ->> 'client_created_at', '')::timestamptz;
 
     -- (b1) envelope shape validation. Malformed envelopes are returned rejected
@@ -827,7 +864,40 @@ begin
       continue;
     end if;
 
-    v_fingerprint := md5(v_op_type || '|' || v_payload::text);
+    -- (b1+) PSC-001D correction (F2/F3): CANONICAL TARGET IDENTITY for
+    -- order.void_ack, enforced BEFORE the fingerprint, the terminal-replay
+    -- lookup and the dispatch. The envelope MUST carry a parseable target_id
+    -- AND a parseable payload.order_id and they MUST be the same uuid — a
+    -- missing, malformed or CONTRADICTORY pair is a hostile/malformed
+    -- envelope: rejected with NO ledger row (the malformed-envelope
+    -- convention), so a replayed local_operation_id with a swapped target can
+    -- never reach the stored terminal result, mutate anything, or learn
+    -- anything about another order. Only this operation is affected.
+    if v_op_type = 'order.void_ack' then
+      v_ack_ok := v_target_id is not null;
+      begin
+        v_ack_order := nullif(v_payload ->> 'order_id', '')::uuid;
+      exception when others then
+        v_ack_order := null;
+      end;
+      if v_ack_order is null or not v_ack_ok or v_target_id <> v_ack_order then
+        v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type,
+          'ok', false, 'error', 'invalid_payload',
+          'detail', 'order.void_ack requires matching uuid target_id and payload.order_id',
+          'status', 'rejected', 'idempotency_replay', false);
+        continue;
+      end if;
+    end if;
+
+    -- PSC-001D correction (F2): the order.void_ack fingerprint BINDS the
+    -- canonical order target identity, so a terminal replay is valid only for
+    -- the same local_operation_id + operation + payload + TARGET. The 12
+    -- prior operations keep their exact existing fingerprint semantics.
+    if v_op_type = 'order.void_ack' then
+      v_fingerprint := md5(v_op_type || '|' || v_payload::text || '|' || v_target_id::text);
+    else
+      v_fingerprint := md5(v_op_type || '|' || v_payload::text);
+    end if;
 
     -- (b2) dedup / replay (transport identity = org + device + local_operation_id).
     select so.status, so.result, so.operation_type, so.payload_fingerprint
@@ -1056,12 +1126,12 @@ begin
           -- already-acknowledged replay; its flat typed refusals
           -- (invalid_device_type / permission_denied / order_not_voided /
           -- acknowledgement_not_required) RETURN through verbatim. TARGET-ID
-          -- CONSISTENCY: an envelope naming BOTH a target_id and a
-          -- payload.order_id must agree — a contradictory pair is a hostile/
-          -- malformed envelope and takes the hardened exception path (the
-          -- per-op subtransaction records it rejected). MONEY-FREE.
-          if v_target_id is not null
-             and v_target_id <> (v_payload ->> 'order_id')::uuid then
+          -- CONSISTENCY is enforced at (b1+) BEFORE the fingerprint and the
+          -- terminal replay — by the time this arm runs, target_id and
+          -- payload.order_id are guaranteed present, valid and equal. The
+          -- check below is pure defence-in-depth and unreachable. MONEY-FREE.
+          if v_target_id is null
+             or v_target_id <> (v_payload ->> 'order_id')::uuid then
             raise exception 'sync_push: order.void_ack target_id does not match payload.order_id' using errcode = '42501';
           end if;
           v_dispatch := app.kitchen_ack_void(
@@ -1135,7 +1205,7 @@ end;
 $$;
 
 comment on function app.sync_push(uuid, uuid, jsonb) is
-  'RF-056/RF-061 + ... + PILOT-OPERATIONS-CORRECTIONS-001 + PSC-001D (D-010/D-022) SECURITY DEFINER batch push. Faithful re-creation of the 20260720110000 body + ONE added dispatch branch: order.void_ack -> app.kitchen_ack_void (PIN session + KDS-class device + kitchen role set enforced inside; payload carries only order_id; a target_id that contradicts payload.order_id is a hostile envelope and takes the hardened exception path). All prior behaviour verbatim (batch cap, revoked-device recording, dedup/replay, dependency guard, per-op subtransactions, finalization, customer_name stamp, the 12 prior operations). Authorization INGEST-TIME; scope from the session, never the payload.';
+  'RF-056/RF-061 + ... + PILOT-OPERATIONS-CORRECTIONS-001 + PSC-001D (D-010/D-022) SECURITY DEFINER batch push. Faithful re-creation of the 20260720110000 body + ONE added dispatch branch: order.void_ack -> app.kitchen_ack_void (PIN session + KDS-class device + kitchen role set enforced inside; payload carries only order_id). ORDER.VOID_ACK IDENTITY HARDENING (independent-review corrections): the target uuid is parsed inside a PROTECTED per-operation boundary (a malformed target rejects only its own operation, never the batch); the envelope must carry a matching uuid target_id + payload.order_id (a missing/malformed/contradictory pair is a malformed envelope — rejected with NO ledger row, BEFORE the fingerprint and the terminal-replay lookup); and the operation''s fingerprint BINDS the canonical target identity, so a terminal replay is valid only for the same local_operation_id + type + payload + target. The 12 prior operations keep their exact parse/fingerprint semantics. All prior behaviour verbatim (batch cap, revoked-device recording, dedup/replay, dependency guard, per-op subtransactions, finalization, customer_name stamp). Authorization INGEST-TIME; scope from the session, never the payload.';
 
 -- ACL parity (CREATE OR REPLACE preserves grants; re-issued explicitly).
 revoke all on function app.sync_push(uuid, uuid, jsonb) from public;
