@@ -57,6 +57,19 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
   // safeguard is exactly the row an owner must notice, never a bare category).
   'order.void_acknowledged': AuditActionSpec(category: 'voids', hasTitle: true),
   'order.void_ack_denied': AuditActionSpec(category: 'voids', hasTitle: true),
+  // PSC-001C: service rounds — items added to an existing order and the
+  // round's own kitchen lifecycle. All four carry explicit titles (a denied
+  // addition or transition is exactly the row an owner must notice).
+  'order.items_added': AuditActionSpec(category: 'orders', hasTitle: true),
+  'order.items_add_denied': AuditActionSpec(category: 'orders', hasTitle: true),
+  'order.round_status_updated': AuditActionSpec(
+    category: 'orders',
+    hasTitle: true,
+  ),
+  'order.round_status_denied': AuditActionSpec(
+    category: 'orders',
+    hasTitle: true,
+  ),
   'order.discount_applied': AuditActionSpec(
     category: 'discounts',
     hasTitle: true,
