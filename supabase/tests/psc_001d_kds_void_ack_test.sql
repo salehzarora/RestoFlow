@@ -19,7 +19,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(53);
+select plan(76);
 
 -- ===== fixtures: Org A (1 POS + 2 KDS devices, 5 operators) + Org B (KDS mgr) =
 insert into organizations (id, name, slug, default_currency) values
@@ -115,6 +115,13 @@ create or replace function pg_temp.kack2(p_pin uuid, p_dev uuid, p_op text, p_pa
     'local_operation_id', p_op, 'operation_type', 'order.void_ack', 'target_entity', 'order',
     'target_id', p_target,
     'payload', jsonb_build_object('order_id', p_payload_order))));
+$$;
+-- Adversarial variant: RAW-TEXT payload.order_id (possibly malformed) + text target.
+create or replace function pg_temp.kack3(p_pin uuid, p_dev uuid, p_op text, p_payload_text text, p_target text) returns jsonb language sql as $$
+  select public.sync_push(p_pin, p_dev, jsonb_build_array(jsonb_build_object(
+    'local_operation_id', p_op, 'operation_type', 'order.void_ack', 'target_entity', 'order',
+    'target_id', p_target,
+    'payload', jsonb_build_object('order_id', p_payload_text))));
 $$;
 
 -- Orders o1..o8 (POS cashier submits; kitchen advances where needed).
@@ -421,6 +428,125 @@ select is((select status from orders where id = 'e0000000-0000-0000-0000-0000000
 select ok(
   not exists (select 1 from sync_operations where local_operation_id in ('ack-bad1', 'ack-bad2')),
   '53. F3: malformed void_ack envelopes leave NO ledger rows; no acknowledgement mutated');
+
+-- ===== (54-76) FINAL CORRECTION: revoked-device identity contract ============
+-- Revoke KDS-2's backing device session (d3). Its queued ops now go through the
+-- REVOKED-DEVICE branch of sync_push. 'ack-o4-dev2' was APPLIED from d3 BEFORE
+-- the revocation (test 28), so legitimate terminal replay must survive while a
+-- hostile/ambiguous identity must be rejected BEFORE fingerprint, replay,
+-- conflict comparison and any ledger write — revocation grants no ambiguity.
+update device_sessions set revoked_at = now(), is_active = false
+  where id = 'e0000000-0000-0000-0000-0000000000e3';
+
+-- (1) fresh VALID-identity request from the revoked device
+create temp table rk1 as
+  select pg_temp.kack('e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3',
+                      'rack-1', 'e0000000-0000-0000-0000-00000000a0d7') as r;
+select is((select r -> 'results' -> 0 ->> 'detail' from rk1), 'revoked_device',
+  '54. RV: a valid-identity ack from a revoked device keeps the normal revoked-device rejection');
+select is((select (r ->> 'device_revoked')::boolean from rk1), true,
+  '55. RV: the response still carries device_revoked=true');
+select ok(
+  (select status = 'rejected' and rejection_reason = 'revoked_device'
+     from sync_operations where local_operation_id = 'rack-1'),
+  '56. RV: the op is RECORDED in the ledger as rejected/revoked_device (offline queue not lost)');
+select ok(
+  (select kitchen_ack_at is null from orders where id = 'e0000000-0000-0000-0000-00000000a0d7'),
+  '57. RV: no order mutation from the revoked device');
+
+-- (2) EXACT replay: same id + type + payload + target -> stored terminal result
+select is(
+  (pg_temp.kack('e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3',
+                'rack-1', 'e0000000-0000-0000-0000-00000000a0d7') -> 'results' -> 0 ->> 'idempotency_replay')::boolean,
+  true, '58. RV: an EXACT replay still replays the stored terminal result');
+select ok(
+  (select status = 'rejected' and rejection_reason = 'revoked_device' and retry_count = 0
+     from sync_operations where local_operation_id = 'rack-1'),
+  '59. RV: the replay leaves the ledger row stable (no retry bump, no rewrite)');
+
+-- (3) CHANGED-TARGET terminal replay: same id + payload A, target B
+select is(
+  (pg_temp.kack2('e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3', 'rack-1',
+                 'e0000000-0000-0000-0000-00000000a0d7', 'e0000000-0000-0000-0000-00000000a0d4') -> 'results' -> 0 ->> 'error'),
+  'invalid_payload', '60. RV: a changed-target replay is rejected BEFORE terminal replay');
+select ok(
+  (select status = 'rejected' and rejection_reason = 'revoked_device' and retry_count = 0
+     from sync_operations where local_operation_id = 'rack-1'),
+  '61. RV: the original ledger row is untouched by the hostile replay');
+-- CHANGED-PAYLOAD identity: same id + original target, payload.order_id B
+select is(
+  (pg_temp.kack2('e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3', 'rack-1',
+                 'e0000000-0000-0000-0000-00000000a0d4', 'e0000000-0000-0000-0000-00000000a0d7') -> 'results' -> 0 ->> 'error'),
+  'invalid_payload', '62. RV: a changed-payload replay is rejected before terminal replay too');
+
+-- (3b) hostile changed-target replay of a PRE-REVOCATION APPLIED ack
+select is(
+  (pg_temp.kack2('e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3', 'ack-o4-dev2',
+                 'e0000000-0000-0000-0000-00000000a0d4', 'e0000000-0000-0000-0000-00000000a0d7') -> 'results' -> 0 ->> 'error'),
+  'invalid_payload', '63. RV: a swapped-target replay of a pre-revocation APPLIED ack never returns the stored result');
+select is(
+  (select status from sync_operations where local_operation_id = 'ack-o4-dev2'),
+  'applied', '64. RV: the stored applied ledger row is unchanged');
+select ok(
+  (select kitchen_ack_at is null from orders where id = 'e0000000-0000-0000-0000-00000000a0d7'),
+  '65. RV: the swapped-target order is untouched after all hostile replays');
+select is(
+  (select count(*)::int from audit_events where action = 'order.void_acknowledged'
+    and (new_values ->> 'order_id') = 'e0000000-0000-0000-0000-00000000a0d4'),
+  1, '66. RV: no additional acknowledgement success audit was written');
+
+-- (4) FRESH target/payload mismatch
+select is(
+  (pg_temp.kack2('e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3', 'rack-mm',
+                 'e0000000-0000-0000-0000-00000000a0d7', 'e0000000-0000-0000-0000-00000000a0d6') -> 'results' -> 0 ->> 'error'),
+  'invalid_payload', '67. RV: target A + payload B on a NEW op is a malformed envelope');
+select ok(
+  not exists (select 1 from sync_operations where local_operation_id = 'rack-mm'),
+  '68. RV: the fresh mismatch leaves NO ledger row');
+
+-- (5) malformed target_id
+select is(
+  (pg_temp.kack2('e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3', 'rack-badt',
+                 'e0000000-0000-0000-0000-00000000a0d7', 'not-a-uuid') -> 'results' -> 0 ->> 'error'),
+  'invalid_payload', '69. RV: a malformed target_id rejects only its own operation');
+select ok(
+  not exists (select 1 from sync_operations where local_operation_id = 'rack-badt'),
+  '70. RV: the malformed-target envelope leaves NO ledger row');
+
+-- (6) malformed payload.order_id
+select is(
+  (pg_temp.kack3('e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3', 'rack-badp',
+                 'not-a-uuid', 'e0000000-0000-0000-0000-00000000a0d7') -> 'results' -> 0 ->> 'error'),
+  'invalid_payload', '71. RV: a malformed payload.order_id rejects only its own operation');
+select ok(
+  not exists (select 1 from sync_operations where local_operation_id = 'rack-badp'),
+  '72. RV: the malformed-payload envelope leaves NO ledger row');
+
+-- (7) MIXED revoked-device batch: valid sibling first, malformed void_ack second
+create temp table rkmix as select public.sync_push(
+  'e0000000-0000-0000-0000-0000000ad007', 'e0000000-0000-0000-0000-0000000000d3',
+  jsonb_build_array(
+    jsonb_build_object('local_operation_id', 'rst-mix', 'operation_type', 'order.status', 'target_entity', 'order',
+      'payload', jsonb_build_object('order_id', 'e0000000-0000-0000-0000-00000000a0d6', 'new_status', 'ready')),
+    jsonb_build_object('local_operation_id', 'rack-mixbad', 'operation_type', 'order.void_ack', 'target_entity', 'order',
+      'target_id', 'still-not-a-uuid',
+      'payload', jsonb_build_object('order_id', 'e0000000-0000-0000-0000-00000000a0d1')))) as r;
+select ok(
+  (select r -> 'results' -> 0 ->> 'local_operation_id' = 'rst-mix'
+      and r -> 'results' -> 0 ->> 'detail' = 'revoked_device' from rkmix),
+  '73. RV: the valid sibling (a prior dispatch arm) gets its normal revoked-device result, in order');
+select ok(
+  (select status = 'rejected' and rejection_reason = 'revoked_device'
+     from sync_operations where local_operation_id = 'rst-mix'),
+  '74. RV: the valid sibling is still RECORDED in the ledger');
+select ok(
+  (select r -> 'results' -> 1 ->> 'local_operation_id' = 'rack-mixbad'
+      and r -> 'results' -> 1 ->> 'error' = 'invalid_payload' from rkmix),
+  '75. RV: the malformed void_ack rejects only itself — the batch is not aborted');
+select ok(
+  not exists (select 1 from sync_operations where local_operation_id = 'rack-mixbad')
+  and (select status = 'preparing' from orders where id = 'e0000000-0000-0000-0000-00000000a0d6'),
+  '76. RV: no ledger row for the malformed op and no mutation from the revoked device');
 
 select * from finish();
 rollback;
