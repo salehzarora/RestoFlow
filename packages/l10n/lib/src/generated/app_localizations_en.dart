@@ -158,6 +158,64 @@ class AppLocalizationsEn extends AppLocalizations {
       'Cancellation acknowledgement denied';
 
   @override
+  String get activityLogTitleItemsAdded => 'Items added to order';
+
+  @override
+  String get activityLogTitleItemsAddDenied => 'Adding items denied';
+
+  @override
+  String get activityLogTitleRoundStatusUpdated =>
+      'Service round status updated';
+
+  @override
+  String get activityLogTitleRoundStatusDenied => 'Round status change denied';
+
+  @override
+  String get activityLogFieldRoundNumber => 'Round number';
+
+  @override
+  String get activityLogFieldAddedItemCount => 'Added items';
+
+  @override
+  String get kdsAdditionLabel => 'Addition';
+
+  @override
+  String kdsRoundLabel(int number) {
+    return 'Round $number';
+  }
+
+  @override
+  String get posAddItemsAction => 'Add items';
+
+  @override
+  String posAddingToOrderBanner(String orderCode) {
+    return 'Adding to $orderCode';
+  }
+
+  @override
+  String get posSubmitAddition => 'Submit addition';
+
+  @override
+  String get posAdditionPending => 'Addition pending…';
+
+  @override
+  String get posAdditionApplied => 'Addition sent to the kitchen';
+
+  @override
+  String get posAdditionFailedRetry => 'Addition failed — tap to retry';
+
+  @override
+  String get posAddItemsIneligiblePaid => 'Paid orders can\'t take additions';
+
+  @override
+  String get posAddItemsIneligibleStatus =>
+      'This order can no longer take additions';
+
+  @override
+  String get posAddItemsIneligibleTakeaway =>
+      'Takeaway orders can\'t take additions';
+
+  @override
   String get activityLogTitleDiscountApplied => 'Discount applied';
 
   @override
