@@ -15,6 +15,7 @@ import 'state/kds_kitchen_print_controller.dart';
 import 'state/kds_printer_assignments.dart';
 import 'state/kds_session.dart';
 import 'state/kds_status_pusher.dart';
+import 'state/kds_void_ack_controller.dart';
 import 'widgets/device_settings_menu.dart';
 import 'widgets/kds_state_message.dart';
 import 'widgets/kds_ticket_card.dart' show KdsTicketPrintStatus;
@@ -100,6 +101,10 @@ class KdsSyncedHome extends ConsumerWidget {
         // Part D/F: the honest per-ticket kitchen print-job status, keyed by
         // order id so a ticket keeps its status across poll rebuilds.
         final printJobs = ref.watch(kdsKitchenPrintControllerProvider);
+        // PSC-001D: the per-order acknowledgement state for the red
+        // cancellation cards (pending until the authoritative pull clears the
+        // card; failed stays visible + retryable).
+        final ackState = ref.watch(kdsVoidAckControllerProvider);
         return KdsScreen(
           tickets: vs.tickets,
           allowRecall: false,
@@ -120,6 +125,18 @@ class KdsSyncedHome extends ConsumerWidget {
           // kitchen print pipeline — it creates no order and changes no status,
           // and preserves the native Wi-Fi/Bluetooth + Arabic/Hebrew raster path.
           onReprint: (ticket) => _retryPrint(ref, l10n, ticket),
+          // PSC-001D: acknowledge a pending cancellation — the server-
+          // authoritative order.void_ack through the existing sync path. The
+          // card stays until the authoritative pull returns kitchen_ack_at.
+          onAcknowledgeCancellation: (ticket) {
+            final orderId = ticket.orderId;
+            if (orderId == null) return;
+            ref
+                .read(kdsVoidAckControllerProvider.notifier)
+                .acknowledge(orderId);
+          },
+          ackPendingOrderIds: ackState.pending,
+          ackFailedOrderIds: ackState.failed,
           onAdvanced: pusher == null
               ? null
               : (ticket, to) async {

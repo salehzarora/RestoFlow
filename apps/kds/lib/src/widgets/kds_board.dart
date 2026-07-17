@@ -28,6 +28,10 @@ class KdsBoard extends StatelessWidget {
     this.onReprint,
     this.newArrivalIds = const <String>{},
     this.newArrivalWindow = const Duration(seconds: 60),
+    this.onAcknowledgeCancellation,
+    this.ackPendingOrderIds = const <String>{},
+    this.ackFailedOrderIds = const <String>{},
+    this.cancelledArrivalIds = const <String>{},
     super.key,
   });
 
@@ -53,19 +57,48 @@ class KdsBoard extends StatelessWidget {
   /// A2: how long the new-arrival glow runs before it self-stops.
   final Duration newArrivalWindow;
 
-  /// Buckets a status into its workflow column key.
-  static String _bucket(KitchenTicketStatus status) => switch (status) {
+  /// PSC-001D: acknowledge a pending cancellation card (LIVE board); null
+  /// (demo / bare tests) renders no acknowledgement action.
+  final void Function(KdsTicketView ticket)? onAcknowledgeCancellation;
+
+  /// PSC-001D: ORDER ids whose acknowledgement is currently in flight — the
+  /// card shows its honest pending state and blocks duplicate taps.
+  final Set<String> ackPendingOrderIds;
+
+  /// PSC-001D: ORDER ids whose last acknowledgement attempt failed — the card
+  /// stays visible with a localized failure line and remains retryable.
+  final Set<String> ackFailedOrderIds;
+
+  /// PSC-001D: ticket ids whose cancellation card just APPEARED — one finite,
+  /// reduce-motion-aware danger pulse (locked decision).
+  final Set<String> cancelledArrivalIds;
+
+  /// Buckets a ticket into its workflow column key.
+  ///
+  /// PSC-001D: a PENDING-ACKNOWLEDGEMENT cancellation stays in the WORKING
+  /// column where the kitchen last saw the order (locked placement:
+  /// submitted -> New, accepted/preparing -> Preparing, ready -> Ready; an
+  /// unknown source fails safe to New — up front, never hidden). Every other
+  /// cancelled ticket (demo/local) keeps today's Cleared bucket.
+  static String _bucket(KdsTicketView ticket) => switch (ticket.status) {
     KitchenTicketStatus.newTicket => 'new',
     KitchenTicketStatus.acknowledged ||
     KitchenTicketStatus.inPreparation => 'preparing',
     KitchenTicketStatus.ready => 'ready',
+    KitchenTicketStatus.cancelled when ticket.requiresAck =>
+      switch (ticket.voidedFromStatus) {
+        'submitted' => 'new',
+        'accepted' || 'preparing' => 'preparing',
+        'ready' => 'ready',
+        _ => 'new',
+      },
     KitchenTicketStatus.bumped || KitchenTicketStatus.cancelled => 'cleared',
   };
 
   List<_BoardColumn> _columns() {
     final byBucket = <String, List<KdsTicketView>>{};
     for (final ticket in tickets) {
-      (byBucket[_bucket(ticket.status)] ??= <KdsTicketView>[]).add(ticket);
+      (byBucket[_bucket(ticket)] ??= <KdsTicketView>[]).add(ticket);
     }
     // KDS-FIFO-001: within every status column, oldest submitted order first
     // (stable id tie-break) — the top card is the next ticket to handle. A
@@ -128,6 +161,10 @@ class KdsBoard extends StatelessWidget {
                         onReprint: onReprint,
                         newArrivalIds: newArrivalIds,
                         newArrivalWindow: newArrivalWindow,
+                        onAcknowledgeCancellation: onAcknowledgeCancellation,
+                        ackPendingOrderIds: ackPendingOrderIds,
+                        ackFailedOrderIds: ackFailedOrderIds,
+                        cancelledArrivalIds: cancelledArrivalIds,
                       ),
                     ),
                   ],
@@ -158,6 +195,10 @@ class KdsBoard extends StatelessWidget {
                         onReprint: onReprint,
                         newArrivalIds: newArrivalIds,
                         newArrivalWindow: newArrivalWindow,
+                        onAcknowledgeCancellation: onAcknowledgeCancellation,
+                        ackPendingOrderIds: ackPendingOrderIds,
+                        ackFailedOrderIds: ackFailedOrderIds,
+                        cancelledArrivalIds: cancelledArrivalIds,
                       ),
                     ),
                   ),
@@ -203,6 +244,19 @@ class KdsBoard extends StatelessWidget {
                         onRecall: onRecall == null
                             ? null
                             : () => onRecall!(ticket),
+                        onAcknowledgeCancellation:
+                            onAcknowledgeCancellation == null
+                            ? null
+                            : () => onAcknowledgeCancellation!(ticket),
+                        ackPending:
+                            ticket.orderId != null &&
+                            ackPendingOrderIds.contains(ticket.orderId),
+                        ackFailed:
+                            ticket.orderId != null &&
+                            ackFailedOrderIds.contains(ticket.orderId),
+                        highlightCancelled: cancelledArrivalIds.contains(
+                          ticket.kitchenTicketId,
+                        ),
                       ),
                   const SizedBox(height: RestoflowSpacing.md),
                 ],
@@ -225,6 +279,10 @@ class _StatusColumn extends StatelessWidget {
     this.onReprint,
     this.newArrivalIds = const <String>{},
     this.newArrivalWindow = const Duration(seconds: 60),
+    this.onAcknowledgeCancellation,
+    this.ackPendingOrderIds = const <String>{},
+    this.ackFailedOrderIds = const <String>{},
+    this.cancelledArrivalIds = const <String>{},
   });
 
   final _BoardColumn column;
@@ -239,6 +297,10 @@ class _StatusColumn extends StatelessWidget {
   final void Function(KdsTicketView ticket)? onReprint;
   final Set<String> newArrivalIds;
   final Duration newArrivalWindow;
+  final void Function(KdsTicketView ticket)? onAcknowledgeCancellation;
+  final Set<String> ackPendingOrderIds;
+  final Set<String> ackFailedOrderIds;
+  final Set<String> cancelledArrivalIds;
 
   @override
   Widget build(BuildContext context) {
@@ -278,6 +340,19 @@ class _StatusColumn extends StatelessWidget {
                         onRecall: onRecall == null
                             ? null
                             : () => onRecall!(ticket),
+                        onAcknowledgeCancellation:
+                            onAcknowledgeCancellation == null
+                            ? null
+                            : () => onAcknowledgeCancellation!(ticket),
+                        ackPending:
+                            ticket.orderId != null &&
+                            ackPendingOrderIds.contains(ticket.orderId),
+                        ackFailed:
+                            ticket.orderId != null &&
+                            ackFailedOrderIds.contains(ticket.orderId),
+                        highlightCancelled: cancelledArrivalIds.contains(
+                          ticket.kitchenTicketId,
+                        ),
                       ),
                   ],
                 ),

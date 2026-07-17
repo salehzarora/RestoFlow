@@ -53,13 +53,29 @@ class KdsTicketMapper {
     // Active orders: not tombstoned, kitchen-relevant status. An EXPLICIT
     // money-free pluck per order (status, type, table, notes) — never the raw
     // row (T-003: money keys exist on the wire for non-kitchen roles).
+    //
+    // PSC-001D: a VOIDED order the kitchen must still acknowledge is the ONE
+    // deliberate exception to the active-status filter — it stays on the board
+    // as a red cancellation card until app.kitchen_ack_void clears it
+    // (server-authoritative: voided + kitchen_ack_required + no kitchen_ack_at
+    // yet). An acknowledged void, a served-source void (no acknowledgement
+    // required) and every historical/ordinary voided or cancelled order remain
+    // EXCLUDED exactly as before.
     final orderInfo = <String, _OrderInfo>{};
+    final pendingAckOrders = <String>{};
     for (final o in orders) {
       if (o['deleted_at'] != null) continue;
       final id = o['id'];
       final status = o['status'];
       if (id is! String || status is! String) continue;
-      if (!_activeOrderStatuses.contains(status)) continue;
+      final isPendingAckVoid =
+          status == 'voided' &&
+          o['kitchen_ack_required'] == true &&
+          o['kitchen_ack_at'] == null;
+      if (!_activeOrderStatuses.contains(status) && !isPendingAckVoid) {
+        continue;
+      }
+      if (isPendingAckVoid) pendingAckOrders.add(id);
       final tableId = o['table_id'];
       final orderType = o['order_type'];
       final notes = o['notes'];
@@ -67,6 +83,10 @@ class KdsTicketMapper {
       // trimmed + empty->null). Present on the kitchen wire row because
       // app.redact_money only strips *_minor/receipt keys, not this display text.
       final customerName = o['customer_name'];
+      // PSC-001D: the cancellation card's honest void time + source state —
+      // money-free scalar plucks, present only on a pending-ack void.
+      final voidedAtRaw = o['voided_at'];
+      final voidedFromRaw = o['voided_from_status'];
       orderInfo[id] = _OrderInfo(
         status: status,
         orderType: orderType is String ? orderType : null,
@@ -81,6 +101,12 @@ class KdsTicketMapper {
         // age); `client_created_at` is the offline-client fallback. Still a
         // money-free pluck — timestamps only.
         submittedAt: _parseTimestamp(o['created_at'], o['client_created_at']),
+        voidedAt: isPendingAckVoid && voidedAtRaw is String
+            ? DateTime.tryParse(voidedAtRaw)
+            : null,
+        voidedFromStatus: isPendingAckVoid && voidedFromRaw is String
+            ? voidedFromRaw
+            : null,
       );
     }
 
@@ -127,8 +153,16 @@ class KdsTicketMapper {
       if (itemId is! String || orderId is! String) continue;
       final info = orderInfo[orderId];
       if (info == null) continue; // parent not active
+      // PSC-001D: the pending-ack CANCELLATION card deliberately keeps its
+      // (now voided) items visible — the kitchen must see WHAT was canceled.
+      // The bypass is scoped to exactly that card; every normal ticket keeps
+      // the exclusion, so ordinary voided/cancelled/served items never leak
+      // back onto working cards.
+      final pendingAck = pendingAckOrders.contains(orderId);
       final itemStatus = it['status'];
-      if (itemStatus is String && _excludedItemStatuses.contains(itemStatus)) {
+      if (!pendingAck &&
+          itemStatus is String &&
+          _excludedItemStatuses.contains(itemStatus)) {
         continue;
       }
       final stationRaw = it['station_id'];
@@ -153,7 +187,11 @@ class KdsTicketMapper {
           kitchenTicketId: key,
           stationId: station,
           orderId: orderId,
-          status: _ticketStatusFor(info.status),
+          // PSC-001D: a pending-ack void renders as the CANCELLED ticket (red
+          // card, acknowledge-only); normal orders keep the status projection.
+          status: pendingAck
+              ? KitchenTicketStatus.cancelled
+              : _ticketStatusFor(info.status),
           info: info,
         ),
       );
@@ -169,7 +207,9 @@ class KdsTicketMapper {
       );
       // KDS-ALERTS-AND-KITCHEN-COUNTS-002: accumulate this item's counted-resource
       // contributions for the whole order — factor = the ordered item quantity.
-      if (quantity > 0) {
+      // PSC-001D: a cancellation card needs no cook-prep totals (nothing is
+      // being prepared any more), so pending-ack orders contribute none.
+      if (!pendingAck && quantity > 0) {
         final contribs = countContribsByOrder[orderId] ??=
             <KitchenCountContribution>[];
         // Per-OPTION counts (already × modifier units): label = the resource the
@@ -227,6 +267,10 @@ class KdsTicketMapper {
                 // count totals (patties + buns + …) shown at the top. Money-free.
                 kitchenCounts:
                     kitchenCountsByOrder[b.orderId] ?? const <KitchenCount>[],
+                // PSC-001D: cancellation provenance for the red card (null on
+                // every normal ticket).
+                voidedAt: b.info.voidedAt,
+                voidedFromStatus: b.info.voidedFromStatus,
               ),
             )
             .toList()
@@ -296,6 +340,8 @@ class _OrderInfo {
     required this.notes,
     required this.customerName,
     required this.submittedAt,
+    this.voidedAt,
+    this.voidedFromStatus,
   });
 
   final String status;
@@ -304,4 +350,8 @@ class _OrderInfo {
   final String? notes;
   final String? customerName;
   final DateTime? submittedAt;
+
+  /// PSC-001D: set ONLY for a pending-acknowledgement void (the red card).
+  final DateTime? voidedAt;
+  final String? voidedFromStatus;
 }
