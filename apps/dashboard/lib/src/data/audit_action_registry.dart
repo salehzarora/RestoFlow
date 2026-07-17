@@ -52,6 +52,11 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
   'order.status_update_denied': AuditActionSpec(category: 'orders'),
   'order.voided': AuditActionSpec(category: 'voids', hasTitle: true),
   'order.void_denied': AuditActionSpec(category: 'voids'),
+  // PSC-001D: the kitchen's explicit cancellation acknowledgement. BOTH carry a
+  // specific title (the denial too — a refused acknowledgement of a safety
+  // safeguard is exactly the row an owner must notice, never a bare category).
+  'order.void_acknowledged': AuditActionSpec(category: 'voids', hasTitle: true),
+  'order.void_ack_denied': AuditActionSpec(category: 'voids', hasTitle: true),
   'order.discount_applied': AuditActionSpec(
     category: 'discounts',
     hasTitle: true,
