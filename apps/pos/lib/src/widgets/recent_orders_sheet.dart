@@ -10,14 +10,18 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/order_actions.dart';
 import '../data/order_center_view.dart';
+import '../data/order_detail_repository.dart';
 import '../data/order_identity.dart';
 import '../data/order_reconciler.dart' show unpaidOrderCount;
 import '../data/order_snapshot.dart';
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
+import '../data/payment.dart' show CashPayment;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
+import '../state/addition_controller.dart';
 import '../state/discount_controller.dart';
+import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import '../state/draft_recovery_controller.dart';
 import '../state/order_sync_controller.dart';
 import '../state/outbox_controller.dart';
@@ -154,6 +158,15 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
       for (final e in entries)
         if (e.syncState.isPending) _entryIdentity(e).key: PosPendingKind.submit,
     };
+    // PSC-001C: an addition THIS DEVICE has in flight (or failed-retryable)
+    // for an order withdraws that order's other controls, exactly like any
+    // other pending local operation. Keyed by the server order id — an
+    // addition only ever targets a real server order.
+    final addition = ref.watch(additionControllerProvider);
+    final additionTarget = addition.target;
+    if (additionTarget != null && (addition.sending || addition.failed)) {
+      pendingByIdentity[additionTarget.orderId] = PosPendingKind.itemsAdd;
+    }
 
     final counts = sectionCounts(orders);
     final visible = viewOrders(
@@ -984,6 +997,22 @@ class _ActionRow extends ConsumerWidget {
       );
     }
 
+    // PSC-001C: extend an eligible dine-in order with a NEW service round. The
+    // authoritative existing items load first (pos_order_detail) so the cart
+    // enters addition mode showing server truth — never a local guess.
+    if (actions.canAddItems) {
+      children.add(
+        _ActionButton(
+          child: OutlinedButton.icon(
+            key: Key('recent-add-items-${order.orderNumber}'),
+            onPressed: () => _startAddition(context, ref),
+            icon: const Icon(Icons.playlist_add, size: 18),
+            label: Text(l10n.posAddItemsAction),
+          ),
+        ),
+      );
+    }
+
     if (actions.canOpenReceipt) {
       children.add(
         _ActionButton(
@@ -999,11 +1028,7 @@ class _ActionRow extends ConsumerWidget {
         _ActionButton(
           child: TextButton.icon(
             key: Key('recent-view-${order.orderNumber}'),
-            onPressed: () => ReceiptPrintPreview.show(
-              context,
-              order: order.order!,
-              payment: order.payment!,
-            ),
+            onPressed: () => _viewReceipt(context, ref),
             icon: const Icon(Icons.visibility_outlined, size: 18),
             label: Text(l10n.receiptPreviewTitle),
           ),
@@ -1020,12 +1045,72 @@ class _ActionRow extends ConsumerWidget {
     );
   }
 
-  /// Reprints the STORED receipt. It needs the ORDER-TIME lines, which only a
-  /// device-owned order has — the eligibility policy already refuses it otherwise.
+  /// PSC-001C: enters ADDITION MODE for this order — loads the authoritative
+  /// detail, hands it to the addition controller, and closes the sheet so the
+  /// cashier lands on the menu with the "Adding to #CODE" cart banner.
+  Future<void> _startAddition(BuildContext context, WidgetRef ref) async {
+    final orderId = order.orderId;
+    if (orderId == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final PosOrderDetail detail;
+    try {
+      detail = await ref.read(orderDetailRepositoryProvider).fetch(orderId);
+    } on PosOrderDetailException {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posAdditionFailedRetry)),
+      );
+      return;
+    }
+    ref.read(additionControllerProvider.notifier).enter(detail);
+    if (navigator.canPop()) navigator.pop();
+  }
+
+  /// The COMBINED order view + payment for receipt surfaces: the local
+  /// order-time lines when this device owns them AND the order has no rounds;
+  /// otherwise the AUTHORITATIVE server detail (PSC-001C) — which is also what
+  /// lets a DIFFERENT POS device rebuild the complete receipt.
+  Future<(SubmittedOrderView, CashPayment)?> _receiptSource(
+    WidgetRef ref,
+  ) async {
+    final localView = order.order;
+    final localPayment = order.payment;
+    final orderId = order.orderId;
+    if (orderId != null) {
+      try {
+        final detail = await ref
+            .read(orderDetailRepositoryProvider)
+            .fetch(orderId);
+        final payment = cashPaymentFromDetail(detail) ?? localPayment;
+        if (payment != null) {
+          return (submittedOrderViewFromDetail(detail), payment);
+        }
+      } on PosOrderDetailException {
+        // fall through to the local order-time lines below
+      }
+    }
+    if (localView != null && localPayment != null) {
+      return (localView, localPayment);
+    }
+    return null;
+  }
+
+  Future<void> _viewReceipt(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final source = await _receiptSource(ref);
+    if (source == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posAdditionFailedRetry)),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    ReceiptPrintPreview.show(context, order: source.$1, payment: source.$2);
+  }
+
+  /// Reprints the receipt from the COMBINED authoritative source (server
+  /// detail first, local order-time lines as the offline fallback).
   Future<void> _reprint(BuildContext context, WidgetRef ref) async {
-    final payment = order.payment;
-    final view = order.order;
-    if (payment == null || view == null) return;
     final messenger = ScaffoldMessenger.of(context);
     final bridge = ref.read(posActivePrintBridgeProvider);
     if (bridge == null) {
@@ -1034,8 +1119,20 @@ class _ActionRow extends ConsumerWidget {
       );
       return;
     }
+    final source = await _receiptSource(ref);
+    if (source == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posAdditionFailedRetry)),
+      );
+      return;
+    }
     final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
-    final document = buildReceiptDocument(l10n, view, payment, isDemo: isDemo);
+    final document = buildReceiptDocument(
+      l10n,
+      source.$1,
+      source.$2,
+      isDemo: isDemo,
+    );
     await ref
         .read(receiptPrintControllerProvider.notifier)
         .reprint(
@@ -1082,6 +1179,8 @@ String _pendingLabel(AppLocalizations l10n, PosPendingKind k) => switch (k) {
   PosPendingKind.payment => l10n.posOrdersPendingPayment,
   PosPendingKind.discount => l10n.posOrdersPendingDiscount,
   PosPendingKind.cancellation => l10n.posOrdersPendingCancellation,
+  // PSC-001C: an addition in flight for this order from THIS device.
+  PosPendingKind.itemsAdd => l10n.posAdditionPending,
 };
 
 String _hhmm(DateTime dt) {

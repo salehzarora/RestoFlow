@@ -12,6 +12,7 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../format/tax_math.dart';
 import '../pos_palette.dart';
+import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
 import '../state/order_setup_controller.dart';
@@ -116,7 +117,15 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
         },
       );
     } else {
-      final canSend = !cart.isEmpty && setup.isReadyToSubmit && !_submitting;
+      // PSC-001C: ADDITION MODE — the cart's lines are a pending addition to
+      // an EXISTING order. The parent already owns its type/table, so the
+      // order-setup gate does not apply; the banner below names the target.
+      final addition = ref.watch(additionControllerProvider);
+      final canSend =
+          !cart.isEmpty &&
+          (addition.active || setup.isReadyToSubmit) &&
+          !_submitting &&
+          !addition.sending;
       final pendingSync = ref
           .watch(outboxControllerProvider)
           .where((e) => e.syncState.isPending)
@@ -143,7 +152,20 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
               onClear: cart.isEmpty ? null : controller.clear,
             ),
             const Divider(height: 1),
-            const OrderSetupSection(),
+            // PSC-001C: while ADDING to an existing order the setup section
+            // (type/table) is replaced by the target banner — the parent
+            // order's context is fixed and must stay visible.
+            if (addition.active)
+              _AdditionBanner(
+                l10n: l10n,
+                orderCode: addition.target!.orderCode,
+                tableLabel: addition.target!.tableLabel,
+                failed: addition.failed,
+                onCancel: () =>
+                    ref.read(additionControllerProvider.notifier).exit(),
+              )
+            else
+              const OrderSetupSection(),
             const Divider(height: 1),
             Expanded(
               child: cart.isEmpty
@@ -186,7 +208,13 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
               currencyCode: cart.currencyCode,
               orderType: setup.orderType,
               tableLabel: setup.assignedTable?.label,
-              showNeedsTableHint: cart.isNotEmpty && setup.needsTableWarning,
+              showNeedsTableHint:
+                  cart.isNotEmpty &&
+                  setup.needsTableWarning &&
+                  !addition.active,
+              sendLabelOverride: addition.active
+                  ? l10n.posSubmitAddition
+                  : null,
               // POS-SUBMIT-GUARD-001: the spinner + disabled state while a submit
               // is in flight.
               submitting: _submitting,
@@ -317,6 +345,27 @@ Future<void> submitOrderFromCart({
   int taxRateBp = 0,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
+  // PSC-001C: ADDITION MODE routes the SAME send action to one
+  // `order.items_add` operation for the target order — the original items are
+  // never re-sent, a failure keeps the pending lines local + retryable, and
+  // the cart clears only after the server applied the addition (inside the
+  // controller, together with the authoritative refresh).
+  final additionState = ref.read(additionControllerProvider);
+  if (additionState.active) {
+    final result = await ref
+        .read(additionControllerProvider.notifier)
+        .submit(cart.lines);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.applied
+              ? l10n.posAdditionApplied
+              : l10n.posAdditionFailedRetry,
+        ),
+      ),
+    );
+    return;
+  }
   final outbox = ref.read(outboxControllerProvider.notifier);
   // Captured BEFORE the await: the widget's ref dies with the tree (an unpair
   // unmounts the POS), but the container and the notifiers it owns do not.
@@ -1034,6 +1083,69 @@ class _SelectionSummary extends StatelessWidget {
   }
 }
 
+/// PSC-001C: the ADDITION-MODE banner — names the order being extended (and
+/// its table), surfaces an honest retryable failure line, and offers Cancel
+/// (which leaves the pending lines in the cart; discarding work is the
+/// cashier's explicit choice via the cart's own Clear).
+class _AdditionBanner extends StatelessWidget {
+  const _AdditionBanner({
+    required this.l10n,
+    required this.orderCode,
+    required this.tableLabel,
+    required this.failed,
+    required this.onCancel,
+  });
+
+  final AppLocalizations l10n;
+  final String orderCode;
+  final String? tableLabel;
+  final bool failed;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tone = failed ? RestoflowTone.danger : RestoflowTone.info;
+    final style = tone.styleOf(theme);
+    final table = tableLabel;
+    return Container(
+      key: const Key('pos-addition-banner'),
+      width: double.infinity,
+      color: style.container,
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.md,
+        vertical: RestoflowSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.playlist_add, size: 18, color: style.accent),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            child: Text(
+              failed
+                  ? l10n.posAdditionFailedRetry
+                  : table != null
+                  ? '${l10n.posAddingToOrderBanner(orderCode)} · ${l10n.posTableLabel} $table'
+                  : l10n.posAddingToOrderBanner(orderCode),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: style.accent,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          TextButton(
+            key: const Key('pos-addition-cancel'),
+            onPressed: onCancel,
+            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CartFooter extends StatelessWidget {
   const _CartFooter({
     required this.l10n,
@@ -1046,7 +1158,12 @@ class _CartFooter extends StatelessWidget {
     required this.onSend,
     this.showNeedsTableHint = false,
     this.submitting = false,
+    this.sendLabelOverride,
   });
+
+  /// PSC-001C: addition mode relabels the send button ("Submit addition") —
+  /// the same handler routes to `order.items_add` instead of a new order.
+  final String? sendLabelOverride;
 
   final AppLocalizations l10n;
   final int subtotalMinor;
@@ -1151,7 +1268,7 @@ class _CartFooter extends StatelessWidget {
                   icon: submitting
                       ? RestoflowInlineSpinner(color: theme.colorScheme.primary)
                       : const Icon(Icons.send),
-                  label: Text(l10n.posSendOrder),
+                  label: Text(sendLabelOverride ?? l10n.posSendOrder),
                   style: RestoflowButtonStyles.big(context),
                 ),
               ),
