@@ -179,12 +179,15 @@ class KdsTicketMapper {
 
     // Group active items into (order, station) tickets.
     final grouped = <String, _TicketBuilder>{};
-    // KDS-ALERTS-AND-KITCHEN-COUNTS-002: WHOLE-ORDER count contributions keyed by
-    // order id, unified across BOTH the modifier-option counts (patties, …) AND
-    // the item-base counts (buns, …). Aggregated across ALL of an order's items
-    // (not per station) so the top-of-ticket summary is the total the kitchen
-    // needs for the whole order. Money-free; only explicit owner config feeds it.
-    final countContribsByOrder = <String, List<KitchenCountContribution>>{};
+    // KDS-ALERTS-AND-KITCHEN-COUNTS-002 + PSC-001C correction (Finding 3):
+    // count contributions are keyed by the WORK UNIT — the initial submission
+    // (order, NO round) or one service round (order, round) — unified across
+    // BOTH the modifier-option counts (patties, …) AND the item-base counts
+    // (buns, …). Still aggregated across ALL of the work unit's STATIONS (the
+    // top-of-ticket summary is the total that unit needs), but NEVER across
+    // work units: a Round-2 ticket must not display the original order's
+    // counts as if they were new work. Money-free; owner config only.
+    final countContribsByWorkUnit = <String, List<KitchenCountContribution>>{};
     for (final it in orderItems) {
       if (it['deleted_at'] != null) continue;
       final itemId = it['id'];
@@ -266,12 +269,15 @@ class KdsTicketMapper {
         ),
       );
       // KDS-ALERTS-AND-KITCHEN-COUNTS-002: accumulate this item's counted-resource
-      // contributions for the whole order — factor = the ordered item quantity.
+      // contributions for its OWN WORK UNIT (PSC-001C Finding 3: keyed by
+      // order + round, so a round ticket never inherits the original order's
+      // counts) — factor = the ordered item quantity.
       // PSC-001D: a cancellation card needs no cook-prep totals (nothing is
       // being prepared any more), so pending-ack orders contribute none.
       if (!pendingAck && quantity > 0) {
-        final contribs = countContribsByOrder[orderId] ??=
-            <KitchenCountContribution>[];
+        final contribs =
+            countContribsByWorkUnit['$orderId|${roundId ?? ''}'] ??=
+                <KitchenCountContribution>[];
         // Per-OPTION counts (already × modifier units): label = the resource the
         // owner typed as the option's count unit (e.g. "قطع لحم").
         final itemMeat = meatByItem[itemId];
@@ -300,10 +306,11 @@ class KdsTicketMapper {
       }
     }
 
-    // KDS-ALERTS-AND-KITCHEN-COUNTS-002: the whole-order count totals per order
-    // (grouped by resource label), attached to every ticket of that order below.
-    final kitchenCountsByOrder = <String, List<KitchenCount>>{
-      for (final entry in countContribsByOrder.entries)
+    // KDS-ALERTS-AND-KITCHEN-COUNTS-002 + PSC-001C Finding 3: the count totals
+    // per WORK UNIT (grouped by resource label), attached below to every
+    // STATION ticket of that unit — and only that unit.
+    final kitchenCountsByWorkUnit = <String, List<KitchenCount>>{
+      for (final entry in countContribsByWorkUnit.entries)
         entry.key: aggregateKitchenCounts(entry.value),
     };
 
@@ -325,10 +332,12 @@ class KdsTicketMapper {
                 // PSC-001C: a round ticket's honest FIFO/elapsed anchor is the
                 // ROUND's own submission time, not the parent order's.
                 submittedAt: b.round?.submittedAt ?? b.info.submittedAt,
-                // KDS-ALERTS-AND-KITCHEN-COUNTS-002: the unified whole-order
-                // count totals (patties + buns + …) shown at the top. Money-free.
+                // KDS-ALERTS-AND-KITCHEN-COUNTS-002 + PSC-001C Finding 3: the
+                // unified count totals of THIS ticket's own work unit
+                // (patties + buns + …) shown at the top. Money-free.
                 kitchenCounts:
-                    kitchenCountsByOrder[b.orderId] ?? const <KitchenCount>[],
+                    kitchenCountsByWorkUnit['${b.orderId}|${b.roundId ?? ''}'] ??
+                    const <KitchenCount>[],
                 // PSC-001D: cancellation provenance for the red card (null on
                 // every normal ticket).
                 voidedAt: b.info.voidedAt,
