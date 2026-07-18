@@ -13,6 +13,7 @@ import '../data/order_submission.dart';
 import '../data/payment.dart' show CashPayment;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
+import '../state/cart_controller.dart' show cartControllerProvider;
 import '../format/payment_method_label.dart';
 import '../print/native_print_bridges.dart';
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
@@ -79,6 +80,11 @@ class OrderConfirmation extends ConsumerWidget {
       return (r != null && r.binding.matches(binding)) ? r : null;
     }();
     final canRestoreDraft = isRejectedDraft && recovery != null;
+    // Cart-safety (final): while a frozen addition attempt owns the cart the
+    // Restore action is DISABLED — the coordinator refuses it regardless.
+    final cartLocked = ref.watch(
+      cartControllerProvider.select((c) => c.lockedByAddition),
+    );
     // Finding 3: clearing an accepted recovery now lives in the recovery CONTROLLER
     // (it watches the outbox), so an applied order clears its recovery even if this
     // confirmation is never opened / is unmounted / the app navigated away. No widget
@@ -395,17 +401,22 @@ class OrderConfirmation extends ConsumerWidget {
                               // (restoreDraft dismisses this confirmation); if a cart is
                               // present it enforces the Replace / Keep-current / Cancel
                               // decision — identically to the Recent Orders entry point.
-                              onPressed: () async {
-                                final outcome = await PosRecoveryCoordinator(
-                                  ref,
-                                ).restore(context, recovery);
-                                // Keep-current retired the shell but left the cart; the
-                                // confirmation still shows the (retired) order, so
-                                // dismiss it to that kept cart.
-                                if (outcome == PosRecoveryOutcome.keptCurrent) {
-                                  onNewOrder();
-                                }
-                              },
+                              onPressed: cartLocked
+                                  ? null
+                                  : () async {
+                                      final outcome =
+                                          await PosRecoveryCoordinator(
+                                            ref,
+                                          ).restore(context, recovery);
+                                      // Keep-current retired the shell but left the
+                                      // cart; the confirmation still shows the
+                                      // (retired) order, so dismiss it to that kept
+                                      // cart. A locked-cart refusal changes nothing.
+                                      if (outcome ==
+                                          PosRecoveryOutcome.keptCurrent) {
+                                        onNewOrder();
+                                      }
+                                    },
                               icon: const Icon(Icons.edit_outlined),
                               label: Text(l10n.posRecoveryBackToCart),
                               style: RestoflowButtonStyles.big(context),

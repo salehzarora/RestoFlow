@@ -63,7 +63,12 @@ class MenuItemCard extends StatelessWidget {
   });
 
   final DemoMenuItem item;
-  final VoidCallback onAdd;
+
+  /// The add gesture. Null = adding is DISABLED (PSC-001C cart-safety: a
+  /// frozen addition attempt owns the cart) — the tap gate closes and the add
+  /// button renders disabled, exactly like the unavailable gate but without
+  /// the sold-out/paused labeling (the cart banner explains the state).
+  final VoidCallback? onAdd;
 
   /// PILOT-OPERATIONS-CORRECTIONS-001: a DELIBERATE (long-press) availability
   /// management action, shown ONLY to an operator with `manage_menu_availability`.
@@ -208,7 +213,8 @@ class MenuItemCard extends StatelessWidget {
                         ),
                         if (!unavailable) ...[
                           const SizedBox(width: RestoflowSpacing.sm),
-                          // The canonical add gesture: a 44px filled green button.
+                          // The canonical add gesture: a 44px filled green
+                          // button (disabled while the cart is locked).
                           _AddButton(onAdd: onAdd, tooltip: l10n.posAddToCart),
                         ],
                       ],
@@ -411,7 +417,7 @@ class _OptionsIndicator extends StatelessWidget {
 class _AddButton extends StatelessWidget {
   const _AddButton({required this.onAdd, required this.tooltip});
 
-  final VoidCallback onAdd;
+  final VoidCallback? onAdd;
   final String tooltip;
 
   @override

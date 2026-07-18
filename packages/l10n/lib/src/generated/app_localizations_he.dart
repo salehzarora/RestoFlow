@@ -153,6 +153,73 @@ class AppLocalizationsHe extends AppLocalizations {
   String get activityLogTitleVoidAckDenied => 'אישור הצפייה בביטול נדחה';
 
   @override
+  String get activityLogTitleItemsAdded => 'פריטים נוספו להזמנה';
+
+  @override
+  String get activityLogTitleItemsAddDenied => 'הוספת פריטים נדחתה';
+
+  @override
+  String get activityLogTitleRoundStatusUpdated => 'סטטוס סבב ההגשה עודכן';
+
+  @override
+  String get activityLogTitleRoundStatusDenied => 'שינוי סטטוס הסבב נדחה';
+
+  @override
+  String get activityLogFieldRoundNumber => 'מספר סבב';
+
+  @override
+  String get activityLogFieldAddedItemCount => 'פריטים שנוספו';
+
+  @override
+  String get kdsAdditionLabel => 'תוספת';
+
+  @override
+  String kdsRoundLabel(int number) {
+    return 'סבב $number';
+  }
+
+  @override
+  String get posAddItemsAction => 'הוספת פריטים';
+
+  @override
+  String posAddingToOrderBanner(String orderCode) {
+    return 'מוסיפים אל $orderCode';
+  }
+
+  @override
+  String get posSubmitAddition => 'שליחת התוספת';
+
+  @override
+  String get posAdditionPending => 'התוספת בשליחה…';
+
+  @override
+  String get posAdditionApplied => 'התוספת נשלחה למטבח';
+
+  @override
+  String get posAdditionClearCartFirst =>
+      'סיימו או בטלו את הסל הנוכחי לפני הוספה להזמנה אחרת';
+
+  @override
+  String get posAdditionFailedRetry => 'התוספת נכשלה — הקישו לניסיון חוזר';
+
+  @override
+  String get posAdditionSavedRefreshNeeded =>
+      'הפריטים נוספו ונשמרו — תצוגת ההזמנה לא התרעננה. הקישו על רענון לסיום.';
+
+  @override
+  String get posReceiptUnavailableRetry =>
+      'לא ניתן לטעון את קבלת ההזמנה — בדקו את החיבור ונסו שוב.';
+
+  @override
+  String get posAddItemsIneligiblePaid => 'אי אפשר להוסיף להזמנה ששולמה';
+
+  @override
+  String get posAddItemsIneligibleStatus => 'אי אפשר עוד להוסיף להזמנה הזו';
+
+  @override
+  String get posAddItemsIneligibleTakeaway => 'אי אפשר להוסיף להזמנות איסוף';
+
+  @override
   String get activityLogTitleDiscountApplied => 'הנחה הוחלה';
 
   @override

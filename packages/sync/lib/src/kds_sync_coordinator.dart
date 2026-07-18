@@ -16,6 +16,10 @@ const List<String> kKdsPullEntities = [
   'orders',
   'order_items',
   'order_item_modifiers',
+  // PSC-001C: additional service rounds ("Addition / Round N") — money-free by
+  // schema; the KDS renders each active round as its own ticket with the
+  // round's OWN status.
+  'order_service_rounds',
   'tables',
 ];
 

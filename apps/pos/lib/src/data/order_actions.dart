@@ -29,6 +29,7 @@ class PosOrderActions {
     required this.canMoveTable,
     required this.canOpenReceipt,
     required this.pendingKind,
+    this.canAddItems = false,
   });
 
   final bool canPay;
@@ -50,6 +51,12 @@ class PosOrderActions {
   /// exists. A discovered order has no lines — printing one would be a forgery.
   final bool canOpenReceipt;
 
+  /// PSC-001C: new items may be added to this order as an authoritative
+  /// SERVICE ROUND — an ACTIVE (non-terminal) DINE-IN server order that has
+  /// not been charged yet. The server enforces every rule again
+  /// (order_not_dine_in / order_not_eligible / order_already_settled).
+  final bool canAddItems;
+
   /// The local operation this device has in flight for the order, if any. It is
   /// reported SEPARATELY from the lifecycle status, because "my payment is syncing"
   /// is a fact about this till, not about the order.
@@ -59,11 +66,16 @@ class PosOrderActions {
 
   /// True when nothing at all can be offered — the row shows no trailing actions.
   bool get isEmpty =>
-      !canPay && !canDiscount && !canVoid && !canMoveTable && !canOpenReceipt;
+      !canPay &&
+      !canDiscount &&
+      !canVoid &&
+      !canMoveTable &&
+      !canOpenReceipt &&
+      !canAddItems;
 }
 
 /// The local mutation this device currently has queued/in flight for an order.
-enum PosPendingKind { submit, payment, discount, cancellation }
+enum PosPendingKind { submit, payment, discount, cancellation, itemsAdd }
 
 /// Decides what may be offered for [order].
 ///
@@ -176,6 +188,26 @@ PosOrderActions resolveOrderActions(
   final canMoveTable =
       !terminal && order.orderType == OrderType.dineIn && pending == null;
 
+  // ADD ITEMS (PSC-001C). New work joins the SAME bill as a service round —
+  // dine-in only (locked; takeaway is out of scope), never on a terminal
+  // order, FROZEN once the order has been charged (the same freeze that
+  // guards discounts: a charged bill's total must keep matching its numbered
+  // receipt), and withheld while THIS device has any operation in flight for
+  // the order (a stale expected state helps nobody). A comped-to-zero UNPAID
+  // order stays eligible — the addition simply makes it chargeable again.
+  //
+  // "Charged" here spans BOTH channels: this device's own payment MARKER and
+  // the SERVER's settlement verdict — a branch-DISCOVERED paid order has no
+  // local payment row, and its snapshot saying `paid` is exactly the server
+  // telling us the freeze applies (offering the button would offer a control
+  // the server refuses with order_already_settled).
+  final chargedPerServer = alreadyCharged || settlement == PosSettlement.paid;
+  final canAddItems =
+      !terminal &&
+      order.orderType == OrderType.dineIn &&
+      !chargedPerServer &&
+      pending == null;
+
   return PosOrderActions(
     canPay: canPay,
     canDiscount: canDiscount,
@@ -185,7 +217,16 @@ PosOrderActions resolveOrderActions(
     // Reprint stays available for a real receipt even on a terminal order — reading
     // a receipt is not a mutation, and a closed order is exactly when someone asks
     // for one again.
-    canOpenReceipt: order.canReprintReceipt,
+    // PSC-001C: the AUTHORITATIVE server detail (pos_order_detail) can rebuild
+    // the COMBINED receipt for any PAID server order — original + added items
+    // as one list — so a different POS device is no longer blind. The local
+    // order-time-lines path stays first-class; the detail read is the honest
+    // cross-device upgrade (no more forgery risk: the lines come from the
+    // server, not a guess). "Paid" spans the local marker AND the server's
+    // settlement verdict (a discovered paid order has no local payment row).
+    canOpenReceipt:
+        order.canReprintReceipt || (chargedPerServer && order.orderId != null),
     pendingKind: pending,
+    canAddItems: canAddItems,
   );
 }

@@ -382,6 +382,126 @@ abstract class AppLocalizations {
   /// **'Cancellation acknowledgement denied'**
   String get activityLogTitleVoidAckDenied;
 
+  /// No description provided for @activityLogTitleItemsAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Items added to order'**
+  String get activityLogTitleItemsAdded;
+
+  /// No description provided for @activityLogTitleItemsAddDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding items denied'**
+  String get activityLogTitleItemsAddDenied;
+
+  /// No description provided for @activityLogTitleRoundStatusUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Service round status updated'**
+  String get activityLogTitleRoundStatusUpdated;
+
+  /// No description provided for @activityLogTitleRoundStatusDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Round status change denied'**
+  String get activityLogTitleRoundStatusDenied;
+
+  /// No description provided for @activityLogFieldRoundNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Round number'**
+  String get activityLogFieldRoundNumber;
+
+  /// No description provided for @activityLogFieldAddedItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Added items'**
+  String get activityLogFieldAddedItemCount;
+
+  /// No description provided for @kdsAdditionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Addition'**
+  String get kdsAdditionLabel;
+
+  /// KDS round-ticket label; {number} is the service round number (2+).
+  ///
+  /// In en, this message translates to:
+  /// **'Round {number}'**
+  String kdsRoundLabel(int number);
+
+  /// No description provided for @posAddItemsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add items'**
+  String get posAddItemsAction;
+
+  /// POS cart banner while extending an existing order; {orderCode} is the #XXXXXX code.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding to {orderCode}'**
+  String posAddingToOrderBanner(String orderCode);
+
+  /// No description provided for @posSubmitAddition.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit addition'**
+  String get posSubmitAddition;
+
+  /// No description provided for @posAdditionPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Addition pending…'**
+  String get posAdditionPending;
+
+  /// No description provided for @posAdditionApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Addition sent to the kitchen'**
+  String get posAdditionApplied;
+
+  /// No description provided for @posAdditionClearCartFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish or cancel the current cart before adding to another order'**
+  String get posAdditionClearCartFirst;
+
+  /// No description provided for @posAdditionFailedRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Addition failed — tap to retry'**
+  String get posAdditionFailedRetry;
+
+  /// No description provided for @posAdditionSavedRefreshNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Items added and saved — the order view could not refresh. Tap Refresh to finish.'**
+  String get posAdditionSavedRefreshNeeded;
+
+  /// No description provided for @posReceiptUnavailableRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the order\'s receipt — check the connection and try again.'**
+  String get posReceiptUnavailableRetry;
+
+  /// No description provided for @posAddItemsIneligiblePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid orders can\'t take additions'**
+  String get posAddItemsIneligiblePaid;
+
+  /// No description provided for @posAddItemsIneligibleStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'This order can no longer take additions'**
+  String get posAddItemsIneligibleStatus;
+
+  /// No description provided for @posAddItemsIneligibleTakeaway.
+  ///
+  /// In en, this message translates to:
+  /// **'Takeaway orders can\'t take additions'**
+  String get posAddItemsIneligibleTakeaway;
+
   /// No description provided for @activityLogTitleDiscountApplied.
   ///
   /// In en, this message translates to:

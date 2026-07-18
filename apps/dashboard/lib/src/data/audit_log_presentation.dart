@@ -173,6 +173,10 @@ const Map<String, _Kind> _displayableKeys = {
   'voided_from_status': _Kind.text,
   'device_type': _Kind.text,
   'kitchen_ack_required': _Kind.boolean,
+  // PSC-001C: service rounds — a position in the order and a line count.
+  // Never money, never identifiers (T-003 holds).
+  'round_number': _Kind.count,
+  'added_item_count': _Kind.count,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -229,6 +233,9 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   'voided_from_status' => l10n.activityLogFieldVoidedFromStatus,
   'device_type' => l10n.activityLogFieldDeviceType,
   'kitchen_ack_required' => l10n.activityLogFieldKitchenAckRequired,
+  // PSC-001C: service-round safe scalars.
+  'round_number' => l10n.activityLogFieldRoundNumber,
+  'added_item_count' => l10n.activityLogFieldAddedItemCount,
   _ => key,
 };
 
@@ -363,6 +370,11 @@ class AuditEventPresenter {
     // denial get specific titles (never a bare category fallback).
     'order.void_acknowledged' => l10n.activityLogTitleVoidAcknowledged,
     'order.void_ack_denied' => l10n.activityLogTitleVoidAckDenied,
+    // PSC-001C: service-round additions + their kitchen lifecycle.
+    'order.items_added' => l10n.activityLogTitleItemsAdded,
+    'order.items_add_denied' => l10n.activityLogTitleItemsAddDenied,
+    'order.round_status_updated' => l10n.activityLogTitleRoundStatusUpdated,
+    'order.round_status_denied' => l10n.activityLogTitleRoundStatusDenied,
     'order.discount_applied' => l10n.activityLogTitleDiscountApplied,
     // FULL-COMP-PERMISSION-001: a REFUSED discount had no title of its own, so it
     // fell back to the bare category label — the operator saw "Discounts" and had
@@ -433,6 +445,14 @@ class AuditEventPresenter {
   /// two allowlisted nested objects). Never emits a sensitive-looking key.
   List<AuditChange> _changes(AuditEvent e) {
     final out = <AuditChange>[];
+    // PSC-001C correction (Finding 6): the four service-round actions are
+    // MONEY-FREE by approved contract. Even a HOSTILE / manually inserted
+    // payload must never render a money value for them — the exclusion is
+    // ACTION-SPECIFIC, so approved money-carrying actions (payments,
+    // discounts, shifts, order.submitted, completion) keep their rows.
+    final moneyFree =
+        e.action.startsWith('order.items_add') ||
+        e.action.startsWith('order.round_status');
     // The union of keys present in either side, in a stable order (new first).
     final keys = <String>{...e.newValues.keys, ...e.oldValues.keys};
     for (final key in keys) {
@@ -444,6 +464,7 @@ class AuditEventPresenter {
       }
       final kind = _displayableKeys[key];
       if (kind == null) continue;
+      if (moneyFree && kind == _Kind.money) continue;
       final oldV = _format(kind, e.oldValues[key]);
       final newV = _format(kind, e.newValues[key]);
       if (newV == null && oldV == null) continue;

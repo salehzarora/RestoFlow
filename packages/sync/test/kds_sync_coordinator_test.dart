@@ -94,6 +94,9 @@ void main() {
         'orders',
         'order_items',
         'order_item_modifiers',
+        // PSC-001C: additional service rounds — money-free by schema; each
+        // active round renders as its own "Addition / Round N" ticket.
+        'order_service_rounds',
         // Money-free dining-table directory (demo-readiness sprint) — the KDS
         // resolves orders.table_id to a human label; still no financial entity.
         'tables',

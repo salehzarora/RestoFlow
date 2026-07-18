@@ -256,12 +256,23 @@ class KdsTicketCard extends StatelessWidget {
                   takeaway ||
                   tableLabel != null ||
                   customerName != null ||
+                  ticket.roundNumber != null ||
                   showStation) ...[
                 const SizedBox(height: RestoflowSpacing.sm),
                 Wrap(
                   spacing: RestoflowSpacing.sm,
                   runSpacing: RestoflowSpacing.xs,
                   children: [
+                    // PSC-001C: an ADDITION ticket announces itself — the
+                    // kitchen must see this is NEW work on an existing order,
+                    // not a re-send of the original items. Money-free.
+                    if (ticket.roundNumber != null)
+                      RestoflowStatusPill(
+                        key: Key('kds-round-${ticket.kitchenTicketId}'),
+                        icon: Icons.playlist_add,
+                        label:
+                            '${l10n.kdsAdditionLabel} · ${l10n.kdsRoundLabel(ticket.roundNumber!)}',
+                      ),
                     if (dineIn)
                       RestoflowStatusPill(
                         icon: Icons.restaurant,

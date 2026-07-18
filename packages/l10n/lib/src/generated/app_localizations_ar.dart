@@ -156,6 +156,75 @@ class AppLocalizationsAr extends AppLocalizations {
       'تم رفض تأكيد الاطّلاع على الإلغاء';
 
   @override
+  String get activityLogTitleItemsAdded => 'تمت إضافة أصناف إلى الطلب';
+
+  @override
+  String get activityLogTitleItemsAddDenied => 'رُفضت إضافة الأصناف';
+
+  @override
+  String get activityLogTitleRoundStatusUpdated => 'تم تحديث حالة جولة الخدمة';
+
+  @override
+  String get activityLogTitleRoundStatusDenied => 'رُفض تغيير حالة الجولة';
+
+  @override
+  String get activityLogFieldRoundNumber => 'رقم الجولة';
+
+  @override
+  String get activityLogFieldAddedItemCount => 'الأصناف المضافة';
+
+  @override
+  String get kdsAdditionLabel => 'إضافة';
+
+  @override
+  String kdsRoundLabel(int number) {
+    return 'جولة $number';
+  }
+
+  @override
+  String get posAddItemsAction => 'إضافة أصناف';
+
+  @override
+  String posAddingToOrderBanner(String orderCode) {
+    return 'إضافة إلى $orderCode';
+  }
+
+  @override
+  String get posSubmitAddition => 'إرسال الإضافة';
+
+  @override
+  String get posAdditionPending => 'الإضافة قيد الإرسال…';
+
+  @override
+  String get posAdditionApplied => 'أُرسلت الإضافة إلى المطبخ';
+
+  @override
+  String get posAdditionClearCartFirst =>
+      'أكمل السلة الحالية أو ألغِها قبل الإضافة إلى طلب آخر';
+
+  @override
+  String get posAdditionFailedRetry => 'فشلت الإضافة — اضغط لإعادة المحاولة';
+
+  @override
+  String get posAdditionSavedRefreshNeeded =>
+      'أُضيفت الأصناف وحُفظت — تعذّر تحديث عرض الطلب. اضغط \"تحديث\" للإكمال.';
+
+  @override
+  String get posReceiptUnavailableRetry =>
+      'تعذّر تحميل إيصال الطلب — تحقّق من الاتصال وحاول مجددًا.';
+
+  @override
+  String get posAddItemsIneligiblePaid => 'لا يمكن الإضافة إلى طلب مدفوع';
+
+  @override
+  String get posAddItemsIneligibleStatus =>
+      'لم يعد بالإمكان الإضافة إلى هذا الطلب';
+
+  @override
+  String get posAddItemsIneligibleTakeaway =>
+      'لا يمكن الإضافة إلى طلبات السفري';
+
+  @override
   String get activityLogTitleDiscountApplied => 'تم تطبيق خصم';
 
   @override

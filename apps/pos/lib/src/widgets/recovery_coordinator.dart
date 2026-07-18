@@ -40,6 +40,17 @@ class PosRecoveryCoordinator {
     BuildContext context,
     PosDraftRecovery recovery,
   ) async {
+    // Cart-safety (final): while a frozen addition attempt owns the cart the
+    // recovery flow REFUSES UP FRONT — before any dialog, before any choice,
+    // before any retirement. Without this, the non-empty locked cart reached
+    // the Replace / Keep-current dialog and "Keep current" permanently
+    // retired the shell + record while the addition was still in flight.
+    // Nothing changes here: the cart, the addition attempt, the shell and the
+    // recovery record all stay exactly as they are, and the same recovery
+    // remains fully available after the lock releases.
+    if (ref.read(cartControllerProvider).lockedByAddition) {
+      return PosRecoveryOutcome.lockedByAddition;
+    }
     // A non-empty cart (real lines) is work the operator built while this attempt was
     // pending — never silently overwrite it.
     if (ref.read(cartControllerProvider).isNotEmpty) {
@@ -59,8 +70,15 @@ class PosRecoveryCoordinator {
           break; // fall through to the single restore below
       }
     }
-    // Empty cart, or an explicit Replace: restore exactly once.
-    ref.read(cartControllerProvider.notifier).restoreDraft(recovery.draft);
+    // Empty cart, or an explicit Replace: restore exactly once. Cart-safety:
+    // while a frozen addition attempt owns the cart the restore REFUSES —
+    // nothing is overwritten, the shell and its recovery both remain.
+    final restored = ref
+        .read(cartControllerProvider.notifier)
+        .restoreDraft(recovery.draft);
+    if (restored != CartMutationResult.applied) {
+      return PosRecoveryOutcome.cancelled;
+    }
     final setup = ref.read(orderSetupControllerProvider.notifier);
     setup.setOrderType(recovery.orderType);
     final table = recovery.table;
@@ -142,4 +160,12 @@ class PosRecoveryCoordinator {
 enum _RestoreChoice { replace, keepCurrent, cancel }
 
 /// The outcome of [PosRecoveryCoordinator.restore], so the caller can close its sheet.
-enum PosRecoveryOutcome { restored, keptCurrent, cancelled }
+enum PosRecoveryOutcome {
+  restored,
+  keptCurrent,
+  cancelled,
+
+  /// A frozen addition attempt owns the cart — the recovery flow was refused
+  /// BEFORE any dialog or retirement; the shell and record remain available.
+  lockedByAddition,
+}

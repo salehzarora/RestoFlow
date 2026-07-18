@@ -158,6 +158,76 @@ class AppLocalizationsEn extends AppLocalizations {
       'Cancellation acknowledgement denied';
 
   @override
+  String get activityLogTitleItemsAdded => 'Items added to order';
+
+  @override
+  String get activityLogTitleItemsAddDenied => 'Adding items denied';
+
+  @override
+  String get activityLogTitleRoundStatusUpdated =>
+      'Service round status updated';
+
+  @override
+  String get activityLogTitleRoundStatusDenied => 'Round status change denied';
+
+  @override
+  String get activityLogFieldRoundNumber => 'Round number';
+
+  @override
+  String get activityLogFieldAddedItemCount => 'Added items';
+
+  @override
+  String get kdsAdditionLabel => 'Addition';
+
+  @override
+  String kdsRoundLabel(int number) {
+    return 'Round $number';
+  }
+
+  @override
+  String get posAddItemsAction => 'Add items';
+
+  @override
+  String posAddingToOrderBanner(String orderCode) {
+    return 'Adding to $orderCode';
+  }
+
+  @override
+  String get posSubmitAddition => 'Submit addition';
+
+  @override
+  String get posAdditionPending => 'Addition pending…';
+
+  @override
+  String get posAdditionApplied => 'Addition sent to the kitchen';
+
+  @override
+  String get posAdditionClearCartFirst =>
+      'Finish or cancel the current cart before adding to another order';
+
+  @override
+  String get posAdditionFailedRetry => 'Addition failed — tap to retry';
+
+  @override
+  String get posAdditionSavedRefreshNeeded =>
+      'Items added and saved — the order view could not refresh. Tap Refresh to finish.';
+
+  @override
+  String get posReceiptUnavailableRetry =>
+      'Couldn\'t load the order\'s receipt — check the connection and try again.';
+
+  @override
+  String get posAddItemsIneligiblePaid => 'Paid orders can\'t take additions';
+
+  @override
+  String get posAddItemsIneligibleStatus =>
+      'This order can no longer take additions';
+
+  @override
+  String get posAddItemsIneligibleTakeaway =>
+      'Takeaway orders can\'t take additions';
+
+  @override
   String get activityLogTitleDiscountApplied => 'Discount applied';
 
   @override
