@@ -72,9 +72,12 @@ class RecentOrdersSheet extends ConsumerStatefulWidget {
   const RecentOrdersSheet({this.focusOrderId, super.key});
 
   /// PSC-001A: when set, the sheet opens FOCUSED on this server order — the
-  /// All section with the search seeded to the order's display code, so the
-  /// target card (with its full honest action policy) is immediately visible.
-  /// An unknown id degrades honestly to the plain full list.
+  /// All section with the EXACT orderId match PINNED FIRST in the list (the
+  /// id stays the authoritative identity through the final rendered result;
+  /// it is never converted into a display-code text query, so a second order
+  /// sharing the same printed code can never replace the requested target).
+  /// An unknown id degrades honestly to the plain full list; an explicit
+  /// user search/filter hands control back to normal behavior.
   final String? focusOrderId;
 
   static Future<void> show(BuildContext context, {String? focusOrderId}) =>
@@ -106,11 +109,12 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
   /// out would leave the timer running forever.
   PosOrderSyncController? _sync;
 
-  /// PSC-001A focus: the order id still awaiting its search-seed resolution.
-  /// Resolved lazily against the WATCHED rows in [build] (the persisted cache
-  /// loads asynchronously — an initState-only lookup would race it); an id
-  /// that never appears leaves the plain honest list.
-  String? _pendingFocusId;
+  /// PSC-001A focus: the AUTHORITATIVE target order id, held separately from
+  /// the text search for the sheet's whole life. The pin applies whenever the
+  /// exact id is present in the watched rows (so it survives the async cache
+  /// load and every targeted refresh) and clears only when the user starts an
+  /// explicit search/filter/section change of their own.
+  String? _focusOrderId;
 
   @override
   void initState() {
@@ -118,7 +122,7 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     final focusId = widget.focusOrderId;
     if (focusId != null) {
       _section = PosOrderSection.all;
-      _pendingFocusId = focusId;
+      _focusOrderId = focusId;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -128,23 +132,22 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     });
   }
 
-  /// Seeds the search with the focused order's display code once its row is
-  /// visible in the watched authoritative set.
-  void _resolveFocus(List<PosRecentOrder> orders) {
-    final focusId = _pendingFocusId;
-    if (focusId == null) return;
-    for (final o in orders) {
-      if (o.orderId == focusId) {
-        final code = o.orderNumber;
-        _pendingFocusId = null;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _search.text = code;
-          setState(() => _query = code);
-        });
-        return;
-      }
-    }
+  /// The user took over (typed a search, changed a filter/section) — normal
+  /// behavior owns the list from here.
+  void _releaseFocus() => _focusOrderId = null;
+
+  /// Pins the EXACT orderId match first. Identity, never the display code:
+  /// two orders sharing one printed code cannot swap the requested target.
+  List<PosRecentOrder> _withFocusPinned(List<PosRecentOrder> visible) {
+    final focusId = _focusOrderId;
+    if (focusId == null) return visible;
+    final idx = visible.indexWhere((o) => o.orderId == focusId);
+    if (idx <= 0) return visible; // absent (honest plain list) or already first
+    return [
+      visible[idx],
+      ...visible.sublist(0, idx),
+      ...visible.sublist(idx + 1),
+    ];
   }
 
   @override
@@ -160,6 +163,8 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
   /// to run — but re-filtering and rebuilding a long list on every keystroke makes a
   /// cheap tablet feel broken, which is its own kind of lie about the software.
   void _onQuery(String value) {
+    // An explicit user search takes over from the notification focus pin.
+    _releaseFocus();
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
       if (!mounted) return;
@@ -178,7 +183,6 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final orders = ref.watch(posRecentOrdersControllerProvider);
-    _resolveFocus(orders);
     final status = ref.watch(posOrderSyncControllerProvider);
     // EFFECTIVE rights, or null when UNKNOWN. Unknown is NOT denied — a failed probe
     // must not silently strip a manager of the ability to discount; the server
@@ -209,14 +213,16 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     }
 
     final counts = sectionCounts(orders);
-    final visible = viewOrders(
-      orders,
-      section: _section,
-      settlement: _settlement,
-      type: _type,
-      status: _status,
-      query: _query,
-      sort: _sort,
+    final visible = _withFocusPinned(
+      viewOrders(
+        orders,
+        section: _section,
+        settlement: _settlement,
+        type: _type,
+        status: _status,
+        query: _query,
+        sort: _sort,
+      ),
     );
 
     final width = MediaQuery.sizeOf(context).width;
@@ -243,7 +249,10 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
             // The counts describe what is LOADED. While more history remains we do
             // not pretend otherwise — see the '+' in the chip.
             partial: status.hasMoreHistory,
-            onSelect: (s) => setState(() => _section = s),
+            onSelect: (s) => setState(() {
+              _releaseFocus();
+              _section = s;
+            }),
           ),
           const SizedBox(height: RestoflowSpacing.sm),
           _SearchField(
@@ -259,10 +268,22 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
             type: _type,
             status: _status,
             sort: _sort,
-            onSettlement: (s) => setState(() => _settlement = s),
-            onType: (t) => setState(() => _type = t),
-            onStatus: (s) => setState(() => _status = s),
-            onSort: (s) => setState(() => _sort = s),
+            onSettlement: (s) => setState(() {
+              _releaseFocus();
+              _settlement = s;
+            }),
+            onType: (t) => setState(() {
+              _releaseFocus();
+              _type = t;
+            }),
+            onStatus: (s) => setState(() {
+              _releaseFocus();
+              _status = s;
+            }),
+            onSort: (s) => setState(() {
+              _releaseFocus();
+              _sort = s;
+            }),
           ),
           if (status.error == PosSyncError.offline) ...[
             const SizedBox(height: RestoflowSpacing.sm),

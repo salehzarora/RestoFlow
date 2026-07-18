@@ -46,8 +46,9 @@ class PosMenuScreen extends StatelessWidget {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // The gradient brand tile (§6.1).
+            // The gradient brand tile (§6.1) — always visible, every width.
             Container(
+              key: const Key('pos-brand-tile'),
               width: 38,
               height: 38,
               decoration: BoxDecoration(
@@ -60,18 +61,23 @@ class PosMenuScreen extends StatelessWidget {
                 size: RestoflowIconSizes.md,
               ),
             ),
-            const SizedBox(width: RestoflowSpacing.sm),
-            Flexible(
-              child: Text(
-                l10n.posAppTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: kRestoflowInk,
+            // PSC-001A compact app bar: on narrow phones the TEXT title yields
+            // its width to the five operational actions (the brand tile keeps
+            // the identity); wider bars keep the ellipsizing title.
+            if (MediaQuery.sizeOf(context).width >= kPosCompactAppBarWidth) ...[
+              const SizedBox(width: RestoflowSpacing.sm),
+              Flexible(
+                child: Text(
+                  l10n.posAppTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: kRestoflowInk,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
         actions: const [
@@ -264,7 +270,10 @@ class _MenuSkeleton extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
+        // Scrolls like the REAL CategoryChips strip it stands in for — a
+        // fixed 4×96 row overflowed narrow phones during the load frame.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           padding: const EdgeInsetsDirectional.fromSTEB(
             RestoflowSpacing.lg,
             RestoflowSpacing.sm,
