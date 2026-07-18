@@ -9,6 +9,7 @@ import '../data/ready_feed_repository.dart';
 import '../data/ready_notifications_store.dart';
 import '../data/sync_cursor_store.dart';
 import 'order_sync_controller.dart' show posSyncClockProvider;
+import 'pos_session.dart' show posSyncSessionProvider;
 import 'pos_sync_scope_provider.dart';
 
 /// PSC-001A — THE single owner of ready-feed polling and local notification
@@ -40,6 +41,11 @@ import 'pos_sync_scope_provider.dart';
 ///  * a banner is exposed ONLY AFTER its records' `alerted=true` persisted
 ///    durably (a crash cannot re-present; a failed persist keeps it pending
 ///    and quietly retries);
+///  * a terminal security refusal LATCHES the exact polling identity
+///    (pinSessionId|deviceId|scopeKey): no timer, no resume, no manual
+///    refresh may issue an RPC for that identity again — only a genuinely
+///    NEW valid identity (the existing PIN/session flow) clears it; transport
+///    failures never latch;
 ///  * background failures are QUIET (degraded flag, no banners); the ~7s poll
 ///    is the reconnect probe.
 class PosReadyAlert {
@@ -59,6 +65,7 @@ class PosReadyNotificationsState {
     this.initialized = false,
     this.loading = false,
     this.degraded = false,
+    this.securityBlocked = false,
     this.lastUpdatedAt,
     this.records = const [],
     this.activeAlert,
@@ -75,6 +82,10 @@ class PosReadyNotificationsState {
   /// good state; the poll keeps probing and recovers silently.
   final bool degraded;
 
+  /// The TERMINAL typed session state: the server refused this exact polling
+  /// identity (invalid session/device/permission). Polling is fenced until
+  /// the existing PIN/session flow produces a new valid identity.
+  final bool securityBlocked;
   final DateTime? lastUpdatedAt;
 
   /// Newest-first for the history sheet.
@@ -89,6 +100,7 @@ class PosReadyNotificationsState {
     bool? initialized,
     bool? loading,
     bool? degraded,
+    bool? securityBlocked,
     DateTime? lastUpdatedAt,
     List<PosReadyNotificationRecord>? records,
     PosReadyAlert? activeAlert,
@@ -97,6 +109,7 @@ class PosReadyNotificationsState {
     initialized: initialized ?? this.initialized,
     loading: loading ?? this.loading,
     degraded: degraded ?? this.degraded,
+    securityBlocked: securityBlocked ?? this.securityBlocked,
     lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
     records: records ?? this.records,
     activeAlert: clearActiveAlert ? null : (activeAlert ?? this.activeAlert),
@@ -137,6 +150,9 @@ class PosReadyNotificationsController
   DateTime? _lastAttemptAt;
   DateTime? _lastUpdatedAt;
 
+  /// FIX 5 — the exact identity a terminal security refusal belongs to.
+  String? _securityLatchIdentity;
+
   /// The production tick (main.dart overrides the interval provider).
   static const Duration defaultPollInterval = Duration(seconds: 7);
 
@@ -164,6 +180,9 @@ class PosReadyNotificationsController
       (previous, next) => _onScopeChanged(next?.key),
     );
     _onScopeChanged(ref.watch(posSyncScopeProvider)?.key);
+    // FIX 5: a SESSION change (same scope, new PIN) must rebuild so the latch
+    // re-evaluates against the new identity and polling resumes.
+    ref.watch(posSyncSessionProvider);
     _disposed = false;
     ref.onDispose(() {
       _disposed = true;
@@ -172,6 +191,7 @@ class PosReadyNotificationsController
       _autoDismiss?.cancel();
       _autoDismiss = null;
     });
+    _clearLatchIfIdentityChanged();
     _ensureTimer();
     // The immediate first load for the (re)built scope — scheduled from BUILD,
     // never from the scope listener: the listener fires while this provider is
@@ -195,6 +215,7 @@ class PosReadyNotificationsController
             initialized: env.initialized,
             records: env.records,
             lastUpdatedAt: _lastUpdatedAt,
+            securityBlocked: _latched,
           );
   }
 
@@ -229,12 +250,48 @@ class PosReadyNotificationsController
   bool get isPolling => _timer != null;
 
   // ---------------------------------------------------------------------------
+  // FIX 5 — the terminal security latch
+  // ---------------------------------------------------------------------------
+
+  /// The immutable polling identity every RPC belongs to.
+  String? _pollingIdentity() {
+    final session = ref.read(posSyncSessionProvider);
+    final key = _scopeKey;
+    if (session == null || key == null) return null;
+    return '${session.pinSessionId}|${session.deviceId}|$key';
+  }
+
+  /// Latched = the CURRENT identity is the exact one the server terminally
+  /// refused. Resume, timer ticks, and manual refresh all fence on this; a
+  /// transport failure never sets it.
+  bool get _latched =>
+      _securityLatchIdentity != null &&
+      _securityLatchIdentity == _pollingIdentity();
+
+  /// Whether polling is terminally fenced for the current identity
+  /// (test seam).
+  @visibleForTesting
+  bool get isSecurityLatched => _latched;
+
+  void _clearLatchIfIdentityChanged() {
+    final latch = _securityLatchIdentity;
+    if (latch == null) return;
+    final id = _pollingIdentity();
+    // Only a DIFFERENT valid identity clears the latch — never a resume, a
+    // tick, a manual refresh, or a transport error.
+    if (id != null && id != latch) {
+      _securityLatchIdentity = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Lifecycle (driven by PosSyncLifecycle — this controller owns no observer)
   // ---------------------------------------------------------------------------
 
   /// The app/page came to the foreground (also the startup signal).
   void onResume() {
     _foreground = true;
+    _clearLatchIfIdentityChanged();
     _ensureTimer();
     unawaited(refreshNow());
   }
@@ -248,13 +305,18 @@ class PosReadyNotificationsController
   }
 
   void _ensureTimer() {
-    if (_timer != null || !_foreground || _scopeKey == null || _isDemo) {
+    if (_timer != null ||
+        !_foreground ||
+        _scopeKey == null ||
+        _isDemo ||
+        _latched) {
       return;
     }
     final interval = ref.read(posReadyFeedPollIntervalProvider);
     if (interval == null) return;
     _timer = Timer.periodic(interval, (_) {
       if (_inFlight != null) return; // no overlapping cycles
+      if (_latched) return; // terminally fenced identity
       if (_inBackoff()) return; // quiet slow-down after repeated failures
       unawaited(refreshNow());
     });
@@ -333,11 +395,12 @@ class PosReadyNotificationsController
   // ---------------------------------------------------------------------------
 
   /// One discovery/bootstrap cycle now. Manual callers (refresh button,
-  /// resume, scope restoration) bypass the backoff gate; concurrent callers
-  /// join the in-flight cycle.
+  /// resume, scope restoration) bypass the backoff gate — but NEVER the
+  /// terminal security latch; concurrent callers join the in-flight cycle.
   Future<void> refreshNow() {
     final existing = _inFlight;
     if (existing != null) return existing;
+    if (_latched) return Future.value();
     final run = _run();
     _inFlight = run;
     return run.whenComplete(() {
@@ -347,7 +410,7 @@ class PosReadyNotificationsController
 
   Future<void> _run() async {
     final scope = _scope();
-    if (scope == null || _isDemo) return;
+    if (scope == null || _isDemo || _latched) return;
     final gen = _generation;
     final scopeKey = _scopeKey;
     _lastAttemptAt = _now();
@@ -383,8 +446,23 @@ class PosReadyNotificationsController
       } else {
         await _poll(gen, scopeKey);
       }
-    } on PosReadyFeedException {
+    } on PosReadyFeedException catch (e) {
       if (_isStale(gen, scopeKey)) return;
+      if (e.failure == PosReadyFeedFailure.session) {
+        // FIX 5: latch the EXACT refused identity and stop. Recovery belongs
+        // to the existing PIN/session flow — a new valid identity clears the
+        // latch; resume/tick/manual refresh never do.
+        _securityLatchIdentity = _pollingIdentity();
+        _timer?.cancel();
+        _timer = null;
+        state = state.copyWith(
+          loading: false,
+          degraded: true,
+          securityBlocked: true,
+        );
+        _consecutiveFailures++;
+        return;
+      }
       _failCycle();
       return;
     } on PosPersistenceException {
@@ -741,6 +819,7 @@ class PosReadyNotificationsController
   Future<void> reconcileStatuses() {
     final existing = _reconcileInFlight;
     if (existing != null) return existing;
+    if (_latched) return Future.value();
     final run = _reconcile();
     _reconcileInFlight = run;
     return run.whenComplete(() {
@@ -750,7 +829,7 @@ class PosReadyNotificationsController
 
   Future<void> _reconcile() async {
     final scope = _scope();
-    if (scope == null || _isDemo) return;
+    if (scope == null || _isDemo || _latched) return;
     final env = _envelope;
     if (env == null || !env.initialized || env.records.isEmpty) return;
     final gen = _generation;
