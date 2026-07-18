@@ -16,7 +16,13 @@
 --      converges on the winner's applied result (idempotency_replay) — the
 --      round advanced ONCE, ONE success audit, the ledger stays applied.
 --   A. two sessions push the SAME order.items_add op: ONE round, ONE item
---      set, ONE success audit; both callers reference the SAME round.
+--      set, ONE success audit; both callers reference the SAME round. Then
+--      (final correction, Finding 5) the LEDGER truth is asserted explicitly:
+--      exactly one applied sync_operations row whose stored result names the
+--      created round, never overwritten by a rejection/conflict — and an
+--      EXACT terminal replay of the same op returns that stored result
+--      (idempotency_replay) while creating no second round, item set or
+--      audit and leaving the ledger row byte-identical.
 --   F. the same key with a DIFFERENT fingerprint after terminality: the
 --      conflict contract fires, nothing dispatches, the terminal row stands.
 --   T. an exact terminal replay after the race remains successful.
@@ -149,7 +155,7 @@ create or replace function pg_temp.add_sql() returns text language sql as $$
     '7c000000-0000-0000-0000-0000000000f1');
 $$;
 
-select plan(17);
+select plan(26);
 
 -- ===== setup (sequential, committed): submit order + round 2 =================
 create temp table t_setup1 as
@@ -248,6 +254,66 @@ select is(
        and occurred_at >= (select started_at from t_ids)
        and (new_values ->> 'round_number')::int = 3),
   1, 'A6: exactly ONE items_added success audit for the raced addition');
+
+-- ---- the raced key's LEDGER truth (final correction, Finding 5) ------------
+select is(
+  (select count(*)::int from sync_operations
+     where organization_id = '7c000000-0000-0000-0000-0000000000a0'
+       and device_id = '7c000000-0000-0000-0000-00000000da11'
+       and local_operation_id = (select op_add1 from t_ids)),
+  1, 'A7: exactly ONE sync_operations row exists for the raced items_add key');
+select is(
+  (select status from sync_operations
+     where local_operation_id = (select op_add1 from t_ids)),
+  'applied', 'A8: that ledger row is APPLIED');
+select ok(
+  (select (so.result ->> 'ok')::boolean
+      and (so.result ->> 'round_id') = (a.res -> 'results' -> 0 ->> 'round_id')
+     from sync_operations so, t_a_a a
+     where so.local_operation_id = (select op_add1 from t_ids)),
+  'A9: the STORED result references the created round');
+select ok(
+  (select so.last_error_code is null
+      and so.rejection_reason is null
+      and (so.result ->> 'error') is null
+     from sync_operations so
+     where so.local_operation_id = (select op_add1 from t_ids)),
+  'A10: no rejected/conflict write ever overwrote the applied row');
+
+-- ---- the EXACT terminal replay of the raced op (same canonical add_sql) ----
+create temp table t_a_ledger as
+  select status, result from sync_operations
+    where local_operation_id = (select op_add1 from t_ids);
+create temp table t_a_replay as select r::jsonb as res
+  from dblink((select cs from t_conn), pg_temp.add_sql()) as t(r text);
+select ok(
+  (select (rp.res -> 'results' -> 0 ->> 'status') = 'applied'
+      and (rp.res -> 'results' -> 0 ->> 'idempotency_replay')::boolean
+      and (rp.res -> 'results' -> 0 ->> 'round_id')
+            = (a.res -> 'results' -> 0 ->> 'round_id')
+     from t_a_replay rp, t_a_a a),
+  'A11: an exact terminal replay returns the STORED applied result (replay flag, same round)');
+select is(
+  (select count(*)::int from order_service_rounds
+     where order_id = (select order_c from t_ids) and round_number = 3),
+  1, 'A12: the replay created NO second round');
+select is(
+  (select count(*)::int from order_items oi
+     join order_service_rounds r on r.id = oi.service_round_id
+     where r.order_id = (select order_c from t_ids) and r.round_number = 3),
+  1, 'A13: the replay inserted NO second item set');
+select is(
+  (select count(*)::int from audit_events
+     where organization_id = '7c000000-0000-0000-0000-0000000000a0'
+       and action = 'order.items_added'
+       and occurred_at >= (select started_at from t_ids)
+       and (new_values ->> 'round_number')::int = 3),
+  1, 'A14: the replay wrote NO second success audit for the raced round');
+select ok(
+  (select so.status = l.status and so.result = l.result
+     from sync_operations so, t_a_ledger l
+     where so.local_operation_id = (select op_add1 from t_ids)),
+  'A15: the ledger status AND stored result are unchanged after the replay');
 
 -- ============================================================================
 -- SCENARIO F — same key, DIFFERENT fingerprint after terminality.

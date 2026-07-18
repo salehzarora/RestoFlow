@@ -30,7 +30,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(97);
+select plan(98);
 
 -- ===== fixtures: Org A (2 POS + 2 KDS devices) + Org B (1 POS) ===============
 insert into organizations (id, name, slug, default_currency) values
@@ -672,6 +672,19 @@ select ok(
      from (select public.pos_order_detail('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1',
                                           'c0000000-0000-0000-0000-00000000a0b1') as r) x),
   '82. a paid order''s detail carries the completed payment + receipt number (reprint-complete)');
+-- Final correction (Finding 3): the payment block carries the AUTHORITATIVE
+-- payment identity and STORED status — the client must never fabricate either.
+select ok(
+  (select (r -> 'payment' ->> 'payment_id')::uuid = p.id
+      and (r -> 'payment' ->> 'payment_status') = p.status
+      and p.status = 'completed'
+     from (select public.pos_order_detail('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1',
+                                          'c0000000-0000-0000-0000-00000000a0b1') as r) x,
+          payments p
+     where p.order_id = 'c0000000-0000-0000-0000-00000000a0b1'
+       and p.status   = 'completed'
+       and p.deleted_at is null),
+  '82b. the detail payment names the REAL payments.id + its stored completed status');
 select is(
   (select public.pos_order_detail('c0000000-0000-0000-0000-0000000ad003', 'c0000000-0000-0000-0000-0000000000d2',
                                   'c0000000-0000-0000-0000-00000000a001') ->> 'error'),
