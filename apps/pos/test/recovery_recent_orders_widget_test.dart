@@ -221,4 +221,58 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'PSC-001C cart-safety: the Restore action DISABLES while a frozen '
+    'addition attempt owns the cart, and restores after unlock — the shell '
+    'and recovery survive throughout',
+    (tester) async {
+      final c = await seededContainer([rejectedShell('eL')]);
+      addTearDown(c.dispose);
+      c
+          .read(posDraftRecoveryProvider.notifier)
+          .capture(
+            PosDraftRecovery(
+              draft: const CartDraftSnapshot(currencyCode: 'ILS', lines: []),
+              orderType: OrderType.dineIn,
+              outboxEntryId: 'eL',
+              binding: c.read(posRecoveryBindingProvider),
+            ),
+          );
+      await pump(tester, c);
+      await tester.tap(find.byKey(const Key('orders-section-all')));
+      await tester.pumpAndSettle();
+      ButtonStyleButton restoreButton() => tester.widget<ButtonStyleButton>(
+        find.byKey(const Key('recent-restore-DEMO-eL')),
+      );
+      expect(restoreButton().onPressed, isNotNull);
+
+      // A frozen addition attempt owns the cart.
+      const owner = CartLockOwner(
+        generation: 1,
+        orderId: 'o-add',
+        localOperationId: 'op-add',
+      );
+      expect(
+        c.read(cartControllerProvider.notifier).lockForAddition(owner),
+        isTrue,
+      );
+      await tester.pumpAndSettle();
+      expect(restoreButton().onPressed, isNull); // disabled, not hidden
+
+      // A legitimate release restores the SAME action for the SAME recovery.
+      expect(
+        c.read(cartControllerProvider.notifier).unlockForAddition(owner),
+        isTrue,
+      );
+      await tester.pumpAndSettle();
+      expect(restoreButton().onPressed, isNotNull);
+      expect(
+        c
+            .read(posDraftRecoveryProvider.notifier)
+            .recoverable('eL', c.read(posRecoveryBindingProvider)),
+        isNotNull,
+      );
+    },
+  );
 }

@@ -7,15 +7,22 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RuntimeConfig, runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_pos/src/data/demo_menu.dart' show DemoMenuItem;
 import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/order_detail_repository.dart';
+import 'package:restoflow_pos/src/data/recent_orders_store.dart';
+import 'package:restoflow_pos/src/data/sync_cursor_store.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
 import 'package:restoflow_pos/src/state/addition_controller.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
+import 'package:restoflow_pos/src/state/draft_recovery_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
+import 'package:restoflow_pos/src/state/recent_orders_controller.dart'
+    show posRecentOrdersStoreProvider;
 import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
+import 'package:restoflow_pos/src/widgets/recovery_coordinator.dart';
 
 /// PSC-001C final cart-safety micro-fix — the OWNER-TOKEN cart mutation lock.
 ///
@@ -50,6 +57,7 @@ const _intruder = DemoMenuItem(
 
 PosOrderDetail _detail({
   String orderId = 'o-1',
+  int revision = 2,
   List<PosOrderDetailRound> rounds = const [
     PosOrderDetailRound(roundId: 'r-new', roundNumber: 2, status: 'submitted'),
   ],
@@ -58,7 +66,7 @@ PosOrderDetail _detail({
   orderCode: '#O00001',
   orderType: 'dine_in',
   status: 'preparing',
-  revision: 2,
+  revision: revision,
   currencyCode: 'ILS',
   subtotalMinor: 2500,
   discountTotalMinor: 0,
@@ -627,6 +635,310 @@ void main() {
       expect(find.byKey(const Key('pos-addition-banner')), findsNothing);
       expect(container.read(cartControllerProvider).lockedByAddition, isFalse);
       expect(container.read(cartControllerProvider).lines, hasLength(1));
+    });
+  });
+
+  group('H. unlockForAddition fails CLOSED (final Fix 2)', () {
+    test(
+      'no owner / wrong token → false with zero state change; only the '
+      'exact owner unlocks; a second unlock with the old owner → false',
+      () async {
+        final (container, _) = _container(_FakeTransport([(p) => _applied(p)]));
+        final cart = container.read(cartControllerProvider.notifier);
+        const owner = CartLockOwner(
+          generation: 3,
+          orderId: 'o-1',
+          localOperationId: 'op-1',
+        );
+        // Absence of a lock is NOT privileged authorization.
+        expect(cart.unlockForAddition(owner), isFalse);
+        expect(
+          container.read(cartControllerProvider).lockedByAddition,
+          isFalse,
+        );
+        // Lock, then every partial mismatch fails closed.
+        expect(cart.lockForAddition(owner), isTrue);
+        expect(
+          cart.unlockForAddition(
+            const CartLockOwner(
+              generation: 4,
+              orderId: 'o-1',
+              localOperationId: 'op-1',
+            ),
+          ),
+          isFalse,
+          reason: 'wrong generation',
+        );
+        expect(
+          cart.unlockForAddition(
+            const CartLockOwner(
+              generation: 3,
+              orderId: 'o-2',
+              localOperationId: 'op-1',
+            ),
+          ),
+          isFalse,
+          reason: 'wrong order id',
+        );
+        expect(
+          cart.unlockForAddition(
+            const CartLockOwner(
+              generation: 3,
+              orderId: 'o-1',
+              localOperationId: 'op-2',
+            ),
+          ),
+          isFalse,
+          reason: 'wrong local_operation_id',
+        );
+        expect(container.read(cartControllerProvider).lockedByAddition, isTrue);
+        // The exact owner unlocks; the SAME token cannot unlock twice.
+        expect(cart.unlockForAddition(owner), isTrue);
+        expect(
+          container.read(cartControllerProvider).lockedByAddition,
+          isFalse,
+        );
+        expect(cart.unlockForAddition(owner), isFalse);
+      },
+    );
+  });
+
+  group('I. reconciliation verifies EXACT lock ownership (final Fix 3)', () {
+    test('NO lock owner at reconcile: the fresh detail is NOT installed, the '
+        'attempt and cart stay, refresh-required remains', () async {
+      final repo = _GatedDetailRepo();
+      final transport = _FakeTransport([(p) => _applied(p)]);
+      final (container, _) = _container(transport, detailRepo: repo);
+      final notifier = container.read(additionControllerProvider.notifier);
+      final cart = container.read(cartControllerProvider.notifier);
+      final entry = notifier.enterForOrder('o-1');
+      repo.gates[0].complete(_detail()); // the entry detail: revision 2
+      expect(await entry, AdditionEntryResult.entered);
+      expect(cart.addItem(_item), CartMutationResult.applied);
+      final submitted = notifier.submit();
+      await pumpEventQueue(times: 5);
+      expect(
+        container.read(additionControllerProvider).awaitingRefresh,
+        isTrue,
+      );
+      // Strip the lock through its EXACT owner (test-constructed absence).
+      final s = container.read(additionControllerProvider);
+      final owner = CartLockOwner(
+        generation: s.generation,
+        orderId: s.attempt!.orderId,
+        localOperationId: s.attempt!.localOperationId,
+      );
+      expect(cart.unlockForAddition(owner), isTrue);
+      // The hanging refresh now lands with a DISTINGUISHABLE fresh detail.
+      repo.gates[1].complete(_detail(revision: 7));
+      final result = await submitted;
+      expect(result.applied, isTrue);
+      expect(result.refreshRequired, isTrue); // reconciliation fail-closed
+      final after = container.read(additionControllerProvider);
+      expect(after.awaitingRefresh, isTrue);
+      expect(after.hasOpenAttempt, isTrue);
+      expect(after.target?.revision, 2); // the fresh detail was NOT installed
+      expect(container.read(cartControllerProvider).lines, hasLength(1));
+    });
+
+    test('WRONG-generation owner holds the lock: same fail-closed result and '
+        'the foreign lock is untouched', () async {
+      final repo = _GatedDetailRepo();
+      final transport = _FakeTransport([(p) => _applied(p)]);
+      final (container, _) = _container(transport, detailRepo: repo);
+      final notifier = container.read(additionControllerProvider.notifier);
+      final cart = container.read(cartControllerProvider.notifier);
+      final entry = notifier.enterForOrder('o-1');
+      repo.gates[0].complete(_detail());
+      expect(await entry, AdditionEntryResult.entered);
+      expect(cart.addItem(_item), CartMutationResult.applied);
+      final submitted = notifier.submit();
+      await pumpEventQueue(times: 5);
+      final s = container.read(additionControllerProvider);
+      final exact = CartLockOwner(
+        generation: s.generation,
+        orderId: s.attempt!.orderId,
+        localOperationId: s.attempt!.localOperationId,
+      );
+      expect(cart.unlockForAddition(exact), isTrue);
+      final foreign = CartLockOwner(
+        generation: s.generation + 7,
+        orderId: s.attempt!.orderId,
+        localOperationId: s.attempt!.localOperationId,
+      );
+      expect(cart.lockForAddition(foreign), isTrue);
+      repo.gates[1].complete(_detail(revision: 7));
+      final result = await submitted;
+      expect(result.refreshRequired, isTrue);
+      final after = container.read(additionControllerProvider);
+      expect(after.awaitingRefresh, isTrue);
+      expect(after.target?.revision, 2);
+      // The foreign lock survives untouched — zero side effects on it.
+      final held = container.read(cartControllerProvider);
+      expect(held.lockedByAddition, isTrue);
+      expect(held.lines, hasLength(1));
+      expect(cart.ownsAdditionLock(foreign), isTrue);
+    });
+
+    test('ownsAdditionLock is read-only and exact: false with no owner, false '
+        'on any field mismatch, true only for the full token', () async {
+      final (container, _) = _container(_FakeTransport([(p) => _applied(p)]));
+      final cart = container.read(cartControllerProvider.notifier);
+      const owner = CartLockOwner(
+        generation: 5,
+        orderId: 'o-9',
+        localOperationId: 'op-9',
+      );
+      expect(cart.ownsAdditionLock(owner), isFalse); // nothing locked
+      expect(cart.lockForAddition(owner), isTrue);
+      expect(cart.ownsAdditionLock(owner), isTrue);
+      expect(
+        cart.ownsAdditionLock(
+          const CartLockOwner(
+            generation: 6,
+            orderId: 'o-9',
+            localOperationId: 'op-9',
+          ),
+        ),
+        isFalse,
+      );
+      // Read-only: the probe changed nothing.
+      expect(container.read(cartControllerProvider).lockedByAddition, isTrue);
+      expect(cart.unlockForAddition(owner), isTrue);
+    });
+  });
+
+  group('J. draft recovery refuses while the cart is addition-locked '
+      '(final Fix 1)', () {
+    testWidgets('the REAL coordinator: lockedByAddition outcome before any '
+        'dialog/retirement; everything preserved; the SAME recovery succeeds '
+        'after a legitimate unlock', (tester) async {
+      final transport = _FakeTransport([(p) => _rejected(p)]);
+      final container = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posAuthTransportProvider.overrideWithValue(transport),
+          posSyncSessionProvider.overrideWithValue(
+            const SyncSession(pinSessionId: 'pin-1', deviceId: 'dev-1'),
+          ),
+          orderDetailRepositoryProvider.overrideWithValue(_FakeDetailRepo()),
+          orderSnapshotRepositoryProvider.overrideWithValue(
+            DemoOrderSnapshotRepository(),
+          ),
+          posSyncPollIntervalProvider.overrideWithValue(null),
+          posRecentOrdersStoreProvider.overrideWithValue(
+            InMemoryRecentOrdersStore(),
+          ),
+          posSyncCursorStoreProvider.overrideWithValue(
+            InMemorySyncCursorStore(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      late WidgetRef widgetRef;
+      late BuildContext widgetContext;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Consumer(
+              builder: (c, r, _) {
+                widgetRef = r;
+                widgetContext = c;
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // The recoverable record R (this session's binding).
+      final recovery = PosDraftRecovery(
+        draft: const CartDraftSnapshot(
+          currencyCode: 'ILS',
+          lines: [
+            CartDraftLine(
+              menuItemId: 'm-draft',
+              name: 'Draft Burger',
+              basePriceMinor: 500,
+              quantity: 1,
+            ),
+          ],
+        ),
+        orderType: OrderType.dineIn,
+        outboxEntryId: 'entry-R',
+        binding: container.read(posRecoveryBindingProvider),
+      );
+      container.read(posDraftRecoveryProvider.notifier).capture(recovery);
+
+      // A REAL addition attempt A locks the cart (retryable failure).
+      final notifier = container.read(additionControllerProvider.notifier);
+      await notifier.enterForOrder('o-1');
+      expect(
+        container.read(cartControllerProvider.notifier).addItem(_item),
+        CartMutationResult.applied,
+      );
+      await notifier.submit();
+      expect(container.read(cartControllerProvider).lockedByAddition, isTrue);
+      final attemptBefore = container.read(additionControllerProvider).attempt;
+
+      // Recovery invoked DIRECTLY through the coordinator while locked.
+      final outcome = await PosRecoveryCoordinator(
+        widgetRef,
+      ).restore(widgetContext, recovery);
+      await tester.pump();
+      expect(outcome, PosRecoveryOutcome.lockedByAddition);
+      // No dialog was ever opened.
+      expect(find.byKey(const Key('recovery-replace-dialog')), findsNothing);
+      // The cart, the lock and the attempt are all unchanged.
+      final cartState = container.read(cartControllerProvider);
+      expect(cartState.lockedByAddition, isTrue);
+      expect(cartState.lines.single.menuItemId, _item.id);
+      expect(
+        container.read(additionControllerProvider).attempt?.localOperationId,
+        attemptBefore?.localOperationId,
+      );
+      // The recovery record still exists and remains recoverable.
+      expect(
+        container
+            .read(posDraftRecoveryProvider.notifier)
+            .hasRecoveryFor('entry-R'),
+        isTrue,
+      );
+      expect(
+        container
+            .read(posDraftRecoveryProvider.notifier)
+            .recoverable('entry-R', container.read(posRecoveryBindingProvider)),
+        isNotNull,
+      );
+
+      // LEGITIMATE unlock (explicit cancel of the failed attempt), then the
+      // SAME recovery proceeds normally.
+      expect(notifier.exit(), isTrue);
+      expect(
+        container.read(cartControllerProvider.notifier).clear(),
+        CartMutationResult.applied,
+      );
+      final second = await PosRecoveryCoordinator(
+        widgetRef,
+      ).restore(widgetContext, recovery);
+      await tester.pump();
+      expect(second, PosRecoveryOutcome.restored);
+      expect(
+        container.read(cartControllerProvider).lines.single.menuItemId,
+        'm-draft',
+      );
+      expect(
+        container
+            .read(posDraftRecoveryProvider.notifier)
+            .hasRecoveryFor('entry-R'),
+        isFalse, // resolved through the normal flow
+      );
     });
   });
 }
