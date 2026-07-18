@@ -40,7 +40,17 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   static const ui.Color _white = ui.Color(0xFFFFFFFF);
 
   @override
-  Future<ReceiptRasterImage> rasterize(ReceiptRasterRequest request) async {
+  Future<ReceiptRasterImage> rasterize(ReceiptRasterRequest request) async =>
+      (await rasterizeDetailed(request)).image;
+
+  /// [rasterize] plus per-line VISIBILITY: which vertical rows of the final
+  /// bitmap each logical line occupies ([ReceiptRasterBand]). The image is the
+  /// production output — bands are derived from the same block heights that
+  /// position the paint, so tests/diagnostics can assert ink per line without
+  /// changing what a printer receives.
+  Future<ReceiptRasterRender> rasterizeDetailed(
+    ReceiptRasterRequest request,
+  ) async {
     final widthDots = request.widthDots;
     final textDirection = request.direction == ReceiptTextDirection.rtl
         ? ui.TextDirection.rtl
@@ -72,6 +82,18 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     }
     final heightDots = math.max(1, totalHeight.ceil());
 
+    final image = await _render(blocks, widthDots, heightDots);
+    return ReceiptRasterRender(
+      image: image,
+      bands: _bandsFor(request, blocks, heightDots),
+    );
+  }
+
+  Future<ReceiptRasterImage> _render(
+    List<_Block> blocks,
+    int widthDots,
+    int heightDots,
+  ) async {
     final image = await _paint(blocks, widthDots, heightDots);
     try {
       final byteData = await image.toByteData(
@@ -84,6 +106,33 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     } finally {
       image.dispose();
     }
+  }
+
+  List<ReceiptRasterBand> _bandsFor(
+    ReceiptRasterRequest request,
+    List<_Block> blocks,
+    int heightDots,
+  ) {
+    final bands = <ReceiptRasterBand>[];
+    var y = 0.0;
+    for (var i = 0; i < blocks.length; i++) {
+      final style = i < request.styles.length
+          ? request.styles[i]
+          : PrintLineStyle.normal;
+      final startRow = y.floor().clamp(0, heightDots);
+      y += blocks[i].height;
+      final endRow = y.ceil().clamp(0, heightDots);
+      bands.add(
+        ReceiptRasterBand(
+          index: i,
+          text: request.lines[i],
+          style: style,
+          startRow: startRow,
+          endRow: endRow,
+        ),
+      );
+    }
+    return bands;
   }
 
   double get _separatorHeight => fontSize * 0.85;
@@ -226,6 +275,65 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
       widthBytes: widthBytes,
       heightDots: heightDots,
     );
+  }
+}
+
+/// One logical receipt line's vertical placement inside the final bitmap
+/// (PILOT-PRINT-FIDELITY-001). Pure metadata for tests/diagnostics — the
+/// printed bytes are unchanged. Rows are half-open: `[startRow, endRow)`.
+class ReceiptRasterBand {
+  const ReceiptRasterBand({
+    required this.index,
+    required this.text,
+    required this.style,
+    required this.startRow,
+    required this.endRow,
+  });
+
+  /// Position of the line in the request (parallel to `request.lines`).
+  final int index;
+
+  /// The logical line text this band renders.
+  final String text;
+
+  /// The semantic style the band was rendered with.
+  final PrintLineStyle style;
+
+  /// First bitmap row (inclusive) of this line's block.
+  final int startRow;
+
+  /// One past the last bitmap row of this line's block.
+  final int endRow;
+
+  bool get isSeparator => style == PrintLineStyle.separator;
+
+  /// Whether the line carries visible content a printed receipt must show
+  /// (non-empty after trimming; separators draw their own rule).
+  bool get expectsInk => isSeparator || text.trim().isNotEmpty;
+}
+
+/// The detailed result of [FlutterReceiptRasterizer.rasterizeDetailed]: the
+/// production bitmap plus the per-line bands that compose it.
+class ReceiptRasterRender {
+  const ReceiptRasterRender({required this.image, required this.bands});
+
+  final ReceiptRasterImage image;
+  final List<ReceiptRasterBand> bands;
+
+  /// Black-dot count within [band]'s rows (whole-width scan of the 1bpp data).
+  int inkInBand(ReceiptRasterBand band) {
+    var count = 0;
+    for (var row = band.startRow; row < band.endRow; row++) {
+      final base = row * image.widthBytes;
+      for (var b = 0; b < image.widthBytes; b++) {
+        var byte = image.data[base + b];
+        while (byte != 0) {
+          count += byte & 1;
+          byte >>= 1;
+        }
+      }
+    }
+    return count;
   }
 }
 

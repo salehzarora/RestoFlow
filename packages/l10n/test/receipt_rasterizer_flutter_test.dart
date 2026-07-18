@@ -147,6 +147,184 @@ void main() {
     expect(tall.heightDots, greaterThan(short.heightDots));
   });
 
+  // PILOT-PRINT-FIDELITY-001: per-BAND ink. The physical defect was a receipt
+  // whose item/modifier body occupied blank vertical space inside the single
+  // bitmap while header and totals printed. These tests pin, per logical line,
+  // that valid non-empty content produces actual black dots WITHIN THAT LINE'S
+  // OWN ROWS — a blank-but-height-reserving body can never pass again.
+  // HONESTY: the CI text engine substitutes a test font that draws solid boxes
+  // for most glyphs, so a DEVICE-ONLY font-fallback miss may not reproduce
+  // here; real hardware remains the final arbiter for glyph fidelity. What
+  // these tests DO guarantee structurally: bands tile the bitmap exactly, and
+  // the renderer never silently accepts an ink-less band for renderable text.
+  group('per-band body ink (PILOT-PRINT-FIDELITY-001)', () {
+    Future<ReceiptRasterRender> render(
+      List<(String, PrintLineStyle)> styledLines, {
+      ReceiptTextDirection direction = ReceiptTextDirection.rtl,
+      String localeTag = 'ar',
+    }) => rasterizer.rasterizeDetailed(
+      ReceiptRasterRequest(
+        lines: [for (final (t, _) in styledLines) t],
+        styles: [for (final (_, s) in styledLines) s],
+        widthDots: 576,
+        direction: direction,
+        localeTag: localeTag,
+      ),
+    );
+
+    void expectEveryBandInked(ReceiptRasterRender r) {
+      for (final band in r.bands) {
+        if (!band.expectsInk) continue;
+        expect(
+          r.inkInBand(band),
+          greaterThan(0),
+          reason:
+              'line ${band.index} (${band.style.name}) '
+              '"${band.text.trim()}" rendered NO ink in rows '
+              '${band.startRow}..${band.endRow}',
+        );
+      }
+    }
+
+    void expectBandsTile(ReceiptRasterRender r) {
+      expect(r.bands.first.startRow, 0);
+      expect(r.bands.last.endRow, r.image.heightDots);
+      for (var i = 1; i < r.bands.length; i++) {
+        // floor/ceil rounding may overlap adjacent bands by one row but can
+        // never leave an unowned gap.
+        expect(r.bands[i].startRow, lessThanOrEqualTo(r.bands[i - 1].endRow));
+        expect(r.bands[i].endRow, greaterThanOrEqualTo(r.bands[i - 1].endRow));
+      }
+    }
+
+    // The exact physical shape: Arabic header, meta, item + modifiers with
+    // two-column padding and the × multiplier, totals below.
+    List<(String, PrintLineStyle)> arabicReceipt() => const [
+      ('مطعم الأصالة', PrintLineStyle.headingLarge),
+      ('مدفوع', PrintLineStyle.centered),
+      ('#A1B2C3', PrintLineStyle.headingLarge),
+      ('صالة · طاولة T3 · 14:30', PrintLineStyle.centered),
+      ('--------', PrintLineStyle.separator),
+      ('2 × كباب حلبي                          ₪50.00', PrintLineStyle.item),
+      ('  + إضافة ثوم ×2', PrintLineStyle.sub),
+      ('  + بدون بصل', PrintLineStyle.sub),
+      ('1 × حمص بالطحينة                       ₪18.00', PrintLineStyle.item),
+      ('--------', PrintLineStyle.separator),
+      ('المجموع                                ₪68.00', PrintLineStyle.total),
+      ('المدفوع                                ₪70.00', PrintLineStyle.normal),
+      ('الباقي                                  ₪2.00', PrintLineStyle.normal),
+      ('شكراً لزيارتكم', PrintLineStyle.centered),
+    ];
+
+    test('Arabic receipt: header, EVERY item, EVERY modifier, and totals '
+        'bands all carry ink; bands tile the bitmap', () async {
+      final r = await render(arabicReceipt());
+      expectBandsTile(r);
+      expectEveryBandInked(r);
+      // Explicit body pins (the photographed blank region).
+      final items = r.bands.where((b) => b.style == PrintLineStyle.item);
+      final subs = r.bands.where((b) => b.style == PrintLineStyle.sub);
+      expect(items, hasLength(2));
+      expect(subs, hasLength(2));
+      for (final b in [...items, ...subs]) {
+        expect(r.inkInBand(b), greaterThan(0));
+      }
+    });
+
+    test('Hebrew item + modifiers carry ink', () async {
+      final r = await render(const [
+        ('קבלה', PrintLineStyle.headingLarge),
+        ('2 × שווארמה בפיתה                      ₪45.00', PrintLineStyle.item),
+        ('  + תוספת חריף', PrintLineStyle.sub),
+        ('סה"כ                                   ₪45.00', PrintLineStyle.total),
+      ], localeTag: 'he');
+      expectBandsTile(r);
+      expectEveryBandInked(r);
+    });
+
+    test('English item with the × multiplier carries ink', () async {
+      final r = await render(
+        const [
+          ('Receipt', PrintLineStyle.headingLarge),
+          (
+            '2 × Burger                             ₪50.00',
+            PrintLineStyle.item,
+          ),
+          ('  + Extra cheese', PrintLineStyle.sub),
+          (
+            'TOTAL                                  ₪50.00',
+            PrintLineStyle.total,
+          ),
+        ],
+        direction: ReceiptTextDirection.ltr,
+        localeTag: 'en',
+      );
+      expectBandsTile(r);
+      expectEveryBandInked(r);
+    });
+
+    test('mixed RTL text, digits, currency, and two-column spacing stay '
+        'non-blank', () async {
+      final r = await render(const [
+        ('3 × Pizza مرغريتا 12" ₪36.50           ₪109.50', PrintLineStyle.item),
+      ]);
+      expect(r.inkInBand(r.bands.single), greaterThan(0));
+    });
+
+    test('a MANY-item receipt grows vertically, keeps every item band inked, '
+        'and keeps totals present (no clipping)', () async {
+      final few = await render(arabicReceipt());
+      final many = await render([
+        ...arabicReceipt().take(5),
+        for (var i = 1; i <= 12; i++) ...[
+          (
+            '$i × صنف رقم $i                        ₪10.00',
+            PrintLineStyle.item,
+          ),
+          ('  + إضافة $i', PrintLineStyle.sub),
+        ],
+        ...arabicReceipt().skip(9),
+      ]);
+      expect(many.image.heightDots, greaterThan(few.image.heightDots));
+      expectBandsTile(many);
+      expectEveryBandInked(many);
+      expect(
+        many.bands.where((b) => b.style == PrintLineStyle.total).length,
+        1,
+      );
+    });
+
+    test('a LONG receipt keeps every section: no missing middle', () async {
+      final r = await render([
+        ('رأس الإيصال', PrintLineStyle.headingLarge),
+        for (var i = 1; i <= 40; i++)
+          (
+            '$i × صنف طويل جداً رقم $i              ₪10.00',
+            PrintLineStyle.item,
+          ),
+        ('المجموع                               ₪400.00', PrintLineStyle.total),
+      ]);
+      expectBandsTile(r);
+      expectEveryBandInked(r);
+    });
+
+    test('production rasterize() bytes are IDENTICAL to the detailed render '
+        '(the seam changes nothing a printer receives)', () async {
+      final request = ReceiptRasterRequest(
+        lines: [for (final (t, _) in arabicReceipt()) t],
+        styles: [for (final (_, s) in arabicReceipt()) s],
+        widthDots: 576,
+        direction: ReceiptTextDirection.rtl,
+        localeTag: 'ar',
+      );
+      final plain = await rasterizer.rasterize(request);
+      final detailed = await rasterizer.rasterizeDetailed(request);
+      expect(plain.heightDots, detailed.image.heightDots);
+      expect(plain.widthBytes, detailed.image.widthBytes);
+      expect(plain.data, detailed.image.data);
+    });
+  });
+
   // PRINT-RTL-001: the full live path — an already-laid-out ESC/POS TEXT document
   // rasterized by the REAL dart:ui renderer, then encoded to ESC/POS raster
   // bytes. Proves ar/he go out as a GS v 0 image, never codepage text.
