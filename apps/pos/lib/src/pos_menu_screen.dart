@@ -17,6 +17,8 @@ import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
 import 'widgets/outbox_status_indicator.dart';
 import 'widgets/pos_bottom_bar.dart';
+import 'widgets/ready_alert_overlay.dart';
+import 'widgets/ready_notification_bell.dart';
 import 'widgets/recent_orders_sheet.dart';
 
 /// The RestoFlow POS cashier screen (DESIGN-004 Warm/Bento): a warm-canvas
@@ -73,40 +75,49 @@ class PosMenuScreen extends StatelessWidget {
           ],
         ),
         actions: const [
+          // PSC-001A: the ready-notification bell leads the action group.
+          ReadyNotificationBell(),
           RecentOrdersButton(),
           OutboxStatusIndicator(),
           LanguageSelector(),
           DeviceSettingsMenu(),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final mode = posLayoutModeFor(
-            width: constraints.maxWidth,
-            height: constraints.maxHeight,
-          );
+      // PSC-001A: the body hosts the ONE ready-alert banner above whichever
+      // responsive layout is active — same overlay on phone and tablet.
+      body: Stack(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final mode = posLayoutModeFor(
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
+              );
 
-          if (mode == PosLayoutMode.phone) {
-            return const Column(
-              children: [
-                Expanded(child: _MenuPane()),
-                PosBottomBar(),
-              ],
-            );
-          }
+              if (mode == PosLayoutMode.phone) {
+                return const Column(
+                  children: [
+                    Expanded(child: _MenuPane()),
+                    PosBottomBar(),
+                  ],
+                );
+              }
 
-          final compact = mode == PosLayoutMode.compactLandscape;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Expanded(child: _MenuPane()),
-              SizedBox(
-                width: posCartWidthFor(mode),
-                child: CartPanel(compact: compact),
-              ),
-            ],
-          );
-        },
+              final compact = mode == PosLayoutMode.compactLandscape;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Expanded(child: _MenuPane()),
+                  SizedBox(
+                    width: posCartWidthFor(mode),
+                    child: CartPanel(compact: compact),
+                  ),
+                ],
+              );
+            },
+          ),
+          const ReadyAlertOverlay(),
+        ],
       ),
     );
   }

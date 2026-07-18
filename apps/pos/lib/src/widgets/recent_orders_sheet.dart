@@ -69,15 +69,22 @@ class RecentOrdersButton extends ConsumerWidget {
 /// come from the server. Every action offered is decided by ONE eligibility policy
 /// (`order_actions.dart`), so a button that cannot work is never drawn.
 class RecentOrdersSheet extends ConsumerStatefulWidget {
-  const RecentOrdersSheet({super.key});
+  const RecentOrdersSheet({this.focusOrderId, super.key});
 
-  static Future<void> show(BuildContext context) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
-    builder: (_) => const RecentOrdersSheet(),
-  );
+  /// PSC-001A: when set, the sheet opens FOCUSED on this server order — the
+  /// All section with the search seeded to the order's display code, so the
+  /// target card (with its full honest action policy) is immediately visible.
+  /// An unknown id degrades honestly to the plain full list.
+  final String? focusOrderId;
+
+  static Future<void> show(BuildContext context, {String? focusOrderId}) =>
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        useSafeArea: true,
+        builder: (_) => RecentOrdersSheet(focusOrderId: focusOrderId),
+      );
 
   @override
   ConsumerState<RecentOrdersSheet> createState() => _RecentOrdersSheetState();
@@ -99,15 +106,45 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
   /// out would leave the timer running forever.
   PosOrderSyncController? _sync;
 
+  /// PSC-001A focus: the order id still awaiting its search-seed resolution.
+  /// Resolved lazily against the WATCHED rows in [build] (the persisted cache
+  /// loads asynchronously — an initState-only lookup would race it); an id
+  /// that never appears leaves the plain honest list.
+  String? _pendingFocusId;
+
   @override
   void initState() {
     super.initState();
+    final focusId = widget.focusOrderId;
+    if (focusId != null) {
+      _section = PosOrderSection.all;
+      _pendingFocusId = focusId;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final sync = ref.read(posOrderSyncControllerProvider.notifier);
       _sync = sync;
       sync.addVisibleConsumer();
     });
+  }
+
+  /// Seeds the search with the focused order's display code once its row is
+  /// visible in the watched authoritative set.
+  void _resolveFocus(List<PosRecentOrder> orders) {
+    final focusId = _pendingFocusId;
+    if (focusId == null) return;
+    for (final o in orders) {
+      if (o.orderId == focusId) {
+        final code = o.orderNumber;
+        _pendingFocusId = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _search.text = code;
+          setState(() => _query = code);
+        });
+        return;
+      }
+    }
   }
 
   @override
@@ -141,6 +178,7 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final orders = ref.watch(posRecentOrdersControllerProvider);
+    _resolveFocus(orders);
     final status = ref.watch(posOrderSyncControllerProvider);
     // EFFECTIVE rights, or null when UNKNOWN. Unknown is NOT denied — a failed probe
     // must not silently strip a manager of the ability to discount; the server
