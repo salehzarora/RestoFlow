@@ -80,6 +80,10 @@ class _StubReadyController extends PosReadyNotificationsController {
     reconcileCalls++;
   }
 
+  /// Simulates a live state change (e.g. a new arrival) while UI is open.
+  void setRecords(List<PosReadyNotificationRecord> records) =>
+      state = state.copyWith(records: records);
+
   @override
   Future<void> refreshNow() async {
     refreshCalls++;
@@ -541,6 +545,122 @@ void main() {
       expect(direction, TextDirection.rtl);
       expect(find.text('היסטוריית התראות'), findsOneWidget);
       expect(find.textContaining('התוספת מוכנה — סבב 2'), findsOneWidget);
+    });
+  });
+
+  group('history sheet display limit (newest 8 + Show more)', () {
+    int listCount(WidgetTester tester) =>
+        tester.widget<ListView>(find.byType(ListView)).semanticChildCount!;
+
+    Future<(_StubReadyController, ProviderContainer)> pumpSheet(
+      WidgetTester tester,
+      int records,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      return _pump(
+        tester,
+        const Scaffold(body: ReadyNotificationsSheet()),
+        readyState: PosReadyNotificationsState(
+          initialized: true,
+          // Deliberately SHUFFLED (odd then even) — the sheet must sort
+          // newest-first itself.
+          records: [
+            for (var n = 1; n <= records; n += 2) _record(n),
+            for (var n = 2; n <= records; n += 2) _record(n),
+          ],
+        ),
+      );
+    }
+
+    testWidgets('6 records → all 6 visible and NO Show more', (tester) async {
+      await pumpSheet(tester, 6);
+      expect(listCount(tester), 6);
+      expect(find.byKey(const Key('ready-show-more')), findsNothing);
+    });
+
+    testWidgets('12 records → the NEWEST 8 first, Show more reveals all 12 '
+        'and then hides', (tester) async {
+      await pumpSheet(tester, 12);
+      expect(listCount(tester), 8);
+      // Visible are n=12..5; n=4 is NOT in the list at all.
+      expect(
+        find.byKey(Key('ready-row-initial_order|${_uid(12)}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('ready-row-initial_order|${_uid(4)}')),
+        findsNothing,
+      );
+      expect(find.text('Show more'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('ready-show-more')));
+      await tester.pumpAndSettle();
+      expect(listCount(tester), 12);
+      expect(find.byKey(const Key('ready-show-more')), findsNothing);
+    });
+
+    testWidgets('25 records reveal 8 → 16 → 24 → 25', (tester) async {
+      await pumpSheet(tester, 25);
+      expect(listCount(tester), 8);
+      for (final expected in [16, 24, 25]) {
+        await tester.tap(find.byKey(const Key('ready-show-more')));
+        await tester.pumpAndSettle();
+        expect(listCount(tester), expected);
+      }
+      expect(find.byKey(const Key('ready-show-more')), findsNothing);
+    });
+
+    testWidgets('REOPENING the sheet starts back at the newest 8', (
+      tester,
+    ) async {
+      await pumpSheet(tester, 12);
+      await tester.tap(find.byKey(const Key('ready-show-more')));
+      await tester.pumpAndSettle();
+      expect(listCount(tester), 12);
+      // Close (a fresh mount) and reopen — a NEW sheet State resets to 8.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await pumpSheet(tester, 12);
+      expect(listCount(tester), 8);
+    });
+
+    testWidgets('NEWEST-FIRST ordering; a record arriving while OPEN sorts '
+        'into position within the same visible page', (tester) async {
+      final (stub, _) = await pumpSheet(tester, 9);
+      expect(listCount(tester), 8);
+      // Topmost row is the newest (n=9); n=1 (the oldest) is not listed.
+      final topDy = tester
+          .getTopLeft(find.byKey(Key('ready-row-initial_order|${_uid(9)}')))
+          .dy;
+      final secondDy = tester
+          .getTopLeft(find.byKey(Key('ready-row-initial_order|${_uid(8)}')))
+          .dy;
+      expect(topDy, lessThan(secondDy));
+      expect(
+        find.byKey(Key('ready-row-initial_order|${_uid(1)}')),
+        findsNothing,
+      );
+      // A NEW arrival (n=30, the newest) appears FIRST; the visible window
+      // stays at 8, so the previous 8th (n=2) slides out.
+      stub.setRecords([for (var n = 1; n <= 9; n++) _record(n), _record(30)]);
+      await tester.pumpAndSettle();
+      expect(listCount(tester), 8);
+      final newTopDy = tester
+          .getTopLeft(find.byKey(Key('ready-row-initial_order|${_uid(30)}')))
+          .dy;
+      expect(
+        newTopDy,
+        lessThan(
+          tester
+              .getTopLeft(find.byKey(Key('ready-row-initial_order|${_uid(9)}')))
+              .dy,
+        ),
+      );
+      expect(
+        find.byKey(Key('ready-row-initial_order|${_uid(2)}')),
+        findsNothing,
+      );
     });
   });
 

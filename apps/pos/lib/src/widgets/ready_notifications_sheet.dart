@@ -42,6 +42,11 @@ class ReadyNotificationsSheet extends ConsumerStatefulWidget {
 
 class _ReadyNotificationsSheetState
     extends ConsumerState<ReadyNotificationsSheet> {
+  /// The history reveals in pages of 8, newest first; every OPEN starts back
+  /// at the newest page (this is State, so a reopened sheet resets).
+  static const int _pageSize = 8;
+  int _visibleCount = _pageSize;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +67,14 @@ class _ReadyNotificationsSheetState
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final state = ref.watch(posReadyNotificationsControllerProvider);
+    // Newest first by readyAt; a record arriving while the sheet is open
+    // sorts into position. Only the first [_visibleCount] render — "Show
+    // more" reveals the next page of 8 until everything retained is visible.
+    final ordered = [...state.records]
+      ..sort((a, b) => b.readyAtTime.compareTo(a.readyAtTime));
+    final visible = ordered.length <= _visibleCount
+        ? ordered
+        : ordered.sublist(0, _visibleCount);
     final recentOrders = ref.watch(posRecentOrdersControllerProvider);
     // Render-time parent-status join: the recent-orders snapshots are the
     // freshest parent truth this till already holds — zero extra RPCs.
@@ -166,11 +179,11 @@ class _ReadyNotificationsSheetState
                   )
                 : ListView.separated(
                     shrinkWrap: true,
-                    itemCount: state.records.length,
+                    itemCount: visible.length,
                     separatorBuilder: (_, _) =>
                         const SizedBox(height: RestoflowSpacing.xs),
                     itemBuilder: (context, i) {
-                      final record = state.records[i];
+                      final record = visible[i];
                       return _ReadyNotificationRow(
                         record: record,
                         l10n: l10n,
@@ -185,6 +198,12 @@ class _ReadyNotificationsSheetState
                     },
                   ),
           ),
+          if (ordered.length > _visibleCount)
+            TextButton(
+              key: const Key('ready-show-more'),
+              onPressed: () => setState(() => _visibleCount += _pageSize),
+              child: Text(l10n.posReadyShowMore),
+            ),
         ],
       ),
     );

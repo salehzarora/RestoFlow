@@ -538,6 +538,12 @@ abstract class AppLocalizations {
   /// **'Ready updates temporarily unavailable — retrying'**
   String get posReadyPollingDegraded;
 
+  /// PSC-001A: reveals the next page of retained ready notifications (8 at a time) in the history sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get posReadyShowMore;
+
   /// No description provided for @posAdditionSavedRefreshNeeded.
   ///
   /// In en, this message translates to:

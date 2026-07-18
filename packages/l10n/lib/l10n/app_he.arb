@@ -73,6 +73,7 @@
   "posReadyOpenOrder": "פתח הזמנה",
   "posReadyAtTime": "מוכן ב-{time}",
   "posReadyPollingDegraded": "עדכוני המוכנות אינם זמינים זמנית — מנסה שוב",
+  "posReadyShowMore": "הצג עוד",
   "posAdditionSavedRefreshNeeded": "הפריטים נוספו ונשמרו — תצוגת ההזמנה לא התרעננה. הקישו על רענון לסיום.",
   "posReceiptUnavailableRetry": "לא ניתן לטעון את קבלת ההזמנה — בדקו את החיבור ונסו שוב.",
   "posAddItemsIneligiblePaid": "אי אפשר להוסיף להזמנה ששולמה",

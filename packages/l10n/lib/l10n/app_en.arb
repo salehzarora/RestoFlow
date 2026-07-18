@@ -92,6 +92,8 @@
   "@posReadyAtTime": {"description": "PSC-001A: when the work unit became ready (authoritative server stamp, HH:mm).", "placeholders": {"time": {"type": "String"}}},
   "posReadyPollingDegraded": "Ready updates temporarily unavailable — retrying",
   "@posReadyPollingDegraded": {"description": "PSC-001A: quiet degraded subtitle in the history sheet while background ready-feed polling is failing; polling keeps probing and recovers silently."},
+  "posReadyShowMore": "Show more",
+  "@posReadyShowMore": {"description": "PSC-001A: reveals the next page of retained ready notifications (8 at a time) in the history sheet."},
   "posAdditionSavedRefreshNeeded": "Items added and saved — the order view could not refresh. Tap Refresh to finish.",
   "posReceiptUnavailableRetry": "Couldn't load the order's receipt — check the connection and try again.",
   "posAddItemsIneligiblePaid": "Paid orders can't take additions",

@@ -159,6 +159,7 @@ ProviderContainer harness({
   bool withScope = true,
   Duration? pollInterval,
   bool demo = false,
+  DateTime Function()? clock,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -167,7 +168,7 @@ ProviderContainer harness({
         store ?? InMemoryReadyNotificationsStore(),
       ),
       posReadyFeedPollIntervalProvider.overrideWithValue(pollInterval),
-      posSyncClockProvider.overrideWithValue(() => _t0),
+      posSyncClockProvider.overrideWithValue(clock ?? () => _t0),
       runtimeConfigProvider.overrideWithValue(
         RuntimeConfig.test(isDemoMode: demo),
       ),
@@ -428,11 +429,11 @@ void main() {
       expect(gated.calls, 1);
     });
 
-    test('P5 retention keeps the NEWEST 100 within 24h and never rewinds the '
+    test('P5 retention keeps the NEWEST 100 and never rewinds the '
         'cursor', () async {
       final store = _FlakyStore();
       final rows = [
-        _row(150, readyAt: _at(60 * 30)), // older than 24h — pruned by age
+        _row(150, readyAt: _at(60 * 30)), // the oldest — falls off the cap
         for (var i = 1; i <= 120; i++) _row(i, readyAt: _at(200 - i)),
       ];
       final c = harness(repo: _FakeRepo([(_) => _page(rows)]), store: store);
@@ -1185,6 +1186,202 @@ void main() {
       state = c.read(posReadyNotificationsControllerProvider);
       expect(state.unreadCount, 0);
       expect(store.persisted.last.records.every((r) => r.read), isTrue);
+    });
+  });
+
+  group('D. calendar retention (today + yesterday, LOCAL dates)', () {
+    // All fixtures are built from the injected clock's LOCAL calendar so the
+    // assertions hold on any test machine's timezone: `day(offset, hour)` is
+    // a LOCAL wall time converted back to the UTC wire format.
+    final nowLocal = _t0.toLocal();
+    String day(int offsetDays, int hour, [int minute = 0]) => DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day + offsetDays,
+      hour,
+      minute,
+    ).toUtc().toIso8601String();
+
+    test('D1 a poll keeps today + yesterday by LOCAL CALENDAR date and drops '
+        'older — including a day-before-yesterday 23:59 row that a rolling '
+        '48h window would have kept', () async {
+      final store = _FlakyStore();
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []),
+          (_) => _page([
+            _row(1, readyAt: day(0, 0, 1)), // today 00:01 — kept
+            _row(2, readyAt: day(-1, 23, 59)), // yesterday 23:59 — kept
+            _row(3, readyAt: day(-1, 0, 1)), // yesterday 00:01 — kept
+            // even though a rolling 24h window would drop it
+            _row(4, readyAt: day(-2, 23, 59)), // two days ago — dropped
+            // even though a rolling 48h window would keep it
+            _row(5, readyAt: day(-2, 3)), // two days ago — dropped
+          ]),
+          (_) => _page(const []),
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c);
+      await notifier.refreshNow();
+      await pumpEventQueue(times: 10);
+      final ids = {for (final r in store.persisted.last.records) r.workUnitId};
+      expect(ids, {_uid(1), _uid(2), _uid(3)});
+      // The dropped history never alerted.
+      final alert = c.read(posReadyNotificationsControllerProvider).activeAlert;
+      expect(alert!.items.every((r) => r.workUnitId != _uid(4)), isTrue);
+      expect(alert.items.every((r) => r.workUnitId != _uid(5)), isTrue);
+    });
+
+    test(
+      'D2 LOADING persisted state prunes out-of-window records without '
+      'touching the durable cursor — nothing refetches or re-alerts',
+      () async {
+        final store = _FlakyStore();
+        const scope = PosSyncScope(
+          organizationId: 'org1',
+          restaurantId: 'r1',
+          branchId: 'branch-A',
+          deviceId: 'dev1',
+        );
+        PosReadyNotificationRecord rec(int n, String readyAt) =>
+            PosReadyNotificationRecord(
+              workUnitType: 'initial_order',
+              workUnitId: _uid(n),
+              orderId: _oid(n),
+              orderCode: '#00000$n',
+              orderType: 'dine_in',
+              tableLabel: 'T$n',
+              readyAt: readyAt,
+              workUnitStatus: 'ready',
+              parentOrderStatus: 'preparing',
+              revision: 3,
+              discoveredAt: readyAt,
+              read: false,
+              alerted: true,
+            );
+        // The durable cursor deliberately points at the OLD (prunable) record.
+        final oldCursor = PosReadyCursor(
+          readyAt: day(-3, 12),
+          workUnitType: 'initial_order',
+          id: _uid(9),
+        );
+        await store.persist(
+          scope,
+          PosReadyNotificationsEnvelope(
+            initialized: true,
+            bootstrapServerTs: _t0.toIso8601String(),
+            cursor: oldCursor,
+            records: [
+              rec(1, day(0, 1)),
+              rec(2, day(-1, 12)),
+              rec(9, day(-3, 12)), // beyond yesterday — pruned on load
+            ],
+          ),
+        );
+        final repo = _FakeRepo([(_) => _page(const [])]);
+        final c = harness(repo: repo, store: store);
+        await _ready(c);
+        final state = c.read(posReadyNotificationsControllerProvider);
+        expect(
+          {for (final r in state.records) r.workUnitId},
+          {_uid(1), _uid(2)},
+        );
+        expect(state.activeAlert, isNull); // pruning never re-alerts
+        // The empty poll page persisted the pruned set with the cursor INTACT
+        // (no rewind, no cursorless refetch).
+        final persisted = store.persisted.last;
+        expect(persisted.cursor!.id, _uid(9));
+        expect(persisted.cursor!.readyAt, oldCursor.readyAt);
+        expect(persisted.records, hasLength(2));
+        expect(repo.requestedCursors.every((c) => c?.id == _uid(9)), isTrue);
+      },
+    );
+
+    test(
+      'D3 pruning device A never touches device B\'s stored history',
+      () async {
+        final store = _FlakyStore();
+        const scopeB = PosSyncScope(
+          organizationId: 'org1',
+          restaurantId: 'r1',
+          branchId: 'branch-B',
+          deviceId: 'dev1',
+        );
+        await store.persist(
+          scopeB,
+          PosReadyNotificationsEnvelope(
+            initialized: true,
+            records: [
+              PosReadyNotificationRecord(
+                workUnitType: 'initial_order',
+                workUnitId: _uid(31),
+                orderId: _oid(31),
+                orderCode: '#000031',
+                orderType: 'dine_in',
+                tableLabel: 'T31',
+                readyAt: day(-5, 12), // ANCIENT — but that is B's business
+                workUnitStatus: 'ready',
+                parentOrderStatus: 'preparing',
+                revision: 3,
+                discoveredAt: day(-5, 12),
+                read: false,
+                alerted: true,
+              ),
+            ],
+          ),
+        );
+        final c = harness(
+          repo: _FakeRepo([
+            (_) => _page(const []),
+            (_) => _page([_row(1, readyAt: day(-3, 12)), _row(2)]),
+            (_) => _page(const []),
+          ]),
+          store: store,
+        );
+        final notifier = await _ready(c);
+        await notifier.refreshNow();
+        await pumpEventQueue(times: 10);
+        // A pruned its 3-day-old row...
+        final stateA = c.read(posReadyNotificationsControllerProvider);
+        expect({for (final r in stateA.records) r.workUnitId}, {_uid(2)});
+        // ...and every write stayed in A's namespace; B still holds its record.
+        expect(store.persistKeys.skip(1).every((k) => k != scopeB.key), isTrue);
+        final envB = await store.load(scopeB);
+        expect(envB!.records.single.workUnitId, _uid(31));
+      },
+    );
+
+    test('D4 the DAY ROLLING OVER prunes on the next refresh/sweep without '
+        'moving the cursor', () async {
+      var now = _t0;
+      final store = _FlakyStore();
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []),
+          (_) => _page([_row(1, readyAt: day(0, 1)), _row(2)]),
+          (_) => _page(const []),
+        ]),
+        store: store,
+        clock: () => now,
+      );
+      final notifier = await _ready(c);
+      await notifier.refreshNow();
+      await pumpEventQueue(times: 10);
+      expect(
+        c.read(posReadyNotificationsControllerProvider).records,
+        hasLength(2),
+      );
+      final cursorBefore = store.persisted.last.cursor;
+      // Two local days pass; the operator opens/refreshes the history.
+      now = _t0.add(const Duration(days: 2));
+      await notifier.refreshNow();
+      await pumpEventQueue(times: 10);
+      final state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.records, isEmpty);
+      final persisted = store.persisted.last;
+      expect(persisted.records, isEmpty);
+      expect(persisted.cursor!.id, cursorBefore!.id); // cursor untouched
     });
   });
 
