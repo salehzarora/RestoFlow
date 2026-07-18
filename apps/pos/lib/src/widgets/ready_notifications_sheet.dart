@@ -15,12 +15,15 @@ import 'recent_orders_sheet.dart';
 /// PSC-001A — the READY-NOTIFICATION HISTORY sheet (the bell's surface).
 ///
 /// A compact, honest local history: what became ready, when, and what state
-/// that work is in NOW. Opening the sheet does NOT mark anything read — a
-/// glance mid-rush is not an acknowledgement; reading is the intentional
-/// per-row open or the explicit "Mark all read". Opening triggers ONE
-/// cursorless status-reconciliation sweep (the keyset discovery feed never
-/// re-delivers consumed rows, so current statuses come from this sweep + the
-/// live recent-orders snapshots).
+/// that work is in NOW. Acknowledgement lives on the BELL: the tap that
+/// opens this sheet already marked the then-retained records read (persisted
+/// first), so no separate "Mark all read" action exists here. The sheet
+/// itself never marks anything merely for being visible — a notification
+/// arriving while it is open stays unread until the next bell tap (or its
+/// own row-open). Opening triggers ONE cursorless status-reconciliation
+/// sweep (the keyset discovery feed never re-delivers consumed rows, so
+/// current statuses come from this sweep + the live recent-orders
+/// snapshots).
 class ReadyNotificationsSheet extends ConsumerStatefulWidget {
   const ReadyNotificationsSheet({super.key});
 
@@ -131,17 +134,6 @@ class _ReadyNotificationsSheetState
                   unawaited(controller.refreshNow());
                   unawaited(controller.reconcileStatuses());
                 },
-              ),
-              TextButton(
-                key: const Key('ready-mark-all-read'),
-                onPressed: state.unreadCount == 0
-                    ? null
-                    : () => ref
-                          .read(
-                            posReadyNotificationsControllerProvider.notifier,
-                          )
-                          .markAllRead(),
-                child: Text(l10n.posReadyMarkAllRead),
               ),
             ],
           ),

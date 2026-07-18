@@ -118,12 +118,16 @@ class _FlakyStore extends InMemoryReadyNotificationsStore {
   /// Fail exactly the Nth persist call (1-based); 0 = disabled.
   int failPersistNumber = 0;
   final List<PosReadyNotificationsEnvelope> persisted = [];
+
+  /// The scope key of every ATTEMPTED persist, in order (isolation probes).
+  final List<String> persistKeys = [];
   @override
   Future<void> persist(
     PosSyncScope scope,
     PosReadyNotificationsEnvelope env,
   ) async {
     persistCalls++;
+    persistKeys.add(scope.key);
     if (failNextPersists > 0) {
       failNextPersists--;
       throw const PosPersistenceException('nope');
@@ -611,7 +615,7 @@ void main() {
     });
 
     test('A3 DISMISSAL IS NOT READ; an intentional open reads exactly one; '
-        'mark-all-read reads everything and persists', () async {
+        'the bell mark-all reads everything and persists', () async {
       final store = _FlakyStore();
       final c = harness(
         repo: _FakeRepo([
@@ -629,8 +633,7 @@ void main() {
       await pumpEventQueue(times: 5);
       state = c.read(posReadyNotificationsControllerProvider);
       expect(state.unreadCount, 1);
-      notifier.markAllRead();
-      await pumpEventQueue(times: 5);
+      expect(await notifier.markAllCurrentRead(), isTrue);
       state = c.read(posReadyNotificationsControllerProvider);
       expect(state.unreadCount, 0);
       final env = store.persisted.last;
@@ -908,7 +911,7 @@ void main() {
       // ALL later. Here: mark row 1 read is a no-op; instead make row 1
       // unread first via a completed poll... Simplest honest scenario: the
       // gated page re-serves row 1 (status refresh) while the user marks it
-      // read had it been unread. Use markAllRead-vs-poll as S2's stronger
+      // read had it been unread. Use mark-all-vs-poll as S2's stronger
       // case; S1 asserts the sticky rebase with a fresh unread row:
       gated.gates[1].complete(_page([_row(2)]));
       await poll;
@@ -939,7 +942,7 @@ void main() {
       await pumpEventQueue(times: 20);
       final poll = notifier.refreshNow(); // gate 1 pending
       await pumpEventQueue(times: 5);
-      notifier.markAllRead();
+      expect(await notifier.markAllCurrentRead(), isTrue);
       await pumpEventQueue(times: 10);
       gated.gates[1].complete(_page([_row(1, status: 'served'), _row(2)]));
       await poll;
@@ -998,6 +1001,190 @@ void main() {
       expect(state.activeAlert!.items.single.workUnitId, _uid(1));
       // And alerted=true persisted BEFORE that banner appeared.
       expect(store.persisted.last.records.single.alerted, isTrue);
+    });
+  });
+
+  group('R. the bell mark-all-current-read (persist-first acknowledgement)', () {
+    PosReadyNotificationRecord storedRecord(int n) =>
+        PosReadyNotificationRecord(
+          workUnitType: 'initial_order',
+          workUnitId: _uid(n),
+          orderId: _oid(n),
+          orderCode: '#00000$n',
+          orderType: 'dine_in',
+          tableLabel: 'T$n',
+          readyAt: _at(60 - n),
+          workUnitStatus: 'ready',
+          parentOrderStatus: 'preparing',
+          revision: 3,
+          discoveredAt: _at(50 - n),
+          read: false,
+          alerted: true,
+        );
+
+    test('R1 five unread + mark-all: true, unread 0, ALL read persisted, the '
+        'visible banner cleared', () async {
+      final store = _FlakyStore();
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []), // bootstrap
+          (_) => _page([for (var n = 1; n <= 5; n++) _row(n)]),
+          (_) => _page(const []),
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c);
+      await notifier.refreshNow();
+      await pumpEventQueue(times: 10);
+      var state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.unreadCount, 5);
+      expect(state.activeAlert, isNotNull); // the arrivals bannered
+      expect(await notifier.markAllCurrentRead(), isTrue);
+      state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.unreadCount, 0);
+      expect(state.activeAlert, isNull); // acknowledged banner cleared
+      final env = store.persisted.last;
+      expect(env.records, hasLength(5));
+      expect(env.records.every((r) => r.read && r.alerted), isTrue);
+    });
+
+    test('R2 DEVICE ISOLATION: device A marking all read never touches device '
+        "B's envelope; B still opens to its own unread", () async {
+      final store = _FlakyStore();
+      const scopeB = PosSyncScope(
+        organizationId: 'org1',
+        restaurantId: 'r1',
+        branchId: 'branch-B',
+        deviceId: 'dev1',
+      );
+      await store.persist(
+        scopeB,
+        PosReadyNotificationsEnvelope(
+          initialized: true,
+          records: [for (var n = 11; n <= 14; n++) storedRecord(n)],
+        ),
+      );
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []), // A bootstrap
+          (_) => _page([for (var n = 1; n <= 5; n++) _row(n)]),
+          (_) => _page(const []),
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c);
+      await notifier.refreshNow();
+      await pumpEventQueue(times: 10);
+      expect(await notifier.markAllCurrentRead(), isTrue);
+      expect(c.read(posReadyNotificationsControllerProvider).unreadCount, 0);
+      // B's namespace is untouched — still 4 unread on disk.
+      const scopeA = PosSyncScope(
+        organizationId: 'org1',
+        restaurantId: 'r1',
+        branchId: 'branch-A',
+        deviceId: 'dev1',
+      );
+      final envB = await store.load(scopeB);
+      expect(envB!.records, hasLength(4));
+      expect(envB.records.every((r) => !r.read), isTrue);
+      // Every controller write targeted A's namespace — the seed is the ONLY
+      // write B's key ever saw.
+      expect(store.persistKeys.first, scopeB.key);
+      expect(store.persistKeys.skip(1).every((k) => k == scopeA.key), isTrue);
+      // Switching THIS till to branch B (a scope change) loads B's own
+      // envelope: 4 unread — A's acknowledgement never leaked. (Reading once
+      // triggers the LAZY provider rebuild; the pumps then land its load.)
+      c.read(posDeviceContextProvider.notifier).set(_ctxB);
+      c.read(posReadyNotificationsControllerProvider);
+      await pumpEventQueue(times: 20);
+      final stateB = c.read(posReadyNotificationsControllerProvider);
+      expect(stateB.records, hasLength(4));
+      expect(stateB.unreadCount, 4);
+    });
+
+    test('R3 read state SURVIVES a controller restart (persisted before '
+        'claimed)', () async {
+      final store = _FlakyStore();
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []),
+          (_) => _page([_row(1), _row(2)]),
+          (_) => _page(const []),
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c);
+      await notifier.refreshNow();
+      await pumpEventQueue(times: 10);
+      expect(await notifier.markAllCurrentRead(), isTrue);
+      // A fresh container over the SAME store (page/app restart).
+      final c2 = harness(
+        repo: _FakeRepo([(_) => _page(const [])]),
+        store: store,
+      );
+      await _ready(c2);
+      final state = c2.read(posReadyNotificationsControllerProvider);
+      expect(state.records, hasLength(2));
+      expect(state.unreadCount, 0);
+    });
+
+    test('R4 a notification arriving AFTER the mark-all snapshot stays '
+        'unread, badges 1, and alerts normally', () async {
+      final store = _FlakyStore();
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []),
+          (_) => _page([_row(1), _row(2)]),
+          (_) => _page([_row(3)]),
+          (_) => _page(const []),
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c);
+      await notifier.refreshNow();
+      await pumpEventQueue(times: 10);
+      expect(await notifier.markAllCurrentRead(), isTrue);
+      notifier.dismissAlert(); // drop any residual banner state
+      await notifier.refreshNow(); // delivers row 3
+      await pumpEventQueue(times: 10);
+      final state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.unreadCount, 1);
+      final r3 = state.records.firstWhere((r) => r.workUnitId == _uid(3));
+      expect(r3.read, isFalse);
+      expect(state.activeAlert, isNotNull); // alerted normally
+      expect(state.activeAlert!.items.single.workUnitId, _uid(3));
+    });
+
+    test('R5 a FAILED persist claims nothing: false, unread intact, banner '
+        'kept, quietly degraded; the next tap succeeds', () async {
+      final store = _FlakyStore();
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []),
+          (_) => _page([for (var n = 1; n <= 3; n++) _row(n)]),
+          (_) => _page(const []),
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c);
+      await notifier.refreshNow();
+      await pumpEventQueue(times: 10);
+      final bannerBefore = c
+          .read(posReadyNotificationsControllerProvider)
+          .activeAlert;
+      expect(bannerBefore, isNotNull);
+      store.failNextPersists = 1;
+      expect(await notifier.markAllCurrentRead(), isFalse);
+      var state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.unreadCount, 3); // nothing falsely cleared
+      expect(state.degraded, isTrue); // quiet, no throw, no loop
+      expect(state.activeAlert, isNotNull); // the banner was not stolen
+      expect(store.persisted.last.records.every((r) => !r.read), isTrue);
+      // The store recovered — the next bell tap acknowledges for real.
+      expect(await notifier.markAllCurrentRead(), isTrue);
+      state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.unreadCount, 0);
+      expect(store.persisted.last.records.every((r) => r.read), isTrue);
     });
   });
 
