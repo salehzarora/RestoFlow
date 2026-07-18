@@ -86,20 +86,19 @@ PosOrderDetail _detail({
   rounds: rounds,
 );
 
-CartLineView _line({String id = 'l1', String item = 'm1'}) => CartLineView(
-  lineId: id,
-  menuItemId: item,
-  name: 'Fries',
-  quantity: 2,
-  unitPriceMinor: 500,
-  lineTotalMinor: 1000,
-  currencyCode: 'ILS',
-);
-
 const _menuItem = DemoMenuItem(
   id: 'm-race',
   name: 'Race Burger',
   priceMinor: 700,
+  categoryId: 'c1',
+  categoryName: 'Food',
+);
+
+/// The hostile mutation the LOCKED cart must refuse.
+const _hackedItem = DemoMenuItem(
+  id: 'm-hacked',
+  name: 'Hacked',
+  priceMinor: 9999,
   categoryId: 'c1',
   categoryName: 'Food',
 );
@@ -238,10 +237,27 @@ Object? _rejected(Map<String, dynamic> params, String error) {
 class _ProbeCart extends CartController {
   int clearCount = 0;
   @override
-  void clear() {
-    clearCount++;
-    super.clear();
+  CartMutationResult clear() {
+    final result = super.clear();
+    if (result == CartMutationResult.applied) clearCount++;
+    return result;
   }
+
+  @override
+  bool clearForAddition(CartLockOwner owner) {
+    final cleared = super.clearForAddition(owner);
+    if (cleared) clearCount++;
+    return cleared;
+  }
+}
+
+/// Seeds ONE real line into the REAL cart controller (entry requires an empty
+/// cart, so seeding always happens AFTER enterForOrder committed).
+void seedCart(ProviderContainer container) {
+  expect(
+    container.read(cartControllerProvider.notifier).addItem(_menuItem),
+    CartMutationResult.applied,
+  );
 }
 
 /// Detail repo with an optional per-fetch handler sequence (the last handler
@@ -392,7 +408,8 @@ void main() {
       final (container, transport, _, _) = _harness([(p) => _applied(p)]);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      final result = await notifier.submit([_line()]);
+      seedCart(container);
+      final result = await notifier.submit();
       expect(result.applied, isTrue);
       expect(result.roundNumber, 2);
       final op = (transport.calls.single['p_operations'] as List).single as Map;
@@ -404,9 +421,9 @@ void main() {
       final items = payload['order_items'] as List;
       expect(items, hasLength(1));
       final item = items.single as Map;
-      expect(item['menu_item_id'], 'm1');
-      expect(item['quantity'], 2);
-      expect(item['unit_price_minor_snapshot'], 500);
+      expect(item['menu_item_id'], 'm-race');
+      expect(item['quantity'], 1);
+      expect(item['unit_price_minor_snapshot'], 700);
       // Additions never carry a line discount.
       expect(item.containsKey('line_discount_minor'), isFalse);
       // NO order-level client totals ride the payload.
@@ -419,7 +436,8 @@ void main() {
       final (container, _, cart, detailRepo) = _harness([(p) => _applied(p)]);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      final result = await notifier.submit([_line()]);
+      seedCart(container);
+      final result = await notifier.submit();
       expect(result.applied, isTrue);
       expect(result.refreshRequired, isFalse);
       expect(cart.clearCount, 1);
@@ -437,7 +455,8 @@ void main() {
       ]);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      final result = await notifier.submit([_line()]);
+      seedCart(container);
+      final result = await notifier.submit();
       expect(result.applied, isFalse);
       expect(result.error, 'order_already_settled');
       expect(cart.clearCount, 0);
@@ -455,8 +474,9 @@ void main() {
         ]);
         final notifier = container.read(additionControllerProvider.notifier);
         await notifier.enterForOrder('o-1');
-        await notifier.submit([_line()]);
-        final retry = await notifier.submit([_line()]);
+        seedCart(container);
+        await notifier.submit();
+        final retry = await notifier.submit();
         expect(retry.applied, isTrue);
         String opId(Map<String, dynamic> call) =>
             ((call['p_operations'] as List).single as Map)['local_operation_id']
@@ -483,7 +503,8 @@ void main() {
         ]);
         final notifier = container.read(additionControllerProvider.notifier);
         await notifier.enterForOrder('o-1');
-        final result = await notifier.submit([_line()]);
+        seedCart(container);
+        final result = await notifier.submit();
         expect(result.applied, isFalse);
         expect(cart.clearCount, 0);
       },
@@ -495,7 +516,8 @@ void main() {
       ]);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      final result = await notifier.submit([_line()]);
+      seedCart(container);
+      final result = await notifier.submit();
       expect(result.applied, isFalse);
       expect(cart.clearCount, 0);
       expect(container.read(additionControllerProvider).failed, isTrue);
@@ -563,61 +585,64 @@ void main() {
       },
     );
 
-    test('D2 a failed retry resends the FROZEN payload + SAME op id even when '
-        'the cart mutated (and never carries a table_id)', () async {
-      final (container, transport, _, _) = _harness([
-        (p) => _rejected(p, 'rejected'),
-        (p) => _applied(p),
-      ]);
-      final notifier = container.read(additionControllerProvider.notifier);
-      await notifier.enterForOrder('o-1');
-      await notifier.submit([_line()]);
-      // The cart changed after the failure — the retry must IGNORE it.
-      final mutated = CartLineView(
-        lineId: 'l9',
-        menuItemId: 'm9',
-        name: 'Hacked',
-        quantity: 9,
-        unitPriceMinor: 9999,
-        lineTotalMinor: 89991,
-        currencyCode: 'ILS',
-      );
-      final retry = await notifier.submit([mutated]);
-      expect(retry.applied, isTrue);
-      expect(transport.calls, hasLength(2));
-      final op1 = (transport.calls[0]['p_operations'] as List).single as Map;
-      final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
-      expect(op2['local_operation_id'], op1['local_operation_id']);
-      expect(op2['payload'], op1['payload']); // canonical-equivalent snapshot
-      expect(op2['client_created_at'], op1['client_created_at']);
-      final items = (op2['payload'] as Map)['order_items'] as List;
-      expect((items.single as Map)['menu_item_id'], 'm1'); // never the mutation
-      expect((op2['payload'] as Map).containsKey('table_id'), isFalse);
-    });
+    test(
+      'D2 a failed retry resends the FROZEN payload + SAME op id — the '
+      'locked cart cannot mutate under it (and never carries a table_id)',
+      () async {
+        final (container, transport, cart, _) = _harness([
+          (p) => _rejected(p, 'rejected'),
+          (p) => _applied(p),
+        ]);
+        final notifier = container.read(additionControllerProvider.notifier);
+        await notifier.enterForOrder('o-1');
+        seedCart(container);
+        await notifier.submit();
+        // Cart-safety: the frozen attempt LOCKED the cart — a mutation between
+        // failure and retry is refused, so the retry payload cannot diverge.
+        expect(cart.addItem(_hackedItem), CartMutationResult.lockedByAddition);
+        final retry = await notifier.submit();
+        expect(retry.applied, isTrue);
+        expect(transport.calls, hasLength(2));
+        final op1 = (transport.calls[0]['p_operations'] as List).single as Map;
+        final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
+        expect(op2['local_operation_id'], op1['local_operation_id']);
+        expect(op2['payload'], op1['payload']); // canonical-equivalent snapshot
+        expect(op2['client_created_at'], op1['client_created_at']);
+        final items = (op2['payload'] as Map)['order_items'] as List;
+        // The frozen line — never the refused mutation.
+        expect((items.single as Map)['menu_item_id'], 'm-race');
+        expect((op2['payload'] as Map).containsKey('table_id'), isFalse);
+      },
+    );
 
     test('D3 while an attempt is open, even the failed state blocks a new '
         'target; explicit cancel unlocks with a NEW op id', () async {
-      final (container, transport, _, _) = _harness([
+      final (container, transport, cart, _) = _harness([
         (p) => _rejected(p, 'rejected'),
         (p) => _applied(p),
       ]);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      await notifier.submit([_line()]);
+      seedCart(container);
+      await notifier.submit();
       expect(container.read(additionControllerProvider).hasOpenAttempt, isTrue);
       expect(
         await notifier.enterForOrder('o-2'),
         AdditionEntryResult.blockedPendingAttempt,
       );
       // EXPLICIT cancel (allowed on a retryable failure) discards the frozen
-      // attempt entirely.
+      // attempt entirely — and releases the cart lock WITHOUT clearing the
+      // lines (discarding them is the cashier's explicit next step).
       expect(notifier.exit(), isTrue);
       expect(
         container.read(additionControllerProvider).hasOpenAttempt,
         isFalse,
       );
+      expect(container.read(cartControllerProvider).lines, hasLength(1));
+      expect(cart.clear(), CartMutationResult.applied);
       await notifier.enterForOrder('o-2');
-      await notifier.submit([_line()]);
+      seedCart(container);
+      await notifier.submit();
       final op1 = (transport.calls[0]['p_operations'] as List).single as Map;
       final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
       expect(op2['local_operation_id'], isNot(op1['local_operation_id']));
@@ -641,14 +666,16 @@ void main() {
       ]);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      await notifier.submit([_line()]);
+      seedCart(container);
+      await notifier.submit();
       expect(
         container.read(additionControllerProvider).hasOpenAttempt,
         isFalse,
       );
       // Cleanup exited addition mode (Finding 4) — enter again for the next.
       expect(await notifier.enterForOrder('o-1'), AdditionEntryResult.entered);
-      await notifier.submit([_line()]);
+      seedCart(container);
+      await notifier.submit();
       final op1 = (transport.calls[0]['p_operations'] as List).single as Map;
       final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
       expect(op2['local_operation_id'], isNot(op1['local_operation_id']));
@@ -931,7 +958,8 @@ void main() {
       addTearDown(container.dispose);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      final submitted = notifier.submit([_line()]);
+      seedCart(container);
+      final submitted = notifier.submit();
       final sendingState = container.read(additionControllerProvider);
       expect(sendingState.sending, isTrue);
       expect(sendingState.canCancel, isFalse);
@@ -968,8 +996,9 @@ void main() {
       final entry = notifier.enterForOrder('o-1');
       repo.gates[0].complete(_detail());
       expect(await entry, AdditionEntryResult.entered);
+      seedCart(container);
       // Submit applies instantly; the IN-SUBMIT refresh fetch (gate 1) hangs.
-      final submitted = notifier.submit([_line()]);
+      final submitted = notifier.submit();
       await pumpEventQueue(times: 5);
       expect(
         container.read(additionControllerProvider).awaitingRefresh,
@@ -1021,7 +1050,8 @@ void main() {
       ], detailRepo: repo);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      final result = await notifier.submit([_line()]);
+      seedCart(container);
+      final result = await notifier.submit();
       expect(result.applied, isTrue);
       expect(result.refreshRequired, isTrue); // honest: saved, view stale
       final state = container.read(additionControllerProvider);
@@ -1047,7 +1077,8 @@ void main() {
       ], detailRepo: repo);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      final result = await notifier.submit([_line()]);
+      seedCart(container);
+      final result = await notifier.submit();
       expect(result.applied, isTrue);
       expect(result.refreshRequired, isTrue);
       final state = container.read(additionControllerProvider);
@@ -1069,7 +1100,8 @@ void main() {
       ], detailRepo: repo);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      final result = await notifier.submit([_line()]);
+      seedCart(container);
+      final result = await notifier.submit();
       expect(result.refreshRequired, isTrue);
       expect(
         container.read(additionControllerProvider).awaitingRefresh,
@@ -1095,7 +1127,8 @@ void main() {
       ], detailRepo: repo);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      await notifier.submit([_line()]);
+      seedCart(container);
+      await notifier.submit();
       expect(transport.calls, hasLength(1));
       expect(await notifier.retryRefresh(), isTrue);
       expect(transport.calls, hasLength(1)); // refresh-only — never a re-send
@@ -1122,12 +1155,13 @@ void main() {
       ], detailRepo: repo);
       final notifier = container.read(additionControllerProvider.notifier);
       await notifier.enterForOrder('o-1');
-      await notifier.submit([_line()]);
+      seedCart(container);
+      await notifier.submit();
       expect(
         container.read(additionControllerProvider).awaitingRefresh,
         isTrue,
       );
-      final again = await notifier.submit([_line(id: 'l9', item: 'm9')]);
+      final again = await notifier.submit();
       expect(again.applied, isTrue);
       expect(again.refreshRequired, isFalse); // handler 3 verified the round
       expect(transport.calls, hasLength(1)); // the cart was NOT reinterpreted
