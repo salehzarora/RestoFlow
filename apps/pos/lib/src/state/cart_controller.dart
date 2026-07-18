@@ -296,17 +296,23 @@ class CartController extends Notifier<CartViewState> {
   }
 
   /// Releases the lock with the matching [owner] token, leaving the cart
-  /// lines INTACT (an explicit cancel keeps the cashier's work). Fails closed
-  /// (false, still locked) on a token mismatch; a no-op success when nothing
-  /// is locked.
+  /// lines INTACT (an explicit cancel keeps the cashier's work). FAIL CLOSED:
+  /// false — with zero state change — when nothing is locked OR the token
+  /// does not exactly match; true only proves the caller owned the lock.
+  /// Absence of a lock is never treated as privileged authorization.
   bool unlockForAddition(CartLockOwner owner) {
     final current = _lockOwner;
-    if (current == null) return true;
-    if (!owner.matches(current)) return false;
+    if (current == null || !owner.matches(current)) return false;
     _lockOwner = null;
     _emit();
     return true;
   }
+
+  /// READ-ONLY exact-owner check: whether [owner] — all three token fields —
+  /// currently holds the mutation lock. False when nothing is locked. Mutates
+  /// nothing; the reconciliation verifies ownership through this BEFORE
+  /// installing any fresh authoritative detail.
+  bool ownsAdditionLock(CartLockOwner owner) => owner.matches(_lockOwner);
 
   /// PRIVILEGED owner-token cleanup: clears the submitted cart state AND
   /// releases the lock in one step — only for the matching [owner], after the

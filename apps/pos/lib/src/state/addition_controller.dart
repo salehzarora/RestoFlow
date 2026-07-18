@@ -519,14 +519,23 @@ class AdditionController extends Notifier<AdditionState> {
       state = state.copyWith(lastError: 'refresh_required');
       return false;
     }
-    // Install the VERIFIED fresh detail first, then the privileged
-    // owner-token clear+unlock. Fail closed: a refused clear (token owned by
-    // someone else — the cannot-happen double-fence disagreement) leaves the
-    // cart, the lock and the attempt for the true owner.
+    // Final ownership fence (read-only, BEFORE any install): the cart must be
+    // locked by EXACTLY this attempt's token. A stale or foreign owner — or
+    // no lock at all — gets ZERO side effects: no fresh-detail install, no
+    // clear, no unlock, no attempt change; the honest refresh-required state
+    // remains. Only then: install the verified fresh detail and IMMEDIATELY
+    // run the privileged owner-token clear+unlock — no await exists between
+    // the ownership check, the install, and the clear.
+    final cartController = ref.read(cartControllerProvider.notifier);
+    final owner = _ownerOf(gen, attempt);
+    if (!cartController.ownsAdditionLock(owner)) {
+      state = state.copyWith(lastError: 'refresh_required');
+      return false;
+    }
     state = state.copyWith(target: fresh);
-    if (!ref
-        .read(cartControllerProvider.notifier)
-        .clearForAddition(_ownerOf(gen, attempt))) {
+    if (!cartController.clearForAddition(owner)) {
+      // Unreachable after the ownership check above (same synchronous block),
+      // but kept fail-closed: the true owner keeps the cart and the attempt.
       state = state.copyWith(lastError: 'refresh_required');
       return false;
     }

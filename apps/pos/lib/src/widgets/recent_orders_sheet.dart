@@ -825,6 +825,11 @@ class _RejectedRecoveryActions extends ConsumerWidget {
         recovery == null &&
         outboxEntryId != null &&
         recoveries.containsKey(outboxEntryId);
+    // Cart-safety (final): while a frozen addition attempt owns the cart the
+    // Restore action is DISABLED — the coordinator refuses it regardless.
+    final cartLocked = ref.watch(
+      cartControllerProvider.select((c) => c.lockedByAddition),
+    );
     final coordinator = PosRecoveryCoordinator(ref);
 
     return Wrap(
@@ -842,15 +847,22 @@ class _RejectedRecoveryActions extends ConsumerWidget {
           _ActionButton(
             child: FilledButton.icon(
               key: Key('recent-restore-${order.orderNumber}'),
-              onPressed: () async {
-                final outcome = await coordinator.restore(context, recovery);
-                // Restored or kept-current both resolve the shell — close the sheet so
-                // the operator is back on the (restored or kept) cart. Cancel stays.
-                if (context.mounted &&
-                    outcome != PosRecoveryOutcome.cancelled) {
-                  Navigator.of(context).maybePop();
-                }
-              },
+              onPressed: cartLocked
+                  ? null
+                  : () async {
+                      final outcome = await coordinator.restore(
+                        context,
+                        recovery,
+                      );
+                      // Restored or kept-current both resolve the shell — close the
+                      // sheet so the operator is back on the (restored or kept) cart.
+                      // Cancel — and a locked-cart refusal — leave everything open.
+                      if (context.mounted &&
+                          (outcome == PosRecoveryOutcome.restored ||
+                              outcome == PosRecoveryOutcome.keptCurrent)) {
+                        Navigator.of(context).maybePop();
+                      }
+                    },
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: Text(l10n.posRecoveryBackToCart),
             ),
