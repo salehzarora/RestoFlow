@@ -70,6 +70,8 @@
   "posAdditionApplied": "Addition sent to the kitchen",
   "posAdditionClearCartFirst": "Finish or cancel the current cart before adding to another order",
   "posAdditionFailedRetry": "Addition failed — tap to retry",
+  "posAdditionSavedRefreshNeeded": "Items added and saved — the order view could not refresh. Tap Refresh to finish.",
+  "posReceiptUnavailableRetry": "Couldn't load the order's receipt — check the connection and try again.",
   "posAddItemsIneligiblePaid": "Paid orders can't take additions",
   "posAddItemsIneligibleStatus": "This order can no longer take additions",
   "posAddItemsIneligibleTakeaway": "Takeaway orders can't take additions",

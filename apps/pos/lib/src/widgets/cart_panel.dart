@@ -121,11 +121,15 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       // an EXISTING order. The parent already owns its type/table, so the
       // order-setup gate does not apply; the banner below names the target.
       final addition = ref.watch(additionControllerProvider);
+      // Finding 4: while APPLIED-AWAITING-REFRESH the send button stays off —
+      // the operation must never be dispatched again; the banner offers the
+      // refresh retry instead.
       final canSend =
           !cart.isEmpty &&
           (addition.active || setup.isReadyToSubmit) &&
           !_submitting &&
-          !addition.sending;
+          !addition.sending &&
+          !addition.awaitingRefresh;
       final pendingSync = ref
           .watch(outboxControllerProvider)
           .where((e) => e.syncState.isPending)
@@ -161,8 +165,18 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                 orderCode: addition.target!.orderCode,
                 tableLabel: addition.target!.tableLabel,
                 failed: addition.failed,
+                awaitingRefresh: addition.awaitingRefresh,
+                // Finding 2: cancel is DISABLED while the attempt is on the
+                // wire or applied-awaiting-refresh — the controller refuses
+                // it anyway (defense in depth); the banner is honest about it.
+                canCancel: addition.canCancel,
                 onCancel: () =>
                     ref.read(additionControllerProvider.notifier).exit(),
+                // Finding 4: the ONLY retry offered after applied is the
+                // authoritative refresh — never a second dispatch.
+                onRetryRefresh: () => ref
+                    .read(additionControllerProvider.notifier)
+                    .retryRefresh(),
               )
             else
               const OrderSetupSection(),
@@ -355,11 +369,15 @@ Future<void> submitOrderFromCart({
     final result = await ref
         .read(additionControllerProvider.notifier)
         .submit(cart.lines);
+    // Finding 4: applied-but-not-refreshed is its own honest message — the
+    // addition IS saved; only the authoritative view still needs a reload.
     messenger.showSnackBar(
       SnackBar(
         content: Text(
           result.applied
-              ? l10n.posAdditionApplied
+              ? (result.refreshRequired
+                    ? l10n.posAdditionSavedRefreshNeeded
+                    : l10n.posAdditionApplied)
               : l10n.posAdditionFailedRetry,
         ),
       ),
@@ -1087,25 +1105,40 @@ class _SelectionSummary extends StatelessWidget {
 /// its table), surfaces an honest retryable failure line, and offers Cancel
 /// (which leaves the pending lines in the cart; discarding work is the
 /// cashier's explicit choice via the cart's own Clear).
+///
+/// Correction pass: Cancel is DISABLED while it cannot actually happen
+/// (sending / applied-awaiting-refresh — Finding 2), and the applied-but-not-
+/// refreshed state shows its own honest line with a REFRESH retry instead of
+/// Cancel (Finding 4 — the addition is saved; only the view needs a reload).
 class _AdditionBanner extends StatelessWidget {
   const _AdditionBanner({
     required this.l10n,
     required this.orderCode,
     required this.tableLabel,
     required this.failed,
+    required this.awaitingRefresh,
+    required this.canCancel,
     required this.onCancel,
+    required this.onRetryRefresh,
   });
 
   final AppLocalizations l10n;
   final String orderCode;
   final String? tableLabel;
   final bool failed;
+  final bool awaitingRefresh;
+  final bool canCancel;
   final VoidCallback onCancel;
+  final VoidCallback onRetryRefresh;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tone = failed ? RestoflowTone.danger : RestoflowTone.info;
+    final tone = failed
+        ? RestoflowTone.danger
+        : awaitingRefresh
+        ? RestoflowTone.warning
+        : RestoflowTone.info;
     final style = tone.styleOf(theme);
     final table = tableLabel;
     return Container(
@@ -1124,6 +1157,8 @@ class _AdditionBanner extends StatelessWidget {
             child: Text(
               failed
                   ? l10n.posAdditionFailedRetry
+                  : awaitingRefresh
+                  ? l10n.posAdditionSavedRefreshNeeded
                   : table != null
                   ? '${l10n.posAddingToOrderBanner(orderCode)} · ${l10n.posTableLabel} $table'
                   : l10n.posAddingToOrderBanner(orderCode),
@@ -1135,11 +1170,18 @@ class _AdditionBanner extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          TextButton(
-            key: const Key('pos-addition-cancel'),
-            onPressed: onCancel,
-            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
-          ),
+          if (awaitingRefresh)
+            TextButton(
+              key: const Key('pos-addition-retry-refresh'),
+              onPressed: onRetryRefresh,
+              child: Text(l10n.posOrdersRefresh),
+            )
+          else
+            TextButton(
+              key: const Key('pos-addition-cancel'),
+              onPressed: canCancel ? onCancel : null,
+              child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+            ),
         ],
       ),
     );

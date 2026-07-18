@@ -62,6 +62,8 @@
   "posAdditionApplied": "أُرسلت الإضافة إلى المطبخ",
   "posAdditionClearCartFirst": "أكمل السلة الحالية أو ألغِها قبل الإضافة إلى طلب آخر",
   "posAdditionFailedRetry": "فشلت الإضافة — اضغط لإعادة المحاولة",
+  "posAdditionSavedRefreshNeeded": "أُضيفت الأصناف وحُفظت — تعذّر تحديث عرض الطلب. اضغط \"تحديث\" للإكمال.",
+  "posReceiptUnavailableRetry": "تعذّر تحميل إيصال الطلب — تحقّق من الاتصال وحاول مجددًا.",
   "posAddItemsIneligiblePaid": "لا يمكن الإضافة إلى طلب مدفوع",
   "posAddItemsIneligibleStatus": "لم يعد بالإمكان الإضافة إلى هذا الطلب",
   "posAddItemsIneligibleTakeaway": "لا يمكن الإضافة إلى طلبات السفري",

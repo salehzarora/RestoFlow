@@ -209,6 +209,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posAdditionFailedRetry => 'Addition failed — tap to retry';
 
   @override
+  String get posAdditionSavedRefreshNeeded =>
+      'Items added and saved — the order view could not refresh. Tap Refresh to finish.';
+
+  @override
+  String get posReceiptUnavailableRetry =>
+      'Couldn\'t load the order\'s receipt — check the connection and try again.';
+
+  @override
   String get posAddItemsIneligiblePaid => 'Paid orders can\'t take additions';
 
   @override

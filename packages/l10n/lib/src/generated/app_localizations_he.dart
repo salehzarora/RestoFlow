@@ -203,6 +203,14 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posAdditionFailedRetry => 'התוספת נכשלה — הקישו לניסיון חוזר';
 
   @override
+  String get posAdditionSavedRefreshNeeded =>
+      'הפריטים נוספו ונשמרו — תצוגת ההזמנה לא התרעננה. הקישו על רענון לסיום.';
+
+  @override
+  String get posReceiptUnavailableRetry =>
+      'לא ניתן לטעון את קבלת ההזמנה — בדקו את החיבור ונסו שוב.';
+
+  @override
   String get posAddItemsIneligiblePaid => 'אי אפשר להוסיף להזמנה ששולמה';
 
   @override

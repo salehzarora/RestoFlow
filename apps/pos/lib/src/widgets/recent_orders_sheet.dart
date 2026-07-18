@@ -159,13 +159,14 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
       for (final e in entries)
         if (e.syncState.isPending) _entryIdentity(e).key: PosPendingKind.submit,
     };
-    // PSC-001C: an addition THIS DEVICE has in flight (or failed-retryable)
-    // for an order withdraws that order's other controls, exactly like any
-    // other pending local operation. Keyed by the server order id — an
-    // addition only ever targets a real server order.
+    // PSC-001C: an addition THIS DEVICE has in flight (failed-retryable or
+    // applied-awaiting-refresh) for an order withdraws that order's other
+    // controls, exactly like any other pending local operation. Keyed by the
+    // server order id — an addition only ever targets a real server order.
     final addition = ref.watch(additionControllerProvider);
     final additionTarget = addition.target;
-    if (additionTarget != null && (addition.sending || addition.failed)) {
+    if (additionTarget != null &&
+        (addition.sending || addition.failed || addition.awaitingRefresh)) {
       pendingByIdentity[additionTarget.orderId] = PosPendingKind.itemsAdd;
     }
 
@@ -1046,15 +1047,16 @@ class _ActionRow extends ConsumerWidget {
     );
   }
 
-  /// PSC-001C: enters ADDITION MODE for this order — loads the authoritative
-  /// detail, hands it to the addition controller, and closes the sheet so the
-  /// cashier lands on the menu with the "Adding to #CODE" cart banner.
+  /// PSC-001C: enters ADDITION MODE for this order and closes the sheet so
+  /// the cashier lands on the menu with the "Adding to #CODE" cart banner.
   ///
-  /// Finding-2 entry guards: a NON-EMPTY normal cart, an open (pending or
-  /// failed-retryable) attempt, or a DIFFERENT already-targeted order all
-  /// BLOCK entry with an honest message — a cart is never silently retargeted
-  /// and a frozen attempt's identity is immutable. Re-entering the SAME
-  /// target is a harmless no-op.
+  /// Finding 1 (correction): the COMPLETE entry transition is owned by
+  /// [AdditionController.enterForOrder] — it reserves the target BEFORE the
+  /// authoritative load and re-verifies the token + still-empty cart before
+  /// committing, so a cart line added during the load can never silently
+  /// become an addition. The [canBeginAddition] call below is an EARLY
+  /// CONVENIENCE check only (instant feedback without a fetch); it is not
+  /// the guarantee.
   Future<void> _startAddition(BuildContext context, WidgetRef ref) async {
     final orderId = order.orderId;
     if (orderId == null) return;
@@ -1070,60 +1072,47 @@ class _ActionRow extends ConsumerWidget {
       );
       return;
     }
-    final PosOrderDetail detail;
-    try {
-      detail = await ref.read(orderDetailRepositoryProvider).fetch(orderId);
-    } on PosOrderDetailException {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posAdditionFailedRetry)),
-      );
-      return;
+    final entry = await ref
+        .read(additionControllerProvider.notifier)
+        .enterForOrder(orderId);
+    switch (entry) {
+      case AdditionEntryResult.entered:
+        if (navigator.canPop()) navigator.pop();
+      case AdditionEntryResult.detailUnavailable:
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.posAdditionFailedRetry)),
+        );
+      case AdditionEntryResult.superseded:
+        break; // a newer entry owns the flow — nothing to report here
+      case AdditionEntryResult.blockedPendingAttempt:
+      case AdditionEntryResult.blockedDifferentTarget:
+      case AdditionEntryResult.cartNotEmpty:
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.posAdditionClearCartFirst)),
+        );
     }
-    final entry = ref.read(additionControllerProvider.notifier).enter(detail);
-    if (entry != AdditionEntryResult.entered) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posAdditionClearCartFirst)),
-      );
-      return;
-    }
-    if (navigator.canPop()) navigator.pop();
   }
 
-  /// The COMBINED order view + payment for receipt surfaces: the local
-  /// order-time lines when this device owns them AND the order has no rounds;
-  /// otherwise the AUTHORITATIVE server detail (PSC-001C) — which is also what
-  /// lets a DIFFERENT POS device rebuild the complete receipt.
-  Future<(SubmittedOrderView, CashPayment)?> _receiptSource(
-    WidgetRef ref,
-  ) async {
-    final localView = order.order;
-    final localPayment = order.payment;
-    final orderId = order.orderId;
-    if (orderId != null) {
-      try {
-        final detail = await ref
-            .read(orderDetailRepositoryProvider)
-            .fetch(orderId);
-        final payment = cashPaymentFromDetail(detail) ?? localPayment;
-        if (payment != null) {
-          return (submittedOrderViewFromDetail(detail), payment);
-        }
-      } on PosOrderDetailException {
-        // fall through to the local order-time lines below
-      }
-    }
-    if (localView != null && localPayment != null) {
-      return (localView, localPayment);
-    }
-    return null;
-  }
+  /// The COMBINED order view + payment for the receipt surfaces — the ONE
+  /// [authoritativeReceiptSource] policy: a server-backed order's receipt
+  /// comes from `pos_order_detail` (Finding 4 — a failed load/parse is an
+  /// honest retry, NEVER a silent partial local receipt that could miss
+  /// another till's additions); demo keeps its self-contained local record.
+  Future<(SubmittedOrderView, CashPayment)?> _receiptSource(WidgetRef ref) =>
+      authoritativeReceiptSource(
+        isDemoMode: ref.read(runtimeConfigProvider).isDemoMode,
+        orderId: order.orderId,
+        localView: order.order,
+        localPayment: order.payment,
+        repository: ref.read(orderDetailRepositoryProvider),
+      );
 
   Future<void> _viewReceipt(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     final source = await _receiptSource(ref);
     if (source == null) {
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posAdditionFailedRetry)),
+        SnackBar(content: Text(l10n.posReceiptUnavailableRetry)),
       );
       return;
     }
@@ -1131,8 +1120,9 @@ class _ActionRow extends ConsumerWidget {
     ReceiptPrintPreview.show(context, order: source.$1, payment: source.$2);
   }
 
-  /// Reprints the receipt from the COMBINED authoritative source (server
-  /// detail first, local order-time lines as the offline fallback).
+  /// Reprints the receipt from the COMBINED authoritative source — see
+  /// [_receiptSource]; an unavailable source is an honest retry message,
+  /// never a partial receipt presented as complete.
   Future<void> _reprint(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     final bridge = ref.read(posActivePrintBridgeProvider);
@@ -1145,7 +1135,7 @@ class _ActionRow extends ConsumerWidget {
     final source = await _receiptSource(ref);
     if (source == null) {
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posAdditionFailedRetry)),
+        SnackBar(content: Text(l10n.posReceiptUnavailableRetry)),
       );
       return;
     }

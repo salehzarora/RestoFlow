@@ -206,6 +206,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posAdditionFailedRetry => 'فشلت الإضافة — اضغط لإعادة المحاولة';
 
   @override
+  String get posAdditionSavedRefreshNeeded =>
+      'أُضيفت الأصناف وحُفظت — تعذّر تحديث عرض الطلب. اضغط \"تحديث\" للإكمال.';
+
+  @override
+  String get posReceiptUnavailableRetry =>
+      'تعذّر تحميل إيصال الطلب — تحقّق من الاتصال وحاول مجددًا.';
+
+  @override
   String get posAddItemsIneligiblePaid => 'لا يمكن الإضافة إلى طلب مدفوع';
 
   @override

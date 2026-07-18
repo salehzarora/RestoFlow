@@ -472,6 +472,18 @@ abstract class AppLocalizations {
   /// **'Addition failed — tap to retry'**
   String get posAdditionFailedRetry;
 
+  /// No description provided for @posAdditionSavedRefreshNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Items added and saved — the order view could not refresh. Tap Refresh to finish.'**
+  String get posAdditionSavedRefreshNeeded;
+
+  /// No description provided for @posReceiptUnavailableRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the order\'s receipt — check the connection and try again.'**
+  String get posReceiptUnavailableRetry;
+
   /// No description provided for @posAddItemsIneligiblePaid.
   ///
   /// In en, this message translates to:

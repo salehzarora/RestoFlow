@@ -62,6 +62,8 @@
   "posAdditionApplied": "התוספת נשלחה למטבח",
   "posAdditionClearCartFirst": "סיימו או בטלו את הסל הנוכחי לפני הוספה להזמנה אחרת",
   "posAdditionFailedRetry": "התוספת נכשלה — הקישו לניסיון חוזר",
+  "posAdditionSavedRefreshNeeded": "הפריטים נוספו ונשמרו — תצוגת ההזמנה לא התרעננה. הקישו על רענון לסיום.",
+  "posReceiptUnavailableRetry": "לא ניתן לטעון את קבלת ההזמנה — בדקו את החיבור ונסו שוב.",
   "posAddItemsIneligiblePaid": "אי אפשר להוסיף להזמנה ששולמה",
   "posAddItemsIneligibleStatus": "אי אפשר עוד להוסיף להזמנה הזו",
   "posAddItemsIneligibleTakeaway": "אי אפשר להוסיף להזמנות איסוף",
