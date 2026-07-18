@@ -16,9 +16,24 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 /// [ui.Picture], then thresholds the pixels into a 1-bit-per-pixel, MSB-first,
 /// row-major bitmap that drops straight into a [PrintRasterImageLine].
 ///
-/// It uses the Flutter/platform DEFAULT fonts (no bundled font asset, approved
-/// D3) and requires NO `BuildContext` and NO ARB dependency. A request with no
-/// per-line styles renders every line as [PrintLineStyle.normal] (prior behavior).
+/// It bundles NO font asset (approved D3) and requires NO `BuildContext` and
+/// NO ARB dependency. A request with no per-line styles renders every line as
+/// [PrintLineStyle.normal] (prior behavior).
+///
+/// PILOT-PRINT-FIDELITY-001 hardening — a physical receipt printed its
+/// header/totals but a HEIGHT-RESERVING BLANK band where the item/modifier
+/// body belonged (each line is an isolated paragraph whose block height is
+/// reserved whether or not any glyph painted). Three defenses:
+///  * every paragraph names an EXPLICIT font family plus a fallback list of
+///    platform families that cover Arabic/Hebrew/Latin (the design-system
+///    named-fallback pattern) instead of relying on the ambiguous platform
+///    default lookup for isolated styled paragraphs;
+///  * only CONCRETE, universally-shipped weights are used (w400/w700 — never
+///    synthetic w600/w800 axes);
+///  * after thresholding, any line whose text is renderable yet produced ZERO
+///    ink triggers ONE safe re-render pass where those lines drop to the base
+///    spec that body-adjacent lines demonstrably print with — a valid line is
+///    never silently reserved as blank height.
 class FlutterReceiptRasterizer implements ReceiptRasterizer {
   const FlutterReceiptRasterizer({
     this.fontSize = 22.0,
@@ -39,6 +54,25 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   static const ui.Color _black = ui.Color(0xFF000000);
   static const ui.Color _white = ui.Color(0xFFFFFFFF);
 
+  /// Explicit primary family: the Android system default, resolved by NAME so
+  /// isolated paragraphs never depend on the engine's anonymous default
+  /// lookup. Harmless where absent — the fallbacks below take over.
+  static const String _fontFamily = 'Roboto';
+
+  /// Named, repository-safe fallback families (no bundled asset): Android's
+  /// Noto Arabic/Hebrew system fonts first, then the desktop/web families the
+  /// design system already relies on for ar/he.
+  static const List<String> _fontFallbacks = <String>[
+    'Noto Naskh Arabic UI',
+    'Noto Naskh Arabic',
+    'Noto Sans Arabic',
+    'Noto Sans Hebrew',
+    'Segoe UI',
+    'Tahoma',
+    'Arial',
+    'sans-serif',
+  ];
+
   @override
   Future<ReceiptRasterImage> rasterize(ReceiptRasterRequest request) async =>
       (await rasterizeDetailed(request)).image;
@@ -50,6 +84,27 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   /// changing what a printer receives.
   Future<ReceiptRasterRender> rasterizeDetailed(
     ReceiptRasterRequest request,
+  ) async {
+    final first = await _renderPass(request, const {});
+    // INK GUARANTEE: a line whose text is renderable must not come out as
+    // reserved-but-blank height. If any did, re-render ONCE with those lines
+    // dropped to the base spec (the size/weight the plain body demonstrably
+    // prints with); the retry is observable via [ReceiptRasterRender
+    // .retriedLineIndexes] so tests and diagnostics can see it happened.
+    final blank = <int>{
+      for (final band in first.bands)
+        if (!band.isSeparator &&
+            band.text.trim().isNotEmpty &&
+            first.inkInBand(band) == 0)
+          band.index,
+    };
+    if (blank.isEmpty) return first;
+    return _renderPass(request, blank);
+  }
+
+  Future<ReceiptRasterRender> _renderPass(
+    ReceiptRasterRequest request,
+    Set<int> safeRespecLines,
   ) async {
     final widthDots = request.widthDots;
     final textDirection = request.direction == ReceiptTextDirection.rtl
@@ -69,7 +124,16 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
         totalHeight += _separatorHeight;
         continue;
       }
-      final spec = _specFor(style);
+      final styleSpec = _specFor(style);
+      // A retried line keeps its alignment but takes the BASE size/weight —
+      // the exact configuration the plain body lines print with.
+      final spec = safeRespecLines.contains(i)
+          ? _LineSpec(
+              size: fontSize,
+              weight: ui.FontWeight.w400,
+              align: styleSpec.align,
+            )
+          : styleSpec;
       final paragraph = _layoutLine(
         request.lines[i],
         widthDots,
@@ -86,6 +150,7 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     return ReceiptRasterRender(
       image: image,
       bands: _bandsFor(request, blocks, heightDots),
+      retriedLineIndexes: Set.unmodifiable(safeRespecLines),
     );
   }
 
@@ -185,27 +250,38 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     }
   }
 
+  /// Semantic weights collapse to the two CONCRETE axes every platform ships
+  /// (w400/w700) — synthetic w600/w800 lookups are never requested.
+  static ui.FontWeight _concreteWeight(ui.FontWeight weight) =>
+      weight.value >= ui.FontWeight.w600.value
+      ? ui.FontWeight.w700
+      : ui.FontWeight.w400;
+
   ui.Paragraph _layoutLine(
     String text,
     int widthDots,
     ui.TextDirection textDirection,
     _LineSpec spec,
   ) {
+    final weight = _concreteWeight(spec.weight);
     final builder =
         ui.ParagraphBuilder(
             ui.ParagraphStyle(
               textDirection: textDirection,
               textAlign: spec.align,
+              fontFamily: _fontFamily,
               fontSize: spec.size,
               height: lineHeight,
-              fontWeight: spec.weight,
+              fontWeight: weight,
             ),
           )
           ..pushStyle(
             ui.TextStyle(
               color: _black,
+              fontFamily: _fontFamily,
+              fontFamilyFallback: _fontFallbacks,
               fontSize: spec.size,
-              fontWeight: spec.weight,
+              fontWeight: weight,
             ),
           )
           ..addText(text);
@@ -315,10 +391,19 @@ class ReceiptRasterBand {
 /// The detailed result of [FlutterReceiptRasterizer.rasterizeDetailed]: the
 /// production bitmap plus the per-line bands that compose it.
 class ReceiptRasterRender {
-  const ReceiptRasterRender({required this.image, required this.bands});
+  const ReceiptRasterRender({
+    required this.image,
+    required this.bands,
+    this.retriedLineIndexes = const {},
+  });
 
   final ReceiptRasterImage image;
   final List<ReceiptRasterBand> bands;
+
+  /// Line indexes that came out BLANK on the first pass (despite renderable
+  /// text) and were re-rendered with the base spec — empty in the normal
+  /// single-pass case.
+  final Set<int> retriedLineIndexes;
 
   /// Black-dot count within [band]'s rows (whole-width scan of the 1bpp data).
   int inkInBand(ReceiptRasterBand band) {

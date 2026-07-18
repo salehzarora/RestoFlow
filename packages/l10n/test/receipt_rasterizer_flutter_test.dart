@@ -308,6 +308,28 @@ void main() {
       expectEveryBandInked(r);
     });
 
+    test('a healthy receipt renders in ONE pass (no retry)', () async {
+      final r = await render(arabicReceipt());
+      expect(r.retriedLineIndexes, isEmpty);
+    });
+
+    test('INK GUARANTEE: a renderable-but-blank line triggers exactly one '
+        'safe re-render pass and is observable', () async {
+      // U+200B (zero-width space) is NOT trimmed whitespace, so the line
+      // counts as renderable — yet no font produces ink for it. The renderer
+      // must detect the blank band and retry it with the base spec rather
+      // than silently reserving blank height.
+      final r = await render(const [
+        ('عنوان', PrintLineStyle.headingLarge),
+        ('​', PrintLineStyle.item),
+        ('المجموع ₪10.00', PrintLineStyle.total),
+      ]);
+      expect(r.retriedLineIndexes, {1});
+      // The neighbours still carry ink; the receipt still renders.
+      expect(r.inkInBand(r.bands[0]), greaterThan(0));
+      expect(r.inkInBand(r.bands[2]), greaterThan(0));
+    });
+
     test('production rasterize() bytes are IDENTICAL to the detailed render '
         '(the seam changes nothing a printer receives)', () async {
       final request = ReceiptRasterRequest(
