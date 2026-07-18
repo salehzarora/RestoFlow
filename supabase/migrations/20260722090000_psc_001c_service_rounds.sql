@@ -3025,7 +3025,14 @@ begin
       and r.deleted_at is null;
 
   -- (f) the (at most one) completed payment — enough for a faithful reprint.
+  --     PSC-001C correction (Finding 3): the AUTHORITATIVE payment identity
+  --     and stored status ride along — payment_id is payments.id and
+  --     payment_status is the stored payments.status (always 'completed'
+  --     here, by the filter below) so the client NEVER fabricates a payment
+  --     identity or assumes a status it was not told.
   select jsonb_build_object(
+           'payment_id',     p.id,
+           'payment_status', p.status,
            'method',         p.method,
            'amount_minor',   p.amount_minor,
            'tendered_minor', p.tendered_minor,
@@ -3050,7 +3057,7 @@ end;
 $$;
 
 comment on function app.pos_order_detail(uuid, uuid, uuid) is
-  'PSC-001C: the AUTHORITATIVE branch-scoped POS order read — header (safe #XXXXXX code, type, status, table label, revision, integer-minor totals, receipt number, customer name) + every ACTIVE customer-visible item with modifiers, snapshots and ROUND membership (NULL service_round_id = the original submission) + the round list + the at-most-one completed payment. The single source for opening an existing order, entering Add items, the post-addition refresh, payment, and the combined itemized receipt — including a DIFFERENT authorized POS device of the same branch (cross-device reprint). SCOPE: the PIN session''s OWN org+branch (no parameter names another scope); a nonexistent and a foreign-scope order collapse to the SAME order_not_found envelope (R-003). Requires an active POS-class device (invalid_device_type otherwise) and cashier/manager/restaurant_owner/org_owner (permission_denied otherwise — this read carries money, so kitchen_staff is refused; T-003). NO PINs, tokens, raw payloads, internal staff UUIDs or foreign-branch data. READ-ONLY: mutates nothing, writes no audit.';
+  'PSC-001C: the AUTHORITATIVE branch-scoped POS order read — header (safe #XXXXXX code, type, status, table label, revision, integer-minor totals, receipt number, customer name) + every ACTIVE customer-visible item with modifiers, snapshots and ROUND membership (NULL service_round_id = the original submission) + the round list + the at-most-one completed payment WITH its authoritative identity and stored status (payment_id = payments.id, payment_status = payments.status — the client must never fabricate either). The single source for opening an existing order, entering Add items, the post-addition refresh, payment, and the combined itemized receipt — including a DIFFERENT authorized POS device of the same branch (cross-device reprint). SCOPE: the PIN session''s OWN org+branch (no parameter names another scope); a nonexistent and a foreign-scope order collapse to the SAME order_not_found envelope (R-003). Requires an active POS-class device (invalid_device_type otherwise) and cashier/manager/restaurant_owner/org_owner (permission_denied otherwise — this read carries money, so kitchen_staff is refused; T-003). NO PINs, tokens, raw payloads, internal staff UUIDs or foreign-branch data. READ-ONLY: mutates nothing, writes no audit.';
 
 create or replace function public.pos_order_detail(
   p_pin_session_id uuid,

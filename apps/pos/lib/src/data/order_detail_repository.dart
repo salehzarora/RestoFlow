@@ -234,11 +234,14 @@ class PosOrderDetailModifier {
     if (raw is! Map) return null;
     final option = raw['option_name_snapshot'];
     // Finding 5: the modifier's price delta and quantity are REQUIRED — a
-    // silently-zeroed delta misprices the line it belongs to.
+    // silently-zeroed delta misprices the line it belongs to. The price obeys
+    // the stored invariant (order_item_modifiers CHECK price_minor_snapshot
+    // >= 0): a negative delta cannot be authoritative and fails the detail.
     final price = _int(raw['price_minor_snapshot']);
     final quantity = _int(raw['quantity']);
     if (option is! String ||
         price == null ||
+        price < 0 ||
         quantity == null ||
         quantity < 1) {
       return null;
@@ -283,6 +286,8 @@ class PosOrderDetailRound {
 /// The at-most-one completed payment (enough for a faithful reprint).
 class PosOrderDetailPayment {
   const PosOrderDetailPayment({
+    required this.paymentId,
+    required this.status,
     required this.method,
     required this.amountMinor,
     required this.tenderedMinor,
@@ -291,7 +296,15 @@ class PosOrderDetailPayment {
     this.receiptNumber,
   });
 
-  final String method;
+  /// The AUTHORITATIVE payment identity (`payments.id`) — Finding 3: the
+  /// client never fabricates a payment identity; a receipt names the real row.
+  final String paymentId;
+
+  /// The STORED `payments.status`. The detail RPC only emits completed
+  /// payments, and the parse refuses anything else — completed is verified,
+  /// never assumed.
+  final PaymentStatus status;
+  final PaymentMethod method;
   final int amountMinor;
   final int tenderedMinor;
   final int changeMinor;
@@ -302,15 +315,22 @@ class PosOrderDetailPayment {
   final DateTime paidAt;
   final String? receiptNumber;
 
-  /// The supported tender wire values (the payments.method CHECK).
-  static const Set<String> _methods = {'cash', 'card', 'bit', 'external'};
+  /// Canonical UUID shape of `payments.id` — anything else is not a real row.
+  static final RegExp _uuid = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}'
+    r'-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
 
   static PosOrderDetailPayment? fromJson(Object? raw) {
     if (raw is! Map) return null;
-    // Finding 5: a COMPLETED payment's facts are all REQUIRED. An unknown
-    // method must FAIL (never default to cash); the amounts must be exact
-    // integers; the timestamp must parse — a reprint never guesses.
-    final method = raw['method'];
+    // Findings 3+5: a COMPLETED payment's facts are ALL required — the real
+    // payments.id (a valid UUID), the STORED status (exactly 'completed' —
+    // the RPC emits nothing else, so anything else is a lie), a supported
+    // method (an unknown one must FAIL, never default to cash), exact
+    // integer amounts, and a parseable timestamp. Nothing is synthesized.
+    final id = raw['payment_id'];
+    final status = raw['payment_status'];
+    final method = PaymentMethod.fromWire(raw['method']);
     final amount = _int(raw['amount_minor']);
     final tendered = _int(raw['tendered_minor']);
     final change = _int(raw['change_minor']);
@@ -318,8 +338,10 @@ class PosOrderDetailPayment {
     final paidAt = createdAtRaw is String
         ? DateTime.tryParse(createdAtRaw)
         : null;
-    if (method is! String ||
-        !_methods.contains(method) ||
+    if (id is! String ||
+        !_uuid.hasMatch(id) ||
+        status != PaymentStatus.completed.wire ||
+        method == null ||
         amount == null ||
         amount < 0 ||
         tendered == null ||
@@ -330,6 +352,8 @@ class PosOrderDetailPayment {
       return null;
     }
     return PosOrderDetailPayment(
+      paymentId: id,
+      status: PaymentStatus.completed,
       method: method,
       amountMinor: amount,
       tenderedMinor: tendered,
@@ -465,19 +489,21 @@ SubmittedOrderView submittedOrderViewFromDetail(
 );
 
 /// The completed payment as the receipt's [CashPayment], or null when the
-/// order is unpaid. Identity fields the server detail deliberately does not
-/// expose (payment id, recording device/op) are stamped with an explicit
-/// 'authoritative' placeholder — the printed receipt never renders them.
+/// order is unpaid. Finding 3: the payment identity, method, status and time
+/// are the PARSED authoritative values — never fabricated, never defaulted.
+/// Only the recording device/operation (which the server detail deliberately
+/// does not expose) keep an explicit 'authoritative' placeholder; the printed
+/// receipt never renders them.
 CashPayment? cashPaymentFromDetail(PosOrderDetail d) {
   final p = d.payment;
   if (p == null) return null;
   return CashPayment(
-    paymentId: 'authoritative',
+    paymentId: p.paymentId,
     orderNumber: d.orderCode,
     deviceId: 'authoritative',
     localOperationId: 'authoritative',
-    method: PaymentMethod.fromWire(p.method) ?? PaymentMethod.cash,
-    status: PaymentStatus.completed,
+    method: p.method,
+    status: p.status,
     amountMinor: p.amountMinor,
     tenderedMinor: p.tenderedMinor,
     changeMinor: p.changeMinor,
@@ -489,4 +515,49 @@ CashPayment? cashPaymentFromDetail(PosOrderDetail d) {
     orderId: d.orderId,
     orderStatus: d.status,
   );
+}
+
+/// PSC-001C correction — the ONE receipt-source policy for the recent-orders
+/// view/reprint surfaces.
+///
+/// A SERVER-BACKED order's receipt comes from the authoritative combined
+/// detail: the local order-time lines can miss another till's additions, so a
+/// failed load or parse returns NULL (an honest "couldn't load — retry", shown
+/// by the caller) and is NEVER silently substituted with a partial local
+/// receipt. The one legitimate stand-in is this till's OWN recorded payment
+/// when the detail has no completed payment yet (a queued, not-yet-synced
+/// payment) — the itemized view stays authoritative even then.
+///
+/// Demo mode keeps its self-contained local receipt: there is no server to
+/// ask. The just-submitted confirmation-screen print is a DIFFERENT flow and
+/// keeps its intentional local rendering; it does not pass through here.
+Future<(SubmittedOrderView, CashPayment)?> authoritativeReceiptSource({
+  required bool isDemoMode,
+  required String? orderId,
+  required SubmittedOrderView? localView,
+  required CashPayment? localPayment,
+  required OrderDetailRepository repository,
+}) async {
+  if (isDemoMode) {
+    if (localView != null && localPayment != null) {
+      return (localView, localPayment);
+    }
+    return null;
+  }
+  if (orderId != null) {
+    final PosOrderDetail detail;
+    try {
+      detail = await repository.fetch(orderId);
+    } on PosOrderDetailException {
+      return null;
+    }
+    final payment = cashPaymentFromDetail(detail) ?? localPayment;
+    if (payment == null) return null;
+    return (submittedOrderViewFromDetail(detail), payment);
+  }
+  // No server identity at all — the COMPLETE local record or nothing.
+  if (localView != null && localPayment != null) {
+    return (localView, localPayment);
+  }
+  return null;
 }
