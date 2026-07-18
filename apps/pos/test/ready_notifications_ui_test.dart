@@ -54,7 +54,8 @@ class _StubReadyController extends PosReadyNotificationsController {
   int dismissCalls = 0;
   int reconcileCalls = 0;
   int refreshCalls = 0;
-  bool allRead = false;
+  int markAllCalls = 0;
+  bool markAllResult = true;
 
   @override
   PosReadyNotificationsState build() => fixed;
@@ -63,7 +64,10 @@ class _StubReadyController extends PosReadyNotificationsController {
   void markRead(String identityKey) => readCalls.add(identityKey);
 
   @override
-  void markAllRead() => allRead = true;
+  Future<bool> markAllCurrentRead() async {
+    markAllCalls++;
+    return markAllResult;
+  }
 
   @override
   void dismissAlert() {
@@ -216,6 +220,78 @@ void main() {
       );
       expect(find.text('99+'), findsOneWidget);
     });
+
+    testWidgets('TAPPING the bell marks all current notifications read FIRST '
+        'and then opens the history sheet', (tester) async {
+      final (stub, _) = await _pump(
+        tester,
+        const Scaffold(body: Center(child: ReadyNotificationBell())),
+        readyState: PosReadyNotificationsState(
+          initialized: true,
+          records: [_record(1), _record(2)],
+        ),
+      );
+      await tester.tap(find.byKey(const Key('ready-bell-button')));
+      await tester.pumpAndSettle();
+      expect(stub.markAllCalls, 1);
+      expect(
+        find.byKey(const Key('ready-notifications-sheet')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a DOUBLE-TAP runs one mark-all and opens exactly ONE sheet', (
+      tester,
+    ) async {
+      final (stub, _) = await _pump(
+        tester,
+        const Scaffold(body: Center(child: ReadyNotificationBell())),
+        readyState: PosReadyNotificationsState(
+          initialized: true,
+          records: [_record(1)],
+        ),
+      );
+      await tester.tap(find.byKey(const Key('ready-bell-button')));
+      await tester.tap(
+        find.byKey(const Key('ready-bell-button')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      expect(stub.markAllCalls, 1);
+      expect(
+        find.byKey(const Key('ready-notifications-sheet')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a FAILED mark-all still opens the sheet once — with the '
+        'unread truth intact, nothing pretends to be read', (tester) async {
+      final (stub, _) = await _pump(
+        tester,
+        const Scaffold(body: Center(child: ReadyNotificationBell())),
+        readyState: PosReadyNotificationsState(
+          initialized: true,
+          records: [_record(1), _record(2)],
+        ),
+      );
+      stub.markAllResult = false;
+      await tester.tap(find.byKey(const Key('ready-bell-button')));
+      await tester.pumpAndSettle();
+      expect(stub.markAllCalls, 1);
+      expect(
+        find.byKey(const Key('ready-notifications-sheet')),
+        findsOneWidget,
+      );
+      // The sheet shows the honest unread rows (state untouched on failure).
+      expect(
+        find.byKey(Key('ready-unread-initial_order|${_uid(1)}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('ready-unread-initial_order|${_uid(2)}')),
+        findsOneWidget,
+      );
+    });
   });
 
   group('alert overlay', () {
@@ -360,51 +436,51 @@ void main() {
       );
     });
 
-    testWidgets(
-      'rows: initial vs Addition/Round N, ready time, status pill, '
-      'unread dot; Refresh triggers poll+sweep; Mark-all-read wires through',
-      (tester) async {
-        final (stub, _) = await _pump(
-          tester,
-          const Scaffold(body: ReadyNotificationsSheet()),
-          readyState: PosReadyNotificationsState(
-            initialized: true,
-            records: [
-              _record(1, read: true, status: 'served'),
-              _record(2, type: 'service_round'),
-            ],
-          ),
-        );
-        expect(
-          find.byKey(Key('ready-row-initial_order|${_uid(1)}')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(Key('ready-row-service_round|${_uid(2)}')),
-          findsOneWidget,
-        );
-        expect(find.textContaining('Addition ready — Round 2'), findsOneWidget);
-        expect(find.textContaining('Ready at'), findsNWidgets(2));
-        expect(find.text('Served'), findsOneWidget);
-        // Only the unread round row carries the dot.
-        expect(
-          find.byKey(Key('ready-unread-service_round|${_uid(2)}')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(Key('ready-unread-initial_order|${_uid(1)}')),
-          findsNothing,
-        );
-        final sweepsBefore = stub.reconcileCalls;
-        await tester.tap(find.byKey(const Key('ready-refresh-button')));
-        await tester.pump();
-        expect(stub.refreshCalls, 1);
-        expect(stub.reconcileCalls, sweepsBefore + 1);
-        await tester.tap(find.byKey(const Key('ready-mark-all-read')));
-        await tester.pump();
-        expect(stub.allRead, isTrue);
-      },
-    );
+    testWidgets('rows: initial vs Addition/Round N, ready time, status pill, '
+        'unread dot; Refresh triggers poll+sweep; NO Mark-all-read action '
+        'remains (the bell owns acknowledgement)', (tester) async {
+      final (stub, _) = await _pump(
+        tester,
+        const Scaffold(body: ReadyNotificationsSheet()),
+        readyState: PosReadyNotificationsState(
+          initialized: true,
+          records: [
+            _record(1, read: true, status: 'served'),
+            _record(2, type: 'service_round'),
+          ],
+        ),
+      );
+      expect(
+        find.byKey(Key('ready-row-initial_order|${_uid(1)}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('ready-row-service_round|${_uid(2)}')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Addition ready — Round 2'), findsOneWidget);
+      expect(find.textContaining('Ready at'), findsNWidgets(2));
+      expect(find.text('Served'), findsOneWidget);
+      // Only the unread round row carries the dot.
+      expect(
+        find.byKey(Key('ready-unread-service_round|${_uid(2)}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('ready-unread-initial_order|${_uid(1)}')),
+        findsNothing,
+      );
+      final sweepsBefore = stub.reconcileCalls;
+      await tester.tap(find.byKey(const Key('ready-refresh-button')));
+      await tester.pump();
+      expect(stub.refreshCalls, 1);
+      expect(stub.reconcileCalls, sweepsBefore + 1);
+      // The separate Mark-all-read action is GONE — the bell tap is the
+      // acknowledgement; the sheet itself marks nothing.
+      expect(find.byKey(const Key('ready-mark-all-read')), findsNothing);
+      expect(find.text('Mark all read'), findsNothing);
+      expect(stub.markAllCalls, 0);
+    });
 
     testWidgets('OPEN ORDER: a row tap marks THAT notification read and opens '
         'the orders centre with the exact orderId PINNED FIRST — the search '

@@ -724,7 +724,8 @@ class PosReadyNotificationsController
         return; // still pending; degraded already surfaced; retried later
       }
       if (committed == null || _isStale(gen, scopeKey)) return;
-      // The queue may have been cleared (markAllRead) while persisting.
+      // The queue may have been drained (markAllCurrentRead) while
+      // persisting.
       if (_pendingEntries.isEmpty ||
           !identical(_pendingEntries.first.first, items.first)) {
         return;
@@ -782,17 +783,22 @@ class PosReadyNotificationsController
     );
   }
 
-  /// Marks every retained record read; the explicit "I know" also clears the
-  /// visible alert and the pending queue.
-  void markAllRead() {
-    _pendingEntries.clear();
-    _autoDismiss?.cancel();
-    _autoDismiss = null;
-    state = state.copyWith(clearActiveAlert: true);
+  /// The bell's implicit acknowledgement: marks every record retained AT CALL
+  /// TIME read+alerted, PERSISTENCE FIRST. Only after the envelope write
+  /// succeeds do the badge (via the commit's publish), the visible alert, and
+  /// the acknowledged queue entries clear — a failed persist changes nothing
+  /// visible (the quiet degraded flag is the only trace) and returns false,
+  /// so the caller never presents a falsely cleared badge. Records that
+  /// arrive AFTER the snapshot — even mid-pipeline — stay unread and alert
+  /// normally; read state stays local to this device's scope envelope.
+  Future<bool> markAllCurrentRead() async {
+    final ids = {for (final r in state.records) r.identityKey};
+    if (ids.isEmpty) return true;
     final gen = _generation;
     final scopeKey = _scopeKey;
-    unawaited(
-      _commit(
+    final PosReadyNotificationsEnvelope? committed;
+    try {
+      committed = await _commit(
         gen,
         scopeKey,
         build: (cur) => PosReadyNotificationsEnvelope(
@@ -800,11 +806,33 @@ class PosReadyNotificationsController
           bootstrapServerTs: cur.bootstrapServerTs,
           cursor: cur.cursor,
           records: [
-            for (final r in cur.records) r.copyWith(read: true, alerted: true),
+            for (final r in cur.records)
+              ids.contains(r.identityKey)
+                  ? r.copyWith(read: true, alerted: true)
+                  : r,
           ],
         ),
-      ).catchError((Object _) => null),
-    );
+      );
+    } on PosPersistenceException {
+      return false;
+    }
+    if (committed == null || _isStale(gen, scopeKey)) return false;
+    // Acknowledged records leave the alert queue; an entry (or the visible
+    // banner) holding any POST-snapshot record is untouched and still
+    // presents normally.
+    for (var i = _pendingEntries.length - 1; i >= 0; i--) {
+      _pendingEntries[i].removeWhere((r) => ids.contains(r.identityKey));
+      if (_pendingEntries[i].isEmpty) _pendingEntries.removeAt(i);
+    }
+    final active = state.activeAlert;
+    if (active != null &&
+        active.items.every((r) => ids.contains(r.identityKey))) {
+      _autoDismiss?.cancel();
+      _autoDismiss = null;
+      state = state.copyWith(clearActiveAlert: true);
+      unawaited(_promoteNextAlert());
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------------------
