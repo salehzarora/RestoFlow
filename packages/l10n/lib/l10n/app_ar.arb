@@ -73,6 +73,7 @@
   "posReadyOpenOrder": "فتح الطلب",
   "posReadyAtTime": "جاهز في {time}",
   "posReadyPollingDegraded": "تحديثات الجاهزية غير متاحة مؤقتًا — تجري إعادة المحاولة",
+  "posReadyShowMore": "عرض المزيد",
   "posAdditionSavedRefreshNeeded": "أُضيفت الأصناف وحُفظت — تعذّر تحديث عرض الطلب. اضغط \"تحديث\" للإكمال.",
   "posReceiptUnavailableRetry": "تعذّر تحميل إيصال الطلب — تحقّق من الاتصال وحاول مجددًا.",
   "posAddItemsIneligiblePaid": "لا يمكن الإضافة إلى طلب مدفوع",

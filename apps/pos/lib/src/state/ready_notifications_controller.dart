@@ -166,10 +166,10 @@ class PosReadyNotificationsController
   static const int maxPagesPerCycle = 5;
   static const int pageLimit = 100;
 
-  /// Local retention: newest [maxRecords] within [maxAge] by readyAt.
-  /// Pruning never touches the durable cursor.
+  /// Local retention: newest [maxRecords] records whose readyAt falls on the
+  /// device's LOCAL calendar TODAY or YESTERDAY (calendar days, not a rolling
+  /// window). Pruning never touches the durable cursor.
   static const int maxRecords = 100;
-  static const Duration maxAge = Duration(hours: 24);
 
   static const int maxQueuedAlertEntries = 3;
 
@@ -430,7 +430,17 @@ class PosReadyNotificationsController
           return false;
         }
         if (_isStale(gen, scopeKey)) return false;
-        _envelope = loaded ?? PosReadyNotificationsEnvelope.empty;
+        // Loaded state passes retention IMMEDIATELY (out-of-window history
+        // never renders); the pruned set becomes durable on the next commit.
+        // Cursor and bootstrap markers pass through untouched.
+        _envelope = loaded == null
+            ? PosReadyNotificationsEnvelope.empty
+            : PosReadyNotificationsEnvelope(
+                initialized: loaded.initialized,
+                bootstrapServerTs: loaded.bootstrapServerTs,
+                cursor: loaded.cursor,
+                records: _prune(loaded.records),
+              );
         _publish(_envelope!, loading: !_envelope!.initialized);
         return true;
       });
@@ -622,13 +632,22 @@ class PosReadyNotificationsController
     tableLabel: row.tableLabel,
   );
 
-  /// Newest [maxRecords] within [maxAge] by readyAt. The cursor is untouched.
+  /// Newest [maxRecords] whose readyAt falls on the device's LOCAL calendar
+  /// today or yesterday — CALENDAR dates, not a rolling duration: on July 20
+  /// the whole of July 19 stays and the whole of July 18 goes, regardless of
+  /// the hour. Runs on every load and every envelope build, so the day
+  /// rolling over prunes on the next poll/sweep/open. The cursor is NEVER
+  /// touched: pruned history is behind the durable cursor and can never be
+  /// re-fetched or re-alerted.
   List<PosReadyNotificationRecord> _prune(
     Iterable<PosReadyNotificationRecord> records,
   ) {
-    final floor = _now().subtract(maxAge);
-    final kept = records.where((r) => r.readyAtTime.isAfter(floor)).toList()
-      ..sort(_newestFirst);
+    final today = _now().toLocal();
+    // Local midnight of YESTERDAY (Dart normalizes day-1 across month/year).
+    final floor = DateTime(today.year, today.month, today.day - 1);
+    final kept =
+        records.where((r) => !r.readyAtTime.toLocal().isBefore(floor)).toList()
+          ..sort(_newestFirst);
     return kept.length <= maxRecords ? kept : kept.sublist(0, maxRecords);
   }
 
@@ -714,10 +733,10 @@ class PosReadyNotificationsController
             initialized: cur.initialized,
             bootstrapServerTs: cur.bootstrapServerTs,
             cursor: cur.cursor,
-            records: [
+            records: _prune([
               for (final r in cur.records)
                 ids.contains(r.identityKey) ? r.copyWith(alerted: true) : r,
-            ],
+            ]),
           ),
         );
       } on PosPersistenceException {
@@ -772,12 +791,12 @@ class PosReadyNotificationsController
           initialized: cur.initialized,
           bootstrapServerTs: cur.bootstrapServerTs,
           cursor: cur.cursor,
-          records: [
+          records: _prune([
             for (final r in cur.records)
               r.identityKey == identityKey
                   ? r.copyWith(read: true, alerted: true)
                   : r,
-          ],
+          ]),
         ),
       ).catchError((Object _) => null),
     );
@@ -805,12 +824,12 @@ class PosReadyNotificationsController
           initialized: cur.initialized,
           bootstrapServerTs: cur.bootstrapServerTs,
           cursor: cur.cursor,
-          records: [
+          records: _prune([
             for (final r in cur.records)
               ids.contains(r.identityKey)
                   ? r.copyWith(read: true, alerted: true)
                   : r,
-          ],
+          ]),
         ),
       );
     } on PosPersistenceException {
@@ -898,7 +917,7 @@ class PosReadyNotificationsController
             bootstrapServerTs: cur.bootstrapServerTs,
             // The discovery cursor is NOT this sweep's to move.
             cursor: cur.cursor,
-            records: records,
+            records: _prune(records),
           );
         },
       );

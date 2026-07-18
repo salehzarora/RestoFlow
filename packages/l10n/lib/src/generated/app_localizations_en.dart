@@ -249,6 +249,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Ready updates temporarily unavailable — retrying';
 
   @override
+  String get posReadyShowMore => 'Show more';
+
+  @override
   String get posAdditionSavedRefreshNeeded =>
       'Items added and saved — the order view could not refresh. Tap Refresh to finish.';
 

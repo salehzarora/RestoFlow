@@ -246,6 +246,9 @@ class AppLocalizationsAr extends AppLocalizations {
       'تحديثات الجاهزية غير متاحة مؤقتًا — تجري إعادة المحاولة';
 
   @override
+  String get posReadyShowMore => 'عرض المزيد';
+
+  @override
   String get posAdditionSavedRefreshNeeded =>
       'أُضيفت الأصناف وحُفظت — تعذّر تحديث عرض الطلب. اضغط \"تحديث\" للإكمال.';
 

@@ -243,6 +243,9 @@ class AppLocalizationsHe extends AppLocalizations {
       'עדכוני המוכנות אינם זמינים זמנית — מנסה שוב';
 
   @override
+  String get posReadyShowMore => 'הצג עוד';
+
+  @override
   String get posAdditionSavedRefreshNeeded =>
       'הפריטים נוספו ונשמרו — תצוגת ההזמנה לא התרעננה. הקישו על רענון לסיום.';
 
