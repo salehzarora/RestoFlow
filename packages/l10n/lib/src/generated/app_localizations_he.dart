@@ -203,6 +203,46 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posAdditionFailedRetry => 'התוספת נכשלה — הקישו לניסיון חוזר';
 
   @override
+  String get posReadyBellTooltip => 'התראות מוכנות';
+
+  @override
+  String get posReadyHistoryTitle => 'היסטוריית התראות';
+
+  @override
+  String get posReadyOrderReady => 'ההזמנה מוכנה';
+
+  @override
+  String posReadyAdditionReady(int number) {
+    return 'התוספת מוכנה — סבב $number';
+  }
+
+  @override
+  String posReadyGroupedAlert(int count) {
+    return '$count הזמנות מוכנות';
+  }
+
+  @override
+  String get posReadyEmpty => 'אין התראות מוכנות';
+
+  @override
+  String get posReadyUnreadLabel => 'לא נקרא';
+
+  @override
+  String get posReadyMarkAllRead => 'סמן הכל כנקרא';
+
+  @override
+  String get posReadyOpenOrder => 'פתח הזמנה';
+
+  @override
+  String posReadyAtTime(String time) {
+    return 'מוכן ב-$time';
+  }
+
+  @override
+  String get posReadyPollingDegraded =>
+      'עדכוני המוכנות אינם זמינים זמנית — מנסה שוב';
+
+  @override
   String get posAdditionSavedRefreshNeeded =>
       'הפריטים נוספו ונשמרו — תצוגת ההזמנה לא התרעננה. הקישו על רענון לסיום.';
 

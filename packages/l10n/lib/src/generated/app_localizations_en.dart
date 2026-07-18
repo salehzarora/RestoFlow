@@ -209,6 +209,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posAdditionFailedRetry => 'Addition failed — tap to retry';
 
   @override
+  String get posReadyBellTooltip => 'Ready notifications';
+
+  @override
+  String get posReadyHistoryTitle => 'Notification history';
+
+  @override
+  String get posReadyOrderReady => 'Order ready';
+
+  @override
+  String posReadyAdditionReady(int number) {
+    return 'Addition ready — Round $number';
+  }
+
+  @override
+  String posReadyGroupedAlert(int count) {
+    return '$count orders ready';
+  }
+
+  @override
+  String get posReadyEmpty => 'No ready notifications';
+
+  @override
+  String get posReadyUnreadLabel => 'Unread';
+
+  @override
+  String get posReadyMarkAllRead => 'Mark all read';
+
+  @override
+  String get posReadyOpenOrder => 'Open order';
+
+  @override
+  String posReadyAtTime(String time) {
+    return 'Ready at $time';
+  }
+
+  @override
+  String get posReadyPollingDegraded =>
+      'Ready updates temporarily unavailable — retrying';
+
+  @override
   String get posAdditionSavedRefreshNeeded =>
       'Items added and saved — the order view could not refresh. Tap Refresh to finish.';
 

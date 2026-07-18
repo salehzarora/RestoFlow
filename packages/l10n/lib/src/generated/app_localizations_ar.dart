@@ -206,6 +206,46 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posAdditionFailedRetry => 'فشلت الإضافة — اضغط لإعادة المحاولة';
 
   @override
+  String get posReadyBellTooltip => 'إشعارات الجاهزية';
+
+  @override
+  String get posReadyHistoryTitle => 'سجل الإشعارات';
+
+  @override
+  String get posReadyOrderReady => 'الطلب جاهز';
+
+  @override
+  String posReadyAdditionReady(int number) {
+    return 'الإضافة جاهزة — الجولة $number';
+  }
+
+  @override
+  String posReadyGroupedAlert(int count) {
+    return '$count طلبات جاهزة';
+  }
+
+  @override
+  String get posReadyEmpty => 'لا توجد إشعارات جاهزية';
+
+  @override
+  String get posReadyUnreadLabel => 'غير مقروء';
+
+  @override
+  String get posReadyMarkAllRead => 'تعليم الكل كمقروء';
+
+  @override
+  String get posReadyOpenOrder => 'فتح الطلب';
+
+  @override
+  String posReadyAtTime(String time) {
+    return 'جاهز في $time';
+  }
+
+  @override
+  String get posReadyPollingDegraded =>
+      'تحديثات الجاهزية غير متاحة مؤقتًا — تجري إعادة المحاولة';
+
+  @override
   String get posAdditionSavedRefreshNeeded =>
       'أُضيفت الأصناف وحُفظت — تعذّر تحديث عرض الطلب. اضغط \"تحديث\" للإكمال.';
 
