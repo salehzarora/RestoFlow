@@ -105,14 +105,20 @@ class PosReadyNotificationRecord {
     'alerted': alerted,
   };
 
-  /// Fail-closed: a malformed record invalidates the envelope it rode in
-  /// (the caller discards the whole envelope and re-bootstraps safely).
+  /// Fail-closed, at FULL wire strictness (one validation contract with
+  /// [PosReadyFeedRow.fromJson] — local state is never weaker than the RPC
+  /// parser): a malformed record invalidates the WHOLE envelope it rode in
+  /// (the caller discards it and re-bootstraps safely; nothing is partially
+  /// retained).
   static PosReadyNotificationRecord? fromJson(Object? raw) {
     if (raw is! Map) return null;
     final type = raw['work_unit_type'];
     final workUnitId = raw['work_unit_id'];
     final orderId = raw['order_id'];
     final orderCode = raw['order_code'];
+    final roundNumber = raw['round_number'];
+    final orderType = raw['order_type'];
+    final tableLabel = raw['table_label'];
     final readyAt = raw['ready_at'];
     final workUnitStatus = raw['work_unit_status'];
     final parentStatus = raw['parent_order_status'];
@@ -122,31 +128,42 @@ class PosReadyNotificationRecord {
     final alerted = raw['alerted'];
     if (!kReadyWorkUnitTypes.contains(type) ||
         workUnitId is! String ||
+        !kUuidPattern.hasMatch(workUnitId) ||
         orderId is! String ||
+        !kUuidPattern.hasMatch(orderId) ||
         orderCode is! String ||
+        !kReadyOrderCodePattern.hasMatch(orderCode) ||
         readyAt is! String ||
         DateTime.tryParse(readyAt) == null ||
         workUnitStatus is! String ||
+        workUnitStatus.isEmpty ||
         parentStatus is! String ||
+        parentStatus.isEmpty ||
         revision is! int ||
+        revision < 1 ||
         discoveredAt is! String ||
+        DateTime.tryParse(discoveredAt) == null ||
         read is! bool ||
-        alerted is! bool) {
+        alerted is! bool ||
+        (orderType != null && orderType is! String) ||
+        (tableLabel != null && tableLabel is! String)) {
       return null;
     }
-    final roundNumber = raw['round_number'];
+    // The round cross-check mirrors the wire: an addition names its round
+    // (>= 2); the initial unit never carries one.
+    if (type == 'service_round') {
+      if (roundNumber is! int || roundNumber < 2) return null;
+    } else if (roundNumber != null) {
+      return null;
+    }
     return PosReadyNotificationRecord(
       workUnitType: type as String,
       workUnitId: workUnitId,
       orderId: orderId,
       orderCode: orderCode,
       roundNumber: roundNumber is int ? roundNumber : null,
-      orderType: raw['order_type'] is String
-          ? raw['order_type'] as String
-          : null,
-      tableLabel: raw['table_label'] is String
-          ? raw['table_label'] as String
-          : null,
+      orderType: orderType as String?,
+      tableLabel: tableLabel as String?,
       readyAt: readyAt,
       workUnitStatus: workUnitStatus,
       parentOrderStatus: parentStatus,

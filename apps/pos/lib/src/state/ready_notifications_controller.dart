@@ -12,7 +12,8 @@ import 'order_sync_controller.dart' show posSyncClockProvider;
 import 'pos_sync_scope_provider.dart';
 
 /// PSC-001A — THE single owner of ready-feed polling and local notification
-/// state. One timer, one in-flight request, one persisted envelope per scope.
+/// state. One timer, one in-flight discovery cycle, ONE SERIALIZED
+/// mutation/persistence pipeline, one persisted envelope per scope.
 ///
 /// Deliberately a SECOND coordinator beside [PosOrderSyncController], not a
 /// bolt-on: the cadence differs (~7s vs ~30s), the gating differs (screen-wide
@@ -22,16 +23,25 @@ import 'pos_sync_scope_provider.dart';
 /// scope-generation fencing after every await, injected clock and interval.
 ///
 /// HONESTY RULES:
-///  * the durable cursor NEVER advances past rows that were not persisted —
-///    cursor and records live in ONE envelope written atomically;
-///  * `initialized` is the EXPLICIT bootstrap marker (cursor null is a
-///    legitimate zero-row bootstrap, never "first run");
-///  * an identity ((work_unit_type, work_unit_id)) alerts AT MOST once, ever —
-///    `alerted` is sticky and persisted;
+///  * EVERY persisted-envelope mutation goes through the ONE serialized
+///    pipeline ([_commit]): it REBASES on the latest envelope at commit time
+///    (never a snapshot captured before an await), verifies the page's
+///    request cursor against the current durable cursor, persists, and only
+///    then swaps memory/state — a stale poll result can never overwrite a
+///    newer read/alerted/status, and the cursor structurally cannot advance
+///    past unstored rows;
+///  * BOOTSTRAP IS RESUMABLE: `initialized` stays false across cycles while
+///    the historical window drains (five pages per cycle, the envelope cursor
+///    doubling as the durable bootstrap-progress cursor and the ORIGINAL
+///    `bootstrapServerTs` frozen from the first response); it flips true only
+///    on the server's `has_more == false`, and only then may the
+///    genuinely-new (post-baseline) rows alert — a >500-row history can never
+///    leak into discovery as a notification storm;
+///  * a banner is exposed ONLY AFTER its records' `alerted=true` persisted
+///    durably (a crash cannot re-present; a failed persist keeps it pending
+///    and quietly retries);
 ///  * background failures are QUIET (degraded flag, no banners); the ~7s poll
-///    is itself the reconnect probe — first success recovers;
-///  * a security refusal STOPS the poller and defers to the existing
-///    reauth/scope-drop flow.
+///    is the reconnect probe.
 class PosReadyAlert {
   const PosReadyAlert({required this.id, required this.items});
 
@@ -54,7 +64,8 @@ class PosReadyNotificationsState {
     this.activeAlert,
   });
 
-  /// Bootstrap completed for the CURRENT scope (persisted marker).
+  /// Bootstrap completed for the CURRENT scope (persisted marker). False
+  /// also covers a PARTIALLY drained bootstrap still resuming across cycles.
   final bool initialized;
 
   /// The first load/bootstrap for this scope is in flight.
@@ -63,6 +74,7 @@ class PosReadyNotificationsState {
   /// Quietly degraded: the last poll/persist failed; records are the last
   /// good state; the poll keeps probing and recovers silently.
   final bool degraded;
+
   final DateTime? lastUpdatedAt;
 
   /// Newest-first for the history sheet.
@@ -97,18 +109,23 @@ class PosReadyNotificationsController
   Timer? _autoDismiss;
   Future<void>? _inFlight;
   Future<void>? _reconcileInFlight;
+
+  /// FIX 2 — the ONE serialized mutation/persistence tail. Every envelope
+  /// mutation chains onto it; network I/O stays OUTSIDE the queue and its
+  /// result rebases on the latest envelope inside it.
+  Future<void> _mutationTail = Future<void>.value();
+  bool _promoting = false;
   bool _disposed = false;
   bool _foreground = true;
 
-  /// Scope-generation fencing — the exact [PosOrderSyncController] pattern:
-  /// plain fields advanced EAGERLY by the scope listener, re-checked after
-  /// every await; a stale continuation drops itself silently.
+  /// Scope-generation fencing — plain fields advanced EAGERLY by the scope
+  /// listener, re-checked after every await; a stale continuation drops
+  /// itself silently.
   String? _scopeKey;
   int _generation = 0;
 
-  /// The in-memory envelope — assigned ONLY after a successful [persist], so
-  /// memory can never outrun durable state (and the cursor cannot advance
-  /// past unstored rows even within one session).
+  /// The in-memory envelope — swapped ONLY inside [_commit] after a
+  /// successful persist, so memory can never outrun durable state.
   PosReadyNotificationsEnvelope? _envelope;
 
   /// Queued alert ENTRIES (each = one cycle's new arrivals). Capped at
@@ -118,6 +135,7 @@ class PosReadyNotificationsController
 
   int _consecutiveFailures = 0;
   DateTime? _lastAttemptAt;
+  DateTime? _lastUpdatedAt;
 
   /// The production tick (main.dart overrides the interval provider).
   static const Duration defaultPollInterval = Duration(seconds: 7);
@@ -127,8 +145,8 @@ class PosReadyNotificationsController
   static const int backoffAfterFailures = 3;
   static const Duration backoffInterval = Duration(seconds: 30);
 
-  /// One refresh cycle drains at most this many pages; backlog continues on
-  /// the next tick (never an unbounded drain loop).
+  /// One cycle drains at most this many pages; backlog (bootstrap included)
+  /// continues on the next tick — never an unbounded drain loop.
   static const int maxPagesPerCycle = 5;
   static const int pageLimit = 100;
 
@@ -168,7 +186,16 @@ class PosReadyNotificationsController
         unawaited(refreshNow());
       });
     }
-    return const PosReadyNotificationsState();
+    // A SAME-SCOPE rebuild (e.g. a session change) keeps the loaded records —
+    // blanking the bell/history because a provider rebuilt would be a lie.
+    final env = _envelope;
+    return env == null
+        ? const PosReadyNotificationsState()
+        : PosReadyNotificationsState(
+            initialized: env.initialized,
+            records: env.records,
+            lastUpdatedAt: _lastUpdatedAt,
+          );
   }
 
   bool _isStale(int gen, String? scopeKey) =>
@@ -187,6 +214,7 @@ class PosReadyNotificationsController
     _inFlight = null;
     _consecutiveFailures = 0;
     _lastAttemptAt = null;
+    _lastUpdatedAt = null;
     _autoDismiss?.cancel();
     _autoDismiss = null;
     _timer?.cancel();
@@ -220,7 +248,9 @@ class PosReadyNotificationsController
   }
 
   void _ensureTimer() {
-    if (_timer != null || !_foreground || _scopeKey == null || _isDemo) return;
+    if (_timer != null || !_foreground || _scopeKey == null || _isDemo) {
+      return;
+    }
     final interval = ref.read(posReadyFeedPollIntervalProvider);
     if (interval == null) return;
     _timer = Timer.periodic(interval, (_) {
@@ -242,12 +272,69 @@ class PosReadyNotificationsController
   bool get isInBackoff => _inBackoff();
 
   // ---------------------------------------------------------------------------
+  // FIX 2 — the serialized mutation/persistence pipeline
+  // ---------------------------------------------------------------------------
+
+  Future<T> _mutate<T>(Future<T> Function() action) {
+    final run = _mutationTail.then((_) => action());
+    _mutationTail = run.then<void>((_) {}, onError: (_) {});
+    return run;
+  }
+
+  bool _sameCursor(PosReadyCursor? a, PosReadyCursor? b) =>
+      a?.readyAt == b?.readyAt &&
+      a?.workUnitType == b?.workUnitType &&
+      a?.id == b?.id;
+
+  /// THE one envelope commit. Inside the serialized mutation it REBASES on
+  /// the latest envelope (never a pre-await snapshot), optionally verifies a
+  /// page's request cursor against the current durable cursor (a stale page
+  /// result gets ZERO side effects), persists, and only then swaps
+  /// memory/state. Returns the committed envelope; null = skipped
+  /// (stale/precondition/no scope). A persistence failure marks the quiet
+  /// degraded state and RETHROWS [PosPersistenceException] so the calling
+  /// cycle can account for it exactly once.
+  Future<PosReadyNotificationsEnvelope?> _commit(
+    int gen,
+    String? scopeKey, {
+    PosReadyCursor? expectedCursor,
+    bool enforceCursorPrecondition = false,
+    bool requireUninitialized = false,
+    required PosReadyNotificationsEnvelope Function(
+      PosReadyNotificationsEnvelope current,
+    )
+    build,
+  }) => _mutate(() async {
+    if (_isStale(gen, scopeKey)) return null;
+    final scope = _scope();
+    if (scope == null) return null;
+    final current = _envelope ?? PosReadyNotificationsEnvelope.empty;
+    if (enforceCursorPrecondition) {
+      if (!_sameCursor(current.cursor, expectedCursor)) return null;
+      if (requireUninitialized && current.initialized) return null;
+    }
+    final next = build(current);
+    try {
+      await ref.read(readyNotificationsStoreProvider).persist(scope, next);
+    } on PosPersistenceException {
+      if (!_isStale(gen, scopeKey)) {
+        state = state.copyWith(loading: false, degraded: true);
+      }
+      rethrow;
+    }
+    if (_isStale(gen, scopeKey)) return null;
+    _envelope = next;
+    _publish(next);
+    return next;
+  });
+
+  // ---------------------------------------------------------------------------
   // The refresh cycle
   // ---------------------------------------------------------------------------
 
-  /// One discovery cycle now. Manual callers (refresh button, resume, scope
-  /// restoration) bypass the backoff gate; concurrent callers join the one
-  /// in-flight cycle.
+  /// One discovery/bootstrap cycle now. Manual callers (refresh button,
+  /// resume, scope restoration) bypass the backoff gate; concurrent callers
+  /// join the in-flight cycle.
   Future<void> refreshNow() {
     final existing = _inFlight;
     if (existing != null) return existing;
@@ -265,37 +352,39 @@ class PosReadyNotificationsController
     final scopeKey = _scopeKey;
     _lastAttemptAt = _now();
 
-    var env = _envelope;
-    if (env == null) {
+    if (_envelope == null) {
       state = state.copyWith(loading: state.records.isEmpty);
-      final PosReadyNotificationsEnvelope? loaded;
-      try {
-        loaded = await ref.read(readyNotificationsStoreProvider).load(scope);
-      } catch (_) {
-        if (_isStale(gen, scopeKey)) return;
-        _failCycle();
+      // The initial load joins the SAME serialized pipeline — a commit can
+      // never interleave with it.
+      final ok = await _mutate(() async {
+        if (_isStale(gen, scopeKey) || _envelope != null) {
+          return !_isStale(gen, scopeKey);
+        }
+        final PosReadyNotificationsEnvelope? loaded;
+        try {
+          loaded = await ref.read(readyNotificationsStoreProvider).load(scope);
+        } catch (_) {
+          return false;
+        }
+        if (_isStale(gen, scopeKey)) return false;
+        _envelope = loaded ?? PosReadyNotificationsEnvelope.empty;
+        _publish(_envelope!, loading: !_envelope!.initialized);
+        return true;
+      });
+      if (!ok || _isStale(gen, scopeKey)) {
+        if (!_isStale(gen, scopeKey)) _failCycle();
         return;
       }
-      if (_isStale(gen, scopeKey)) return;
-      env = loaded ?? PosReadyNotificationsEnvelope.empty;
-      _envelope = env;
-      _publish(env, loading: !env.initialized);
     }
 
     try {
-      if (!env.initialized) {
-        await _bootstrap(gen, scopeKey, scope, env);
+      if (!_envelope!.initialized) {
+        await _bootstrap(gen, scopeKey);
       } else {
-        await _poll(gen, scopeKey, scope, env);
+        await _poll(gen, scopeKey);
       }
-    } on PosReadyFeedException catch (e) {
+    } on PosReadyFeedException {
       if (_isStale(gen, scopeKey)) return;
-      if (e.failure == PosReadyFeedFailure.session) {
-        // Security refusal: STOP the poller; the PIN gate / scope-drop owns
-        // recovery. Quietly degraded — never an error banner from a poll.
-        _timer?.cancel();
-        _timer = null;
-      }
       _failCycle();
       return;
     } on PosPersistenceException {
@@ -305,8 +394,9 @@ class PosReadyNotificationsController
     }
     if (_isStale(gen, scopeKey)) return;
     _consecutiveFailures = 0;
-    _publish(_envelope!, degraded: false, lastUpdatedAt: _now());
-    _promoteAlert();
+    _lastUpdatedAt = _now();
+    _publish(_envelope!, degraded: false, lastUpdatedAt: _lastUpdatedAt);
+    await _promoteNextAlert();
   }
 
   void _failCycle() {
@@ -314,94 +404,108 @@ class PosReadyNotificationsController
     state = state.copyWith(loading: false, degraded: true);
   }
 
-  /// FIRST RUN for this scope. The explicit [initialized] flag — never cursor
-  /// presence — marks completion. The first successful response's `server_ts`
-  /// is the BASELINE: rows at-or-before it are historical (read+alerted, no
-  /// badge, no banner — no storm); rows after it became ready DURING the
-  /// bootstrap and alert normally rather than being silently absorbed.
-  /// Everything persists in ONE atomic envelope; a crash before that persist
-  /// simply re-bootstraps.
-  Future<void> _bootstrap(
-    int gen,
-    String? scopeKey,
-    PosSyncScope scope,
-    PosReadyNotificationsEnvelope env,
-  ) async {
+  /// FIX 1 — RESUMABLE bootstrap. The FIRST response of a FRESH bootstrap
+  /// freezes `bootstrapServerTs`; every page (this cycle and every later
+  /// resume cycle) classifies against that ORIGINAL baseline and commits
+  /// through the pipeline with `initialized = !page.hasMore` — so a >500-row
+  /// history stays `initialized=false` across cycles, resumes from the
+  /// persisted progress cursor (never a null refetch), and can never leak
+  /// into normal discovery as an alert storm. Alerts (only the genuinely-new
+  /// post-baseline rows, still unalerted) queue ONLY after completion.
+  Future<void> _bootstrap(int gen, String? scopeKey) async {
     final repo = ref.read(readyFeedRepositoryProvider);
-    final byIdentity = <String, PosReadyNotificationRecord>{
-      for (final r in env.records) r.identityKey: r,
-    };
-    String? baselineTs;
-    PosReadyCursor? cursor;
+    var current = _envelope!;
+    var baselineTs = current.bootstrapServerTs;
     var pages = 0;
     var hasMore = true;
     while (hasMore && pages < maxPagesPerCycle) {
-      final page = await repo.fetch(cursor: cursor, limit: pageLimit);
+      final requestCursor = current.cursor;
+      final page = await repo.fetch(cursor: requestCursor, limit: pageLimit);
       if (_isStale(gen, scopeKey)) return;
       baselineTs ??= page.serverTs;
-      final baseline = DateTime.parse(baselineTs);
-      for (final row in page.rows) {
-        final historical = !row.readyAtTime.isAfter(baseline);
-        byIdentity[row.identityKey] = _recordFrom(
-          row,
-          read: historical,
-          alerted: historical,
-        );
-      }
-      cursor = page.nextCursor ?? cursor;
+      final ts = baselineTs;
+      final committed = await _commit(
+        gen,
+        scopeKey,
+        expectedCursor: requestCursor,
+        enforceCursorPrecondition: true,
+        requireUninitialized: true,
+        build: (cur) {
+          final baseline = DateTime.parse(ts);
+          final byIdentity = <String, PosReadyNotificationRecord>{
+            for (final r in cur.records) r.identityKey: r,
+          };
+          for (final row in page.rows) {
+            final existing = byIdentity[row.identityKey];
+            if (existing != null) {
+              byIdentity[row.identityKey] = _refresh(existing, row);
+            } else {
+              final historical = !row.readyAtTime.isAfter(baseline);
+              byIdentity[row.identityKey] = _recordFrom(
+                row,
+                read: historical,
+                alerted: historical,
+              );
+            }
+          }
+          return PosReadyNotificationsEnvelope(
+            initialized: !page.hasMore,
+            bootstrapServerTs: ts,
+            cursor: page.nextCursor ?? cur.cursor,
+            records: _prune(byIdentity.values),
+          );
+        },
+      );
+      if (committed == null) return; // stale/precondition — resume next cycle
+      current = committed;
       hasMore = page.hasMore;
       pages++;
     }
-    final complete = PosReadyNotificationsEnvelope(
-      initialized: true,
-      bootstrapServerTs: baselineTs,
-      cursor: cursor,
-      records: _prune(byIdentity.values),
-    );
-    await ref.read(readyNotificationsStoreProvider).persist(scope, complete);
-    if (_isStale(gen, scopeKey)) return;
-    _envelope = complete;
-    _queueUnalerted(complete);
+    if (current.initialized) _queueUnalerted(current);
+    // else: the partial progress (initialized=false, ORIGINAL baseline, the
+    // advanced cursor, accumulated records) is durable; the next cycle
+    // resumes from exactly here. No alerts until completion.
   }
 
-  /// NORMAL polling: tuple-cursor pages, each persisted BEFORE the cursor
-  /// advances past it; a new identity is unread and queues an alert AFTER its
-  /// envelope persisted; a re-seen identity only refreshes statuses/context
-  /// and keeps read/alerted sticky.
-  Future<void> _poll(
-    int gen,
-    String? scopeKey,
-    PosSyncScope scope,
-    PosReadyNotificationsEnvelope env,
-  ) async {
+  /// NORMAL polling: tuple-cursor pages, each committed through the pipeline
+  /// (rebased, cursor-preconditioned, persisted BEFORE the cursor advances);
+  /// a new identity is unread and queues an alert only after its envelope
+  /// persisted; a re-seen identity only refreshes statuses/context and keeps
+  /// read/alerted sticky.
+  Future<void> _poll(int gen, String? scopeKey) async {
     final repo = ref.read(readyFeedRepositoryProvider);
-    final store = ref.read(readyNotificationsStoreProvider);
-    var current = env;
+    var current = _envelope!;
     var pages = 0;
     var hasMore = true;
     while (hasMore && pages < maxPagesPerCycle) {
-      final page = await repo.fetch(cursor: current.cursor, limit: pageLimit);
+      final requestCursor = current.cursor;
+      final page = await repo.fetch(cursor: requestCursor, limit: pageLimit);
       if (_isStale(gen, scopeKey)) return;
-      final byIdentity = <String, PosReadyNotificationRecord>{
-        for (final r in current.records) r.identityKey: r,
-      };
-      for (final row in page.rows) {
-        final existing = byIdentity[row.identityKey];
-        byIdentity[row.identityKey] = existing == null
-            ? _recordFrom(row, read: false, alerted: false)
-            : _refresh(existing, row);
-      }
-      final next = PosReadyNotificationsEnvelope(
-        initialized: true,
-        bootstrapServerTs: current.bootstrapServerTs,
-        cursor: page.nextCursor ?? current.cursor,
-        records: _prune(byIdentity.values),
+      final committed = await _commit(
+        gen,
+        scopeKey,
+        expectedCursor: requestCursor,
+        enforceCursorPrecondition: true,
+        build: (cur) {
+          final byIdentity = <String, PosReadyNotificationRecord>{
+            for (final r in cur.records) r.identityKey: r,
+          };
+          for (final row in page.rows) {
+            final existing = byIdentity[row.identityKey];
+            byIdentity[row.identityKey] = existing == null
+                ? _recordFrom(row, read: false, alerted: false)
+                : _refresh(existing, row);
+          }
+          return PosReadyNotificationsEnvelope(
+            initialized: true,
+            bootstrapServerTs: cur.bootstrapServerTs,
+            cursor: page.nextCursor ?? cur.cursor,
+            records: _prune(byIdentity.values),
+          );
+        },
       );
-      await store.persist(scope, next);
-      if (_isStale(gen, scopeKey)) return;
-      _envelope = next;
-      current = next;
-      _publish(next);
+      if (committed == null) return;
+      current = committed;
       hasMore = page.hasMore;
       pages++;
     }
@@ -477,7 +581,7 @@ class PosReadyNotificationsController
   }
 
   // ---------------------------------------------------------------------------
-  // Alert queue
+  // Alert queue (FIX 3: alerted persists BEFORE the banner shows)
   // ---------------------------------------------------------------------------
 
   /// Queues one entry for every persisted-but-never-alerted record set. This
@@ -508,43 +612,60 @@ class PosReadyNotificationsController
     }
   }
 
-  /// Shows the next queued entry when no alert is visible. Marks its items
-  /// `alerted` durably (best-effort: an in-memory mark still prevents any
-  /// re-alert this session; a failed write can at worst re-present once
-  /// after a restart — the record stays honestly unread either way).
-  void _promoteAlert() {
-    if (state.activeAlert != null || _pendingEntries.isEmpty) return;
-    final items = _pendingEntries.removeAt(0);
-    final alert = PosReadyAlert(id: ++_alertSeq, items: items);
-    _markAlerted(items);
-    state = state.copyWith(activeAlert: alert);
-    final autoDismiss = ref.read(posReadyAlertAutoDismissProvider);
-    if (autoDismiss != null) {
-      _autoDismiss?.cancel();
-      final alertId = alert.id;
-      _autoDismiss = Timer(autoDismiss, () {
-        if (_disposed || state.activeAlert?.id != alertId) return;
-        dismissAlert();
-      });
+  /// Shows the next queued entry ONLY after its records' `alerted=true`
+  /// persisted durably (grouped entries persist every identity in the same
+  /// envelope write, then show ONE banner). A failed persist keeps the entry
+  /// pending — quietly degraded, retried on the next successful cycle —
+  /// and shows NOTHING.
+  Future<void> _promoteNextAlert() async {
+    if (_promoting || state.activeAlert != null || _pendingEntries.isEmpty) {
+      return;
     }
-  }
-
-  void _markAlerted(List<PosReadyNotificationRecord> items) {
-    final env = _envelope;
-    if (env == null) return;
-    final ids = {for (final r in items) r.identityKey};
-    final updated = PosReadyNotificationsEnvelope(
-      initialized: env.initialized,
-      bootstrapServerTs: env.bootstrapServerTs,
-      cursor: env.cursor,
-      records: [
-        for (final r in env.records)
-          ids.contains(r.identityKey) ? r.copyWith(alerted: true) : r,
-      ],
-    );
-    _envelope = updated;
-    _publish(updated);
-    _persistQuietly(updated);
+    _promoting = true;
+    try {
+      final gen = _generation;
+      final scopeKey = _scopeKey;
+      final items = List.of(_pendingEntries.first);
+      final ids = {for (final r in items) r.identityKey};
+      final PosReadyNotificationsEnvelope? committed;
+      try {
+        committed = await _commit(
+          gen,
+          scopeKey,
+          build: (cur) => PosReadyNotificationsEnvelope(
+            initialized: cur.initialized,
+            bootstrapServerTs: cur.bootstrapServerTs,
+            cursor: cur.cursor,
+            records: [
+              for (final r in cur.records)
+                ids.contains(r.identityKey) ? r.copyWith(alerted: true) : r,
+            ],
+          ),
+        );
+      } on PosPersistenceException {
+        return; // still pending; degraded already surfaced; retried later
+      }
+      if (committed == null || _isStale(gen, scopeKey)) return;
+      // The queue may have been cleared (markAllRead) while persisting.
+      if (_pendingEntries.isEmpty ||
+          !identical(_pendingEntries.first.first, items.first)) {
+        return;
+      }
+      _pendingEntries.removeAt(0);
+      final alert = PosReadyAlert(id: ++_alertSeq, items: items);
+      state = state.copyWith(activeAlert: alert);
+      final autoDismiss = ref.read(posReadyAlertAutoDismissProvider);
+      if (autoDismiss != null) {
+        _autoDismiss?.cancel();
+        final alertId = alert.id;
+        _autoDismiss = Timer(autoDismiss, () {
+          if (_disposed || state.activeAlert?.id != alertId) return;
+          dismissAlert();
+        });
+      }
+    } finally {
+      _promoting = false;
+    }
   }
 
   /// DISMISSAL IS NOT READ — the banner goes away; the unread badge stays.
@@ -553,67 +674,58 @@ class PosReadyNotificationsController
     _autoDismiss?.cancel();
     _autoDismiss = null;
     state = state.copyWith(clearActiveAlert: true);
-    _promoteAlert();
+    unawaited(_promoteNextAlert());
   }
 
   // ---------------------------------------------------------------------------
-  // Read state
+  // Read state (all through the serialized pipeline)
   // ---------------------------------------------------------------------------
 
   /// Marks ONE notification read (an intentional open).
   void markRead(String identityKey) {
-    final env = _envelope;
-    if (env == null) return;
-    final updated = PosReadyNotificationsEnvelope(
-      initialized: env.initialized,
-      bootstrapServerTs: env.bootstrapServerTs,
-      cursor: env.cursor,
-      records: [
-        for (final r in env.records)
-          r.identityKey == identityKey
-              ? r.copyWith(read: true, alerted: true)
-              : r,
-      ],
+    final gen = _generation;
+    final scopeKey = _scopeKey;
+    unawaited(
+      _commit(
+        gen,
+        scopeKey,
+        build: (cur) => PosReadyNotificationsEnvelope(
+          initialized: cur.initialized,
+          bootstrapServerTs: cur.bootstrapServerTs,
+          cursor: cur.cursor,
+          records: [
+            for (final r in cur.records)
+              r.identityKey == identityKey
+                  ? r.copyWith(read: true, alerted: true)
+                  : r,
+          ],
+        ),
+      ).catchError((Object _) => null),
     );
-    _envelope = updated;
-    _publish(updated);
-    _persistQuietly(updated);
   }
 
   /// Marks every retained record read; the explicit "I know" also clears the
   /// visible alert and the pending queue.
   void markAllRead() {
-    final env = _envelope;
-    if (env == null) return;
-    final updated = PosReadyNotificationsEnvelope(
-      initialized: env.initialized,
-      bootstrapServerTs: env.bootstrapServerTs,
-      cursor: env.cursor,
-      records: [
-        for (final r in env.records) r.copyWith(read: true, alerted: true),
-      ],
-    );
-    _envelope = updated;
     _pendingEntries.clear();
     _autoDismiss?.cancel();
     _autoDismiss = null;
-    _publish(updated);
     state = state.copyWith(clearActiveAlert: true);
-    _persistQuietly(updated);
-  }
-
-  void _persistQuietly(PosReadyNotificationsEnvelope env) {
-    final scope = _scope();
-    if (scope == null) return;
     final gen = _generation;
     final scopeKey = _scopeKey;
     unawaited(
-      ref.read(readyNotificationsStoreProvider).persist(scope, env).catchError((
-        Object _,
-      ) {
-        if (_isStale(gen, scopeKey)) return;
-        state = state.copyWith(degraded: true);
-      }),
+      _commit(
+        gen,
+        scopeKey,
+        build: (cur) => PosReadyNotificationsEnvelope(
+          initialized: cur.initialized,
+          bootstrapServerTs: cur.bootstrapServerTs,
+          cursor: cur.cursor,
+          records: [
+            for (final r in cur.records) r.copyWith(read: true, alerted: true),
+          ],
+        ),
+      ).catchError((Object _) => null),
     );
   }
 
@@ -624,9 +736,8 @@ class PosReadyNotificationsController
   /// One CURSORLESS feed read over the server's 24h window that refreshes the
   /// current statuses of ALREADY-KNOWN identities. It never adds records,
   /// never alerts, never touches read/alerted, and never moves the durable
-  /// discovery cursor. Failures are quiet (the sheet shows the degraded
-  /// subtitle); local retention is also 24h, so every retained record stays
-  /// eligible.
+  /// discovery cursor. Failures are quiet; local retention is also 24h, so
+  /// every retained record stays eligible.
   Future<void> reconcileStatuses() {
     final existing = _reconcileInFlight;
     if (existing != null) return existing;
@@ -665,40 +776,28 @@ class PosReadyNotificationsController
       state = state.copyWith(degraded: true);
       return;
     }
-    final current = _envelope;
-    if (current == null) return;
-    var changed = false;
-    final records = <PosReadyNotificationRecord>[];
-    for (final r in current.records) {
-      final row = byIdentity[r.identityKey];
-      if (row == null ||
-          (row.workUnitStatus == r.workUnitStatus &&
-              row.parentOrderStatus == r.parentOrderStatus &&
-              row.revision == r.revision)) {
-        records.add(r);
-      } else {
-        changed = true;
-        records.add(_refresh(r, row));
-      }
-    }
-    if (!changed) return;
-    final updated = PosReadyNotificationsEnvelope(
-      initialized: current.initialized,
-      bootstrapServerTs: current.bootstrapServerTs,
-      cursor:
-          current.cursor, // the discovery cursor is NOT this sweep's to move
-      records: records,
-    );
     try {
-      await ref.read(readyNotificationsStoreProvider).persist(scope, updated);
+      await _commit(
+        gen,
+        scopeKey,
+        build: (cur) {
+          final records = <PosReadyNotificationRecord>[];
+          for (final r in cur.records) {
+            final row = byIdentity[r.identityKey];
+            records.add(row == null ? r : _refresh(r, row));
+          }
+          return PosReadyNotificationsEnvelope(
+            initialized: cur.initialized,
+            bootstrapServerTs: cur.bootstrapServerTs,
+            // The discovery cursor is NOT this sweep's to move.
+            cursor: cur.cursor,
+            records: records,
+          );
+        },
+      );
     } on PosPersistenceException {
-      if (_isStale(gen, scopeKey)) return;
-      state = state.copyWith(degraded: true);
-      return;
+      // degraded already surfaced by _commit
     }
-    if (_isStale(gen, scopeKey)) return;
-    _envelope = updated;
-    _publish(updated);
   }
 }
 

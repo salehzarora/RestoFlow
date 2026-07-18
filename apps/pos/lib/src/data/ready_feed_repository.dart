@@ -63,6 +63,11 @@ final RegExp kUuidPattern = RegExp(
   r'-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
 );
 
+/// The feed's display-code shape (`'#' || upper(right(hex(order uuid), 6))`).
+/// ONE contract for the RPC parser AND the persisted-record parser — local
+/// state is never allowed to be weaker than the wire.
+final RegExp kReadyOrderCodePattern = RegExp(r'^#[0-9A-F]{6}$');
+
 /// One ready work unit as the feed reported it (safe fields only — no money,
 /// no items, no payloads).
 class PosReadyFeedRow {
@@ -114,13 +119,15 @@ class PosReadyFeedRow {
     final workUnitStatus = raw['work_unit_status'];
     final parentStatus = raw['parent_order_status'];
     final revision = raw['revision'];
+    final orderType = raw['order_type'];
+    final tableLabel = raw['table_label'];
     if (!kReadyWorkUnitTypes.contains(type) ||
         workUnitId is! String ||
         !kUuidPattern.hasMatch(workUnitId) ||
         orderId is! String ||
         !kUuidPattern.hasMatch(orderId) ||
         orderCode is! String ||
-        orderCode.isEmpty ||
+        !kReadyOrderCodePattern.hasMatch(orderCode) ||
         readyAt is! String ||
         readyAt.isEmpty ||
         DateTime.tryParse(readyAt) == null ||
@@ -129,7 +136,10 @@ class PosReadyFeedRow {
         parentStatus is! String ||
         parentStatus.isEmpty ||
         revision is! int ||
-        revision < 1) {
+        revision < 1 ||
+        // The safe OPTIONAL strings are null or well-typed — never coerced.
+        (orderType != null && orderType is! String) ||
+        (tableLabel != null && tableLabel is! String)) {
       return null;
     }
     // An addition names its round (>= 2); the initial unit never does.
@@ -144,12 +154,8 @@ class PosReadyFeedRow {
       orderId: orderId,
       orderCode: orderCode,
       roundNumber: roundNumber is int ? roundNumber : null,
-      orderType: raw['order_type'] is String
-          ? raw['order_type'] as String
-          : null,
-      tableLabel: raw['table_label'] is String
-          ? raw['table_label'] as String
-          : null,
+      orderType: orderType as String?,
+      tableLabel: tableLabel as String?,
       readyAt: readyAt,
       workUnitStatus: workUnitStatus,
       parentOrderStatus: parentStatus,
