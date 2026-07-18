@@ -83,3 +83,11 @@ PosLayoutMode posLayoutModeFor({
   if (width >= 700 && width > height) return PosLayoutMode.compactLandscape;
   return PosLayoutMode.phone;
 }
+
+/// PSC-001A: below this width the POS app bar goes COMPACT — the textual
+/// title hides (the brand tile stays) and the outbox indicator collapses to
+/// its icon (tooltip + full semantics retained), so the five operational
+/// actions (ready bell, orders, outbox, language, device menu) always fit
+/// without a RenderFlex overflow on narrow phones. Chosen from real 320/360/
+/// 390 widget-test evidence, not taste.
+const double kPosCompactAppBarWidth = 480;

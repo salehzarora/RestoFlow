@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/order_sync_controller.dart';
 import '../state/pos_menu_provider.dart';
+import '../state/ready_notifications_controller.dart';
 
 /// POS-OPERATIONS-SYNC-001 — the app-lifecycle seam for authoritative sync.
 ///
@@ -34,6 +35,9 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(posOrderSyncControllerProvider.notifier).syncNow();
+      // PSC-001A: the ready-notification poller starts with the surface too —
+      // same deferred frame, same no-scope no-op safety.
+      ref.read(posReadyNotificationsControllerProvider.notifier).onResume();
     });
   }
 
@@ -45,14 +49,21 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
     // `mounted` guards the window where the observer is still registered but the
     // element is gone — Riverpod throws on a ref read after dispose.
     if (!mounted) return;
+    // PSC-001A: the ready poller PAUSES whenever the app/page leaves the
+    // foreground (hidden browser tab, backgrounded app) — a ~7s tick against
+    // an invisible surface is pure waste — and resumes with an immediate poll.
+    if (state != AppLifecycleState.resumed) {
+      ref.read(posReadyNotificationsControllerProvider.notifier).onPaused();
+      return;
+    }
     // RESUME. The coordinator collapses concurrent callers onto the ONE in-flight
     // sync, so a platform that fires `resumed` more than once cannot start three
     // racing pulls whose losers overwrite the winner.
     ref.read(posOrderSyncControllerProvider.notifier).onResume();
+    ref.read(posReadyNotificationsControllerProvider.notifier).onResume();
     // PILOT-OPERATIONS-CORRECTIONS-001: also refresh the MENU (and therefore
     // availability) on resume — a Dashboard availability change made while the POS
     // was backgrounded would otherwise stay invisible until the session changed.

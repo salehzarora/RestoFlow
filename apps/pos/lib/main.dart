@@ -12,6 +12,7 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/durable_outbox_store.dart';
+import 'src/data/ready_notifications_store.dart';
 import 'src/data/recent_orders_store.dart';
 import 'src/data/sync_cursor_store.dart';
 import 'src/print/print_bridge.dart';
@@ -26,6 +27,7 @@ import 'src/state/pos_device_context.dart';
 import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_session.dart';
 import 'src/state/pos_shift_close_policy.dart';
+import 'src/state/ready_notifications_controller.dart';
 import 'src/state/recent_orders_controller.dart';
 import 'src/widgets/pos_sync_lifecycle.dart';
 
@@ -99,6 +101,18 @@ Widget _posApp(
       // coordinator stops it when the last one closes). Null in tests.
       posSyncPollIntervalProvider.overrideWithValue(
         PosOrderSyncController.defaultPeriodicInterval,
+      ),
+      // PSC-001A: the persisted ready-notification envelope (cursor + records
+      // + read state, one atomic write per scope key) and the ~7s foreground
+      // ready-feed tick + ~8s banner auto-dismiss. All null/in-memory in tests.
+      readyNotificationsStoreProvider.overrideWithValue(
+        SharedPrefsReadyNotificationsStore(prefs),
+      ),
+      posReadyFeedPollIntervalProvider.overrideWithValue(
+        PosReadyNotificationsController.defaultPollInterval,
+      ),
+      posReadyAlertAutoDismissProvider.overrideWithValue(
+        const Duration(seconds: 8),
       ),
       // RF-118: the client PIN-attempt lockout counter persists to
       // shared_preferences too, so a too-many-attempts cooldown survives a

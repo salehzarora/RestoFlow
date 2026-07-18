@@ -17,6 +17,8 @@ import 'widgets/menu_item_card.dart';
 import 'widgets/modifier_selection_sheet.dart';
 import 'widgets/outbox_status_indicator.dart';
 import 'widgets/pos_bottom_bar.dart';
+import 'widgets/ready_alert_overlay.dart';
+import 'widgets/ready_notification_bell.dart';
 import 'widgets/recent_orders_sheet.dart';
 
 /// The RestoFlow POS cashier screen (DESIGN-004 Warm/Bento): a warm-canvas
@@ -44,8 +46,9 @@ class PosMenuScreen extends StatelessWidget {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // The gradient brand tile (§6.1).
+            // The gradient brand tile (§6.1) — always visible, every width.
             Container(
+              key: const Key('pos-brand-tile'),
               width: 38,
               height: 38,
               decoration: BoxDecoration(
@@ -58,55 +61,69 @@ class PosMenuScreen extends StatelessWidget {
                 size: RestoflowIconSizes.md,
               ),
             ),
-            const SizedBox(width: RestoflowSpacing.sm),
-            Flexible(
-              child: Text(
-                l10n.posAppTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: kRestoflowInk,
+            // PSC-001A compact app bar: on narrow phones the TEXT title yields
+            // its width to the five operational actions (the brand tile keeps
+            // the identity); wider bars keep the ellipsizing title.
+            if (MediaQuery.sizeOf(context).width >= kPosCompactAppBarWidth) ...[
+              const SizedBox(width: RestoflowSpacing.sm),
+              Flexible(
+                child: Text(
+                  l10n.posAppTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: kRestoflowInk,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
         actions: const [
+          // PSC-001A: the ready-notification bell leads the action group.
+          ReadyNotificationBell(),
           RecentOrdersButton(),
           OutboxStatusIndicator(),
           LanguageSelector(),
           DeviceSettingsMenu(),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final mode = posLayoutModeFor(
-            width: constraints.maxWidth,
-            height: constraints.maxHeight,
-          );
+      // PSC-001A: the body hosts the ONE ready-alert banner above whichever
+      // responsive layout is active — same overlay on phone and tablet.
+      body: Stack(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final mode = posLayoutModeFor(
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
+              );
 
-          if (mode == PosLayoutMode.phone) {
-            return const Column(
-              children: [
-                Expanded(child: _MenuPane()),
-                PosBottomBar(),
-              ],
-            );
-          }
+              if (mode == PosLayoutMode.phone) {
+                return const Column(
+                  children: [
+                    Expanded(child: _MenuPane()),
+                    PosBottomBar(),
+                  ],
+                );
+              }
 
-          final compact = mode == PosLayoutMode.compactLandscape;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Expanded(child: _MenuPane()),
-              SizedBox(
-                width: posCartWidthFor(mode),
-                child: CartPanel(compact: compact),
-              ),
-            ],
-          );
-        },
+              final compact = mode == PosLayoutMode.compactLandscape;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Expanded(child: _MenuPane()),
+                  SizedBox(
+                    width: posCartWidthFor(mode),
+                    child: CartPanel(compact: compact),
+                  ),
+                ],
+              );
+            },
+          ),
+          const ReadyAlertOverlay(),
+        ],
       ),
     );
   }
@@ -253,7 +270,10 @@ class _MenuSkeleton extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
+        // Scrolls like the REAL CategoryChips strip it stands in for — a
+        // fixed 4×96 row overflowed narrow phones during the load frame.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           padding: const EdgeInsetsDirectional.fromSTEB(
             RestoflowSpacing.lg,
             RestoflowSpacing.sm,

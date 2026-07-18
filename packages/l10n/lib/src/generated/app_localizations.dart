@@ -472,6 +472,72 @@ abstract class AppLocalizations {
   /// **'Addition failed — tap to retry'**
   String get posAdditionFailedRetry;
 
+  /// PSC-001A: tooltip/semantic label of the POS app-bar ready-notification bell.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready notifications'**
+  String get posReadyBellTooltip;
+
+  /// PSC-001A: title of the POS ready-notification history sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification history'**
+  String get posReadyHistoryTitle;
+
+  /// PSC-001A: alert/history line for an INITIAL order work unit becoming ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Order ready'**
+  String get posReadyOrderReady;
+
+  /// PSC-001A: alert/history line for a service-round work unit becoming ready; {number} is the round number (2+).
+  ///
+  /// In en, this message translates to:
+  /// **'Addition ready — Round {number}'**
+  String posReadyAdditionReady(int number);
+
+  /// PSC-001A: the ONE grouped banner when several work units become ready close together; {count} is the number of ready work units.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} orders ready'**
+  String posReadyGroupedAlert(int count);
+
+  /// PSC-001A: empty state of the ready-notification history sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'No ready notifications'**
+  String get posReadyEmpty;
+
+  /// PSC-001A: semantic/visual marker of an unread ready notification.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get posReadyUnreadLabel;
+
+  /// PSC-001A: explicit action marking every retained ready notification read.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all read'**
+  String get posReadyMarkAllRead;
+
+  /// PSC-001A: action opening the parent order of a ready notification in the orders centre.
+  ///
+  /// In en, this message translates to:
+  /// **'Open order'**
+  String get posReadyOpenOrder;
+
+  /// PSC-001A: when the work unit became ready (authoritative server stamp, HH:mm).
+  ///
+  /// In en, this message translates to:
+  /// **'Ready at {time}'**
+  String posReadyAtTime(String time);
+
+  /// PSC-001A: quiet degraded subtitle in the history sheet while background ready-feed polling is failing; polling keeps probing and recovers silently.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready updates temporarily unavailable — retrying'**
+  String get posReadyPollingDegraded;
+
   /// No description provided for @posAdditionSavedRefreshNeeded.
   ///
   /// In en, this message translates to:
