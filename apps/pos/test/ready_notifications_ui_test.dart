@@ -131,6 +131,30 @@ Future<(_StubReadyController, ProviderContainer)> _pump(
   return (stub, container);
 }
 
+PosRecentOrder _recentOrderWith({
+  required int n,
+  required String code,
+  required int hoursAgo,
+}) => PosRecentOrder.discovered(
+  PosOrderSnapshot(
+    orderId: _oid(n),
+    orderCode: code,
+    revision: 3,
+    status: 'ready',
+    settlement: PosSettlement.unpaid,
+    subtotalMinor: 2500,
+    discountTotalMinor: 0,
+    taxTotalMinor: 0,
+    grandTotalMinor: 2500,
+    createdAt: DateTime.now().toUtc().subtract(Duration(hours: hoursAgo)),
+    updatedAt: DateTime.now().toUtc().subtract(Duration(hours: hoursAgo)),
+    syncAt: DateTime.now().toUtc().subtract(Duration(hours: hoursAgo)),
+    orderType: 'dine_in',
+    tableLabel: 'T$n',
+    currencyCode: 'ILS',
+  ),
+);
+
 PosRecentOrder _recentOrder(int n) => PosRecentOrder.discovered(
   PosOrderSnapshot(
     orderId: _oid(n),
@@ -383,8 +407,12 @@ void main() {
     );
 
     testWidgets('OPEN ORDER: a row tap marks THAT notification read and opens '
-        'the orders centre FOCUSED on the parent (All section + seeded '
-        'search)', (tester) async {
+        'the orders centre with the exact orderId PINNED FIRST — the search '
+        'stays independent and empty', (tester) async {
+      tester.view.physicalSize = const Size(1100, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final (stub, _) = await _pump(
         tester,
         Builder(
@@ -399,18 +427,24 @@ void main() {
       await tester.tap(find.byKey(Key('ready-row-initial_order|${_uid(1)}')));
       await tester.pumpAndSettle();
       expect(stub.readCalls, ['initial_order|${_uid(1)}']);
-      // The orders centre opened focused: All selected, search seeded with
-      // the display code, the target card visible.
+      // The orders centre opened focused: All selected, the TARGET is the
+      // FIRST card, and the text search stayed independent/empty.
       expect(find.byKey(const Key('recent-orders-sheet')), findsOneWidget);
       expect(
         tester
             .widget<TextField>(find.byKey(const Key('orders-search-field')))
             .controller!
             .text,
-        '#000001',
+        isEmpty,
       );
-      await tester.pumpAndSettle(const Duration(milliseconds: 300));
-      expect(find.byKey(const Key('recent-order-#000001')), findsOneWidget);
+      final firstCard = tester
+          .widgetList(
+            find.byWidgetPredicate(
+              (w) => w.key.toString().contains('recent-order-'),
+            ),
+          )
+          .first;
+      expect(firstCard.key, const Key('recent-order-#000001'));
     });
 
     testWidgets('Hebrew renders the sheet RTL with localized strings', (
@@ -434,17 +468,31 @@ void main() {
     });
   });
 
-  group('recent-orders focus (PSC-001A reuse)', () {
-    testWidgets('focusOrderId lands on All with the search seeded; an UNKNOWN '
-        'id degrades honestly to the plain list', (tester) async {
+  group('recent-orders focus (PSC-001A orderId pin)', () {
+    Widget? firstCard(WidgetTester tester) => tester
+        .widgetList(
+          find.byWidgetPredicate(
+            (w) => w.key.toString().contains('recent-order-'),
+          ),
+        )
+        .firstOrNull;
+
+    testWidgets('TWO orders sharing one display code: the requested orderId '
+        'is the pinned target — identity, never the printed code', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1100, 1600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      // Two DISTINCT orders with the IDENTICAL printed code; the older twin
+      // sorts later naturally, so pinning must act by id, not by code order.
+      final target = _recentOrderWith(n: 7, code: '#AAAAAA', hoursAgo: 3);
+      final impostor = _recentOrderWith(n: 8, code: '#AAAAAA', hoursAgo: 1);
       await _pump(
         tester,
-        Scaffold(body: RecentOrdersSheet(focusOrderId: _oid(1))),
-        seededOrders: [_recentOrder(1), _recentOrder(2)],
+        Scaffold(body: RecentOrdersSheet(focusOrderId: _oid(7))),
+        seededOrders: [impostor, target],
       );
       await tester.pumpAndSettle(const Duration(milliseconds: 300));
       expect(
@@ -453,8 +501,46 @@ void main() {
             .selected,
         isTrue,
       );
-      expect(find.byKey(const Key('recent-order-#000001')), findsOneWidget);
-      expect(find.byKey(const Key('recent-order-#000002')), findsNothing);
+      // Both twins share the code-based card KEY, so identity is proven by
+      // CONTENT: the first rendered card must carry the requested order's
+      // table (T7). The target is 3h old and the impostor 1h — natural
+      // newest-first sorting would lead with the impostor; only the id pin
+      // can put the requested order first.
+      final firstCardFinder = find
+          .byWidgetPredicate((w) => w.key.toString().contains('recent-order-'))
+          .first;
+      expect(
+        find.descendant(
+          of: firstCardFinder,
+          matching: find.textContaining('T7'),
+        ),
+        findsOneWidget,
+      );
+      expect(firstCard(tester), isNotNull);
+    });
+
+    testWidgets('the pin survives the ASYNC cache load; an UNKNOWN id '
+        'degrades honestly (no same-code impostor is focused)', (tester) async {
+      tester.view.physicalSize = const Size(1100, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await _pump(
+        tester,
+        Scaffold(body: RecentOrdersSheet(focusOrderId: _oid(1))),
+        seededOrders: [_recentOrder(2), _recentOrder(1)],
+      );
+      // The store load is asynchronous — the pin applies once rows land.
+      await tester.pumpAndSettle(const Duration(milliseconds: 300));
+      expect(firstCard(tester)!.key, const Key('recent-order-#000001'));
+      // The search stayed independent of the focus.
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('orders-search-field')))
+            .controller!
+            .text,
+        isEmpty,
+      );
 
       // A fresh tree — the previous sheet's element/state must not be reused.
       await tester.pumpWidget(const SizedBox.shrink());
@@ -468,15 +554,9 @@ void main() {
         seededOrders: [_recentOrder(1), _recentOrder(2)],
       );
       await tester.pumpAndSettle(const Duration(milliseconds: 300));
-      // Honest degradation: NO search seed ever happened (the unfiltered
-      // list stands — both seeded orders remain in the authoritative state).
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('orders-search-field')))
-            .controller!
-            .text,
-        isEmpty,
-      );
+      // Honest degradation: no pin applied, no same-code substitute — the
+      // natural newest-first order stands and both orders remain in state.
+      expect(firstCard(tester)!.key, isNot(const Key('recent-order-#000001')));
       final orders = container.read(posRecentOrdersControllerProvider);
       expect(orders.where((o) => o.orderNumber.startsWith('#00000')).length, 2);
     });

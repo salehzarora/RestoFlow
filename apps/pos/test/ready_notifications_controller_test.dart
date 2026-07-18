@@ -114,6 +114,9 @@ class _ThrowingRepo implements ReadyFeedRepository {
 class _FlakyStore extends InMemoryReadyNotificationsStore {
   int persistCalls = 0;
   int failNextPersists = 0;
+
+  /// Fail exactly the Nth persist call (1-based); 0 = disabled.
+  int failPersistNumber = 0;
   final List<PosReadyNotificationsEnvelope> persisted = [];
   @override
   Future<void> persist(
@@ -123,6 +126,9 @@ class _FlakyStore extends InMemoryReadyNotificationsStore {
     persistCalls++;
     if (failNextPersists > 0) {
       failNextPersists--;
+      throw const PosPersistenceException('nope');
+    }
+    if (failPersistNumber == persistCalls) {
       throw const PosPersistenceException('nope');
     }
     persisted.add(env);
@@ -590,10 +596,14 @@ void main() {
       var alert = c.read(posReadyNotificationsControllerProvider).activeAlert;
       expect(alert!.items.single.workUnitId, _uid(1));
       notifier.dismissAlert();
+      // Promotion is ASYNC by design: the next entry's alerted=true must
+      // persist durably BEFORE its banner may appear.
+      await pumpEventQueue(times: 10);
       alert = c.read(posReadyNotificationsControllerProvider).activeAlert;
       expect(alert!.isGrouped, isTrue);
       expect(alert.items, hasLength(4));
       notifier.dismissAlert();
+      await pumpEventQueue(times: 10);
       expect(
         c.read(posReadyNotificationsControllerProvider).activeAlert,
         isNull,
@@ -694,5 +704,408 @@ void main() {
       expect(state.records, hasLength(1));
       expect(state.records.single.workUnitStatus, 'voided');
     });
+  });
+
+  group('C. correction — resumable bootstrap (Fix 1)', () {
+    List<PosReadyFeedPage Function(PosReadyCursor?)> pagesOf(
+      List<List<PosReadyFeedRow>> chunks,
+    ) => [
+      for (var i = 0; i < chunks.length; i++)
+        (_) => _page(chunks[i], hasMore: i < chunks.length - 1),
+      (_) => _page(const []),
+    ];
+
+    List<List<PosReadyFeedRow>> chunkRows(int total, {int size = 100}) {
+      final rows = [
+        for (var n = 1; n <= total; n++)
+          _row(
+            n,
+            readyAt: _t0
+                .subtract(Duration(seconds: total - n))
+                .toIso8601String(),
+          ),
+      ];
+      return [
+        for (var i = 0; i < rows.length; i += size)
+          rows.sublist(i, i + size > rows.length ? rows.length : i + size),
+      ];
+    }
+
+    test('C1 501 historical rows: cycle 1 drains 500 and stays '
+        'initialized=false; cycle 2 finishes row 501 as HISTORICAL — zero '
+        'unread, zero banner, ever', () async {
+      final store = _FlakyStore();
+      final c = harness(repo: _FakeRepo(pagesOf(chunkRows(501))), store: store);
+      final notifier = await _ready(c); // cycle 1: five pages (500 rows)
+      var state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.initialized, isFalse); // has_more was still true
+      expect(state.unreadCount, 0);
+      expect(state.activeAlert, isNull);
+      final partial = store.persisted.last;
+      expect(partial.initialized, isFalse);
+      expect(partial.bootstrapServerTs, _t0.toIso8601String());
+      expect(partial.cursor, isNotNull);
+      await notifier.refreshNow(); // cycle 2: page 6 (row 501, has_more=false)
+      state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.initialized, isTrue);
+      expect(state.unreadCount, 0);
+      expect(state.activeAlert, isNull);
+      final complete = store.persisted.last;
+      expect(complete.initialized, isTrue);
+      expect(complete.bootstrapServerTs, _t0.toIso8601String());
+      expect(complete.records.every((r) => r.read && r.alerted), isTrue);
+    });
+
+    test('C2 700 historical rows span cycles: everything stays read+alerted, '
+        'zero notification storm', () async {
+      final c = harness(repo: _FakeRepo(pagesOf(chunkRows(700))));
+      final notifier = await _ready(c); // cycle 1: 500
+      expect(
+        c.read(posReadyNotificationsControllerProvider).initialized,
+        isFalse,
+      );
+      await notifier.refreshNow(); // cycle 2: 200 + completion
+      final state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.initialized, isTrue);
+      expect(state.unreadCount, 0);
+      expect(state.activeAlert, isNull);
+      expect(state.records.every((r) => r.read && r.alerted), isTrue);
+    });
+
+    test('C3 a row that became ready AFTER the baseline, arriving in the '
+        'remaining backlog, is stored unread and alerts EXACTLY ONCE, only '
+        'after bootstrap completes', () async {
+      final chunks = chunkRows(501);
+      // Splice a genuinely-new row (post-baseline ready_at) into page 6.
+      chunks.last.add(
+        _row(
+          999,
+          readyAt: _t0.add(const Duration(seconds: 5)).toIso8601String(),
+        ),
+      );
+      final c = harness(repo: _FakeRepo(pagesOf(chunks)));
+      final notifier = await _ready(c); // cycle 1 — NO alert yet
+      expect(
+        c.read(posReadyNotificationsControllerProvider).activeAlert,
+        isNull,
+      );
+      await notifier.refreshNow(); // completion cycle
+      final state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.initialized, isTrue);
+      expect(state.unreadCount, 1);
+      expect(state.activeAlert!.items.single.workUnitId, _uid(999));
+      await notifier.refreshNow(); // repeat poll: alerted once, ever
+      expect(
+        c
+            .read(posReadyNotificationsControllerProvider)
+            .activeAlert!
+            .items
+            .single
+            .workUnitId,
+        _uid(999),
+      );
+    });
+
+    test(
+      'C4 a RESTART after page 5 resumes from the persisted progress '
+      'cursor with the ORIGINAL baseline — no null refetch, no duplicate',
+      () async {
+        final store = InMemoryReadyNotificationsStore();
+        final chunks = chunkRows(501);
+        final firstRun = harness(
+          repo: _FakeRepo(pagesOf(chunks)),
+          store: store,
+        );
+        await _ready(firstRun); // cycle 1: 500 rows, partial persisted
+        firstRun.dispose();
+
+        final resumeRepo = _FakeRepo(pagesOf([chunks.last]));
+        final second = ProviderContainer(
+          overrides: [
+            readyFeedRepositoryProvider.overrideWithValue(resumeRepo),
+            readyNotificationsStoreProvider.overrideWithValue(store),
+            posReadyFeedPollIntervalProvider.overrideWithValue(null),
+            posSyncClockProvider.overrideWithValue(() => _t0),
+            runtimeConfigProvider.overrideWithValue(
+              RuntimeConfig.test(isDemoMode: false),
+            ),
+            posSyncSessionProvider.overrideWithValue(
+              const SyncSession(pinSessionId: 'pin1', deviceId: 'dev1'),
+            ),
+          ],
+        );
+        addTearDown(second.dispose);
+        second.read(posDeviceContextProvider.notifier).set(_ctxA);
+        second.read(posReadyNotificationsControllerProvider.notifier);
+        await pumpEventQueue(times: 30);
+        // The resumed request continued from the PERSISTED cursor, not null.
+        expect(resumeRepo.requestedCursors.first, isNotNull);
+        expect(resumeRepo.requestedCursors.first!.id, _uid(500));
+        final state = second.read(posReadyNotificationsControllerProvider);
+        expect(state.initialized, isTrue);
+        expect(state.unreadCount, 0);
+        expect(state.activeAlert, isNull);
+        final env = await store.load(
+          const PosSyncScope(
+            organizationId: 'org1',
+            restaurantId: 'r1',
+            branchId: 'branch-A',
+            deviceId: 'dev1',
+          ),
+        );
+        expect(env!.bootstrapServerTs, _t0.toIso8601String()); // ORIGINAL
+        // No duplicate identities across the two runs.
+        final keys = env.records.map((r) => r.identityKey).toList();
+        expect(keys.toSet().length, keys.length);
+      },
+    );
+
+    test('C5 a persistence failure during a RESUMED bootstrap pins the '
+        'progress cursor; the same page retries safely', () async {
+      final store = _FlakyStore();
+      final chunks = chunkRows(501);
+      final c = harness(
+        repo: _FakeRepo([
+          ...pagesOf(chunks).take(5), // cycle 1 handlers (pages 1..5)
+          (_) => _page(chunks.last), // cycle 2 attempt (persist will fail)
+          (_) => _page(chunks.last), // cycle 3 retry of the SAME page
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c); // cycle 1
+      final pinned = store.persisted.last.cursor;
+      store.failNextPersists = 1;
+      await notifier.refreshNow(); // cycle 2 — persist fails
+      var state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.initialized, isFalse);
+      expect(state.degraded, isTrue);
+      expect(store.persisted.last.cursor!.id, pinned!.id); // pinned
+      await notifier.refreshNow(); // cycle 3 — same page, recovers
+      state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.initialized, isTrue);
+      expect(state.unreadCount, 0);
+      final fake = c.read(readyFeedRepositoryProvider) as _FakeRepo;
+      // The retry asked from the SAME pinned cursor.
+      expect(fake.requestedCursors.last!.id, pinned.id);
+    });
+  });
+
+  group('S. correction — serialized mutations (Fix 2) and persist-before-'
+      'banner (Fix 3)', () {
+    test('S1 a poll result landing AFTER markRead cannot un-read the record '
+        '(the commit rebases on the LATEST envelope)', () async {
+      final gated = _GatedRepo();
+      final store = _FlakyStore();
+      final c = harness(repo: gated, store: store);
+      final notifier = c.read(posReadyNotificationsControllerProvider.notifier);
+      await pumpEventQueue(times: 5);
+      gated.gates[0].complete(_page([_row(1)])); // bootstrap: row 1 read
+      await pumpEventQueue(times: 20);
+      final poll = notifier.refreshNow(); // discovery gated (gate 1)
+      await pumpEventQueue(times: 5);
+      // While the poll response is on the wire, the user opens row 2 — wait,
+      // row 2 arrives IN that response; mark row 1 (already read) plus mark
+      // ALL later. Here: mark row 1 read is a no-op; instead make row 1
+      // unread first via a completed poll... Simplest honest scenario: the
+      // gated page re-serves row 1 (status refresh) while the user marks it
+      // read had it been unread. Use markAllRead-vs-poll as S2's stronger
+      // case; S1 asserts the sticky rebase with a fresh unread row:
+      gated.gates[1].complete(_page([_row(2)]));
+      await poll;
+      await pumpEventQueue(times: 10);
+      notifier.markRead('initial_order|${_uid(2)}');
+      await pumpEventQueue(times: 10);
+      final sweep = notifier.reconcileStatuses(); // gated (gate 2)
+      await pumpEventQueue(times: 5);
+      gated.gates[2].complete(
+        _page([_row(2, status: 'served', parent: 'served')]),
+      );
+      await sweep;
+      final record = c
+          .read(posReadyNotificationsControllerProvider)
+          .records
+          .firstWhere((r) => r.workUnitId == _uid(2));
+      expect(record.read, isTrue); // the sweep commit REBASED on the markRead
+      expect(record.workUnitStatus, 'served'); // and still applied statuses
+    });
+
+    test('S2 mark-all-read racing a gated poll: no record returns to unread; '
+        'the poll\'s own NEW row stays honestly unread', () async {
+      final gated = _GatedRepo();
+      final c = harness(repo: gated);
+      final notifier = c.read(posReadyNotificationsControllerProvider.notifier);
+      await pumpEventQueue(times: 5);
+      gated.gates[0].complete(_page([_row(1)]));
+      await pumpEventQueue(times: 20);
+      final poll = notifier.refreshNow(); // gate 1 pending
+      await pumpEventQueue(times: 5);
+      notifier.markAllRead();
+      await pumpEventQueue(times: 10);
+      gated.gates[1].complete(_page([_row(1, status: 'served'), _row(2)]));
+      await poll;
+      await pumpEventQueue(times: 10);
+      final state = c.read(posReadyNotificationsControllerProvider);
+      final r1 = state.records.firstWhere((r) => r.workUnitId == _uid(1));
+      expect(r1.read, isTrue); // never rolled back
+      expect(r1.workUnitStatus, 'served');
+      final r2 = state.records.firstWhere((r) => r.workUnitId == _uid(2));
+      expect(r2.read, isFalse); // genuinely new AFTER the mark-all
+    });
+
+    test('S3 two local mutations back-to-back both land in the final '
+        'envelope', () async {
+      final store = _FlakyStore();
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []),
+          (_) => _page([_row(1), _row(2)]),
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c);
+      await notifier.refreshNow();
+      notifier.markRead('initial_order|${_uid(1)}');
+      notifier.markRead('initial_order|${_uid(2)}');
+      await pumpEventQueue(times: 20);
+      final env = store.persisted.last;
+      expect(env.records.every((r) => r.read), isTrue);
+    });
+
+    test('S4 (Fix 3) a persistence failure BEFORE promotion shows NO banner; '
+        'the entry stays pending and ONE banner appears after the retry '
+        'succeeds', () async {
+      final store = _FlakyStore();
+      final c = harness(
+        repo: _FakeRepo([
+          (_) => _page(const []), // bootstrap (persist #1)
+          (_) => _page([_row(1)]), // page commit (#2), promotion (#3)
+          (_) => _page(const []), // next cycle: empty page (#4? none — no
+          // change pages with no rows STILL persist; see below), promotion
+        ]),
+        store: store,
+      );
+      final notifier = await _ready(c);
+      store.failPersistNumber = store.persistCalls + 2; // fail the PROMOTION
+      await notifier.refreshNow();
+      var state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.activeAlert, isNull); // nothing displayed
+      expect(state.degraded, isTrue);
+      // The record persisted honestly UNALERTED (the page commit succeeded).
+      expect(store.persisted.last.records.single.alerted, isFalse);
+      await notifier.refreshNow(); // next successful cycle retries promotion
+      state = c.read(posReadyNotificationsControllerProvider);
+      expect(state.activeAlert, isNotNull); // exactly one banner now
+      expect(state.activeAlert!.items.single.workUnitId, _uid(1));
+      // And alerted=true persisted BEFORE that banner appeared.
+      expect(store.persisted.last.records.single.alerted, isTrue);
+    });
+  });
+
+  group('L. correction — the terminal security latch (Fix 5)', () {
+    test('L1 a terminal security refusal latches the EXACT identity: timer '
+        'cancelled, resume and manual refresh cause ZERO RPCs (the repository '
+        'suite proves invalid_session/invalid_device_type/permission_denied '
+        'all map to this failure)', () async {
+      final repo = _ThrowingRepo(PosReadyFeedFailure.session);
+      final c = harness(repo: repo, pollInterval: const Duration(seconds: 7));
+      final notifier = await _ready(c);
+      expect(notifier.isSecurityLatched, isTrue);
+      expect(notifier.isPolling, isFalse);
+      expect(
+        c.read(posReadyNotificationsControllerProvider).securityBlocked,
+        isTrue,
+      );
+      final calls = repo.calls;
+      notifier.onResume(); // resume must NOT bypass the latch
+      await pumpEventQueue(times: 10);
+      expect(repo.calls, calls);
+      expect(notifier.isPolling, isFalse); // and must not re-arm the timer
+      await notifier.refreshNow(); // manual refresh must NOT bypass it
+      expect(repo.calls, calls);
+      await notifier.reconcileStatuses(); // nor the status sweep
+      expect(repo.calls, calls);
+    });
+
+    test('L2 re-emitting the SAME session identity keeps the latch', () async {
+      final repo = _ThrowingRepo(PosReadyFeedFailure.session);
+      final c = harness(repo: repo);
+      final notifier = await _ready(c);
+      final calls = repo.calls;
+      // The same context re-set (same scope value) + repeated resumes.
+      c.read(posDeviceContextProvider.notifier).set(_ctxA);
+      notifier.onResume();
+      notifier.onResume();
+      await pumpEventQueue(times: 10);
+      expect(repo.calls, calls);
+      expect(notifier.isSecurityLatched, isTrue);
+    });
+
+    test('L3 a GENUINELY NEW valid session identity clears the latch and '
+        'polling resumes immediately', () async {
+      final session = StateProvider<SyncSession?>(
+        (_) => const SyncSession(pinSessionId: 'pin1', deviceId: 'dev1'),
+      );
+      var fails = true;
+      final repo = _FakeRepo([
+        (_) {
+          if (fails) {
+            throw const PosReadyFeedException(PosReadyFeedFailure.session);
+          }
+          return _page(const []);
+        },
+      ]);
+      final c = ProviderContainer(
+        overrides: [
+          readyFeedRepositoryProvider.overrideWithValue(repo),
+          readyNotificationsStoreProvider.overrideWithValue(
+            InMemoryReadyNotificationsStore(),
+          ),
+          posReadyFeedPollIntervalProvider.overrideWithValue(null),
+          posSyncClockProvider.overrideWithValue(() => _t0),
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posSyncSessionProvider.overrideWith((ref) => ref.watch(session)),
+        ],
+      );
+      addTearDown(c.dispose);
+      c.read(posDeviceContextProvider.notifier).set(_ctxA);
+      final notifier = c.read(posReadyNotificationsControllerProvider.notifier);
+      await pumpEventQueue(times: 20);
+      expect(notifier.isSecurityLatched, isTrue);
+      final callsWhileLatched = repo.calls;
+      await notifier.refreshNow();
+      expect(repo.calls, callsWhileLatched); // fenced
+      // The existing PIN flow restores a NEW session (new pinSessionId).
+      fails = false;
+      c.read(session.notifier).state = const SyncSession(
+        pinSessionId: 'pin2',
+        deviceId: 'dev1',
+      );
+      c.read(posReadyNotificationsControllerProvider); // settle the rebuild
+      await pumpEventQueue(times: 30);
+      expect(notifier.isSecurityLatched, isFalse);
+      expect(repo.calls, greaterThan(callsWhileLatched)); // polling resumed
+      expect(
+        c.read(posReadyNotificationsControllerProvider).securityBlocked,
+        isFalse,
+      );
+    });
+
+    test(
+      'L4 a TRANSPORT failure never latches — backoff/retry stays active',
+      () async {
+        final repo = _ThrowingRepo(PosReadyFeedFailure.transport);
+        final c = harness(repo: repo, pollInterval: const Duration(seconds: 7));
+        final notifier = await _ready(c);
+        await notifier.refreshNow();
+        await notifier.refreshNow();
+        expect(notifier.isSecurityLatched, isFalse);
+        expect(notifier.isPolling, isTrue); // the probe keeps running
+        final calls = repo.calls;
+        await notifier.refreshNow(); // manual retry still allowed
+        expect(repo.calls, calls + 1);
+      },
+    );
   });
 }

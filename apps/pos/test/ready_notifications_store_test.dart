@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_pos/src/data/ready_feed_repository.dart';
 import 'package:restoflow_pos/src/data/ready_notifications_store.dart';
@@ -170,6 +172,117 @@ void main() {
       raw.replaceFirst('"work_unit_type":"initial_order"', '"id2":"x"'),
     );
     expect(await store.load(_scopeA), isNull);
+  });
+
+  group('strict record validation (correction Fix 4) — wire-strength local '
+      'parsing; one bad record drops the WHOLE envelope', () {
+    Future<PosReadyNotificationsEnvelope?> loadMutated(
+      Map<String, Object?> Function(Map<String, Object?> record) mutate,
+    ) async {
+      final store = await _store();
+      await store.persist(
+        _scopeA,
+        PosReadyNotificationsEnvelope(
+          initialized: true,
+          records: [
+            _record(),
+            _record(
+              type: 'service_round',
+              id: '0a000000-0000-4000-8000-000000000002',
+            ),
+          ],
+        ),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'restoflow.pos.ready_notifications.v1.${_scopeA.key}';
+      final decoded = Map<String, Object?>.from(
+        jsonDecode(prefs.getString(key)!) as Map,
+      );
+      final records = [
+        for (final r in decoded['records']! as List)
+          Map<String, Object?>.from(r as Map),
+      ];
+      records[0] = mutate(records[0]);
+      decoded['records'] = records;
+      await prefs.setString(key, jsonEncode(decoded));
+      return store.load(_scopeA);
+    }
+
+    test('invalid UUID identity drops the envelope', () async {
+      expect(
+        await loadMutated((r) => r..['work_unit_id'] = 'not-a-uuid'),
+        isNull,
+      );
+      expect(await loadMutated((r) => r..['order_id'] = '123'), isNull);
+    });
+
+    test('revision zero drops the envelope', () async {
+      expect(await loadMutated((r) => r..['revision'] = 0), isNull);
+    });
+
+    test(
+      'a service round missing its round number drops the envelope',
+      () async {
+        final store = await _store();
+        // Persist an (invalid) round record straight through the prefs seam.
+        expect(
+          await loadMutated((r) {
+            r['work_unit_type'] = 'service_round';
+            r['round_number'] = null;
+            return r;
+          }),
+          isNull,
+        );
+        expect(store, isNotNull);
+      },
+    );
+
+    test(
+      'an initial order carrying a round number drops the envelope',
+      () async {
+        expect(await loadMutated((r) => r..['round_number'] = 2), isNull);
+      },
+    );
+
+    test('an empty or non-contract order code drops the envelope', () async {
+      expect(await loadMutated((r) => r..['order_code'] = ''), isNull);
+      expect(await loadMutated((r) => r..['order_code'] = '#TOOLONG7'), isNull);
+      expect(await loadMutated((r) => r..['order_code'] = 'A1B2C3'), isNull);
+    });
+
+    test('a malformed discoveredAt drops the envelope', () async {
+      expect(
+        await loadMutated((r) => r..['discovered_at'] = 'a while ago'),
+        isNull,
+      );
+    });
+
+    test('an invalid (empty) status drops the envelope', () async {
+      expect(await loadMutated((r) => r..['work_unit_status'] = ''), isNull);
+      expect(await loadMutated((r) => r..['parent_order_status'] = ''), isNull);
+    });
+
+    test('one bad record among valid ones drops the WHOLE envelope — nothing '
+        'is partially retained', () async {
+      // loadMutated corrupts record[0] while record[1] stays pristine; the
+      // load above already proves null. Cross-check the healthy twin alone
+      // round-trips fine.
+      final store = await _store();
+      await store.persist(
+        _scopeA,
+        PosReadyNotificationsEnvelope(
+          initialized: true,
+          records: [
+            _record(
+              type: 'service_round',
+              id: '0a000000-0000-4000-8000-000000000002',
+            ),
+          ],
+        ),
+      );
+      expect((await store.load(_scopeA))!.records, hasLength(1));
+      expect(await loadMutated((r) => r..['read'] = 'yes'), isNull);
+    });
   });
 
   test('the InMemory store honours the same contract', () async {
