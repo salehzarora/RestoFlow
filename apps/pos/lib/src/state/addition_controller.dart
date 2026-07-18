@@ -26,9 +26,15 @@ import 'pos_session.dart';
 ///    target and the still-empty cart immediately before committing addition
 ///    mode — a cart line added during the load can never silently become an
 ///    addition to the previously selected order;
-///  * the FIRST submit FREEZES one immutable [AdditionAttempt] — parent order
-///    id, the canonical serialized item payload, the local_operation_id and
-///    the client timestamp. Every retry reuses that exact snapshot;
+///  * the FIRST submit ATOMICALLY freezes one immutable [AdditionAttempt] —
+///    parent order id, the canonical serialized item payload (snapshotted
+///    from the LIVE cart), the local_operation_id and the client timestamp —
+///    AND acquires the [CartController] mutation lock under the attempt's
+///    owner token in the same synchronous block. While the frozen attempt
+///    exists (sending / retryable failure / applied-awaiting-refresh) every
+///    normal cart mutation refuses, so the visible cart and the frozen
+///    payload can never diverge and no unrelated line can be introduced only
+///    to be lost on reconciliation. Every retry reuses the exact snapshot;
 ///  * CANCEL IS REFUSED WHILE SENDING (Finding 2), and every asynchronous
 ///    continuation is FENCED on the attempt/entry generation — a stale
 ///    response has zero state side effects;
@@ -201,6 +207,13 @@ enum AdditionEntryResult {
 class AdditionController extends Notifier<AdditionState> {
   Future<AdditionResult>? _inFlight;
 
+  /// The generation the in-flight submit belongs to — a single-flight join is
+  /// only valid for the SAME attempt. A stale still-pending future from a
+  /// reconciled/cancelled attempt must never be handed to a NEW attempt's
+  /// submit (its result would be the old attempt's, and nothing would
+  /// dispatch).
+  int? _inFlightGeneration;
+
   @override
   AdditionState build() => const AdditionState();
 
@@ -277,29 +290,61 @@ class AdditionController extends Notifier<AdditionState> {
   /// Finding 2: REFUSED (returns false, state untouched) while the attempt is
   /// on the wire or applied-awaiting-refresh — the server may/does own the
   /// operation, and pretending it was cancelled would let the same lines be
-  /// sent again as something else. The cart's pending lines are the caller's
-  /// to keep or clear — cancelling never silently discards work.
+  /// sent again as something else.
+  ///
+  /// Cart-safety: cancelling a FAILED frozen attempt releases the cart
+  /// mutation lock with the matching owner token — the cart LINES stay intact
+  /// (discarding work is the cashier's explicit choice via the cart's own
+  /// Clear), and editing + a fresh attempt with a NEW operation id become
+  /// possible again. The release fails closed on a token mismatch.
   bool exit() {
     final s = state;
     if (!s.canCancel && s.phase != AdditionPhase.idle) return false;
+    final attempt = s.attempt;
+    if (attempt != null &&
+        !ref
+            .read(cartControllerProvider.notifier)
+            .unlockForAddition(_ownerOf(s.generation, attempt))) {
+      return false;
+    }
     state = AdditionState(generation: s.generation + 1);
     return true;
   }
 
-  /// Submits the pending addition. On the FIRST call the cart's [lines] are
-  /// frozen into the immutable attempt; retries IGNORE [lines] and resend the
-  /// frozen snapshot verbatim. Single-flight; duplicate taps await the same
-  /// attempt. In [AdditionPhase.appliedAwaitingRefresh] this NEVER dispatches
-  /// again — it retries only the authoritative refresh (Finding 4).
-  Future<AdditionResult> submit(List<CartLineView> lines) {
+  /// The cart-lock owner token of one frozen attempt — the SAME immutable
+  /// identity from freeze to release; never exposed to the widget layer.
+  CartLockOwner _ownerOf(int generation, AdditionAttempt attempt) =>
+      CartLockOwner(
+        generation: generation,
+        orderId: attempt.orderId,
+        localOperationId: attempt.localOperationId,
+      );
+
+  /// Submits the pending addition. The FIRST call ATOMICALLY snapshots the
+  /// LIVE cart into the immutable attempt and acquires the cart mutation lock
+  /// (one synchronous block — no window where the payload is frozen but the
+  /// cart still accepts edits); retries resend the frozen snapshot verbatim.
+  /// Single-flight; duplicate taps await the same attempt. In
+  /// [AdditionPhase.appliedAwaitingRefresh] this NEVER dispatches again — it
+  /// retries only the authoritative refresh (Finding 4).
+  Future<AdditionResult> submit() {
     final inFlight = _inFlight;
-    if (inFlight != null) return inFlight;
-    final attempt = _submit(lines);
+    if (inFlight != null && _inFlightGeneration == state.generation) {
+      return inFlight;
+    }
+    final attempt = _submit();
     _inFlight = attempt;
-    return attempt.whenComplete(() => _inFlight = null);
+    _inFlightGeneration = state.generation;
+    attempt.whenComplete(() {
+      if (identical(_inFlight, attempt)) {
+        _inFlight = null;
+        _inFlightGeneration = null;
+      }
+    });
+    return attempt;
   }
 
-  Future<AdditionResult> _submit(List<CartLineView> lines) async {
+  Future<AdditionResult> _submit() async {
     final s0 = state;
     // Finding 4: an APPLIED operation is never re-dispatched. The only thing
     // left to retry is the authoritative refresh.
@@ -319,11 +364,18 @@ class AdditionController extends Notifier<AdditionState> {
       return const AdditionResult(applied: false, error: 'no_session');
     }
 
-    // FREEZE ONCE (Finding 2): the first submit captures the canonical
-    // payload + operation id + client timestamp; every retry reuses the
-    // frozen snapshot and never re-reads the mutable cart.
+    // ATOMIC FREEZE + LOCK (Finding 2 + cart-safety): one SYNCHRONOUS block —
+    // no await between these lines — reads the LIVE cart, finalizes the
+    // immutable attempt identity, and acquires the CartController mutation
+    // lock for exactly that identity. From here until reconciliation or
+    // explicit cancel, the visible cart and the frozen payload cannot
+    // diverge, and no unrelated line can slip in only to be cleared later.
+    // Retries re-assert the SAME owner token (idempotent).
+    final gen = s0.generation;
+    final cartController = ref.read(cartControllerProvider.notifier);
     var attempt = s0.attempt;
     if (attempt == null) {
+      final lines = ref.read(cartControllerProvider).lines;
       if (lines.isEmpty) {
         return const AdditionResult(applied: false, error: 'nothing_to_add');
       }
@@ -334,8 +386,12 @@ class AdditionController extends Notifier<AdditionState> {
         clientCreatedAt: DateTime.now(),
       );
     }
+    if (!cartController.lockForAddition(_ownerOf(gen, attempt))) {
+      // Another attempt owns the cart — refuse WITHOUT dispatching, without
+      // storing the new identity, and with the cart untouched.
+      return const AdditionResult(applied: false, error: 'cart_locked');
+    }
 
-    final gen = s0.generation;
     state = s0.copyWith(
       attempt: attempt,
       phase: AdditionPhase.sending,
@@ -422,9 +478,13 @@ class AdditionController extends Notifier<AdditionState> {
   /// (side channel — the poll converges regardless) and the authoritative
   /// detail reload that must PROVE the addition (right parent order and, when
   /// the server named one, the applied round) before cleanup runs EXACTLY
-  /// once: clear the submitted cart lines, drop the attempt, leave addition
-  /// mode. Every path is fenced on the attempt identity (Finding 2): a stale
-  /// refresh callback cannot complete a newer attempt or clear a newer cart.
+  /// once: install the fresh authoritative detail, then clear the submitted
+  /// cart state + release the mutation lock with the MATCHING owner token
+  /// (the privileged [CartController.clearForAddition]), drop the attempt,
+  /// leave addition mode. Every path is double-fenced (Finding 2 +
+  /// cart-safety): the state fence (generation + attempt identity + phase)
+  /// AND the cart's own owner-token check — a stale attempt-A callback can
+  /// never clear or unlock a cart owned by attempt B.
   Future<bool> _reconcileApplied(
     int gen,
     AdditionAttempt attempt,
@@ -459,7 +519,17 @@ class AdditionController extends Notifier<AdditionState> {
       state = state.copyWith(lastError: 'refresh_required');
       return false;
     }
-    ref.read(cartControllerProvider.notifier).clear();
+    // Install the VERIFIED fresh detail first, then the privileged
+    // owner-token clear+unlock. Fail closed: a refused clear (token owned by
+    // someone else — the cannot-happen double-fence disagreement) leaves the
+    // cart, the lock and the attempt for the true owner.
+    state = state.copyWith(target: fresh);
+    if (!ref
+        .read(cartControllerProvider.notifier)
+        .clearForAddition(_ownerOf(gen, attempt))) {
+      state = state.copyWith(lastError: 'refresh_required');
+      return false;
+    }
     state = AdditionState(generation: gen + 1);
     return true;
   }

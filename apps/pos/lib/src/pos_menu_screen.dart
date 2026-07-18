@@ -343,6 +343,10 @@ class _MenuGrid extends ConsumerWidget {
     for (final line in cart.lines) {
       inCart[line.menuItemId] = (inCart[line.menuItemId] ?? 0) + line.quantity;
     }
+    // PSC-001C cart-safety: while a frozen addition attempt owns the cart the
+    // add gestures are DISABLED (the controller refuses the mutation
+    // regardless; the cart banner explains the pending/refresh state).
+    final cartLocked = cart.lockedByAddition;
 
     // Per-category counts for the chip badges (All = total).
     final counts = <String, int>{kAllCategoriesId: menu.items.length};
@@ -409,7 +413,9 @@ class _MenuGrid extends ConsumerWidget {
                                   item: item,
                                 )
                               : null,
-                          onAdd: groups.isEmpty
+                          onAdd: cartLocked
+                              ? null
+                              : groups.isEmpty
                               ? () => controller.addItem(item)
                               : () => ModifierSelectionSheet.show(
                                   context,

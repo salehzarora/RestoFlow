@@ -83,6 +83,41 @@ class CartLineView {
   Money get lineTotal => Money(lineTotalMinor, currencyCode);
 }
 
+/// PSC-001C cart-safety — the immutable OWNER identity of the frozen addition
+/// attempt that holds the cart mutation lock. A lock is never a bare boolean:
+/// the token binds the lock to ONE exact attempt (its entry generation, parent
+/// order and idempotency id), so a stale callback from an earlier attempt can
+/// never clear or unlock a cart owned by a later one.
+class CartLockOwner {
+  const CartLockOwner({
+    required this.generation,
+    required this.orderId,
+    required this.localOperationId,
+  });
+
+  final int generation;
+  final String orderId;
+  final String localOperationId;
+
+  bool matches(CartLockOwner? other) =>
+      other != null &&
+      other.generation == generation &&
+      other.orderId == orderId &&
+      other.localOperationId == localOperationId;
+}
+
+/// The typed outcome of a normal cart mutation call — a refused mutation is
+/// REPORTED, never silently ignored while the UI implies success.
+enum CartMutationResult {
+  applied,
+
+  /// A frozen addition attempt owns the cart (sending / retryable failure /
+  /// applied-awaiting-refresh): its payload is immutable, so the visible cart
+  /// must stay exactly what was frozen. The UI shows the existing pending /
+  /// refresh-required messaging and disables the controls.
+  lockedByAddition,
+}
+
 /// Immutable snapshot of the cart for the POS UI (the Riverpod state value).
 class CartViewState {
   const CartViewState({
@@ -90,6 +125,7 @@ class CartViewState {
     required this.subtotalMinor,
     required this.currencyCode,
     this.submittedOrder,
+    this.lockedByAddition = false,
   });
 
   /// Builds an immutable view from the mutable domain [Cart], optionally
@@ -102,6 +138,7 @@ class CartViewState {
     SubmittedOrderView? submittedOrder,
     Map<String, List<SelectedModifier>> lineModifiers = const {},
     Map<String, String> lineNotes = const {},
+    bool lockedByAddition = false,
   }) {
     var modifiersTotal = 0;
     final views = cart.lines
@@ -127,6 +164,7 @@ class CartViewState {
       subtotalMinor: cart.subtotalMinor + modifiersTotal,
       currencyCode: cart.currencyCode,
       submittedOrder: submittedOrder,
+      lockedByAddition: lockedByAddition,
     );
   }
 
@@ -137,6 +175,11 @@ class CartViewState {
   /// Snapshot of the last locally-submitted demo order, or null when none is
   /// being confirmed (RF-101). When non-null, the cart UI shows the confirmation.
   final SubmittedOrderView? submittedOrder;
+
+  /// PSC-001C cart-safety: a frozen addition attempt owns the cart — every
+  /// visible mutation control must be disabled (the controller refuses the
+  /// mutation regardless).
+  final bool lockedByAddition;
 
   bool get hasSubmittedOrder => submittedOrder != null;
 
@@ -193,6 +236,15 @@ class CartController extends Notifier<CartViewState> {
   int _orderSeq = 0;
   SubmittedOrderView? _submittedOrder;
 
+  /// PSC-001C cart-safety: the frozen addition attempt currently owning the
+  /// cart, or null when the cart is freely editable. While held, EVERY normal
+  /// mutation entry point refuses ([CartMutationResult.lockedByAddition]) —
+  /// the frozen payload and the visible cart must stay identical, and no
+  /// unrelated line may be introduced only to be cleared on reconciliation.
+  CartLockOwner? _lockOwner;
+
+  bool get _locked => _lockOwner != null;
+
   /// Selected modifier snapshots per line id (the domain [Cart] predates
   /// modifiers; the app carries them alongside — D-008 snapshots).
   final Map<String, List<SelectedModifier>> _lineModifiers = {};
@@ -221,14 +273,63 @@ class CartController extends Notifier<CartViewState> {
     _submittedOrder = null;
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lockOwner = null;
     return CartViewState.fromCart(_cart);
+  }
+
+  // -------------------------------------------------------------------------
+  // PSC-001C cart-safety — the addition mutation lock (owner-token, never a
+  // bare boolean). Acquired atomically with the payload freeze by the
+  // AdditionController; released ONLY by the matching owner (explicit cancel
+  // of a retryable failure, or the privileged post-reconciliation clear).
+  // -------------------------------------------------------------------------
+
+  /// Acquires the mutation lock for [owner]. Fails (false, nothing changes)
+  /// when a DIFFERENT attempt already owns the cart; re-acquiring with the
+  /// SAME identity is an idempotent success (a retry of the frozen attempt).
+  bool lockForAddition(CartLockOwner owner) {
+    final current = _lockOwner;
+    if (current != null && !owner.matches(current)) return false;
+    _lockOwner = owner;
+    _emit();
+    return true;
+  }
+
+  /// Releases the lock with the matching [owner] token, leaving the cart
+  /// lines INTACT (an explicit cancel keeps the cashier's work). Fails closed
+  /// (false, still locked) on a token mismatch; a no-op success when nothing
+  /// is locked.
+  bool unlockForAddition(CartLockOwner owner) {
+    final current = _lockOwner;
+    if (current == null) return true;
+    if (!owner.matches(current)) return false;
+    _lockOwner = null;
+    _emit();
+    return true;
+  }
+
+  /// PRIVILEGED owner-token cleanup: clears the submitted cart state AND
+  /// releases the lock in one step — only for the matching [owner], after the
+  /// authoritative reconciliation verified the addition. Fails closed (false,
+  /// cart and lock untouched) on any mismatch: a stale attempt-A callback can
+  /// never clear a cart owned by attempt B.
+  bool clearForAddition(CartLockOwner owner) {
+    final current = _lockOwner;
+    if (current == null || !owner.matches(current)) return false;
+    _lockOwner = null;
+    _cart = _freshCart();
+    _lineModifiers.clear();
+    _lineNotes.clear();
+    _emit();
+    return true;
   }
 
   /// Adds [item] to the cart. If a PLAIN line (no modifiers) for the same menu
   /// item already exists, its quantity is incremented instead of adding a
   /// duplicate line. Adding an item while a confirmation is showing dismisses
   /// it and starts a fresh order.
-  void addItem(DemoMenuItem item) {
+  CartMutationResult addItem(DemoMenuItem item) {
+    if (_locked) return CartMutationResult.lockedByAddition;
     _submittedOrder = null;
     // An EMPTY cart re-binds to the active menu currency before its first line
     // (the menu can finish loading after the cart was first built).
@@ -252,17 +353,19 @@ class CartController extends Notifier<CartViewState> {
       );
     }
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// Adds a CONFIGURED [item] with its selected [modifiers] and optional
   /// cashier [note] as its OWN line (never merged — each configured item is
   /// priced/kitchen-routed on its own; the RF-052 formula counts each
   /// modifier's delta × its quantity once per line).
-  void addItemWithModifiers(
+  CartMutationResult addItemWithModifiers(
     DemoMenuItem item,
     List<SelectedModifier> modifiers, {
     String? note,
   }) {
+    if (_locked) return CartMutationResult.lockedByAddition;
     final trimmedNote = note?.trim();
     final hasNote = trimmedNote != null && trimmedNote.isNotEmpty;
     if (modifiers.isEmpty && !hasNote) return addItem(item);
@@ -283,6 +386,7 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers[lineId] = List.unmodifiable(modifiers);
     if (hasNote) _lineNotes[lineId] = trimmedNote;
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// TABLET-UX-001 (A): replaces the selected [modifiers] and optional [note] on
@@ -291,12 +395,13 @@ class CartController extends Notifier<CartViewState> {
   /// modifier snapshots + note change, so the line total recomputes through the
   /// same RF-052 formula. No-op when [lineId] is gone. Used by the cart's Edit
   /// action, which reopens the customization sheet prefilled with this line.
-  void updateLineModifiers(
+  CartMutationResult updateLineModifiers(
     String lineId,
     List<SelectedModifier> modifiers, {
     String? note,
   }) {
-    if (_lineById(lineId) == null) return;
+    if (_locked) return CartMutationResult.lockedByAddition;
+    if (_lineById(lineId) == null) return CartMutationResult.applied;
     if (modifiers.isEmpty) {
       _lineModifiers.remove(lineId);
     } else {
@@ -309,44 +414,55 @@ class CartController extends Notifier<CartViewState> {
       _lineNotes.remove(lineId);
     }
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// Increases the quantity of [lineId] by one.
-  void increaseQuantity(String lineId) {
+  CartMutationResult increaseQuantity(String lineId) {
+    if (_locked) return CartMutationResult.lockedByAddition;
     final line = _lineById(lineId);
-    if (line == null) return;
+    if (line == null) return CartMutationResult.applied;
     _cart.changeQuantity(lineId, line.quantity + 1);
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// Decreases the quantity of [lineId] by one; removes the line at quantity 1.
-  void decreaseQuantity(String lineId) {
+  CartMutationResult decreaseQuantity(String lineId) {
+    if (_locked) return CartMutationResult.lockedByAddition;
     final line = _lineById(lineId);
-    if (line == null) return;
+    if (line == null) return CartMutationResult.applied;
     if (line.quantity <= 1) {
       _cart.removeLine(lineId);
     } else {
       _cart.changeQuantity(lineId, line.quantity - 1);
     }
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// Removes the line [lineId] entirely.
-  void removeLine(String lineId) {
-    if (_lineById(lineId) == null) return;
+  CartMutationResult removeLine(String lineId) {
+    if (_locked) return CartMutationResult.lockedByAddition;
+    if (_lineById(lineId) == null) return CartMutationResult.applied;
     _cart.removeLine(lineId);
     _lineModifiers.remove(lineId);
     _lineNotes.remove(lineId);
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// Clears the cart by rebuilding a fresh draft (the domain Cart has no
-  /// `clear()`); line ids keep advancing so they stay unique.
-  void clear() {
+  /// `clear()`); line ids keep advancing so they stay unique. While a frozen
+  /// addition attempt owns the cart this REFUSES — the privileged
+  /// [clearForAddition] is the only clear a locked cart accepts.
+  CartMutationResult clear() {
+    if (_locked) return CartMutationResult.lockedByAddition;
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// PILOT-OPERATIONS-CORRECTIONS-001: capture the current cart as an immutable
@@ -372,7 +488,8 @@ class CartController extends Notifier<CartViewState> {
   /// (products, quantities, modifiers, notes). Idempotent replacement — it always
   /// REPLACES the current cart, so a repeated "Back to cart" cannot duplicate
   /// lines. Line ids keep advancing so they stay unique.
-  void restoreDraft(CartDraftSnapshot draft) {
+  CartMutationResult restoreDraft(CartDraftSnapshot draft) {
+    if (_locked) return CartMutationResult.lockedByAddition;
     _cart = Cart(
       orderId: 'demo-order',
       organizationId: 'demo-org',
@@ -402,6 +519,7 @@ class CartController extends Notifier<CartViewState> {
     }
     _submittedOrder = null;
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// Locally "submits" the current cart (RF-101): materializes an in-memory
@@ -409,7 +527,7 @@ class CartController extends Notifier<CartViewState> {
   /// local/provisional demo number, then empties the cart so the confirmation
   /// stands on its own. No backend, RPC, payment, kitchen, printer, or
   /// persistence — purely a visible demo confirmation. No-op on an empty cart.
-  void submitOrder({
+  CartMutationResult submitOrder({
     OrderType orderType = OrderType.takeaway,
     String? tableLabel,
     String? customerName,
@@ -420,7 +538,8 @@ class CartController extends Notifier<CartViewState> {
     int taxTotalMinor = 0,
     int taxRateBp = 0,
   }) {
-    if (_cart.isEmpty) return;
+    if (_locked) return CartMutationResult.lockedByAddition;
+    if (_cart.isEmpty) return CartMutationResult.applied;
     final order = LocalOrder.submitFromCart(_cart, orderType: orderType);
     _orderSeq++;
     // RF-115: the outbox controller is the numbering authority for the real
@@ -469,6 +588,7 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _emit();
+    return CartMutationResult.applied;
   }
 
   /// Finding 1 (PILOT-OPERATIONS-CORRECTIONS-001): build a [SubmittedOrderView] from a
@@ -540,12 +660,14 @@ class CartController extends Notifier<CartViewState> {
   }
 
   /// Dismisses the confirmation and returns to an empty cart (RF-101).
-  void startNewOrder() {
+  CartMutationResult startNewOrder() {
+    if (_locked) return CartMutationResult.lockedByAddition;
     _submittedOrder = null;
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
     _emit();
+    return CartMutationResult.applied;
   }
 
   CartLine? _lineById(String lineId) {
@@ -567,6 +689,7 @@ class CartController extends Notifier<CartViewState> {
     submittedOrder: _submittedOrder,
     lineModifiers: _lineModifiers,
     lineNotes: _lineNotes,
+    lockedByAddition: _locked,
   );
 }
 

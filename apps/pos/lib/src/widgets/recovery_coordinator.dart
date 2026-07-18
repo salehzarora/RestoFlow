@@ -59,8 +59,15 @@ class PosRecoveryCoordinator {
           break; // fall through to the single restore below
       }
     }
-    // Empty cart, or an explicit Replace: restore exactly once.
-    ref.read(cartControllerProvider.notifier).restoreDraft(recovery.draft);
+    // Empty cart, or an explicit Replace: restore exactly once. Cart-safety:
+    // while a frozen addition attempt owns the cart the restore REFUSES —
+    // nothing is overwritten, the shell and its recovery both remain.
+    final restored = ref
+        .read(cartControllerProvider.notifier)
+        .restoreDraft(recovery.draft);
+    if (restored != CartMutationResult.applied) {
+      return PosRecoveryOutcome.cancelled;
+    }
     final setup = ref.read(orderSetupControllerProvider.notifier);
     setup.setOrderType(recovery.orderType);
     final table = recovery.table;

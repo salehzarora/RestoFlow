@@ -153,7 +153,11 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
               l10n: l10n,
               itemCount: cart.itemCount,
               pendingSync: pendingSync,
-              onClear: cart.isEmpty ? null : controller.clear,
+              // Cart-safety: a frozen addition attempt owns the cart — the
+              // Clear control is disabled (the controller refuses regardless).
+              onClear: cart.isEmpty || cart.lockedByAddition
+                  ? null
+                  : controller.clear,
             ),
             const Divider(height: 1),
             // PSC-001C: while ADDING to an existing order the setup section
@@ -199,17 +203,27 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                       ),
                       itemBuilder: (context, index) {
                         final line = cart.lines[index];
+                        // Cart-safety: while a frozen addition attempt owns
+                        // the cart, every line control is disabled — the
+                        // visible lines ARE the frozen payload.
+                        final locked = cart.lockedByAddition;
                         return _CartLineTile(
                           line: line,
                           l10n: l10n,
                           dense: dense,
-                          onIncrease: () =>
-                              controller.increaseQuantity(line.lineId),
-                          onDecrease: () =>
-                              controller.decreaseQuantity(line.lineId),
-                          onRemove: () => controller.removeLine(line.lineId),
-                          onEdit: () =>
-                              _editLine(context, menu, line, controller),
+                          onIncrease: locked
+                              ? null
+                              : () => controller.increaseQuantity(line.lineId),
+                          onDecrease: locked
+                              ? null
+                              : () => controller.decreaseQuantity(line.lineId),
+                          onRemove: locked
+                              ? null
+                              : () => controller.removeLine(line.lineId),
+                          onEdit: locked
+                              ? null
+                              : () =>
+                                    _editLine(context, menu, line, controller),
                         );
                       },
                     ),
@@ -366,9 +380,7 @@ Future<void> submitOrderFromCart({
   // controller, together with the authoritative refresh).
   final additionState = ref.read(additionControllerProvider);
   if (additionState.active) {
-    final result = await ref
-        .read(additionControllerProvider.notifier)
-        .submit(cart.lines);
+    final result = await ref.read(additionControllerProvider.notifier).submit();
     // Finding 4: applied-but-not-refreshed is its own honest message — the
     // addition IS saved; only the authoritative view still needs a reload.
     messenger.showSnackBar(
@@ -759,10 +771,13 @@ class _CartLineTile extends StatelessWidget {
 
   final CartLineView line;
   final AppLocalizations l10n;
-  final VoidCallback onIncrease;
-  final VoidCallback onDecrease;
-  final VoidCallback onRemove;
-  final VoidCallback onEdit;
+
+  /// Null = the control is DISABLED (cart-safety: a frozen addition attempt
+  /// owns the cart and the visible lines are its immutable payload).
+  final VoidCallback? onIncrease;
+  final VoidCallback? onDecrease;
+  final VoidCallback? onRemove;
+  final VoidCallback? onEdit;
 
   /// TABLET-UX-001 (B): tighter paddings + the '× qty · unit' meta folded into
   /// the controls row, so the landscape side cart shows several lines at once.
@@ -933,7 +948,7 @@ class _LineActionButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final Color color;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool dense;
 
   @override
@@ -964,8 +979,8 @@ class _QuantityStepper extends StatelessWidget {
 
   final int quantity;
   final AppLocalizations l10n;
-  final VoidCallback onIncrease;
-  final VoidCallback onDecrease;
+  final VoidCallback? onIncrease;
+  final VoidCallback? onDecrease;
   final bool dense;
 
   @override
@@ -1017,7 +1032,7 @@ class _StepButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final bool filled;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool dense;
 
   @override
@@ -1032,22 +1047,26 @@ class _StepButton extends StatelessWidget {
       child: InkResponse(
         onTap: onPressed,
         radius: dense ? 24 : 26,
-        child: Container(
-          width: tap,
-          height: tap,
-          alignment: Alignment.center,
+        child: Opacity(
+          // A disabled stepper must LOOK disabled, not just refuse the tap.
+          opacity: onPressed == null ? 0.4 : 1.0,
           child: Container(
-            width: inner,
-            height: inner,
-            decoration: BoxDecoration(
-              color: filled ? theme.colorScheme.primary : Colors.white,
-              borderRadius: BorderRadius.circular(RestoflowRadii.sm + 2),
-              border: filled ? null : Border.all(color: kRestoflowHairline),
-            ),
-            child: Icon(
-              icon,
-              size: RestoflowIconSizes.md,
-              color: filled ? theme.colorScheme.onPrimary : kRestoflowInk,
+            width: tap,
+            height: tap,
+            alignment: Alignment.center,
+            child: Container(
+              width: inner,
+              height: inner,
+              decoration: BoxDecoration(
+                color: filled ? theme.colorScheme.primary : Colors.white,
+                borderRadius: BorderRadius.circular(RestoflowRadii.sm + 2),
+                border: filled ? null : Border.all(color: kRestoflowHairline),
+              ),
+              child: Icon(
+                icon,
+                size: RestoflowIconSizes.md,
+                color: filled ? theme.colorScheme.onPrimary : kRestoflowInk,
+              ),
             ),
           ),
         ),
