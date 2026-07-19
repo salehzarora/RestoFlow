@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_printing/restoflow_printing.dart';
@@ -149,14 +151,13 @@ void main() {
 
   // PILOT-PRINT-FIDELITY-001: per-BAND ink. The physical defect was a receipt
   // whose item/modifier body occupied blank vertical space inside the single
-  // bitmap while header and totals printed. These tests pin, per logical line,
-  // that valid non-empty content produces actual black dots WITHIN THAT LINE'S
-  // OWN ROWS — a blank-but-height-reserving body can never pass again.
-  // HONESTY: the CI text engine substitutes a test font that draws solid boxes
-  // for most glyphs, so a DEVICE-ONLY font-fallback miss may not reproduce
-  // here; real hardware remains the final arbiter for glyph fidelity. What
-  // these tests DO guarantee structurally: bands tile the bitmap exactly, and
-  // the renderer never silently accepts an ink-less band for renderable text.
+  // bitmap while header and totals printed. These tests pin, per logical
+  // line, that under THIS test environment's font the content produces black
+  // dots WITHIN THAT LINE'S OWN ROWS, that bands tile the bitmap exactly, and
+  // that a first-pass zero-ink visible line is detected and given ONE
+  // recorded fallback render attempt. They do NOT prove every device font
+  // yields final ink — a device failing both passes may still print a blank
+  // band; real hardware remains the final glyph-fidelity arbiter.
   group('per-band body ink (PILOT-PRINT-FIDELITY-001)', () {
     Future<ReceiptRasterRender> render(
       List<(String, PrintLineStyle)> styledLines, {
@@ -388,7 +389,18 @@ void main() {
       });
     });
 
-    group('zero-ink recovery (ONE fallback attempt — not a glyph '
+    // HONEST CONTRACT under test here: a first-pass zero-ink VISIBLE line is
+    // DETECTED, ONE fallback render is attempted, and the attempt is recorded
+    // in retriedLineIndexes. This is NOT a guarantee that every valid line
+    // ends with ink, and NOT proof a blank body is impossible on every device
+    // font — a device failing both passes may legitimately remain blank, and
+    // physical hardware stays the final glyph-fidelity arbiter. Because the
+    // production rasterizer has NO forced-blank API (its constructor takes
+    // only fontSize/lineHeight/luminanceThreshold), the blank first pass is
+    // supplied as an explicit SYNTHETIC raster to the read-only
+    // debugRecoverFromFirstPass diagnostic, which runs the SAME detection +
+    // recovery step production uses.
+    group('zero-ink recovery (one fallback attempt — not a glyph '
         'guarantee)', () {
       const receipt = [
         ('عنوان الإيصال', PrintLineStyle.headingLarge),
@@ -398,47 +410,87 @@ void main() {
         ('المجموع ₪68.00', PrintLineStyle.total),
       ];
 
-      Future<ReceiptRasterRender> renderWith(
-        FlutterReceiptRasterizer rasterizer,
-      ) => rasterizer.rasterizeDetailed(
-        ReceiptRasterRequest(
-          lines: [for (final (t, _) in receipt) t],
-          styles: [for (final (_, s) in receipt) s],
-          widthDots: 576,
-          direction: ReceiptTextDirection.rtl,
-          localeTag: 'ar',
-        ),
+      ReceiptRasterRequest req() => ReceiptRasterRequest(
+        lines: [for (final (t, _) in receipt) t],
+        styles: [for (final (_, s) in receipt) s],
+        widthDots: 576,
+        direction: ReceiptTextDirection.rtl,
+        localeTag: 'ar',
       );
 
-      test('a VISIBLE line forced blank on the first pass: neighbours '
-          'cannot satisfy its scan, it is retried in ITS OWN band, the '
-          'fallback paints, and no other line moves', () async {
-        final normal = await renderWith(const FlutterReceiptRasterizer());
-        final seamed = await renderWith(
-          const FlutterReceiptRasterizer(debugBlankFirstPassLineIndexes: {2}),
+      /// A copy of [src] with [band]'s owned rows zeroed — the synthetic
+      /// stand-in for a device font that painted nothing for that line.
+      ReceiptRasterImage withBlankBand(
+        ReceiptRasterImage src,
+        ReceiptRasterBand band,
+      ) {
+        final data = Uint8List.fromList(src.data);
+        data.fillRange(
+          band.startRow * src.widthBytes,
+          band.endRow * src.widthBytes,
+          0,
         );
-        // Detected + recovered: the middle visible item retried, and its
-        // OWN rows carry ink after the fallback pass.
-        expect(seamed.retriedLineIndexes, {2});
-        expect(seamed.inkInBand(seamed.bands[2]), greaterThan(0));
-        // Neighbours were inked the whole time — their ink did NOT mask the
-        // blank middle line (exact ownership, no overlap).
-        expect(seamed.inkInBand(seamed.bands[1]), greaterThan(0));
-        expect(seamed.inkInBand(seamed.bands[3]), greaterThan(0));
-        // Band geometry is identical with and without the recovery: later
-        // lines did not move and the total height is unchanged.
-        expect(seamed.image.heightDots, normal.image.heightDots);
-        for (var i = 0; i < normal.bands.length; i++) {
-          expect(seamed.bands[i].startRow, normal.bands[i].startRow);
-          expect(seamed.bands[i].endRow, normal.bands[i].endRow);
-        }
+        return ReceiptRasterImage(
+          data: data,
+          widthBytes: src.widthBytes,
+          heightDots: src.heightDots,
+        );
+      }
+
+      test('NORMAL rasterize paints the visible middle line (no intentional '
+          'skip path) and repeated calls are byte-identical', () async {
+        final a = await rasterizer.rasterizeDetailed(req());
+        expect(a.retriedLineIndexes, isEmpty);
+        expect(a.inkInBand(a.bands[2]), greaterThan(0));
+        final b = await rasterizer.rasterizeDetailed(req());
+        expect(b.image.data, a.image.data);
       });
 
-      test('a line blank on BOTH passes: no crash, recorded as retried, '
-          'neighbours intact, raster stays structurally valid — visibility '
-          'is NOT guaranteed (hardware is the arbiter)', () async {
-        final r = await renderWith(
-          const FlutterReceiptRasterizer(debugBlankEveryPassLineIndexes: {2}),
+      test(
+        'a SYNTHETIC first-pass blank on a visible middle line is '
+        'detected despite fully inked neighbours, retried in ITS OWN band, '
+        'and the real fallback paints without moving any other line',
+        () async {
+          final normal = await rasterizer.rasterizeDetailed(req());
+          final synthetic = withBlankBand(normal.image, normal.bands[2]);
+          // The synthetic input keeps both neighbours fully inked — their ink
+          // must NOT mask the blank middle line (exact ownership, no overlap).
+          final syntheticView = ReceiptRasterRender(
+            image: synthetic,
+            bands: normal.bands,
+          );
+          expect(syntheticView.inkInBand(normal.bands[1]), greaterThan(0));
+          expect(syntheticView.inkInBand(normal.bands[2]), 0);
+          expect(syntheticView.inkInBand(normal.bands[3]), greaterThan(0));
+
+          final recovered = await rasterizer.debugRecoverFromFirstPass(
+            req(),
+            synthetic,
+          );
+          expect(recovered.retriedLineIndexes, {2});
+          // The REAL fallback pass painted the line inside its own band.
+          expect(recovered.inkInBand(recovered.bands[2]), greaterThan(0));
+          expect(recovered.inkInBand(recovered.bands[1]), greaterThan(0));
+          expect(recovered.inkInBand(recovered.bands[3]), greaterThan(0));
+          // Band geometry is identical with and without the recovery: later
+          // lines did not move and the total height is unchanged.
+          expect(recovered.image.heightDots, normal.image.heightDots);
+          for (var i = 0; i < normal.bands.length; i++) {
+            expect(recovered.bands[i].startRow, normal.bands[i].startRow);
+            expect(recovered.bands[i].endRow, normal.bands[i].endRow);
+          }
+        },
+      );
+
+      test('a line blank on BOTH passes (synthetic retry result): exactly '
+          'one retry, no recursion or crash, neighbours intact, structure '
+          'valid — the line honestly remains blank', () async {
+        final normal = await rasterizer.rasterizeDetailed(req());
+        final synthetic = withBlankBand(normal.image, normal.bands[2]);
+        final r = await rasterizer.debugRecoverFromFirstPass(
+          req(),
+          synthetic,
+          syntheticRetryResult: synthetic,
         );
         expect(r.retriedLineIndexes, {2});
         expect(r.inkInBand(r.bands[2]), 0); // honestly still blank
@@ -446,6 +498,23 @@ void main() {
         expect(r.inkInBand(r.bands[3]), greaterThan(0));
         expectBandsTile(r);
         expect(r.image.data.length, r.image.widthBytes * r.image.heightDots);
+      });
+
+      test('PRODUCTION ISOLATION: a diagnostic call leaves no residue — the '
+          'same instance then renders normally, byte-identical to a fresh '
+          'instance', () async {
+        final before = await rasterizer.rasterizeDetailed(req());
+        await rasterizer.debugRecoverFromFirstPass(
+          req(),
+          withBlankBand(before.image, before.bands[2]),
+        );
+        final after = await rasterizer.rasterizeDetailed(req());
+        expect(after.retriedLineIndexes, isEmpty);
+        expect(after.image.data, before.image.data);
+        final fresh = await const FlutterReceiptRasterizer().rasterizeDetailed(
+          req(),
+        );
+        expect(after.image.data, fresh.image.data);
       });
     });
 

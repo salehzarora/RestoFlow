@@ -47,8 +47,6 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     this.fontSize = 22.0,
     this.lineHeight = 1.3,
     this.luminanceThreshold = 128,
-    this.debugBlankFirstPassLineIndexes = const {},
-    this.debugBlankEveryPassLineIndexes = const {},
   });
 
   /// The base (normal) glyph size in logical pixels (== dots at 1:1). Styled
@@ -60,18 +58,6 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
 
   /// A pixel is treated as a black dot when opaque and below this luminance.
   final int luminanceThreshold;
-
-  /// TEST-ONLY seam: line indexes whose FIRST paint pass is skipped, so tests
-  /// can force a genuinely visible line to come out blank once (the Android
-  /// font failure is not reproducible under the CI test font). Empty in
-  /// production — when unused the output is untouched.
-  @visibleForTesting
-  final Set<int> debugBlankFirstPassLineIndexes;
-
-  /// TEST-ONLY seam: line indexes never painted on ANY pass (models a device
-  /// font that cannot draw the text at all). Empty in production.
-  @visibleForTesting
-  final Set<int> debugBlankEveryPassLineIndexes;
 
   static const ui.Color _black = ui.Color(0xFF000000);
   static const ui.Color _white = ui.Color(0xFFFFFFFF);
@@ -108,11 +94,58 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     ReceiptRasterRequest request,
   ) async {
     final layouts = _layoutBands(request);
-    final bands = [for (final l in layouts) l.band];
     final heightDots = layouts.isEmpty ? 1 : layouts.last.band.endRow;
+    // The REAL first pass paints every line — production has no path that
+    // intentionally skips painting a selected line.
+    final first = await _render(layouts, request.widthDots, heightDots);
+    return _recoverZeroInk(request, layouts, first);
+  }
 
-    var image = await _render(layouts, request.widthDots, heightDots, pass: 0);
-    var render = ReceiptRasterRender(image: image, bands: bands);
+  /// TEST-ONLY diagnostic: runs the SAME zero-ink detection and recovery step
+  /// production uses, but over an explicitly supplied synthetic
+  /// [firstPassImage] (and, optionally, a synthetic retry result standing in
+  /// for a device font that stays blank on the second pass too — the CI test
+  /// font cannot produce such a blank naturally). It lays out fresh bands per
+  /// call, mutates no instance or global state, and is NEVER consulted by
+  /// [rasterize]/[rasterizeDetailed] — a normal render cannot activate it.
+  @visibleForTesting
+  Future<ReceiptRasterRender> debugRecoverFromFirstPass(
+    ReceiptRasterRequest request,
+    ReceiptRasterImage firstPassImage, {
+    ReceiptRasterImage? syntheticRetryResult,
+  }) async {
+    final layouts = _layoutBands(request);
+    final heightDots = layouts.isEmpty ? 1 : layouts.last.band.endRow;
+    if (firstPassImage.heightDots != heightDots ||
+        firstPassImage.widthBytes != (request.widthDots + 7) ~/ 8) {
+      throw ArgumentError(
+        'synthetic first-pass raster must match the layout: '
+        'expected ${(request.widthDots + 7) ~/ 8}x$heightDots, got '
+        '${firstPassImage.widthBytes}x${firstPassImage.heightDots}',
+      );
+    }
+    return _recoverZeroInk(
+      request,
+      layouts,
+      firstPassImage,
+      syntheticRetryResult: syntheticRetryResult,
+    );
+  }
+
+  /// The ONE zero-ink recovery step (shared verbatim by production and the
+  /// test diagnostic): detect visible lines whose OWN band carries no ink in
+  /// [firstPass], and if any exist re-render ONCE with those lines dropped to
+  /// the base spec — then return whatever that single retry produced.
+  /// [syntheticRetryResult] is only ever supplied by
+  /// [debugRecoverFromFirstPass]; production always repaints for real.
+  Future<ReceiptRasterRender> _recoverZeroInk(
+    ReceiptRasterRequest request,
+    List<_LineLayout> layouts,
+    ReceiptRasterImage firstPass, {
+    ReceiptRasterImage? syntheticRetryResult,
+  }) async {
+    final bands = [for (final l in layouts) l.band];
+    final render = ReceiptRasterRender(image: firstPass, bands: bands);
 
     // ZERO-INK RECOVERY (one fallback attempt, not a glyph guarantee): only
     // lines with actual VISIBLE printable content are eligible — separators
@@ -129,13 +162,15 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     for (final l in layouts) {
       if (blank.contains(l.band.index)) l.useFallback = true;
     }
-    image = await _render(layouts, request.widthDots, heightDots, pass: 1);
-    render = ReceiptRasterRender(
-      image: image,
+    final heightDots = layouts.isEmpty ? 1 : layouts.last.band.endRow;
+    final retry =
+        syntheticRetryResult ??
+        await _render(layouts, request.widthDots, heightDots);
+    return ReceiptRasterRender(
+      image: retry,
       bands: bands,
       retriedLineIndexes: Set.unmodifiable(blank),
     );
-    return render;
   }
 
   /// Lays out every line ONCE and assigns exact integer band ownership:
@@ -216,10 +251,9 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   Future<ReceiptRasterImage> _render(
     List<_LineLayout> layouts,
     int widthDots,
-    int heightDots, {
-    required int pass,
-  }) async {
-    final image = await _paint(layouts, widthDots, heightDots, pass: pass);
+    int heightDots,
+  ) async {
+    final image = await _paint(layouts, widthDots, heightDots);
     try {
       final byteData = await image.toByteData(
         format: ui.ImageByteFormat.rawRgba,
@@ -325,9 +359,8 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   Future<ui.Image> _paint(
     List<_LineLayout> layouts,
     int widthDots,
-    int heightDots, {
-    required int pass,
-  }) async {
+    int heightDots,
+  ) async {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(
       recorder,
@@ -343,12 +376,9 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     final inset = widthDots * 0.03;
     for (final layout in layouts) {
       final band = layout.band;
-      final skip =
-          debugBlankEveryPassLineIndexes.contains(band.index) ||
-          (pass == 0 && debugBlankFirstPassLineIndexes.contains(band.index));
-      if (skip) continue;
       // OWNERSHIP CLIP: nothing a line draws may escape its own rows, so a
-      // neighbour's ink can never satisfy this band's zero-ink scan.
+      // neighbour's ink can never satisfy this band's zero-ink scan. Every
+      // line is painted — there is no path that intentionally skips one.
       canvas.save();
       canvas.clipRect(
         ui.Rect.fromLTRB(
