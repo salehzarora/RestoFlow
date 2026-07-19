@@ -187,13 +187,21 @@ void main() {
     }
 
     void expectBandsTile(ReceiptRasterRender r) {
+      // EXACT ownership: half-open bands tile the bitmap precisely — no
+      // overlap, no unowned gap, full coverage.
       expect(r.bands.first.startRow, 0);
       expect(r.bands.last.endRow, r.image.heightDots);
       for (var i = 1; i < r.bands.length; i++) {
-        // floor/ceil rounding may overlap adjacent bands by one row but can
-        // never leave an unowned gap.
-        expect(r.bands[i].startRow, lessThanOrEqualTo(r.bands[i - 1].endRow));
-        expect(r.bands[i].endRow, greaterThanOrEqualTo(r.bands[i - 1].endRow));
+        expect(
+          r.bands[i].startRow,
+          r.bands[i - 1].endRow,
+          reason:
+              'band $i must begin exactly where band ${i - 1} ends '
+              '(no overlap, no gap)',
+        );
+      }
+      for (final band in r.bands) {
+        expect(band.endRow, greaterThan(band.startRow));
       }
     }
 
@@ -313,21 +321,132 @@ void main() {
       expect(r.retriedLineIndexes, isEmpty);
     });
 
-    test('INK GUARANTEE: a renderable-but-blank line triggers exactly one '
-        'safe re-render pass and is observable', () async {
-      // U+200B (zero-width space) is NOT trimmed whitespace, so the line
-      // counts as renderable — yet no font produces ink for it. The renderer
-      // must detect the blank band and retry it with the base spec rather
-      // than silently reserving blank height.
+    test('FRACTIONAL adjacent heights still produce exact integer '
+        'ownership: every band starts where the previous ends', () async {
+      // Mixed styles produce fractional logical heights (0.9×, 1.1×, 1.2×,
+      // 1.55× of 22px × 1.3 line height, and the 18.7px separator).
       final r = await render(const [
-        ('عنوان', PrintLineStyle.headingLarge),
-        ('​', PrintLineStyle.item),
+        ('عنوان كبير', PrintLineStyle.headingLarge),
+        ('1 × صنف', PrintLineStyle.item),
+        ('  + إضافة', PrintLineStyle.sub),
+        ('----', PrintLineStyle.separator),
         ('المجموع ₪10.00', PrintLineStyle.total),
+        ('ملاحظة', PrintLineStyle.note),
+        ('شكراً', PrintLineStyle.centered),
       ]);
-      expect(r.retriedLineIndexes, {1});
-      // The neighbours still carry ink; the receipt still renders.
-      expect(r.inkInBand(r.bands[0]), greaterThan(0));
-      expect(r.inkInBand(r.bands[2]), greaterThan(0));
+      expectBandsTile(r); // asserts next.startRow == previous.endRow exactly
+    });
+
+    group('visible-content classification (no ink expected from '
+        'invisible-only lines)', () {
+      test('U+200B-only is NOT visible: expectsInk=false, no retry', () async {
+        final r = await render(const [
+          ('عنوان', PrintLineStyle.headingLarge),
+          ('\u200B', PrintLineStyle.item),
+          ('المجموع ₪10.00', PrintLineStyle.total),
+        ]);
+        expect(hasVisibleReceiptText('\u200B'), isFalse);
+        expect(r.bands[1].expectsInk, isFalse);
+        expect(r.retriedLineIndexes, isEmpty); // nothing to recover
+        expect(r.inkInBand(r.bands[0]), greaterThan(0));
+        expect(r.inkInBand(r.bands[2]), greaterThan(0));
+      });
+
+      test('default-ignorable-only combinations are NOT visible', () {
+        for (final s in const [
+          '',
+          '   ',
+          '\u200B\u200C\u200D',
+          '\u2060\uFEFF',
+          ' \u200E\u200F ',
+          '\u202A\u202C\u00AD\u061C',
+        ]) {
+          expect(
+            hasVisibleReceiptText(s),
+            isFalse,
+            reason: 'invisible-only "$s" must not expect ink',
+          );
+        }
+      });
+
+      test('real Arabic, Hebrew, English, digits, × and ₪ ARE visible and '
+          'their owned bands carry ink', () async {
+        expect(hasVisibleReceiptText('كباب حلبي'), isTrue);
+        expect(hasVisibleReceiptText('שווארמה בפיתה'), isTrue);
+        expect(hasVisibleReceiptText('2 × Burger ₪50.00'), isTrue);
+        // Combining marks attached to real text stay visible.
+        expect(hasVisibleReceiptText('مُشَكَّل'), isTrue);
+        final r = await render(const [
+          ('2 × كباب حلبي', PrintLineStyle.item),
+          ('  + שווארמה', PrintLineStyle.sub),
+          ('2 × Burger ₪50.00', PrintLineStyle.item),
+        ]);
+        for (final band in r.bands) {
+          expect(band.expectsInk, isTrue);
+          expect(r.inkInBand(band), greaterThan(0));
+        }
+      });
+    });
+
+    group('zero-ink recovery (ONE fallback attempt — not a glyph '
+        'guarantee)', () {
+      const receipt = [
+        ('عنوان الإيصال', PrintLineStyle.headingLarge),
+        ('1 × كباب حلبي', PrintLineStyle.item),
+        ('2 × حمص بالطحينة', PrintLineStyle.item),
+        ('  + إضافة ثوم', PrintLineStyle.sub),
+        ('المجموع ₪68.00', PrintLineStyle.total),
+      ];
+
+      Future<ReceiptRasterRender> renderWith(
+        FlutterReceiptRasterizer rasterizer,
+      ) => rasterizer.rasterizeDetailed(
+        ReceiptRasterRequest(
+          lines: [for (final (t, _) in receipt) t],
+          styles: [for (final (_, s) in receipt) s],
+          widthDots: 576,
+          direction: ReceiptTextDirection.rtl,
+          localeTag: 'ar',
+        ),
+      );
+
+      test('a VISIBLE line forced blank on the first pass: neighbours '
+          'cannot satisfy its scan, it is retried in ITS OWN band, the '
+          'fallback paints, and no other line moves', () async {
+        final normal = await renderWith(const FlutterReceiptRasterizer());
+        final seamed = await renderWith(
+          const FlutterReceiptRasterizer(debugBlankFirstPassLineIndexes: {2}),
+        );
+        // Detected + recovered: the middle visible item retried, and its
+        // OWN rows carry ink after the fallback pass.
+        expect(seamed.retriedLineIndexes, {2});
+        expect(seamed.inkInBand(seamed.bands[2]), greaterThan(0));
+        // Neighbours were inked the whole time — their ink did NOT mask the
+        // blank middle line (exact ownership, no overlap).
+        expect(seamed.inkInBand(seamed.bands[1]), greaterThan(0));
+        expect(seamed.inkInBand(seamed.bands[3]), greaterThan(0));
+        // Band geometry is identical with and without the recovery: later
+        // lines did not move and the total height is unchanged.
+        expect(seamed.image.heightDots, normal.image.heightDots);
+        for (var i = 0; i < normal.bands.length; i++) {
+          expect(seamed.bands[i].startRow, normal.bands[i].startRow);
+          expect(seamed.bands[i].endRow, normal.bands[i].endRow);
+        }
+      });
+
+      test('a line blank on BOTH passes: no crash, recorded as retried, '
+          'neighbours intact, raster stays structurally valid — visibility '
+          'is NOT guaranteed (hardware is the arbiter)', () async {
+        final r = await renderWith(
+          const FlutterReceiptRasterizer(debugBlankEveryPassLineIndexes: {2}),
+        );
+        expect(r.retriedLineIndexes, {2});
+        expect(r.inkInBand(r.bands[2]), 0); // honestly still blank
+        expect(r.inkInBand(r.bands[1]), greaterThan(0));
+        expect(r.inkInBand(r.bands[3]), greaterThan(0));
+        expectBandsTile(r);
+        expect(r.image.data.length, r.image.widthBytes * r.image.heightDots);
+      });
     });
 
     test('production rasterize() bytes are IDENTICAL to the detailed render '

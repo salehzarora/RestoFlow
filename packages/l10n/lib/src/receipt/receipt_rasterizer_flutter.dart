@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:restoflow_printing/restoflow_printing.dart';
 
 /// The real Flutter/`dart:ui` [ReceiptRasterizer] for Arabic/Hebrew/English
@@ -22,23 +23,32 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 ///
 /// PILOT-PRINT-FIDELITY-001 hardening — a physical receipt printed its
 /// header/totals but a HEIGHT-RESERVING BLANK band where the item/modifier
-/// body belonged (each line is an isolated paragraph whose block height is
-/// reserved whether or not any glyph painted). Three defenses:
+/// body belonged. Defenses:
 ///  * every paragraph names an EXPLICIT font family plus a fallback list of
 ///    platform families that cover Arabic/Hebrew/Latin (the design-system
 ///    named-fallback pattern) instead of relying on the ambiguous platform
 ///    default lookup for isolated styled paragraphs;
 ///  * only CONCRETE, universally-shipped weights are used (w400/w700 — never
 ///    synthetic w600/w800 axes);
-///  * after thresholding, any line whose text is renderable yet produced ZERO
-///    ink triggers ONE safe re-render pass where those lines drop to the base
-///    spec that body-adjacent lines demonstrably print with — a valid line is
-///    never silently reserved as blank height.
+///  * EXACT band ownership: every line owns an integer, half-open, exactly
+///    tiling row range `[startRow, endRow)` — adjacent bands share a boundary
+///    (`next.startRow == previous.endRow`), painting is CLIPPED to the owned
+///    band so glyph overflow can never leak into a neighbour's rows, and the
+///    band is sized up front for BOTH the styled and the fallback render;
+///  * ZERO-INK RECOVERY: a line with visible printable content that produced
+///    no ink on the first pass gets ONE fallback render attempt at the base
+///    spec, inside the SAME owned band (no reflow, no height change). This is
+///    a best-effort recovery, NOT an absolute glyph guarantee — a device font
+///    that cannot draw the text on either pass still yields a blank band, and
+///    real hardware remains the final glyph-fidelity arbiter. The attempt is
+///    observable via [ReceiptRasterRender.retriedLineIndexes].
 class FlutterReceiptRasterizer implements ReceiptRasterizer {
   const FlutterReceiptRasterizer({
     this.fontSize = 22.0,
     this.lineHeight = 1.3,
     this.luminanceThreshold = 128,
+    this.debugBlankFirstPassLineIndexes = const {},
+    this.debugBlankEveryPassLineIndexes = const {},
   });
 
   /// The base (normal) glyph size in logical pixels (== dots at 1:1). Styled
@@ -50,6 +60,18 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
 
   /// A pixel is treated as a black dot when opaque and below this luminance.
   final int luminanceThreshold;
+
+  /// TEST-ONLY seam: line indexes whose FIRST paint pass is skipped, so tests
+  /// can force a genuinely visible line to come out blank once (the Android
+  /// font failure is not reproducible under the CI test font). Empty in
+  /// production — when unused the output is untouched.
+  @visibleForTesting
+  final Set<int> debugBlankFirstPassLineIndexes;
+
+  /// TEST-ONLY seam: line indexes never painted on ANY pass (models a device
+  /// font that cannot draw the text at all). Empty in production.
+  @visibleForTesting
+  final Set<int> debugBlankEveryPassLineIndexes;
 
   static const ui.Color _black = ui.Color(0xFF000000);
   static const ui.Color _white = ui.Color(0xFFFFFFFF);
@@ -77,89 +99,127 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   Future<ReceiptRasterImage> rasterize(ReceiptRasterRequest request) async =>
       (await rasterizeDetailed(request)).image;
 
-  /// [rasterize] plus per-line VISIBILITY: which vertical rows of the final
-  /// bitmap each logical line occupies ([ReceiptRasterBand]). The image is the
-  /// production output — bands are derived from the same block heights that
-  /// position the paint, so tests/diagnostics can assert ink per line without
-  /// changing what a printer receives.
+  /// [rasterize] plus per-line VISIBILITY: the exact, non-overlapping row
+  /// range each logical line owns in the final bitmap ([ReceiptRasterBand]).
+  /// The image is the production output — bands are the same integer ranges
+  /// that position and clip the paint, so a per-band ink scan can never be
+  /// satisfied by a neighbouring line's pixels.
   Future<ReceiptRasterRender> rasterizeDetailed(
     ReceiptRasterRequest request,
   ) async {
-    final first = await _renderPass(request, const {});
-    // INK GUARANTEE: a line whose text is renderable must not come out as
-    // reserved-but-blank height. If any did, re-render ONCE with those lines
-    // dropped to the base spec (the size/weight the plain body demonstrably
-    // prints with); the retry is observable via [ReceiptRasterRender
-    // .retriedLineIndexes] so tests and diagnostics can see it happened.
+    final layouts = _layoutBands(request);
+    final bands = [for (final l in layouts) l.band];
+    final heightDots = layouts.isEmpty ? 1 : layouts.last.band.endRow;
+
+    var image = await _render(layouts, request.widthDots, heightDots, pass: 0);
+    var render = ReceiptRasterRender(image: image, bands: bands);
+
+    // ZERO-INK RECOVERY (one fallback attempt, not a glyph guarantee): only
+    // lines with actual VISIBLE printable content are eligible — separators
+    // draw their own rule and invisible-only lines legitimately stay blank.
     final blank = <int>{
-      for (final band in first.bands)
+      for (final band in bands)
         if (!band.isSeparator &&
-            band.text.trim().isNotEmpty &&
-            first.inkInBand(band) == 0)
+            hasVisibleReceiptText(band.text) &&
+            render.inkInBand(band) == 0)
           band.index,
     };
-    if (blank.isEmpty) return first;
-    return _renderPass(request, blank);
+    if (blank.isEmpty) return render;
+
+    for (final l in layouts) {
+      if (blank.contains(l.band.index)) l.useFallback = true;
+    }
+    image = await _render(layouts, request.widthDots, heightDots, pass: 1);
+    render = ReceiptRasterRender(
+      image: image,
+      bands: bands,
+      retriedLineIndexes: Set.unmodifiable(blank),
+    );
+    return render;
   }
 
-  Future<ReceiptRasterRender> _renderPass(
-    ReceiptRasterRequest request,
-    Set<int> safeRespecLines,
-  ) async {
+  /// Lays out every line ONCE and assigns exact integer band ownership:
+  /// a running row cursor gives each line `startRow = previous.endRow` and an
+  /// integer height of `ceil(max(styled requirement, fallback requirement))`,
+  /// so bands tile the bitmap exactly and the fallback pass fits the SAME
+  /// band without moving later lines or changing the total height.
+  List<_LineLayout> _layoutBands(ReceiptRasterRequest request) {
     final widthDots = request.widthDots;
     final textDirection = request.direction == ReceiptTextDirection.rtl
         ? ui.TextDirection.rtl
         : ui.TextDirection.ltr;
-
-    // One laid-out block per line, styled by its PrintLineStyle. A `separator`
-    // is a horizontal rule (no text). Heights accumulate top-to-bottom.
-    final blocks = <_Block>[];
-    var totalHeight = 0.0;
+    final layouts = <_LineLayout>[];
+    var cursor = 0;
     for (var i = 0; i < request.lines.length; i++) {
+      final text = request.lines[i];
       final style = i < request.styles.length
           ? request.styles[i]
           : PrintLineStyle.normal;
+
       if (style == PrintLineStyle.separator) {
-        blocks.add(_Block.separator(_separatorHeight));
-        totalHeight += _separatorHeight;
+        final rows = math.max(1, _separatorHeight.ceil());
+        layouts.add(
+          _LineLayout.separator(
+            band: ReceiptRasterBand(
+              index: i,
+              text: text,
+              style: style,
+              startRow: cursor,
+              endRow: cursor + rows,
+            ),
+          ),
+        );
+        cursor += rows;
         continue;
       }
-      final styleSpec = _specFor(style);
-      // A retried line keeps its alignment but takes the BASE size/weight —
-      // the exact configuration the plain body lines print with.
-      final spec = safeRespecLines.contains(i)
-          ? _LineSpec(
-              size: fontSize,
-              weight: ui.FontWeight.w400,
-              align: styleSpec.align,
-            )
-          : styleSpec;
-      final paragraph = _layoutLine(
-        request.lines[i],
-        widthDots,
-        textDirection,
-        spec,
-      );
-      final height = math.max(spec.size * lineHeight, paragraph.height);
-      blocks.add(_Block.text(paragraph, height));
-      totalHeight += height;
-    }
-    final heightDots = math.max(1, totalHeight.ceil());
 
-    final image = await _render(blocks, widthDots, heightDots);
-    return ReceiptRasterRender(
-      image: image,
-      bands: _bandsFor(request, blocks, heightDots),
-      retriedLineIndexes: Set.unmodifiable(safeRespecLines),
-    );
+      final styleSpec = _specFor(style);
+      final styled = _layoutLine(text, widthDots, textDirection, styleSpec);
+      var required = math.max(styleSpec.size * lineHeight, styled.height);
+
+      // FALLBACK HEIGHT SAFETY: a visible line may be re-rendered at the base
+      // spec inside the same band, so reserve enough rows for EITHER render
+      // before the band is finalized.
+      ui.Paragraph? fallback;
+      if (hasVisibleReceiptText(text)) {
+        final fallbackSpec = _LineSpec(
+          size: fontSize,
+          weight: ui.FontWeight.w400,
+          align: styleSpec.align,
+        );
+        fallback = _layoutLine(text, widthDots, textDirection, fallbackSpec);
+        required = math.max(
+          required,
+          math.max(fontSize * lineHeight, fallback.height),
+        );
+      }
+
+      final rows = math.max(1, required.ceil());
+      layouts.add(
+        _LineLayout.text(
+          styled: styled,
+          fallback: fallback,
+          band: ReceiptRasterBand(
+            index: i,
+            text: text,
+            style: style,
+            startRow: cursor,
+            endRow: cursor + rows,
+          ),
+        ),
+      );
+      cursor += rows;
+    }
+    return layouts;
   }
 
   Future<ReceiptRasterImage> _render(
-    List<_Block> blocks,
+    List<_LineLayout> layouts,
     int widthDots,
-    int heightDots,
-  ) async {
-    final image = await _paint(blocks, widthDots, heightDots);
+    int heightDots, {
+    required int pass,
+  }) async {
+    final image = await _paint(layouts, widthDots, heightDots, pass: pass);
     try {
       final byteData = await image.toByteData(
         format: ui.ImageByteFormat.rawRgba,
@@ -171,33 +231,6 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     } finally {
       image.dispose();
     }
-  }
-
-  List<ReceiptRasterBand> _bandsFor(
-    ReceiptRasterRequest request,
-    List<_Block> blocks,
-    int heightDots,
-  ) {
-    final bands = <ReceiptRasterBand>[];
-    var y = 0.0;
-    for (var i = 0; i < blocks.length; i++) {
-      final style = i < request.styles.length
-          ? request.styles[i]
-          : PrintLineStyle.normal;
-      final startRow = y.floor().clamp(0, heightDots);
-      y += blocks[i].height;
-      final endRow = y.ceil().clamp(0, heightDots);
-      bands.add(
-        ReceiptRasterBand(
-          index: i,
-          text: request.lines[i],
-          style: style,
-          startRow: startRow,
-          endRow: endRow,
-        ),
-      );
-    }
-    return bands;
   }
 
   double get _separatorHeight => fontSize * 0.85;
@@ -290,10 +323,11 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   }
 
   Future<ui.Image> _paint(
-    List<_Block> blocks,
+    List<_LineLayout> layouts,
     int widthDots,
-    int heightDots,
-  ) async {
+    int heightDots, {
+    required int pass,
+  }) async {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(
       recorder,
@@ -307,20 +341,37 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
       ..color = _black
       ..strokeWidth = 2.0;
     final inset = widthDots * 0.03;
-    var y = 0.0;
-    for (final block in blocks) {
-      final paragraph = block.paragraph;
-      if (paragraph != null) {
-        canvas.drawParagraph(paragraph, ui.Offset(0, y));
-      } else {
-        final lineY = y + block.height / 2;
+    for (final layout in layouts) {
+      final band = layout.band;
+      final skip =
+          debugBlankEveryPassLineIndexes.contains(band.index) ||
+          (pass == 0 && debugBlankFirstPassLineIndexes.contains(band.index));
+      if (skip) continue;
+      // OWNERSHIP CLIP: nothing a line draws may escape its own rows, so a
+      // neighbour's ink can never satisfy this band's zero-ink scan.
+      canvas.save();
+      canvas.clipRect(
+        ui.Rect.fromLTRB(
+          0,
+          band.startRow.toDouble(),
+          widthDots.toDouble(),
+          band.endRow.toDouble(),
+        ),
+      );
+      if (layout.isSeparator) {
+        final lineY = (band.startRow + band.endRow) / 2;
         canvas.drawLine(
           ui.Offset(inset, lineY),
           ui.Offset(widthDots - inset, lineY),
           rulePaint,
         );
+      } else {
+        final paragraph = layout.useFallback && layout.fallback != null
+            ? layout.fallback!
+            : layout.styled!;
+        canvas.drawParagraph(paragraph, ui.Offset(0, band.startRow.toDouble()));
       }
-      y += block.height;
+      canvas.restore();
     }
     final picture = recorder.endRecording();
     try {
@@ -354,9 +405,28 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   }
 }
 
-/// One logical receipt line's vertical placement inside the final bitmap
-/// (PILOT-PRINT-FIDELITY-001). Pure metadata for tests/diagnostics — the
-/// printed bytes are unchanged. Rows are half-open: `[startRow, endRow)`.
+/// Matches strings whose every character is invisible on paper: whitespace,
+/// zero-width characters (ZWSP/ZWNJ/ZWJ), bidi marks and embedding controls,
+/// word joiner and invisible operators, deprecated format characters, soft
+/// hyphen, Arabic letter mark, and the BOM. Bounded local list — no Unicode
+/// package.
+final RegExp _invisibleOnlyPattern = RegExp(
+  r'^[\s\u00AD\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u2064\u206A-\u206F\uFEFF]*$',
+);
+
+/// True when [text] contains at least one VISIBLE printable character (real
+/// Arabic/Hebrew/Latin letters, digits, ×, ₪, punctuation…). Lines made only
+/// of whitespace / zero-width / directional-control characters print nothing
+/// legitimately and must not be treated as ink-expecting content. Combining
+/// marks attached to real text are untouched — the pattern only ever matches
+/// WHOLE strings of invisible characters.
+bool hasVisibleReceiptText(String text) =>
+    !_invisibleOnlyPattern.hasMatch(text);
+
+/// One logical receipt line's EXACT vertical ownership inside the final
+/// bitmap (PILOT-PRINT-FIDELITY-001). Rows are half-open `[startRow, endRow)`
+/// and adjacent bands tile exactly: `next.startRow == previous.endRow`, the
+/// first band starts at row 0, and the last band ends at the image height.
 class ReceiptRasterBand {
   const ReceiptRasterBand({
     required this.index,
@@ -375,17 +445,19 @@ class ReceiptRasterBand {
   /// The semantic style the band was rendered with.
   final PrintLineStyle style;
 
-  /// First bitmap row (inclusive) of this line's block.
+  /// First bitmap row (inclusive) owned by this line.
   final int startRow;
 
-  /// One past the last bitmap row of this line's block.
+  /// One past the last bitmap row owned by this line.
   final int endRow;
 
   bool get isSeparator => style == PrintLineStyle.separator;
 
-  /// Whether the line carries visible content a printed receipt must show
-  /// (non-empty after trimming; separators draw their own rule).
-  bool get expectsInk => isSeparator || text.trim().isNotEmpty;
+  /// Whether the printed receipt must show something in this band: separators
+  /// draw their rule, and text lines only when they carry actually VISIBLE
+  /// printable content (see [hasVisibleReceiptText] — zero-width/control-only
+  /// strings legitimately print nothing).
+  bool get expectsInk => isSeparator || hasVisibleReceiptText(text);
 }
 
 /// The detailed result of [FlutterReceiptRasterizer.rasterizeDetailed]: the
@@ -400,12 +472,15 @@ class ReceiptRasterRender {
   final ReceiptRasterImage image;
   final List<ReceiptRasterBand> bands;
 
-  /// Line indexes that came out BLANK on the first pass (despite renderable
-  /// text) and were re-rendered with the base spec — empty in the normal
-  /// single-pass case.
+  /// Diagnostic metadata: line indexes that produced ZERO ink on the first
+  /// pass despite visible content and received the one fallback render
+  /// attempt (see the class doc — a recovery attempt, not a glyph
+  /// guarantee). Empty in the normal single-pass case.
   final Set<int> retriedLineIndexes;
 
-  /// Black-dot count within [band]'s rows (whole-width scan of the 1bpp data).
+  /// Black-dot count within [band]'s OWNED rows (whole-width scan of the
+  /// 1bpp data). Ownership is exact and painting is clipped to it, so a
+  /// neighbouring line's ink can never contribute.
   int inkInBand(ReceiptRasterBand band) {
     var count = 0;
     for (var row = band.startRow; row < band.endRow; row++) {
@@ -435,12 +510,21 @@ class _LineSpec {
   final ui.TextAlign align;
 }
 
-/// One vertical block: a laid-out text [paragraph] (a styled line) or, when
-/// [paragraph] is null, a horizontal separator rule. [height] is its vertical span.
-class _Block {
-  _Block.text(this.paragraph, this.height);
-  _Block.separator(this.height) : paragraph = null;
+/// One laid-out line: its exact owned [band], the [styled] paragraph, and —
+/// for visible text lines — the pre-measured base-spec [fallback] paragraph
+/// the zero-ink recovery pass swaps in ([useFallback]) without reflowing.
+class _LineLayout {
+  _LineLayout.text({
+    required this.styled,
+    required this.fallback,
+    required this.band,
+  });
+  _LineLayout.separator({required this.band}) : styled = null, fallback = null;
 
-  final ui.Paragraph? paragraph;
-  final double height;
+  final ui.Paragraph? styled;
+  final ui.Paragraph? fallback;
+  final ReceiptRasterBand band;
+  bool useFallback = false;
+
+  bool get isSeparator => styled == null;
 }
