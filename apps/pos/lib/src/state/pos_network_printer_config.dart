@@ -5,6 +5,7 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pos_device_context.dart';
+import 'pos_printer_purpose.dart';
 
 export 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show NetworkPrinterConfig;
@@ -17,10 +18,9 @@ export 'package:restoflow_native_printing/restoflow_native_printing.dart'
 /// leaves the device and never carries a token or secret. It is stored per
 /// paired device id (so two stations sharing a machine don't share a printer)
 /// via `shared_preferences`, exactly like the auto-print preference.
-/// A locally-saved network (Wi-Fi/Ethernet) ESC/POS printer for THIS device
-/// (ANDROID-002). ANDROID-004 moved the shape into the shared
-/// `restoflow_native_printing` package (reused by POS + KDS); this alias keeps
-/// the POS's historical name + per-device provider below unchanged.
+/// ANDROID-004 moved the shape into the shared `restoflow_native_printing`
+/// package (reused by POS + KDS); this alias keeps the POS's historical name +
+/// per-device providers below unchanged.
 typedef PosNetworkPrinterConfig = NetworkPrinterConfig;
 
 /// The `shared_preferences` key prefix for the per-device saved network printer.
@@ -30,25 +30,43 @@ const String kPosNetworkPrinterKeyPrefix = 'restoflow.printer.network.pos.';
 /// yet paired) so the pilot can still configure + test-print a printer.
 const String kPosNetworkPrinterLocalKey = 'local';
 
-/// The saved network printer for THIS device, or null when none is configured.
-final posNetworkPrinterConfigProvider =
-    AsyncNotifierProvider<
+/// KITCHEN-MODE-001B: the per-PURPOSE saved network printer family.
+/// [PosPrinterPurpose.customerReceipt] reads/writes the LEGACY key (identity
+/// migration — existing installations keep their receipt printer untouched);
+/// [PosPrinterPurpose.kitchenTicket] uses the purpose-suffixed key and starts
+/// unset. The two slots are fully independent (separate keys) — the SAME
+/// endpoint may be saved in both, and writing one never touches the other.
+final posNetworkPrinterConfigFamily =
+    AsyncNotifierProvider.family<
       PosNetworkPrinterConfigController,
-      PosNetworkPrinterConfig?
+      PosNetworkPrinterConfig?,
+      PosPrinterPurpose
     >(PosNetworkPrinterConfigController.new);
 
+/// The CUSTOMER-RECEIPT slot — the POS's historical provider name. Every
+/// pre-001B call site (receipt controller, bridges, settings) keeps resolving
+/// exactly this slot; nothing ever prints a kitchen ticket through it.
+final posNetworkPrinterConfigProvider = posNetworkPrinterConfigFamily(
+  PosPrinterPurpose.customerReceipt,
+);
+
+/// The KITCHEN-TICKET slot (KITCHEN-MODE-001B; preparation-only this phase).
+final posKitchenNetworkPrinterConfigProvider = posNetworkPrinterConfigFamily(
+  PosPrinterPurpose.kitchenTicket,
+);
+
 class PosNetworkPrinterConfigController
-    extends AsyncNotifier<PosNetworkPrinterConfig?> {
+    extends FamilyAsyncNotifier<PosNetworkPrinterConfig?, PosPrinterPurpose> {
   String get _key {
     final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
     final segment = (deviceId == null || deviceId.isEmpty)
         ? kPosNetworkPrinterLocalKey
         : deviceId;
-    return '$kPosNetworkPrinterKeyPrefix$segment';
+    return '$kPosNetworkPrinterKeyPrefix${arg.keySegment}$segment';
   }
 
   @override
-  Future<PosNetworkPrinterConfig?> build() async {
+  Future<PosNetworkPrinterConfig?> build(PosPrinterPurpose arg) async {
     // Re-read when the pairing gate (re)publishes the device.
     ref.watch(posDeviceContextProvider);
     try {
@@ -65,7 +83,7 @@ class PosNetworkPrinterConfigController
     }
   }
 
-  /// Persists [config] for this device (state first, storage best-effort).
+  /// Persists [config] for this device+purpose (state first, best-effort).
   Future<void> save(PosNetworkPrinterConfig config) async {
     state = AsyncData(config);
     try {
@@ -76,7 +94,7 @@ class PosNetworkPrinterConfigController
     }
   }
 
-  /// Removes this device's saved printer.
+  /// Removes this device+purpose's saved printer (other purposes untouched).
   Future<void> clear() async {
     state = const AsyncData(null);
     try {

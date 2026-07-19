@@ -6,8 +6,10 @@ import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../print/bluetooth_printer.dart';
 import '../print/bluetooth_printer_tester.dart';
+import '../print/kitchen_test_document.dart';
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_device_context.dart';
+import '../state/pos_printer_purpose.dart';
 
 enum _BtStatus { idle, testing, success, failure }
 
@@ -16,7 +18,15 @@ enum _BtStatus { idle, testing, success, failure }
 /// and Remove it — NO print bridge required. The MVP uses devices already paired
 /// in Android Bluetooth settings (no in-app discovery). Money-free.
 class BluetoothPrinterSection extends ConsumerStatefulWidget {
-  const BluetoothPrinterSection({super.key});
+  const BluetoothPrinterSection({
+    super.key,
+    this.purpose = PosPrinterPurpose.customerReceipt,
+  });
+
+  /// KITCHEN-MODE-001B: which LOCAL purpose slot this section configures
+  /// (customerReceipt = the legacy slot, byte-identical behavior; the kitchen
+  /// slot is preparation-only and tests with the money-free kitchen document).
+  final PosPrinterPurpose purpose;
 
   @override
   ConsumerState<BluetoothPrinterSection> createState() =>
@@ -37,6 +47,13 @@ class _BluetoothPrinterSectionState
   /// printed on paper, never sent anywhere).
   pp.PrinterErrorCategory? _failCategory;
   String? _failDetail;
+
+  /// Purpose-suffixed widget keys (customer keeps the legacy names).
+  Key _k(String base) => Key(
+    widget.purpose == PosPrinterPurpose.customerReceipt
+        ? base
+        : '$base-kitchen',
+  );
 
   @override
   void initState() {
@@ -60,7 +77,7 @@ class _BluetoothPrinterSectionState
     if (address == null) return;
     final messenger = ScaffoldMessenger.of(context);
     await ref
-        .read(posBluetoothPrinterConfigProvider.notifier)
+        .read(posBluetoothPrinterConfigFamily(widget.purpose).notifier)
         .save(PosBluetoothPrinterConfig(address: address, name: _selectedName));
     if (!mounted) return;
     setState(() => _status = _BtStatus.idle);
@@ -71,7 +88,9 @@ class _BluetoothPrinterSectionState
 
   Future<void> _remove(AppLocalizations l10n) async {
     final messenger = ScaffoldMessenger.of(context);
-    await ref.read(posBluetoothPrinterConfigProvider.notifier).clear();
+    await ref
+        .read(posBluetoothPrinterConfigFamily(widget.purpose).notifier)
+        .clear();
     if (!mounted) return;
     setState(() {
       _status = _BtStatus.idle;
@@ -92,11 +111,24 @@ class _BluetoothPrinterSectionState
       _failDetail = null;
     });
     final deviceLabel = ref.read(posDeviceContextProvider)?.displayName;
+    // KITCHEN-MODE-001B: the kitchen slot tests with the MONEY-FREE localized
+    // kitchen TEST document (shared raster path); the customer slot keeps the
+    // classic diagnostic. Result = bytes accepted by the transport only.
+    final document = widget.purpose == PosPrinterPurpose.kitchenTicket
+        ? await buildPosKitchenTestDocument(
+            ref,
+            l10n,
+            printerName: _selectedName,
+            deviceLabel: deviceLabel,
+          )
+        : null;
+    if (!mounted) return;
     final result = await ref
         .read(bluetoothPrinterTesterProvider)
         .testPrint(
           PosBluetoothPrinterConfig(address: address, name: _selectedName),
           deviceLabel: deviceLabel,
+          document: document,
         );
     if (!mounted) return;
     setState(() {
@@ -112,13 +144,15 @@ class _BluetoothPrinterSectionState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final saved = ref.watch(posBluetoothPrinterConfigProvider).valueOrNull;
+    final saved = ref
+        .watch(posBluetoothPrinterConfigFamily(widget.purpose))
+        .valueOrNull;
     // The effective selection: an in-session pick, else the saved printer.
     final selectedAddress = _selectedAddress ?? saved?.address;
     final canAct = selectedAddress != null && _status != _BtStatus.testing;
 
     return Column(
-      key: const Key('bluetooth-printer-section'),
+      key: _k('bluetooth-printer-section'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
@@ -144,7 +178,7 @@ class _BluetoothPrinterSectionState
               ),
             ),
             TextButton.icon(
-              key: const Key('bluetooth-refresh'),
+              key: _k('bluetooth-refresh'),
               onPressed: _loading ? null : _refresh,
               icon: const Icon(Icons.refresh, size: RestoflowIconSizes.sm),
               label: Text(l10n.posBluetoothRefreshAction),
@@ -167,7 +201,7 @@ class _BluetoothPrinterSectionState
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                key: const Key('bluetooth-save'),
+                key: _k('bluetooth-save'),
                 onPressed: canAct ? () => _save(l10n) : null,
                 icon: const Icon(Icons.save_outlined),
                 label: Text(l10n.posNetworkPrinterSaveAction),
@@ -176,7 +210,7 @@ class _BluetoothPrinterSectionState
             const SizedBox(width: RestoflowSpacing.sm),
             Expanded(
               child: FilledButton.icon(
-                key: const Key('bluetooth-test'),
+                key: _k('bluetooth-test'),
                 onPressed: canAct ? () => _testPrint(l10n) : null,
                 icon: const Icon(Icons.print_outlined),
                 label: Text(l10n.posNetworkPrinterTestAction),
@@ -189,7 +223,7 @@ class _BluetoothPrinterSectionState
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: TextButton.icon(
-              key: const Key('bluetooth-remove'),
+              key: _k('bluetooth-remove'),
               onPressed: () => _remove(l10n),
               icon: const Icon(
                 Icons.delete_outline,

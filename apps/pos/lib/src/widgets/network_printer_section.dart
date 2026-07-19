@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../print/kitchen_test_document.dart';
 import '../print/network_printer_tester.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_network_printer_config.dart';
+import '../state/pos_printer_purpose.dart';
 
 // posNativePrintingAvailableProvider moved to pos_printer_transport.dart
 // (ANDROID-003); re-exported so existing importers/tests keep resolving it.
@@ -20,7 +22,17 @@ enum _TestStatus { idle, testing, success, failure }
 /// bytes straight to the printer — NO print bridge required. Shown only where
 /// native printing is available (Android app). Money-free.
 class NetworkPrinterSection extends ConsumerStatefulWidget {
-  const NetworkPrinterSection({super.key});
+  const NetworkPrinterSection({
+    super.key,
+    this.purpose = PosPrinterPurpose.customerReceipt,
+  });
+
+  /// KITCHEN-MODE-001B: which LOCAL purpose slot this section configures.
+  /// [PosPrinterPurpose.customerReceipt] (default) is the legacy slot — keys,
+  /// widget Keys and behavior byte-identical to pre-001B. The kitchen slot is
+  /// preparation-only: its test print uses the money-free kitchen TEST
+  /// document, and nothing automatic prints kitchen tickets in this phase.
+  final PosPrinterPurpose purpose;
 
   @override
   ConsumerState<NetworkPrinterSection> createState() =>
@@ -36,6 +48,15 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
 
   bool _prefilled = false;
   _TestStatus _status = _TestStatus.idle;
+
+  /// Purpose-suffixed widget keys: the customer slot keeps the LEGACY key
+  /// names (existing tests unchanged); the kitchen slot gets its own so both
+  /// sections can coexist in one tree.
+  Key _k(String base) => Key(
+    widget.purpose == PosPrinterPurpose.customerReceipt
+        ? base
+        : '$base-kitchen',
+  );
 
   /// Inline validation error (invalid IP/port), or null.
   String? _fieldError;
@@ -75,7 +96,9 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
     final config = _readFields(l10n);
     if (config == null) return;
     final messenger = ScaffoldMessenger.of(context);
-    await ref.read(posNetworkPrinterConfigProvider.notifier).save(config);
+    await ref
+        .read(posNetworkPrinterConfigFamily(widget.purpose).notifier)
+        .save(config);
     if (!mounted) return;
     setState(() => _status = _TestStatus.idle);
     messenger.showSnackBar(
@@ -87,16 +110,31 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
     final config = _readFields(l10n);
     if (config == null) return;
     // Persist what we are testing so a saved config always matches the test.
-    await ref.read(posNetworkPrinterConfigProvider.notifier).save(config);
+    await ref
+        .read(posNetworkPrinterConfigFamily(widget.purpose).notifier)
+        .save(config);
     if (!mounted) return;
     setState(() {
       _status = _TestStatus.testing;
       _lastHostPort = '${config.host}:${config.port}';
     });
     final deviceLabel = ref.read(posDeviceContextProvider)?.displayName;
+    // KITCHEN-MODE-001B: the kitchen slot tests with the MONEY-FREE localized
+    // kitchen TEST document (shared raster path); the customer slot keeps the
+    // classic diagnostic. Result = bytes accepted by the transport, never a
+    // paper-print claim; local/device-only, never reported to the Dashboard.
+    final document = widget.purpose == PosPrinterPurpose.kitchenTicket
+        ? await buildPosKitchenTestDocument(
+            ref,
+            l10n,
+            printerName: config.name,
+            deviceLabel: deviceLabel,
+          )
+        : null;
+    if (!mounted) return;
     final result = await ref
         .read(networkPrinterTesterProvider)
-        .testPrint(config, deviceLabel: deviceLabel);
+        .testPrint(config, deviceLabel: deviceLabel, document: document);
     if (!mounted) return;
     setState(
       () => _status = result.ok ? _TestStatus.success : _TestStatus.failure,
@@ -107,7 +145,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final savedAsync = ref.watch(posNetworkPrinterConfigProvider);
+    final savedAsync = ref.watch(posNetworkPrinterConfigFamily(widget.purpose));
     final saved = savedAsync.valueOrNull;
 
     // Prefill the fields once from the saved config (if any).
@@ -123,7 +161,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
     final busy = _status == _TestStatus.testing;
 
     return Column(
-      key: const Key('network-printer-section'),
+      key: _k('network-printer-section'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
@@ -139,7 +177,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
         ),
         const SizedBox(height: RestoflowSpacing.sm),
         TextField(
-          key: const Key('network-printer-ip-field'),
+          key: _k('network-printer-ip-field'),
           controller: _ipController,
           enabled: !busy,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -160,7 +198,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
             SizedBox(
               width: 110,
               child: TextField(
-                key: const Key('network-printer-port-field'),
+                key: _k('network-printer-port-field'),
                 controller: _portController,
                 enabled: !busy,
                 keyboardType: TextInputType.number,
@@ -178,7 +216,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
             const SizedBox(width: RestoflowSpacing.sm),
             Expanded(
               child: TextField(
-                key: const Key('network-printer-name-field'),
+                key: _k('network-printer-name-field'),
                 controller: _nameController,
                 enabled: !busy,
                 decoration: InputDecoration(
@@ -198,7 +236,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                key: const Key('network-printer-save'),
+                key: _k('network-printer-save'),
                 onPressed: busy ? null : () => _save(l10n),
                 icon: const Icon(Icons.save_outlined),
                 label: Text(l10n.posNetworkPrinterSaveAction),
@@ -207,7 +245,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
             const SizedBox(width: RestoflowSpacing.sm),
             Expanded(
               child: FilledButton.icon(
-                key: const Key('network-printer-test'),
+                key: _k('network-printer-test'),
                 onPressed: busy ? null : () => _testPrint(l10n),
                 icon: const Icon(Icons.print_outlined),
                 label: Text(l10n.posNetworkPrinterTestAction),

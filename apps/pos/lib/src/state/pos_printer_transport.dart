@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pos_device_context.dart';
 import 'pos_network_printer_config.dart' show kPosNetworkPrinterLocalKey;
+import 'pos_printer_purpose.dart';
 
 /// True when this build can print directly to a native (Wi-Fi/Bluetooth) printer
 /// — the native Android app. ANDROID-004 moved the definition into the shared
@@ -13,32 +14,43 @@ final posNativePrintingAvailableProvider = nativePrintingAvailableProvider;
 
 /// Which local transport the POS uses for on-device printing (ANDROID-003).
 /// ANDROID-004 moved the enum into the shared package; this alias keeps the
-/// POS's historical name + persisted selection provider below unchanged.
+/// POS's historical name + persisted selection providers below unchanged.
 typedef PosPrinterTransportKind = PrinterTransportKind;
 
 /// The `shared_preferences` key prefix for the per-device selected transport.
 const String kPosPrinterTransportKeyPrefix = 'restoflow.printer.selected.pos.';
 
-/// The transport the cashier selected on THIS device (default [network]).
-/// Persisted per paired device, like the printer configs.
-final posSelectedPrinterTransportProvider =
-    AsyncNotifierProvider<
+/// KITCHEN-MODE-001B: the per-PURPOSE selected transport family
+/// (customerReceipt = the LEGACY key, identity migration; kitchenTicket = the
+/// purpose-suffixed key; each purpose keeps its OWN transport choice).
+final posSelectedPrinterTransportFamily =
+    AsyncNotifierProvider.family<
       PosSelectedPrinterTransportController,
-      PosPrinterTransportKind
+      PosPrinterTransportKind,
+      PosPrinterPurpose
     >(PosSelectedPrinterTransportController.new);
 
+/// The CUSTOMER-RECEIPT transport choice — the POS's historical provider name.
+final posSelectedPrinterTransportProvider = posSelectedPrinterTransportFamily(
+  PosPrinterPurpose.customerReceipt,
+);
+
+/// The KITCHEN-TICKET transport choice (KITCHEN-MODE-001B; preparation-only).
+final posKitchenSelectedPrinterTransportProvider =
+    posSelectedPrinterTransportFamily(PosPrinterPurpose.kitchenTicket);
+
 class PosSelectedPrinterTransportController
-    extends AsyncNotifier<PosPrinterTransportKind> {
+    extends FamilyAsyncNotifier<PosPrinterTransportKind, PosPrinterPurpose> {
   String get _key {
     final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
     final segment = (deviceId == null || deviceId.isEmpty)
         ? kPosNetworkPrinterLocalKey
         : deviceId;
-    return '$kPosPrinterTransportKeyPrefix$segment';
+    return '$kPosPrinterTransportKeyPrefix${arg.keySegment}$segment';
   }
 
   @override
-  Future<PosPrinterTransportKind> build() async {
+  Future<PosPrinterTransportKind> build(PosPrinterPurpose arg) async {
     ref.watch(posDeviceContextProvider);
     try {
       final prefs = await SharedPreferences.getInstance();

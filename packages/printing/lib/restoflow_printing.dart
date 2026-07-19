@@ -35,6 +35,7 @@ export 'src/bridge/print_bridge_transport.dart';
 export 'src/codec/print_document_codec.dart';
 // ANDROID-002: the on-device ESC/POS "Test print" diagnostic document builder
 // (ASCII/English-only, money-free) for the printer-setup Test print button.
+export 'src/diagnostics/escpos_kitchen_test_document.dart';
 export 'src/diagnostics/escpos_test_document.dart';
 // RF-074: cash-drawer kick trigger — a narrow input contract + a dispatcher
 // that enqueues a one-shot, no-retry `cashDrawer` job (consumes RF-070's

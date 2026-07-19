@@ -136,6 +136,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // KITCHEN-MODE-001B: the printer section above the info rows grew (purpose
+    // selector), so the lazy sheet list may not have built them yet — scroll
+    // the info section into view first.
+    await tester.scrollUntilVisible(
+      find.text(l10n.deviceSettingsAppTypePos),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text(l10n.deviceSettingsAppTypePos), findsOneWidget);
     expect(find.text('Front POS'), findsOneWidget);
     expect(find.text(l10n.deviceSettingsPairingActive), findsOneWidget);
