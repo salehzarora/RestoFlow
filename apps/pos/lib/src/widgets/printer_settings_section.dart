@@ -166,11 +166,21 @@ class _PrinterSettingsSectionState
           ),
         ),
         const SizedBox(height: RestoflowSpacing.md),
+        // KITCHEN-MODE-001B correction (review HIGH): the transport sections
+        // are STATEFUL (text controllers, in-session Bluetooth selection,
+        // test status). A stable PURPOSE-SPECIFIC key forces Flutter to
+        // dispose the old purpose's State and build a fresh one on every
+        // purpose switch — customer values can never linger in (or be saved
+        // into) the kitchen slot, and vice versa. The key is stable across
+        // ordinary rebuilds (wire tokens, never translated labels) and both
+        // sections additionally carry a didUpdateWidget fallback.
         switch (selected) {
           PosPrinterTransportKind.network => NetworkPrinterSection(
+            key: ValueKey('network-printer-purpose-${_purpose.wire}'),
             purpose: _purpose,
           ),
           PosPrinterTransportKind.bluetooth => BluetoothPrinterSection(
+            key: ValueKey('bluetooth-printer-purpose-${_purpose.wire}'),
             purpose: _purpose,
           ),
         },

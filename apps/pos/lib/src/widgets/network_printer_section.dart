@@ -65,6 +65,28 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
   String? _lastHostPort;
 
   @override
+  void didUpdateWidget(NetworkPrinterSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // KITCHEN-MODE-001B correction (review HIGH): the parent keys this section
+    // per purpose, so a purpose switch normally creates a FRESH State. This
+    // fallback keeps isolation correct even if a future composition reuses the
+    // State instance: drop every stale field and prefill again from the NEW
+    // purpose's slot. It only RELOADS UI state — it never writes to either
+    // slot, so switching tabs can never overwrite a configuration.
+    if (oldWidget.purpose != widget.purpose) {
+      setState(() {
+        _prefilled = false;
+        _status = _TestStatus.idle;
+        _fieldError = null;
+        _lastHostPort = null;
+        _ipController.clear();
+        _portController.text = '9100';
+        _nameController.clear();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _ipController.dispose();
     _portController.dispose();

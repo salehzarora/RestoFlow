@@ -55,10 +55,46 @@ class _BluetoothPrinterSectionState
         : '$base-kitchen',
   );
 
+  /// KITCHEN-MODE-001B correction: the EFFECTIVE selection — the in-session
+  /// pick, else THIS purpose's saved printer. Save/Test used to read only the
+  /// in-session pick, silently no-oping on a saved-only slot even though the
+  /// buttons showed enabled (the same effective rule canAct uses) — which the
+  /// copy-customer→kitchen flow would hit every time.
+  ({String address, String? name})? _effectiveSelection() {
+    final address = _selectedAddress;
+    if (address != null) return (address: address, name: _selectedName);
+    final saved = ref
+        .read(posBluetoothPrinterConfigFamily(widget.purpose))
+        .valueOrNull;
+    if (saved == null) return null;
+    return (address: saved.address, name: saved.name);
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+  }
+
+  @override
+  void didUpdateWidget(BluetoothPrinterSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // KITCHEN-MODE-001B correction (review HIGH): the parent keys this section
+    // per purpose, so a purpose switch normally creates a FRESH State. This
+    // fallback keeps isolation correct even if a future composition reuses the
+    // State instance: clear the in-session selection + status so the display
+    // falls back to the NEW purpose's SAVED printer. The paired-device list is
+    // purpose-independent hardware state and is kept; stored configurations
+    // are never touched — switching tabs never links or clears either slot.
+    if (oldWidget.purpose != widget.purpose) {
+      setState(() {
+        _status = _BtStatus.idle;
+        _selectedAddress = null;
+        _selectedName = null;
+        _failCategory = null;
+        _failDetail = null;
+      });
+    }
   }
 
   Future<void> _refresh() async {
@@ -73,12 +109,17 @@ class _BluetoothPrinterSectionState
   }
 
   Future<void> _save(AppLocalizations l10n) async {
-    final address = _selectedAddress;
-    if (address == null) return;
+    final selection = _effectiveSelection();
+    if (selection == null) return;
     final messenger = ScaffoldMessenger.of(context);
     await ref
         .read(posBluetoothPrinterConfigFamily(widget.purpose).notifier)
-        .save(PosBluetoothPrinterConfig(address: address, name: _selectedName));
+        .save(
+          PosBluetoothPrinterConfig(
+            address: selection.address,
+            name: selection.name,
+          ),
+        );
     if (!mounted) return;
     setState(() => _status = _BtStatus.idle);
     messenger.showSnackBar(
@@ -103,8 +144,8 @@ class _BluetoothPrinterSectionState
   }
 
   Future<void> _testPrint(AppLocalizations l10n) async {
-    final address = _selectedAddress;
-    if (address == null) return;
+    final selection = _effectiveSelection();
+    if (selection == null) return;
     setState(() {
       _status = _BtStatus.testing;
       _failCategory = null;
@@ -118,7 +159,7 @@ class _BluetoothPrinterSectionState
         ? await buildPosKitchenTestDocument(
             ref,
             l10n,
-            printerName: _selectedName,
+            printerName: selection.name,
             deviceLabel: deviceLabel,
           )
         : null;
@@ -126,7 +167,10 @@ class _BluetoothPrinterSectionState
     final result = await ref
         .read(bluetoothPrinterTesterProvider)
         .testPrint(
-          PosBluetoothPrinterConfig(address: address, name: _selectedName),
+          PosBluetoothPrinterConfig(
+            address: selection.address,
+            name: selection.name,
+          ),
           deviceLabel: deviceLabel,
           document: document,
         );
