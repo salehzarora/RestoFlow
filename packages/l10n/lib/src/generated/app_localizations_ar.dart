@@ -4631,4 +4631,107 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get activityLogDeniedPermission => 'غير مسموح لهذا الدور';
+
+  @override
+  String get printersRoleBoth => 'كلاهما';
+
+  @override
+  String get printersPurposeBothHint =>
+      'طابعة واحدة تطبع فواتير الزبائن وتذاكر المطبخ';
+
+  @override
+  String get printersReadinessTitle => 'جاهزية الطابعات';
+
+  @override
+  String get printersReadinessServerOnly =>
+      'سجلات الخادم فقط — لا يتحقق هذا من اختيار الجهاز أو الطباعة الفعلية';
+
+  @override
+  String get printersReadinessMissing => 'غير موجودة';
+
+  @override
+  String get printers80mmReady => 'جاهزة 80مم';
+
+  @override
+  String get printers80mmRequired => 'مطلوب 80مم';
+
+  @override
+  String get printersCustomerReceiptPrinter => 'طابعة فواتير الزبائن';
+
+  @override
+  String get printersKitchenTicketPrinter => 'طابعة تذاكر المطبخ';
+
+  @override
+  String get printersSameForBoth => 'يمكن للطابعة نفسها خدمة الغرضين';
+
+  @override
+  String get printersKitchenPreparationTitle => 'تجهيز مطبخ بالطابعة فقط';
+
+  @override
+  String get printersPrinterOnlyNotYetAvailable =>
+      'تجهيز المطبخ بالطابعة فقط غير متاح بعد حتى اكتمال جاهزية الأجهزة.';
+
+  @override
+  String get activityLogTitlePrinterCreated => 'تمت إضافة طابعة';
+
+  @override
+  String get activityLogTitlePrinterUpdated => 'تم تحديث الطابعة';
+
+  @override
+  String get activityLogTitlePrinterDeleted => 'تمت إزالة الطابعة';
+
+  @override
+  String get activityLogTitlePrinterRouteUpdated => 'تغيّر توجيه الطابعة';
+
+  @override
+  String get activityLogFieldPaperWidth => 'عرض الورق';
+
+  @override
+  String get activityLogFieldEnabled => 'مفعّلة';
+
+  @override
+  String get activityLogFieldConnectionType => 'الاتصال';
+
+  @override
+  String get posPrinterPurposeHeading => 'ماذا تطبع هذه الطابعة؟';
+
+  @override
+  String get posPrinterPurposeCustomer => 'فواتير الزبائن';
+
+  @override
+  String get posPrinterPurposeKitchen => 'تذاكر المطبخ';
+
+  @override
+  String get posKitchenPrinterPreparationTitle => 'تجهيز فقط';
+
+  @override
+  String get posKitchenPrinterPreparationBody =>
+      'لا تُطبع تذاكر المطبخ تلقائيًا بعد. يمكنك تجهيز طابعة المطبخ واختبارها الآن، وتفعيل مطبخ الطابعة فقط غير متاح بعد.';
+
+  @override
+  String get posKitchenPrinterUseCustomerAction =>
+      'استخدم طابعة الزبائن لتذاكر المطبخ';
+
+  @override
+  String get posKitchenPrinterCopiedSnack =>
+      'تم نسخ طابعة الزبائن إلى خانة المطبخ';
+
+  @override
+  String get posKitchenPrinterNothingToCopySnack =>
+      'لم يتم إعداد طابعة زبائن بعد';
+
+  @override
+  String get posKitchenTestBanner => '*** تجربة ***';
+
+  @override
+  String get posKitchenTestTitle => 'اختبار تذكرة المطبخ';
+
+  @override
+  String get posKitchenTestSampleItem => '1 x صنف تجريبي';
+
+  @override
+  String get posKitchenTestSampleModifier => '+ إضافة تجريبية';
+
+  @override
+  String get posKitchenTestSampleNote => 'ملاحظة: ملاحظة تجريبية';
 }

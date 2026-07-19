@@ -8649,6 +8649,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not permitted for this role'**
   String get activityLogDeniedPermission;
+
+  /// Printer role: one physical printer serving BOTH customer receipts and kitchen tickets (KITCHEN-MODE-001B).
+  ///
+  /// In en, this message translates to:
+  /// **'Both'**
+  String get printersRoleBoth;
+
+  /// Purpose-tile hint for the both role in the printer wizard.
+  ///
+  /// In en, this message translates to:
+  /// **'One printer prints customer receipts and kitchen tickets'**
+  String get printersPurposeBothHint;
+
+  /// Title of the server-record printer readiness summary card.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer readiness'**
+  String get printersReadinessTitle;
+
+  /// Honest caption: the readiness card checks configuration records, never device-local selection or reachability.
+  ///
+  /// In en, this message translates to:
+  /// **'Server printer records only — device selection and physical printing are not verified here'**
+  String get printersReadinessServerOnly;
+
+  /// Readiness pill: no printer record covers this purpose.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get printersReadinessMissing;
+
+  /// Readiness pill: an enabled 80mm printer record covers this purpose.
+  ///
+  /// In en, this message translates to:
+  /// **'80mm ready'**
+  String get printers80mmReady;
+
+  /// Readiness pill: only 58mm records cover this purpose (80mm is required for the printer-only kitchen).
+  ///
+  /// In en, this message translates to:
+  /// **'80mm required'**
+  String get printers80mmRequired;
+
+  /// Readiness row label for the customer receipt purpose.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer receipt printer'**
+  String get printersCustomerReceiptPrinter;
+
+  /// Readiness row label for the kitchen ticket purpose.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket printer'**
+  String get printersKitchenTicketPrinter;
+
+  /// Shown when an enabled both-role printer exists.
+  ///
+  /// In en, this message translates to:
+  /// **'The same printer can serve both purposes'**
+  String get printersSameForBoth;
+
+  /// Title of the static preparation notice (no toggle exists).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer-only kitchen preparation'**
+  String get printersKitchenPreparationTitle;
+
+  /// Static non-interactive notice: the printer-only kitchen workflow cannot be activated yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer-only kitchen preparation is not yet available until device readiness is complete.'**
+  String get printersPrinterOnlyNotYetAvailable;
+
+  /// Activity Log title: a printer configuration record was created.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer added'**
+  String get activityLogTitlePrinterCreated;
+
+  /// Activity Log title: a printer configuration record was changed.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer updated'**
+  String get activityLogTitlePrinterUpdated;
+
+  /// Activity Log title: a printer configuration record was soft-deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer removed'**
+  String get activityLogTitlePrinterDeleted;
+
+  /// Activity Log title: a station-to-printer route changed.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer routing changed'**
+  String get activityLogTitlePrinterRouteUpdated;
+
+  /// Activity Log field label for printer paper width.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper width'**
+  String get activityLogFieldPaperWidth;
+
+  /// Activity Log field label for the printer enabled flag.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get activityLogFieldEnabled;
+
+  /// Activity Log field label for the printer connection type.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection'**
+  String get activityLogFieldConnectionType;
+
+  /// Heading over the POS printer purpose selector.
+  ///
+  /// In en, this message translates to:
+  /// **'What does this printer print?'**
+  String get posPrinterPurposeHeading;
+
+  /// POS purpose segment: the customer receipt printer slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer receipts'**
+  String get posPrinterPurposeCustomer;
+
+  /// POS purpose segment: the kitchen ticket printer slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen tickets'**
+  String get posPrinterPurposeKitchen;
+
+  /// Title of the POS kitchen-slot preparation notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparation only'**
+  String get posKitchenPrinterPreparationTitle;
+
+  /// Body of the POS kitchen-slot preparation notice — honest dormancy statement.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen tickets are not printed automatically yet. You can prepare and test the kitchen printer now; printer-only kitchen activation is not yet available.'**
+  String get posKitchenPrinterPreparationBody;
+
+  /// Button: copy the customer slot's endpoint into the kitchen slot (explicit one-time copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Use the customer printer for kitchen tickets'**
+  String get posKitchenPrinterUseCustomerAction;
+
+  /// Snackbar after a successful copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer printer copied to the kitchen slot'**
+  String get posKitchenPrinterCopiedSnack;
+
+  /// Snackbar when the copy action found nothing to copy.
+  ///
+  /// In en, this message translates to:
+  /// **'No customer printer is configured yet'**
+  String get posKitchenPrinterNothingToCopySnack;
+
+  /// Banner framing the kitchen test print so it can never be mistaken for a real ticket.
+  ///
+  /// In en, this message translates to:
+  /// **'*** TEST ***'**
+  String get posKitchenTestBanner;
+
+  /// Title line of the kitchen test print.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket test'**
+  String get posKitchenTestTitle;
+
+  /// Sample quantity/item line of the kitchen test print (no real order data).
+  ///
+  /// In en, this message translates to:
+  /// **'1 x Sample item'**
+  String get posKitchenTestSampleItem;
+
+  /// Sample modifier line of the kitchen test print.
+  ///
+  /// In en, this message translates to:
+  /// **'+ Sample modifier'**
+  String get posKitchenTestSampleModifier;
+
+  /// Sample note line of the kitchen test print.
+  ///
+  /// In en, this message translates to:
+  /// **'Note: sample note'**
+  String get posKitchenTestSampleNote;
 }
 
 class _AppLocalizationsDelegate

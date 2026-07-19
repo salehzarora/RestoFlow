@@ -177,6 +177,14 @@ const Map<String, _Kind> _displayableKeys = {
   // Never money, never identifiers (T-003 holds).
   'round_number': _Kind.count,
   'added_item_count': _Kind.count,
+  // KITCHEN-MODE-001B: printer configuration safe scalars. display_name is
+  // tenant display text (the item_name/table_label class); the rest are closed
+  // enums/booleans. connection_config (host/port/addresses) is NOT listed and
+  // is a nested object server-side — endpoints never render here.
+  'display_name': _Kind.text,
+  'paper_width': _Kind.text,
+  'is_enabled': _Kind.boolean,
+  'connection_type': _Kind.text,
 };
 
 /// The payload keys the presenter may ever render, exposed so the audit-coverage
@@ -236,6 +244,11 @@ String auditFieldLabel(AppLocalizations l10n, String key) => switch (key) {
   // PSC-001C: service-round safe scalars.
   'round_number' => l10n.activityLogFieldRoundNumber,
   'added_item_count' => l10n.activityLogFieldAddedItemCount,
+  // KITCHEN-MODE-001B: printer configuration safe scalars.
+  'display_name' => l10n.activityLogFieldName,
+  'paper_width' => l10n.activityLogFieldPaperWidth,
+  'is_enabled' => l10n.activityLogFieldEnabled,
+  'connection_type' => l10n.activityLogFieldConnectionType,
   _ => key,
 };
 
@@ -417,6 +430,12 @@ class AuditEventPresenter {
     'table.link_denied' => l10n.activityLogTitleTableLinkDenied,
     'table.tables_unlinked' => l10n.activityLogTitleTablesUnlinked,
     'table.unlink_denied' => l10n.activityLogTitleTableUnlinkDenied,
+    // KITCHEN-MODE-001B: printer configuration (settings category; the former
+    // intentional-'other' deferral is resolved).
+    'printer.printer_device.created' => l10n.activityLogTitlePrinterCreated,
+    'printer.printer_device.updated' => l10n.activityLogTitlePrinterUpdated,
+    'printer.printer_device.deleted' => l10n.activityLogTitlePrinterDeleted,
+    'printer.printer_route.updated' => l10n.activityLogTitlePrinterRouteUpdated,
     _ => null,
   };
 
@@ -452,7 +471,10 @@ class AuditEventPresenter {
     // discounts, shifts, order.submitted, completion) keep their rows.
     final moneyFree =
         e.action.startsWith('order.items_add') ||
-        e.action.startsWith('order.round_status');
+        e.action.startsWith('order.round_status') ||
+        // KITCHEN-MODE-001B: printer configuration is MONEY-FREE by contract —
+        // mirror the server-side hostile-key hardening client-side too.
+        e.action.startsWith('printer.');
     // The union of keys present in either side, in a stable order (new first).
     final keys = <String>{...e.newValues.keys, ...e.oldValues.keys};
     for (final key in keys) {
@@ -603,6 +625,11 @@ class AuditEventPresenter {
     'cashier' => l10n.authRoleCashier,
     'kitchen_staff' => l10n.authRoleKitchenStaff,
     'accountant' => l10n.authRoleAccountant,
+    // KITCHEN-MODE-001B: printer configuration shares the `role` payload key —
+    // localize its closed vocabulary too (no collision with membership roles).
+    'receipt' => l10n.printersRoleReceipt,
+    'kitchen' => l10n.printersRoleKitchen,
+    'both' => l10n.printersRoleBoth,
     _ => role,
   };
 

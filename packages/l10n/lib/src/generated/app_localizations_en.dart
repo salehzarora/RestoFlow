@@ -4666,4 +4666,108 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityLogDeniedPermission => 'Not permitted for this role';
+
+  @override
+  String get printersRoleBoth => 'Both';
+
+  @override
+  String get printersPurposeBothHint =>
+      'One printer prints customer receipts and kitchen tickets';
+
+  @override
+  String get printersReadinessTitle => 'Printer readiness';
+
+  @override
+  String get printersReadinessServerOnly =>
+      'Server printer records only — device selection and physical printing are not verified here';
+
+  @override
+  String get printersReadinessMissing => 'Missing';
+
+  @override
+  String get printers80mmReady => '80mm ready';
+
+  @override
+  String get printers80mmRequired => '80mm required';
+
+  @override
+  String get printersCustomerReceiptPrinter => 'Customer receipt printer';
+
+  @override
+  String get printersKitchenTicketPrinter => 'Kitchen ticket printer';
+
+  @override
+  String get printersSameForBoth => 'The same printer can serve both purposes';
+
+  @override
+  String get printersKitchenPreparationTitle =>
+      'Printer-only kitchen preparation';
+
+  @override
+  String get printersPrinterOnlyNotYetAvailable =>
+      'Printer-only kitchen preparation is not yet available until device readiness is complete.';
+
+  @override
+  String get activityLogTitlePrinterCreated => 'Printer added';
+
+  @override
+  String get activityLogTitlePrinterUpdated => 'Printer updated';
+
+  @override
+  String get activityLogTitlePrinterDeleted => 'Printer removed';
+
+  @override
+  String get activityLogTitlePrinterRouteUpdated => 'Printer routing changed';
+
+  @override
+  String get activityLogFieldPaperWidth => 'Paper width';
+
+  @override
+  String get activityLogFieldEnabled => 'Enabled';
+
+  @override
+  String get activityLogFieldConnectionType => 'Connection';
+
+  @override
+  String get posPrinterPurposeHeading => 'What does this printer print?';
+
+  @override
+  String get posPrinterPurposeCustomer => 'Customer receipts';
+
+  @override
+  String get posPrinterPurposeKitchen => 'Kitchen tickets';
+
+  @override
+  String get posKitchenPrinterPreparationTitle => 'Preparation only';
+
+  @override
+  String get posKitchenPrinterPreparationBody =>
+      'Kitchen tickets are not printed automatically yet. You can prepare and test the kitchen printer now; printer-only kitchen activation is not yet available.';
+
+  @override
+  String get posKitchenPrinterUseCustomerAction =>
+      'Use the customer printer for kitchen tickets';
+
+  @override
+  String get posKitchenPrinterCopiedSnack =>
+      'Customer printer copied to the kitchen slot';
+
+  @override
+  String get posKitchenPrinterNothingToCopySnack =>
+      'No customer printer is configured yet';
+
+  @override
+  String get posKitchenTestBanner => '*** TEST ***';
+
+  @override
+  String get posKitchenTestTitle => 'Kitchen ticket test';
+
+  @override
+  String get posKitchenTestSampleItem => '1 x Sample item';
+
+  @override
+  String get posKitchenTestSampleModifier => '+ Sample modifier';
+
+  @override
+  String get posKitchenTestSampleNote => 'Note: sample note';
 }

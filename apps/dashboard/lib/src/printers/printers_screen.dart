@@ -133,6 +133,8 @@ class _PrintersScreenState extends State<PrintersScreen> {
         RestoflowSpacing.xxl,
       ),
       children: [
+        _PrinterReadinessSummary(snapshot: snapshot),
+        const SizedBox(height: RestoflowSpacing.sm),
         for (final printer in snapshot.printers)
           Padding(
             padding: const EdgeInsetsDirectional.only(
@@ -246,6 +248,137 @@ class _PrintersScreenState extends State<PrintersScreen> {
   }
 }
 
+/// KITCHEN-MODE-001B: honest SERVER-RECORD readiness for the two printer
+/// purposes. This verifies `printer_devices` rows only — it never claims a POS
+/// device selected a printer locally, that a test print succeeded, that a
+/// printer is physically reachable, or that the printer-only kitchen workflow
+/// is ready for activation. The preparation notice below is STATIC text —
+/// deliberately not a toggle (the workflow mode stays dormant; no setter
+/// exists).
+class _PrinterReadinessSummary extends StatelessWidget {
+  const _PrinterReadinessSummary({required this.snapshot});
+
+  final PrintersSnapshot snapshot;
+
+  ({String label, RestoflowTone tone, IconData icon}) _resolve(
+    AppLocalizations l10n,
+    List<PrinterDevice> candidates,
+  ) {
+    if (candidates.isEmpty) {
+      return (
+        label: l10n.printersReadinessMissing,
+        tone: RestoflowTone.danger,
+        icon: Icons.error_outline,
+      );
+    }
+    final enabled = [
+      for (final p in candidates)
+        if (p.isEnabled) p,
+    ];
+    if (enabled.isEmpty) {
+      return (
+        label: l10n.printersDisabled,
+        tone: RestoflowTone.danger,
+        icon: Icons.pause_circle_outline,
+      );
+    }
+    if (enabled.any((p) => p.paperWidth == '80mm')) {
+      return (
+        label: l10n.printers80mmReady,
+        tone: RestoflowTone.success,
+        icon: Icons.check_circle_outline,
+      );
+    }
+    return (
+      label: l10n.printers80mmRequired,
+      tone: RestoflowTone.warning,
+      icon: Icons.warning_amber_outlined,
+    );
+  }
+
+  Widget _purposeRow(
+    ThemeData theme,
+    String label,
+    ({String label, RestoflowTone tone, IconData icon}) state,
+  ) => Padding(
+    padding: const EdgeInsetsDirectional.only(bottom: RestoflowSpacing.xs),
+    child: Row(
+      children: [
+        Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+        AdminPill.tone(label: state.label, tone: state.tone, icon: state.icon),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final customer = _resolve(l10n, [
+      for (final p in snapshot.printers)
+        if (p.role.servesCustomerReceipts) p,
+    ]);
+    final kitchen = _resolve(l10n, [
+      for (final p in snapshot.printers)
+        if (p.role.servesKitchenTickets) p,
+    ]);
+    final sharedBoth = snapshot.printers.any(
+      (p) => p.role == PrinterRole.both && p.isEnabled,
+    );
+    return Card(
+      key: const Key('printer-readiness-summary'),
+      elevation: 0,
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(RestoflowRadii.lg),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(RestoflowSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.printersReadinessTitle,
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: RestoflowSpacing.xxs),
+            Text(
+              l10n.printersReadinessServerOnly,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: RestoflowSpacing.sm),
+            _purposeRow(theme, l10n.printersCustomerReceiptPrinter, customer),
+            _purposeRow(theme, l10n.printersKitchenTicketPrinter, kitchen),
+            if (sharedBoth)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(
+                  bottom: RestoflowSpacing.xs,
+                ),
+                child: Text(
+                  l10n.printersSameForBoth,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            const SizedBox(height: RestoflowSpacing.xs),
+            RestoflowNoticeBanner(
+              tone: RestoflowTone.info,
+              icon: Icons.soup_kitchen_outlined,
+              title: l10n.printersKitchenPreparationTitle,
+              body: l10n.printersPrinterOnlyNotYetAvailable,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PrinterCard extends StatelessWidget {
   const _PrinterCard({
     required this.printer,
@@ -268,7 +401,16 @@ class _PrinterCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isReceipt = printer.role == PrinterRole.receipt;
+    final roleLabel = switch (printer.role) {
+      PrinterRole.receipt => l10n.printersRoleReceipt,
+      PrinterRole.kitchen => l10n.printersRoleKitchen,
+      PrinterRole.both => l10n.printersRoleBoth,
+    };
+    final roleIcon = switch (printer.role) {
+      PrinterRole.receipt => Icons.receipt_long_outlined,
+      PrinterRole.kitchen => Icons.soup_kitchen_outlined,
+      PrinterRole.both => Icons.print_outlined,
+    };
     final connectionLabel = switch (printer.connectionType) {
       PrinterConnectionType.network => l10n.printersConnNetwork,
       PrinterConnectionType.bluetooth => l10n.printersConnBluetooth,
@@ -334,9 +476,7 @@ class _PrinterCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(RestoflowRadii.md),
                   ),
                   child: Icon(
-                    isReceipt
-                        ? Icons.receipt_long_outlined
-                        : Icons.soup_kitchen_outlined,
+                    roleIcon,
                     size: RestoflowIconSizes.lg,
                     color: scheme.onPrimaryContainer,
                   ),
@@ -376,13 +516,9 @@ class _PrinterCard extends StatelessWidget {
               runSpacing: RestoflowSpacing.xs,
               children: [
                 AdminPill(
-                  label: isReceipt
-                      ? l10n.printersRoleReceipt
-                      : l10n.printersRoleKitchen,
+                  label: roleLabel,
                   color: scheme.primary,
-                  icon: isReceipt
-                      ? Icons.receipt_long_outlined
-                      : Icons.soup_kitchen_outlined,
+                  icon: roleIcon,
                 ),
                 AdminPill.tone(
                   label: printer.isEnabled
@@ -645,7 +781,8 @@ class _PrinterDialogState extends State<_PrinterDialog> {
     );
   }
 
-  /// Step 1 — "What do you want to print?": two big purpose tiles.
+  /// Step 1 — "What do you want to print?": three purpose tiles
+  /// (KITCHEN-MODE-001B adds `both`: ONE physical printer for BOTH purposes).
   List<Widget> _purposeStep(AppLocalizations l10n) => [
     _ChoiceTile(
       selected: _role == PrinterRole.receipt,
@@ -661,6 +798,14 @@ class _PrinterDialogState extends State<_PrinterDialog> {
       title: l10n.printersRoleKitchen,
       hint: l10n.printersPurposeKitchenHint,
       onTap: () => setState(() => _role = PrinterRole.kitchen),
+    ),
+    const SizedBox(height: RestoflowSpacing.sm),
+    _ChoiceTile(
+      selected: _role == PrinterRole.both,
+      icon: Icons.print_outlined,
+      title: l10n.printersRoleBoth,
+      hint: l10n.printersPurposeBothHint,
+      onTap: () => setState(() => _role = PrinterRole.both),
     ),
   ];
 
