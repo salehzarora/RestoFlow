@@ -22,8 +22,11 @@
 --     P11 served + ACTIVE round, pay -> completes (rounds gate skipped:
 --         kitchen progression has no writer in printer-only mode)
 --     idempotent re-run on P1; cross-tenant helper call fails closed;
---     NO payment is ever fabricated; ready_at stays NULL and the POS ready
---     feed stays EMPTY (printer-only orders never alert).
+--     NO payment is ever fabricated; the auto-completion path never stamps
+--     ready_at; and (review HIGH-3) the POS ready feed stays EMPTY even when
+--     the branch holds HISTORICAL ready orders/rounds stamped under kds
+--     before the privileged mode switch — while the equivalent Branch-K
+--     fixture keeps appearing (kds feed unchanged).
 -- Session pinned to UTC; hex-only UUIDs; PIN-session auth (GUC-free).
 -- ============================================================================
 begin;
@@ -31,7 +34,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(36);
+select plan(40);
 
 -- ===== fixture ===============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -44,9 +47,10 @@ insert into branches (id, organization_id, restaurant_id, name) values
   ('00000000-0000-0000-0000-0001a2000a1a', '00000000-0000-0000-0000-0001a2000a00', '00000000-0000-0000-0000-0001a2000a10', 'Branch K (kds)'),
   ('00000000-0000-0000-0000-0001a2000a2b', '00000000-0000-0000-0000-0001a2000a00', '00000000-0000-0000-0000-0001a2000a10', 'Branch P (printer-only)'),
   ('00000000-0000-0000-0000-0001a2000b1a', '00000000-0000-0000-0000-0001a2000b00', '00000000-0000-0000-0000-0001a2000b10', 'Branch B1a');
--- the ONLY write path in this phase: privileged SQL (see foundation suite).
-update branches set kitchen_workflow_mode = 'printer_only'
-  where id in ('00000000-0000-0000-0000-0001a2000a2b', '00000000-0000-0000-0000-0001a2000b1a');
+-- NOTE: branches start at the DEFAULT 'kds'; the privileged flip to
+-- printer_only happens AFTER the full fixture below, so every historical row
+-- (including the genuine ready_at stamps) was created UNDER kds — exactly the
+-- review HIGH-3 scenario.
 
 insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
   ('00000000-0000-0000-0000-0001a200d001', '00000000-0000-0000-0000-0001a2000a00', '00000000-0000-0000-0000-0001a2000a10', '00000000-0000-0000-0000-0001a2000a1a', 'pos'),
@@ -96,6 +100,22 @@ insert into payments (id, organization_id, restaurant_id, branch_id, order_id, d
 insert into order_service_rounds (organization_id, restaurant_id, branch_id, order_id, round_number, device_id, opened_by_employee_profile_id) values
   ('00000000-0000-0000-0000-0001a2000a00', '00000000-0000-0000-0000-0001a2000a10', '00000000-0000-0000-0000-0001a2000a2b', '00000000-0000-0000-0000-0001a200010b', 2, '00000000-0000-0000-0000-0001a200d002', '00000000-0000-0000-0000-0001a20ef002'),
   ('00000000-0000-0000-0000-0001a2000a00', '00000000-0000-0000-0000-0001a2000a10', '00000000-0000-0000-0000-0001a2000a1a', '00000000-0000-0000-0000-0001a2000203', 2, '00000000-0000-0000-0000-0001a200d001', '00000000-0000-0000-0000-0001a20ef001');
+
+-- HISTORICAL ready work units (review HIGH-3): a READY order + a READY round in
+-- Branch P and a READY order in Branch K, all with GENUINE non-null ready_at
+-- stamps — created NOW, while both branches are still 'kds'. After the flip
+-- below, the Branch-P pair must NEVER resurface in the POS ready feed, while
+-- the Branch-K one must keep appearing under the existing kds rules.
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, local_operation_id, revision, ready_at) values
+  ('00000000-0000-0000-0000-0001a2000110', '00000000-0000-0000-0000-0001a2000a00', '00000000-0000-0000-0000-0001a2000a10', '00000000-0000-0000-0000-0001a2000a2b', '00000000-0000-0000-0000-0001a200d002', '00000000-0000-0000-0000-0001a20c5002', '00000000-0000-0000-0000-0001a20ef002', '00000000-0000-0000-0000-0001a20ab002', 'dine_in', 'ready', 'ILS', 1000, 0, 0, 1000, 'km-ph1', 2, now()),
+  ('00000000-0000-0000-0000-0001a2000204', '00000000-0000-0000-0000-0001a2000a00', '00000000-0000-0000-0000-0001a2000a10', '00000000-0000-0000-0000-0001a2000a1a', '00000000-0000-0000-0000-0001a200d001', '00000000-0000-0000-0000-0001a20c5001', '00000000-0000-0000-0000-0001a20ef001', '00000000-0000-0000-0000-0001a20ab001', 'dine_in', 'ready', 'ILS',  900, 0, 0,  900, 'km-kh1', 2, now());
+insert into order_service_rounds (id, organization_id, restaurant_id, branch_id, order_id, round_number, status, ready_at, device_id, opened_by_employee_profile_id) values
+  ('00000000-0000-0000-0000-0001a2000e10', '00000000-0000-0000-0000-0001a2000a00', '00000000-0000-0000-0000-0001a2000a10', '00000000-0000-0000-0000-0001a2000a2b', '00000000-0000-0000-0000-0001a2000110', 2, 'ready', now(), '00000000-0000-0000-0000-0001a200d002', '00000000-0000-0000-0000-0001a20ef002');
+
+-- the ONLY write path in this phase: privileged SQL (see foundation suite).
+-- Flipped AFTER every historical fixture above (the review HIGH-3 scenario).
+update branches set kitchen_workflow_mode = 'printer_only'
+  where id in ('00000000-0000-0000-0000-0001a2000a2b', '00000000-0000-0000-0000-0001a2000b1a');
 
 -- open shifts + bound drawers so app.record_payment can run (RF-055).
 select app.open_shift('00000000-0000-0000-0000-0001a20c5001', '00000000-0000-0000-0000-0001a20aff01',
@@ -307,18 +327,40 @@ select is((select status from orders where id = '00000000-0000-0000-0000-0001a20
   'K3: the kds order with an unserved round stays served (rounds gate byte-equivalent)');            -- 33
 
 -- =============================================================================
--- E. the ready feed stays EMPTY for printer-only orders  (34-36)
+-- E. the ready feed in a printer-only branch  (34-40, review HIGH-3)
+--    The branch HOLDS a genuinely-ready historical order (PH1) AND a
+--    genuinely-ready historical round, both stamped while the branch was kds —
+--    the feed must still be EMPTY after the privileged flip, while the
+--    equivalent Branch-K fixture keeps appearing under the existing kds rules.
 -- =============================================================================
 select ok(
   (select bool_and(ready_at is null) from orders
-    where branch_id = '00000000-0000-0000-0000-0001a2000a2b'),
-  'NO printer-only order ever received a ready_at stamp');                                           -- 34
+    where branch_id = '00000000-0000-0000-0000-0001a2000a2b'
+      and id <> '00000000-0000-0000-0000-0001a2000110'),
+  'NO printer-only order was EVER stamped ready_at by the auto-completion path (only the pre-flip historical fixture carries one)'); -- 34
 create temp table t_feed as
   select public.pos_ready_feed('00000000-0000-0000-0000-0001a20c5002', '00000000-0000-0000-0000-0001a200d002') as r;
-select ok((select (r ->> 'ok')::boolean from t_feed),
-  'the POS ready feed itself still answers in a printer-only branch');                               -- 35
+select ok((select (r ->> 'ok')::boolean and r ->> 'entity' = 'ready_feed' from t_feed),
+  'the POS ready feed still answers with the VALID success envelope in a printer-only branch');      -- 35
 select is((select jsonb_array_length(r -> 'ready') from t_feed), 0,
-  'the ready feed is EMPTY — auto-completed printer-only orders never surface as ready alerts');     -- 36
+  'the feed is EMPTY despite the branch holding a HISTORICAL ready order AND ready round (read-time gate)'); -- 36
+select ok(
+  (select r::text not like '%0001a2000110%' and r::text not like '%0001a2000e10%' from t_feed),
+  'neither the historical ready order id nor the historical ready round id leaks anywhere in the response'); -- 37
+select ok(
+  (select (r ->> 'has_more')::boolean = false and r -> 'next_cursor' = 'null'::jsonb from t_feed),
+  'the gated response keeps the envelope contract: has_more=false, next_cursor=null');               -- 38
+create temp table t_feedk as
+  select public.pos_ready_feed('00000000-0000-0000-0000-0001a20c5001', '00000000-0000-0000-0000-0001a200d001') as r;
+select ok(
+  (select exists (select 1 from jsonb_array_elements(r -> 'ready') e
+                   where e ->> 'work_unit_type' = 'initial_order'
+                     and e ->> 'order_id' = '00000000-0000-0000-0000-0001a2000204')
+     from t_feedk),
+  'KDS-MODE REGRESSION: the same-shaped historical ready order in Branch K STILL appears in its feed'); -- 39
+select ok(
+  (select (r ->> 'ok')::boolean and r -> 'next_cursor' is not null and r -> 'next_cursor' <> 'null'::jsonb from t_feedk),
+  'KDS-MODE REGRESSION: the Branch-K feed keeps its keyset cursor (pagination behavior unchanged)');  -- 40
 
 select * from finish();
 rollback;

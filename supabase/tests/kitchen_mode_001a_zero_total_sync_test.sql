@@ -22,10 +22,14 @@
 --       the money-free `tables` floor entity — no orders / order_items /
 --       order_item_modifiers / order_service_rounds, and NO order id ever
 --       appears anywhere in the response; an EXPLICIT order-entity request
---       rejects with the existing not-permitted 42501 (fail closed); the
---       operation_statuses device feed stays intact.
---     * kitchen_staff @ kds branch: allow-list unchanged (regression).
---     * cashier @ printer-only branch: POS exposure unchanged.
+--       rejects with the existing not-permitted 42501 (fail closed).
+--     * (review HIGH-1) the operation_statuses feed is SUPPRESSED to an empty
+--       collection for that session — proven against REAL order-bearing
+--       sync_operations rows whose target_id names an order and whose
+--       result/conflict_info carry the money-shaped key change_due_minor —
+--       even when operation_statuses is requested explicitly.
+--     * kitchen_staff @ kds branch: allow-list AND op-status feed unchanged.
+--     * cashier @ printer-only branch: POS exposure AND op-status unchanged.
 -- Session pinned to UTC; hex-only UUIDs; PIN-session auth (GUC-free).
 -- ============================================================================
 begin;
@@ -33,7 +37,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(25);
+select plan(30);
 
 -- ===== fixture ===============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -92,6 +96,16 @@ insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_cate
 insert into tables (id, organization_id, restaurant_id, branch_id, label) values
   ('00000000-0000-0000-0000-0001a300ab1a', '00000000-0000-0000-0000-0001a3000a00', '00000000-0000-0000-0000-0001a3000a10', '00000000-0000-0000-0000-0001a3000a1a', 'K1'),
   ('00000000-0000-0000-0000-0001a300ab2b', '00000000-0000-0000-0000-0001a3000a00', '00000000-0000-0000-0000-0001a3000a10', '00000000-0000-0000-0000-0001a3000a2b', 'P1');
+
+-- REAL order-bearing sync operations (review HIGH-1) for ALL THREE devices:
+-- target_id names an order (soft reference — the orders are created by
+-- submit_order later in this file), and result + conflict_info carry the
+-- money-shaped key change_due_minor. Under the PRE-correction behavior the
+-- printer-only kitchen device (d004) would receive ALL of this verbatim.
+insert into sync_operations (id, organization_id, restaurant_id, branch_id, device_id, local_operation_id, operation_type, target_entity, target_id, payload, payload_fingerprint, status, result, conflict_info) values
+  ('00000000-0000-0000-0000-0001a3050001', '00000000-0000-0000-0000-0001a3000a00', '00000000-0000-0000-0000-0001a3000a10', '00000000-0000-0000-0000-0001a3000a2b', '00000000-0000-0000-0000-0001a300d004', 'km-op-p1', 'payment.create', 'payments', '00000000-0000-0000-0000-0001a3000d01', '{"amount_minor": 500}', 'km-fp-1', 'applied',  '{"ok": true, "order_id": "00000000-0000-0000-0000-0001a3000d01", "change_due_minor": 150}', '{"change_due_minor": 150}'),
+  ('00000000-0000-0000-0000-0001a3050002', '00000000-0000-0000-0000-0001a3000a00', '00000000-0000-0000-0000-0001a3000a10', '00000000-0000-0000-0000-0001a3000a1a', '00000000-0000-0000-0000-0001a300d003', 'km-op-k1', 'payment.create', 'payments', '00000000-0000-0000-0000-0001a3000d02', '{"amount_minor": 300}', 'km-fp-2', 'applied',  '{"ok": true, "order_id": "00000000-0000-0000-0000-0001a3000d02", "change_due_minor": 50}',  '{"change_due_minor": 50}'),
+  ('00000000-0000-0000-0000-0001a3050003', '00000000-0000-0000-0000-0001a3000a00', '00000000-0000-0000-0000-0001a3000a10', '00000000-0000-0000-0000-0001a3000a2b', '00000000-0000-0000-0000-0001a300d002', 'km-op-p2', 'payment.create', 'payments', '00000000-0000-0000-0000-0001a3000d01', '{"amount_minor": 500}', 'km-fp-3', 'applied',  '{"ok": true, "order_id": "00000000-0000-0000-0000-0001a3000d01", "change_due_minor": 150}', '{"change_due_minor": 150}');
 
 -- =============================================================================
 -- A. ZERO-TOTAL submit in the PRINTER-ONLY branch — completes at the tail (1-8)
@@ -250,6 +264,40 @@ select ok(
                    where r ->> 'id' = '00000000-0000-0000-0000-0001a3000d01')
    from t_cp),
   'cashier@printer-only: the POS is UNAFFECTED — it still pulls orders (incl. the auto-completed one)'); -- 25
+
+-- =============================================================================
+-- F. operation-status feed exclusion  (26-30, review HIGH-1)
+--    The fixture REALLY holds an order-bearing sync operation for the
+--    printer-only kitchen device — target_id = the zero-total order,
+--    result/conflict_info carrying change_due_minor. t_kp above was pulled
+--    with that row in place.
+-- =============================================================================
+select is(
+  (select jsonb_array_length(res -> 'operation_statuses' -> 'rows') from t_kp),
+  0, 'kitchen@printer-only: the op-status feed is an EMPTY collection despite a REAL op row for this exact device'); -- 26
+select ok(
+  (select res::text not like '%change_due_minor%' and res::text not like '%km-op-p1%' from t_kp),
+  'kitchen@printer-only: neither the money-shaped key nor the operation identity leaks anywhere in the serialized response'); -- 27
+create temp table t_kpo as
+  select app.sync_pull('00000000-0000-0000-0000-0001a30c5004', '00000000-0000-0000-0000-0001a300d004',
+                       array['operation_statuses'], '{}'::jsonb, 500) as res;
+select ok(
+  (select (res ->> 'ok')::boolean
+      and jsonb_array_length(res -> 'operation_statuses' -> 'rows') = 0
+      and res::text not like '%change_due_minor%'
+      and res::text not like '%0001a3000d01%'
+   from t_kpo),
+  'kitchen@printer-only: an EXPLICIT operation_statuses request is still an empty collection (suppression is authoritative)'); -- 28
+select ok(
+  (select exists (select 1 from jsonb_array_elements(res -> 'operation_statuses' -> 'rows') e
+                   where e ->> 'local_operation_id' = 'km-op-k1')
+   from t_kk),
+  'kitchen@kds: the existing op-status behavior is UNCHANGED — the kds kitchen device still receives its row'); -- 29
+select ok(
+  (select exists (select 1 from jsonb_array_elements(res -> 'operation_statuses' -> 'rows') e
+                   where e ->> 'local_operation_id' = 'km-op-p2')
+   from t_cp),
+  'cashier@printer-only: the POS op-status feed is UNCHANGED (only the printer-only KITCHEN session is suppressed)'); -- 30
 
 select * from finish();
 rollback;

@@ -16,6 +16,13 @@
 --   * Security: SECURITY DEFINER + pinned search_path; grants to authenticated
 --     only; app.try_auto_complete_order stays INTERNAL; branches RLS still
 --     ENABLED + FORCED.
+--   * Correction pass (review HIGH-2 / MEDIUM-1): the device getter enforces
+--     the FULL liveness contract — expired session, inactive session,
+--     suspended branch, suspended restaurant, suspended organization, inactive
+--     device, revoked pairing, forged token, cross-device token reuse all
+--     return the SAME typed invalid_session with NO mode key; a cross-branch
+--     session row is proven STRUCTURALLY impossible (composite FKs); the
+--     no-activation-path check inspects EVERY function that updates branches.
 -- Session pinned to UTC; hex-only UUIDs; GUC/PIN conventions as RF-113.
 -- ============================================================================
 begin;
@@ -23,7 +30,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(32);
+select plan(45);
 
 -- ===== fixture ===============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -34,6 +41,7 @@ insert into restaurants (id, organization_id, name, timezone) values
   ('00000000-0000-0000-0000-0001a0000b10', '00000000-0000-0000-0000-0001a0000b00', 'Rest B1', 'UTC');
 insert into branches (id, organization_id, restaurant_id, name) values
   ('00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', 'Branch A1a'),
+  ('00000000-0000-0000-0000-0001a0000a2a', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', 'Branch A2a (stays kds)'),
   ('00000000-0000-0000-0000-0001a0000b1a', '00000000-0000-0000-0000-0001a0000b00', '00000000-0000-0000-0000-0001a0000b10', 'Branch B1a');
 insert into app_users (id, email) values
   ('00000000-0000-0000-0000-0001a0000e01', 'km1a-owner@example.test'),
@@ -45,12 +53,20 @@ insert into memberships (id, app_user_id, organization_id, restaurant_id, branch
 -- and a FOREIGN device in Org B (no session) for the forged-device assertion.
 insert into devices (id, organization_id, restaurant_id, branch_id, device_type, label) values
   ('00000000-0000-0000-0000-0001a0004001', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', 'pos', 'Front POS'),
+  ('00000000-0000-0000-0000-0001a0004002', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a2a', 'pos', 'A2a POS'),
   ('00000000-0000-0000-0000-0001a0004b01', '00000000-0000-0000-0000-0001a0000b00', '00000000-0000-0000-0000-0001a0000b10', '00000000-0000-0000-0000-0001a0000b1a', 'pos', 'Org B POS');
 insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
-  ('00000000-0000-0000-0000-0001a0004011', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0004001', 'active');
-insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at) values
-  ('00000000-0000-0000-0000-0001a0004051', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0004001', '00000000-0000-0000-0000-0001a0004011', app.hash_provisioning_secret('tok-km1a-pos'),     true,  null),
-  ('00000000-0000-0000-0000-0001a0004052', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0004001', '00000000-0000-0000-0000-0001a0004011', app.hash_provisioning_secret('tok-km1a-revoked'), false, now());
+  ('00000000-0000-0000-0000-0001a0004011', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0004001', 'active'),
+  ('00000000-0000-0000-0000-0001a0004021', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a2a', '00000000-0000-0000-0000-0001a0004002', 'active');
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at, expires_at) values
+  -- the LIVE session, a REVOKED one, an EXPIRED one (RF-118), an INACTIVE
+  -- (never revoked) one — all on device 4001 — and a live session on the
+  -- SECOND device 4002 in the kds branch (cross-device reuse + per-branch read).
+  ('00000000-0000-0000-0000-0001a0004051', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0004001', '00000000-0000-0000-0000-0001a0004011', app.hash_provisioning_secret('tok-km1a-pos'),      true,  null,  null),
+  ('00000000-0000-0000-0000-0001a0004052', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0004001', '00000000-0000-0000-0000-0001a0004011', app.hash_provisioning_secret('tok-km1a-revoked'),  false, now(), null),
+  ('00000000-0000-0000-0000-0001a0004053', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0004001', '00000000-0000-0000-0000-0001a0004011', app.hash_provisioning_secret('tok-km1a-expired'),  true,  null,  now() - interval '1 hour'),
+  ('00000000-0000-0000-0000-0001a0004054', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a1a', '00000000-0000-0000-0000-0001a0004001', '00000000-0000-0000-0000-0001a0004011', app.hash_provisioning_secret('tok-km1a-inactive'), false, null,  null),
+  ('00000000-0000-0000-0000-0001a0004061', '00000000-0000-0000-0000-0001a0000a00', '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a2a', '00000000-0000-0000-0000-0001a0004002', '00000000-0000-0000-0000-0001a0004021', app.hash_provisioning_secret('tok-km1a-a2'),       true,  null,  null);
 
 -- ===== A. schema (as the BYPASSRLS owner) ====================================
 select is(
@@ -194,6 +210,77 @@ select ok(
      from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relname = 'branches'),
   'RLS on branches is still ENABLED and FORCED');                                                                -- 32
+
+-- ===== G. device getter FULL liveness contract (review HIGH-2) ===============
+-- Every failure mode below must yield the SAME typed invalid_session with NO
+-- mode key — no distinction between expiry, suspension, revocation and forgery.
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-expired') ->> 'error'),
+  'invalid_session', 'an EXPIRED device session (RF-118 expires_at) fails closed');                              -- 33
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-inactive') ->> 'error'),
+  'invalid_session', 'an INACTIVE (never-revoked) device session fails closed');                                 -- 34
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-a2') ->> 'error'),
+  'invalid_session', 'CROSS-DEVICE token reuse inside the SAME org fails closed');                               -- 35
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004002', 'tok-km1a-a2') ->> 'kitchen_workflow_mode'),
+  'kds', 'each device reads its OWN branch: the A2a device sees kds while A1a is printer_only');                 -- 36
+select throws_ok(
+  $$ insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref)
+       values ('00000000-0000-0000-0000-0001a0004099', '00000000-0000-0000-0000-0001a0000a00',
+               '00000000-0000-0000-0000-0001a0000a10', '00000000-0000-0000-0000-0001a0000a2a',
+               '00000000-0000-0000-0000-0001a0004001', '00000000-0000-0000-0000-0001a0004011',
+               app.hash_provisioning_secret('tok-km1a-forged')) $$,
+  '23503', NULL,
+  'a CROSS-BRANCH session row (A2a scope on the A1a device/pairing) is STRUCTURALLY impossible (composite FK)'); -- 37
+
+update branches set status = 'suspended' where id = '00000000-0000-0000-0000-0001a0000a1a';
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-pos') ->> 'error'),
+  'invalid_session', 'a SUSPENDED branch fails closed even for a perfectly valid token');                        -- 38
+select ok(
+  not (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-expired') ? 'kitchen_workflow_mode')
+  and not (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-inactive') ? 'kitchen_workflow_mode')
+  and not (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-pos') ? 'kitchen_workflow_mode'),
+  'NO liveness failure ever carries a kitchen_workflow_mode key (no silent kds, no mode leak)');                 -- 39
+update branches set status = 'active' where id = '00000000-0000-0000-0000-0001a0000a1a';
+
+update restaurants set status = 'suspended' where id = '00000000-0000-0000-0000-0001a0000a10';
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-pos') ->> 'error'),
+  'invalid_session', 'a SUSPENDED restaurant fails closed');                                                     -- 40
+update restaurants set status = 'active' where id = '00000000-0000-0000-0000-0001a0000a10';
+
+update organizations set status = 'suspended' where id = '00000000-0000-0000-0000-0001a0000a00';
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-pos') ->> 'error'),
+  'invalid_session', 'a SUSPENDED organization fails closed');                                                   -- 41
+update organizations set status = 'active' where id = '00000000-0000-0000-0000-0001a0000a00';
+
+update devices set is_active = false where id = '00000000-0000-0000-0000-0001a0004001';
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-pos') ->> 'error'),
+  'invalid_session', 'an INACTIVE device fails closed');                                                         -- 42
+update devices set is_active = true where id = '00000000-0000-0000-0000-0001a0004001';
+
+update device_pairings set status = 'revoked' where id = '00000000-0000-0000-0000-0001a0004011';
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-pos') ->> 'error'),
+  'invalid_session', 'a REVOKED pairing fails closed');                                                          -- 43
+update device_pairings set status = 'active' where id = '00000000-0000-0000-0000-0001a0004011';
+
+select is(
+  (app.get_device_kitchen_workflow_mode('00000000-0000-0000-0000-0001a0004001', 'tok-km1a-pos') ->> 'kitchen_workflow_mode'),
+  'printer_only', 'with EVERY liveness dimension restored, the valid token reads the real mode again');          -- 44
+
+-- ===== H. broadened no-activation-path (review MEDIUM-1) =====================
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname in ('app', 'public')
+      and p.prosrc ~* 'update\s+(public\.)?branches\y'
+      and p.prosrc ilike '%kitchen_workflow_mode%'),
+  0, 'NO function in app/public that UPDATEs branches touches kitchen_workflow_mode (all current and future branch/settings setters inspected by source)'); -- 45
 
 select * from finish();
 rollback;

@@ -29,11 +29,13 @@
 --      body (20260719100000) with a dormant zero-total printer-only completion
 --      tail + ADDITIVE envelope keys (auto_completed, order_status).
 --   5. app.sync_pull — faithful re-creation of the LIVE PSC-001C body with the
---      authoritative kitchen exclusion for printer_only branches.
---
--- pos_ready_feed is DELIBERATELY untouched: it serves only rows with a
--- non-null ready_at, which is stamped exclusively on the KDS preparing->ready
--- transition — a printer-only order can never enter it (proven by pgTAP).
+--      authoritative kitchen exclusion for printer_only branches (order
+--      entities AND the operation-status feed — review finding HIGH-1).
+--   6. app.pos_ready_feed — faithful re-creation of the LIVE PSC-001C body
+--      with an authoritative read-time branch-mode gate (review finding
+--      HIGH-3): HISTORICAL ready_at rows stamped while the branch was `kds`
+--      must not resurface after a privileged switch to `printer_only`.
+--      Historical ready_at values are never cleared or mutated.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -126,21 +128,35 @@ begin
   end if;
   v_hash := app.hash_provisioning_secret(btrim(p_session_token));
 
-  -- token proof EXACTLY like app.get_device_printer_assignments: a live ACTIVE
-  -- session on an ACTIVE pairing for THIS device, on a live device + live
-  -- branch/restaurant. Read the mode from the device's OWN branch only — the
-  -- caller can never choose a branch.
+  -- FULL device-liveness contract (review finding HIGH-2): the RF-118
+  -- restore_device_session token proof (active + non-revoked + NON-EXPIRED
+  -- session on an active pairing for THIS device, live device, live
+  -- branch/restaurant tombstones) EXTENDED with the tenant-suspension gates
+  -- (branch/restaurant/organization status = 'active') and explicit same-scope
+  -- pins between session, pairing and device (defence in depth — the
+  -- device_sessions composite FKs already make a cross-branch session row
+  -- structurally impossible). Read the mode from the device's OWN branch only —
+  -- the caller can never choose a branch.
   select b.kitchen_workflow_mode into v_mode
     from public.device_sessions ds
     join public.device_pairings dp on dp.id = ds.device_pairing_id
+      and dp.organization_id = ds.organization_id
+      and dp.restaurant_id   = ds.restaurant_id
+      and dp.branch_id       = ds.branch_id
+      and dp.device_id       = ds.device_id
     join public.devices d on d.id = ds.device_id
+      and d.organization_id = ds.organization_id
     join public.branches b on b.organization_id = ds.organization_id
-      and b.restaurant_id = ds.restaurant_id and b.id = ds.branch_id and b.deleted_at is null
+      and b.restaurant_id = ds.restaurant_id and b.id = ds.branch_id
+      and b.deleted_at is null and b.status = 'active'
     join public.restaurants r on r.organization_id = ds.organization_id
-      and r.id = ds.restaurant_id and r.deleted_at is null
+      and r.id = ds.restaurant_id and r.deleted_at is null and r.status = 'active'
+    join public.organizations org on org.id = ds.organization_id
+      and org.deleted_at is null and org.status = 'active'
     where ds.device_id = p_device_id
       and ds.session_token_ref = v_hash
       and ds.is_active and ds.revoked_at is null
+      and (ds.expires_at is null or ds.expires_at > now())  -- RF-118: reject an expired session
       and dp.status = 'active' and dp.revoked_at is null and dp.deleted_at is null
       and d.is_active and d.deleted_at is null;
   if v_mode is null then
@@ -154,7 +170,7 @@ end;
 $$;
 
 comment on function app.get_device_kitchen_workflow_mode(uuid, text) is
-  'KITCHEN-MODE-001A: TOKEN-PROVEN device read of its OWN branch''s kitchen_workflow_mode (auth mirrors app.get_device_printer_assignments; any failure => typed {ok:false, error:invalid_session} — fail closed, no scope leak, and NEVER a fabricated ''kds''). Returns only {ok, kitchen_workflow_mode, server_ts} — no secrets, no money. Callable by anonymous authenticated devices (authorization is the token, not membership). READ-ONLY — no setter exists in this phase.';
+  'KITCHEN-MODE-001A: TOKEN-PROVEN device read of its OWN branch''s kitchen_workflow_mode. FULL liveness contract (review HIGH-2): RF-118 restore_device_session parity (active, non-revoked, NON-EXPIRED session; active pairing; live device) PLUS branch/restaurant/organization must be non-deleted AND status=active, with same-scope session/pairing/device pins. EVERY failure — expiry, suspension, revocation, forged token, forged scope, cross-tenant — is the SAME typed {ok:false, error:invalid_session}: fail closed, no failure-cause distinction, no scope leak, and NEVER a fabricated ''kds''. Returns only {ok, kitchen_workflow_mode, server_ts} — no secrets, no money. Callable by anonymous authenticated devices (authorization is the token, not membership). READ-ONLY — no setter exists in this phase.';
 
 create or replace function public.get_device_kitchen_workflow_mode(
   p_device_id uuid, p_session_token text)
@@ -841,9 +857,10 @@ grant execute on function app.submit_order(uuid, uuid, uuid, text, text, uuid, u
 
 -- ----------------------------------------------------------------------------
 -- 5. app.sync_pull — faithful re-creation of the LIVE PSC-001C body
---    (20260722090000 lines 2496-2700) with ONE delta: the authoritative
---    kitchen exclusion for printer_only branches (section (b)). Signature
---    UNCHANGED; grants re-issued for parity.
+--    (20260722090000 lines 2496-2700) with TWO deltas: the authoritative
+--    kitchen entity exclusion for printer_only branches (section (b)) and the
+--    operation-status feed suppression for the same sessions (HIGH-1).
+--    Signature UNCHANGED; grants re-issued for parity.
 -- ----------------------------------------------------------------------------
 create or replace function app.sync_pull(
   p_pin_session_id uuid,
@@ -884,7 +901,8 @@ declare
   v_op_count    integer;
   v_op_last     jsonb;
   v_op_statuses jsonb;
-  v_kitchen_mode text;  -- KITCHEN-MODE-001A: branch workflow mode (kitchen gate)
+  v_kitchen_mode text;      -- KITCHEN-MODE-001A: branch workflow mode (kitchen gate)
+  v_ops_suppressed boolean := false;  -- KITCHEN-MODE-001A (HIGH-1): op-status feed off for printer-only kitchen
   c_financial   constant text[] := array['payments', 'shifts', 'cash_drawer_sessions'];
   c_business    constant text[] := array['orders', 'order_items', 'order_item_modifiers', 'order_service_rounds', 'payments', 'shifts', 'cash_drawer_sessions'];
   -- RF-109: the six menu reference entities. Price-capable roles only (menu rows carry money, T-003).
@@ -954,6 +972,14 @@ begin
         and b.deleted_at is null;
     if coalesce(v_kitchen_mode, 'kds') = 'printer_only' then
       v_allowed := c_floor;
+      -- KITCHEN-MODE-001A (HIGH-1): the paper-only kitchen does not consume
+      -- order sync operations — the operation-status feed projects target_id,
+      -- result and conflict_info, which carry order identifiers and
+      -- money-shaped keys (e.g. change_due_minor) and must remain
+      -- money-free and order-identifier-free on this surface. Suppressed
+      -- authoritatively below (empty collection), even when explicitly
+      -- requested.
+      v_ops_suppressed := true;
     else
       -- KDS MODE (default) — BYTE-EQUIVALENT to the PSC-001C allow-list:
       -- order_service_rounds is MONEY-FREE by schema — the kitchen needs it
@@ -988,6 +1014,17 @@ begin
         raise exception 'sync_pull: unknown entity %', v_entity using errcode = '42501';
       end if;
     end loop;
+  end if;
+
+  -- KITCHEN-MODE-001A (HIGH-1): the AUTHORITATIVE operation-status exclusion
+  -- for the printer-only kitchen. Forcing v_include_ops off routes section (e)
+  -- to its existing empty-collection branch — {rows: [], next_cursor: null,
+  -- has_more: false} — a valid envelope carrying NO operation metadata, order
+  -- identifier or money-shaped key. Backend-side by design: cosmetic
+  -- client-side redaction would leave the wire payload exposed. kitchen_staff
+  -- in kds mode and every other role keep the existing feed unchanged.
+  if v_ops_suppressed then
+    v_include_ops := false;
   end if;
 
   -- (d) page each requested entity by its per-entity (updated_at, id) cursor.
@@ -1075,15 +1112,254 @@ end;
 $$;
 
 comment on function app.sync_pull(uuid, uuid, text[], jsonb, integer) is
-  'RF-057 pull RPC, hardened by RF-059 (A3/T-003), extended by RF-109 (menu), the MVP `tables` floor entity, PSC-001C (order_service_rounds) and KITCHEN-MODE-001A. Session/device validation (A8), role-permitted entity set (A5), per-entity (updated_at,id) cursor (A1), tombstones inline (A9), limit default 500/cap 1000, current-device operation_statuses feed (A4), RF057-B1 lookahead, and kitchen money redaction are preserved verbatim. KITCHEN-MODE-001A: a kitchen_staff session in a `printer_only` branch resolves the money-free `tables` floor entity ONLY — no orders/order_items/order_item_modifiers/order_service_rounds — so an (accidentally) paired KDS renders a safe, honest EMPTY board; an explicit order-entity request rejects with the existing not-permitted 42501 (fail closed); the mode read fail-closes to kds; NO other role''s exposure changes; tenant/branch isolation unchanged (R-003). Faithful re-creation of the 20260722090000 body. Read-only; no audit.';
+  'RF-057 pull RPC, hardened by RF-059 (A3/T-003), extended by RF-109 (menu), the MVP `tables` floor entity, PSC-001C (order_service_rounds) and KITCHEN-MODE-001A. Session/device validation (A8), role-permitted entity set (A5), per-entity (updated_at,id) cursor (A1), tombstones inline (A9), limit default 500/cap 1000, current-device operation_statuses feed (A4), RF057-B1 lookahead, and kitchen money redaction are preserved verbatim. KITCHEN-MODE-001A: a kitchen_staff session in a `printer_only` branch resolves the money-free `tables` floor entity ONLY — no orders/order_items/order_item_modifiers/order_service_rounds — so an (accidentally) paired KDS renders a safe, honest EMPTY board; an explicit order-entity request rejects with the existing not-permitted 42501 (fail closed); the current-device operation_statuses feed is likewise SUPPRESSED to an empty collection for that session (HIGH-1 — target_id/result/conflict_info carry order identifiers and money-shaped keys such as change_due_minor, and the paper-only kitchen consumes no sync operations); the mode read fail-closes to kds; NO other role''s exposure changes; tenant/branch isolation unchanged (R-003). Faithful re-creation of the 20260722090000 body. Read-only; no audit.';
 
 revoke all on function app.sync_pull(uuid, uuid, text[], jsonb, integer) from public;
 grant execute on function app.sync_pull(uuid, uuid, text[], jsonb, integer) to authenticated;
 
+-- ----------------------------------------------------------------------------
+-- 6. app.pos_ready_feed — faithful re-creation of the LIVE PSC-001C body
+--    (20260722090000 lines 3099-3306, the ONLY definition in the repository)
+--    with ONE delta: the read-time printer-only gate (c2) (review finding
+--    HIGH-3). Signature, wrapper, security posture and grants UNCHANGED and
+--    re-issued verbatim.
+-- ----------------------------------------------------------------------------
+create or replace function app.pos_ready_feed(
+  p_pin_session_id uuid,
+  p_device_id      uuid,
+  p_since_ready_at timestamptz default null,
+  p_since_type     text        default null,
+  p_since_id       uuid        default null,
+  p_limit          integer     default 100
+)
+  returns jsonb
+  language plpgsql
+  stable
+  security definer
+  set search_path = ''
+as $$
+declare
+  v_org         uuid;
+  v_branch      uuid;
+  v_dsid        uuid;
+  v_membership  uuid;
+  v_ds_device   uuid;
+  v_ds_active   boolean;
+  v_ds_revoked  timestamptz;
+  v_pairing     text;
+  v_role        text;
+  v_m_status    text;
+  v_m_deleted   timestamptz;
+  v_device_type text;
+  v_limit       integer;
+  v_window      timestamptz;
+  v_rows        jsonb;
+  v_count       integer;
+  v_last_at     timestamptz;
+  v_last_type   text;
+  v_last_id     uuid;
+  v_kitchen_mode text;  -- KITCHEN-MODE-001A (HIGH-3): authoritative branch workflow mode
+begin
+  -- (a) canonical preamble (pos_order_snapshots parity).
+  select ps.organization_id, ps.branch_id, ps.device_session_id, ps.resolved_membership_id
+    into v_org, v_branch, v_dsid, v_membership
+    from public.pin_sessions ps
+    where ps.id = p_pin_session_id;
+  if not found or not app.is_pin_session_valid(p_pin_session_id) then
+    return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'ready_feed');
+  end if;
+  select ds.device_id, ds.is_active, ds.revoked_at, dp.status
+    into v_ds_device, v_ds_active, v_ds_revoked, v_pairing
+    from public.device_sessions ds
+    join public.device_pairings dp on dp.id = ds.device_pairing_id
+    where ds.id = v_dsid;
+  if not found
+     or not (v_ds_active and v_ds_revoked is null and v_pairing = 'active')
+     or v_ds_device is distinct from p_device_id then
+    return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'ready_feed');
+  end if;
+  select m.role, m.status, m.deleted_at
+    into v_role, v_m_status, v_m_deleted
+    from public.memberships m
+    where m.id = v_membership and m.organization_id = v_org;
+  if not found or v_m_status <> 'active' or v_m_deleted is not null then
+    return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'ready_feed');
+  end if;
+
+  -- (b) POS-class device + POS role set (the feed is a POS surface).
+  select d.device_type into v_device_type
+    from public.devices d
+    where d.id = p_device_id and d.organization_id = v_org;
+  if v_device_type is distinct from 'pos' then
+    return jsonb_build_object('ok', false, 'error', 'invalid_device_type', 'entity', 'ready_feed');
+  end if;
+  if v_role not in ('cashier', 'manager', 'restaurant_owner', 'org_owner') then
+    return jsonb_build_object('ok', false, 'error', 'permission_denied', 'entity', 'ready_feed');
+  end if;
+
+  -- (c) FAIL-CLOSED input validation: the cursor is all-three-or-none, its
+  --     type is the closed enum, and the limit is bounded. A malformed cursor
+  --     is REFUSED, never coerced into a silent full-window restart.
+  if not ((p_since_ready_at is null and p_since_type is null and p_since_id is null)
+          or (p_since_ready_at is not null and p_since_type is not null and p_since_id is not null)) then
+    return jsonb_build_object('ok', false, 'error', 'invalid_cursor', 'entity', 'ready_feed');
+  end if;
+  if p_since_type is not null and p_since_type not in ('initial_order', 'service_round') then
+    return jsonb_build_object('ok', false, 'error', 'invalid_cursor', 'entity', 'ready_feed');
+  end if;
+  if p_limit is null or p_limit < 1 or p_limit > 500 then
+    return jsonb_build_object('ok', false, 'error', 'invalid_limit', 'entity', 'ready_feed');
+  end if;
+  v_limit  := p_limit;
+  -- The bounded FIRST-READ window: a device with no cursor gets the last 24h
+  -- only (no storm of ancient events); with a cursor the keyset bounds it.
+  v_window := case when p_since_ready_at is null then now() - interval '24 hours' else null end;
+
+  -- (c2) KITCHEN-MODE-001A (HIGH-3): the AUTHORITATIVE branch-mode gate, read
+  --      at feed time from the SESSION branch. In a `printer_only` branch
+  --      there is no KDS to progress work units, so "ready" alerts are
+  --      meaningless — and HISTORICAL rows stamped while the branch was still
+  --      `kds` must NOT resurface after a privileged mode switch. Historical
+  --      ready_at values are never cleared or mutated (write-once durable
+  --      data); the feed is filtered at READ TIME only. The response stays the
+  --      VALID success envelope (empty ready collection, no cursor, no order
+  --      or round identifier) so PSC-001A clients keep polling without errors
+  --      or fake notifications. Fail-closed mode read: a missing branch row
+  --      behaves as the historical `kds` feed. Session/device/role/cursor
+  --      validation above is deliberately UNCHANGED in both modes.
+  select b.kitchen_workflow_mode into v_kitchen_mode
+    from public.branches b
+    where b.id = v_branch and b.organization_id = v_org and b.deleted_at is null;
+  if coalesce(v_kitchen_mode, 'kds') = 'printer_only' then
+    return jsonb_build_object(
+      'ok', true, 'entity', 'ready_feed', 'server_ts', now(),
+      'ready', '[]'::jsonb, 'has_more', false, 'next_cursor', null);
+  end if;
+
+  -- (d) the DERIVED feed: initial work units (orders.ready_at) UNION additional
+  --     rounds (order_service_rounds.ready_at), branch-scoped, keyset-paged on
+  --     (ready_at, work_unit_type, work_unit_id) ascending. NO money column is
+  --     projected anywhere.
+  with feed as (
+    select 'initial_order'::text as work_unit_type,
+           o.id                  as work_unit_id,
+           o.id                  as order_id,
+           '#' || upper(right(replace(o.id::text, '-', ''), 6)) as order_code,
+           null::integer         as round_number,
+           o.order_type,
+           tbl.label             as table_label,
+           o.ready_at,
+           o.status              as work_unit_status,
+           o.status              as parent_order_status,
+           o.revision
+      from public.orders o
+      left join public.tables tbl
+        on  tbl.organization_id = o.organization_id
+        and tbl.id              = o.table_id
+      where o.organization_id = v_org
+        and o.branch_id       = v_branch
+        and o.deleted_at is null
+        and o.ready_at is not null
+    union all
+    select 'service_round'::text as work_unit_type,
+           r.id                  as work_unit_id,
+           r.order_id,
+           '#' || upper(right(replace(r.order_id::text, '-', ''), 6)) as order_code,
+           r.round_number,
+           o.order_type,
+           tbl.label             as table_label,
+           r.ready_at,
+           r.status              as work_unit_status,
+           o.status              as parent_order_status,
+           r.revision
+      from public.order_service_rounds r
+      join public.orders o
+        on  o.organization_id = r.organization_id
+        and o.id              = r.order_id
+      left join public.tables tbl
+        on  tbl.organization_id = o.organization_id
+        and tbl.id              = o.table_id
+      where r.organization_id = v_org
+        and r.branch_id       = v_branch
+        and r.deleted_at is null
+        and r.ready_at is not null
+  ),
+  page as (
+    select *
+      from feed f
+      where (v_window is null or f.ready_at >= v_window)
+        and (p_since_ready_at is null
+             or (f.ready_at, f.work_unit_type, f.work_unit_id)
+                > (p_since_ready_at, p_since_type, p_since_id))
+      order by f.ready_at asc, f.work_unit_type asc, f.work_unit_id asc
+      limit v_limit
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'work_unit_type',      p.work_unit_type,
+           'work_unit_id',        p.work_unit_id,
+           'order_id',            p.order_id,
+           'order_code',          p.order_code,
+           'round_number',        p.round_number,
+           'order_type',          p.order_type,
+           'table_label',         p.table_label,
+           'ready_at',            p.ready_at,
+           'work_unit_status',    p.work_unit_status,
+           'parent_order_status', p.parent_order_status,
+           'revision',            p.revision
+         ) order by p.ready_at asc, p.work_unit_type asc, p.work_unit_id asc), '[]'::jsonb),
+         count(*)::integer,
+         (array_agg(p.ready_at       order by p.ready_at desc, p.work_unit_type desc, p.work_unit_id desc))[1],
+         (array_agg(p.work_unit_type order by p.ready_at desc, p.work_unit_type desc, p.work_unit_id desc))[1],
+         (array_agg(p.work_unit_id   order by p.ready_at desc, p.work_unit_type desc, p.work_unit_id desc))[1]
+    into v_rows, v_count, v_last_at, v_last_type, v_last_id
+    from page p;
+
+  return jsonb_build_object(
+    'ok', true, 'entity', 'ready_feed', 'server_ts', now(),
+    'ready',       v_rows,
+    'has_more',    (v_count = v_limit),
+    'next_cursor', case when v_count > 0
+                        then jsonb_build_object('ready_at', v_last_at, 'work_unit_type', v_last_type, 'id', v_last_id)
+                        else null end);
+end;
+$$;
+
+comment on function app.pos_ready_feed(uuid, uuid, timestamptz, text, uuid, integer) is
+  'PSC-001C: the DURABLE DERIVED ready feed — the PSC-001A backend source. Rows are the WRITE-ONCE ready_at stamps on orders (work_unit_type=initial_order) and order_service_rounds (work_unit_type=service_round), branch-scoped from the PIN session (no parameter names another scope). Each work unit appears EXACTLY ONCE per ready occurrence by construction (the stamp is write-once inside the single-shot guarded transitions — idempotent replays, repeated ready requests, racing devices and pull reconnects cannot duplicate it), and a unit that later becomes served or voided KEEPS its historical ready occurrence (current work_unit_status + parent_order_status are exposed alongside). Deterministic keyset pagination on (ready_at, work_unit_type, work_unit_id) — two units sharing a ready_at cannot be skipped or duplicated; the cursor is all-three-or-none and FAIL-CLOSED validated. No cursor -> a bounded 24h first-read window (no banner storms for old events). Limit default 100, cap 500. Requires an active POS-class device + cashier/manager/restaurant_owner/org_owner. Returns NO money field. NOT derived from audit_events. READ-ONLY: mutates nothing, writes no audit. PSC-001A consumes this via ~7s foreground polling + resume refresh and owns all local read/history state — no banner/bell/read-state/sound exists in this phase. KITCHEN-MODE-001A (HIGH-3): in a `printer_only` branch the feed returns the SAME success envelope with an EMPTY ready collection — historical ready_at rows stamped under `kds` never resurface after a privileged mode switch (read-time filter; historical stamps are never cleared); kds-mode behavior, pagination, device isolation, window and response shape are byte-unchanged. Faithful re-creation of the 20260722090000 body.';
+
+create or replace function public.pos_ready_feed(
+  p_pin_session_id uuid,
+  p_device_id      uuid,
+  p_since_ready_at timestamptz default null,
+  p_since_type     text        default null,
+  p_since_id       uuid        default null,
+  p_limit          integer     default 100
+)
+  returns jsonb
+  language sql
+  volatile
+  security invoker
+  set search_path = ''
+as $$
+  select app.pos_ready_feed(p_pin_session_id, p_device_id, p_since_ready_at,
+                            p_since_type, p_since_id, p_limit);
+$$;
+
+comment on function public.pos_ready_feed(uuid, uuid, timestamptz, text, uuid, integer) is
+  'PSC-001C: PostgREST wrapper for app.pos_ready_feed (the public.pos_order_snapshots pattern: anon key + PIN/device session; SECURITY INVOKER pass-through). Authenticated only.';
+
+revoke all on function app.pos_ready_feed(uuid, uuid, timestamptz, text, uuid, integer) from public;
+revoke all on function app.pos_ready_feed(uuid, uuid, timestamptz, text, uuid, integer) from anon;
+grant execute on function app.pos_ready_feed(uuid, uuid, timestamptz, text, uuid, integer) to authenticated;
+revoke all on function public.pos_ready_feed(uuid, uuid, timestamptz, text, uuid, integer) from public;
+revoke all on function public.pos_ready_feed(uuid, uuid, timestamptz, text, uuid, integer) from anon;
+grant execute on function public.pos_ready_feed(uuid, uuid, timestamptz, text, uuid, integer) to authenticated;
+
 -- ============================================================================
 -- DOWN (manual; Supabase is forward-only — `supabase db reset` replays):
 --   re-create app.sync_pull / app.submit_order / app.try_auto_complete_order
---     from 20260722090000 / 20260719100000 / 20260722090000 respectively;
+--     / app.pos_ready_feed from 20260722090000 / 20260719100000 /
+--     20260722090000 / 20260722090000 respectively;
 --   drop function if exists public.get_device_kitchen_workflow_mode(uuid, text);
 --   drop function if exists app.get_device_kitchen_workflow_mode(uuid, text);
 --   drop function if exists public.get_branch_kitchen_workflow_mode(uuid, uuid, uuid);
