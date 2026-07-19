@@ -38,9 +38,9 @@ select is(app.audit_category('settings.branch.updated'),       'settings', 'sett
 select is(app.audit_category('settings.restaurant.updated'),   'settings', 'settings.restaurant.updated -> settings');
 select is(app.audit_category('settings.organization.updated'), 'settings', 'settings.organization.updated -> settings');
 select is(app.audit_category('settings.branch.update_denied'), 'settings', 'settings.branch.update_denied -> settings');
--- printer.* config is DEFERRED to a future printer-domain ticket (printer scope
--- excluded here) -> intentional 'other'. A truly unknown/legacy action is safe.
-select is(app.audit_category('printer.printer_device.updated'), 'other', 'printer.* stays other (intentional deferral)');
+-- KITCHEN-MODE-001B resolved the former intentional-'other' deferral: printer
+-- configuration IS settings work. A truly unknown/legacy action is still safe.
+select is(app.audit_category('printer.printer_device.updated'), 'settings', 'printer.* classifies as settings (KITCHEN-MODE-001B)');
 select is(app.audit_category('some.brand_new_unknown'),        'other', 'an unknown/legacy action falls back to other (safe)');
 select is(app.audit_category(null),                            'other', 'a null action is other (never throws)');
 
