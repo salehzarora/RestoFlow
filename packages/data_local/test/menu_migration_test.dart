@@ -45,8 +45,9 @@ void main() {
               .map((r) => r.data['name'] as String)
               .toSet();
 
-      // RF-018 tables survived; the six RF-030 menu tables were created; and
-      // the RF-071 print_jobs table was added (onUpgrade runs from<2 + from<3).
+      // RF-018 tables survived; the six RF-030 menu tables were created; the
+      // RF-071 print_jobs table was added; and KITCHEN-MODE-001C2A adds the
+      // kitchen_spool_jobs table (onUpgrade runs from<2 + from<3 + from<4).
       expect(
         tables,
         containsAll(<String>{
@@ -59,6 +60,7 @@ void main() {
           'modifiers',
           'modifier_options',
           'print_jobs',
+          'kitchen_spool_jobs',
         }),
       );
 
@@ -68,13 +70,14 @@ void main() {
           .get();
       expect(kept, hasLength(1));
 
-      // user_version advanced to the current schema (v3 since RF-071).
+      // user_version advanced to the current schema (v4 since
+      // KITCHEN-MODE-001C2A).
       final version = (await db.customSelect('PRAGMA user_version').get())
           .single
           .data
           .values
           .first;
-      expect(version, 3);
+      expect(version, 4);
     },
   );
 }
