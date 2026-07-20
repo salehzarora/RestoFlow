@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KITCHEN-MODE-001C2A backup safety (Android 11 and lower, Auto Backup).
+
+     Targeted exclusions only; application backup stays enabled otherwise.
+
+     1) flutter_secure_storage's SharedPreferences file: its values are
+        wrapped by an Android-Keystore master key that NEVER leaves the
+        device, so restoring this file onto another device/installation
+        yields undecryptable entries and a mismatched half-state (this file
+        holds the kitchen-spool AES key and the device-session credential).
+        Filename verified against flutter_secure_storage 9.2.4
+        (SHARED_PREFERENCES_NAME = "FlutterSecureStorage").
+
+     2) The encrypted kitchen-spool database directory (the canonical
+        location pinned in restoflow_data_local): restoring the spool
+        WITHOUT its matching Keystore key would strand undecryptable rows in
+        a mismatched state. Excluding the DIRECTORY also covers the
+        -wal/-shm/-journal side files (backup rules have no wildcards).
+        Nothing creates this directory yet (001C2B); the rule is
+        deploy-ahead. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+    <exclude domain="root" path="app_flutter/restoflow_kitchen_spool" />
+    <exclude domain="file" path="restoflow_kitchen_spool" />
+    <exclude domain="database" path="restoflow_kitchen_spool" />
+</full-backup-content>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KITCHEN-MODE-001C2A backup safety (Android 12+): the same targeted
+     exclusions as backup_rules.xml, applied to BOTH cloud backup and
+     device-to-device transfer. Rationale documented in backup_rules.xml:
+     Keystore-wrapped secure storage and the (future, 001C2B) encrypted
+     kitchen-spool database must never be restored independently into a
+     mismatched key/data state; there is no silent key regeneration. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+        <exclude domain="root" path="app_flutter/restoflow_kitchen_spool" />
+        <exclude domain="file" path="restoflow_kitchen_spool" />
+        <exclude domain="database" path="restoflow_kitchen_spool" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+        <exclude domain="root" path="app_flutter/restoflow_kitchen_spool" />
+        <exclude domain="file" path="restoflow_kitchen_spool" />
+        <exclude domain="database" path="restoflow_kitchen_spool" />
+    </device-transfer>
+</data-extraction-rules>
