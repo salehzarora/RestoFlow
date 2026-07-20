@@ -87,6 +87,17 @@ class SupabaseDevicePrinterAssignmentsRepository
                 connectionType: (row['connection_type'] ?? '').toString(),
                 paperWidth: (row['paper_width'] ?? '').toString(),
                 isEnabled: row['is_enabled'] == true,
+                // KITCHEN-MODE-001C2B (additive 001B keys): the un-narrowed
+                // configured role + the purpose list, for kitchen-ticket
+                // destination authority (D2).
+                configuredRole: row['configured_role'] is String
+                    ? row['configured_role'] as String
+                    : null,
+                supportedPurposes: [
+                  for (final purpose
+                      in (row['supported_purposes'] as List?) ?? const [])
+                    if (purpose is String) purpose,
+                ],
               ),
         ],
         routes: [

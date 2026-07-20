@@ -17,12 +17,14 @@ class AssignedPrinter {
     required this.connectionType,
     required this.paperWidth,
     required this.isEnabled,
+    this.configuredRole,
+    this.supportedPurposes = const [],
   });
 
   final String id;
   final String displayName;
 
-  /// `'receipt'` or `'kitchen'`.
+  /// `'receipt'` or `'kitchen'` (the LEGACY narrowed value).
   final String role;
 
   /// `'network'`, `'usb'`, or `'bluetooth'` — capability display only; this
@@ -34,6 +36,24 @@ class AssignedPrinter {
 
   /// False = configured but disabled by the owner in the Dashboard.
   final bool isEnabled;
+
+  /// KITCHEN-MODE-001C2B (additive, from the 001B server keys): the owner's
+  /// UN-narrowed configured role (`receipt` / `kitchen` / `both`) — null when
+  /// an older server omits it.
+  final String? configuredRole;
+
+  /// KITCHEN-MODE-001C2B (additive): the purposes this printer serves
+  /// (`customer_receipt` / `kitchen_ticket`); empty when the server omits it.
+  final List<String> supportedPurposes;
+
+  /// Whether this printer may serve KITCHEN TICKETS (KITCHEN-MODE-001B
+  /// purpose model, with a legacy-role fallback for older envelopes).
+  bool get servesKitchenTickets =>
+      supportedPurposes.contains('kitchen_ticket') ||
+      (supportedPurposes.isEmpty &&
+          (configuredRole ?? role) != 'receipt' &&
+          ((configuredRole ?? role) == 'kitchen' ||
+              (configuredRole ?? role) == 'both'));
 }
 
 /// One station→printer routing edge of the device's branch.
