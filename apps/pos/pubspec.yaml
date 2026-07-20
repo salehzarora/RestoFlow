@@ -50,9 +50,20 @@ dependencies:
     path: ../../packages/core
   # KITCHEN-MODE-001C2A: Android Keystore-backed storage for the kitchen-spool
   # AES key (same plugin/default options family as the device-session store in
-  # feature_auth). DORMANT: nothing in production startup instantiates the
-  # adapter yet; web fails closed (no localStorage fallback).
+  # feature_auth); web fails closed (no localStorage fallback).
   flutter_secure_storage: '>=9.0.0 <10.0.0'
+  # KITCHEN-MODE-001C2B: the dedicated runtime kitchen-spool database, cipher,
+  # key manager and bounded store. Production use is CONFINED to lib/src/spool
+  # (the dormancy scan enforces it) and the import path stays structurally
+  # impossible until 001C3 (no mode revision + no readiness reporting).
+  restoflow_data_local:
+    path: ../../packages/data_local
+  # KITCHEN-MODE-001C2B: the native application-documents directory for the
+  # dedicated spool database path (never called on web).
+  path_provider: '>=2.1.0 <3.0.0'
+  # KITCHEN-MODE-001C2B: SHA-256 for the NON-SECRET destination fingerprint
+  # and the deterministic session fingerprint in the secure mode cache.
+  crypto: '>=3.0.0 <4.0.0'
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -60,13 +71,8 @@ dev_dependencies:
   # backup-contract and dormancy source scans (CI runs `flutter test
   # apps/pos` from the repository root; local runs start inside the app).
   path: '>=1.9.0 <2.0.0'
-  # KITCHEN-MODE-001C2A CLEANUP 1: TEST-ONLY dependency so the Android
-  # backup-contract guard test can import the pinned kitchen-spool path
-  # constants (the single source of truth) and bind them to the backup XML
-  # resources. NOT a runtime dependency — the dormancy test proves no
-  # production source imports restoflow_data_local.
-  restoflow_data_local:
-    path: ../../packages/data_local
+  # (restoflow_data_local moved to regular dependencies in 001C2B — the spool
+  # runtime is real production code now, confined to lib/src/spool.)
 
 flutter:
   # Bundles the Material Icons font so `Icon(Icons.*)` renders glyphs (not the
