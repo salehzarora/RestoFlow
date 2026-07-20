@@ -4,9 +4,13 @@ import 'package:drift/drift.dart';
 import 'package:restoflow_printing/restoflow_printing.dart';
 
 import 'converters.dart';
+// KITCHEN-MODE-001C2A: brings the closed kitchen-spool enums into the library
+// scope so the generated `part` can reference the converter types.
+import 'kitchen_spool/kitchen_spool_status.dart';
 import 'sync_operation_state.dart';
 import 'tables/item_sizes.dart';
 import 'tables/item_variants.dart';
+import 'tables/kitchen_spool_jobs.dart';
 import 'tables/menu_categories.dart';
 import 'tables/menu_items.dart';
 import 'tables/modifier_options.dart';
@@ -43,6 +47,7 @@ part 'local_database.g.dart';
     Modifiers,
     ModifierOptions,
     PrintJobs,
+    KitchenSpoolJobs,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -50,17 +55,20 @@ class LocalDatabase extends _$LocalDatabase {
   LocalDatabase(super.executor);
 
   /// v1 = RF-018 sync foundation; v2 = RF-030 menu catalog; v3 = RF-071 print
-  /// spool (`print_jobs`).
+  /// spool (`print_jobs`); v4 = KITCHEN-MODE-001C2A encrypted kitchen spool
+  /// (`kitchen_spool_jobs`).
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   /// Migration strategy.
   ///
   /// `onCreate` builds the full current schema. The v1 -> v2 upgrade ADDS the
-  /// six menu tables; the v2 -> v3 upgrade ADDS the `print_jobs` table only.
-  /// Existing tables are never dropped or recreated. Foreign keys are enabled so
-  /// the menu FK relationships (item->category, size/variant/modifier->item,
-  /// option->modifier) are enforced.
+  /// six menu tables; the v2 -> v3 upgrade ADDS the `print_jobs` table only;
+  /// the v3 -> v4 upgrade ADDS `kitchen_spool_jobs` + its indexes only.
+  /// Existing tables are never dropped or recreated, existing rows are
+  /// preserved, and NOTHING here creates or reads crypto keys — opening the
+  /// database performs no key provisioning of any kind (explicit-only, per
+  /// the RF-021 fail-closed policy).
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
@@ -78,6 +86,17 @@ class LocalDatabase extends _$LocalDatabase {
       if (from < 3) {
         // RF-071: add the local print spool (no FK to other tables).
         await m.createTable(printJobs);
+      }
+      if (from < 4) {
+        // KITCHEN-MODE-001C2A: add the encrypted kitchen spool (additive; no
+        // FK to other tables; no data rewrite; no crypto interaction).
+        await m.createTable(kitchenSpoolJobs);
+        await m.createIndex(kitchenSpoolRunnableIdx);
+        await m.createIndex(kitchenSpoolDestinationIdx);
+        await m.createIndex(kitchenSpoolUnresolvedIdx);
+        await m.createIndex(kitchenSpoolPendingAckIdx);
+        await m.createIndex(kitchenSpoolRetentionIdx);
+        await m.createIndex(kitchenSpoolOrderSequenceIdx);
       }
     },
     beforeOpen: (details) async {

@@ -11,6 +11,15 @@ library;
 export 'src/converters.dart';
 // RF-071: durable Drift-backed print spool store + table.
 export 'src/drift_print_spool_store.dart';
+// KITCHEN-MODE-001C2A: encrypted kitchen spool foundation (field-level
+// AES-256-GCM cipher + AAD, explicit key manager, closed payload models,
+// bounded Drift store). DORMANT: no production composition uses this yet.
+export 'src/kitchen_spool/drift_kitchen_spool_store.dart';
+export 'src/kitchen_spool/kitchen_spool_aad.dart';
+export 'src/kitchen_spool/kitchen_spool_cipher.dart';
+export 'src/kitchen_spool/kitchen_spool_key_manager.dart';
+export 'src/kitchen_spool/kitchen_spool_payload.dart';
+export 'src/kitchen_spool/kitchen_spool_status.dart';
 export 'src/local_database.dart';
 // RF-030: local menu/catalog repository.
 export 'src/menu_repository.dart';
@@ -20,6 +29,8 @@ export 'src/sync_operation_state.dart';
 // RF-030: local menu/catalog tables.
 export 'src/tables/item_sizes.dart';
 export 'src/tables/item_variants.dart';
+// KITCHEN-MODE-001C2A: encrypted kitchen spool table.
+export 'src/tables/kitchen_spool_jobs.dart';
 export 'src/tables/menu_categories.dart';
 export 'src/tables/menu_items.dart';
 export 'src/tables/modifier_options.dart';
