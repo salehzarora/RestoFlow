@@ -50,11 +50,23 @@ final class KitchenModeCacheRecord {
 
 enum KitchenModeCacheFreshness { fresh, stale, expired }
 
+/// CORRECTION-001: the small deterministic clock-skew tolerance. A
+/// `verifiedAt` up to this far in the FUTURE is treated as `now` (device
+/// clocks drift); anything further ahead is a suspect record — EXPIRED, and
+/// invalidated by [PosSecureKitchenModeCache.read]. Negative age must never
+/// read as fresh trust.
+const Duration kKitchenModeCacheClockSkewTolerance = Duration(minutes: 1);
+
 KitchenModeCacheFreshness kitchenModeCacheFreshness(
   KitchenModeCacheRecord record,
   DateTime now,
 ) {
   final age = now.difference(record.verifiedAt);
+  if (age.isNegative && -age > kKitchenModeCacheClockSkewTolerance) {
+    // The record claims to be verified in the FUTURE beyond tolerance:
+    // suspect — never fresh, never a silent kds, never printer-only import.
+    return KitchenModeCacheFreshness.expired;
+  }
   if (age <= const Duration(minutes: 10)) {
     return KitchenModeCacheFreshness.fresh;
   }
@@ -66,8 +78,10 @@ final class PosSecureKitchenModeCache {
   PosSecureKitchenModeCache({
     FlutterSecureStorage? storage,
     PosKitchenSpoolPlatform platform = const PosKitchenSpoolPlatform(),
+    DateTime Function()? now,
   }) : _storage = storage ?? const FlutterSecureStorage(),
-       _platform = platform;
+       _platform = platform,
+       _now = now ?? DateTime.now;
 
   /// Lives under the kitchen-spool namespace so the kitchen-scoped wipe
   /// covers it.
@@ -75,6 +89,7 @@ final class PosSecureKitchenModeCache {
 
   final FlutterSecureStorage _storage;
   final PosKitchenSpoolPlatform _platform;
+  final DateTime Function() _now;
 
   Future<void> write(KitchenModeCacheRecord record) async {
     if (!_platform.supportsSecureSpool) {
@@ -141,6 +156,15 @@ final class PosSecureKitchenModeCache {
           record.deviceId == deviceId &&
           record.sessionFingerprint == sessionFingerprint;
       if (!tupleMatches) {
+        await _storage.delete(key: storageKey);
+        return null;
+      }
+      // CORRECTION-001: a record claiming verification in the FUTURE beyond
+      // the clock-skew tolerance is suspect (clock rollback / tampering) —
+      // invalidated like corruption, never trusted as fresh.
+      if (record.verifiedAt.isAfter(
+        _now().add(kKitchenModeCacheClockSkewTolerance),
+      )) {
         await _storage.delete(key: storageKey);
         return null;
       }
