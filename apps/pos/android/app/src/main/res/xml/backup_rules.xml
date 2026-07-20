@@ -20,6 +20,9 @@
         deploy-ahead. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+    <!-- CLEANUP 2: the plugin's LEGACY preferences filename (pre-9.x
+         installs may still hold values there after an upgrade). -->
+    <exclude domain="sharedpref" path="FlutterSecureKeyStorage.xml" />
     <exclude domain="root" path="app_flutter/restoflow_kitchen_spool" />
     <exclude domain="file" path="restoflow_kitchen_spool" />
     <exclude domain="database" path="restoflow_kitchen_spool" />

@@ -145,9 +145,12 @@ class KitchenSpoolJobs extends Table {
   List<String> get customConstraints => [
     'CHECK (attempt_count >= 0)',
     'CHECK (server_ack_attempt_count >= 0)',
+    'CHECK (encryption_version > 0)',
     "CHECK (status <> 'transport_accepted' OR transport_accepted_at IS NOT NULL)",
     "CHECK (status <> 'possibly_printed' OR transport_accepted_at IS NULL)",
     "CHECK (status <> 'superseded' OR superseded_by_dispatch_id IS NOT NULL)",
+    'CHECK (superseded_by_dispatch_id IS NULL OR '
+        'superseded_by_dispatch_id <> dispatch_id)',
     'CHECK (reprint_of_local_job_id IS NULL OR '
         'reprint_of_local_job_id <> local_job_id)',
     "CHECK (length(encrypted_payload_blob) > 0)",

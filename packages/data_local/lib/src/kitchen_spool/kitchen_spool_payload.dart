@@ -108,8 +108,8 @@ final class KitchenSpoolLocalPayload {
         r.requireMap('destination'),
       ),
       paperWidth: r.optionalString('paper_width', allowed: {'58mm', '80mm'}),
-      documentVersion: r.requireInt('document_version'),
-      rasterVersion: r.requireInt('raster_version'),
+      documentVersion: r.requirePositiveInt('document_version'),
+      rasterVersion: r.requirePositiveInt('raster_version'),
     );
     r.finish();
     return payload;
@@ -175,8 +175,8 @@ final class KitchenDispatchDocument {
   static KitchenDispatchDocument fromJson(Map<String, Object?> raw) {
     final r = _StrictReader(raw, 'dispatch');
     final doc = KitchenDispatchDocument(
-      serverPayloadVersion: r.requireInt('v'),
-      kind: KitchenSpoolDispatchType.fromWire(r.requireString('kind')),
+      serverPayloadVersion: r.requirePositiveInt('v'),
+      kind: _dispatchKind(r.requireString('kind')),
       orderCode: r.requireString('order_code'),
       orderType: r.requireString('order_type'),
       tableLabel: r.optionalString('table_label'),
@@ -196,6 +196,19 @@ final class KitchenDispatchDocument {
     );
     r.finish();
     return doc;
+  }
+}
+
+/// CLEANUP 3: every malformed/unknown dispatch kind is the module's TYPED
+/// payload exception — never a raw [ArgumentError] escaping the closed decode
+/// boundary, and never echoing the unknown content.
+KitchenSpoolDispatchType _dispatchKind(String wire) {
+  try {
+    return KitchenSpoolDispatchType.fromWire(wire);
+  } on ArgumentError {
+    throw const KitchenSpoolPayloadFormatException(
+      'dispatch.kind is not a supported dispatch type',
+    );
   }
 }
 
@@ -226,7 +239,10 @@ final class KitchenDispatchItem {
   static KitchenDispatchItem fromJson(Map<String, Object?> raw) {
     final r = _StrictReader(raw, 'item');
     final item = KitchenDispatchItem(
-      qty: r.requireInt('qty'),
+      // CLEANUP 7D: a dispatched line always has a POSITIVE quantity (matches
+      // the server's order contract); no arbitrary upper cap — large real
+      // restaurant quantities stay legal.
+      qty: r.requirePositiveInt('qty'),
       name: r.requireString('name'),
       note: r.optionalString('note'),
       prep: [
@@ -261,7 +277,9 @@ final class KitchenDispatchPrepComponent {
     final r = _StrictReader(raw, 'prep');
     final prep = KitchenDispatchPrepComponent(
       name: r.optionalString('name'),
-      quantity: r.optionalNum('quantity'),
+      // CLEANUP 7D: prep components follow the KITCHEN-PREP-001 contract —
+      // a count/measure that may be fractional but never zero/negative.
+      quantity: r.optionalPositiveNum('quantity'),
       unit: r.optionalString('unit'),
     );
     r.finish();
@@ -281,7 +299,7 @@ final class KitchenDispatchModifier {
   static KitchenDispatchModifier fromJson(Map<String, Object?> raw) {
     final r = _StrictReader(raw, 'modifier');
     final m = KitchenDispatchModifier(
-      qty: r.requireInt('qty'),
+      qty: r.requirePositiveInt('qty'),
       name: r.requireString('name'),
     );
     r.finish();
@@ -504,6 +522,27 @@ final class _StrictReader {
     throw KitchenSpoolPayloadFormatException(
       '$_context.$key must be an integer',
     );
+  }
+
+  int requirePositiveInt(String key) {
+    final v = requireInt(key);
+    if (v <= 0) {
+      throw KitchenSpoolPayloadFormatException(
+        '$_context.$key must be a positive integer',
+      );
+    }
+    return v;
+  }
+
+  num? optionalPositiveNum(String key) {
+    final v = optionalNum(key);
+    if (v == null) return null;
+    if (v <= 0 || !v.isFinite) {
+      throw KitchenSpoolPayloadFormatException(
+        '$_context.$key must be a positive finite number when present',
+      );
+    }
+    return v;
   }
 
   int? optionalInt(String key) {

@@ -24,8 +24,24 @@ import 'kitchen_spool_status.dart';
 /// Canonical on-disk location for the kitchen-spool database, pinned NOW so
 /// Android backup rules can exclude it by exact path (Auto Backup rules have
 /// no wildcards, so the spool lives in its OWN directory — excluding the
-/// directory also covers `-wal`/`-shm`/`-journal` side files). The deferred
-/// 001C2B production open MUST use these names; nothing opens them in 001C2A.
+/// directory also covers `-wal`/`-shm`/`-journal` side files).
+///
+/// ============================================================================
+/// KITCHEN-MODE-001C2B HARD PRECONDITION (review-approved; NON-NEGOTIABLE):
+///   1. The runtime kitchen spool MUST be opened as a DEDICATED database.
+///   2. It MUST live under [kKitchenSpoolDatabaseDirectoryName].
+///   3. It MUST use [kKitchenSpoolDatabaseFileName].
+///   4. Opening `kitchen_spool_jobs` inside a backed-up general application
+///      database is PROHIBITED (the Android backup exclusion covers ONLY
+///      this directory; a general DB would restore into a mismatched
+///      key/data state).
+///   5. The existing v4 table/store/crypto model is reused as-is — no
+///      plaintext fallback of any kind.
+///   6. The backup-contract guard test
+///      (apps/pos/test/kitchen_spool_backup_contract_test.dart) binds these
+///      constants to the Android XML resources and MUST remain green.
+/// If 001C2B cannot satisfy this, it must STOP before any runtime wiring.
+/// ============================================================================
 const String kKitchenSpoolDatabaseDirectoryName = 'restoflow_kitchen_spool';
 
 /// The database file inside [kKitchenSpoolDatabaseDirectoryName].
@@ -153,18 +169,31 @@ final class NewKitchenSpoolJob {
 }
 
 /// Normalizes a human display label so no endpoint data can leak into the
-/// plaintext column: anything resembling an IP, host:port, MAC/BT address or
-/// URL collapses to a safe generic label; control characters are stripped
-/// and the result is length-capped.
+/// plaintext column: anything resembling an IPv4/IPv6 address, host:port,
+/// MAC/BT address, URL or credentialed URL collapses to the safe generic
+/// `kitchen-printer` label; control characters are stripped and the result is
+/// length-capped. Ordinary human names ("Kitchen Printer", "Grill Station")
+/// pass through untouched.
 String? sanitizeDestinationDisplayLabel(String? label) {
   if (label == null) return null;
   final trimmed = label.trim().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
   if (trimmed.isEmpty) return null;
   final endpointish =
+      // IPv4 (with or without :port).
       RegExp(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}').hasMatch(trimmed) ||
+      // MAC / Bluetooth addresses (colon- or dash-separated hex pairs).
       RegExp(r'([0-9A-Fa-f]{2}[:\-]){3,}[0-9A-Fa-f]{2}').hasMatch(trimmed) ||
+      // CLEANUP 5 — IPv6 in every common shape: compressed (`::`), full
+      // grouped hex (2+ hextet groups), bracketed-with-port, zone index.
+      trimmed.contains('::') ||
+      RegExp(r'([0-9A-Fa-f]{1,4}:){2,}[0-9A-Fa-f]{1,4}').hasMatch(trimmed) ||
+      RegExp(r'\[[0-9A-Fa-f:.]+\]').hasMatch(trimmed) ||
+      RegExp(r'%(eth|wlan|en|lo)\w*', caseSensitive: false).hasMatch(trimmed) ||
+      // host:port (any host shape, incl. hostnames like printer.local:9100).
       RegExp(r':\d{2,5}(\D|$)').hasMatch(trimmed) ||
-      trimmed.contains('://');
+      // URLs, incl. credentialed https://user:pass@host forms.
+      trimmed.contains('://') ||
+      RegExp(r'\S+@\S+\.\S+').hasMatch(trimmed);
   if (endpointish) return 'kitchen-printer';
   return trimmed.length > 60 ? trimmed.substring(0, 60) : trimmed;
 }

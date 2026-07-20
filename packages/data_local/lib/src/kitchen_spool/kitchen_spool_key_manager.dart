@@ -34,6 +34,10 @@ final class KitchenSpoolKeyManager {
   final SecureKeyStore _store;
   final Random _random;
 
+  /// CLEANUP 6: the process-local provisioning serialization chain — each
+  /// provision waits for the previous one; failures never poison the chain.
+  Future<void> _provisionQueue = Future<void>.value();
+
   /// Whether platform secure storage is usable (fail-closed signal).
   Future<bool> isAvailable() => _store.isAvailable();
 
@@ -53,7 +57,26 @@ final class KitchenSpoolKeyManager {
   /// already exists (even a corrupted one) this throws
   /// [SecretAlreadyExistsException] — replacing a key is a destructive
   /// operation that must go through [deleteKeyDangerously] deliberately.
-  Future<void> provisionKey() async {
+  ///
+  /// CLEANUP 6 — PROCESS-LOCAL PROVISIONING SINGLE-FLIGHT: concurrent
+  /// `provisionKey()` calls on this manager are SERIALIZED (each waits for
+  /// the previous to finish before its own read-then-write), so a
+  /// read-then-write race can never store two different keys and strand
+  /// ciphertext under a replaced one — exactly one concurrent call
+  /// provisions; the rest observe the stored key and get the existing
+  /// already-exists outcome. This is honestly a PROCESS-LOCAL guarantee (per
+  /// manager/store instance); flutter_secure_storage offers no cross-process
+  /// atomic compare-and-set and none is claimed. Production provisioning
+  /// must flow through this manager (the raw adapter `write()` remains
+  /// refuse-overwrite as defence in depth).
+  Future<void> provisionKey() {
+    final task = _provisionQueue.then((_) => _provisionOnce());
+    // The queue itself must never carry a failure into the NEXT caller.
+    _provisionQueue = task.then((_) {}, onError: (Object _) {});
+    return task;
+  }
+
+  Future<void> _provisionOnce() async {
     final existing = await _readRawTolerantOfCorruption();
     if (existing != null) {
       throw SecretAlreadyExistsException(keyRef);

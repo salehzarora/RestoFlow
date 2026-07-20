@@ -56,6 +56,13 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # KITCHEN-MODE-001C2A CLEANUP 1: TEST-ONLY dependency so the Android
+  # backup-contract guard test can import the pinned kitchen-spool path
+  # constants (the single source of truth) and bind them to the backup XML
+  # resources. NOT a runtime dependency — the dormancy test proves no
+  # production source imports restoflow_data_local.
+  restoflow_data_local:
+    path: ../../packages/data_local
 
 flutter:
   # Bundles the Material Icons font so `Icon(Icons.*)` renders glyphs (not the
