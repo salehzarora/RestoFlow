@@ -3,7 +3,7 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../spool/pos_kitchen_spool_runtime.dart';
+import '../spool/pos_kitchen_spool_composition.dart';
 import '../state/order_sync_controller.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/ready_notifications_controller.dart';
