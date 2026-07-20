@@ -17,9 +17,24 @@ import '../state/pos_printer_transport.dart';
 /// `kitchen_ticket`, whose `connection_type` matches the locally selected
 /// transport kind, with paper width EXACTLY `80mm`. Endpoints (host/port/BT
 /// address) live ONLY inside the encrypted payload; the plaintext columns
-/// get a sanitized label and a NON-SECRET SHA-256 routing fingerprint
-/// (documented: the fingerprint is a routing identifier, not an endpoint-
-/// confidentiality mechanism, and is never logged next to endpoint hints).
+/// get a sanitized label and a NON-SECRET SHA-256 routing fingerprint.
+///
+/// ACCEPTED LIMITATION — printer identity (CORRECTION-001, reviewed): the
+/// current assignment contract exposes NO stable local↔server per-printer
+/// identity, so this binding is attribute-based, NOT a strong identity
+/// binding. It is accepted for the ONE-kitchen-printer pilot; multiple
+/// same-transport kitchen printers on one branch remain ambiguous until a
+/// later additive server/client contract (001C3+) exposes a stable
+/// assignment id. Do not claim strong identity binding anywhere.
+///
+/// ACCEPTED LIMITATION — routing fingerprint (CORRECTION-001, reviewed):
+/// the plaintext SHA-256 fingerprint is a NON-SECRET routing identifier,
+/// not a confidentiality boundary — LAN endpoints have tiny dictionaries,
+/// so the input is recoverable by brute force. That is accepted for the
+/// backup-excluded on-device database: the endpoints themselves remain ONLY
+/// inside the AES-GCM payload, and the fingerprint is never logged next to
+/// endpoint hints. No HMAC/keyed variant here (would add key-lifecycle
+/// complexity without a real boundary gain).
 sealed class KitchenDestinationResolution {
   const KitchenDestinationResolution();
 }
