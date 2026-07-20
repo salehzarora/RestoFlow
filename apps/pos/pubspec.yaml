@@ -44,9 +44,29 @@ dependencies:
   # removed). permission_handler: the Android 12+ runtime BLUETOOTH_CONNECT
   # request (connect only — the app never scans; bonded devices only).
   permission_handler: ^11.3.1
+  # KITCHEN-MODE-001C2A: the generic SecureKeyStore contract + SecretValue +
+  # fail-closed exception types the kitchen-spool key adapter implements.
+  restoflow_core:
+    path: ../../packages/core
+  # KITCHEN-MODE-001C2A: Android Keystore-backed storage for the kitchen-spool
+  # AES key (same plugin/default options family as the device-session store in
+  # feature_auth). DORMANT: nothing in production startup instantiates the
+  # adapter yet; web fails closed (no localStorage fallback).
+  flutter_secure_storage: '>=9.0.0 <10.0.0'
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # KITCHEN-MODE-001C2A CI fix: platform-independent path resolution for the
+  # backup-contract and dormancy source scans (CI runs `flutter test
+  # apps/pos` from the repository root; local runs start inside the app).
+  path: '>=1.9.0 <2.0.0'
+  # KITCHEN-MODE-001C2A CLEANUP 1: TEST-ONLY dependency so the Android
+  # backup-contract guard test can import the pinned kitchen-spool path
+  # constants (the single source of truth) and bind them to the backup XML
+  # resources. NOT a runtime dependency — the dormancy test proves no
+  # production source imports restoflow_data_local.
+  restoflow_data_local:
+    path: ../../packages/data_local
 
 flutter:
   # Bundles the Material Icons font so `Icon(Icons.*)` renders glyphs (not the
