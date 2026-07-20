@@ -336,6 +336,7 @@ class _ScriptedBtTester implements BluetoothPrinterTester {
   Future<pp.PrintResult> testPrint(
     BluetoothPrinterConfig config, {
     String? deviceLabel,
+    pp.PrintDocument? document,
   }) async {
     final result = results[calls < results.length ? calls : results.length - 1];
     calls++;

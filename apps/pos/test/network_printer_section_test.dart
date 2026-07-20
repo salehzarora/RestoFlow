@@ -32,6 +32,7 @@ class _FakeTester implements NetworkPrinterTester {
   Future<pp.PrintResult> testPrint(
     PosNetworkPrinterConfig config, {
     String? deviceLabel,
+    pp.PrintDocument? document,
   }) async {
     calls++;
     lastConfig = config;

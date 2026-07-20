@@ -22,10 +22,14 @@ enum PrinterConnectionType {
   };
 }
 
-/// `printer_devices.role` (RF-150 CHECK: receipt | kitchen).
+/// `printer_devices.role` (RF-150 + KITCHEN-MODE-001B CHECK: receipt |
+/// kitchen | both). `both` marks ONE physical printer as eligible for BOTH
+/// purposes (customer receipts + kitchen tickets) — never a duplicate row.
+/// Unknown wire values still parse to null (rows are skipped, never crash).
 enum PrinterRole {
   receipt('receipt'),
-  kitchen('kitchen');
+  kitchen('kitchen'),
+  both('both');
 
   const PrinterRole(this.wire);
   final String wire;
@@ -33,8 +37,15 @@ enum PrinterRole {
   static PrinterRole? fromWire(String? wire) => switch (wire) {
     'receipt' => PrinterRole.receipt,
     'kitchen' => PrinterRole.kitchen,
+    'both' => PrinterRole.both,
     _ => null,
   };
+
+  /// Whether this printer may print customer receipts.
+  bool get servesCustomerReceipts => this != PrinterRole.kitchen;
+
+  /// Whether this printer may print kitchen tickets.
+  bool get servesKitchenTickets => this != PrinterRole.receipt;
 }
 
 /// `printer_devices.paper_width` (RF-150 CHECK: 58mm | 80mm; 80mm default,

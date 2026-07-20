@@ -175,16 +175,25 @@ const Map<String, AuditActionSpec> kAuditActionRegistry = {
   ),
   'sync.operation_conflict': AuditActionSpec(category: 'sync'),
   'sync.operation_rejected': AuditActionSpec(category: 'sync'),
-  // --- INTENTIONAL 'other': printer.* config is deferred to a future
-  // printer-domain ticket (the printer domain is out of scope here). Documented,
-  // exempt from the not-Other guard — NOT a silent fall-through.
-  'printer.printer_device.updated': AuditActionSpec(
-    category: 'other',
-    intentionalOther: true,
+  // --- KITCHEN-MODE-001B: printer configuration is SETTINGS work with real
+  // AR/HE/EN titles (the former intentional-'other' deferral is resolved).
+  // The server classifies printer.% as 'settings' too (audit_category).
+  'printer.printer_device.created': AuditActionSpec(
+    category: 'settings',
+    hasTitle: true,
   ),
+  'printer.printer_device.updated': AuditActionSpec(
+    category: 'settings',
+    hasTitle: true,
+  ),
+  'printer.printer_device.deleted': AuditActionSpec(
+    category: 'settings',
+    hasTitle: true,
+  ),
+  'printer.printer_device.upsert_denied': AuditActionSpec(category: 'settings'),
   'printer.printer_route.updated': AuditActionSpec(
-    category: 'other',
-    intentionalOther: true,
+    category: 'settings',
+    hasTitle: true,
   ),
 };
 

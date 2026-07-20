@@ -76,6 +76,7 @@ class _FakeBtTester implements BluetoothPrinterTester {
   Future<pp.PrintResult> testPrint(
     PosBluetoothPrinterConfig config, {
     String? deviceLabel,
+    pp.PrintDocument? document,
   }) async {
     calls++;
     lastConfig = config;
@@ -91,6 +92,7 @@ class _FlakyBtTester implements BluetoothPrinterTester {
   Future<pp.PrintResult> testPrint(
     PosBluetoothPrinterConfig config, {
     String? deviceLabel,
+    pp.PrintDocument? document,
   }) async {
     calls++;
     return calls == 1

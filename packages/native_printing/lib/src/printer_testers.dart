@@ -12,9 +12,14 @@ import 'printer_config.dart';
 /// real socket. Nothing here computes money (DECISION D-007/D-008); the test
 /// document is a fixed English diagnostic.
 abstract class NetworkPrinterTester {
+  /// Sends a diagnostic document to [config]. With no [document] the classic
+  /// money-free network diagnostic is used; KITCHEN-MODE-001B callers pass the
+  /// (equally money-free) kitchen-ticket test document — the tester stays a
+  /// pure TRANSPORT seam and never composes content itself.
   Future<pp.PrintResult> testPrint(
     NetworkPrinterConfig config, {
     String? deviceLabel,
+    pp.PrintDocument? document,
   });
 }
 
@@ -35,12 +40,15 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
   Future<pp.PrintResult> testPrint(
     NetworkPrinterConfig config, {
     String? deviceLabel,
+    pp.PrintDocument? document,
   }) async {
-    final document = pp.escPosNetworkTestDocument(
-      printerName: config.name,
-      deviceLabel: deviceLabel,
-    );
-    final bytes = adapter.encode(document, profile);
+    final doc =
+        document ??
+        pp.escPosNetworkTestDocument(
+          printerName: config.name,
+          deviceLabel: deviceLabel,
+        );
+    final bytes = adapter.encode(doc, profile);
     final transport = pp.NetworkTcpPrintTransport(
       host: config.host,
       port: config.port,
@@ -64,9 +72,11 @@ final networkPrinterTesterProvider = Provider<NetworkPrinterTester>(
 /// for an 80mm profile, and delivers the bytes over the Bluetooth transport.
 /// Behind an interface so widget tests inject a fake and never open Bluetooth.
 abstract class BluetoothPrinterTester {
+  /// Sends a diagnostic document to [config] (see [NetworkPrinterTester]).
   Future<pp.PrintResult> testPrint(
     BluetoothPrinterConfig config, {
     String? deviceLabel,
+    pp.PrintDocument? document,
   });
 }
 
@@ -87,12 +97,15 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
   Future<pp.PrintResult> testPrint(
     BluetoothPrinterConfig config, {
     String? deviceLabel,
+    pp.PrintDocument? document,
   }) async {
-    final document = pp.escPosNetworkTestDocument(
-      printerName: config.name,
-      deviceLabel: deviceLabel,
-    );
-    final bytes = adapter.encode(document, profile);
+    final doc =
+        document ??
+        pp.escPosNetworkTestDocument(
+          printerName: config.name,
+          deviceLabel: deviceLabel,
+        );
+    final bytes = adapter.encode(doc, profile);
     final transport = BluetoothClassicPrintTransport(
       connector: connector,
       address: config.address,

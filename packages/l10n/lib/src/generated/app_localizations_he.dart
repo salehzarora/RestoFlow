@@ -4595,4 +4595,106 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get activityLogDeniedPermission => 'אין הרשאה לתפקיד זה';
+
+  @override
+  String get printersRoleBoth => 'שניהם';
+
+  @override
+  String get printersPurposeBothHint =>
+      'מדפסת אחת מדפיסה קבלות ללקוחות וכרטיסי מטבח';
+
+  @override
+  String get printersReadinessTitle => 'מוכנות מדפסות';
+
+  @override
+  String get printersReadinessServerOnly =>
+      'רשומות שרת בלבד — בחירת המכשיר והדפסה בפועל אינן מאומתות כאן';
+
+  @override
+  String get printersReadinessMissing => 'חסרה';
+
+  @override
+  String get printers80mmReady => 'מוכנה 80מ״מ';
+
+  @override
+  String get printers80mmRequired => 'נדרש 80מ״מ';
+
+  @override
+  String get printersCustomerReceiptPrinter => 'מדפסת קבלות ללקוחות';
+
+  @override
+  String get printersKitchenTicketPrinter => 'מדפסת כרטיסי מטבח';
+
+  @override
+  String get printersSameForBoth => 'אותה מדפסת יכולה לשרת את שני היעדים';
+
+  @override
+  String get printersKitchenPreparationTitle => 'הכנת מטבח במדפסת בלבד';
+
+  @override
+  String get printersPrinterOnlyNotYetAvailable =>
+      'הכנת מטבח במדפסת בלבד עדיין אינה זמינה עד להשלמת מוכנות המכשירים.';
+
+  @override
+  String get activityLogTitlePrinterCreated => 'נוספה מדפסת';
+
+  @override
+  String get activityLogTitlePrinterUpdated => 'המדפסת עודכנה';
+
+  @override
+  String get activityLogTitlePrinterDeleted => 'המדפסת הוסרה';
+
+  @override
+  String get activityLogTitlePrinterRouteUpdated => 'ניתוב המדפסת שונה';
+
+  @override
+  String get activityLogFieldPaperWidth => 'רוחב נייר';
+
+  @override
+  String get activityLogFieldEnabled => 'מופעלת';
+
+  @override
+  String get activityLogFieldConnectionType => 'חיבור';
+
+  @override
+  String get posPrinterPurposeHeading => 'מה מדפיסה המדפסת הזו?';
+
+  @override
+  String get posPrinterPurposeCustomer => 'קבלות ללקוחות';
+
+  @override
+  String get posPrinterPurposeKitchen => 'כרטיסי מטבח';
+
+  @override
+  String get posKitchenPrinterPreparationTitle => 'הכנה בלבד';
+
+  @override
+  String get posKitchenPrinterPreparationBody =>
+      'כרטיסי מטבח עדיין אינם מודפסים אוטומטית. אפשר להכין ולבדוק את מדפסת המטבח כעת; הפעלת מטבח במדפסת בלבד עדיין אינה זמינה.';
+
+  @override
+  String get posKitchenPrinterUseCustomerAction =>
+      'השתמש במדפסת הלקוחות לכרטיסי מטבח';
+
+  @override
+  String get posKitchenPrinterCopiedSnack =>
+      'מדפסת הלקוחות הועתקה למשבצת המטבח';
+
+  @override
+  String get posKitchenPrinterNothingToCopySnack => 'טרם הוגדרה מדפסת לקוחות';
+
+  @override
+  String get posKitchenTestBanner => '*** בדיקה ***';
+
+  @override
+  String get posKitchenTestTitle => 'בדיקת כרטיס מטבח';
+
+  @override
+  String get posKitchenTestSampleItem => '1 x פריט לדוגמה';
+
+  @override
+  String get posKitchenTestSampleModifier => '+ תוספת לדוגמה';
+
+  @override
+  String get posKitchenTestSampleNote => 'הערה: הערת דוגמה';
 }

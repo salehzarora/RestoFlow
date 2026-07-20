@@ -118,7 +118,9 @@ select is(
   (select array_agg(distinct k order by k)
      from _res, jsonb_array_elements(r -> 'printers') e, jsonb_object_keys(e) k
     where label = 'pos')::text,
-  '{connection_type,display_name,id,is_enabled,paper_width,role}',
+  -- KITCHEN-MODE-001B added the ADDITIVE configured_role + supported_purposes
+  -- keys; connection_config is still NEVER in the device payload.
+  '{configured_role,connection_type,display_name,id,is_enabled,paper_width,role,supported_purposes}',
   'printer rows carry ONLY the whitelisted keys (never connection_config)');                                    -- 15
 select ok(
   (select position('connection_config' in r::text) = 0
