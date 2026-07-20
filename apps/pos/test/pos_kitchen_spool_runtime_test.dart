@@ -13,6 +13,8 @@ import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
+import 'package:restoflow_pos/src/spool/kitchen_destination_resolver.dart';
+import 'package:restoflow_pos/src/spool/kitchen_dispatch_drain_coordinator.dart';
 import 'package:restoflow_pos/src/spool/pending_kitchen_ack_coordinator.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_runtime.dart';
@@ -149,10 +151,15 @@ void main() {
     documentsDirectoryProvider: () async => tempDir,
   );
 
+  var localJobCounter = 0;
+
   PosKitchenSpoolRuntime runtime({
     PosKitchenSpoolPlatform platform = native,
     DeviceContext? Function()? deviceContext,
     PosSecureKitchenModeCache? modeCache,
+    Future<KitchenModeResult> Function()? fetchMode,
+    Future<KitchenDestinationResolution> Function()? destinationResolver,
+    bool wireDrain = false,
   }) => PosKitchenSpoolRuntime(
     platform: platform,
     deviceContext: deviceContext ?? () => _context,
@@ -167,6 +174,15 @@ void main() {
       secretStore: secretStore,
     ),
     databaseFactoryBuilder: factory,
+    pullRepository: wireDrain
+        ? SupabaseKitchenDispatchPullRepository(
+            transport: transport,
+            secretStore: secretStore,
+          )
+        : null,
+    fetchMode: fetchMode,
+    destinationResolver: destinationResolver,
+    localJobIdGenerator: wireDrain ? () => 'rt-${++localJobCounter}' : null,
     modeCache: modeCache,
     keyStore: FlutterSecureKitchenSpoolKeyStore(
       storage: secureStorage,
@@ -339,6 +355,7 @@ void main() {
       final cache = PosSecureKitchenModeCache(
         storage: secureStorage,
         platform: native,
+        now: () => now,
       );
       final report = await runtime(modeCache: cache).onStartup();
       expect(report.detail, 'kds_no_spool_footprint');
@@ -366,6 +383,7 @@ void main() {
       final cache = PosSecureKitchenModeCache(
         storage: secureStorage,
         platform: native,
+        now: () => now,
       );
       await cache.write(
         KitchenModeCacheRecord(
@@ -507,5 +525,186 @@ void main() {
         expect((await rt.onResume()).detail, 'kds_no_spool_footprint');
       },
     );
+  });
+
+  group('CORRECTION-001: trusted printer-only drain path (test-injected)', () {
+    Future<KitchenModeResult> trustedMode() async =>
+        KitchenModePrinterOnlyWithRevision(revision: 3, verifiedAt: now);
+
+    Map<String, Object?> pageOf(List<Map<String, Object?>> rows) => {
+      'ok': true,
+      'dispatches': rows,
+      'has_more': false,
+    };
+
+    Map<String, Object?> dispatchRow(String id) => {
+      'id': id,
+      'dispatch_type': 'initial_order',
+      'order_id': 'order-$id',
+      'payload_version': 1,
+      'payload': {
+        'v': 1,
+        'kind': 'initial_order',
+        'order_code': '#000042',
+        'order_type': 'dine_in',
+        'items': [
+          {'qty': 1, 'name': 'Burger', 'modifiers': <Object?>[]},
+        ],
+      },
+      'created_at': '2026-07-20T10:00:00Z',
+    };
+
+    const resolved = ResolvedKitchenDestination(
+      destination: NetworkKitchenDestination(host: '10.0.0.9', port: 9100),
+      fingerprint: 'fp-rt',
+      displayLabel: 'Kitchen',
+      transportKind: 'network',
+      paperWidth: '80mm',
+    );
+
+    test(
+      'an injected trusted revision executes the FULL dormant chain: '
+      'provision key (zero rows) -> pull -> durable import -> ack -> cursor',
+      () async {
+        transport.enqueue(pageOf([dispatchRow('d-1')]));
+        transport.enqueue({'ok': true}); // ack d-1
+        final cache = PosSecureKitchenModeCache(
+          storage: secureStorage,
+          platform: native,
+          now: () => now,
+        );
+        final rt = runtime(
+          fetchMode: trustedMode,
+          destinationResolver: () async => resolved,
+          wireDrain: true,
+          modeCache: cache,
+        );
+        final report = await rt.onStartup();
+        expect(report, isA<KitchenSpoolRunDrained>());
+        final drained = report as KitchenSpoolRunDrained;
+        expect(drained.drain.stoppedReason, KitchenDrainStopReason.complete);
+        expect(drained.drain.rowsImported, 1);
+        expect(drained.drain.acknowledgementsSucceeded, 1);
+        await rt.dispose();
+
+        // The dedicated spool now exists with the durable acked row, the key
+        // was provisioned (zero rows at first run), and the TRUSTED revision
+        // is cached.
+        final verifyDb = await factory().open();
+        final verifyStore = DriftKitchenSpoolStore(verifyDb);
+        final row = (await verifyStore.findByDispatchId('d-1'))!;
+        expect(row.status, KitchenSpoolJobStatus.imported);
+        expect(row.serverAcknowledgedAt, isNotNull);
+        await verifyDb.close();
+        expect(
+          secureStorage.values.keys,
+          contains('restoflow.pos.kitchen_spool.ref:kitchen-spool-aes-key-v1'),
+        );
+        final record = await cache.read(
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+          deviceId: 'dev-1',
+          sessionFingerprint: sessionFingerprint('tok-secret-1'),
+        );
+        expect(record!.mode, 'printer_only');
+        expect(record.modeRevision, 3);
+      },
+    );
+
+    test('readiness_required stops the drain TYPED and triggers no readiness '
+        'reporting call', () async {
+      transport.enqueue({'ok': false, 'error': 'readiness_required'});
+      final rt = runtime(
+        fetchMode: trustedMode,
+        destinationResolver: () async => resolved,
+        wireDrain: true,
+      );
+      final report = await rt.onStartup();
+      final drained = report as KitchenSpoolRunDrained;
+      expect(
+        drained.drain.stoppedReason,
+        KitchenDrainStopReason.readinessRequired,
+      );
+      expect(transport.calls, hasLength(1));
+      expect(transport.calls.single.$1, 'pull_kitchen_print_dispatches');
+      await rt.dispose();
+    });
+
+    test('trusted mode + missing key OVER ROWS stays BLOCKED: no pull, no key '
+        'regeneration, rows preserved', () async {
+      final db = await factory().open();
+      await DriftKitchenSpoolStore(db).insertImportedJob(_job('9'));
+      await db.close();
+      final rt = runtime(
+        fetchMode: trustedMode,
+        destinationResolver: () async => resolved,
+        wireDrain: true,
+      );
+      final report = await rt.onStartup();
+      expect(report, isA<KitchenSpoolRunBlocked>());
+      expect(report.detail, 'KitchenSpoolKeyMissingWithRows');
+      expect(secureStorage.values, isEmpty, reason: 'never regenerated');
+      expect(transport.calls, isEmpty, reason: 'no pull while blocked');
+      await rt.dispose();
+    });
+
+    test('an UNDETERMINABLE destination fails closed BEFORE any pull (never '
+        'imports rows as blocked on a guess)', () async {
+      final rt = runtime(
+        fetchMode: trustedMode,
+        destinationResolver: () async =>
+            throw const KitchenSpoolDestinationUnresolvableException(),
+        wireDrain: true,
+      );
+      final report = await rt.onStartup();
+      expect(report, isA<KitchenSpoolRunBlocked>());
+      expect(report.detail, 'kitchen_destination_unresolvable');
+      expect(transport.calls, isEmpty);
+      await rt.dispose();
+    });
+
+    test('trusted mode without the drain wiring stays a typed skip (never a '
+        'partial drain)', () async {
+      final report = await runtime(fetchMode: trustedMode).onStartup();
+      expect(report.detail, 'real_backend_not_wired');
+      expect(transport.calls, isEmpty);
+    });
+  });
+
+  group('CORRECTION-001: lifecycle async safety', () {
+    test('an UNEXPECTED error during startup becomes a typed redacted Blocked '
+        'report (no unhandled async error, no raw message), and the guard '
+        'resets for the next run', () async {
+      var calls = 0;
+      final rt = runtime(
+        fetchMode: () async {
+          calls++;
+          if (calls == 1) {
+            throw StateError('SECRET-ENDPOINT-10.0.0.9-SHOULD-NOT-LEAK');
+          }
+          return KitchenModeVerifiedKds(verifiedAt: now);
+        },
+      );
+      final report = await rt.onStartup();
+      expect(report, isA<KitchenSpoolRunBlocked>());
+      expect(report.detail, 'unexpected_failure');
+      expect(report.detail, isNot(contains('SECRET')));
+      expect(report.detail, isNot(contains('10.0.0.9')));
+      // The re-entry guard reset: the following invocation runs normally.
+      expect((await rt.onResume()).detail, 'kds_no_spool_footprint');
+    });
+
+    test('an UNEXPECTED error during resume is equally contained', () async {
+      final rt = runtime(fetchMode: () async => throw ArgumentError('boom'));
+      final report = await rt.onResume();
+      expect(report, isA<KitchenSpoolRunBlocked>());
+      expect(report.detail, 'unexpected_failure');
+      expect(
+        (await rt.onResume()).detail,
+        'unexpected_failure',
+        reason: 'guard reset — the error path is repeatable, not latched',
+      );
+    });
   });
 }

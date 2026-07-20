@@ -94,7 +94,13 @@ void main() {
 
     setUp(() {
       fake = _FakeSecureStorage();
-      cache = PosSecureKitchenModeCache(storage: fake, platform: native);
+      // Deterministic clock pinned to the record time: the CORRECTION-001
+      // future-timestamp guard must never depend on the wall clock here.
+      cache = PosSecureKitchenModeCache(
+        storage: fake,
+        platform: native,
+        now: () => verifiedAt,
+      );
     });
 
     test('write/read round-trips under the kitchen-spool namespace', () async {
@@ -224,4 +230,128 @@ void main() {
       expect(fake.readCalls, 0);
     });
   });
+
+  group(
+    'CORRECTION-001: clock handling (future verifiedAt is never fresh)',
+    () {
+      KitchenModeCacheRecord at(DateTime t) => KitchenModeCacheRecord(
+        organizationId: 'org-1',
+        restaurantId: 'rest-1',
+        branchId: 'branch-1',
+        deviceId: 'dev-1',
+        sessionFingerprint: 'fp-1',
+        mode: 'kds',
+        verifiedAt: t,
+      );
+
+      test('exact-boundary freshness ladder', () {
+        final now = DateTime.utc(2026, 7, 20, 12);
+        // verifiedAt == now.
+        expect(
+          kitchenModeCacheFreshness(at(now), now),
+          KitchenModeCacheFreshness.fresh,
+        );
+        // Slightly in the future WITHIN the deterministic tolerance (1 min).
+        expect(
+          kitchenModeCacheFreshness(
+            at(now.add(const Duration(seconds: 30))),
+            now,
+          ),
+          KitchenModeCacheFreshness.fresh,
+        );
+        expect(
+          kitchenModeCacheFreshness(
+            at(now.add(kKitchenModeCacheClockSkewTolerance)),
+            now,
+          ),
+          KitchenModeCacheFreshness.fresh,
+        );
+        // Beyond tolerance: SUSPECT — expired, never fresh trust.
+        expect(
+          kitchenModeCacheFreshness(
+            at(
+              now.add(
+                kKitchenModeCacheClockSkewTolerance +
+                    const Duration(seconds: 1),
+              ),
+            ),
+            now,
+          ),
+          KitchenModeCacheFreshness.expired,
+        );
+        expect(
+          kitchenModeCacheFreshness(
+            at(now.add(const Duration(days: 400))),
+            now,
+          ),
+          KitchenModeCacheFreshness.expired,
+        );
+        // Exactly 10 minutes old -> still fresh; just over -> stale.
+        expect(
+          kitchenModeCacheFreshness(
+            at(now.subtract(const Duration(minutes: 10))),
+            now,
+          ),
+          KitchenModeCacheFreshness.fresh,
+        );
+        expect(
+          kitchenModeCacheFreshness(
+            at(now.subtract(const Duration(minutes: 10, seconds: 1))),
+            now,
+          ),
+          KitchenModeCacheFreshness.stale,
+        );
+        // Exactly 2 hours -> stale; just over -> expired.
+        expect(
+          kitchenModeCacheFreshness(
+            at(now.subtract(const Duration(hours: 2))),
+            now,
+          ),
+          KitchenModeCacheFreshness.stale,
+        );
+        expect(
+          kitchenModeCacheFreshness(
+            at(now.subtract(const Duration(hours: 2, seconds: 1))),
+            now,
+          ),
+          KitchenModeCacheFreshness.expired,
+        );
+      });
+
+      test('read() INVALIDATES a record verified beyond the future tolerance '
+          '(suspect record: deleted like corruption, never trusted)', () async {
+        final fixedNow = DateTime.utc(2026, 7, 20, 12);
+        final fake = _FakeSecureStorage();
+        final cache = PosSecureKitchenModeCache(
+          storage: fake,
+          platform: native,
+          now: () => fixedNow,
+        );
+        await cache.write(at(fixedNow.add(const Duration(minutes: 5))));
+        expect(await readScoped(cache), isNull);
+        expect(fake.values, isEmpty, reason: 'suspect record deleted');
+      });
+
+      test(
+        'read() tolerates a future verifiedAt WITHIN the tolerance',
+        () async {
+          final fixedNow = DateTime.utc(2026, 7, 20, 12);
+          final fake = _FakeSecureStorage();
+          final cache = PosSecureKitchenModeCache(
+            storage: fake,
+            platform: native,
+            now: () => fixedNow,
+          );
+          await cache.write(at(fixedNow.add(const Duration(seconds: 30))));
+          final record = await readScoped(cache);
+          expect(record, isNotNull);
+          // Even so, freshness treats it as no fresher than NOW-equivalent.
+          expect(
+            kitchenModeCacheFreshness(record!, fixedNow),
+            KitchenModeCacheFreshness.fresh,
+          );
+        },
+      );
+    },
+  );
 }
