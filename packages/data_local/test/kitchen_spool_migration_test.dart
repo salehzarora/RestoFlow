@@ -11,12 +11,16 @@ import 'package:test/test.dart';
 
 import 'support/source_boundary.dart';
 
-/// KITCHEN-MODE-001C2A §11 — LocalDatabase v4 migration safety.
+/// KITCHEN-MODE-001C2B — general LocalDatabase v5 migration safety.
 ///
-/// The harness matches the house pattern (menu_migration_test.dart): build a
-/// raw sqlite3 database with hand-written minimal old-version tables + seeded
-/// rows, stamp `PRAGMA user_version`, then open [LocalDatabase] to run
-/// `onUpgrade`, and assert additive creation + data survival.
+/// v5 moves the kitchen spool to the DEDICATED [KitchenSpoolDatabase]: the
+/// general database drops its (only-ever-empty) `kitchen_spool_jobs` copy
+/// behind a FAIL-CLOSED guard — any unexpected spool row ABORTS the
+/// migration without advancing the version or deleting anything.
+///
+/// Harness = the house pattern: raw sqlite3 old-version fixtures with seeded
+/// rows + `PRAGMA user_version`, then open [LocalDatabase] to run
+/// `onUpgrade`.
 void main() {
   const expectedTables = {
     'outbox_operations',
@@ -28,22 +32,12 @@ void main() {
     'modifiers',
     'modifier_options',
     'print_jobs',
-    'kitchen_spool_jobs',
-  };
-
-  const expectedSpoolIndexes = {
-    'kitchen_spool_runnable_idx',
-    'kitchen_spool_destination_idx',
-    'kitchen_spool_unresolved_idx',
-    'kitchen_spool_pending_ack_idx',
-    'kitchen_spool_retention_idx',
-    'kitchen_spool_order_sequence_idx',
   };
 
   late Directory tempDir;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('kmc2a_migration');
+    tempDir = await Directory.systemTemp.createTemp('kmc2b_migration');
   });
 
   tearDown(() async {
@@ -59,15 +53,6 @@ void main() {
           .map((r) => r.data['name'] as String)
           .toSet();
 
-  Future<Set<String>> indexNames(LocalDatabase db) async =>
-      (await db
-              .customSelect(
-                "SELECT name FROM sqlite_master WHERE type = 'index'",
-              )
-              .get())
-          .map((r) => r.data['name'] as String)
-          .toSet();
-
   Future<int> userVersion(LocalDatabase db) async =>
       (await db.customSelect('PRAGMA user_version').getSingle())
               .data
@@ -75,74 +60,44 @@ void main() {
               .first
           as int;
 
-  Future<Set<String>> spoolColumns(LocalDatabase db) async =>
-      (await db.customSelect("PRAGMA table_info('kitchen_spool_jobs')").get())
-          .map((r) => r.data['name'] as String)
-          .toSet();
+  void createLegacyCoreTables(raw_sqlite.Database raw) {
+    raw
+      ..execute('CREATE TABLE outbox_operations (id TEXT NOT NULL PRIMARY KEY)')
+      ..execute(
+        'CREATE TABLE processed_pull_log (id TEXT NOT NULL PRIMARY KEY)',
+      );
+  }
 
-  const expectedSpoolColumns = {
-    'local_job_id',
-    'dispatch_id',
-    'organization_id',
-    'restaurant_id',
-    'branch_id',
-    'device_id',
-    'order_id',
-    'service_round_id',
-    'dispatch_type',
-    'status',
-    'encrypted_payload_blob',
-    'encryption_version',
-    'destination_fingerprint',
-    'destination_display_label',
-    'transport_kind',
-    'paper_width',
-    'payload_version',
-    'document_version',
-    'raster_version',
-    'attempt_count',
-    'next_attempt_at',
-    'last_attempt_at',
-    'last_error_code',
-    'server_claim_expires_at',
-    'pending_server_ack_status',
-    'server_ack_attempt_count',
-    'server_ack_next_attempt_at',
-    'server_ack_last_error_code',
-    'created_at',
-    'updated_at',
-    'transport_accepted_at',
-    'server_acknowledged_at',
-    'reviewed_at',
-    'reprint_of_local_job_id',
-    'superseded_by_dispatch_id',
-  };
+  void createLegacyMenuTables(raw_sqlite.Database raw) {
+    raw
+      ..execute('CREATE TABLE menu_categories (id TEXT NOT NULL PRIMARY KEY)')
+      ..execute('CREATE TABLE menu_items (id TEXT NOT NULL PRIMARY KEY)')
+      ..execute('CREATE TABLE item_sizes (id TEXT NOT NULL PRIMARY KEY)')
+      ..execute('CREATE TABLE item_variants (id TEXT NOT NULL PRIMARY KEY)')
+      ..execute('CREATE TABLE modifiers (id TEXT NOT NULL PRIMARY KEY)')
+      ..execute('CREATE TABLE modifier_options (id TEXT NOT NULL PRIMARY KEY)');
+  }
 
   test(
-    'fresh database creates the full v4 schema (tables + indexes)',
+    'fresh database creates the v5 schema WITHOUT kitchen_spool_jobs',
     () async {
       final db = LocalDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       await db.customSelect('SELECT 1').get();
-      expect(await tableNames(db), containsAll(expectedTables));
-      expect(await indexNames(db), containsAll(expectedSpoolIndexes));
-      expect(await spoolColumns(db), expectedSpoolColumns);
-      expect(await userVersion(db), 4);
+      final tables = await tableNames(db);
+      expect(tables, containsAll(expectedTables));
+      expect(tables, isNot(contains('kitchen_spool_jobs')));
+      expect(await userVersion(db), 5);
     },
   );
 
   test(
-    'v1 -> v4 adds menu + print_jobs + kitchen_spool_jobs; RF-018 data survives',
+    'v1 -> v5 adds menu + print_jobs, never the spool; data survives',
     () async {
       final dbPath = '${tempDir.path}/v1.sqlite';
       final raw = raw_sqlite.sqlite3.open(dbPath);
+      createLegacyCoreTables(raw);
       raw
-        ..execute(
-          'CREATE TABLE outbox_operations (id TEXT NOT NULL PRIMARY KEY)',
-        )
-        ..execute(
-          'CREATE TABLE processed_pull_log (id TEXT NOT NULL PRIMARY KEY)',
-        )
         ..execute('INSERT INTO outbox_operations (id) VALUES (?)', ['keep-v1'])
         ..execute('PRAGMA user_version = 1')
         ..dispose();
@@ -151,36 +106,25 @@ void main() {
       addTearDown(db.close);
       await db.customSelect('SELECT 1').get();
 
-      expect(await tableNames(db), containsAll(expectedTables));
-      expect(await indexNames(db), containsAll(expectedSpoolIndexes));
+      final tables = await tableNames(db);
+      expect(tables, containsAll(expectedTables));
+      expect(tables, isNot(contains('kitchen_spool_jobs')));
       final kept = await db
           .customSelect("SELECT id FROM outbox_operations WHERE id = 'keep-v1'")
           .get();
       expect(kept, hasLength(1), reason: 'no destructive recreation');
-      expect(await userVersion(db), 4);
+      expect(await userVersion(db), 5);
     },
   );
 
   test(
-    'v2 -> v4 adds print_jobs + kitchen_spool_jobs; menu data survives',
+    'v2 -> v5 adds print_jobs; menu data survives; no spool table',
     () async {
       final dbPath = '${tempDir.path}/v2.sqlite';
       final raw = raw_sqlite.sqlite3.open(dbPath);
+      createLegacyCoreTables(raw);
+      createLegacyMenuTables(raw);
       raw
-        ..execute(
-          'CREATE TABLE outbox_operations (id TEXT NOT NULL PRIMARY KEY)',
-        )
-        ..execute(
-          'CREATE TABLE processed_pull_log (id TEXT NOT NULL PRIMARY KEY)',
-        )
-        ..execute('CREATE TABLE menu_categories (id TEXT NOT NULL PRIMARY KEY)')
-        ..execute('CREATE TABLE menu_items (id TEXT NOT NULL PRIMARY KEY)')
-        ..execute('CREATE TABLE item_sizes (id TEXT NOT NULL PRIMARY KEY)')
-        ..execute('CREATE TABLE item_variants (id TEXT NOT NULL PRIMARY KEY)')
-        ..execute('CREATE TABLE modifiers (id TEXT NOT NULL PRIMARY KEY)')
-        ..execute(
-          'CREATE TABLE modifier_options (id TEXT NOT NULL PRIMARY KEY)',
-        )
         ..execute('INSERT INTO menu_items (id) VALUES (?)', ['menu-keep'])
         ..execute('PRAGMA user_version = 2')
         ..dispose();
@@ -189,186 +133,138 @@ void main() {
       addTearDown(db.close);
       await db.customSelect('SELECT 1').get();
 
-      expect(await tableNames(db), containsAll(expectedTables));
+      final tables = await tableNames(db);
+      expect(tables, containsAll(expectedTables));
+      expect(tables, isNot(contains('kitchen_spool_jobs')));
       final kept = await db
           .customSelect("SELECT id FROM menu_items WHERE id = 'menu-keep'")
           .get();
       expect(kept, hasLength(1));
-      expect(await userVersion(db), 4);
+      expect(await userVersion(db), 5);
     },
   );
 
-  test('v3 -> v4 adds ONLY kitchen_spool_jobs (+indexes); outbox/menu/'
-      'print_jobs data survives untouched', () async {
-    final dbPath = '${tempDir.path}/v3.sqlite';
+  test(
+    'v3 -> v5 preserves outbox/menu/print_jobs data; no spool table',
+    () async {
+      final dbPath = '${tempDir.path}/v3.sqlite';
+      final raw = raw_sqlite.sqlite3.open(dbPath);
+      createLegacyCoreTables(raw);
+      createLegacyMenuTables(raw);
+      raw
+        ..execute('CREATE TABLE print_jobs (id TEXT NOT NULL PRIMARY KEY)')
+        ..execute('INSERT INTO outbox_operations (id) VALUES (?)', ['ob-keep'])
+        ..execute('INSERT INTO menu_items (id) VALUES (?)', ['menu-keep'])
+        ..execute('INSERT INTO print_jobs (id) VALUES (?)', ['pj-keep'])
+        ..execute('PRAGMA user_version = 3')
+        ..dispose();
+
+      final db = LocalDatabase(NativeDatabase(File(dbPath)));
+      addTearDown(db.close);
+      await db.customSelect('SELECT 1').get();
+
+      final tables = await tableNames(db);
+      expect(tables, containsAll(expectedTables));
+      expect(tables, isNot(contains('kitchen_spool_jobs')));
+      for (final probe in [
+        ('outbox_operations', 'ob-keep'),
+        ('menu_items', 'menu-keep'),
+        ('print_jobs', 'pj-keep'),
+      ]) {
+        final kept = await db
+            .customSelect(
+              'SELECT id FROM ${probe.$1} WHERE id = ?',
+              variables: [Variable.withString(probe.$2)],
+            )
+            .get();
+        expect(kept, hasLength(1), reason: '${probe.$1} row must survive');
+      }
+      expect(await userVersion(db), 5);
+    },
+  );
+
+  test('v4 with an EMPTY spool table -> v5 drops it and its indexes', () async {
+    final dbPath = '${tempDir.path}/v4-empty.sqlite';
     final raw = raw_sqlite.sqlite3.open(dbPath);
+    createLegacyCoreTables(raw);
+    createLegacyMenuTables(raw);
     raw
-      ..execute('CREATE TABLE outbox_operations (id TEXT NOT NULL PRIMARY KEY)')
-      ..execute(
-        'CREATE TABLE processed_pull_log (id TEXT NOT NULL PRIMARY KEY)',
-      )
-      ..execute('CREATE TABLE menu_categories (id TEXT NOT NULL PRIMARY KEY)')
-      ..execute('CREATE TABLE menu_items (id TEXT NOT NULL PRIMARY KEY)')
-      ..execute('CREATE TABLE item_sizes (id TEXT NOT NULL PRIMARY KEY)')
-      ..execute('CREATE TABLE item_variants (id TEXT NOT NULL PRIMARY KEY)')
-      ..execute('CREATE TABLE modifiers (id TEXT NOT NULL PRIMARY KEY)')
-      ..execute('CREATE TABLE modifier_options (id TEXT NOT NULL PRIMARY KEY)')
       ..execute('CREATE TABLE print_jobs (id TEXT NOT NULL PRIMARY KEY)')
-      ..execute('INSERT INTO outbox_operations (id) VALUES (?)', ['ob-keep'])
-      ..execute('INSERT INTO menu_items (id) VALUES (?)', ['menu-keep'])
+      ..execute(
+        'CREATE TABLE kitchen_spool_jobs '
+        '(local_job_id TEXT NOT NULL PRIMARY KEY)',
+      )
+      ..execute(
+        'CREATE INDEX kitchen_spool_runnable_idx '
+        'ON kitchen_spool_jobs (local_job_id)',
+      )
       ..execute('INSERT INTO print_jobs (id) VALUES (?)', ['pj-keep'])
-      ..execute('PRAGMA user_version = 3')
+      ..execute('PRAGMA user_version = 4')
       ..dispose();
 
     final db = LocalDatabase(NativeDatabase(File(dbPath)));
     addTearDown(db.close);
     await db.customSelect('SELECT 1').get();
 
-    expect(await tableNames(db), containsAll(expectedTables));
-    expect(await indexNames(db), containsAll(expectedSpoolIndexes));
-    expect(await spoolColumns(db), expectedSpoolColumns);
-    for (final probe in [
-      ('outbox_operations', 'ob-keep'),
-      ('menu_items', 'menu-keep'),
-      ('print_jobs', 'pj-keep'),
-    ]) {
-      final kept = await db
-          .customSelect(
-            'SELECT id FROM ${probe.$1} WHERE id = ?',
-            variables: [Variable.withString(probe.$2)],
-          )
-          .get();
-      expect(kept, hasLength(1), reason: '${probe.$1} row must survive');
-    }
-    expect(await userVersion(db), 4);
+    final tables = await tableNames(db);
+    expect(tables, isNot(contains('kitchen_spool_jobs')));
+    final indexes =
+        (await db
+                .customSelect(
+                  "SELECT name FROM sqlite_master WHERE type = 'index'",
+                )
+                .get())
+            .map((r) => r.data['name'] as String)
+            .toSet();
+    expect(indexes, isNot(contains('kitchen_spool_runnable_idx')));
+    final kept = await db
+        .customSelect("SELECT id FROM print_jobs WHERE id = 'pj-keep'")
+        .get();
+    expect(kept, hasLength(1));
+    expect(await userVersion(db), 5);
   });
 
-  test(
-    'SQLite CHECK constraints reject invalid kitchen_spool_jobs states',
-    () async {
-      final db = LocalDatabase(NativeDatabase.memory());
-      addTearDown(db.close);
-      await db.customSelect('SELECT 1').get();
+  test('v4 with a NON-EMPTY spool table -> v5 REFUSES: no version advance, '
+      'no row deleted (fail-closed guard)', () async {
+    final dbPath = '${tempDir.path}/v4-rows.sqlite';
+    final raw = raw_sqlite.sqlite3.open(dbPath);
+    createLegacyCoreTables(raw);
+    createLegacyMenuTables(raw);
+    raw
+      ..execute('CREATE TABLE print_jobs (id TEXT NOT NULL PRIMARY KEY)')
+      ..execute(
+        'CREATE TABLE kitchen_spool_jobs '
+        '(local_job_id TEXT NOT NULL PRIMARY KEY)',
+      )
+      ..execute('INSERT INTO kitchen_spool_jobs (local_job_id) VALUES (?)', [
+        'unexpected-row',
+      ])
+      ..execute('PRAGMA user_version = 4')
+      ..dispose();
 
-      Future<void> expectRejected(String sqlValues) async {
-        await expectLater(
-          db.customStatement(
-            'INSERT INTO kitchen_spool_jobs '
-            '(local_job_id, dispatch_id, organization_id, restaurant_id, '
-            'branch_id, device_id, order_id, dispatch_type, status, '
-            'encrypted_payload_blob, encryption_version, payload_version, '
-            'document_version, raster_version, attempt_count, '
-            'server_ack_attempt_count, transport_accepted_at, '
-            'superseded_by_dispatch_id, reprint_of_local_job_id, '
-            'created_at, updated_at) VALUES $sqlValues',
-          ),
-          throwsA(anything),
-        );
-      }
+    final db = LocalDatabase(NativeDatabase(File(dbPath)));
+    await expectLater(db.customSelect('SELECT 1').get(), throwsA(anything));
+    await db.close();
 
-      // attempt_count >= 0
-      await expectRejected(
-        "('j1','d1','o','r','b','dev','ord','initial_order','imported',"
-        "x'01', 1, 1, 1, 1, -1, 0, NULL, NULL, NULL, '2026-01-01', "
-        "'2026-01-01')",
-      );
-      // transport_accepted requires transport_accepted_at
-      await expectRejected(
-        "('j2','d2','o','r','b','dev','ord','initial_order',"
-        "'transport_accepted', x'01', 1, 1, 1, 1, 0, 0, NULL, NULL, NULL, "
-        "'2026-01-01', '2026-01-01')",
-      );
-      // possibly_printed cannot carry transport_accepted_at
-      await expectRejected(
-        "('j3','d3','o','r','b','dev','ord','initial_order',"
-        "'possibly_printed', x'01', 1, 1, 1, 1, 0, 0, '2026-01-01', NULL, "
-        "NULL, '2026-01-01', '2026-01-01')",
-      );
-      // superseded requires superseded_by_dispatch_id
-      await expectRejected(
-        "('j4','d4','o','r','b','dev','ord','initial_order','superseded',"
-        "x'01', 1, 1, 1, 1, 0, 0, NULL, NULL, NULL, '2026-01-01', "
-        "'2026-01-01')",
-      );
-      // reprint_of_local_job_id cannot equal local_job_id
-      await expectRejected(
-        "('j5','d5','o','r','b','dev','ord','initial_order','imported',"
-        "x'01', 1, 1, 1, 1, 0, 0, NULL, NULL, 'j5', '2026-01-01', "
-        "'2026-01-01')",
-      );
-      // encrypted blob may not be empty
-      await expectRejected(
-        "('j6','d6','o','r','b','dev','ord','initial_order','imported',"
-        "x'', 1, 1, 1, 1, 0, 0, NULL, NULL, NULL, '2026-01-01', "
-        "'2026-01-01')",
-      );
-      // CLEANUP 4: encryption_version must be POSITIVE (zero and negative
-      // fail via raw SQL — the store layer is bypassed on purpose).
-      await expectRejected(
-        "('j4a','d4a','o','r','b','dev','ord','initial_order','imported',"
-        "x'01', 0, 1, 1, 1, 0, 0, NULL, NULL, NULL, '2026-01-01', "
-        "'2026-01-01')",
-      );
-      await expectRejected(
-        "('j4b','d4b','o','r','b','dev','ord','initial_order','imported',"
-        "x'01', -1, 1, 1, 1, 0, 0, NULL, NULL, NULL, '2026-01-01', "
-        "'2026-01-01')",
-      );
-      // CLEANUP 4: SELF-supersession (superseded_by = own dispatch_id) fails.
-      await expectRejected(
-        "('j4c','d4c','o','r','b','dev','ord','initial_order','superseded',"
-        "x'01', 1, 1, 1, 1, 0, 0, NULL, 'd4c', NULL, '2026-01-01', "
-        "'2026-01-01')",
-      );
-      // Positive controls: a DIFFERENT superseding id is valid; NULL
-      // supersession on a live row is valid (implicit in earlier inserts).
-      await db.customStatement(
-        'INSERT INTO kitchen_spool_jobs '
-        '(local_job_id, dispatch_id, organization_id, restaurant_id, '
-        'branch_id, device_id, order_id, dispatch_type, status, '
-        'encrypted_payload_blob, encryption_version, payload_version, '
-        'document_version, raster_version, superseded_by_dispatch_id, '
-        'created_at, updated_at) VALUES '
-        "('j4d','d4d','o','r','b','dev','ord','initial_order','superseded',"
-        "x'01', 1, 1, 1, 1, 'void-d9', '2026-01-01', '2026-01-01')",
-      );
-      // dispatch_id unique
-      await db.customStatement(
-        'INSERT INTO kitchen_spool_jobs '
-        '(local_job_id, dispatch_id, organization_id, restaurant_id, '
-        'branch_id, device_id, order_id, dispatch_type, status, '
-        'encrypted_payload_blob, encryption_version, payload_version, '
-        'document_version, raster_version, created_at, updated_at) VALUES '
-        "('j7','d7','o','r','b','dev','ord','initial_order','imported',"
-        "x'01', 1, 1, 1, 1, '2026-01-01', '2026-01-01')",
-      );
-      await expectLater(
-        db.customStatement(
-          'INSERT INTO kitchen_spool_jobs '
-          '(local_job_id, dispatch_id, organization_id, restaurant_id, '
-          'branch_id, device_id, order_id, dispatch_type, status, '
-          'encrypted_payload_blob, encryption_version, payload_version, '
-          'document_version, raster_version, created_at, updated_at) VALUES '
-          "('j8','d7','o','r','b','dev','ord','initial_order','imported',"
-          "x'01', 1, 1, 1, 1, '2026-01-01', '2026-01-01')",
-        ),
-        throwsA(anything),
-      );
-    },
-  );
+    // The refused migration left EVERYTHING intact: version unchanged,
+    // the unexpected row preserved.
+    final verify = raw_sqlite.sqlite3.open(dbPath);
+    final version =
+        verify.select('PRAGMA user_version').first.values.first as int;
+    expect(version, 4, reason: 'refused migration must not advance');
+    final rows = verify.select(
+      "SELECT local_job_id FROM kitchen_spool_jobs "
+      "WHERE local_job_id = 'unexpected-row'",
+    );
+    expect(rows, hasLength(1), reason: 'no spool row may be dropped');
+    verify.dispose();
+  });
 
   test(
     'database open/migration never touches crypto keys (source boundary)',
     () async {
-      // LocalDatabase takes only a QueryExecutor: there is no SecureKeyStore
-      // anywhere in its construction, and this test opens + migrates with NO
-      // key material in existence. The stronger structural proof: the
-      // database/migration sources (main + generated part) have no key-store
-      // or crypto reference. CI-PORTABLE: the package root is resolved via a
-      // deterministic ancestor search (CI runs `dart test
-      // packages/data_local` from the REPOSITORY ROOT; local runs start
-      // inside the package) — never from an assumed working directory, and
-      // never with an assumed path-separator style.
+      // Covers BOTH database sources (general + dedicated spool) via the
+      // CI-portable helper; the scan refuses to pass vacuously.
       final packageRoot = locateDataLocalPackageRoot();
       final code = readDatabaseSourcesCodeOnly(packageRoot);
       expect(
@@ -380,7 +276,7 @@ void main() {
       final db = LocalDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       await db.customSelect('SELECT 1').get(); // opens + migrates, no keys
-      expect(await userVersion(db), 4);
+      expect(await userVersion(db), 5);
     },
   );
 }

@@ -1,6 +1,9 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../spool/pos_kitchen_spool_composition.dart';
 import '../state/order_sync_controller.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/ready_notifications_controller.dart';
@@ -38,6 +41,13 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
       // PSC-001A: the ready-notification poller starts with the surface too —
       // same deferred frame, same no-scope no-op safety.
       ref.read(posReadyNotificationsControllerProvider.notifier).onResume();
+      // KITCHEN-MODE-001C2B (LOCKED D4): the kitchen-spool reconciliation
+      // hook — startup/resume only, never a timer. Inert on web/demo (the
+      // provider is null) and a typed no-op without device scope; production
+      // dispatch importing stays impossible until 001C3. Explicitly
+      // fire-and-forget: the runtime converts EVERY failure into a typed
+      // redacted report, so no unhandled async error can escape this hook.
+      unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onStartup());
     });
   }
 
@@ -64,6 +74,9 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     // racing pulls whose losers overwrite the winner.
     ref.read(posOrderSyncControllerProvider.notifier).onResume();
     ref.read(posReadyNotificationsControllerProvider.notifier).onResume();
+    // KITCHEN-MODE-001C2B (D4): resume-time spool reconciliation (see the
+    // startup hook above; same inert/no-op + typed-failure guarantees).
+    unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onResume());
     // PILOT-OPERATIONS-CORRECTIONS-001: also refresh the MENU (and therefore
     // availability) on resume — a Dashboard availability change made while the POS
     // was backgrounded would otherwise stay invisible until the session changed.

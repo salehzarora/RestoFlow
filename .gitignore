@@ -100,6 +100,10 @@ lib/generated_plugin_registrant.dart
 # effect. Do NOT broaden it: every other *.g.dart / *.drift.dart / *.moor.dart
 # (including any test-only generated DB) stays ignored.
 !packages/data_local/lib/src/local_database.g.dart
+# KITCHEN-MODE-001C2B: the SECOND (and only other) committed Drift output — the
+# dedicated kitchen-spool database. Same RF-018 Option A rationale; same rule:
+# do NOT broaden beyond these two named production files.
+!packages/data_local/lib/src/kitchen_spool_database.g.dart
 
 # ----------------------------------------------------------------------------
 # IDE / editor (commit ONLY shared, intentional config)

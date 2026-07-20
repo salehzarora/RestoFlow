@@ -104,6 +104,12 @@ void main() {
     File(
       p.join(srcDir.path, 'local_database.g.dart'),
     ).writeAsStringSync('mixin GeneratedBits {}\n');
+    File(
+      p.join(srcDir.path, 'kitchen_spool_database.dart'),
+    ).writeAsStringSync('class KitchenSpoolDatabase {}\n');
+    File(
+      p.join(srcDir.path, 'kitchen_spool_database.g.dart'),
+    ).writeAsStringSync('mixin SpoolGeneratedBits {}\n');
     // Hostile content in places the scan must IGNORE.
     for (final ignored in [
       ['test', 'evil_test.dart'],
@@ -136,6 +142,12 @@ void main() {
     File(
       p.join(srcDir.path, 'local_database.g.dart'),
     ).writeAsStringSync('mixin GeneratedBits {}\n');
+    File(
+      p.join(srcDir.path, 'kitchen_spool_database.dart'),
+    ).writeAsStringSync('class KitchenSpoolDatabase {}\n');
+    File(
+      p.join(srcDir.path, 'kitchen_spool_database.g.dart'),
+    ).writeAsStringSync('mixin SpoolGeneratedBits {}\n');
     final code = readDatabaseSourcesCodeOnly(fake);
     expect(findCryptoBoundaryViolation(code), 'provisionKey');
   });

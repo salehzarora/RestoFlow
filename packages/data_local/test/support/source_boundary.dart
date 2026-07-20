@@ -52,6 +52,10 @@ Directory locateDataLocalPackageRoot({Directory? from}) {
 const List<String> kDatabaseSourceRelativePaths = [
   'lib/src/local_database.dart',
   'lib/src/local_database.g.dart',
+  // KITCHEN-MODE-001C2B: the dedicated spool database is under the SAME
+  // boundary — its construction/migration must never touch crypto keys.
+  'lib/src/kitchen_spool_database.dart',
+  'lib/src/kitchen_spool_database.g.dart',
 ];
 
 /// Reads the database/migration sources as CODE ONLY: full-line comments are

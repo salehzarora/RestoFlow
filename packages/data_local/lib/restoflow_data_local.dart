@@ -20,6 +20,10 @@ export 'src/kitchen_spool/kitchen_spool_cipher.dart';
 export 'src/kitchen_spool/kitchen_spool_key_manager.dart';
 export 'src/kitchen_spool/kitchen_spool_payload.dart';
 export 'src/kitchen_spool/kitchen_spool_status.dart';
+// KITCHEN-MODE-001C2B: the DEDICATED runtime kitchen-spool database (Android
+// backup-excluded path) + its fail-closed factory. Opening the spool through
+// the general LocalDatabase is prohibited.
+export 'src/kitchen_spool_database.dart';
 export 'src/local_database.dart';
 // RF-030: local menu/catalog repository.
 export 'src/menu_repository.dart';

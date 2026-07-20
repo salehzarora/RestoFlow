@@ -21,6 +21,9 @@ dependencies:
   # kitchen dispatch payload blob is encrypted; plaintext columns stay
   # metadata-only by contract.
   cryptography: '>=2.7.0 <3.0.0'
+  # KITCHEN-MODE-001C2B: platform-independent path composition for the
+  # DEDICATED kitchen-spool database factory (was dev-only for tests).
+  path: '>=1.9.0 <2.0.0'
   # RF-021: the fail-closed data-at-rest opening policy consumes the pure-Dart
   # SecureKeyStore / SecretValue / fail-closed exceptions from core.
   restoflow_core:
@@ -31,10 +34,6 @@ dependencies:
     path: ../printing
 
 dev_dependencies:
-  # KITCHEN-MODE-001C2A CI fix: platform-independent path handling for the
-  # source-boundary scan (CI runs `dart test packages/data_local` from the
-  # repository root; local runs start inside the package).
-  path: '>=1.9.0 <2.0.0'
   drift_dev: '>=2.18.0 <3.0.0'
   # RF018-B1 pinned build_runner to 2.4.15 for CI codegen reliability. RF-020
   # introduces flutter_test workspace-wide, which forces matcher 0.12.19 -> test

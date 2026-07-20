@@ -132,8 +132,8 @@ void main() {
         'modifier_options',
         // RF-071 local print spool.
         'print_jobs',
-        // KITCHEN-MODE-001C2A encrypted kitchen spool.
-        'kitchen_spool_jobs',
+        // KITCHEN-MODE-001C2B: kitchen_spool_jobs deliberately ABSENT — the
+        // kitchen spool lives in the dedicated KitchenSpoolDatabase.
       });
     });
 

@@ -11,7 +11,7 @@ import 'package:test/test.dart';
 
 /// KITCHEN-MODE-001C2A §10 — the bounded KitchenSpoolStore invariants.
 void main() {
-  late LocalDatabase db;
+  late KitchenSpoolDatabase db;
   late DriftKitchenSpoolStore store;
   late AesGcmKitchenSpoolCipher cipher;
   late SecretValue key;
@@ -26,7 +26,7 @@ void main() {
   final t0 = DateTime.utc(2026, 7, 20, 10);
 
   setUp(() async {
-    db = LocalDatabase(NativeDatabase.memory());
+    db = KitchenSpoolDatabase(NativeDatabase.memory());
     store = DriftKitchenSpoolStore(db);
     cipher = AesGcmKitchenSpoolCipher();
     final keyStore = InMemorySecureKeyStore();
@@ -111,6 +111,20 @@ void main() {
     );
   }
 
+  /// KITCHEN-MODE-001C2B: imports AND completes the server acknowledgement,
+  /// satisfying the print-eligibility invariant (only server-acknowledged
+  /// jobs may ever become runnable).
+  Future<KitchenSpoolJobRow> importAcked(NewKitchenSpoolJob job) async {
+    final row = await store.insertImportedJob(job);
+    await store.setPendingServerAck(
+      row.localJobId,
+      KitchenServerAckStatus.imported,
+      t0,
+    );
+    await store.markServerAcked(row.localJobId, t0);
+    return (await store.getByLocalJobId(row.localJobId))!;
+  }
+
   group('import', () {
     test('unique dispatch import + idempotent duplicate', () async {
       final a = await store.insertImportedJob(await newJob('disp-1'));
@@ -186,8 +200,8 @@ void main() {
     test(
       'runnable ordering is createdAt asc and respects nextAttemptAt',
       () async {
-        final a = await store.insertImportedJob(await newJob('d-a'));
-        final b = await store.insertImportedJob(await newJob('d-b'));
+        final a = await importAcked(await newJob('d-a'));
+        final b = await importAcked(await newJob('d-b'));
         final list = await store.listRunnable(
           deviceId: deviceId,
           branchId: branchId,
@@ -219,7 +233,7 @@ void main() {
     test(
       'claim is single-flight per job (second claim returns null)',
       () async {
-        final row = await store.insertImportedJob(await newJob('d-claim'));
+        final row = await importAcked(await newJob('d-claim'));
         final claimed = await store.claimRunnableForPrinting(
           row.localJobId,
           t0.add(const Duration(minutes: 1)),
@@ -237,13 +251,13 @@ void main() {
     );
 
     test('claim is single-flight per DESTINATION fingerprint', () async {
-      final a = await store.insertImportedJob(
+      final a = await importAcked(
         await newJob('d-dest-a', destinationFingerprint: 'fp-shared'),
       );
-      final b = await store.insertImportedJob(
+      final b = await importAcked(
         await newJob('d-dest-b', destinationFingerprint: 'fp-shared'),
       );
-      final c = await store.insertImportedJob(
+      final c = await importAcked(
         await newJob('d-dest-c', destinationFingerprint: 'fp-other'),
       );
       expect(await store.claimRunnableForPrinting(a.localJobId, t0), isNotNull);
@@ -261,7 +275,7 @@ void main() {
     test(
       'markQueued only from imported; markPrinting only from runnable',
       () async {
-        final row = await store.insertImportedJob(await newJob('d-q'));
+        final row = await importAcked(await newJob('d-q'));
         expect(await store.markQueued(row.localJobId, t0), isTrue);
         expect(await store.markQueued(row.localJobId, t0), isFalse);
         expect(await store.markPrinting(row.localJobId, t0), isTrue);
@@ -274,9 +288,9 @@ void main() {
     test(
       'printing -> possiblyPrinted recovery maps ONLY printing rows',
       () async {
-        final printing = await store.insertImportedJob(await newJob('d-p1'));
+        final printing = await importAcked(await newJob('d-p1'));
         await store.claimRunnableForPrinting(printing.localJobId, t0);
-        final queued = await store.insertImportedJob(await newJob('d-p2'));
+        final queued = await importAcked(await newJob('d-p2'));
         await store.markQueued(queued.localJobId, t0);
         final changed = await store.markPossiblyPrintedOnRecovery(
           t0.add(const Duration(minutes: 1)),
@@ -294,7 +308,7 @@ void main() {
     );
 
     test('possiblyPrinted can NEVER become runnable again', () async {
-      final row = await store.insertImportedJob(await newJob('d-pp'));
+      final row = await importAcked(await newJob('d-pp'));
       await store.claimRunnableForPrinting(row.localJobId, t0);
       await store.markPossiblyPrintedOnRecovery(t0);
       expect(
@@ -318,7 +332,7 @@ void main() {
     test(
       'transportAccepted is terminal for printing and never re-runnable',
       () async {
-        final row = await store.insertImportedJob(await newJob('d-ta'));
+        final row = await importAcked(await newJob('d-ta'));
         // Only printing may complete.
         expect(await store.markTransportAccepted(row.localJobId, t0), isFalse);
         await store.claimRunnableForPrinting(row.localJobId, t0);
@@ -370,7 +384,7 @@ void main() {
     test(
       'server evidence does NOT supersede transportAccepted history or a job printing right now',
       () async {
-        final done = await store.insertImportedJob(await newJob('d-done'));
+        final done = await importAcked(await newJob('d-done'));
         await store.claimRunnableForPrinting(done.localJobId, t0);
         await store.markTransportAccepted(done.localJobId, t0);
         expect(
@@ -381,7 +395,7 @@ void main() {
           ),
           isFalse,
         );
-        final printing = await store.insertImportedJob(await newJob('d-mid'));
+        final printing = await importAcked(await newJob('d-mid'));
         await store.claimRunnableForPrinting(printing.localJobId, t0);
         expect(
           await store.markSupersededFromServerEvidence(
@@ -398,7 +412,7 @@ void main() {
   group('server acknowledgement independence', () {
     test('pending ack is retained independently; ack retries NEVER make a '
         'transportAccepted job runnable again', () async {
-      final row = await store.insertImportedJob(await newJob('d-ack'));
+      final row = await importAcked(await newJob('d-ack'));
       await store.claimRunnableForPrinting(row.localJobId, t0);
       await store.markTransportAccepted(row.localJobId, t0);
       await store.setPendingServerAck(
@@ -447,7 +461,7 @@ void main() {
 
   group('scope + counting', () {
     test('unresolved count and listings are device/branch scoped', () async {
-      await store.insertImportedJob(await newJob('d-s1'));
+      await importAcked(await newJob('d-s1'));
       await store.insertImportedJob(await newJob('d-s2', branch: otherBranch));
       await store.insertImportedJob(await newJob('d-s3', device: otherDevice));
       expect(
@@ -473,7 +487,7 @@ void main() {
     test('prune removes ONLY fully server-acked transportAccepted history '
         'older than the cutoff', () async {
       // Fully resolved + old -> prunable.
-      final old = await store.insertImportedJob(await newJob('d-old'));
+      final old = await importAcked(await newJob('d-old'));
       await store.claimRunnableForPrinting(old.localJobId, t0);
       await store.markTransportAccepted(old.localJobId, t0);
       await store.setPendingServerAck(
@@ -483,7 +497,7 @@ void main() {
       );
       await store.markServerAcked(old.localJobId, t0);
       // Accepted but ack still pending -> NOT prunable.
-      final pendingAck = await store.insertImportedJob(await newJob('d-pa'));
+      final pendingAck = await importAcked(await newJob('d-pa'));
       await store.claimRunnableForPrinting(pendingAck.localJobId, t0);
       await store.markTransportAccepted(pendingAck.localJobId, t0);
       await store.setPendingServerAck(
@@ -492,7 +506,7 @@ void main() {
         t0,
       );
       // possiblyPrinted -> NEVER prunable.
-      final ambiguous = await store.insertImportedJob(await newJob('d-amb'));
+      final ambiguous = await importAcked(await newJob('d-amb'));
       await store.claimRunnableForPrinting(ambiguous.localJobId, t0);
       await store.markPossiblyPrintedOnRecovery(t0);
       // blocked -> NEVER prunable.
@@ -581,6 +595,182 @@ void main() {
     });
   });
 
+  group('KITCHEN-MODE-001C2B print-eligibility + server evidence', () {
+    test(
+      'an imported-but-UNACKNOWLEDGED job can never become runnable',
+      () async {
+        final row = await store.insertImportedJob(await newJob('d-unacked'));
+        expect(
+          await store.listRunnable(
+            deviceId: deviceId,
+            branchId: branchId,
+            now: t0.add(const Duration(days: 1)),
+          ),
+          isEmpty,
+        );
+        expect(
+          await store.claimRunnableForPrinting(row.localJobId, t0),
+          isNull,
+        );
+        expect(await store.markQueued(row.localJobId, t0), isFalse);
+        expect(await store.markPrinting(row.localJobId, t0), isFalse);
+      },
+    );
+
+    test('a TRANSIENT ack failure keeps the job non-runnable', () async {
+      final row = await store.insertImportedJob(await newJob('d-transient'));
+      await store.setPendingServerAck(
+        row.localJobId,
+        KitchenServerAckStatus.imported,
+        t0,
+      );
+      await store.updateServerAckRetry(
+        row.localJobId,
+        errorCode: 'network_unreachable',
+        nextAttemptAt: t0.add(const Duration(minutes: 5)),
+        now: t0,
+      );
+      expect(await store.claimRunnableForPrinting(row.localJobId, t0), isNull);
+      // Once the server acknowledges, the job becomes runnable.
+      await store.markServerAcked(row.localJobId, t0);
+      expect(
+        await store.claimRunnableForPrinting(row.localJobId, t0),
+        isNotNull,
+      );
+    });
+
+    test('a TERMINAL server verdict stops retries and is permanently '
+        'non-runnable while preserving the encrypted job', () async {
+      final row = await store.insertImportedJob(await newJob('d-terminal'));
+      await store.setPendingServerAck(
+        row.localJobId,
+        KitchenServerAckStatus.imported,
+        t0,
+      );
+      expect(
+        await store.markServerAckTerminal(
+          row.localJobId,
+          terminalCode: 'not_claim_owner',
+          now: t0,
+        ),
+        isTrue,
+      );
+      final after = (await store.getByLocalJobId(row.localJobId))!;
+      expect(after.serverAckTerminalCode, 'not_claim_owner');
+      expect(after.pendingServerAckStatus, isNull);
+      expect(after.serverAcknowledgedAt, isNull);
+      expect(after.encryptedPayloadBlob, isNotEmpty);
+      // Retry loop is over; never runnable.
+      expect(
+        await store.listPendingServerAcks(
+          deviceId: deviceId,
+          branchId: branchId,
+          now: t0.add(const Duration(days: 1)),
+        ),
+        isEmpty,
+      );
+      expect(await store.claimRunnableForPrinting(row.localJobId, t0), isNull);
+      expect(await store.markQueued(row.localJobId, t0), isFalse);
+      // Terminal is one-shot: no pending ack remains to terminate.
+      expect(
+        await store.markServerAckTerminal(
+          row.localJobId,
+          terminalCode: 'conflict',
+          now: t0,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'linkSupersessionEvidence keeps possiblyPrinted AMBIGUITY while '
+      'attaching the void link; markSuperseded refuses possiblyPrinted',
+      () async {
+        final row = await importAcked(await newJob('d-pp-link'));
+        await store.claimRunnableForPrinting(row.localJobId, t0);
+        await store.markPossiblyPrintedOnRecovery(t0);
+        // The blunt supersession path must NOT erase the ambiguity.
+        expect(
+          await store.markSupersededFromServerEvidence(
+            dispatchId: 'd-pp-link',
+            supersededByDispatchId: 'void-9',
+            now: t0,
+          ),
+          isFalse,
+        );
+        // The link path attaches evidence and PRESERVES the state.
+        expect(
+          await store.linkSupersessionEvidence(
+            dispatchId: 'd-pp-link',
+            supersededByDispatchId: 'void-9',
+            now: t0,
+          ),
+          isTrue,
+        );
+        final linked = (await store.getByLocalJobId(row.localJobId))!;
+        expect(linked.status, KitchenSpoolJobStatus.possiblyPrinted);
+        expect(linked.supersededByDispatchId, 'void-9');
+        // Idempotent: an existing link is never overwritten.
+        expect(
+          await store.linkSupersessionEvidence(
+            dispatchId: 'd-pp-link',
+            supersededByDispatchId: 'void-10',
+            now: t0,
+          ),
+          isFalse,
+        );
+        expect(
+          (await store.getByLocalJobId(row.localJobId))!.supersededByDispatchId,
+          'void-9',
+        );
+      },
+    );
+
+    test('listPendingServerAcks honors due time and scope', () async {
+      final due = await store.insertImportedJob(await newJob('d-ack-due'));
+      await store.setPendingServerAck(
+        due.localJobId,
+        KitchenServerAckStatus.imported,
+        t0,
+      );
+      final later = await store.insertImportedJob(await newJob('d-ack-later'));
+      await store.setPendingServerAck(
+        later.localJobId,
+        KitchenServerAckStatus.blockedConfiguration,
+        t0,
+      );
+      await store.updateServerAckRetry(
+        later.localJobId,
+        errorCode: 'network_unreachable',
+        nextAttemptAt: t0.add(const Duration(hours: 1)),
+        now: t0,
+      );
+      final other = await store.insertImportedJob(
+        await newJob('d-ack-other', branch: otherBranch),
+      );
+      await store.setPendingServerAck(
+        other.localJobId,
+        KitchenServerAckStatus.imported,
+        t0,
+      );
+      final pending = await store.listPendingServerAcks(
+        deviceId: deviceId,
+        branchId: branchId,
+        now: t0.add(const Duration(minutes: 1)),
+      );
+      expect(pending.map((r) => r.localJobId), [due.localJobId]);
+    });
+
+    test('countTotalRows counts every scope (metadata only)', () async {
+      expect(await store.countTotalRows(), 0);
+      await store.insertImportedJob(await newJob('d-count-1'));
+      await store.insertImportedJob(
+        await newJob('d-count-2', branch: otherBranch),
+      );
+      expect(await store.countTotalRows(), 2);
+    });
+  });
+
   twoConnectionClaimTests();
 }
 
@@ -601,8 +791,8 @@ void twoConnectionClaimTests() {
     addTearDown(() => dir.delete(recursive: true));
     final file = File('${dir.path}/spool.sqlite');
 
-    final db1 = LocalDatabase(NativeDatabase(file));
-    final db2 = LocalDatabase(NativeDatabase(file));
+    final db1 = KitchenSpoolDatabase(NativeDatabase(file));
+    final db2 = KitchenSpoolDatabase(NativeDatabase(file));
     addTearDown(db1.close);
     addTearDown(db2.close);
     final store1 = DriftKitchenSpoolStore(db1);
@@ -632,6 +822,15 @@ void twoConnectionClaimTests() {
         );
     await seed('conn-job-a', 'conn-disp-a');
     await seed('conn-job-b', 'conn-disp-b');
+    // Satisfy the 001C2B print-eligibility invariant for both jobs.
+    for (final jobId in ['conn-job-a', 'conn-job-b']) {
+      await store1.setPendingServerAck(
+        jobId,
+        KitchenServerAckStatus.imported,
+        t0,
+      );
+      await store1.markServerAcked(jobId, t0);
+    }
 
     // Connection 1 claims job A.
     final winner = await store1.claimRunnableForPrinting('conn-job-a', t0);

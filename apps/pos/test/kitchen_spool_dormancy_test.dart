@@ -8,14 +8,17 @@ import 'package:path/path.dart' as p;
 
 import 'support/pos_package_root.dart';
 
-/// KITCHEN-MODE-001C2A §13 — runtime dormancy / source-boundary proof.
+/// KITCHEN-MODE-001C2B — runtime source-boundary proof (evolved from the
+/// 001C2A dormancy scan).
 ///
-/// The encrypted kitchen spool ships as DORMANT foundation code: nothing in
-/// POS production composition may instantiate it, no server kitchen RPC may
-/// gain a caller, and no browser storage may be involved anywhere near it.
-/// These are STRING-LEVEL scans of the production sources (`lib/`), so a
-/// future wiring attempt fails this test until it happens in its own
-/// reviewed phase (001C2B+).
+/// The spool is now COMPOSED, but only through the sanctioned boundary:
+/// every spool reference lives in `lib/src/spool/`, and the ONE production
+/// caller is the `PosSyncLifecycle` startup/resume hook (LOCKED D4 — no
+/// timer, no worker). Readiness reporting, the workflow-mode setter, the
+/// member inspection RPC, print transport, and browser storage remain
+/// prohibited everywhere. These are STRING-LEVEL code scans, so any wiring
+/// beyond the sanctioned boundary fails this test until its own reviewed
+/// phase.
 void main() {
   late final List<File> libSources;
   late final String mainSource;
@@ -67,11 +70,16 @@ void main() {
     },
   );
 
-  test('NO production source outside lib/src/spool references the spool', () {
-    final outside = allSourcesExcept((p) => p.contains('lib/src/spool/'));
-    // CLEANUP 7E: identifier set hardened against alias/barrel/indirect
-    // construction bypasses — an aliased import still carries the package
-    // path string, and ANY reference to these types/members must name them.
+  test('spool references live ONLY in lib/src/spool + the sanctioned '
+      'PosSyncLifecycle hook (D4)', () {
+    final outside = allSourcesExcept(
+      (p) =>
+          p.contains('lib/src/spool/') ||
+          p.endsWith('lib/src/widgets/pos_sync_lifecycle.dart'),
+    );
+    // Identifier set hardened against alias/barrel/indirect construction
+    // bypasses — an aliased import still carries the package path string,
+    // and ANY reference to these types/members must name them.
     for (final needle in [
       'FlutterSecureKitchenSpoolKeyStore',
       'PosKitchenSpoolPlatform',
@@ -82,6 +90,7 @@ void main() {
       'KitchenSpoolStore',
       'KitchenSpoolAad',
       'KitchenSpoolLocalPayload',
+      'KitchenSpoolDatabase',
       'kitchen_spool',
       'KitchenSpool',
       'provisionKey',
@@ -92,34 +101,62 @@ void main() {
       expect(
         outside,
         isNot(contains(needle)),
-        reason: '"$needle" must not appear outside lib/src/spool',
+        reason: '"$needle" must not appear outside the sanctioned boundary',
       );
     }
   });
 
-  test(
-    'POS production code has NO restoflow_data_local import (no runtime DB)',
-    () {
-      final all = allSourcesExcept((_) => false);
-      expect(all, isNot(contains('package:restoflow_data_local')));
-    },
-  );
+  test('the sanctioned lifecycle hook may reference ONLY the runtime provider '
+      '(never stores, ciphers, keys, or databases directly)', () {
+    final hook = allSourcesExcept(
+      (p) => !p.endsWith('lib/src/widgets/pos_sync_lifecycle.dart'),
+    );
+    expect(hook, contains('posKitchenSpoolRuntimeProvider'));
+    for (final needle in [
+      'DriftKitchenSpoolStore',
+      'KitchenSpoolKeyManager',
+      'KitchenSpoolCipher',
+      'KitchenSpoolDatabase',
+      'FlutterSecureKitchenSpoolKeyStore',
+      'provisionKey',
+    ]) {
+      expect(hook, isNot(contains(needle)));
+    }
+  });
 
-  test(
-    'no readiness / dispatch-pull / ack / mode-setter caller exists in POS',
-    () {
-      final all = allSourcesExcept((_) => false);
-      for (final rpc in [
-        'report_kitchen_printer_readiness',
-        'pull_kitchen_print_dispatches',
-        'acknowledge_kitchen_print_dispatch',
-        'set_kitchen_workflow_mode',
-        'get_kitchen_workflow_transition_readiness',
-      ]) {
-        expect(all, isNot(contains(rpc)), reason: '$rpc must have NO caller');
-      }
-    },
-  );
+  test('restoflow_data_local imports are CONFINED to lib/src/spool', () {
+    final outside = allSourcesExcept((p) => p.contains('lib/src/spool/'));
+    expect(outside, isNot(contains('package:restoflow_data_local')));
+  });
+
+  test('no readiness / mode-setter / member-inspection caller exists in POS '
+      '(pull/ack RPC strings live only in the feature_auth clients)', () {
+    final all = allSourcesExcept((_) => false);
+    for (final rpc in [
+      'report_kitchen_printer_readiness',
+      'set_kitchen_workflow_mode',
+      'get_kitchen_workflow_transition_readiness',
+      // The raw RPC strings must never appear in POS sources either —
+      // POS talks only through the typed feature_auth repositories.
+      'pull_kitchen_print_dispatches',
+      'acknowledge_kitchen_print_dispatch',
+    ]) {
+      expect(all, isNot(contains(rpc)), reason: '$rpc must have NO caller');
+    }
+  });
+
+  test('the spool layer never calls print transport (no worker in 001C2B)', () {
+    final spool = allSourcesExcept((p) => !p.contains('lib/src/spool/'));
+    for (final needle in [
+      'NativePrintTarget',
+      'PrintBridge',
+      'printBridge',
+      'sendToPrinter',
+      'MethodChannel',
+    ]) {
+      expect(spool, isNot(contains(needle)));
+    }
+  });
 
   test('the spool layer never touches SharedPreferences/localStorage', () {
     final spool = allSourcesExcept((p) => !p.contains('lib/src/spool/'));
@@ -134,8 +171,10 @@ void main() {
 
   test('the spool layer never logs or prints (no secret leak channel)', () {
     final spool = allSourcesExcept((p) => !p.contains('lib/src/spool/'));
-    expect(spool, isNot(contains('print(')));
+    // Word-boundary matches: identifiers like `sessionFingerprint(` or
+    // `catalog(` must not mask-trip the bare print()/log() detectors.
+    expect(spool, isNot(matches(RegExp(r'(?<![A-Za-z0-9_])print\('))));
     expect(spool, isNot(contains('debugPrint')));
-    expect(spool, isNot(contains('log(')));
+    expect(spool, isNot(matches(RegExp(r'(?<![A-Za-z0-9_.])log\('))));
   });
 }
