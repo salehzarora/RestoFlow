@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(143);
+select plan(157);
 
 -- ===== fixture ===============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -774,6 +774,9 @@ select ok(
         where order_id = '00000000-0000-0000-0000-0001c1000d0a')
   and (select count(*) = 1 from audit_events
         where action = 'kitchen.dispatch_created'
+          and organization_id = '00000000-0000-0000-0000-0001c1000a00'
+          and restaurant_id = '00000000-0000-0000-0000-0001c1000a10'
+          and branch_id = '00000000-0000-0000-0000-0001c1000a2b'
           and new_values ->> 'order_code'
               = '#' || upper(right(replace('00000000-0000-0000-0000-0001c1000d0a', '-', ''), 6))),
   'K4: a REAL push replay neither duplicates the dispatch nor re-audits');                                       -- 84
@@ -1082,6 +1085,9 @@ select ok(
         where order_id = '00000000-0000-0000-0000-0001c1000d21' and dispatch_type = 'void')
   and (select count(*) = 1 from audit_events
         where action = 'kitchen.dispatch_void_created'
+          and organization_id = '00000000-0000-0000-0000-0001c1000a00'
+          and restaurant_id = '00000000-0000-0000-0000-0001c1000a10'
+          and branch_id = '00000000-0000-0000-0000-0001c1000a2b'
           and new_values ->> 'order_code'
               = '#' || upper(right(replace('00000000-0000-0000-0000-0001c1000d21', '-', ''), 6))),
   'O6: a VOID replay is idempotent — no duplicate void, no repeated supersession, no duplicate audit');          -- 109
@@ -1141,6 +1147,16 @@ select ok(
   'O8: a possibly_printed original is LINKED to the void, stays sticky-ambiguous, never re-serves; the VOID prints'); -- 111
 
 -- ===== P. readiness selection + retention ===================================
+-- CORRECTION-001 cleanup (deterministic shadow test): make the qualifying
+-- 80mm report (device d001) STRICTLY OLDER than the non-qualifying 58mm report
+-- (device d005) — but still fresh — instead of relying on a tied transaction
+-- timestamp. Under the CORRECT qualifying selection the 80mm report is still
+-- chosen; under a regressed newest-report-wins selection the newer 58mm would
+-- shadow it and this test would FAIL, which is exactly the regression P1 must
+-- catch.
+update kitchen_printer_readiness_reports
+  set reported_at = now() - interval '5 minutes', expires_at = now() + interval '5 minutes'
+  where device_id = '00000000-0000-0000-0000-0001c100d001';
 select app.report_kitchen_printer_readiness(
   '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2',
   'kitchen_printer_only_v1', 'build-58', 'kitchen_ticket',
@@ -1153,7 +1169,13 @@ create temp table t_p1c as
     '00000000-0000-0000-0000-0001c1000a2b') as res;
 reset role;
 select ok(
-  (select not ((res -> 'to_printer_only' -> 'blockers') @> '"paper_width_80mm_required"'::jsonb)
+  -- the fixture genuinely presents a NEWER non-qualifying report:
+  (select r58.reported_at > r80.reported_at
+     from kitchen_printer_readiness_reports r58, kitchen_printer_readiness_reports r80
+     where r58.device_id = '00000000-0000-0000-0000-0001c100d005'
+       and r80.device_id = '00000000-0000-0000-0000-0001c100d001')
+  -- yet the OLDER qualifying 80mm report is still selected, never shadowed:
+  and (select not ((res -> 'to_printer_only' -> 'blockers') @> '"paper_width_80mm_required"'::jsonb)
       and (res -> 'readiness_report' ->> 'qualifying')::boolean
       and res -> 'readiness_report' ->> 'paper_width' = '80mm'
    from t_p1c),
@@ -1426,7 +1448,7 @@ select ok(
      'paymentInfo', 'taxAmount', 'serviceFee', 'tipAmount', 'customerPhone',
      'deliveryAddress', 'bluetoothAddress', 'connectionConfig', 'apiKey',
      'accessToken']) as k),
-  'T1: every CamelCase / kebab / compact hostile variant is rejected after normalization');                      -- 138
+  'T1: every CamelCase / kebab / dotted hostile variant is rejected after normalization');                       -- 138
 select ok(
   pg_temp.guard_rejects('{"a": [{"b": {"amountDue": 1}}]}'::jsonb)
   and pg_temp.guard_rejects('{"items": [{"meta": {"access-token": "x"}}]}'::jsonb),
@@ -1463,6 +1485,142 @@ select ok(
   and app.kitchen_prep_projection('{"name":"A"}'::jsonb) is null
   and app.kitchen_prep_projection('[{"name":"B","quantity":"9"}]'::jsonb) = '[{"name": "B"}]'::jsonb,
   'T6: the projection is strict — non-arrays null out, non-objects and non-numeric quantities are dropped');     -- 143
+
+-- ===== U. compact all-lowercase hostile keys (review cleanup) ================
+-- CORRECTION-001 cleanup: a compact all-lowercase compound carries no boundary
+-- to split on, so normalization leaves it a single token; the explicit
+-- compact-compound deny list must reject each spelling. (T1 proved only the
+-- boundary-carrying CamelCase/kebab/dotted variants.)
+select ok(
+  (select bool_and(pg_temp.guard_rejects(jsonb_build_object(k, 1)))
+   from unnest(array[
+     'unitprice', 'priceminor', 'totalvalue', 'amountdue', 'paymentinfo',
+     'taxamount', 'servicefee', 'tipamount', 'customerphone', 'deliveryaddress',
+     'bluetoothaddress', 'connectionconfig', 'apikey', 'accesstoken',
+     'currencycode', 'paymentmethod']) as k),
+  'U1: every COMPACT all-lowercase hostile compound is rejected (explicit deny list)');                          -- 144
+select ok(
+  pg_temp.guard_rejects('{"meta_apikey_field": "x"}'::jsonb)
+  and pg_temp.guard_rejects('{"a": [{"b": {"amountdue": 1}}]}'::jsonb),
+  'U2: a compact compound as a sub-token or nested/array key is rejected too');                                  -- 145
+insert into kitchen_print_dispatches (organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key)
+  values ('00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b',
+          '00000000-0000-0000-0000-0001c1000d26', 'initial_order',
+          '{"tenderness": "x", "chicken_tenders": 2, "tenderloin_name": "y", "quantity": 3, "round_number": 1, "order_note": "z"}'::jsonb,
+          'x:u3');
+select is(
+  (select count(*)::int from kitchen_print_dispatches where idempotency_key = 'x:u3'),
+  1, 'U3: the compact deny list never false-positives on tenderness / chicken_tenders / tenderloin_name / quantity / round_number / order_note'); -- 146
+
+-- ===== V. prep projection value typing (review cleanup) =====================
+-- CORRECTION-001 cleanup: name/unit survive ONLY as real JSON strings;
+-- object/array/boolean values are DROPPED, never serialized to JSON text.
+select is(
+  app.kitchen_prep_projection('[{"name": {"amountdue": 5}, "quantity": 1}]'::jsonb),
+  '[{"quantity": 1}]'::jsonb,
+  'V1: an OBJECT-valued prep name is DROPPED (never serialized to text)');                                       -- 147
+select is(
+  app.kitchen_prep_projection('[{"name": "A", "unit": ["host", 1]}]'::jsonb),
+  '[{"name": "A"}]'::jsonb,
+  'V2: an ARRAY-valued prep unit is DROPPED');                                                                   -- 148
+select is(
+  app.kitchen_prep_projection('[{"name": "Extra tahini", "unit": "tbsp", "quantity": 2}]'::jsonb),
+  '[{"name": "Extra tahini", "quantity": 2, "unit": "tbsp"}]'::jsonb,
+  'V3: valid string name/unit and a numeric quantity are RETAINED');                                             -- 149
+select is(
+  app.kitchen_prep_projection('[{"name": "A", "quantity": {"price": 1}}]'::jsonb),
+  '[{"name": "A"}]'::jsonb,
+  'V4: an OBJECT-valued quantity is DROPPED (only a JSON number survives)');                                     -- 150
+
+-- ===== W. note cap is payload-only, never a mutation (review cleanup) =======
+select public.sync_push('00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c100d001',
+  jsonb_build_array(jsonb_build_object(
+    'local_operation_id', 'c1-w1', 'operation_type', 'order.submit', 'target_entity', 'order',
+    'payload', jsonb_build_object(
+      'order_id', '00000000-0000-0000-0000-0001c1000d31', 'order_type', 'takeaway',
+      'currency_code', 'ILS', 'notes', repeat('o', 800),
+      'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+      'order_items', jsonb_build_array(jsonb_build_object(
+        'menu_item_id', '00000000-0000-0000-0000-0001c10000f1', 'quantity', 1,
+        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Falafel',
+        'notes', repeat('i', 800)))))));
+select ok(
+  (select length(money_free_payload ->> 'order_note') = 500
+      and length(money_free_payload -> 'items' -> 0 ->> 'note') = 500
+   from kitchen_print_dispatches
+   where order_id = '00000000-0000-0000-0000-0001c1000d31' and dispatch_type = 'initial_order'),
+  'W1: an order note and an item note longer than 500 chars are each CAPPED to 500 in the payload copy');        -- 151
+select ok(
+  (select length(notes) = 800 from orders where id = '00000000-0000-0000-0000-0001c1000d31')
+  and (select length(notes) = 800 from order_items
+        where order_id = '00000000-0000-0000-0000-0001c1000d31' and service_round_id is null),
+  'W2: the AUTHORITATIVE stored order/item notes keep their full length — the cap never mutated them');          -- 152
+select ok(
+  (select not (money_free_payload ? 'order_note')
+      and money_free_payload::text not ilike '%phone%'
+      and money_free_payload::text not ilike '%address%'
+      and money_free_payload::text not like '%_minor%'
+   from kitchen_print_dispatches
+   where order_id = '00000000-0000-0000-0000-0001c1000d0e' and dispatch_type = 'initial_order'),
+  'W3: an empty note stays omitted and the note-bearing payload introduces no money/privacy key');               -- 153
+
+-- ===== X. revoked-pairing pull/ack liveness (review cleanup) ================
+-- The pull and ack liveness JOINs are hand-duplicated; R only exercised the
+-- report RPC's copy. Prove pull and ack both reject a revoked-pairing device
+-- with the same non-enumerating invalid_session posture, never corrupt the
+-- dispatch, and leave the claim-expiry recovery path open.
+insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
+  ('00000000-0000-0000-0000-0001c100d008', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', 'pos');
+insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
+  ('00000000-0000-0000-0000-0001c100c008', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d008', 'active');
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at) values
+  ('00000000-0000-0000-0000-0001c100e008', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d008', '00000000-0000-0000-0000-0001c100c008', app.hash_provisioning_secret('tok-c1-x8'), true, null);
+select app.report_kitchen_printer_readiness(
+  '00000000-0000-0000-0000-0001c100d008', 'tok-c1-x8',
+  'kitchen_printer_only_v1', 'build-x8', 'kitchen_ticket',
+  'network', '80mm', repeat('88', 16), true, 0, 1);
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, local_operation_id, revision) values
+  ('00000000-0000-0000-0000-0001c1000d32', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d008', '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c10ef002', '00000000-0000-0000-0000-0001c1000f02', 'takeaway', 'submitted', 'ILS', 100, 0, 0, 100, 'c1-d32', 1);
+insert into kitchen_print_dispatches (id, organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key) values
+  ('00000000-0000-0000-0000-0001c1a11d32', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c1000d32', 'initial_order', '{"v":1,"kind":"initial_order"}'::jsonb, 'initial:00000000-0000-0000-0000-0001c1000d32');
+-- device X claims its dispatch while its pairing is still active.
+select app.pull_kitchen_print_dispatches('00000000-0000-0000-0000-0001c100d008', 'tok-c1-x8', 20, null, null, null);
+-- now revoke the pairing.
+update device_pairings set status = 'revoked', revoked_at = now() where id = '00000000-0000-0000-0000-0001c100c008';
+select is(
+  (select app.pull_kitchen_print_dispatches(
+     '00000000-0000-0000-0000-0001c100d008', 'tok-c1-x8', 20, null, null, null) ->> 'error'),
+  'invalid_session', 'X1: PULL by a revoked-pairing device returns the non-enumerating invalid_session');        -- 154
+select is(
+  (select app.acknowledge_kitchen_print_dispatch(
+     '00000000-0000-0000-0000-0001c100d008', 'tok-c1-x8',
+     '00000000-0000-0000-0000-0001c1a11d32', 'transport_accepted', null) ->> 'error'),
+  'invalid_session', 'X2: ACK by a revoked-pairing device returns the same invalid_session (no payload, no state change)'); -- 155
+select ok(
+  (select claimed_by_device_id = '00000000-0000-0000-0000-0001c100d008'
+      and completed_at is null and last_client_status is null
+      and money_free_payload = '{"v":1,"kind":"initial_order"}'::jsonb
+   from kitchen_print_dispatches where id = '00000000-0000-0000-0000-0001c1a11d32'),
+  'X3: the dispatch ownership/state/payload is not corrupted by the denied calls');                              -- 156
+-- expire the revoked device's claim; backdate created_at so this dispatch is
+-- the OLDEST candidate and therefore claimed within the pull limit regardless
+-- of other fixture rows (the retention window was removed, so age never hides
+-- an unresolved row).
+update kitchen_print_dispatches
+  set claim_expires_at = now() - interval '1 minute', created_at = now() - interval '100 days'
+  where id = '00000000-0000-0000-0000-0001c1a11d32';
+-- capture the recovery pull in its OWN statement first (the pull is a
+-- side-effecting claim; evaluating it in a sibling AND-operand would leave its
+-- ordering vs the state read unspecified).
+create temp table t_x4 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp', 20, null, null, null) as res;
+select ok(
+  (select exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                   where (e ->> 'id')::uuid = '00000000-0000-0000-0000-0001c1a11d32') from t_x4)
+  and (select claimed_by_device_id = '00000000-0000-0000-0000-0001c100d001'
+       from kitchen_print_dispatches where id = '00000000-0000-0000-0000-0001c1a11d32'),
+  'X4: the claim-expiry recovery path stays open — a live POS reclaims the dispatch after the lease lapses');    -- 157
 
 select * from finish();
 rollback;

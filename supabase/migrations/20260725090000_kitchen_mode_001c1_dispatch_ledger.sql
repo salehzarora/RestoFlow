@@ -157,13 +157,21 @@ create policy kitchen_printer_readiness_reports_del_deny on public.kitchen_print
 --    quantities always pass.
 --
 --    CORRECTION-001: keys are NORMALIZED to snake_case token form before
---    classification (CamelCase / PascalCase / kebab-case / dotted / spaced /
---    compact variants all collapse to the same tokens: unitPrice, unit-price
---    and unit_price are ONE key), and classification is TOKEN-BOUNDARY
+--    classification, so every key that carries a WORD BOUNDARY collapses to
+--    the same tokens — unitPrice, Unit.Price, unit-price and unit_price all
+--    become {unit, price} and are ONE key. Classification is TOKEN-BOUNDARY
 --    matching — never broad substrings — so `tenderness`, `chicken_tenders`
---    and `tenderloin_name` stay legal while `tender`, `taxAmount`,
---    `serviceFee`, `customerPhone`, `bluetoothAddress`, `apiKey` and
---    `accessToken` are hostile.
+--    and `tenderloin_name` stay legal while `taxAmount`, `serviceFee`,
+--    `customerPhone`, `bluetoothAddress`, `apiKey` and `accessToken` are
+--    hostile.
+--
+--    CORRECTION-001 (review cleanup): a COMPACT all-lowercase spelling that
+--    carries NO boundary at all (unitprice / amountdue / apikey /
+--    connectionconfig) does NOT split into the hostile single-word tokens, so
+--    normalization alone would let it pass. Those compact compounds are
+--    therefore enumerated EXPLICITLY as their own tokens in the deny array
+--    below (exact whole-token spellings only — never substrings — so
+--    `tenderness` and `chicken_tenders` are never affected).
 -- ----------------------------------------------------------------------------
 create or replace function app.kitchen_payload_normalize_key(p_key text)
   returns text
@@ -184,7 +192,7 @@ as $$
 $$;
 
 comment on function app.kitchen_payload_normalize_key(text) is
-  'KITCHEN-MODE-001C1-CORRECTION-001 INTERNAL: canonical snake_case token form of a JSON key — token boundaries inserted at lower/digit->UPPER and ACRONYM->Word transitions, every non-alphanumeric run becomes one underscore, lowercased, collapsed, trimmed. unitPrice / unit-price / Unit.Price / unit_price all normalize identically, so the payload guard cannot be bypassed by casing or separator games.';
+  'KITCHEN-MODE-001C1-CORRECTION-001 INTERNAL: canonical snake_case token form of a JSON key — token boundaries inserted at lower/digit->UPPER and ACRONYM->Word transitions, every non-alphanumeric run becomes one underscore, lowercased, collapsed, trimmed. unitPrice / unit-price / Unit.Price / unit_price all normalize identically to {unit, price}, so the payload guard cannot be bypassed by casing or separator games. NOTE: a COMPACT all-lowercase spelling with no boundary (unitprice) stays a single token and is caught by the explicit compact-compound deny list in app.kitchen_payload_offending_key, not here.';
 
 revoke all on function app.kitchen_payload_normalize_key(text) from public;
 revoke all on function app.kitchen_payload_normalize_key(text) from anon;
@@ -211,7 +219,12 @@ begin
       -- (1) financial / privacy / endpoint / credential TOKENS at any token
       --     boundary of the normalized key ('minor' as a token also covers
       --     every *_minor spelling after normalization);
-      -- (2) the two compounds whose individual tokens are innocuous.
+      -- (2) COMPACT all-lowercase compounds that carry no boundary to split on
+      --     (unitprice / amountdue / apikey / connectionconfig / ...) — matched
+      --     as WHOLE tokens (exact spellings, never substrings), so
+      --     `tenderness` and `chicken_tenders` stay legal;
+      -- (3) the api_key / connection_config compounds whose individual tokens
+      --     are innocuous.
       if string_to_array(v_norm, '_') && array[
            'price', 'prices', 'subtotal', 'subtotals', 'total', 'totals',
            'paid', 'amount', 'amounts', 'change', 'currency', 'currencies',
@@ -220,7 +233,12 @@ begin
            'phone', 'phones', 'address', 'addresses', 'email', 'emails',
            'host', 'hosts', 'port', 'ports', 'token', 'tokens',
            'credential', 'credentials', 'secret', 'secrets',
-           'password', 'passwords', 'minor']
+           'password', 'passwords', 'minor',
+           -- compact all-lowercase compounds (no case/separator boundary):
+           'unitprice', 'priceminor', 'totalvalue', 'amountdue', 'paymentinfo',
+           'taxamount', 'servicefee', 'tipamount', 'customerphone',
+           'deliveryaddress', 'bluetoothaddress', 'connectionconfig',
+           'apikey', 'accesstoken', 'currencycode', 'paymentmethod']
          or v_norm ~ '(^|_)api_keys?(_|$)'
          or v_norm ~ '(^|_)connection_configs?(_|$)'
       then
@@ -246,7 +264,7 @@ end;
 $$;
 
 comment on function app.kitchen_payload_offending_key(jsonb) is
-  'KITCHEN-MODE-001C1: recursive KEY-ONLY inspection of a kitchen dispatch payload at every nesting level (objects and arrays). CORRECTION-001: each key is first normalized (app.kitchen_payload_normalize_key — CamelCase/kebab/dotted/compact all collapse to snake_case) and then judged by TOKEN-BOUNDARY matching against the closed money/financial/PII/endpoint/credential vocabulary (plus the api_key / connection_config compounds and the minor token). Returns the first hostile ORIGINAL key or NULL when clean. Values are never judged, so numeric quantities always pass and harmless text values can never false-positive. INTERNAL — enforced by the kitchen_print_dispatches trigger on INSERT AND UPDATE.';
+  'KITCHEN-MODE-001C1: recursive KEY-ONLY inspection of a kitchen dispatch payload at every nesting level (objects and arrays). CORRECTION-001: each key is first normalized (app.kitchen_payload_normalize_key — CamelCase/PascalCase/kebab/dotted/spaced all collapse to snake_case tokens) and then judged by TOKEN-BOUNDARY matching against the closed money/financial/PII/endpoint/credential vocabulary, plus an EXPLICIT deny list of compact all-lowercase compounds (unitprice/amountdue/apikey/... — matched as whole tokens, never substrings, so tenderness/chicken_tenders stay legal) and the api_key / connection_config regex compounds and the minor token. Returns the first hostile ORIGINAL key or NULL when clean. Values are never judged, so numeric quantities always pass and harmless text values can never false-positive. INTERNAL — enforced by the kitchen_print_dispatches trigger on INSERT AND UPDATE.';
 
 revoke all on function app.kitchen_payload_offending_key(jsonb) from public;
 revoke all on function app.kitchen_payload_offending_key(jsonb) from anon;
@@ -258,6 +276,10 @@ revoke all on function app.kitchen_payload_offending_key(jsonb) from authenticat
 -- dispatch — unknown/non-operational fields are ignored here (the tolerant
 -- house convention; order validation itself is unchanged), text is trimmed
 -- and bounded, and quantity survives only as a real JSON number.
+-- CORRECTION-001 (review cleanup): name/unit survive ONLY when the value is a
+-- real JSON STRING — an object/array/boolean/null value for name or unit is
+-- DROPPED, never serialized to JSON text (so a prep element like
+-- {"name": {"amountdue": 5}} can never smuggle a structured value in as text).
 create or replace function app.kitchen_prep_projection(p_prep jsonb)
   returns jsonb
   language sql
@@ -271,10 +293,12 @@ as $$
       from (
         select ord,
                jsonb_strip_nulls(jsonb_build_object(
-                 'name',     nullif(left(btrim(coalesce(e.elem ->> 'name', '')), 120), ''),
+                 'name',     case when jsonb_typeof(e.elem -> 'name') = 'string'
+                                  then nullif(left(btrim(e.elem ->> 'name'), 120), '') end,
                  'quantity', case when jsonb_typeof(e.elem -> 'quantity') = 'number'
                                   then e.elem -> 'quantity' end,
-                 'unit',     nullif(left(btrim(coalesce(e.elem ->> 'unit', '')), 40), ''))) as proj
+                 'unit',     case when jsonb_typeof(e.elem -> 'unit') = 'string'
+                                  then nullif(left(btrim(e.elem ->> 'unit'), 40), '') end)) as proj
         from jsonb_array_elements(p_prep) with ordinality as e(elem, ord)
         where jsonb_typeof(e.elem) = 'object'
       ) s
@@ -431,6 +455,15 @@ create trigger kitchen_print_dispatches_guard_trg
 -- 5. INTERNAL payload builders — server snapshots from AUTHORITATIVE rows in
 --    the same transaction. Money-free BY CONSTRUCTION (no money column is
 --    ever read); the trigger then re-proves it structurally.
+--
+--    CORRECTION-001 NOTE CAP: order_note (orders.notes) and each item note
+--    (order_items.notes) are trimmed, omitted when empty, and bounded to 500
+--    characters HERE — in the IMMUTABLE kitchen dispatch payload COPY ONLY.
+--    The authoritative stored orders.notes / order_items.notes rows are NEVER
+--    modified by these builders (they are pure read-side snapshots), so the
+--    500-char cap is a physical-ticket display bound on the printed slip, not
+--    a mutation of the order. A stored note longer than 500 chars keeps its
+--    full length in the order; only its dispatch copy is capped.
 -- ----------------------------------------------------------------------------
 create or replace function app.kitchen_dispatch_payload_initial(
   p_organization_id uuid,
