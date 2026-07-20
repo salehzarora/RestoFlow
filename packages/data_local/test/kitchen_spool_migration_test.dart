@@ -9,6 +9,8 @@ import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:sqlite3/sqlite3.dart' as raw_sqlite;
 import 'package:test/test.dart';
 
+import 'support/source_boundary.dart';
+
 /// KITCHEN-MODE-001C2A §11 — LocalDatabase v4 migration safety.
 ///
 /// The harness matches the house pattern (menu_migration_test.dart): build a
@@ -361,13 +363,19 @@ void main() {
       // LocalDatabase takes only a QueryExecutor: there is no SecureKeyStore
       // anywhere in its construction, and this test opens + migrates with NO
       // key material in existence. The stronger structural proof: the
-      // database/migration source has no key-store or crypto import.
-      final source = File('lib/src/local_database.dart').readAsStringSync();
-      expect(source, isNot(contains('SecureKeyStore')));
-      expect(source, isNot(contains('kitchen_spool_cipher')));
-      expect(source, isNot(contains('kitchen_spool_key_manager')));
-      expect(source, isNot(contains('provisionKey')));
-      expect(source, isNot(contains('provisionPersistentKey')));
+      // database/migration sources (main + generated part) have no key-store
+      // or crypto reference. CI-PORTABLE: the package root is resolved via a
+      // deterministic ancestor search (CI runs `dart test
+      // packages/data_local` from the REPOSITORY ROOT; local runs start
+      // inside the package) — never from an assumed working directory, and
+      // never with an assumed path-separator style.
+      final packageRoot = locateDataLocalPackageRoot();
+      final code = readDatabaseSourcesCodeOnly(packageRoot);
+      expect(
+        findCryptoBoundaryViolation(code),
+        isNull,
+        reason: 'database open/migration code must never touch crypto keys',
+      );
 
       final db = LocalDatabase(NativeDatabase.memory());
       addTearDown(db.close);
