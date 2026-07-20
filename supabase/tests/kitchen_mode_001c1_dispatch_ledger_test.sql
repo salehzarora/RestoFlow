@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(80);
+select plan(143);
 
 -- ===== fixture ===============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -678,27 +678,41 @@ select is(
 select ok(
   not has_function_privilege('authenticated', 'app.create_kitchen_dispatch(uuid,uuid,uuid,uuid,uuid,text,jsonb,uuid,uuid,uuid)', 'execute')
   and not has_function_privilege('authenticated', 'app.kitchen_dispatch_payload_initial(uuid,uuid)', 'execute')
-  and not has_function_privilege('authenticated', 'app.kitchen_payload_offending_key(jsonb)', 'execute'),
+  and not has_function_privilege('authenticated', 'app.kitchen_payload_offending_key(jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'app.kitchen_payload_normalize_key(text)', 'execute')
+  and not has_function_privilege('authenticated', 'app.kitchen_prep_projection(jsonb)', 'execute'),
   'the INTERNAL helpers are inaccessible to client roles');                                                      -- 77
 select ok(
   has_function_privilege('authenticated', 'public.report_kitchen_printer_readiness(uuid,text,text,text,text,text,text,text,boolean,integer,integer)', 'execute')
-  and has_function_privilege('authenticated', 'public.pull_kitchen_print_dispatches(uuid,text,integer,timestamptz,uuid)', 'execute')
+  and has_function_privilege('authenticated', 'public.pull_kitchen_print_dispatches(uuid,text,integer,timestamptz,uuid,integer)', 'execute')
   and has_function_privilege('authenticated', 'public.acknowledge_kitchen_print_dispatch(uuid,text,uuid,text,text)', 'execute')
   and has_function_privilege('authenticated', 'public.get_kitchen_workflow_transition_readiness(uuid,uuid,uuid)', 'execute')
-  and not has_function_privilege('anon', 'app.pull_kitchen_print_dispatches(uuid,text,integer,timestamptz,uuid)', 'execute')
-  and not has_function_privilege('anon', 'app.report_kitchen_printer_readiness(uuid,text,text,text,text,text,text,text,boolean,integer,integer)', 'execute'),
-  'grants: authenticated may execute the new RPCs; anon may not reach the app functions');                       -- 78
+  and not has_function_privilege('anon', 'app.pull_kitchen_print_dispatches(uuid,text,integer,timestamptz,uuid,integer)', 'execute')
+  and not has_function_privilege('anon', 'public.pull_kitchen_print_dispatches(uuid,text,integer,timestamptz,uuid,integer)', 'execute')
+  and not has_function_privilege('anon', 'app.report_kitchen_printer_readiness(uuid,text,text,text,text,text,text,text,boolean,integer,integer)', 'execute')
+  and not has_function_privilege('anon', 'app.acknowledge_kitchen_print_dispatch(uuid,text,uuid,text,text)', 'execute')
+  and not has_function_privilege('anon', 'app.get_kitchen_workflow_transition_readiness(uuid,uuid,uuid)', 'execute')
+  and not has_function_privilege('anon', 'app.submit_order(uuid,uuid,uuid,text,text,uuid,uuid,text,text,jsonb,bigint,bigint,bigint,bigint,timestamptz)', 'execute')
+  and not has_function_privilege('anon', 'app.add_order_items(uuid,uuid,uuid,text,jsonb,timestamptz)', 'execute')
+  and not has_function_privilege('anon', 'app.void_order(uuid,uuid,uuid,text,text,integer)', 'execute')
+  and not has_function_privilege('anon', 'app.sync_push(uuid,uuid,jsonb)', 'execute'),
+  'grants: authenticated may execute the new RPCs; anon may reach NOTHING (explicit posture)');                  -- 78
 select ok(
   (select bool_and(p.prosecdef and p.proconfig::text like '%search_path%')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'app'
       and p.proname in ('report_kitchen_printer_readiness', 'pull_kitchen_print_dispatches',
                         'acknowledge_kitchen_print_dispatch', 'get_kitchen_workflow_transition_readiness',
-                        'submit_order', 'add_order_items', 'void_order', 'create_kitchen_dispatch'))
+                        'submit_order', 'add_order_items', 'void_order', 'create_kitchen_dispatch',
+                        'sync_push'))
   and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'app' and p.proname = 'submit_order') = 1
   and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'app' and p.proname = 'void_order') = 1,
+        where n.nspname = 'app' and p.proname = 'void_order') = 1
+  and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'app' and p.proname = 'sync_push') = 1
+  and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'app' and p.proname = 'pull_kitchen_print_dispatches') = 1,
   'SECURITY DEFINER + pinned search_path everywhere; no stale overloads of the re-created RPCs');                -- 79
 select ok(
   (select count(*) >= 3 from audit_events
@@ -716,6 +730,739 @@ select ok(
                            'amount_minor', 5, 'money_free_payload', jsonb_build_object('a', 1)))
        = jsonb_build_object('dispatch_type', 'initial_order', 'order_code', '#X')),
   'dispatch creation is audited with the PIN-session actor; classification + safe-detail drop money and payloads'); -- 80
+
+-- ============================================================================
+-- CORRECTION-001 regressions (K..T).
+-- ============================================================================
+
+-- ===== K. REAL sync_push path: customer_display_name ========================
+create temp table t_k1 as
+  select public.sync_push('00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c100d001',
+    jsonb_build_array(jsonb_build_object(
+      'local_operation_id', 'c1-k1', 'operation_type', 'order.submit', 'target_entity', 'order',
+      'payload', jsonb_build_object(
+        'order_id', '00000000-0000-0000-0000-0001c1000d0a', 'order_type', 'takeaway',
+        'currency_code', 'ILS', 'customer_name', repeat('n', 100),
+        'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+        'order_items', jsonb_build_array(jsonb_build_object(
+          'menu_item_id', '00000000-0000-0000-0000-0001c10000f1', 'quantity', 1,
+          'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Falafel')))))) as res;
+select is((select res -> 'results' -> 0 ->> 'status' from t_k1), 'applied',
+  'K1: the REAL public.sync_push order.submit path applies');                                                    -- 81
+select is(
+  (select length(customer_name) from orders where id = '00000000-0000-0000-0000-0001c1000d0a'),
+  80, 'K2: the stored order name keeps the current stamping behavior (80-char cap)');                            -- 82
+select is(
+  (select money_free_payload ->> 'customer_display_name' from kitchen_print_dispatches
+    where order_id = '00000000-0000-0000-0000-0001c1000d0a' and dispatch_type = 'initial_order'),
+  repeat('n', 80),
+  'K3: the dispatch payload carries the SAFELY TRUNCATED stored name on the REAL push path');                    -- 83
+create temp table t_k1r as
+  select public.sync_push('00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c100d001',
+    jsonb_build_array(jsonb_build_object(
+      'local_operation_id', 'c1-k1', 'operation_type', 'order.submit', 'target_entity', 'order',
+      'payload', jsonb_build_object(
+        'order_id', '00000000-0000-0000-0000-0001c1000d0a', 'order_type', 'takeaway',
+        'currency_code', 'ILS', 'customer_name', repeat('n', 100),
+        'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+        'order_items', jsonb_build_array(jsonb_build_object(
+          'menu_item_id', '00000000-0000-0000-0000-0001c10000f1', 'quantity', 1,
+          'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Falafel')))))) as res;
+select ok(
+  (select (res -> 'results' -> 0 ->> 'idempotency_replay')::boolean from t_k1r)
+  and (select count(*) = 1 from kitchen_print_dispatches
+        where order_id = '00000000-0000-0000-0000-0001c1000d0a')
+  and (select count(*) = 1 from audit_events
+        where action = 'kitchen.dispatch_created'
+          and new_values ->> 'order_code'
+              = '#' || upper(right(replace('00000000-0000-0000-0000-0001c1000d0a', '-', ''), 6))),
+  'K4: a REAL push replay neither duplicates the dispatch nor re-audits');                                       -- 84
+create temp table t_k2 as
+  select public.sync_push('00000000-0000-0000-0000-0001c10c5003', '00000000-0000-0000-0000-0001c100d003',
+    jsonb_build_array(jsonb_build_object(
+      'local_operation_id', 'c1-k2', 'operation_type', 'order.submit', 'target_entity', 'order',
+      'payload', jsonb_build_object(
+        'order_id', '00000000-0000-0000-0000-0001c1000d0b', 'order_type', 'takeaway',
+        'currency_code', 'ILS', 'customer_name', 'Kds Customer',
+        'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+        'order_items', jsonb_build_array(jsonb_build_object(
+          'menu_item_id', '00000000-0000-0000-0000-0001c10000f1', 'quantity', 1,
+          'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Falafel')))))) as res;
+select ok(
+  (select res -> 'results' -> 0 ->> 'status' = 'applied' from t_k2)
+  and not exists (select 1 from kitchen_print_dispatches
+                   where order_id = '00000000-0000-0000-0000-0001c1000d0b'),
+  'K5: the kds-branch REAL push path still creates NO dispatch');                                                -- 85
+create temp table t_k3 as
+  select public.sync_push('00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c100d001',
+    jsonb_build_array(jsonb_build_object(
+      'local_operation_id', 'c1-k3', 'operation_type', 'order.submit', 'target_entity', 'order',
+      'payload', jsonb_build_object(
+        'order_id', '00000000-0000-0000-0000-0001c1000d0c', 'order_type', 'takeaway',
+        'currency_code', 'ILS',
+        'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+        'order_items', jsonb_build_array(jsonb_build_object(
+          'menu_item_id', '00000000-0000-0000-0000-0001c10000f1', 'quantity', 1,
+          'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Falafel')))))) as res;
+select ok(
+  (select res -> 'results' -> 0 ->> 'status' = 'applied' from t_k3)
+  and (select not (money_free_payload ? 'customer_display_name')
+           and money_free_payload::text not ilike '%phone%'
+           and money_free_payload::text not ilike '%address%'
+       from kitchen_print_dispatches
+       where order_id = '00000000-0000-0000-0000-0001c1000d0c' and dispatch_type = 'initial_order'),
+  'K6: a nameless REAL push carries NO customer key — and never phone/address');                                 -- 86
+
+-- ===== L. order-level kitchen note ==========================================
+select public.sync_push('00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c100d001',
+  jsonb_build_array(jsonb_build_object(
+    'local_operation_id', 'c1-l1', 'operation_type', 'order.submit', 'target_entity', 'order',
+    'payload', jsonb_build_object(
+      'order_id', '00000000-0000-0000-0000-0001c1000d0d', 'order_type', 'takeaway',
+      'currency_code', 'ILS', 'customer_name', 'Dana', 'notes', 'no onions please',
+      'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+      'order_items', jsonb_build_array(jsonb_build_object(
+        'menu_item_id', '00000000-0000-0000-0000-0001c10000f1', 'quantity', 1,
+        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Falafel'))))));
+select ok(
+  (select money_free_payload ->> 'order_note' = 'no onions please'
+      and (length(money_free_payload::text)
+           - length(replace(money_free_payload::text, '"order_note"', '')))
+          / length('"order_note"') = 1
+   from kitchen_print_dispatches
+   where order_id = '00000000-0000-0000-0000-0001c1000d0d' and dispatch_type = 'initial_order'),
+  'L1: the initial dispatch carries the order-level kitchen note EXACTLY ONCE');                                 -- 87
+select is(
+  (select notes from orders where id = '00000000-0000-0000-0000-0001c1000d0d'),
+  'no onions please', 'L2: KDS parity — orders.notes (what the KDS row sweep serves) is stored verbatim');       -- 88
+select public.sync_push('00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c100d001',
+  jsonb_build_array(jsonb_build_object(
+    'local_operation_id', 'c1-l3', 'operation_type', 'order.submit', 'target_entity', 'order',
+    'payload', jsonb_build_object(
+      'order_id', '00000000-0000-0000-0000-0001c1000d0e', 'order_type', 'takeaway',
+      'currency_code', 'ILS', 'notes', '   ',
+      'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+      'order_items', jsonb_build_array(jsonb_build_object(
+        'menu_item_id', '00000000-0000-0000-0000-0001c10000f1', 'quantity', 1,
+        'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Falafel'))))));
+select ok(
+  (select not (money_free_payload ? 'order_note') from kitchen_print_dispatches
+    where order_id = '00000000-0000-0000-0000-0001c1000d0e' and dispatch_type = 'initial_order'),
+  'L3: an empty/whitespace order note is OMITTED');                                                              -- 89
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, table_id, notes, local_operation_id, revision) values
+  ('00000000-0000-0000-0000-0001c1000d0f', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d001', '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c10ef002', '00000000-0000-0000-0000-0001c1000f02', 'dine_in', 'submitted', 'ILS', 500, 0, 0, 500, '00000000-0000-0000-0000-0001c100ab2b', 'standing table note', 'c1-d0f', 1);
+create temp table t_l4 as
+  select app.add_order_items(
+    '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d0f',
+    '00000000-0000-0000-0000-0001c100d001', 'c1-l4',
+    '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+    null) as res;
+select ok(
+  (select (res ->> 'ok')::boolean from t_l4)
+  and (select not (money_free_payload ? 'order_note')
+           and jsonb_array_length(money_free_payload -> 'items') = 1
+       from kitchen_print_dispatches d, t_l4 t
+       where d.service_round_id = (t.res ->> 'round_id')::uuid),
+  'L4: the ROUND delta ticket does NOT repeat the standing order note (KDS shows it on the order card)');        -- 90
+
+-- ===== M. STICKY possibly_printed hold (on the d01 VOID dispatch from H) ====
+create temp table t_m0 as
+  select id as vd from kitchen_print_dispatches
+    where order_id = '00000000-0000-0000-0000-0001c1000d01' and dispatch_type = 'void';
+select ok(
+  (select (res ->> 'ok')::boolean and (res ->> 'idempotency_replay')::boolean
+       and not (res ->> 'completed')::boolean
+   from (select app.acknowledge_kitchen_print_dispatch(
+          '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+          (select vd from t_m0), 'possibly_printed', null) as res) s),
+  'M1: the owner may REPLAY possibly_printed idempotently');                                                     -- 91
+select is(
+  (select res ->> 'error' from (select app.acknowledge_kitchen_print_dispatch(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+    (select vd from t_m0), 'imported', null) as res) s),
+  'ambiguous_print_hold', 'M2: possibly_printed -> imported is REFUSED (sticky hold)');                          -- 92
+select is(
+  (select res ->> 'error' from (select app.acknowledge_kitchen_print_dispatch(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+    (select vd from t_m0), 'failed_retryable', 'printer_unreachable') as res) s),
+  'ambiguous_print_hold', 'M3: possibly_printed -> failed_retryable is REFUSED');                                -- 93
+select is(
+  (select res ->> 'error' from (select app.acknowledge_kitchen_print_dispatch(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+    (select vd from t_m0), 'blocked_configuration', 'printer_not_configured') as res) s),
+  'ambiguous_print_hold', 'M4: possibly_printed -> blocked_configuration is REFUSED');                           -- 94
+select is(
+  (select res ->> 'error' from (select app.acknowledge_kitchen_print_dispatch(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+    (select vd from t_m0), 'transport_accepted', null) as res) s),
+  'ambiguous_print_hold', 'M5: possibly_printed -> transport_accepted is REFUSED (never silent success)');       -- 95
+select ok(
+  (select last_client_status = 'possibly_printed' and claim_expires_at is null and completed_at is null
+   from kitchen_print_dispatches where id = (select vd from t_m0))
+  and (select status = 'voided' from orders where id = '00000000-0000-0000-0000-0001c1000d01'),
+  'M6: the row stays a PERMANENT unresolved hold; order state untouched');                                       -- 96
+create temp table t_m7 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp', 20, null, null, null) as res;
+select ok(
+  (select not exists (
+     select 1 from jsonb_array_elements(res -> 'dispatches') e
+      where (e ->> 'id')::uuid = (select vd from t_m0)) from t_m7),
+  'M7: even its OWNER can never re-pull a possibly_printed dispatch');                                           -- 97
+
+-- ===== N. one stable tuple for ORDER BY + cursor (tied timestamps) ==========
+select app.submit_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d11',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-n1', 'takeaway', null, null, 'ILS', null,
+  '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+  500, 0, 0, 500, null);
+select app.submit_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d14',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-n4', 'takeaway', null, null, 'ILS', null,
+  '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+  500, 0, 0, 500, null);
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, table_id, local_operation_id, revision) values
+  ('00000000-0000-0000-0000-0001c1000d13', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d001', '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c10ef002', '00000000-0000-0000-0000-0001c1000f02', 'dine_in', 'submitted', 'ILS', 500, 0, 0, 500, '00000000-0000-0000-0000-0001c100ab2b', 'c1-d13', 1);
+create temp table t_n3 as
+  select app.add_order_items(
+    '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d13',
+    '00000000-0000-0000-0000-0001c100d001', 'c1-n3',
+    '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+    null) as res;
+select app.submit_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d12',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-n2', 'takeaway', null, null, 'ILS', null,
+  '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+  500, 0, 0, 500, null);
+select app.void_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d12',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-vn2', 'tie fixture', null);
+create temp table t_nids as
+  select (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d11' and dispatch_type = 'initial_order') as init_a,
+         (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d14' and dispatch_type = 'initial_order') as init_b,
+         (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d13' and dispatch_type = 'service_round') as round_c,
+         (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d12' and dispatch_type = 'void') as void_d,
+         (select (res ->> 'round_id')::uuid from t_n3) as round_c_round;
+update kitchen_print_dispatches
+  set created_at = now() - interval '1 hour'
+  where id in (select unnest(array[init_a, init_b, round_c, void_d]) from t_nids);
+create function pg_temp.drain_pages(p_dev uuid, p_tok text)
+  returns table(seq int, id uuid, dtype text, first_has_more boolean)
+  language plpgsql as $$
+declare
+  v_res jsonb; v_cur jsonb := null; v_page int := 0; v_e jsonb;
+  v_seq int := 0; v_first boolean := null;
+begin
+  loop
+    v_page := v_page + 1;
+    exit when v_page > 60;
+    if v_cur is null then
+      v_res := app.pull_kitchen_print_dispatches(p_dev, p_tok, 1, null, null, null);
+    else
+      v_res := app.pull_kitchen_print_dispatches(p_dev, p_tok, 1,
+                 (v_cur ->> 'created_at')::timestamptz, (v_cur ->> 'id')::uuid,
+                 (v_cur ->> 'type_rank')::int);
+    end if;
+    exit when not (v_res ->> 'ok')::boolean;
+    if v_first is null then
+      v_first := (v_res ->> 'has_more')::boolean;
+    end if;
+    for v_e in select * from jsonb_array_elements(v_res -> 'dispatches') loop
+      v_seq := v_seq + 1;
+      seq := v_seq; id := (v_e ->> 'id')::uuid; dtype := v_e ->> 'dispatch_type';
+      first_has_more := v_first;
+      return next;
+    end loop;
+    exit when jsonb_array_length(v_res -> 'dispatches') = 0;
+    exit when not (v_res ->> 'has_more')::boolean;
+    v_cur := v_res -> 'next_cursor';
+  end loop;
+end;
+$$;
+create temp table t_drain as
+  select * from pg_temp.drain_pages('00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2');
+select ok(
+  (select count(*) = 1 from t_drain where id = (select init_a from t_nids))
+  and (select count(*) = 1 from t_drain where id = (select init_b from t_nids))
+  and (select count(*) = 1 from t_drain where id = (select round_c from t_nids))
+  and (select count(*) = 1 from t_drain where id = (select void_d from t_nids)),
+  'N1: a limit-1 drain over TIED timestamps receives every dispatch EXACTLY once (no skips)');                   -- 98
+select ok(
+  (select count(*) = count(distinct id) from t_drain),
+  'N2: no dispatch is duplicated across pages');                                                                 -- 99
+select ok(
+  (select array_agg(id order by seq) from (select seq, id from t_drain order by seq limit 4) f)
+  = (select array[least(init_a, init_b), greatest(init_a, init_b), round_c, void_d] from t_nids),
+  'N3: tied rows drain in the STABLE tuple order — initial < initial (id), round, void');                        -- 100
+create temp table t_n4 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2', 1, null, null, null) as res;
+select ok(
+  (select jsonb_array_length(res -> 'dispatches') = 1 and (res ->> 'has_more')::boolean from t_n4),
+  'N4: OWN ACTIVE CLAIMS never inflate the page past p_limit, and has_more stays truthful');                     -- 101
+select ok(
+  (select app.pull_kitchen_print_dispatches(
+     '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2', 1, now(), gen_random_uuid(), 9) ->> 'error')
+    = 'invalid_cursor'
+  and (select app.pull_kitchen_print_dispatches(
+     '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2', 1, now(), null, null) ->> 'error')
+    = 'invalid_cursor',
+  'N5: an invalid or partial cursor (bad rank / missing components) is REJECTED');                               -- 102
+select is(
+  (select app.pull_kitchen_print_dispatches(
+     '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2', 51, null, null, null) ->> 'error'),
+  'invalid_limit', 'N6: p_limit stays capped at 50');                                                            -- 103
+
+-- ===== O. VOID vs original: no resurrection, ever ===========================
+select app.submit_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d21',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-o1', 'takeaway', null, null, 'ILS', null,
+  '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+  500, 0, 0, 500, null);
+create temp table t_o1 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp', 20, null, null, null) as res;
+create temp table t_oids as
+  select (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d21' and dispatch_type = 'initial_order') as f_init;
+select ok(
+  (select exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                   where (e ->> 'id')::uuid = (select f_init from t_oids)) from t_o1)
+  and (select claimed_by_device_id = '00000000-0000-0000-0000-0001c100d001'
+       from kitchen_print_dispatches where id = (select f_init from t_oids)),
+  'O1: device 1 ACTIVELY CLAIMS the original initial ticket');                                                   -- 104
+select app.void_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d21',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-vo21', 'changed mind', null);
+select ok(
+  (select d.superseded_by_dispatch_id = v.id
+       and d.claimed_by_device_id = '00000000-0000-0000-0000-0001c100d001'
+       and d.claimed_at is not null
+   from kitchen_print_dispatches d,
+        kitchen_print_dispatches v
+   where d.id = (select f_init from t_oids)
+     and v.order_id = '00000000-0000-0000-0000-0001c1000d21' and v.dispatch_type = 'void'),
+  'O2: the VOID links the ACTIVELY CLAIMED original (claim provenance preserved, never erased)');                -- 105
+create temp table t_o3 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2', 20, null, null, null) as res;
+select ok(
+  (select not exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                       where (e ->> 'id')::uuid = (select f_init from t_oids))
+      and exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                   where e ->> 'dispatch_type' = 'void'
+                     and e ->> 'order_id' = '00000000-0000-0000-0000-0001c1000d21')
+   from t_o3),
+  'O3: another device can never claim the superseded original — but pulls the VOID');                            -- 106
+create temp table t_o4 as
+  select app.acknowledge_kitchen_print_dispatch(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+    (select f_init from t_oids), 'imported', null) as res;
+select ok(
+  (select (res ->> 'ok')::boolean from t_o4)
+  and (select superseded_by_dispatch_id is not null and last_client_status = 'imported'
+       from kitchen_print_dispatches where id = (select f_init from t_oids)),
+  'O4: the claim OWNER may still acknowledge its already-imported original; supersession is NEVER cleared');     -- 107
+update kitchen_print_dispatches
+  set claim_expires_at = now() - interval '1 minute'
+  where id = (select f_init from t_oids);
+create temp table t_o5 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2', 20, null, null, null) as res;
+select ok(
+  (select not exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                       where (e ->> 'id')::uuid = (select f_init from t_oids)) from t_o5),
+  'O5: even after the claim EXPIRES, stale-claim recovery cannot resurrect a superseded original');              -- 108
+create temp table t_o6 as
+  select app.void_order(
+    '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d21',
+    '00000000-0000-0000-0000-0001c100d001', 'c1-vo21', 'changed mind', null) as res;
+select ok(
+  (select (res ->> 'idempotency_replay')::boolean from t_o6)
+  and (select count(*) = 1 from kitchen_print_dispatches
+        where order_id = '00000000-0000-0000-0000-0001c1000d21' and dispatch_type = 'void')
+  and (select count(*) = 1 from audit_events
+        where action = 'kitchen.dispatch_void_created'
+          and new_values ->> 'order_code'
+              = '#' || upper(right(replace('00000000-0000-0000-0000-0001c1000d21', '-', ''), 6))),
+  'O6: a VOID replay is idempotent — no duplicate void, no repeated supersession, no duplicate audit');          -- 109
+select app.submit_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d22',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-o2', 'takeaway', null, null, 'ILS', null,
+  '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+  500, 0, 0, 500, null);
+select app.pull_kitchen_print_dispatches(
+  '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp', 20, null, null, null);
+select app.acknowledge_kitchen_print_dispatch(
+  '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+  (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d22' and dispatch_type = 'initial_order'),
+  'transport_accepted', null);
+select app.void_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d22',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-vo22', 'printed then voided', null);
+select ok(
+  (select completed_at is not null and superseded_by_dispatch_id is null
+   from kitchen_print_dispatches
+   where order_id = '00000000-0000-0000-0000-0001c1000d22' and dispatch_type = 'initial_order')
+  and (select count(*) = 1 from kitchen_print_dispatches
+        where order_id = '00000000-0000-0000-0000-0001c1000d22' and dispatch_type = 'void')
+  and (select status = 'voided' from orders where id = '00000000-0000-0000-0000-0001c1000d22'),
+  'O7: a COMPLETED original stays unlinked history; the VOID slip still dispatches; order state is the RPC''s'); -- 110
+select app.submit_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d23',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-o3', 'takeaway', null, null, 'ILS', null,
+  '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+  500, 0, 0, 500, null);
+select app.pull_kitchen_print_dispatches(
+  '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp', 20, null, null, null);
+select app.acknowledge_kitchen_print_dispatch(
+  '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+  (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d23' and dispatch_type = 'initial_order'),
+  'possibly_printed', 'crash_during_send');
+select app.void_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d23',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-vo23', 'ambiguous then voided', null);
+create temp table t_o8 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2', 20, null, null, null) as res;
+select ok(
+  (select d.superseded_by_dispatch_id = v.id
+       and d.last_client_status = 'possibly_printed'
+       and d.claim_expires_at is null
+   from kitchen_print_dispatches d, kitchen_print_dispatches v
+   where d.order_id = '00000000-0000-0000-0000-0001c1000d23' and d.dispatch_type = 'initial_order'
+     and v.order_id = '00000000-0000-0000-0000-0001c1000d23' and v.dispatch_type = 'void')
+  and (select not exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                           where e ->> 'order_id' = '00000000-0000-0000-0000-0001c1000d23'
+                             and e ->> 'dispatch_type' = 'initial_order')
+          and exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                       where e ->> 'order_id' = '00000000-0000-0000-0000-0001c1000d23'
+                         and e ->> 'dispatch_type' = 'void')
+       from t_o8),
+  'O8: a possibly_printed original is LINKED to the void, stays sticky-ambiguous, never re-serves; the VOID prints'); -- 111
+
+-- ===== P. readiness selection + retention ===================================
+select app.report_kitchen_printer_readiness(
+  '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2',
+  'kitchen_printer_only_v1', 'build-58', 'kitchen_ticket',
+  'network', '58mm', repeat('cd', 16), true, 0, 1);
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-0001c1000e01';
+create temp table t_p1c as
+  select app.get_kitchen_workflow_transition_readiness(
+    '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10',
+    '00000000-0000-0000-0000-0001c1000a2b') as res;
+reset role;
+select ok(
+  (select not ((res -> 'to_printer_only' -> 'blockers') @> '"paper_width_80mm_required"'::jsonb)
+      and (res -> 'readiness_report' ->> 'qualifying')::boolean
+      and res -> 'readiness_report' ->> 'paper_width' = '80mm'
+   from t_p1c),
+  'P1: a NEWER 58mm report can never SHADOW another POS''s valid fresh 80mm report');                            -- 112
+select app.submit_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d24',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-p2', 'takeaway', null, null, 'ILS', null,
+  '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+  500, 0, 0, 500, null);
+update kitchen_print_dispatches
+  set created_at = now() - interval '40 days'
+  where order_id = '00000000-0000-0000-0000-0001c1000d24' and dispatch_type = 'initial_order';
+create temp table t_pp2 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp', 20, null, null, null) as res;
+select ok(
+  (select exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                   where e ->> 'order_id' = '00000000-0000-0000-0000-0001c1000d24') from t_pp2)
+  and (select claimed_by_device_id = '00000000-0000-0000-0000-0001c100d001'
+       from kitchen_print_dispatches
+       where order_id = '00000000-0000-0000-0000-0001c1000d24' and dispatch_type = 'initial_order'),
+  'P2: a >30-day-old UNRESOLVED dispatch is STILL pullable (unresolved work never ages out)');                   -- 113
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-0001c1000e01';
+create temp table t_pp3 as
+  select app.get_kitchen_workflow_transition_readiness(
+    '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10',
+    '00000000-0000-0000-0000-0001c1000a2b') as res;
+reset role;
+select ok(
+  (select (res -> 'counts' ->> 'unresolved_dispatches')::int from t_pp3)
+  = (select count(*)::int from kitchen_print_dispatches
+      where organization_id = '00000000-0000-0000-0000-0001c1000a00'
+        and branch_id = '00000000-0000-0000-0000-0001c1000a2b'
+        and completed_at is null and superseded_by_dispatch_id is null),
+  'P3: transition blockers count unresolved rows with NO age filter (the 40-day row still blocks)');             -- 114
+update kitchen_print_dispatches
+  set created_at = now() - interval '40 days'
+  where order_id = '00000000-0000-0000-0000-0001c1000d04' and dispatch_type = 'initial_order';
+create temp table t_pp4 as
+  select app.pull_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp', 20, null, null, null) as res;
+select ok(
+  exists (select 1 from kitchen_print_dispatches
+           where order_id = '00000000-0000-0000-0000-0001c1000d04' and completed_at is not null)
+  and (select not exists (select 1 from jsonb_array_elements(res -> 'dispatches') e
+                           where e ->> 'order_id' = '00000000-0000-0000-0000-0001c1000d04') from t_pp4),
+  'P4: a >30-day COMPLETED row remains permanent HISTORY (still stored, still excluded from the feed)');         -- 115
+insert into branches (id, organization_id, restaurant_id, name) values
+  ('00000000-0000-0000-0000-0001c1000a3c', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', 'Branch Q (printer-only)');
+update branches set kitchen_workflow_mode = 'printer_only'
+  where id = '00000000-0000-0000-0000-0001c1000a3c';
+insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
+  ('00000000-0000-0000-0000-0001c100d006', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a3c', 'pos');
+insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
+  ('00000000-0000-0000-0000-0001c100c006', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a3c', '00000000-0000-0000-0000-0001c100d006', 'active');
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at) values
+  ('00000000-0000-0000-0000-0001c100e006', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a3c', '00000000-0000-0000-0000-0001c100d006', '00000000-0000-0000-0000-0001c100c006', app.hash_provisioning_secret('tok-c1-posq'), true, null);
+select app.report_kitchen_printer_readiness(
+  '00000000-0000-0000-0000-0001c100d006', 'tok-c1-posq',
+  'kitchen_printer_only_v1', 'build-q', 'kitchen_ticket',
+  'network', '80mm', repeat('ee', 16), true, 0, 1);
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-0001c1000e01';
+create temp table t_p5a as
+  select app.get_kitchen_workflow_transition_readiness(
+    '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10',
+    '00000000-0000-0000-0000-0001c1000a3c') as res;
+reset role;
+select ok(
+  (select not ((res -> 'to_printer_only' -> 'blockers') @> '"no_fresh_pos_readiness"'::jsonb)
+      and (res -> 'readiness_report' ->> 'qualifying')::boolean from t_p5a),
+  'P5a: a live, qualifying POS readiness report satisfies the blocker');                                         -- 116
+update branches set kitchen_workflow_mode_revision = 2
+  where id = '00000000-0000-0000-0000-0001c1000a3c';
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-0001c1000e01';
+create temp table t_p5b as
+  select app.get_kitchen_workflow_transition_readiness(
+    '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10',
+    '00000000-0000-0000-0000-0001c1000a3c') as res;
+reset role;
+select ok(
+  (select (res -> 'to_printer_only' -> 'blockers') @> '"stale_mode_revision"'::jsonb from t_p5b),
+  'P5b: after a revision bump the report is diagnosed STALE, not silently accepted');                            -- 117
+select is(
+  (select app.pull_kitchen_print_dispatches(
+     '00000000-0000-0000-0000-0001c100d006', 'tok-c1-posq', 20, null, null, null) ->> 'error'),
+  'readiness_required', 'P5c: the PULL rechecks readiness.mode_revision against the branch');                    -- 118
+select app.report_kitchen_printer_readiness(
+  '00000000-0000-0000-0000-0001c100d006', 'tok-c1-posq',
+  'kitchen_printer_only_v1', 'build-q2', 'kitchen_ticket',
+  'network', '80mm', repeat('ee', 16), true, 0, 2);
+select ok(
+  (select (res ->> 'ok')::boolean and jsonb_array_length(res -> 'dispatches') = 0
+   from (select app.pull_kitchen_print_dispatches(
+     '00000000-0000-0000-0000-0001c100d006', 'tok-c1-posq', 20, null, null, null) as res) s),
+  'P5d: a re-report at the CURRENT revision restores the claim path');                                           -- 119
+update devices set is_active = false where id = '00000000-0000-0000-0000-0001c100d006';
+set local role authenticated;
+set local app.current_app_user_id = '00000000-0000-0000-0000-0001c1000e01';
+create temp table t_p5e as
+  select app.get_kitchen_workflow_transition_readiness(
+    '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10',
+    '00000000-0000-0000-0000-0001c1000a3c') as res;
+reset role;
+select ok(
+  (select (res -> 'to_printer_only' -> 'blockers') @> '"no_fresh_pos_readiness"'::jsonb from t_p5e),
+  'P5e: a DEACTIVATED device''s report stops counting — readiness demands a LIVE reporter');                     -- 120
+
+-- ===== Q. acknowledgement extras ============================================
+select is(
+  (select app.acknowledge_kitchen_print_dispatch(
+     '00000000-0000-0000-0000-0001c100d002', 'tok-c1-kdsp',
+     (select f_init from t_oids), 'imported', null) ->> 'error'),
+  'invalid_session', 'Q1: a KDS device is explicitly DENIED acknowledgement');                                   -- 121
+select app.submit_order(
+  '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d25',
+  '00000000-0000-0000-0000-0001c100d001', 'c1-q2', 'takeaway', null, null, 'ILS', null,
+  '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[]}]'::jsonb,
+  500, 0, 0, 500, null);
+select app.pull_kitchen_print_dispatches(
+  '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp', 20, null, null, null);
+create temp table t_q2 as
+  select app.acknowledge_kitchen_print_dispatch(
+    '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+    (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d25' and dispatch_type = 'initial_order'),
+    'blocked_configuration', 'printer_not_configured') as res;
+select ok(
+  (select (res ->> 'ok')::boolean and not (res ->> 'completed')::boolean from t_q2)
+  and (select last_client_status = 'blocked_configuration'
+           and last_error_code = 'printer_not_configured'
+           and completed_at is null and claim_expires_at is not null
+       from kitchen_print_dispatches
+       where order_id = '00000000-0000-0000-0000-0001c1000d25' and dispatch_type = 'initial_order'),
+  'Q2: blocked_configuration is recorded, unresolved, and keeps the natural claim expiry');                      -- 122
+select is(
+  (select app.acknowledge_kitchen_print_dispatch(
+     '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
+     (select id from kitchen_print_dispatches where order_id = '00000000-0000-0000-0000-0001c1000d25' and dispatch_type = 'initial_order'),
+     'failed_retryable', 'NOT VALID!!') ->> 'error'),
+  'invalid_error_code', 'Q3: a malformed error code is rejected (allowlisted shape only)');                      -- 123
+
+-- ===== R. full device-liveness negative matrix (readiness probe) ============
+insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
+  ('00000000-0000-0000-0000-0001c100d007', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', 'pos');
+insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
+  ('00000000-0000-0000-0000-0001c100c007', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d007', 'active');
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at) values
+  ('00000000-0000-0000-0000-0001c100e007', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d007', '00000000-0000-0000-0000-0001c100c007', app.hash_provisioning_secret('tok-c1-neg7'), true, null);
+select ok(
+  (select (app.report_kitchen_printer_readiness(
+    '00000000-0000-0000-0000-0001c100d007', 'tok-c1-neg7',
+    'kitchen_printer_only_v1', 'b7', 'kitchen_ticket', 'network', '80mm',
+    repeat('77', 16), true, 0, 1) ->> 'ok')::boolean),
+  'R0: the liveness-matrix device reports successfully at baseline');                                            -- 124
+update device_sessions set expires_at = now() - interval '1 minute' where id = '00000000-0000-0000-0000-0001c100e007';
+select is(
+  (select app.report_kitchen_printer_readiness(
+    '00000000-0000-0000-0000-0001c100d007', 'tok-c1-neg7',
+    'kitchen_printer_only_v1', 'b7', 'kitchen_ticket', 'network', '80mm',
+    repeat('77', 16), true, 0, 1) ->> 'error'),
+  'invalid_session', 'R1: an EXPIRED session is denied (indistinguishably)');                                    -- 125
+update device_sessions set expires_at = null, revoked_at = now() where id = '00000000-0000-0000-0000-0001c100e007';
+select is(
+  (select app.report_kitchen_printer_readiness(
+    '00000000-0000-0000-0000-0001c100d007', 'tok-c1-neg7',
+    'kitchen_printer_only_v1', 'b7', 'kitchen_ticket', 'network', '80mm',
+    repeat('77', 16), true, 0, 1) ->> 'error'),
+  'invalid_session', 'R2: a REVOKED session is denied');                                                         -- 126
+update device_sessions set revoked_at = null, is_active = false where id = '00000000-0000-0000-0000-0001c100e007';
+select is(
+  (select app.report_kitchen_printer_readiness(
+    '00000000-0000-0000-0000-0001c100d007', 'tok-c1-neg7',
+    'kitchen_printer_only_v1', 'b7', 'kitchen_ticket', 'network', '80mm',
+    repeat('77', 16), true, 0, 1) ->> 'error'),
+  'invalid_session', 'R3: an INACTIVE session is denied');                                                       -- 127
+update device_sessions set is_active = true where id = '00000000-0000-0000-0000-0001c100e007';
+update device_pairings set status = 'revoked' where id = '00000000-0000-0000-0000-0001c100c007';
+select is(
+  (select app.report_kitchen_printer_readiness(
+    '00000000-0000-0000-0000-0001c100d007', 'tok-c1-neg7',
+    'kitchen_printer_only_v1', 'b7', 'kitchen_ticket', 'network', '80mm',
+    repeat('77', 16), true, 0, 1) ->> 'error'),
+  'invalid_session', 'R4: a REVOKED pairing is denied');                                                         -- 128
+update device_pairings set status = 'active' where id = '00000000-0000-0000-0000-0001c100c007';
+update devices set is_active = false where id = '00000000-0000-0000-0000-0001c100d007';
+select is(
+  (select app.report_kitchen_printer_readiness(
+    '00000000-0000-0000-0000-0001c100d007', 'tok-c1-neg7',
+    'kitchen_printer_only_v1', 'b7', 'kitchen_ticket', 'network', '80mm',
+    repeat('77', 16), true, 0, 1) ->> 'error'),
+  'invalid_session', 'R5: a DEACTIVATED device is denied');                                                      -- 129
+
+-- ===== S. structural FK negatives ===========================================
+select throws_ok(
+  $$ insert into kitchen_print_dispatches (organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key)
+     values ('00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a1a',
+             '00000000-0000-0000-0000-0001c1000d01', 'initial_order', '{"v":1}'::jsonb, 'x:s1') $$,
+  '23503', NULL, 'S1: a CROSS-BRANCH order reference is structurally impossible');                               -- 130
+select throws_ok(
+  $$ insert into kitchen_print_dispatches (organization_id, restaurant_id, branch_id, order_id, service_round_id, dispatch_type, money_free_payload, idempotency_key)
+     values ('00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b',
+             '00000000-0000-0000-0000-0001c1000d05',
+             (select round_c_round from t_nids),
+             'service_round', '{"v":1}'::jsonb, 'x:s2') $$,
+  '23503', NULL, 'S2: a service-round dispatch cannot reference ANOTHER order''s round');                        -- 131
+select throws_ok(
+  $$ update kitchen_print_dispatches
+       set claimed_at = now(), claimed_by_device_id = '00000000-0000-0000-0000-0001c1deadd0', claim_expires_at = now() + interval '10 minutes'
+       where order_id = '00000000-0000-0000-0000-0001c1000d0c' and dispatch_type = 'initial_order' $$,
+  '23503', NULL, 'S3: a claim by a NONEXISTENT device is structurally impossible');                              -- 132
+select throws_ok(
+  $$ update kitchen_print_dispatches
+       set claimed_at = now(), claimed_by_device_id = '00000000-0000-0000-0000-0001c100d003', claim_expires_at = now() + interval '10 minutes'
+       where order_id = '00000000-0000-0000-0000-0001c1000d0c' and dispatch_type = 'initial_order' $$,
+  '23503', NULL, 'S4: a claim by ANOTHER BRANCH''s device is structurally impossible');                          -- 133
+select throws_ok(
+  $$ update kitchen_print_dispatches
+       set superseded_by_dispatch_id = '00000000-0000-0000-0000-0001c1deadbe'
+       where order_id = '00000000-0000-0000-0000-0001c1000d0c' and dispatch_type = 'initial_order' $$,
+  '23503', NULL, 'S5: a DANGLING supersession target is structurally impossible');                               -- 134
+select throws_ok(
+  $$ insert into kitchen_print_dispatches (id, organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key, superseded_by_dispatch_id)
+     values ('00000000-0000-0000-0000-0001c15e1f00', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b',
+             '00000000-0000-0000-0000-0001c1000d0c', 'initial_order', '{"v":1}'::jsonb, 'x:s6',
+             '00000000-0000-0000-0000-0001c15e1f00') $$,
+  '23514', NULL, 'S6: SELF-supersession is rejected by CHECK');                                                  -- 135
+select throws_ok(
+  $$ insert into kitchen_print_dispatches (organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key, superseded_by_dispatch_id)
+     values ('00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b',
+             '00000000-0000-0000-0000-0001c1000d0a', 'initial_order', '{"v":1}'::jsonb, 'x:s7',
+             (select id from kitchen_print_dispatches
+               where order_id = '00000000-0000-0000-0000-0001c1000d0a' and dispatch_type = 'initial_order')) $$,
+  '23514', NULL, 'S7: supersession must target a VOID dispatch — an initial can never supersede');               -- 136
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, local_operation_id, revision) values
+  ('00000000-0000-0000-0000-0001c1000d26', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d001', '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c10ef002', '00000000-0000-0000-0000-0001c1000f02', 'takeaway', 'submitted', 'ILS', 100, 0, 0, 100, 'c1-d26', 1);
+insert into kitchen_print_dispatches (id, organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key) values
+  ('00000000-0000-0000-0000-0001c1a11d01', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c1000d26', 'void', '{"v":1,"kind":"void"}'::jsonb, 'x:v1-od26'),
+  ('00000000-0000-0000-0000-0001c1a11d02', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c1000d26', 'void', '{"v":1,"kind":"void"}'::jsonb, 'x:v2-od26');
+update kitchen_print_dispatches
+  set superseded_by_dispatch_id = '00000000-0000-0000-0000-0001c1a11d02'
+  where id = '00000000-0000-0000-0000-0001c1a11d01';
+select throws_ok(
+  $$ insert into kitchen_print_dispatches (organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key, superseded_by_dispatch_id)
+     values ('00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b',
+             '00000000-0000-0000-0000-0001c1000d26', 'initial_order', '{"v":1}'::jsonb, 'x:s8',
+             '00000000-0000-0000-0000-0001c1a11d01') $$,
+  '23514', NULL, 'S8: a supersession CHAIN (target itself superseded) is rejected — cycles are impossible');     -- 137
+
+-- ===== T. guard canaries + prep allowlist ===================================
+create function pg_temp.guard_rejects(p_payload jsonb) returns boolean
+  language plpgsql as $$
+begin
+  insert into public.kitchen_print_dispatches
+    (organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key)
+  values
+    ('00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b',
+     '00000000-0000-0000-0000-0001c1000d26', 'initial_order', p_payload, 'x:guard-' || md5(p_payload::text));
+  delete from public.kitchen_print_dispatches where idempotency_key = 'x:guard-' || md5(p_payload::text);
+  return false;
+exception when check_violation then
+  return true;
+end;
+$$;
+select ok(
+  (select bool_and(pg_temp.guard_rejects(jsonb_build_object(k, 1)))
+   from unnest(array[
+     'unitPrice', 'unit-price', 'priceMinor', 'totalValue', 'amountDue',
+     'paymentInfo', 'taxAmount', 'serviceFee', 'tipAmount', 'customerPhone',
+     'deliveryAddress', 'bluetoothAddress', 'connectionConfig', 'apiKey',
+     'accessToken']) as k),
+  'T1: every CamelCase / kebab / compact hostile variant is rejected after normalization');                      -- 138
+select ok(
+  pg_temp.guard_rejects('{"a": [{"b": {"amountDue": 1}}]}'::jsonb)
+  and pg_temp.guard_rejects('{"items": [{"meta": {"access-token": "x"}}]}'::jsonb),
+  'T2: nested and array-borne hostile variants are rejected at every depth');                                    -- 139
+insert into kitchen_print_dispatches (organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key)
+  values ('00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b',
+          '00000000-0000-0000-0000-0001c1000d26', 'initial_order',
+          '{"tenderness": "extra", "chicken_tenders": 2, "tenderloin_name": "x", "quantity": 3, "round_number": 1}'::jsonb,
+          'x:t3');
+select is(
+  (select count(*)::int from kitchen_print_dispatches where idempotency_key = 'x:t3'),
+  1, 'T3: token-boundary matching never false-positives on tenderness / chicken_tenders / tenderloin_name');     -- 140
+select throws_ok(
+  $$ update kitchen_print_dispatches
+       set money_free_payload = money_free_payload || '{"serviceFee": 1}'::jsonb
+       where idempotency_key = 'x:t3' $$,
+  '23514', NULL, 'T4: the guard covers UPDATE — a hostile key can never be introduced later');                   -- 141
+create temp table t_t5 as
+  select app.submit_order(
+    '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c1000d27',
+    '00000000-0000-0000-0000-0001c100d001', 'c1-t5', 'takeaway', null, null, 'ILS', null,
+    '[{"menu_item_id":"00000000-0000-0000-0000-0001c10000f1","quantity":1,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Falafel","modifiers":[],"prep_snapshot":[{"name":"Extra tahini","quantity":2,"unit":"tbsp","internalNote":"x","supplierCode":"S9"}]}]'::jsonb,
+    500, 0, 0, 500, null) as res;
+select ok(
+  (select (res ->> 'ok')::boolean from t_t5)
+  and (select money_free_payload -> 'items' -> 0 -> 'prep'
+        = '[{"name": "Extra tahini", "quantity": 2, "unit": "tbsp"}]'::jsonb
+       from kitchen_print_dispatches
+       where order_id = '00000000-0000-0000-0000-0001c1000d27' and dispatch_type = 'initial_order'),
+  'T5: only the ALLOWLISTED prep fields survive into the dispatch — unknown client keys are dropped');           -- 142
+select ok(
+  app.kitchen_prep_projection('[{"name":"A","quantity":1,"unit":"g","x":9},{"junk":true},"notobj"]'::jsonb)
+    = '[{"name": "A", "quantity": 1, "unit": "g"}]'::jsonb
+  and app.kitchen_prep_projection('{"name":"A"}'::jsonb) is null
+  and app.kitchen_prep_projection('[{"name":"B","quantity":"9"}]'::jsonb) = '[{"name": "B"}]'::jsonb,
+  'T6: the projection is strict — non-arrays null out, non-objects and non-numeric quantities are dropped');     -- 143
 
 select * from finish();
 rollback;
