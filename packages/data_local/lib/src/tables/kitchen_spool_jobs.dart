@@ -114,6 +114,13 @@ class KitchenSpoolJobs extends Table {
   DateTimeColumn get serverAckNextAttemptAt => dateTime().nullable()();
   TextColumn get serverAckLastErrorCode => text().nullable()();
 
+  /// KITCHEN-MODE-001C2B: a TERMINAL server verdict on this job's ownership/
+  /// import (`not_claim_owner` / `conflict` / `not_found` /
+  /// `ambiguous_print_hold`). Non-null means the server refused ownership
+  /// permanently: acknowledgement retries STOP and the job can NEVER become
+  /// runnable — but the encrypted job and its history are preserved.
+  TextColumn get serverAckTerminalCode => text().nullable()();
+
   /// Lifecycle timestamps (stored as UTC ISO-8601 text — DB option).
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -154,5 +161,8 @@ class KitchenSpoolJobs extends Table {
     'CHECK (reprint_of_local_job_id IS NULL OR '
         'reprint_of_local_job_id <> local_job_id)',
     "CHECK (length(encrypted_payload_blob) > 0)",
+    "CHECK (server_ack_terminal_code IS NULL OR "
+        "server_ack_terminal_code IN ('not_claim_owner', 'conflict', "
+        "'not_found', 'ambiguous_print_hold'))",
   ];
 }

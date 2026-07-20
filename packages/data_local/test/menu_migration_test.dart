@@ -46,8 +46,9 @@ void main() {
               .toSet();
 
       // RF-018 tables survived; the six RF-030 menu tables were created; the
-      // RF-071 print_jobs table was added; and KITCHEN-MODE-001C2A adds the
-      // kitchen_spool_jobs table (onUpgrade runs from<2 + from<3 + from<4).
+      // RF-071 print_jobs table was added. KITCHEN-MODE-001C2B: the kitchen
+      // spool lives in its DEDICATED database, so the general database never
+      // grows a kitchen_spool_jobs table.
       expect(
         tables,
         containsAll(<String>{
@@ -60,9 +61,9 @@ void main() {
           'modifiers',
           'modifier_options',
           'print_jobs',
-          'kitchen_spool_jobs',
         }),
       );
+      expect(tables, isNot(contains('kitchen_spool_jobs')));
 
       // The pre-existing RF-018 row was not dropped (no destructive recreate).
       final kept = await db
@@ -70,14 +71,14 @@ void main() {
           .get();
       expect(kept, hasLength(1));
 
-      // user_version advanced to the current schema (v4 since
-      // KITCHEN-MODE-001C2A).
+      // user_version advanced to the current schema (v5 since
+      // KITCHEN-MODE-001C2B moved the spool to its dedicated database).
       final version = (await db.customSelect('PRAGMA user_version').get())
           .single
           .data
           .values
           .first;
-      expect(version, 4);
+      expect(version, 5);
     },
   );
 }

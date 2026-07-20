@@ -18,7 +18,7 @@ library;
 
 import 'package:drift/drift.dart';
 
-import '../local_database.dart';
+import '../kitchen_spool_database.dart';
 import 'kitchen_spool_status.dart';
 
 /// Canonical on-disk location for the kitchen-spool database, pinned NOW so
@@ -99,10 +99,43 @@ abstract interface class KitchenSpoolStore {
     required DateTime nextAttemptAt,
     required DateTime now,
   });
+
+  /// KITCHEN-MODE-001C2B: records a TERMINAL server verdict
+  /// (`not_claim_owner` / `conflict` / `not_found` / `ambiguous_print_hold`):
+  /// stops acknowledgement retries, preserves the encrypted job and its
+  /// history, and makes the job permanently non-runnable.
+  Future<bool> markServerAckTerminal(
+    String localJobId, {
+    required String terminalCode,
+    required DateTime now,
+  });
+
+  /// KITCHEN-MODE-001C2B: links SERVER supersession evidence onto a
+  /// `possiblyPrinted` row WITHOUT erasing its ambiguous state (paper may
+  /// exist — the 001C2C operator flow needs both facts).
+  Future<bool> linkSupersessionEvidence({
+    required String dispatchId,
+    required String supersededByDispatchId,
+    required DateTime now,
+  });
+
+  /// Jobs still owing the server an acknowledgement, due for retry.
+  Future<List<KitchenSpoolJobRow>> listPendingServerAcks({
+    required String deviceId,
+    required String branchId,
+    required DateTime now,
+    int limit = 20,
+  });
+
   Future<int> countUnresolved({
     required String deviceId,
     required String branchId,
   });
+
+  /// TOTAL rows across every scope (metadata count only — used by the key
+  /// flow's missing-key policy; never decrypts anything).
+  Future<int> countTotalRows();
+
   Future<int> pruneTransportAcceptedOlderThan(DateTime cutoff);
 }
 
@@ -126,6 +159,7 @@ final class NewKitchenSpoolJob {
     this.destinationDisplayLabel,
     this.transportKind,
     this.paperWidth,
+    this.lastErrorCode,
     required this.payloadVersion,
     required this.documentVersion,
     required this.rasterVersion,
@@ -161,6 +195,9 @@ final class NewKitchenSpoolJob {
   final String? destinationDisplayLabel;
   final String? transportKind;
   final String? paperWidth;
+
+  /// Safe typed reason for a blocked-configuration import (never endpoints).
+  final String? lastErrorCode;
   final int payloadVersion;
   final int documentVersion;
   final int rasterVersion;
@@ -198,11 +235,13 @@ String? sanitizeDestinationDisplayLabel(String? label) {
   return trimmed.length > 60 ? trimmed.substring(0, 60) : trimmed;
 }
 
-/// Drift-backed implementation over [LocalDatabase].
+/// Drift-backed implementation over the DEDICATED [KitchenSpoolDatabase]
+/// (KITCHEN-MODE-001C2B: the general LocalDatabase no longer carries the
+/// spool table — opening the spool through it is prohibited).
 final class DriftKitchenSpoolStore implements KitchenSpoolStore {
   DriftKitchenSpoolStore(this._db);
 
-  final LocalDatabase _db;
+  final KitchenSpoolDatabase _db;
 
   $KitchenSpoolJobsTable get _t => _db.kitchenSpoolJobs;
 
@@ -235,6 +274,7 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
               ),
               transportKind: Value(job.transportKind),
               paperWidth: Value(job.paperWidth),
+              lastErrorCode: Value(job.lastErrorCode),
               payloadVersion: job.payloadVersion,
               documentVersion: job.documentVersion,
               rasterVersion: job.rasterVersion,
@@ -280,6 +320,17 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
         .get();
   }
 
+  /// KITCHEN-MODE-001C2B PRINT-ELIGIBILITY INVARIANT: a job can only be
+  /// runnable for the (future, 001C2C) worker when the SERVER successfully
+  /// acknowledged the import — `server_acknowledged_at` set, no pending
+  /// acknowledgement, and no terminal server verdict. An imported-but-
+  /// unacknowledged job, a transient ack failure, and every terminal server
+  /// rejection are all non-runnable.
+  Expression<bool> _serverAckComplete($KitchenSpoolJobsTable t) =>
+      t.serverAcknowledgedAt.isNotNull() &
+      t.pendingServerAckStatus.isNull() &
+      t.serverAckTerminalCode.isNull();
+
   @override
   Future<List<KitchenSpoolJobRow>> listRunnable({
     required String deviceId,
@@ -293,6 +344,7 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
                 t.deviceId.equals(deviceId) &
                 t.branchId.equals(branchId) &
                 t.status.isInValues(KitchenSpoolJobStatus.runnable.toList()) &
+                _serverAckComplete(t) &
                 (t.nextAttemptAt.isNull() |
                     t.nextAttemptAt.isSmallerOrEqualValue(now)),
           )
@@ -336,6 +388,7 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
                     t.status.isInValues(
                       KitchenSpoolJobStatus.runnable.toList(),
                     ) &
+                    _serverAckComplete(t) &
                     (t.nextAttemptAt.isNull() |
                         t.nextAttemptAt.isSmallerOrEqualValue(now)),
               ))
@@ -354,9 +407,12 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
 
   @override
   Future<bool> markQueued(String localJobId, DateTime now) {
+    // Queueing is the first runnable step, so it carries the SAME server-ack
+    // gate: an unacknowledged import can never move toward printing.
     return _transition(
       localJobId,
       from: const {KitchenSpoolJobStatus.imported},
+      requireServerAckComplete: true,
       write: KitchenSpoolJobsCompanion(
         status: const Value(KitchenSpoolJobStatus.queued),
         updatedAt: Value(now),
@@ -367,10 +423,12 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
   @override
   Future<bool> markPrinting(String localJobId, DateTime now) {
     // Explicit transition variant of the claim (no attempt bookkeeping, no
-    // due-time gate) — still single-flight via the conditional WHERE.
+    // due-time gate) — still single-flight via the conditional WHERE and
+    // still server-ack gated.
     return _transition(
       localJobId,
       from: KitchenSpoolJobStatus.runnable,
+      requireServerAckComplete: true,
       write: KitchenSpoolJobsCompanion(
         status: const Value(KitchenSpoolJobStatus.printing),
         updatedAt: Value(now),
@@ -466,6 +524,9 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
     // carrying the superseding void's id. transportAccepted history and a
     // job that is PRINTING RIGHT NOW are left alone (the latter resolves
     // first; later evidence passes can supersede it then).
+    // KITCHEN-MODE-001C2B: possiblyPrinted is deliberately EXCLUDED here —
+    // its ambiguity must never be erased; use [linkSupersessionEvidence] to
+    // attach the void link while KEEPING the possiblyPrinted state.
     final updated =
         await (_db.update(_t)..where(
               (t) =>
@@ -475,7 +536,6 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
                     KitchenSpoolJobStatus.queued,
                     KitchenSpoolJobStatus.failedRetryable,
                     KitchenSpoolJobStatus.blockedConfiguration,
-                    KitchenSpoolJobStatus.possiblyPrinted,
                   ]),
             ))
             .write(
@@ -487,6 +547,90 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
               ),
             );
     return updated > 0;
+  }
+
+  @override
+  Future<bool> linkSupersessionEvidence({
+    required String dispatchId,
+    required String supersededByDispatchId,
+    required DateTime now,
+  }) async {
+    // possiblyPrinted keeps BOTH facts: the ambiguous state (paper may
+    // exist) AND the server's void evidence. Idempotent: an existing link is
+    // never overwritten.
+    final updated =
+        await (_db.update(_t)..where(
+              (t) =>
+                  t.dispatchId.equals(dispatchId) &
+                  t.status.equalsValue(KitchenSpoolJobStatus.possiblyPrinted) &
+                  t.supersededByDispatchId.isNull(),
+            ))
+            .write(
+              KitchenSpoolJobsCompanion(
+                supersededByDispatchId: Value(supersededByDispatchId),
+                updatedAt: Value(now),
+              ),
+            );
+    return updated > 0;
+  }
+
+  @override
+  Future<bool> markServerAckTerminal(
+    String localJobId, {
+    required String terminalCode,
+    required DateTime now,
+  }) async {
+    // A terminal verdict ENDS the retry loop (pending cleared, no next
+    // attempt) and — because serverAcknowledgedAt stays NULL and the
+    // terminal code is set — the job is permanently non-runnable, while the
+    // encrypted job and its history stay intact.
+    final updated =
+        await (_db.update(_t)..where(
+              (t) =>
+                  t.localJobId.equals(localJobId) &
+                  t.pendingServerAckStatus.isNotNull(),
+            ))
+            .write(
+              KitchenSpoolJobsCompanion(
+                pendingServerAckStatus: const Value(null),
+                serverAckNextAttemptAt: const Value(null),
+                serverAckTerminalCode: Value(terminalCode),
+                updatedAt: Value(now),
+              ),
+            );
+    return updated > 0;
+  }
+
+  @override
+  Future<List<KitchenSpoolJobRow>> listPendingServerAcks({
+    required String deviceId,
+    required String branchId,
+    required DateTime now,
+    int limit = 20,
+  }) {
+    return (_db.select(_t)
+          ..where(
+            (t) =>
+                t.deviceId.equals(deviceId) &
+                t.branchId.equals(branchId) &
+                t.pendingServerAckStatus.isNotNull() &
+                (t.serverAckNextAttemptAt.isNull() |
+                    t.serverAckNextAttemptAt.isSmallerOrEqualValue(now)),
+          )
+          ..orderBy([
+            (t) => OrderingTerm.asc(t.createdAt),
+            (t) => OrderingTerm.asc(t.localJobId),
+          ])
+          ..limit(limit))
+        .get();
+  }
+
+  @override
+  Future<int> countTotalRows() async {
+    final count = countAll();
+    final query = _db.selectOnly(_t)..addColumns([count]);
+    final row = await query.getSingle();
+    return row.read(count) ?? 0;
   }
 
   @override
@@ -591,12 +735,16 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
     String localJobId, {
     required Set<KitchenSpoolJobStatus> from,
     required KitchenSpoolJobsCompanion write,
+    bool requireServerAckComplete = false,
   }) async {
     final updated =
         await (_db.update(_t)..where(
               (t) =>
                   t.localJobId.equals(localJobId) &
-                  t.status.isInValues(from.toList()),
+                  t.status.isInValues(from.toList()) &
+                  (requireServerAckComplete
+                      ? _serverAckComplete(t)
+                      : const Constant(true)),
             ))
             .write(write);
     return updated > 0;
