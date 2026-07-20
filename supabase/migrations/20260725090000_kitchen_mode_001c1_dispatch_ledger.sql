@@ -58,6 +58,25 @@
 --   13. app.get_kitchen_workflow_transition_readiness (+wrapper) — read-only
 --       member inspection of every mode-switch blocker.
 --   14. Audit trio faithful re-creations (kitchen.% family).
+--   15. app.sync_push — faithful re-creation of 20260722090000:1672-2370 with
+--       ONE correction delta (order.submit only): after the ORDER-CUSTOMER-001
+--       customer_name stamp, the initial kitchen dispatch payload is rebuilt
+--       through the trusted internal builder in the SAME transaction, so the
+--       REAL push path carries customer_display_name (CORRECTION-001).
+--
+-- KITCHEN-MODE-001C1-CORRECTION-001 (review REQUEST CHANGES, all folded into
+-- this still-unshipped migration): real-path customer_display_name (via §15);
+-- order_note in the initial payload; STICKY possibly_printed hold
+-- (ambiguous_print_hold); one stable (created_at, type_rank, id) tuple for
+-- both ORDER BY and the keyset cursor + truthful has_more/limit; token-
+-- boundary key normalization (CamelCase/kebab/compact variants) + strict
+-- prep_snapshot allowlist projection; VOID supersedes ALL unresolved priors
+-- (claimed/failed/possibly_printed included — no resurrection); structural
+-- composite FKs (order/branch, service round, claimed device, supersession +
+-- self/cycle/void-target guard); unresolved rows never age out of read
+-- surfaces; explicit anon revokes; QUALIFYING readiness selection (live POS
+-- device, never shadowed by a newer non-qualifying report) + pull-side
+-- mode-revision recheck; fail-closed branch-mode reads in the dispatch tails.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -70,6 +89,16 @@ alter table public.branches
 
 comment on column public.branches.kitchen_workflow_mode_revision is
   'KITCHEN-MODE-001C1: monotonic revision of kitchen_workflow_mode, bumped ONLY by the future owner setter (001C3) so stale mode-change requests and stale client caches can be rejected. No setter exists yet; direct app-role writes stay blocked by the 001A branches write-protection.';
+
+-- CORRECTION-001 (structural integrity target): the authoritative composite
+-- identity of an order INCLUDING its branch, so the dispatch ledger can tie
+-- (organization_id, restaurant_id, branch_id, order_id) to ONE real order —
+-- a cross-branch / cross-restaurant / cross-tenant order_id becomes
+-- structurally impossible, not merely RPC-checked. Additive (id is already
+-- the primary key, so the composite is trivially unique).
+alter table public.orders
+  add constraint orders_org_rest_branch_id_key
+  unique (organization_id, restaurant_id, branch_id, id);
 
 -- ----------------------------------------------------------------------------
 -- 2. Device readiness reports (ONE current row per device, upserted; a report
@@ -126,7 +155,41 @@ create policy kitchen_printer_readiness_reports_del_deny on public.kitchen_print
 --    name is never sensitive) or NULL when the payload is clean. Values are
 --    never inspected or returned; only keys are judged, so ordinary numeric
 --    quantities always pass.
+--
+--    CORRECTION-001: keys are NORMALIZED to snake_case token form before
+--    classification (CamelCase / PascalCase / kebab-case / dotted / spaced /
+--    compact variants all collapse to the same tokens: unitPrice, unit-price
+--    and unit_price are ONE key), and classification is TOKEN-BOUNDARY
+--    matching — never broad substrings — so `tenderness`, `chicken_tenders`
+--    and `tenderloin_name` stay legal while `tender`, `taxAmount`,
+--    `serviceFee`, `customerPhone`, `bluetoothAddress`, `apiKey` and
+--    `accessToken` are hostile.
 -- ----------------------------------------------------------------------------
+create or replace function app.kitchen_payload_normalize_key(p_key text)
+  returns text
+  language sql
+  immutable
+  set search_path = ''
+as $$
+  select btrim(
+           regexp_replace(
+             lower(
+               regexp_replace(
+                 regexp_replace(
+                   regexp_replace(coalesce(p_key, ''), '([A-Z]+)([A-Z][a-z])', '\1_\2', 'g'),
+                   '([a-z0-9])([A-Z])', '\1_\2', 'g'),
+                 '[^A-Za-z0-9]+', '_', 'g')),
+             '_{2,}', '_', 'g'),
+           '_');
+$$;
+
+comment on function app.kitchen_payload_normalize_key(text) is
+  'KITCHEN-MODE-001C1-CORRECTION-001 INTERNAL: canonical snake_case token form of a JSON key — token boundaries inserted at lower/digit->UPPER and ACRONYM->Word transitions, every non-alphanumeric run becomes one underscore, lowercased, collapsed, trimmed. unitPrice / unit-price / Unit.Price / unit_price all normalize identically, so the payload guard cannot be bypassed by casing or separator games.';
+
+revoke all on function app.kitchen_payload_normalize_key(text) from public;
+revoke all on function app.kitchen_payload_normalize_key(text) from anon;
+revoke all on function app.kitchen_payload_normalize_key(text) from authenticated;
+
 create or replace function app.kitchen_payload_offending_key(p_value jsonb)
   returns text
   language plpgsql
@@ -144,22 +207,22 @@ begin
   end if;
   if jsonb_typeof(p_value) = 'object' then
     for v_key, v_child in select * from jsonb_each(p_value) loop
-      v_norm := lower(btrim(v_key));
-      if v_norm like '%\_minor' escape '\'
-         or v_norm in (
-           'price', 'unit_price', 'prices', 'subtotal', 'sub_total', 'total',
-           'grand_total', 'paid', 'amount', 'amount_due', 'change',
-           'change_due', 'currency', 'currency_code', 'payment',
-           'payment_method', 'payments', 'tender', 'tendered', 'tax',
-           'tax_rate', 'discount', 'discounts', 'tip', 'tips', 'fee', 'fees',
-           'phone', 'phone_number', 'address', 'email',
-           'connection_config', 'host', 'port', 'bluetooth_address',
-           'token', 'tokens', 'credential', 'credentials', 'secret',
-           'secrets', 'password', 'api_key')
-         or v_norm like '%price%'
-         or v_norm like '%payment%'
-         or v_norm like '%currency%'
-         or v_norm like '%tender%'
+      v_norm := app.kitchen_payload_normalize_key(v_key);
+      -- (1) financial / privacy / endpoint / credential TOKENS at any token
+      --     boundary of the normalized key ('minor' as a token also covers
+      --     every *_minor spelling after normalization);
+      -- (2) the two compounds whose individual tokens are innocuous.
+      if string_to_array(v_norm, '_') && array[
+           'price', 'prices', 'subtotal', 'subtotals', 'total', 'totals',
+           'paid', 'amount', 'amounts', 'change', 'currency', 'currencies',
+           'payment', 'payments', 'tender', 'tendered', 'tax', 'taxes',
+           'discount', 'discounts', 'tip', 'tips', 'fee', 'fees',
+           'phone', 'phones', 'address', 'addresses', 'email', 'emails',
+           'host', 'hosts', 'port', 'ports', 'token', 'tokens',
+           'credential', 'credentials', 'secret', 'secrets',
+           'password', 'passwords', 'minor']
+         or v_norm ~ '(^|_)api_keys?(_|$)'
+         or v_norm ~ '(^|_)connection_configs?(_|$)'
       then
         return v_key;
       end if;
@@ -183,11 +246,49 @@ end;
 $$;
 
 comment on function app.kitchen_payload_offending_key(jsonb) is
-  'KITCHEN-MODE-001C1: recursive KEY-ONLY inspection of a kitchen dispatch payload at every nesting level (objects and arrays). Returns the first hostile key (money/financial/PII/endpoint/credential vocabulary, case-insensitive, incl. any *_minor suffix) or NULL when clean. Values are never judged, so numeric quantities always pass. INTERNAL — enforced by the kitchen_print_dispatches trigger.';
+  'KITCHEN-MODE-001C1: recursive KEY-ONLY inspection of a kitchen dispatch payload at every nesting level (objects and arrays). CORRECTION-001: each key is first normalized (app.kitchen_payload_normalize_key — CamelCase/kebab/dotted/compact all collapse to snake_case) and then judged by TOKEN-BOUNDARY matching against the closed money/financial/PII/endpoint/credential vocabulary (plus the api_key / connection_config compounds and the minor token). Returns the first hostile ORIGINAL key or NULL when clean. Values are never judged, so numeric quantities always pass and harmless text values can never false-positive. INTERNAL — enforced by the kitchen_print_dispatches trigger on INSERT AND UPDATE.';
 
 revoke all on function app.kitchen_payload_offending_key(jsonb) from public;
 revoke all on function app.kitchen_payload_offending_key(jsonb) from anon;
 revoke all on function app.kitchen_payload_offending_key(jsonb) from authenticated;
+
+-- CORRECTION-001: STRICT ALLOWLIST projection of an order item's prep
+-- snapshot. The supported prep component schema is {name, quantity, unit}
+-- (KITCHEN-PREP-001); client-controlled JSON is NEVER embedded verbatim in a
+-- dispatch — unknown/non-operational fields are ignored here (the tolerant
+-- house convention; order validation itself is unchanged), text is trimmed
+-- and bounded, and quantity survives only as a real JSON number.
+create or replace function app.kitchen_prep_projection(p_prep jsonb)
+  returns jsonb
+  language sql
+  immutable
+  set search_path = ''
+as $$
+  select case
+    when p_prep is null or jsonb_typeof(p_prep) <> 'array' then null
+    else (
+      select nullif(coalesce(jsonb_agg(proj order by ord), '[]'::jsonb), '[]'::jsonb)
+      from (
+        select ord,
+               jsonb_strip_nulls(jsonb_build_object(
+                 'name',     nullif(left(btrim(coalesce(e.elem ->> 'name', '')), 120), ''),
+                 'quantity', case when jsonb_typeof(e.elem -> 'quantity') = 'number'
+                                  then e.elem -> 'quantity' end,
+                 'unit',     nullif(left(btrim(coalesce(e.elem ->> 'unit', '')), 40), ''))) as proj
+        from jsonb_array_elements(p_prep) with ordinality as e(elem, ord)
+        where jsonb_typeof(e.elem) = 'object'
+      ) s
+      where s.proj <> '{}'::jsonb
+    )
+  end;
+$$;
+
+comment on function app.kitchen_prep_projection(jsonb) is
+  'KITCHEN-MODE-001C1-CORRECTION-001 INTERNAL: allowlisted kitchen projection of order_items.prep_snapshot — ONLY the supported {name, quantity, unit} operational fields survive (name<=120 / unit<=40 trimmed text, quantity only as a JSON number); unknown client keys are dropped and can never reach a dispatch payload; empty results collapse to NULL so the payload omits the prep key entirely.';
+
+revoke all on function app.kitchen_prep_projection(jsonb) from public;
+revoke all on function app.kitchen_prep_projection(jsonb) from anon;
+revoke all on function app.kitchen_prep_projection(jsonb) from authenticated;
 
 -- ----------------------------------------------------------------------------
 -- 4. The dispatch ledger.
@@ -217,18 +318,40 @@ create table public.kitchen_print_dispatches (
   superseded_by_dispatch_id uuid,
   primary key (id),
   unique (organization_id, idempotency_key),
+  -- CORRECTION-001: the supersession FK target (same org AND same order).
+  unique (organization_id, order_id, id),
   constraint kitchen_print_dispatches_round_type check (
     (dispatch_type = 'service_round') = (service_round_id is not null)),
   constraint kitchen_print_dispatches_claim_shape check (
     (claimed_at is null) = (claimed_by_device_id is null)),
+  constraint kitchen_print_dispatches_no_self_supersede check (
+    superseded_by_dispatch_id is null or superseded_by_dispatch_id <> id),
   foreign key (organization_id, restaurant_id, branch_id)
     references public.branches (organization_id, restaurant_id, id) on delete restrict,
-  foreign key (organization_id, order_id)
-    references public.orders (organization_id, id) on delete restrict
+  -- CORRECTION-001 structural integrity: the order must be THE order of this
+  -- exact org/restaurant/branch (cross-branch, cross-restaurant and
+  -- cross-tenant order references are structurally impossible);
+  foreign key (organization_id, restaurant_id, branch_id, order_id)
+    references public.orders (organization_id, restaurant_id, branch_id, id) on delete restrict,
+  -- ... a service-round dispatch must reference a round OF THAT ORDER
+  -- (MATCH SIMPLE: null service_round_id — non-round dispatches — is exempt;
+  -- the round_type CHECK above makes it mandatory for service_round rows);
+  foreign key (organization_id, order_id, service_round_id)
+    references public.order_service_rounds (organization_id, order_id, id) on delete restrict,
+  -- ... a claim must belong to a REAL device of the same org/rest/branch
+  -- (the RPC additionally enforces POS type + full liveness; RESTRICT keeps
+  -- the operational ledger's history undeletable behind a claim);
+  foreign key (organization_id, restaurant_id, branch_id, claimed_by_device_id)
+    references public.devices (organization_id, restaurant_id, branch_id, id) on delete restrict,
+  -- ... and supersession must point at a REAL dispatch of the SAME org and
+  -- SAME order (self-reference blocked by the CHECK above; void-target and
+  -- chain-length rules are enforced by the guard trigger).
+  foreign key (organization_id, order_id, superseded_by_dispatch_id)
+    references public.kitchen_print_dispatches (organization_id, order_id, id) on delete restrict
 );
 
 comment on table public.kitchen_print_dispatches is
-  'KITCHEN-MODE-001C1: the durable server ledger guaranteeing every ACCEPTED printer-only kitchen event (initial order / service-round delta / void) has an idempotent MONEY-FREE dispatch created IN THE SAME TRANSACTION as the acceptance. The POS pulls-and-claims atomically (10-min claim expiry; stale claims reclaimable), imports into its encrypted local spool (001C2), prints, and acknowledges. claimed/completed/last_client_status semantics ONLY — deliberately NO printed boolean (transport acceptance is never a paper claim). Dispatch state is INDEPENDENT of order state. Completed rows stay readable for 30 days (read-side window; no physical cleanup in this phase). DORMANT: rows can only exist for printer_only branches (none exist; no setter until 001C3).';
+  'KITCHEN-MODE-001C1: the durable server ledger guaranteeing every ACCEPTED printer-only kitchen event (initial order / service-round delta / void) has an idempotent MONEY-FREE dispatch created IN THE SAME TRANSACTION as the acceptance. The POS pulls-and-claims atomically (10-min claim expiry; stale claims reclaimable), imports into its encrypted local spool (001C2), prints, and acknowledges. claimed/completed/last_client_status semantics ONLY — deliberately NO printed boolean (transport acceptance is never a paper claim). Dispatch state is INDEPENDENT of order state. CORRECTION-001 retention contract: an UNRESOLVED row NEVER ages out of any read surface (it stays pullable and stays a transition blocker regardless of age); completed rows are permanent history in this phase (any pruning/archival of COMPLETED rows is a later, separate decision — never of unresolved ones). Structural FKs tie order/branch, service round, claimed device and supersession to authoritative rows. DORMANT: rows can only exist for printer_only branches (none exist; no setter until 001C3).';
 
 create index kitchen_print_dispatches_pull_idx
   on public.kitchen_print_dispatches (organization_id, branch_id, created_at, id)
@@ -256,7 +379,9 @@ create or replace function app.kitchen_print_dispatches_guard()
   set search_path = ''
 as $$
 declare
-  v_bad  text;
+  v_bad          text;
+  v_target_type  text;
+  v_target_super uuid;
 begin
   v_bad := app.kitchen_payload_offending_key(new.money_free_payload);
   if v_bad is not null then
@@ -267,12 +392,32 @@ begin
     raise exception 'kitchen_print_dispatches: payload exceeds the 32KB limit'
       using errcode = '23514';
   end if;
+  -- CORRECTION-001 supersession shape: the target must be a VOID dispatch
+  -- that is itself UNSUPERSEDED. Together with the composite FK (same org +
+  -- same order) and the no-self CHECK, every supersession chain has length
+  -- exactly 1 (row -> its order''s void), so cycles are structurally
+  -- impossible — no walk can ever be needed.
+  if new.superseded_by_dispatch_id is not null then
+    select d.dispatch_type, d.superseded_by_dispatch_id
+      into v_target_type, v_target_super
+      from public.kitchen_print_dispatches d
+      where d.id = new.superseded_by_dispatch_id
+        and d.organization_id = new.organization_id;
+    if v_target_type is not null and v_target_type <> 'void' then
+      raise exception 'kitchen_print_dispatches: supersession target must be a VOID dispatch'
+        using errcode = '23514';
+    end if;
+    if v_target_super is not null then
+      raise exception 'kitchen_print_dispatches: supersession chains are forbidden (the target is itself superseded)'
+        using errcode = '23514';
+    end if;
+  end if;
   return new;
 end;
 $$;
 
 comment on function app.kitchen_print_dispatches_guard() is
-  'KITCHEN-MODE-001C1: BEFORE INSERT/UPDATE guard — recursive money-free/PII key enforcement + ~32KB payload size cap. Fail-closed: a hostile payload aborts the surrounding mutation (an accepted printer-only event must be dispatchable or must not be accepted).';
+  'KITCHEN-MODE-001C1: BEFORE INSERT/UPDATE guard — recursive money-free/PII key enforcement (token-boundary matching on normalized keys) + ~32KB payload size cap + CORRECTION-001 supersession shape (target must be an unsuperseded VOID of the same org+order; with the composite FK and no-self CHECK every chain has length exactly 1, so cycles are structurally impossible). Fail-closed: a hostile payload aborts the surrounding mutation (an accepted printer-only event must be dispatchable or must not be accepted).';
 
 revoke all on function app.kitchen_print_dispatches_guard() from public;
 revoke all on function app.kitchen_print_dispatches_guard() from anon;
@@ -303,13 +448,18 @@ as $$
     'order_type', o.order_type,
     'table_label', tbl.label,
     'customer_display_name', nullif(left(btrim(coalesce(o.customer_name, '')), 80), ''),
+    -- CORRECTION-001: the authoritative ORDER-LEVEL kitchen instruction (the
+    -- same orders.notes the KDS workflow shows), trimmed, omitted when empty,
+    -- bounded to a physical-ticket display cap. Initial slip only — a round
+    -- delta ticket repeats items, not the standing order note.
+    'order_note', nullif(left(btrim(coalesce(o.notes, '')), 500), ''),
     'created_at', o.created_at,
     'items', (
       select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
                'qty', oi.quantity,
                'name', oi.menu_item_name_snapshot,
-               'note', nullif(btrim(coalesce(oi.notes, '')), ''),
-               'prep', oi.prep_snapshot,
+               'note', nullif(left(btrim(coalesce(oi.notes, '')), 500), ''),
+               'prep', app.kitchen_prep_projection(oi.prep_snapshot),
                'modifiers', (
                  select coalesce(jsonb_agg(jsonb_build_object(
                           'qty', om.quantity,
@@ -354,8 +504,8 @@ as $$
       select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
                'qty', oi.quantity,
                'name', oi.menu_item_name_snapshot,
-               'note', nullif(btrim(coalesce(oi.notes, '')), ''),
-               'prep', oi.prep_snapshot,
+               'note', nullif(left(btrim(coalesce(oi.notes, '')), 500), ''),
+               'prep', app.kitchen_prep_projection(oi.prep_snapshot),
                'modifiers', (
                  select coalesce(jsonb_agg(jsonb_build_object(
                           'qty', om.quantity,
@@ -409,9 +559,9 @@ as $$
 $$;
 
 comment on function app.kitchen_dispatch_payload_initial(uuid, uuid) is
-  'KITCHEN-MODE-001C1 INTERNAL: the money-free initial-order kitchen snapshot (initial items only — service_round_id IS NULL). No money column is read; customer_display_name is optional, trimmed to 80 chars; phone/address/payment data never exist here.';
+  'KITCHEN-MODE-001C1 INTERNAL: the money-free initial-order kitchen snapshot (initial items only — service_round_id IS NULL). No money column is read; customer_display_name is optional, trimmed to 80 chars; CORRECTION-001 adds order_note (the authoritative orders.notes the KDS workflow shows — trimmed, <=500, omitted when empty; initial slip only) and routes prep through the strict allowlist projection; item notes are bounded the same way. Phone/address/payment data never exist here.';
 comment on function app.kitchen_dispatch_payload_round(uuid, uuid, uuid) is
-  'KITCHEN-MODE-001C1 INTERNAL: the money-free service-round DELTA snapshot (only that round''s items).';
+  'KITCHEN-MODE-001C1 INTERNAL: the money-free service-round DELTA snapshot (only that round''s items; the standing order_note stays on the initial slip and is deliberately NOT repeated). CORRECTION-001: bounded item notes + allowlisted prep projection.';
 comment on function app.kitchen_dispatch_payload_void(uuid, uuid, text) is
   'KITCHEN-MODE-001C1 INTERNAL: the money-free VOID slip snapshot (marker + safe reason + counts; no items priced, no payment data).';
 
@@ -428,7 +578,8 @@ revoke all on function app.kitchen_dispatch_payload_void(uuid, uuid, text) from 
 -- ----------------------------------------------------------------------------
 -- 6. INTERNAL creator — idempotent (ON CONFLICT DO NOTHING on the logical
 --    key), audits with the PIN-session actor (D-013), and on VOID supersedes
---    the order's UNCLAIMED prior dispatches.
+--    the order's unresolved prior dispatches (CORRECTION-001: ALL of them —
+--    claimed / failed / possibly_printed included; no resurrection).
 -- ----------------------------------------------------------------------------
 create or replace function app.create_kitchen_dispatch(
   p_organization_id uuid,
@@ -476,16 +627,20 @@ begin
   end if;
 
   if p_dispatch_type = 'void' then
-    -- The kitchen never saw an UNCLAIMED dispatch — the void supersedes it so
-    -- the pull feed skips it. Claimed/completed dispatches stay: the kitchen
-    -- may physically hold their paper, and the VOID slip corrects them.
+    -- CORRECTION-001: once a VOID exists, NO earlier dispatch for this order
+    -- may ever become newly claimable or reclaimable — the void supersedes
+    -- EVERY unresolved prior (unclaimed, actively claimed, failed_retryable,
+    -- blocked_configuration, possibly_printed alike), preserving each row''s
+    -- status/claim/observability untouched. A claim holder may still finish
+    -- acknowledging what it already imported; the pull feed and stale-claim
+    -- recovery skip superseded rows permanently. COMPLETED dispatches stay
+    -- unlinked history: their paper may exist, and the VOID slip corrects it.
     update public.kitchen_print_dispatches d
       set superseded_by_dispatch_id = v_id, updated_at = now()
       where d.organization_id = p_organization_id
         and d.order_id = p_order_id
         and d.id <> v_id
         and d.completed_at is null
-        and d.claimed_at is null
         and d.superseded_by_dispatch_id is null;
   end if;
 
@@ -509,7 +664,7 @@ end;
 $$;
 
 comment on function app.create_kitchen_dispatch(uuid, uuid, uuid, uuid, uuid, text, jsonb, uuid, uuid, uuid) is
-  'KITCHEN-MODE-001C1 INTERNAL: creates ONE logical kitchen dispatch per authoritative event (idempotency key initial:<order>/round:<round>/void:<order>; ON CONFLICT DO NOTHING => retries reuse the same row and never re-audit). On void, supersedes the order''s UNCLAIMED prior dispatches. Audits kitchen.dispatch_created/_void_created with the PIN-session actor (D-013). Runs INSIDE the caller''s transaction — a failure aborts the mutation (fail closed); a rollback leaves nothing. NEVER granted to client roles.';
+  'KITCHEN-MODE-001C1 INTERNAL: creates ONE logical kitchen dispatch per authoritative event (idempotency key initial:<order>/round:<round>/void:<order>; ON CONFLICT DO NOTHING => retries reuse the same row and never re-audit). On void, supersedes EVERY unresolved prior dispatch of the order (CORRECTION-001 — unclaimed, claimed, failed_retryable, blocked_configuration and possibly_printed alike; statuses/claims/observability preserved; completed history stays unlinked), so no original can ever print after its void. Audits kitchen.dispatch_created/_void_created with the PIN-session actor (D-013). Runs INSIDE the caller''s transaction — a failure aborts the mutation (fail closed); a rollback leaves nothing. NEVER granted to client roles.';
 
 revoke all on function app.create_kitchen_dispatch(uuid, uuid, uuid, uuid, uuid, text, jsonb, uuid, uuid, uuid) from public;
 revoke all on function app.create_kitchen_dispatch(uuid, uuid, uuid, uuid, uuid, text, jsonb, uuid, uuid, uuid) from anon;
@@ -966,21 +1121,28 @@ begin
   -- NO tender is ever fabricated; the helper is fail-soft, so a completion
   -- side-effect failure can never turn a successful submit into an error.
   -- ---------------------------------------------------------------------------
-  -- KITCHEN-MODE-001C1: the ONE mode read for the whole tail (the same
-  -- fail-closed coalesce-to-kds semantics as before; the read simply moved
-  -- above the zero-total gate so the dispatch block below can share it).
+  -- KITCHEN-MODE-001C1: the ONE mode read for the whole tail (hoisted above
+  -- the zero-total gate so the dispatch block below can share it).
+  -- CORRECTION-001: FAIL CLOSED — the session liveness chain already proved
+  -- this branch live at ingest, so a missing/tombstoned branch row HERE is a
+  -- state inconsistency inside the very transaction that just wrote the
+  -- order; silently treating it as kds-mode could accept a printer-only
+  -- order WITHOUT its kitchen ticket. Raise and roll everything back.
   select b.kitchen_workflow_mode into v_kitchen_mode
     from public.branches b
     where b.id              = v_branch
       and b.organization_id = v_org
       and b.deleted_at is null;
+  if v_kitchen_mode is null then
+    raise exception 'submit_order: branch row unavailable during the kitchen dispatch gate (state inconsistency)';
+  end if;
 
   -- KITCHEN-MODE-001C1 (DORMANT): EVERY accepted printer-only order gets its
   -- durable, idempotent, money-free kitchen dispatch IN THIS SAME TRANSACTION.
   -- A dispatch failure fails the submit (an accepted printer-only order may
   -- never silently miss its kitchen ticket) and a rolled-back submit leaves
   -- no dispatch. kds branches create NOTHING — byte-identical behavior.
-  if coalesce(v_kitchen_mode, 'kds') = 'printer_only' then
+  if v_kitchen_mode = 'printer_only' then
     perform app.create_kitchen_dispatch(
       v_org, v_rest, v_branch, p_order_id, null, 'initial_order',
       app.kitchen_dispatch_payload_initial(v_org, p_order_id),
@@ -988,7 +1150,7 @@ begin
   end if;
 
   if v_grand = 0 then
-    if coalesce(v_kitchen_mode, 'kds') = 'printer_only' then
+    if v_kitchen_mode = 'printer_only' then
       v_auto := app.try_auto_complete_order(
         v_org, v_rest, v_branch, p_order_id,
         'order_submitted',
@@ -1018,6 +1180,7 @@ comment on function app.submit_order(uuid, uuid, uuid, text, text, uuid, uuid, t
   'RF-052 .. RESTAURANT-OPERATIONS-V1-001 .. KITCHEN-MODE-001A + KITCHEN-MODE-001C1. Signature and every kds-mode behavior UNCHANGED (faithful re-creation of the 20260723090000 body). KITCHEN-MODE-001C1 (DORMANT): a printer_only branch additionally writes ONE idempotent money-free kitchen dispatch in the SAME transaction (before the 001A zero-total completion tail, sharing its fail-closed mode read); kds branches are byte-identical. Print/dispatch state never joins order state.';
 
 revoke all on function app.submit_order(uuid, uuid, uuid, text, text, uuid, uuid, text, text, jsonb, bigint, bigint, bigint, bigint, timestamptz) from public;
+revoke all on function app.submit_order(uuid, uuid, uuid, text, text, uuid, uuid, text, text, jsonb, bigint, bigint, bigint, bigint, timestamptz) from anon;
 grant execute on function app.submit_order(uuid, uuid, uuid, text, text, uuid, uuid, text, text, jsonb, bigint, bigint, bigint, bigint, timestamptz) to authenticated;
 
 -- ----------------------------------------------------------------------------
@@ -1474,10 +1637,15 @@ begin
   -- service-round dispatch in this SAME transaction — the ROUND DELTA only,
   -- idempotent by round id, nothing for kds branches, and nothing survives a
   -- rollback. A dispatch failure fails the addition (fail closed).
+  -- CORRECTION-001: a missing branch row here is a state inconsistency (the
+  -- liveness chain proved it live at ingest) — never a silent kds fallback.
   select b.kitchen_workflow_mode into v_kitchen_mode
     from public.branches b
     where b.id = v_branch and b.organization_id = v_org and b.deleted_at is null;
-  if coalesce(v_kitchen_mode, 'kds') = 'printer_only' then
+  if v_kitchen_mode is null then
+    raise exception 'add_order_items: branch row unavailable during the kitchen dispatch gate (state inconsistency)';
+  end if;
+  if v_kitchen_mode = 'printer_only' then
     perform app.create_kitchen_dispatch(
       v_org, v_rest, v_branch, p_order_id, v_round_id, 'service_round',
       app.kitchen_dispatch_payload_round(v_org, p_order_id, v_round_id),
@@ -1496,6 +1664,7 @@ comment on function app.add_order_items(uuid, uuid, uuid, text, jsonb, timestamp
   'PSC-001C service rounds + KITCHEN-MODE-001C1. Signature, locking, round numbering, validation, idempotency, audit and every kds-mode behavior UNCHANGED (faithful re-creation of the 20260722090000 body). KITCHEN-MODE-001C1 (DORMANT): a printer_only branch additionally writes ONE idempotent money-free ROUND-DELTA dispatch in the SAME transaction; kds branches are byte-identical.';
 
 revoke all on function app.add_order_items(uuid, uuid, uuid, text, jsonb, timestamptz) from public;
+revoke all on function app.add_order_items(uuid, uuid, uuid, text, jsonb, timestamptz) from anon;
 grant execute on function app.add_order_items(uuid, uuid, uuid, text, jsonb, timestamptz) to authenticated;
 
 -- ----------------------------------------------------------------------------
@@ -1777,13 +1946,19 @@ begin
   -- kitchen MAY HAVE SEEN this order — the SAME conservative PSC-001D
   -- predicate that drives kitchen_ack_required, OR any prior kitchen dispatch
   -- exists for the order — one durable VOID dispatch is created in this SAME
-  -- transaction. Unclaimed prior dispatches are superseded by it (the kitchen
-  -- never saw them); claimed/completed ones stay (the kitchen may hold their
-  -- paper). kds branches create nothing; a rollback leaves nothing.
+  -- transaction. CORRECTION-001: the void supersedes EVERY unresolved prior
+  -- dispatch of the order (claimed / failed / possibly_printed included) so
+  -- no original can ever print after it; completed priors stay (the kitchen
+  -- may hold their paper — the VOID slip corrects them). kds branches create
+  -- nothing; a rollback leaves nothing; a missing branch row here is a state
+  -- inconsistency — never a silent kds fallback.
   select b.kitchen_workflow_mode into v_kitchen_mode
     from public.branches b
     where b.id = v_branch and b.organization_id = v_org and b.deleted_at is null;
-  if coalesce(v_kitchen_mode, 'kds') = 'printer_only'
+  if v_kitchen_mode is null then
+    raise exception 'void_order: branch row unavailable during the kitchen dispatch gate (state inconsistency)';
+  end if;
+  if v_kitchen_mode = 'printer_only'
      and ((v_o_status in ('submitted', 'accepted', 'preparing', 'ready'))
           or exists (select 1 from public.kitchen_print_dispatches d
                       where d.organization_id = v_org and d.order_id = p_order_id)) then
@@ -1799,9 +1974,10 @@ $$;
 
 
 comment on function app.void_order(uuid, uuid, uuid, text, text, integer) is
-  'RF-062 .. MONEY-VOID-001 .. PSC-001D/PSC-001C + KITCHEN-MODE-001C1. Signature, paid-order restrictions, provenance stamps (voided_from_status / kitchen_ack_required), the PSC-001C whole-order round sweep, audit and every kds-mode behavior UNCHANGED (faithful re-creation of the 20260722090000 body). KITCHEN-MODE-001C1 (DORMANT): a printer_only branch whose kitchen MAY HAVE SEEN the order (the same conservative PSC-001D predicate, or any prior dispatch) additionally writes ONE idempotent money-free VOID dispatch in the SAME transaction, superseding the order''s unclaimed priors; kds branches are byte-identical.';
+  'RF-062 .. MONEY-VOID-001 .. PSC-001D/PSC-001C + KITCHEN-MODE-001C1. Signature, paid-order restrictions, provenance stamps (voided_from_status / kitchen_ack_required), the PSC-001C whole-order round sweep, audit and every kds-mode behavior UNCHANGED (faithful re-creation of the 20260722090000 body). KITCHEN-MODE-001C1 (DORMANT): a printer_only branch whose kitchen MAY HAVE SEEN the order (the same conservative PSC-001D predicate, or any prior dispatch) additionally writes ONE idempotent money-free VOID dispatch in the SAME transaction, superseding EVERY unresolved prior dispatch of the order (CORRECTION-001 — no original can print after its void); kds branches are byte-identical.';
 
 revoke all on function app.void_order(uuid, uuid, uuid, text, text, integer) from public;
+revoke all on function app.void_order(uuid, uuid, uuid, text, text, integer) from anon;
 grant execute on function app.void_order(uuid, uuid, uuid, text, text, integer) to authenticated;
 
 -- ----------------------------------------------------------------------------
@@ -1956,6 +2132,7 @@ create or replace function public.report_kitchen_printer_readiness(
 as $$ select app.report_kitchen_printer_readiness(p_device_id, p_session_token, p_capability, p_app_build, p_printer_purpose, p_transport_kind, p_paper_width, p_printer_fingerprint, p_secure_spool_available, p_unresolved_local_jobs, p_mode_revision); $$;
 
 revoke all on function app.report_kitchen_printer_readiness(uuid, text, text, text, text, text, text, text, boolean, integer, integer) from public;
+revoke all on function app.report_kitchen_printer_readiness(uuid, text, text, text, text, text, text, text, boolean, integer, integer) from anon;
 grant execute on function app.report_kitchen_printer_readiness(uuid, text, text, text, text, text, text, text, boolean, integer, integer) to authenticated;
 revoke all on function public.report_kitchen_printer_readiness(uuid, text, text, text, text, text, text, text, boolean, integer, integer) from public;
 revoke all on function public.report_kitchen_printer_readiness(uuid, text, text, text, text, text, text, text, boolean, integer, integer) from anon;
@@ -1969,7 +2146,11 @@ create or replace function app.pull_kitchen_print_dispatches(
   p_session_token     text,
   p_limit             integer default 20,
   p_cursor_created_at timestamptz default null,
-  p_cursor_id         uuid default null
+  p_cursor_id         uuid default null,
+  -- CORRECTION-001: the cursor carries the FULL ordering tuple. No 001C
+  -- client exists yet, so adding the component is a safe contract change;
+  -- it is LAST with a default, so cursorless recovery calls are unchanged.
+  p_cursor_type_rank  integer default null
 )
   returns jsonb
   language plpgsql
@@ -1977,17 +2158,20 @@ create or replace function app.pull_kitchen_print_dispatches(
   set search_path = ''
 as $$
 declare
-  v_hash    text;
-  v_org     uuid;
-  v_rest    uuid;
-  v_branch  uuid;
-  v_dtype   text;
-  v_mode    text;
-  v_limit   integer;
-  v_rows    jsonb;
-  v_count   integer;
-  v_last_at timestamptz;
-  v_last_id uuid;
+  v_hash      text;
+  v_org       uuid;
+  v_rest      uuid;
+  v_branch    uuid;
+  v_dtype     text;
+  v_mode      text;
+  v_brev      integer;
+  v_limit     integer;
+  v_rows      jsonb;
+  v_count     integer;
+  v_last_at   timestamptz;
+  v_last_rank integer;
+  v_last_id   uuid;
+  v_has_more  boolean;
 begin
   if p_device_id is null or p_session_token is null or btrim(p_session_token) = '' then
     return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'kitchen_print_dispatches');
@@ -1995,7 +2179,14 @@ begin
   if p_limit is null or p_limit < 1 or p_limit > 50 then
     return jsonb_build_object('ok', false, 'error', 'invalid_limit', 'entity', 'kitchen_print_dispatches');
   end if;
-  if (p_cursor_created_at is null) <> (p_cursor_id is null) then
+  -- CORRECTION-001: the cursor is ALL-OR-NOTHING across its three components
+  -- and the rank must be a real rank; a malformed cursor is rejected, never
+  -- guessed around.
+  if not ((p_cursor_created_at is null and p_cursor_id is null and p_cursor_type_rank is null)
+          or (p_cursor_created_at is not null and p_cursor_id is not null and p_cursor_type_rank is not null)) then
+    return jsonb_build_object('ok', false, 'error', 'invalid_cursor', 'entity', 'kitchen_print_dispatches');
+  end if;
+  if p_cursor_type_rank is not null and p_cursor_type_rank not in (0, 1, 2) then
     return jsonb_build_object('ok', false, 'error', 'invalid_cursor', 'entity', 'kitchen_print_dispatches');
   end if;
   v_hash := app.hash_provisioning_secret(btrim(p_session_token));
@@ -2032,7 +2223,8 @@ begin
     return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'kitchen_print_dispatches');
   end if;
 
-  select b.kitchen_workflow_mode into v_mode
+  select b.kitchen_workflow_mode, b.kitchen_workflow_mode_revision
+    into v_mode, v_brev
     from public.branches b
     where b.id = v_branch and b.organization_id = v_org and b.deleted_at is null;
   if coalesce(v_mode, 'kds') <> 'printer_only' then
@@ -2042,6 +2234,8 @@ begin
   -- The deploy-ahead compatibility guard: only a device with a FRESH,
   -- activation-capable readiness report may claim. No deployed client reports
   -- the capability, so production claims are impossible today.
+  -- CORRECTION-001: the report must also carry the CURRENT branch mode
+  -- revision — a device whose cached mode view is stale may not claim.
   if not exists (
     select 1 from public.kitchen_printer_readiness_reports rr
     where rr.organization_id = v_org
@@ -2052,16 +2246,22 @@ begin
       and rr.printer_purpose = 'kitchen_ticket'
       and rr.paper_width = '80mm'
       and rr.secure_spool_available
+      and rr.mode_revision = v_brev
   ) then
     return jsonb_build_object('ok', false, 'error', 'readiness_required', 'entity', 'kitchen_print_dispatches');
   end if;
 
   v_limit := p_limit;
 
-  -- ATOMIC CLAIM: the inner FOR UPDATE serializes concurrent pullers; the
-  -- outer WHERE re-proves claimability AFTER the lock wait, so two devices
-  -- can never claim the same row (the loser's re-check sees the fresh claim).
-  -- Stale claims (expired) and this device's own claims are reclaimable.
+  -- ATOMIC CLAIM (CORRECTION-001 tuple contract): ORDER BY and the keyset
+  -- cursor use the SAME stable tuple (created_at, type_rank, id), so tied
+  -- timestamps can never skip or duplicate a row across a drain loop. The
+  -- inner FOR UPDATE serializes concurrent pullers; the outer WHERE re-proves
+  -- claimability AFTER the lock wait, so two devices can never claim the
+  -- same row. Stale claims (expired) and this device's own claims are
+  -- reclaimable; possibly_printed rows are NEVER served; superseded rows are
+  -- gone from this feed forever; an UNRESOLVED row never ages out — there is
+  -- deliberately NO time window here (CORRECTION-001 retention contract).
   with candidates as (
     select d.id
       from public.kitchen_print_dispatches d
@@ -2070,12 +2270,15 @@ begin
         and d.completed_at is null
         and d.superseded_by_dispatch_id is null
         and d.last_client_status is distinct from 'possibly_printed'
-        and d.created_at > now() - interval '30 days'
         and (d.claimed_at is null
              or d.claim_expires_at < now()
              or d.claimed_by_device_id = p_device_id)
         and (p_cursor_created_at is null
-             or (d.created_at, d.id) > (p_cursor_created_at, p_cursor_id))
+             or (d.created_at,
+                 case d.dispatch_type when 'initial_order' then 0
+                                      when 'service_round' then 1 else 2 end,
+                 d.id)
+                > (p_cursor_created_at, p_cursor_type_rank, p_cursor_id))
       order by d.created_at,
                case d.dispatch_type when 'initial_order' then 0
                                     when 'service_round' then 1 else 2 end,
@@ -2096,57 +2299,99 @@ begin
            or d.claim_expires_at < now()
            or d.claimed_by_device_id = p_device_id);
 
+  -- The returned page: this device's LIVE claims in tuple order, HARD-capped
+  -- at p_limit — own pre-existing active claims can never inflate the page
+  -- beyond the requested limit (CORRECTION-001).
   select coalesce(jsonb_agg(jsonb_build_object(
-           'id', d.id,
-           'dispatch_type', d.dispatch_type,
-           'order_id', d.order_id,
-           'service_round_id', d.service_round_id,
-           'payload_version', d.payload_version,
-           'payload', d.money_free_payload,
-           'created_at', d.created_at,
-           'claim_expires_at', d.claim_expires_at)
-         order by d.created_at,
-                  case d.dispatch_type when 'initial_order' then 0
-                                       when 'service_round' then 1 else 2 end,
-                  d.id), '[]'::jsonb),
+           'id', p.id,
+           'dispatch_type', p.dispatch_type,
+           'order_id', p.order_id,
+           'service_round_id', p.service_round_id,
+           'payload_version', p.payload_version,
+           'payload', p.money_free_payload,
+           'created_at', p.created_at,
+           'claim_expires_at', p.claim_expires_at)
+         order by p.created_at, p.type_rank, p.id), '[]'::jsonb),
          count(*)::int,
-         max(d.created_at), (array_agg(d.id order by d.created_at desc, d.id desc))[1]
-    into v_rows, v_count, v_last_at, v_last_id
-    from public.kitchen_print_dispatches d
-    where d.organization_id = v_org
-      and d.branch_id = v_branch
-      and d.claimed_by_device_id = p_device_id
-      and d.claim_expires_at > now()
-      and d.completed_at is null
-      and d.superseded_by_dispatch_id is null
-      and (p_cursor_created_at is null
-           or (d.created_at, d.id) > (p_cursor_created_at, p_cursor_id));
+         (array_agg(p.created_at order by p.created_at desc, p.type_rank desc, p.id desc))[1],
+         (array_agg(p.type_rank  order by p.created_at desc, p.type_rank desc, p.id desc))[1],
+         (array_agg(p.id         order by p.created_at desc, p.type_rank desc, p.id desc))[1]
+    into v_rows, v_count, v_last_at, v_last_rank, v_last_id
+    from (
+      select d.*,
+             case d.dispatch_type when 'initial_order' then 0
+                                  when 'service_round' then 1 else 2 end as type_rank
+        from public.kitchen_print_dispatches d
+        where d.organization_id = v_org
+          and d.branch_id = v_branch
+          and d.claimed_by_device_id = p_device_id
+          and d.claim_expires_at > now()
+          and d.completed_at is null
+          and d.superseded_by_dispatch_id is null
+          and d.last_client_status is distinct from 'possibly_printed'
+          and (p_cursor_created_at is null
+               or (d.created_at,
+                   case d.dispatch_type when 'initial_order' then 0
+                                        when 'service_round' then 1 else 2 end,
+                   d.id)
+                  > (p_cursor_created_at, p_cursor_type_rank, p_cursor_id))
+        order by d.created_at,
+                 case d.dispatch_type when 'initial_order' then 0
+                                      when 'service_round' then 1 else 2 end,
+                 d.id
+        limit v_limit
+    ) p;
+
+  -- TRUTHFUL has_more (CORRECTION-001): true iff a row SERVABLE TO THIS
+  -- DEVICE (its own live claim, or still claimable by anyone) exists beyond
+  -- the returned page's last tuple.
+  if v_count = 0 then
+    v_has_more := false;
+  else
+    select exists (
+      select 1 from public.kitchen_print_dispatches d
+      where d.organization_id = v_org
+        and d.branch_id = v_branch
+        and d.completed_at is null
+        and d.superseded_by_dispatch_id is null
+        and d.last_client_status is distinct from 'possibly_printed'
+        and ((d.claimed_by_device_id = p_device_id and d.claim_expires_at > now())
+             or d.claimed_at is null
+             or d.claim_expires_at < now())
+        and (d.created_at,
+             case d.dispatch_type when 'initial_order' then 0
+                                  when 'service_round' then 1 else 2 end,
+             d.id) > (v_last_at, v_last_rank, v_last_id))
+      into v_has_more;
+  end if;
 
   return jsonb_build_object(
     'ok', true, 'entity', 'kitchen_print_dispatches',
     'dispatches', v_rows,
-    'has_more', (v_count >= v_limit),
+    'has_more', v_has_more,
     'next_cursor', case when v_count > 0
-                        then jsonb_build_object('created_at', v_last_at, 'id', v_last_id)
+                        then jsonb_build_object('created_at', v_last_at, 'type_rank', v_last_rank, 'id', v_last_id)
                         else null end,
     'server_ts', now());
 end;
 $$;
 
-comment on function app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid) is
-  'KITCHEN-MODE-001C1: the POS''s ATOMIC claim-and-pull. Device-token authenticated (full 001A-corrected liveness; KDS explicitly denied); branch must currently be printer_only; a FRESH activation-capable readiness report is required (the deploy-ahead guard — no deployed client reports it, so production claims are impossible). Claims are per-device with a 10-minute expiry; stale claims are reclaimable; two devices can never win the same row (inner FOR UPDATE + outer re-check). Deterministic order: created_at, then initial_order < service_round < void, then id — per-order initial-before-round is guaranteed by creation order, and a VOID never overtakes its own order''s unattempted original (the original is superseded instead). possibly_printed rows are NEVER re-served (a re-print without operator action could duplicate paper). Payload only to the claiming POS; completed/superseded/30-day-old rows excluded. NOTE (D-013): no audit row on this device-only path — claim observability lives on the row (claimed_at/claimed_by).';
+comment on function app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer) is
+  'KITCHEN-MODE-001C1: the POS''s ATOMIC claim-and-pull. Device-token authenticated (full 001A-corrected liveness; KDS explicitly denied); branch must currently be printer_only; a FRESH activation-capable readiness report carrying the CURRENT branch mode revision is required (the deploy-ahead guard — no deployed client reports it, so production claims are impossible). Claims are per-device with a 10-minute expiry; stale claims are reclaimable; two devices can never win the same row (inner FOR UPDATE + outer re-check). CORRECTION-001: ORDER BY and the keyset cursor share ONE stable tuple (created_at, type_rank initial<round<void, id) — tied timestamps can never skip or duplicate a row across pages; the returned page is hard-capped at p_limit even when the device already held claims; has_more is truthful (a servable row exists beyond the page); the cursor is all-or-nothing and rank-validated; cursorless recovery re-serves own claims. possibly_printed rows are NEVER re-served (a re-print without operator action could duplicate paper); superseded rows are gone forever; an UNRESOLVED row never ages out (no time window). Payload only to the claiming POS. NOTE (D-013): no audit row on this device-only path — claim observability lives on the row (claimed_at/claimed_by).';
 
 create or replace function public.pull_kitchen_print_dispatches(
   p_device_id uuid, p_session_token text, p_limit integer default 20,
-  p_cursor_created_at timestamptz default null, p_cursor_id uuid default null)
+  p_cursor_created_at timestamptz default null, p_cursor_id uuid default null,
+  p_cursor_type_rank integer default null)
   returns jsonb language sql security invoker set search_path = ''
-as $$ select app.pull_kitchen_print_dispatches(p_device_id, p_session_token, p_limit, p_cursor_created_at, p_cursor_id); $$;
+as $$ select app.pull_kitchen_print_dispatches(p_device_id, p_session_token, p_limit, p_cursor_created_at, p_cursor_id, p_cursor_type_rank); $$;
 
-revoke all on function app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid) from public;
-grant execute on function app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid) to authenticated;
-revoke all on function public.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid) from public;
-revoke all on function public.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid) from anon;
-grant execute on function public.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid) to authenticated;
+revoke all on function app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer) from public;
+revoke all on function app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer) from anon;
+grant execute on function app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer) to authenticated;
+revoke all on function public.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer) from public;
+revoke all on function public.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer) from anon;
+grant execute on function public.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer) to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- 12. Acknowledgement (+wrapper).
@@ -2233,6 +2478,22 @@ begin
     return jsonb_build_object('ok', false, 'error', 'not_claim_owner', 'entity', 'kitchen_print_dispatch');
   end if;
 
+  -- CORRECTION-001 STICKY HOLD: once possibly_printed, the ambiguity can
+  -- never be resolved by the machine — paper may or may not exist. The ONLY
+  -- allowed acknowledgement is an idempotent possibly_printed replay by the
+  -- owner; every other status (imported / failed_retryable /
+  -- blocked_configuration / transport_accepted) is refused with a typed
+  -- conflict, the permanent no-lease hold stays, and nothing ever becomes
+  -- automatically pullable again. Resolution is a future explicit
+  -- operator-facing RPC, deliberately NOT part of 001C1.
+  if v_row.last_client_status = 'possibly_printed' then
+    if p_client_status = 'possibly_printed' then
+      return jsonb_build_object('ok', true, 'entity', 'kitchen_print_dispatch',
+        'dispatch_id', v_row.id, 'completed', false, 'idempotency_replay', true, 'server_ts', now());
+    end if;
+    return jsonb_build_object('ok', false, 'error', 'ambiguous_print_hold', 'entity', 'kitchen_print_dispatch');
+  end if;
+
   if p_client_status = 'transport_accepted' then
     update public.kitchen_print_dispatches
       set completed_at = now(), last_client_status = p_client_status,
@@ -2270,7 +2531,7 @@ end;
 $$;
 
 comment on function app.acknowledge_kitchen_print_dispatch(uuid, text, uuid, text, text) is
-  'KITCHEN-MODE-001C1: POS-only dispatch acknowledgement (device-token, full liveness, KDS denied). Closed NON-PHYSICAL status vocabulary — imported (extends the claim), transport_accepted (completes; idempotent replay for the same device), possibly_printed (PERMANENT hold: never auto-re-served, visible until an operator acts), failed_retryable / blocked_configuration (recorded; claim expiry keeps running so retry is possible). ''printed'' deliberately does not exist. Only the claim holder may acknowledge, with a stale-recovery path for the device that HELD the claim finishing a slow print. Error codes are allowlisted-shape, length-limited; no payload/endpoint/money is ever logged. Acknowledgement NEVER touches order state. NOTE (D-013): no audit row on this device-only path — observability lives on the row.';
+  'KITCHEN-MODE-001C1: POS-only dispatch acknowledgement (device-token, full liveness, KDS denied). Closed NON-PHYSICAL status vocabulary — imported (extends the claim), transport_accepted (completes; idempotent replay for the same device), possibly_printed (PERMANENT STICKY hold — CORRECTION-001: after it, the ONLY acceptable acknowledgement is an idempotent possibly_printed replay by the owner; imported/failed_retryable/blocked_configuration/transport_accepted are refused with ambiguous_print_hold, the no-lease hold stays, nothing becomes automatically pullable again, and resolution is a future explicit operator RPC), failed_retryable / blocked_configuration (recorded; claim expiry keeps running so retry is possible). ''printed'' deliberately does not exist. Only the claim holder may acknowledge, with a stale-recovery path for the device that HELD the claim finishing a slow print. Error codes are allowlisted-shape, length-limited; no payload/endpoint/money is ever logged. Acknowledgement NEVER touches order state. NOTE (D-013): no audit row on this device-only path — observability lives on the row.';
 
 create or replace function public.acknowledge_kitchen_print_dispatch(
   p_device_id uuid, p_session_token text, p_dispatch_id uuid,
@@ -2279,6 +2540,7 @@ create or replace function public.acknowledge_kitchen_print_dispatch(
 as $$ select app.acknowledge_kitchen_print_dispatch(p_device_id, p_session_token, p_dispatch_id, p_client_status, p_error_code); $$;
 
 revoke all on function app.acknowledge_kitchen_print_dispatch(uuid, text, uuid, text, text) from public;
+revoke all on function app.acknowledge_kitchen_print_dispatch(uuid, text, uuid, text, text) from anon;
 grant execute on function app.acknowledge_kitchen_print_dispatch(uuid, text, uuid, text, text) to authenticated;
 revoke all on function public.acknowledge_kitchen_print_dispatch(uuid, text, uuid, text, text) from public;
 revoke all on function public.acknowledge_kitchen_print_dispatch(uuid, text, uuid, text, text) from anon;
@@ -2314,6 +2576,8 @@ declare
   v_unresolved     integer;
   v_pending_voids  integer;
   v_report         public.kitchen_printer_readiness_reports%rowtype;
+  v_diag           public.kitchen_printer_readiness_reports%rowtype;
+  v_used           public.kitchen_printer_readiness_reports%rowtype;
   v_to_po          jsonb := '[]'::jsonb;
   v_to_kds         jsonb := '[]'::jsonb;
 begin
@@ -2366,25 +2630,72 @@ begin
     where d.organization_id = p_organization_id and d.branch_id = p_branch_id
       and d.dispatch_type = 'void'
       and d.completed_at is null and d.superseded_by_dispatch_id is null;
+  -- CORRECTION-001 readiness selection: the report that satisfies a blocker
+  -- must be a FULLY QUALIFYING one — fresh, activation-capable (80mm + secure
+  -- spool), carrying the CURRENT mode revision, and filed by a LIVE,
+  -- correctly-scoped, actively-paired POS device. A newer non-qualifying
+  -- report (58mm, stale revision, revoked device, ...) can never SHADOW a
+  -- valid qualifying report from another compatible POS.
   select rr.* into v_report
     from public.kitchen_printer_readiness_reports rr
+    join public.devices d
+      on  d.id = rr.device_id
+      and d.organization_id = rr.organization_id
+      and d.restaurant_id   = rr.restaurant_id
+      and d.branch_id       = rr.branch_id
+      and d.device_type = 'pos' and d.is_active and d.deleted_at is null
     where rr.organization_id = p_organization_id and rr.branch_id = p_branch_id
       and rr.expires_at > now()
       and rr.capability = 'kitchen_printer_only_v1'
+      and rr.printer_purpose = 'kitchen_ticket'
+      and rr.paper_width = '80mm'
+      and rr.secure_spool_available
+      and rr.mode_revision = v_rev
+      and exists (select 1 from public.device_pairings dp
+                   where dp.device_id = d.id and dp.organization_id = d.organization_id
+                     and dp.status = 'active' and dp.revoked_at is null and dp.deleted_at is null)
     order by rr.reported_at desc
     limit 1;
+  if v_report.id is null then
+    -- DIAGNOSTIC fallback (still live-device + fresh + capability-matched):
+    -- names the SPECIFIC deficiency instead of a generic absence.
+    select rr.* into v_diag
+      from public.kitchen_printer_readiness_reports rr
+      join public.devices d
+        on  d.id = rr.device_id
+        and d.organization_id = rr.organization_id
+        and d.restaurant_id   = rr.restaurant_id
+        and d.branch_id       = rr.branch_id
+        and d.device_type = 'pos' and d.is_active and d.deleted_at is null
+      where rr.organization_id = p_organization_id and rr.branch_id = p_branch_id
+        and rr.expires_at > now()
+        and rr.capability = 'kitchen_printer_only_v1'
+        and rr.printer_purpose = 'kitchen_ticket'
+        and exists (select 1 from public.device_pairings dp
+                     where dp.device_id = d.id and dp.organization_id = d.organization_id
+                       and dp.status = 'active' and dp.revoked_at is null and dp.deleted_at is null)
+      order by rr.reported_at desc
+      limit 1;
+  end if;
+  if v_report.id is not null then
+    v_used := v_report;
+  else
+    v_used := v_diag;
+  end if;
 
   -- kds -> printer_only blockers.
   if v_active_orders > 0 then v_to_po := v_to_po || '"active_orders"'::jsonb; end if;
   if v_active_rounds > 0 then v_to_po := v_to_po || '"active_service_rounds"'::jsonb; end if;
   if v_ready_orders > 0 then v_to_po := v_to_po || '"unresolved_ready_state"'::jsonb; end if;
   if v_pending_ops > 0 then v_to_po := v_to_po || '"unresolved_sync_operations"'::jsonb; end if;
-  if v_report.id is null then
+  if v_report.id is not null then
+    null; -- a fully qualifying live report exists: no readiness blocker.
+  elsif v_diag.id is null then
     v_to_po := v_to_po || '"no_fresh_pos_readiness"'::jsonb;
   else
-    if v_report.paper_width <> '80mm' then v_to_po := v_to_po || '"paper_width_80mm_required"'::jsonb; end if;
-    if not v_report.secure_spool_available then v_to_po := v_to_po || '"secure_spool_unavailable"'::jsonb; end if;
-    if v_report.mode_revision <> v_rev then v_to_po := v_to_po || '"stale_mode_revision"'::jsonb; end if;
+    if v_diag.paper_width <> '80mm' then v_to_po := v_to_po || '"paper_width_80mm_required"'::jsonb; end if;
+    if not v_diag.secure_spool_available then v_to_po := v_to_po || '"secure_spool_unavailable"'::jsonb; end if;
+    if v_diag.mode_revision <> v_rev then v_to_po := v_to_po || '"stale_mode_revision"'::jsonb; end if;
   end if;
 
   -- printer_only -> kds blockers.
@@ -2392,9 +2703,9 @@ begin
   if v_pending_voids > 0 then v_to_kds := v_to_kds || '"pending_void_dispatches"'::jsonb; end if;
   if v_active_orders > 0 then v_to_kds := v_to_kds || '"active_orders"'::jsonb; end if;
   if v_active_rounds > 0 then v_to_kds := v_to_kds || '"active_service_rounds"'::jsonb; end if;
-  if v_report.id is null then
+  if v_used.id is null then
     v_to_kds := v_to_kds || '"no_fresh_pos_status_report"'::jsonb;
-  elsif v_report.unresolved_local_jobs > 0 then
+  elsif v_used.unresolved_local_jobs > 0 then
     v_to_kds := v_to_kds || '"unresolved_local_jobs"'::jsonb;
   end if;
 
@@ -2413,20 +2724,23 @@ begin
       'pending_sync_operations', v_pending_ops,
       'unresolved_dispatches', v_unresolved,
       'pending_void_dispatches', v_pending_voids,
-      'unresolved_local_jobs', coalesce(v_report.unresolved_local_jobs, 0)),
-    'readiness_report', case when v_report.id is null then null else jsonb_build_object(
-      'reported_at', v_report.reported_at,
-      'expires_at', v_report.expires_at,
-      'paper_width', v_report.paper_width,
-      'transport_kind', v_report.transport_kind,
-      'secure_spool_available', v_report.secure_spool_available,
-      'app_build', v_report.app_build) end,
+      'unresolved_local_jobs', coalesce(v_used.unresolved_local_jobs, 0)),
+    'readiness_report', case when v_used.id is null then null else jsonb_build_object(
+      'reported_at', v_used.reported_at,
+      'expires_at', v_used.expires_at,
+      'paper_width', v_used.paper_width,
+      'transport_kind', v_used.transport_kind,
+      'secure_spool_available', v_used.secure_spool_available,
+      'app_build', v_used.app_build,
+      -- CORRECTION-001: says explicitly whether this is the fully QUALIFYING
+      -- live report or only the best diagnostic one.
+      'qualifying', (v_report.id is not null)) end,
     'server_ts', now());
 end;
 $$;
 
 comment on function app.get_kitchen_workflow_transition_readiness(uuid, uuid, uuid) is
-  'KITCHEN-MODE-001C1: READ-ONLY inspection of every kitchen-workflow transition blocker (typed codes + safe counts only — no payloads, customer data, money or endpoints). The server recomputes every server-side blocker; the only client-derived input is the FRESH device-session-proven readiness report (unresolved_local_jobs). Any active member covering the branch may READ (matches branch-settings read visibility); the future MUTATION (001C3 setter) is owner-only. Never changes mode; never mutates anything.';
+  'KITCHEN-MODE-001C1: READ-ONLY inspection of every kitchen-workflow transition blocker (typed codes + safe counts only — no payloads, customer data, money or endpoints). The server recomputes every server-side blocker; the only client-derived input is the readiness report. CORRECTION-001 selection: a blocker is satisfied ONLY by a fully QUALIFYING report — fresh, 80mm + secure spool, current mode revision, filed by a LIVE active correctly-scoped actively-paired POS device — and a newer non-qualifying report can never shadow a qualifying one from another POS; when none qualifies, the best live diagnostic report names the specific deficiency (paper/spool/revision) and unresolved_local_jobs comes only from a live-device report. Unresolved dispatches are counted with NO age window (an old unresolved row still blocks). Any active member covering the branch may READ (matches branch-settings read visibility); the future MUTATION (001C3 setter) is owner-only. Never changes mode; never mutates anything.';
 
 create or replace function public.get_kitchen_workflow_transition_readiness(
   p_organization_id uuid, p_restaurant_id uuid, p_branch_id uuid)
@@ -2434,6 +2748,7 @@ create or replace function public.get_kitchen_workflow_transition_readiness(
 as $$ select app.get_kitchen_workflow_transition_readiness(p_organization_id, p_restaurant_id, p_branch_id); $$;
 
 revoke all on function app.get_kitchen_workflow_transition_readiness(uuid, uuid, uuid) from public;
+revoke all on function app.get_kitchen_workflow_transition_readiness(uuid, uuid, uuid) from anon;
 grant execute on function app.get_kitchen_workflow_transition_readiness(uuid, uuid, uuid) to authenticated;
 revoke all on function public.get_kitchen_workflow_transition_readiness(uuid, uuid, uuid) from public;
 revoke all on function public.get_kitchen_workflow_transition_readiness(uuid, uuid, uuid) from anon;
@@ -2654,10 +2969,755 @@ $$;
 comment on function app.audit_safe_detail(text, jsonb) is
   'ALLOWLIST projection of one audit payload to canonical safe fields (see 20260724090000) + KITCHEN-MODE-001C1 dispatch_type. kitchen.% joins the MONEY-FREE hostile-key hardening (every *_minor key dropped for the family). Faithful re-creation otherwise; every un-listed key/structure dropped; malformed -> ''{}''; never throws.';
 
+
+-- ----------------------------------------------------------------------------
+-- 15. app.sync_push — faithful re-creation of the NEWEST body (20260722090000
+--     lines 1672-2370; verified: no later migration re-creates it) with ONE
+--     CORRECTION-001 delta, inside the order.submit case only: after the
+--     ORDER-CUSTOMER-001 customer_name stamp, the order's initial kitchen
+--     dispatch payload is REBUILT via the internal builder in the same
+--     transaction (marked inline). The operation registry (all 15 ops),
+--     signatures, envelopes, identity hardening, atomic ledger claim,
+--     batch/finalization semantics, grants, search_path and every other
+--     behavior are verbatim. public.sync_push (20260628090000) is untouched
+--     and keeps calling this by name.
+-- ----------------------------------------------------------------------------
+create or replace function app.sync_push(
+  p_pin_session_id uuid,
+  p_device_id      uuid,
+  p_operations     jsonb
+)
+  returns jsonb
+  language plpgsql
+  security definer
+  set search_path = ''
+as $$
+declare
+  v_org          uuid;
+  v_rest         uuid;
+  v_branch       uuid;
+  v_dsid         uuid;
+  v_emp          uuid;
+  v_membership   uuid;
+  v_ds_device    uuid;
+  v_ds_active    boolean;
+  v_ds_revoked   timestamptz;
+  v_pairing      text;
+  v_op           jsonb;
+  v_local_op     text;
+  v_op_type      text;
+  v_payload      jsonb;
+  v_depends      jsonb;
+  v_target_ent   text;
+  v_target_id    uuid;
+  v_client_ts    timestamptz;
+  v_fingerprint  text;
+  v_dep          text;
+  v_dep_ok       boolean;
+  v_ex_status    text;
+  v_ex_result    jsonb;
+  v_ex_optype    text;
+  v_ex_fp        text;
+  -- PSC-001C correction (Finding 1): the existing row's id when the atomic
+  -- ledger claim loses, and whether this request ADOPTED a stale non-terminal
+  -- row (the only case that bumps retry_count — the pre-fix contract).
+  v_ex_id        uuid;
+  v_adopted      boolean;
+  v_so_id        uuid;
+  v_dispatch     jsonb;
+  v_dispatch_ok  boolean;
+  v_caught_state text;
+  v_caught_msg   text;
+  v_results      jsonb := '[]'::jsonb;
+  v_op_result    jsonb;
+  v_device_revoked boolean := false;
+  v_customer_name text;
+  v_ack_order    uuid;
+  v_ack_ok       boolean;
+begin
+  -- (0) batch shape + a conservative size cap (no frozen limit in docs; 100 is the
+  --     interim cap, surfaced here and in the tests — keeps a push transaction bounded).
+  if p_operations is null or jsonb_typeof(p_operations) <> 'array' then
+    raise exception 'sync_push: p_operations must be a JSON array' using errcode = '42501';
+  end if;
+  if jsonb_array_length(p_operations) > 100 then
+    raise exception 'sync_push: batch too large (max 100 operations, got %)', jsonb_array_length(p_operations) using errcode = '42501';
+  end if;
+
+  -- (a) PIN session + backing device session/pairing. Scope is derived here. The PIN
+  --     session must exist + be valid (offline-window bounded, Q-009); a missing session
+  --     or expired PIN still raises (cannot key/record safely without a session/window).
+  select ps.organization_id, ps.restaurant_id, ps.branch_id, ps.device_session_id,
+         ps.employee_profile_id, ps.resolved_membership_id
+    into v_org, v_rest, v_branch, v_dsid, v_emp, v_membership
+    from public.pin_sessions ps where ps.id = p_pin_session_id;
+  if not found then
+    raise exception 'sync_push: PIN session not found' using errcode = '42501';
+  end if;
+  if not app.is_pin_session_valid(p_pin_session_id) then
+    raise exception 'sync_push: PIN session is not valid (inactive/ended/expired)' using errcode = '42501';
+  end if;
+  select ds.device_id, ds.is_active, ds.revoked_at, dp.status
+    into v_ds_device, v_ds_active, v_ds_revoked, v_pairing
+    from public.device_sessions ds join public.device_pairings dp on dp.id = ds.device_pairing_id
+    where ds.id = v_dsid;
+  if not found then
+    raise exception 'sync_push: backing device session not found' using errcode = '42501';
+  end if;
+  if v_ds_device <> p_device_id then
+    raise exception 'sync_push: device_id does not match the PIN session device' using errcode = '42501';
+  end if;
+  -- RF061-A1: a REVOKED / inactive device session or pairing no longer fails the whole
+  -- batch with a silent raise. Instead each pushed op is RECORDED as rejected
+  -- (revoked_device) and surfaced, so the offline-queued operations are not lost (R-007;
+  -- AC1). Authorization is INGEST-TIME (the device is revoked NOW); client timestamps are
+  -- never trusted. A previously-APPLIED op still replays its stored result (idempotency).
+  if not (v_ds_active and v_ds_revoked is null and v_pairing = 'active') then
+    v_device_revoked := true;
+    for v_op in select * from jsonb_array_elements(p_operations)
+    loop
+      v_local_op   := v_op ->> 'local_operation_id';
+      v_op_type    := v_op ->> 'operation_type';
+      v_payload    := v_op -> 'payload';
+      v_depends    := coalesce(v_op -> 'depends_on', '[]'::jsonb);
+      v_target_ent := v_op ->> 'target_entity';
+      -- PSC-001D correction (F3) + PSC-001C: for the three IDENTITY-HARDENED
+      -- operations (order.void_ack, order.items_add, order.round_status) the
+      -- target id is parsed inside a PROTECTED boundary — a malformed uuid
+      -- must reject only ITS operation, never abort the whole batch. The 12
+      -- prior operations keep their exact existing parse semantics.
+      if v_op_type in ('order.void_ack', 'order.items_add', 'order.round_status') then
+        begin
+          v_target_id := nullif(v_op ->> 'target_id', '')::uuid;
+        exception when others then
+          v_target_id := null;
+        end;
+      else
+        v_target_id := nullif(v_op ->> 'target_id', '')::uuid;
+      end if;
+      v_client_ts  := nullif(v_op ->> 'client_created_at', '')::timestamptz;
+
+      -- envelope validation (same as the valid path): malformed -> rejected result, NO ledger row
+      if v_local_op is null or btrim(v_local_op) = '' then
+        v_results := v_results || jsonb_build_object('ok', false, 'error', 'invalid_envelope',
+          'detail', 'local_operation_id is required', 'status', 'rejected', 'idempotency_replay', false);
+        continue;
+      end if;
+      if v_op_type is null or v_op_type not in ('shift.open', 'order.submit', 'order.discount', 'payment.create', 'shift.close', 'order.status', 'order.void', 'order.table_move', 'menu.availability_set', 'table.status_set', 'table.link', 'table.unlink', 'order.void_ack', 'order.items_add', 'order.round_status') then
+        v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'ok', false,
+          'error', 'unknown_operation_type', 'detail', coalesce(v_op_type, '<null>'), 'status', 'rejected', 'idempotency_replay', false);
+        continue;
+      end if;
+      if v_payload is null or jsonb_typeof(v_payload) <> 'object' then
+        v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type,
+          'ok', false, 'error', 'invalid_payload', 'detail', 'payload must be a JSON object', 'status', 'rejected', 'idempotency_replay', false);
+        continue;
+      end if;
+
+      -- PSC-001D correction (final pass) + PSC-001C: the SAME canonical
+      -- identity contract as the valid path for ALL THREE hardened operations,
+      -- enforced BEFORE the fingerprint, the terminal-replay lookup, the
+      -- idempotency-conflict comparison and the ledger write. A revoked device
+      -- must not gain permission to submit ambiguous or contradictory
+      -- operation identity: a missing, malformed or CONTRADICTORY
+      -- target/payload-identity pair (payload.order_id for order.void_ack and
+      -- order.items_add; payload.round_id for order.round_status) is a hostile
+      -- or malformed envelope — rejected with NO ledger row (the malformed-
+      -- envelope convention), the batch continues. Only that op is affected.
+      if v_op_type in ('order.void_ack', 'order.items_add', 'order.round_status') then
+        v_ack_ok := v_target_id is not null;
+        begin
+          v_ack_order := nullif(v_payload ->> (case when v_op_type = 'order.round_status' then 'round_id' else 'order_id' end), '')::uuid;
+        exception when others then
+          v_ack_order := null;
+        end;
+        if v_ack_order is null or not v_ack_ok or v_target_id <> v_ack_order then
+          v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type,
+            'ok', false, 'error', 'invalid_payload',
+            'detail', v_op_type || ' requires matching uuid target_id and payload.'
+                      || (case when v_op_type = 'order.round_status' then 'round_id' else 'order_id' end),
+            'status', 'rejected', 'idempotency_replay', false);
+          continue;
+        end if;
+      end if;
+
+      -- PSC-001D correction (F2 + final pass) + PSC-001C: the SAME target-
+      -- bound fingerprint SHAPE as the valid path for all three hardened
+      -- operations — the target component is the PARSED uuid's text
+      -- (guaranteed non-null and equal to the parsed payload identity by the
+      -- check above), so a legitimately-applied op still replays its stored
+      -- result after a revocation (identical identity -> identical
+      -- fingerprint), while the 12 prior operations are unchanged.
+      if v_op_type in ('order.void_ack', 'order.items_add', 'order.round_status') then
+        v_fingerprint := md5(v_op_type || '|' || v_payload::text || '|' || v_target_id::text);
+      else
+        v_fingerprint := md5(v_op_type || '|' || v_payload::text);
+      end if;
+
+      -- dedup/replay (PSC-001C correction, Finding 1 — ATOMIC CLAIM): the
+      -- rejected/revoked_device recording is now claimed with ONE
+      -- INSERT .. ON CONFLICT DO NOTHING on the transport identity. When the
+      -- claim loses, the existing row is LOCKED (waiting out any concurrent
+      -- claimant's COMMIT) and decided from its COMMITTED state: a TERMINAL
+      -- row replays its stored result (a legitimately-APPLIED op before
+      -- revocation is NOT re-rejected — and can no longer be OVERWRITTEN by
+      -- this path racing a valid-device apply); a different identity is a
+      -- conflict; only a genuinely stale NON-terminal row is re-recorded as
+      -- rejected (the pre-fix retry contract, bump included).
+      v_so_id := null;
+      insert into public.sync_operations as so (
+        organization_id, restaurant_id, branch_id, device_id, local_operation_id, operation_type,
+        target_entity, target_id, payload, payload_fingerprint, depends_on, status,
+        last_error_code, last_error_class, rejection_reason,
+        result, client_created_at)
+      values (v_org, v_rest, v_branch, p_device_id, v_local_op, v_op_type,
+              v_target_ent, v_target_id, v_payload, v_fingerprint, v_depends, 'rejected',
+              'revoked_device', 'permanent', 'revoked_device',
+              jsonb_build_object('ok', false, 'error', 'rejected', 'detail', 'revoked_device'), v_client_ts)
+      on conflict (organization_id, device_id, local_operation_id) do nothing
+      returning so.id into v_so_id;
+      if v_so_id is null then
+        select so.id, so.status, so.result, so.operation_type, so.payload_fingerprint
+          into v_ex_id, v_ex_status, v_ex_result, v_ex_optype, v_ex_fp
+          from public.sync_operations so
+          where so.organization_id = v_org and so.device_id = p_device_id and so.local_operation_id = v_local_op
+          for update;
+        if v_ex_optype <> v_op_type or v_ex_fp <> v_fingerprint then
+          insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
+          values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_conflict', null, null,
+                  jsonb_build_object('local_operation_id', v_local_op, 'stored_operation_type', v_ex_optype, 'pushed_operation_type', v_op_type,
+                                     'stored_status', v_ex_status, 'reason', 'idempotency_key_reused_with_different_operation_or_payload'));
+          v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'ok', false,
+            'error', 'conflict', 'detail', 'idempotency key already used for a different operation/payload', 'status', 'conflict', 'idempotency_replay', false);
+          continue;
+        end if;
+        if v_ex_status in ('applied', 'rejected', 'dead', 'conflict') then
+          v_results := v_results || (coalesce(v_ex_result, '{}'::jsonb)
+            || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'status', v_ex_status, 'idempotency_replay', true));
+          continue;
+        end if;
+        -- a stale NON-terminal row: re-record it as rejected (revoked_device)
+        -- under the held lock — the pre-fix on-conflict contract, verbatim.
+        update public.sync_operations as so
+          set status = 'rejected', last_error_code = 'revoked_device', last_error_class = 'permanent',
+              rejection_reason = 'revoked_device',
+              result = jsonb_build_object('ok', false, 'error', 'rejected', 'detail', 'revoked_device'),
+              retry_count = so.retry_count + 1, updated_at = now()
+          where so.id = v_ex_id;
+      end if;
+      insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
+      values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_rejected', 'revoked_device', null,
+              jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'reason', 'revoked_device'));
+      v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'ok', false,
+        'error', 'rejected', 'detail', 'revoked_device', 'status', 'rejected', 'idempotency_replay', false);
+    end loop;
+    return jsonb_build_object('ok', true, 'results', v_results, 'server_ts', now(), 'device_revoked', true);
+  end if;
+
+  -- (b) per-operation loop (ordered) — VALID device path (unchanged from RF-056)
+  for v_op in select * from jsonb_array_elements(p_operations)
+  loop
+    v_caught_state := null;
+    v_caught_msg   := null;
+    v_dispatch     := null;
+    v_dispatch_ok  := null;
+    v_so_id        := null;
+
+    v_local_op   := v_op ->> 'local_operation_id';
+    v_op_type    := v_op ->> 'operation_type';
+    v_payload    := v_op -> 'payload';
+    v_depends    := coalesce(v_op -> 'depends_on', '[]'::jsonb);
+    v_target_ent := v_op ->> 'target_entity';
+    -- PSC-001D correction (F3) + PSC-001C: protected parse for the three
+    -- identity-hardened operations — a malformed target uuid rejects only ITS
+    -- operation (below), never the batch. The 12 prior operations keep their
+    -- exact existing semantics.
+    if v_op_type in ('order.void_ack', 'order.items_add', 'order.round_status') then
+      begin
+        v_target_id := nullif(v_op ->> 'target_id', '')::uuid;
+      exception when others then
+        v_target_id := null;
+      end;
+    else
+      v_target_id := nullif(v_op ->> 'target_id', '')::uuid;
+    end if;
+    v_client_ts  := nullif(v_op ->> 'client_created_at', '')::timestamptz;
+
+    -- (b1) envelope shape validation. Malformed envelopes are returned rejected
+    --      WITHOUT a ledger row (they cannot be keyed/stored safely); they never dispatch.
+    if v_local_op is null or btrim(v_local_op) = '' then
+      v_results := v_results || jsonb_build_object('ok', false, 'error', 'invalid_envelope',
+        'detail', 'local_operation_id is required', 'status', 'rejected', 'idempotency_replay', false);
+      continue;
+    end if;
+    if v_op_type is null or v_op_type not in ('shift.open', 'order.submit', 'order.discount', 'payment.create', 'shift.close', 'order.status', 'order.void', 'order.table_move', 'menu.availability_set', 'table.status_set', 'table.link', 'table.unlink', 'order.void_ack', 'order.items_add', 'order.round_status') then
+      v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'ok', false,
+        'error', 'unknown_operation_type', 'detail', coalesce(v_op_type, '<null>'), 'status', 'rejected', 'idempotency_replay', false);
+      continue;
+    end if;
+    if v_payload is null or jsonb_typeof(v_payload) <> 'object' then
+      v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type,
+        'ok', false, 'error', 'invalid_payload', 'detail', 'payload must be a JSON object', 'status', 'rejected', 'idempotency_replay', false);
+      continue;
+    end if;
+    if jsonb_typeof(v_depends) <> 'array' then
+      v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type,
+        'ok', false, 'error', 'invalid_depends_on', 'detail', 'depends_on must be a JSON array', 'status', 'rejected', 'idempotency_replay', false);
+      continue;
+    end if;
+
+    -- (b1+) PSC-001D correction (F2/F3) + PSC-001C: CANONICAL TARGET IDENTITY
+    -- for the three hardened operations, enforced BEFORE the fingerprint, the
+    -- terminal-replay lookup and the dispatch. The envelope MUST carry a
+    -- parseable target_id AND a parseable payload identity (payload.order_id
+    -- for order.void_ack and order.items_add; payload.round_id for
+    -- order.round_status) and they MUST be the same uuid — a missing,
+    -- malformed or CONTRADICTORY pair is a hostile/malformed envelope:
+    -- rejected with NO ledger row (the malformed-envelope convention), so a
+    -- replayed local_operation_id with a swapped target can never reach the
+    -- stored terminal result, mutate anything, or learn anything about
+    -- another order or round. Only that operation is affected.
+    if v_op_type in ('order.void_ack', 'order.items_add', 'order.round_status') then
+      v_ack_ok := v_target_id is not null;
+      begin
+        v_ack_order := nullif(v_payload ->> (case when v_op_type = 'order.round_status' then 'round_id' else 'order_id' end), '')::uuid;
+      exception when others then
+        v_ack_order := null;
+      end;
+      if v_ack_order is null or not v_ack_ok or v_target_id <> v_ack_order then
+        v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type,
+          'ok', false, 'error', 'invalid_payload',
+          'detail', v_op_type || ' requires matching uuid target_id and payload.'
+                    || (case when v_op_type = 'order.round_status' then 'round_id' else 'order_id' end),
+          'status', 'rejected', 'idempotency_replay', false);
+        continue;
+      end if;
+    end if;
+
+    -- PSC-001D correction (F2) + PSC-001C: the fingerprint of every hardened
+    -- operation BINDS the canonical target identity, so a terminal replay is
+    -- valid only for the same local_operation_id + operation + payload +
+    -- TARGET. The 12 prior operations keep their exact existing fingerprint
+    -- semantics.
+    if v_op_type in ('order.void_ack', 'order.items_add', 'order.round_status') then
+      v_fingerprint := md5(v_op_type || '|' || v_payload::text || '|' || v_target_id::text);
+    else
+      v_fingerprint := md5(v_op_type || '|' || v_payload::text);
+    end if;
+
+    -- (b2) ATOMIC LEDGER CLAIM (PSC-001C correction, Finding 1). The pre-fix
+    -- shape read the ledger and only LATER upserted it, so two concurrent
+    -- requests with the SAME (org, device, local_operation_id) + fingerprint
+    -- could both pass the read; the loser's upsert then dragged the winner's
+    -- COMMITTED terminal row back to in_flight, re-dispatched (now an
+    -- invalid_transition), and finalized the previously-successful row as
+    -- rejected. The claim is now ONE INSERT .. ON CONFLICT DO NOTHING on the
+    -- transport identity, computed AFTER envelope validation + identity
+    -- canonicalization + the fingerprint:
+    --   * claim WON  -> this transaction owns dispatch (fresh row, in_flight,
+    --     retry_count 0) and finalizes it exactly once at (b6);
+    --   * claim LOST -> the existing row is LOCKED (FOR UPDATE — waiting out a
+    --     concurrent claimant's COMMIT) and decided from COMMITTED state: a
+    --     fingerprint/op mismatch keeps the exact idempotency-conflict
+    --     contract; a TERMINAL row replays its stored result (and can never be
+    --     overwritten or reset to in_flight again); only a genuinely stale
+    --     NON-terminal row (pending / crashed in_flight) is ADOPTED — the
+    --     pre-fix retry contract, bump included. A losing concurrent caller
+    --     therefore converges on the winner's stored terminal result.
+    v_adopted := false;
+    v_so_id   := null;
+    insert into public.sync_operations as so (
+      organization_id, restaurant_id, branch_id, device_id, local_operation_id, operation_type,
+      target_entity, target_id, payload, payload_fingerprint, depends_on, status, client_created_at)
+    values (v_org, v_rest, v_branch, p_device_id, v_local_op, v_op_type,
+            v_target_ent, v_target_id, v_payload, v_fingerprint, v_depends, 'in_flight', v_client_ts)
+    on conflict (organization_id, device_id, local_operation_id) do nothing
+    returning so.id into v_so_id;
+
+    if v_so_id is null then
+      select so.id, so.status, so.result, so.operation_type, so.payload_fingerprint
+        into v_ex_id, v_ex_status, v_ex_result, v_ex_optype, v_ex_fp
+        from public.sync_operations so
+        where so.organization_id = v_org and so.device_id = p_device_id and so.local_operation_id = v_local_op
+        for update;
+      if v_ex_optype <> v_op_type or v_ex_fp <> v_fingerprint then
+        insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
+        values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_conflict', null, null,
+                jsonb_build_object('local_operation_id', v_local_op, 'stored_operation_type', v_ex_optype, 'pushed_operation_type', v_op_type,
+                                   'stored_status', v_ex_status, 'reason', 'idempotency_key_reused_with_different_operation_or_payload'));
+        v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'ok', false,
+          'error', 'conflict', 'detail', 'idempotency key already used for a different operation/payload', 'status', 'conflict', 'idempotency_replay', false);
+        continue;
+      end if;
+      if v_ex_status in ('applied', 'rejected', 'dead', 'conflict') then
+        v_results := v_results || (coalesce(v_ex_result, '{}'::jsonb)
+          || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'status', v_ex_status, 'idempotency_replay', true));
+        continue;
+      end if;
+      v_so_id   := v_ex_id;
+      v_adopted := true;
+    end if;
+
+    -- (b3) dependency guard (still BEFORE any dispatch; the claimed/adopted
+    -- row is parked as pending exactly like the pre-fix contract — a fresh
+    -- claim keeps retry_count 0, an adopted re-attempt bumps it).
+    v_dep_ok := true;
+    for v_dep in select jsonb_array_elements_text(v_depends)
+    loop
+      if not exists (
+        select 1 from public.sync_operations so
+        where so.organization_id = v_org and so.device_id = p_device_id
+          and so.local_operation_id = v_dep and so.status = 'applied'
+      ) then
+        v_dep_ok := false;
+        exit;
+      end if;
+    end loop;
+
+    if not v_dep_ok then
+      update public.sync_operations as so
+        set status = 'pending', last_error_code = 'dependency_not_ready', last_error_class = 'transient',
+            retry_count = so.retry_count + (case when v_adopted then 1 else 0 end),
+            updated_at = now()
+        where so.id = v_so_id;
+      v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'ok', false,
+        'error', 'dependency_not_ready', 'retryable', true, 'status', 'pending', 'idempotency_replay', false);
+      continue;
+    end if;
+
+    -- (b4) an ADOPTED stale re-attempt returns to in_flight with the retry
+    -- bump (the pre-fix on-conflict contract); a fresh claim is already
+    -- in_flight and is never re-written here.
+    if v_adopted then
+      update public.sync_operations as so
+        set status = 'in_flight', retry_count = so.retry_count + 1, updated_at = now()
+        where so.id = v_so_id;
+    end if;
+
+    -- (b5) dispatch to the matching business RPC inside a per-op EXCEPTION subtransaction.
+    begin
+      case v_op_type
+        when 'shift.open' then
+          v_dispatch := app.open_shift(
+            p_pin_session_id,
+            (v_payload ->> 'shift_id')::uuid,
+            (v_payload ->> 'cash_drawer_session_id')::uuid,
+            p_device_id,
+            v_local_op,
+            (v_payload ->> 'opening_float_minor')::bigint);
+        when 'order.submit' then
+          v_dispatch := app.submit_order(
+            p_pin_session_id,
+            (v_payload ->> 'order_id')::uuid,
+            p_device_id,
+            v_local_op,
+            v_payload ->> 'order_type',
+            nullif(v_payload ->> 'table_id', '')::uuid,
+            nullif(v_payload ->> 'shift_id', '')::uuid,
+            v_payload ->> 'currency_code',
+            v_payload ->> 'notes',
+            v_payload -> 'order_items',
+            (v_payload ->> 'subtotal_minor')::bigint,
+            (v_payload ->> 'discount_total_minor')::bigint,
+            (v_payload ->> 'tax_total_minor')::bigint,
+            (v_payload ->> 'grand_total_minor')::bigint,
+            v_client_ts);
+          -- ORDER-CUSTOMER-001: stamp the OPTIONAL customer display name on the
+          -- order app.submit_order just created. Kept OUT of submit_order so its
+          -- validated INSERT stays byte-unchanged. Money-free display text: trim
+          -- + empty->null + 80-char cap. Tenant-scoped by v_org; the
+          -- `customer_name is null` guard makes it idempotent (a replay returns
+          -- the same order_id, already stamped) and never overwrites.
+          v_customer_name := left(btrim(coalesce(v_payload ->> 'customer_name', '')), 80);
+          if v_customer_name <> '' then
+            update public.orders
+              set customer_name = v_customer_name
+              where id = (v_dispatch ->> 'order_id')::uuid
+                and organization_id = v_org
+                and customer_name is null;
+          end if;
+          -- KITCHEN-MODE-001C1-CORRECTION-001: the initial kitchen dispatch
+          -- payload is built inside app.submit_order BEFORE this stamp, so on
+          -- the REAL push path customer_display_name was missing. Rebuild the
+          -- COMPLETE normalized payload through the trusted internal server
+          -- builder IN THIS SAME TRANSACTION — never by patching client JSON
+          -- in, never after a client could have seen it (claimed / completed
+          -- / superseded rows are left untouched; inside this first-apply
+          -- transaction the row is not yet visible to any puller), never
+          -- duplicating the dispatch or its audit row (no INSERT, no audit
+          -- here). The row only exists for printer_only branches, so kds
+          -- branches are a structural no-op; the guard trigger re-proves the
+          -- rebuilt payload money-free on UPDATE.
+          if v_customer_name <> '' then
+            update public.kitchen_print_dispatches kd
+              set money_free_payload = app.kitchen_dispatch_payload_initial(v_org, (v_dispatch ->> 'order_id')::uuid),
+                  updated_at = now()
+              where kd.organization_id = v_org
+                and kd.order_id = (v_dispatch ->> 'order_id')::uuid
+                and kd.dispatch_type = 'initial_order'
+                and kd.claimed_at is null
+                and kd.completed_at is null
+                and kd.superseded_by_dispatch_id is null;
+          end if;
+        when 'order.discount' then
+          v_dispatch := app.apply_discount(
+            p_pin_session_id,
+            (v_payload ->> 'order_id')::uuid,
+            p_device_id,
+            v_local_op,
+            v_payload ->> 'scope',
+            nullif(v_payload ->> 'order_item_id', '')::uuid,
+            v_payload ->> 'discount_type',
+            (v_payload ->> 'value')::bigint,
+            v_payload ->> 'reason',
+            nullif(v_payload ->> 'expected_revision', '')::integer);
+        when 'payment.create' then
+          v_dispatch := app.record_payment(
+            p_pin_session_id,
+            (v_payload ->> 'order_id')::uuid,
+            p_device_id,
+            v_local_op,
+            v_payload ->> 'tender_type',
+            (v_payload ->> 'amount_tendered_minor')::bigint,
+            nullif(v_payload ->> 'provisional_receipt_number', ''),
+            nullif(v_payload ->> 'expected_revision', '')::integer);
+        when 'shift.close' then
+          v_dispatch := app.close_shift(
+            p_pin_session_id,
+            (v_payload ->> 'shift_id')::uuid,
+            p_device_id,
+            v_local_op,
+            (v_payload ->> 'counted_amount_minor')::bigint,
+            nullif(v_payload ->> 'reason', ''),
+            nullif(v_payload ->> 'expected_revision', '')::integer);
+        -- MVP addition: KDS/POS order-status updates ride the SAME outbox/ledger
+        -- (D-010/D-022). Scope/actor come from the pin session + device passed
+        -- through (A8); the payload contributes ONLY {order_id, new_status}.
+        when 'order.status' then
+          v_dispatch := app.update_order_status(
+            p_pin_session_id,
+            p_device_id,
+            (v_payload ->> 'order_id')::uuid,
+            v_payload ->> 'new_status',
+            v_local_op);
+        when 'order.void' then
+          -- MONEY-VOID-001: role-gated void of a wrong UNPAID order. Mirrors the
+          -- order.discount branch - actor/org/branch come from the PIN session
+          -- (never the payload) and the op's local_operation_id threads
+          -- app.void_order's own idempotency (D-022). app.void_order (RF-053,
+          -- hardened by RF-062) enforces manager/restaurant_owner/org_owner (or a
+          -- cashier with permissions.void_order='true'), a mandatory reason, legal
+          -- source states (submitted/accepted/preparing/ready/served), and the
+          -- completed-payment block (an order with a live completed payment
+          -- returns permission_denied) - so paid orders are refused server-side.
+          -- Money-free: it only sets orders.status='voided' + void_reason +
+          -- revision and cascades items -> voided; no payment/total is touched.
+          v_dispatch := app.void_order(
+            p_pin_session_id,
+            (v_payload ->> 'order_id')::uuid,
+            p_device_id,
+            v_local_op,
+            v_payload ->> 'reason',
+            nullif(v_payload ->> 'expected_revision', '')::integer);
+        when 'order.table_move' then
+          -- RESTAURANT-OPERATIONS-V1-001: atomic dine-in table move. Mirrors the
+          -- order.void branch — actor/org/branch come from the PIN session
+          -- (never the payload); the op's local_operation_id threads
+          -- app.move_order_table's ORDER-BOUND idempotency (D-022); the payload
+          -- contributes ONLY {order_id, table_id[, expected_revision]}. Typed
+          -- refusals (table_not_allowed / invalid_transition+order_not_movable /
+          -- table_not_available / permission_denied) RETURN through verbatim;
+          -- a revision conflict raises 40001 -> the per-op 'conflict' status.
+          -- Money-free: only orders.table_id + revision move.
+          v_dispatch := app.move_order_table(
+            p_pin_session_id,
+            (v_payload ->> 'order_id')::uuid,
+            p_device_id,
+            v_local_op,
+            nullif(v_payload ->> 'table_id', '')::uuid,
+            nullif(v_payload ->> 'expected_revision', '')::integer);
+        when 'menu.availability_set' then
+          -- PILOT-OPERATIONS-CORRECTIONS-001: a cashier (default-ON
+          -- manage_menu_availability) or manager+ sets a menu item's per-branch
+          -- availability from the POS. Actor/org/branch derive from the PIN
+          -- session (NEVER the payload); the capability is enforced inside. The
+          -- payload contributes ONLY {menu_item_id, availability, reason}. The
+          -- setter is naturally idempotent (no-change re-applies the same state
+          -- with no audit) and transport dedup (sync_operations) guards replay.
+          -- Typed RETURN refusals (permission_denied / not_found) survive
+          -- verbatim. MONEY-FREE.
+          v_dispatch := app.pos_set_item_availability(
+            p_pin_session_id,
+            p_device_id,
+            (v_payload ->> 'menu_item_id')::uuid,
+            v_payload ->> 'availability',
+            nullif(v_payload ->> 'reason', ''));
+        when 'table.status_set' then
+          -- PILOT-OPERATIONS-CORRECTIONS-001: manual table floor-state from the
+          -- POS (manage_table_operations). Scope/actor from the session; payload
+          -- {table_id, status}. Typed refusals survive verbatim. MONEY-FREE.
+          v_dispatch := app.pos_set_table_status(
+            p_pin_session_id, p_device_id,
+            (v_payload ->> 'table_id')::uuid,
+            v_payload ->> 'status');
+        when 'table.link' then
+          -- Link two same-branch tables into an operational group (no order/bill
+          -- merge). Payload {table_id_a, table_id_b}. Deterministic lock order.
+          v_dispatch := app.pos_link_tables(
+            p_pin_session_id, p_device_id,
+            (v_payload ->> 'table_id_a')::uuid,
+            (v_payload ->> 'table_id_b')::uuid);
+        when 'table.unlink' then
+          -- Dissolve the group a table belongs to (orders untouched). Payload
+          -- {table_id}.
+          v_dispatch := app.pos_unlink_tables(
+            p_pin_session_id, p_device_id,
+            (v_payload ->> 'table_id')::uuid);
+        when 'order.void_ack' then
+          -- PSC-001D: the kitchen's cancellation acknowledgement. Mirrors the
+          -- order.status branch — actor/org/branch come from the PIN session
+          -- (never the payload); the payload contributes ONLY {order_id}.
+          -- app.kitchen_ack_void enforces the KDS-class device, the kitchen
+          -- role set, the voided + ack-required state, and the idempotent
+          -- already-acknowledged replay; its flat typed refusals
+          -- (invalid_device_type / permission_denied / order_not_voided /
+          -- acknowledgement_not_required) RETURN through verbatim. TARGET-ID
+          -- CONSISTENCY is enforced at (b1+) BEFORE the fingerprint and the
+          -- terminal replay — by the time this arm runs, target_id and
+          -- payload.order_id are guaranteed present, valid and equal. The
+          -- check below is pure defence-in-depth and unreachable. MONEY-FREE.
+          if v_target_id is null
+             or v_target_id <> (v_payload ->> 'order_id')::uuid then
+            raise exception 'sync_push: order.void_ack target_id does not match payload.order_id' using errcode = '42501';
+          end if;
+          v_dispatch := app.kitchen_ack_void(
+            p_pin_session_id,
+            (v_payload ->> 'order_id')::uuid,
+            p_device_id,
+            v_local_op);
+        when 'order.items_add' then
+          -- PSC-001C: add items to an existing eligible dine-in order as ONE
+          -- new authoritative service round. Actor/org/branch come from the
+          -- PIN session; the payload contributes {order_id, order_items}.
+          -- app.add_order_items enforces the POS-class device, the cashier+
+          -- role set, eligibility (dine_in, open status, no completed
+          -- payment), submit_order-parity pricing/sellability, and round-level
+          -- idempotency; its flat typed refusals (invalid_device_type /
+          -- permission_denied / order_not_dine_in / order_not_eligible /
+          -- order_already_settled / item_unavailable / invalid_item_payload)
+          -- RETURN through verbatim. TARGET-ID CONSISTENCY is enforced at
+          -- (b1+) BEFORE the fingerprint and the terminal replay — the check
+          -- below is pure defence-in-depth and unreachable.
+          if v_target_id is null
+             or v_target_id <> (v_payload ->> 'order_id')::uuid then
+            raise exception 'sync_push: order.items_add target_id does not match payload.order_id' using errcode = '42501';
+          end if;
+          v_dispatch := app.add_order_items(
+            p_pin_session_id,
+            (v_payload ->> 'order_id')::uuid,
+            p_device_id,
+            v_local_op,
+            v_payload -> 'order_items',
+            v_client_ts);
+        when 'order.round_status' then
+          -- PSC-001C: the additional service round's own single-step
+          -- lifecycle. Actor/org/branch come from the PIN session; the
+          -- payload contributes {round_id, new_status}. app.update_round_status
+          -- enforces the LOCKED device/role matrix (production steps KDS-only;
+          -- ready->served KDS kitchen set or POS cashier set), the parent
+          -- guards, single-step legality, the WRITE-ONCE ready_at stamp and
+          -- the completion chain; its flat typed refusals RETURN through
+          -- verbatim. TARGET-ID CONSISTENCY (against payload.round_id) is
+          -- enforced at (b1+) — the check below is pure defence-in-depth and
+          -- unreachable. MONEY-FREE.
+          if v_target_id is null
+             or v_target_id <> (v_payload ->> 'round_id')::uuid then
+            raise exception 'sync_push: order.round_status target_id does not match payload.round_id' using errcode = '42501';
+          end if;
+          v_dispatch := app.update_round_status(
+            p_pin_session_id,
+            (v_payload ->> 'round_id')::uuid,
+            p_device_id,
+            v_payload ->> 'new_status',
+            v_local_op);
+      end case;
+      v_dispatch_ok := coalesce((v_dispatch ->> 'ok')::boolean, false);
+    exception
+      when others then
+        v_caught_state := SQLSTATE;
+        v_caught_msg   := SQLERRM;
+    end;
+
+    -- (b6) finalize the operation outcome
+    if v_caught_state is not null then
+      if v_caught_state = '40001' then
+        update public.sync_operations
+          set status = 'conflict', last_error_code = v_caught_state, last_error_class = 'conflict',
+              conflict_info = jsonb_build_object('sqlstate', v_caught_state, 'message', v_caught_msg),
+              result = jsonb_build_object('ok', false, 'error', 'conflict', 'sqlstate', v_caught_state), updated_at = now()
+          where id = v_so_id;
+        insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
+        values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_conflict', v_caught_msg, null,
+                jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'sqlstate', v_caught_state));
+        v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'ok', false,
+          'error', 'conflict', 'sqlstate', v_caught_state, 'status', 'conflict', 'idempotency_replay', false);
+      else
+        -- validation / state / business-rule failure -> permanent rejected. RF-061: a
+        -- revoked-MEMBERSHIP op fails membership-active in the dispatched RPC; classify its
+        -- rejection reason as 'revoked_employee' so the offline-revoked-employee case is clear.
+        update public.sync_operations
+          set status = 'rejected', last_error_code = v_caught_state, last_error_class = 'permanent',
+              rejection_reason = case when v_caught_msg ilike '%resolved membership is not active%' then 'revoked_employee' else v_caught_msg end,
+              result = jsonb_build_object('ok', false, 'error', 'rejected', 'sqlstate', v_caught_state,
+                         'detail', case when v_caught_msg ilike '%resolved membership is not active%' then 'revoked_employee' else null end), updated_at = now()
+          where id = v_so_id;
+        insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
+        values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_rejected',
+                case when v_caught_msg ilike '%resolved membership is not active%' then 'revoked_employee' else v_caught_msg end, null,
+                jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'sqlstate', v_caught_state));
+        v_results := v_results || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'ok', false,
+          'error', 'rejected', 'sqlstate', v_caught_state,
+          'detail', case when v_caught_msg ilike '%resolved membership is not active%' then 'revoked_employee' else null end,
+          'status', 'rejected', 'idempotency_replay', false);
+      end if;
+    elsif v_dispatch_ok then
+      update public.sync_operations
+        set status = 'applied', result = v_dispatch, applied_at = now(),
+            target_id = coalesce(v_target_id, nullif(v_dispatch ->> 'order_id', '')::uuid, nullif(v_dispatch ->> 'shift_id', '')::uuid, nullif(v_dispatch ->> 'payment_id', '')::uuid),
+            updated_at = now()
+        where id = v_so_id;
+      v_results := v_results || (v_dispatch
+        || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'status', 'applied', 'idempotency_replay', false));
+    else
+      update public.sync_operations
+        set status = 'rejected', last_error_code = coalesce(v_dispatch ->> 'error', 'rejected'), last_error_class = 'permanent',
+            rejection_reason = coalesce(v_dispatch ->> 'error', 'rejected'), result = v_dispatch, updated_at = now()
+        where id = v_so_id;
+      insert into public.audit_events (organization_id, restaurant_id, branch_id, actor_app_user_id, actor_employee_profile_id, device_id, action, reason, old_values, new_values)
+      values (v_org, v_rest, v_branch, null, v_emp, p_device_id, 'sync.operation_rejected', coalesce(v_dispatch ->> 'error', 'rejected'), null,
+              jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'error', coalesce(v_dispatch ->> 'error', 'rejected')));
+      v_results := v_results || (v_dispatch
+        || jsonb_build_object('local_operation_id', v_local_op, 'operation_type', v_op_type, 'status', 'rejected', 'idempotency_replay', false));
+    end if;
+  end loop;
+
+  return jsonb_build_object('ok', true, 'results', v_results, 'server_ts', now());
+end;
+$$;
+
+comment on function app.sync_push(uuid, uuid, jsonb) is
+  'RF-056/RF-061 + ... + PSC-001D + PSC-001C (D-010/D-022) SECURITY DEFINER batch push — faithful re-creation of the 20260722090000 body; all 15 canonical operations, identity hardening, atomic ledger claim, batch cap, result ordering, dependency guard, per-op subtransactions, finalization and the customer_name stamp are verbatim. KITCHEN-MODE-001C1-CORRECTION-001 (order.submit only): immediately after the customer_name stamp, the order''s still-unclaimed initial kitchen dispatch payload is REBUILT through app.kitchen_dispatch_payload_initial in the SAME transaction, so the REAL push path carries customer_display_name exactly like the direct-call path; kds branches are a structural no-op and claimed/completed/superseded dispatches are never touched. Authorization INGEST-TIME; scope from the session, never the payload.';
+
+-- ACL parity (CREATE OR REPLACE preserves grants; re-issued explicitly).
+revoke all on function app.sync_push(uuid, uuid, jsonb) from public;
+revoke all on function app.sync_push(uuid, uuid, jsonb) from anon;
+grant execute on function app.sync_push(uuid, uuid, jsonb) to authenticated;
+
 -- ============================================================================
 -- DOWN (manual; Supabase is forward-only — `supabase db reset` replays):
 --   re-create app.audit_safe_detail / app.audit_action_has_detail /
 --     app.audit_category from 20260724090000 (trio),
+--     app.sync_push from 20260722090000,
 --     app.void_order from 20260722090000,
 --     app.add_order_items from 20260722090000,
 --     app.submit_order from 20260723090000;
@@ -2665,18 +3725,21 @@ comment on function app.audit_safe_detail(text, jsonb) is
 --   drop function if exists app.get_kitchen_workflow_transition_readiness(uuid, uuid, uuid);
 --   drop function if exists public.acknowledge_kitchen_print_dispatch(uuid, text, uuid, text, text);
 --   drop function if exists app.acknowledge_kitchen_print_dispatch(uuid, text, uuid, text, text);
---   drop function if exists public.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid);
---   drop function if exists app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid);
+--   drop function if exists public.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer);
+--   drop function if exists app.pull_kitchen_print_dispatches(uuid, text, integer, timestamptz, uuid, integer);
 --   drop function if exists public.report_kitchen_printer_readiness(uuid, text, text, text, text, text, text, text, boolean, integer, integer);
 --   drop function if exists app.report_kitchen_printer_readiness(uuid, text, text, text, text, text, text, text, boolean, integer, integer);
 --   drop function if exists app.create_kitchen_dispatch(uuid, uuid, uuid, uuid, uuid, text, jsonb, uuid, uuid, uuid);
 --   drop function if exists app.kitchen_dispatch_payload_void(uuid, uuid, text);
 --   drop function if exists app.kitchen_dispatch_payload_round(uuid, uuid, uuid);
 --   drop function if exists app.kitchen_dispatch_payload_initial(uuid, uuid);
+--   drop function if exists app.kitchen_prep_projection(jsonb);
 --   drop trigger if exists kitchen_print_dispatches_guard_trg on public.kitchen_print_dispatches;
 --   drop function if exists app.kitchen_print_dispatches_guard();
 --   drop function if exists app.kitchen_payload_offending_key(jsonb);
+--   drop function if exists app.kitchen_payload_normalize_key(text);
 --   drop table if exists public.kitchen_print_dispatches;
 --   drop table if exists public.kitchen_printer_readiness_reports;
+--   alter table public.orders drop constraint if exists orders_org_rest_branch_id_key;
 --   alter table public.branches drop column if exists kitchen_workflow_mode_revision;
 -- ============================================================================
