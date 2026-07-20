@@ -4,8 +4,11 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:restoflow_data_local/restoflow_data_local.dart'
     show kKitchenSpoolDatabaseDirectoryName, kKitchenSpoolDatabaseFileName;
+
+import 'support/pos_package_root.dart';
 
 /// KITCHEN-MODE-001C2A CLEANUP 1 — the Android backup-path CONTRACT guard.
 ///
@@ -16,19 +19,25 @@ import 'package:restoflow_data_local/restoflow_data_local.dart'
 /// resources and the manifest, so renaming the constant without updating the
 /// XML fails the build, and vice versa.
 void main() {
-  const backupRulesPath = 'android/app/src/main/res/xml/backup_rules.xml';
-  const extractionRulesPath =
-      'android/app/src/main/res/xml/data_extraction_rules.xml';
-  const manifestPath = 'android/app/src/main/AndroidManifest.xml';
-
   late final String backupRules;
   late final String extractionRules;
   late final String manifest;
 
   setUpAll(() {
-    backupRules = File(backupRulesPath).readAsStringSync();
-    extractionRules = File(extractionRulesPath).readAsStringSync();
-    manifest = File(manifestPath).readAsStringSync();
+    // CI-PORTABLE: CI runs `flutter test apps/pos` from the REPOSITORY ROOT
+    // while local runs start inside the app — resolve the app root instead
+    // of assuming the working directory.
+    final appRoot = locatePosPackageRoot();
+    String readUnderMain(List<String> parts) => File(
+      p.joinAll([appRoot.path, 'android', 'app', 'src', 'main', ...parts]),
+    ).readAsStringSync();
+    backupRules = readUnderMain(['res', 'xml', 'backup_rules.xml']);
+    extractionRules = readUnderMain([
+      'res',
+      'xml',
+      'data_extraction_rules.xml',
+    ]);
+    manifest = readUnderMain(['AndroidManifest.xml']);
   });
 
   // Every Android backup domain the spool directory must be excluded under

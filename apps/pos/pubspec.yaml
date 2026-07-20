@@ -56,6 +56,10 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # KITCHEN-MODE-001C2A CI fix: platform-independent path resolution for the
+  # backup-contract and dormancy source scans (CI runs `flutter test
+  # apps/pos` from the repository root; local runs start inside the app).
+  path: '>=1.9.0 <2.0.0'
   # KITCHEN-MODE-001C2A CLEANUP 1: TEST-ONLY dependency so the Android
   # backup-contract guard test can import the pinned kitchen-spool path
   # constants (the single source of truth) and bind them to the backup XML

@@ -4,6 +4,9 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
+
+import 'support/pos_package_root.dart';
 
 /// KITCHEN-MODE-001C2A §13 — runtime dormancy / source-boundary proof.
 ///
@@ -18,13 +21,21 @@ void main() {
   late final String mainSource;
 
   setUpAll(() {
-    libSources = Directory('lib')
-        .listSync(recursive: true)
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.dart'))
-        .toList();
+    // CI-PORTABLE: CI runs `flutter test apps/pos` from the REPOSITORY ROOT
+    // while local runs start inside the app — resolve the app root instead
+    // of assuming the working directory.
+    final appRoot = locatePosPackageRoot();
+    libSources =
+        Directory(p.join(appRoot.path, 'lib'))
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart'))
+            .toList()
+          ..sort((a, b) => a.path.compareTo(b.path)); // deterministic order
     expect(libSources, isNotEmpty);
-    mainSource = File('lib/main.dart').readAsStringSync();
+    mainSource = File(
+      p.join(appRoot.path, 'lib', 'main.dart'),
+    ).readAsStringSync();
   });
 
   String allSourcesExcept(bool Function(String path) excluded) {
