@@ -1,4 +1,5 @@
 import 'dart:convert' show utf8;
+import 'dart:io' show Directory, File;
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
@@ -578,6 +579,82 @@ void main() {
       );
       expect(utf8.decode(clear), contains('Falafel Deluxe'));
     });
+  });
+
+  twoConnectionClaimTests();
+}
+
+// ---------------------------------------------------------------------------
+// CLEANUP 7F — REAL two-connection SQLite claim safety. Two independent
+// NativeDatabase connections open the SAME on-disk file; the destination
+// single-flight guard must hold ACROSS connections (committed state is what
+// the second connection sees). Genuinely in-flight cross-connection
+// transactions are serialized by SQLite file locking (SQLITE_BUSY), which
+// the current harness cannot exercise deterministically — that limitation is
+// reported honestly in the phase report; the conditional-update correctness
+// itself is what this proves cross-connection.
+// ---------------------------------------------------------------------------
+void twoConnectionClaimTests() {
+  test('CLEANUP 7F: destination single-flight holds ACROSS two real SQLite '
+      'connections to the same database file', () async {
+    final dir = await Directory.systemTemp.createTemp('kmc2a_2conn');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/spool.sqlite');
+
+    final db1 = LocalDatabase(NativeDatabase(file));
+    final db2 = LocalDatabase(NativeDatabase(file));
+    addTearDown(db1.close);
+    addTearDown(db2.close);
+    final store1 = DriftKitchenSpoolStore(db1);
+    final store2 = DriftKitchenSpoolStore(db2);
+
+    final t0 = DateTime.utc(2026, 7, 20, 12);
+    Future<void> seed(String jobId, String dispatchId) =>
+        store1.insertImportedJob(
+          NewKitchenSpoolJob(
+            localJobId: jobId,
+            dispatchId: dispatchId,
+            organizationId: 'org',
+            restaurantId: 'rest',
+            branchId: 'branch',
+            deviceId: 'dev',
+            orderId: 'ord',
+            dispatchType: KitchenSpoolDispatchType.initialOrder,
+            initialStatus: KitchenSpoolJobStatus.imported,
+            encryptedPayloadBlob: Uint8List.fromList([1, 2, 3]),
+            encryptionVersion: 1,
+            destinationFingerprint: 'fp-shared-2conn',
+            payloadVersion: 1,
+            documentVersion: 1,
+            rasterVersion: 1,
+            createdAt: t0,
+          ),
+        );
+    await seed('conn-job-a', 'conn-disp-a');
+    await seed('conn-job-b', 'conn-disp-b');
+
+    // Connection 1 claims job A.
+    final winner = await store1.claimRunnableForPrinting('conn-job-a', t0);
+    expect(winner, isNotNull);
+
+    // Connection 2 — a SEPARATE SQLite connection — must observe the
+    // committed claim and REFUSE job B on the same destination.
+    final refused = await store2.claimRunnableForPrinting('conn-job-b', t0);
+    expect(refused, isNull, reason: 'cross-connection single-flight');
+
+    // Never two printing jobs on one destination, from either view.
+    final printing =
+        await (db2.select(db2.kitchenSpoolJobs)..where(
+              (t) => t.status.equalsValue(KitchenSpoolJobStatus.printing),
+            ))
+            .get();
+    expect(printing, hasLength(1));
+
+    // Winner resolves on connection 1 -> connection 2 can now claim B.
+    await store1.markTransportAccepted('conn-job-a', t0);
+    final second = await store2.claimRunnableForPrinting('conn-job-b', t0);
+    expect(second, isNotNull);
+    expect(second!.status, KitchenSpoolJobStatus.printing);
   });
 }
 

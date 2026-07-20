@@ -32,7 +32,15 @@ void main() {
     for (final f in libSources) {
       final normalized = f.path.replaceAll('\\', '/');
       if (excluded(normalized)) continue;
-      buffer.writeln(f.readAsStringSync());
+      // CLEANUP 7E: scan CODE ONLY — comment lines are stripped so a
+      // doc-comment MENTION (e.g. outbox_repository's LocalDatabase note)
+      // does not mask the detector, while any real import/alias/reference
+      // (which must live in code) still trips it.
+      for (final line in f.readAsLinesSync()) {
+        final trimmed = line.trimLeft();
+        if (trimmed.startsWith('//')) continue;
+        buffer.writeln(line);
+      }
     }
     return buffer.toString();
   }
@@ -50,10 +58,32 @@ void main() {
 
   test('NO production source outside lib/src/spool references the spool', () {
     final outside = allSourcesExcept((p) => p.contains('lib/src/spool/'));
-    expect(outside, isNot(contains('FlutterSecureKitchenSpoolKeyStore')));
-    expect(outside, isNot(contains('PosKitchenSpoolPlatform')));
-    expect(outside, isNot(contains('KitchenSpoolKeyManager')));
-    expect(outside, isNot(contains('kitchen_spool')));
+    // CLEANUP 7E: identifier set hardened against alias/barrel/indirect
+    // construction bypasses — an aliased import still carries the package
+    // path string, and ANY reference to these types/members must name them.
+    for (final needle in [
+      'FlutterSecureKitchenSpoolKeyStore',
+      'PosKitchenSpoolPlatform',
+      'KitchenSpoolKeyManager',
+      'KitchenSpoolCipher',
+      'AesGcmKitchenSpoolCipher',
+      'DriftKitchenSpoolStore',
+      'KitchenSpoolStore',
+      'KitchenSpoolAad',
+      'KitchenSpoolLocalPayload',
+      'kitchen_spool',
+      'KitchenSpool',
+      'provisionKey',
+      'provisionPersistentKey',
+      'LocalDatabase',
+      'ProtectedLocalDatabaseFactory',
+    ]) {
+      expect(
+        outside,
+        isNot(contains(needle)),
+        reason: '"$needle" must not appear outside lib/src/spool',
+      );
+    }
   });
 
   test(

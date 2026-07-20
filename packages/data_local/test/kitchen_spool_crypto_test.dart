@@ -1,3 +1,4 @@
+import 'dart:async' show Completer;
 import 'dart:convert' show base64Url, utf8;
 import 'dart:typed_data';
 
@@ -5,6 +6,42 @@ import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_core/testing.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:test/test.dart';
+
+/// CLEANUP 6 harness: a SecureKeyStore wrapper whose read/write block on
+/// externally-controlled gates, so tests can interleave two provision calls
+/// deterministically.
+final class _GatedKeyStore implements SecureKeyStore {
+  _GatedKeyStore(this._inner);
+
+  final SecureKeyStore _inner;
+  Completer<void>? readGate;
+  Completer<void>? writeGate;
+  int reads = 0;
+  int writes = 0;
+
+  @override
+  Future<bool> isAvailable() => _inner.isAvailable();
+
+  @override
+  Future<SecretValue?> read(SecretRef ref) async {
+    reads++;
+    if (readGate != null) await readGate!.future;
+    return _inner.read(ref);
+  }
+
+  @override
+  Future<void> write(SecretRef ref, SecretValue value) async {
+    writes++;
+    if (writeGate != null) await writeGate!.future;
+    return _inner.write(ref, value);
+  }
+
+  @override
+  Future<void> delete(SecretRef ref) => _inner.delete(ref);
+
+  @override
+  Future<void> wipeAll() => _inner.wipeAll();
+}
 
 KitchenSpoolAad _aad({
   String dispatchId = 'd1000000-0000-0000-0000-000000000001',
@@ -369,5 +406,155 @@ void main() {
       final KitchenSpoolCipher asPort = cipher;
       expect(asPort.encryptionVersion, 1);
     });
+
+    test(
+      'CLEANUP 7A: 128 encryptions of the same input yield 128 DISTINCT '
+      '12-byte nonces and distinct envelopes (sampling, not a proof)',
+      () async {
+        final nonces = <String>{};
+        final envelopes = <String>{};
+        for (var i = 0; i < 128; i++) {
+          final envelope = await cipher.encrypt(
+            plaintext: plaintext(),
+            aad: _aad(),
+            key: key,
+          );
+          final nonce = envelope.sublist(6, 18);
+          expect(nonce.length, 12);
+          nonces.add(nonce.join(','));
+          envelopes.add(envelope.join(','));
+        }
+        expect(nonces.length, 128);
+        expect(envelopes.length, 128);
+      },
+    );
+
+    test('CLEANUP 7B: envelope boundary matrix', () async {
+      // Minimum VALID boundary: exactly one plaintext byte round-trips
+      // (header 18 + ciphertext 1 + tag 16 = 35 bytes).
+      final minimal = await cipher.encrypt(
+        plaintext: Uint8List.fromList([0x7B]),
+        aad: _aad(),
+        key: key,
+      );
+      expect(minimal.length, 35);
+      final back = await cipher.decrypt(
+        envelope: minimal,
+        aad: _aad(),
+        key: key,
+      );
+      expect(back, [0x7B]);
+
+      // Tag-only (header + tag, ZERO ciphertext bytes) is malformed.
+      final tagOnly = Uint8List(18 + 16)
+        ..setRange(0, 4, const [0x52, 0x4B, 0x53, 0x31]);
+      tagOnly[4] = 1;
+      tagOnly[5] = 12;
+      await expectLater(
+        cipher.decrypt(envelope: tagOnly, aad: _aad(), key: key),
+        throwsA(isA<MalformedKitchenSpoolEnvelopeException>()),
+      );
+
+      // Trailing extra bytes shift the tag window -> authentication fails
+      // (the documented format has no trailer; nothing is silently ignored).
+      final trailing = Uint8List.fromList([...minimal, 0x00, 0x01]);
+      await expectLater(
+        cipher.decrypt(envelope: trailing, aad: _aad(), key: key),
+        throwsA(isA<KitchenSpoolDecryptionFailedException>()),
+      );
+
+      // An absurd nonce-length byte cannot cause surprise allocation — it is
+      // rejected structurally before any slicing.
+      final hugeNonce = Uint8List.fromList(minimal);
+      hugeNonce[5] = 255;
+      await expectLater(
+        cipher.decrypt(envelope: hugeNonce, aad: _aad(), key: key),
+        throwsA(isA<MalformedKitchenSpoolEnvelopeException>()),
+      );
+
+      // Empty input and sub-header input are malformed, never a range error.
+      await expectLater(
+        cipher.decrypt(envelope: Uint8List(0), aad: _aad(), key: key),
+        throwsA(isA<MalformedKitchenSpoolEnvelopeException>()),
+      );
+    });
+  });
+
+  group('KitchenSpoolKeyManager provisioning single-flight (CLEANUP 6)', () {
+    test('two concurrent provision calls: EXACTLY one provisions, the other '
+        'gets already-exists, ONE key survives', () async {
+      final inner = InMemorySecureKeyStore();
+      final gated = _GatedKeyStore(inner);
+      final manager = KitchenSpoolKeyManager(gated);
+
+      // Hold the FIRST call inside its read so the second call queues
+      // while the first has already observed "missing".
+      gated.readGate = Completer<void>();
+      final first = manager.provisionKey();
+      final second = manager.provisionKey();
+      // Release: without single-flight the second read would also see
+      // "missing" and a second key would overwrite the first.
+      gated.readGate!.complete();
+      gated.readGate = null;
+
+      await first; // succeeds
+      await expectLater(second, throwsA(isA<SecretAlreadyExistsException>()));
+      // One stored key; both operations went through the serialized path.
+      final stored = await manager.readKey();
+      expect(stored, isNotNull);
+      expect(gated.writes, 1, reason: 'exactly ONE write ever happened');
+      // No ciphertext could be stranded: the surviving key is the one the
+      // successful call wrote (nothing replaced it).
+      expect(await manager.inspectState(), KitchenSpoolKeyState.present);
+    });
+
+    test(
+      'concurrent provisioning over a CORRUPTED slot never overwrites',
+      () async {
+        final inner = InMemorySecureKeyStore();
+        final manager = KitchenSpoolKeyManager(inner);
+        await manager.provisionKey();
+        inner.markCorrupted(KitchenSpoolKeyManager.keyRef);
+        final results = await Future.wait([
+          manager.provisionKey().then<Object>(
+            (_) => 'ok',
+            onError: (Object e) => e,
+          ),
+          manager.provisionKey().then<Object>(
+            (_) => 'ok',
+            onError: (Object e) => e,
+          ),
+        ]);
+        for (final r in results) {
+          expect(r, isA<SecretAlreadyExistsException>());
+        }
+      },
+    );
+
+    test(
+      'concurrent provisioning on an UNAVAILABLE store stays typed',
+      () async {
+        final inner = InMemorySecureKeyStore(available: false);
+        final manager = KitchenSpoolKeyManager(inner);
+        final results = await Future.wait([
+          manager.provisionKey().then<Object>(
+            (_) => 'ok',
+            onError: (Object e) => e,
+          ),
+          manager.provisionKey().then<Object>(
+            (_) => 'ok',
+            onError: (Object e) => e,
+          ),
+        ]);
+        for (final r in results) {
+          expect(r, isA<SecureStorageUnavailableException>());
+        }
+        // A failed provision never poisons the chain: once available, the
+        // next provision succeeds normally.
+        inner.setAvailable(available: true);
+        await manager.provisionKey();
+        expect(await manager.readKey(), isNotNull);
+      },
+    );
   });
 }

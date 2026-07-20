@@ -300,6 +300,36 @@ void main() {
         "x'', 1, 1, 1, 1, 0, 0, NULL, NULL, NULL, '2026-01-01', "
         "'2026-01-01')",
       );
+      // CLEANUP 4: encryption_version must be POSITIVE (zero and negative
+      // fail via raw SQL — the store layer is bypassed on purpose).
+      await expectRejected(
+        "('j4a','d4a','o','r','b','dev','ord','initial_order','imported',"
+        "x'01', 0, 1, 1, 1, 0, 0, NULL, NULL, NULL, '2026-01-01', "
+        "'2026-01-01')",
+      );
+      await expectRejected(
+        "('j4b','d4b','o','r','b','dev','ord','initial_order','imported',"
+        "x'01', -1, 1, 1, 1, 0, 0, NULL, NULL, NULL, '2026-01-01', "
+        "'2026-01-01')",
+      );
+      // CLEANUP 4: SELF-supersession (superseded_by = own dispatch_id) fails.
+      await expectRejected(
+        "('j4c','d4c','o','r','b','dev','ord','initial_order','superseded',"
+        "x'01', 1, 1, 1, 1, 0, 0, NULL, 'd4c', NULL, '2026-01-01', "
+        "'2026-01-01')",
+      );
+      // Positive controls: a DIFFERENT superseding id is valid; NULL
+      // supersession on a live row is valid (implicit in earlier inserts).
+      await db.customStatement(
+        'INSERT INTO kitchen_spool_jobs '
+        '(local_job_id, dispatch_id, organization_id, restaurant_id, '
+        'branch_id, device_id, order_id, dispatch_type, status, '
+        'encrypted_payload_blob, encryption_version, payload_version, '
+        'document_version, raster_version, superseded_by_dispatch_id, '
+        'created_at, updated_at) VALUES '
+        "('j4d','d4d','o','r','b','dev','ord','initial_order','superseded',"
+        "x'01', 1, 1, 1, 1, 'void-d9', '2026-01-01', '2026-01-01')",
+      );
       // dispatch_id unique
       await db.customStatement(
         'INSERT INTO kitchen_spool_jobs '

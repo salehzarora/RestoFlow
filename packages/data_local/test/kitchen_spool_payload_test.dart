@@ -255,6 +255,147 @@ void main() {
       expect(bt.toJson()['kind'], 'bluetooth');
     });
 
+    test('CLEANUP 3: unknown/malformed dispatch kind is the TYPED exception '
+        '(never ArgumentError) and never echoes the content', () {
+      final unknown = _dispatchJson()..['kind'] = 'sneaky_reprint_kind';
+      try {
+        KitchenSpoolLocalPayload.fromJson(_payloadJson(dispatch: unknown));
+        fail('expected typed rejection');
+      } on KitchenSpoolPayloadFormatException catch (e) {
+        expect(e.toString(), isNot(contains('sneaky_reprint_kind')));
+      } on ArgumentError {
+        fail('ArgumentError escaped the closed decode boundary');
+      }
+      // Malformed (non-string) kind is typed too.
+      final malformed = _dispatchJson()..['kind'] = 7;
+      expect(
+        () => KitchenSpoolLocalPayload.fromJson(
+          _payloadJson(dispatch: malformed),
+        ),
+        throwsA(isA<KitchenSpoolPayloadFormatException>()),
+      );
+      // Unknown destination kind remains typed and redacted.
+      try {
+        KitchenSpoolLocalPayload.fromJson(
+          _payloadJson(destination: {'kind': 'pneumatic-tube'}),
+        );
+        fail('expected typed rejection');
+      } on KitchenSpoolPayloadFormatException catch (e) {
+        expect(e.toString(), isNot(contains('pneumatic-tube')));
+      }
+    });
+
+    test('CLEANUP 7C: recursive hostile-key validation at extreme nesting', () {
+      // Deeply nested object chain.
+      Object? deep = {'unitPrice': 1};
+      for (var i = 0; i < 12; i++) {
+        deep = {'level$i': deep};
+      }
+      expect(
+        () => rejectHostileKitchenKeys(deep, path: 'dispatch'),
+        throwsA(isA<KitchenSpoolPayloadFormatException>()),
+      );
+      // Arrays inside arrays.
+      expect(
+        () => rejectHostileKitchenKeys({
+          'a': [
+            [
+              {'accessToken': 'x'},
+            ],
+          ],
+        }, path: 'dispatch'),
+        throwsA(isA<KitchenSpoolPayloadFormatException>()),
+      );
+      // Mixed object/array nesting with a compact CamelCase hostile key.
+      expect(
+        () => rejectHostileKitchenKeys({
+          'items': [
+            {
+              'meta': [
+                {'taxAmount': 3},
+              ],
+            },
+          ],
+        }, path: 'dispatch'),
+        throwsA(isA<KitchenSpoolPayloadFormatException>()),
+      );
+      // KEY-ONLY rejection: harmless VALUES containing hostile words pass.
+      final valueTalk = _dispatchJson()
+        ..['order_note'] =
+            'total mess: pay attention to the price tags on tender greens';
+      final decoded = KitchenSpoolLocalPayload.fromJson(
+        _payloadJson(dispatch: valueTalk),
+      );
+      expect(decoded.dispatch.orderNote, contains('total mess'));
+    });
+
+    test('CLEANUP 7D: numeric bounds — versions and quantities must be '
+        'positive; large REAL quantities stay legal', () {
+      // Versions must be > 0.
+      for (final field in ['document_version', 'raster_version']) {
+        for (final bad in [0, -1]) {
+          final raw = _payloadJson()..[field] = bad;
+          expect(
+            () => KitchenSpoolLocalPayload.fromJson(raw),
+            throwsA(isA<KitchenSpoolPayloadFormatException>()),
+            reason: '$field=$bad must be rejected',
+          );
+        }
+      }
+      final badServerV = _dispatchJson()..['v'] = 0;
+      expect(
+        () => KitchenSpoolLocalPayload.fromJson(
+          _payloadJson(dispatch: badServerV),
+        ),
+        throwsA(isA<KitchenSpoolPayloadFormatException>()),
+      );
+      // Item qty must be positive; big quantities are fine.
+      final zeroQty = _dispatchJson();
+      ((zeroQty['items']! as List).first as Map<String, Object?>)['qty'] = 0;
+      expect(
+        () =>
+            KitchenSpoolLocalPayload.fromJson(_payloadJson(dispatch: zeroQty)),
+        throwsA(isA<KitchenSpoolPayloadFormatException>()),
+      );
+      final bigQty = _dispatchJson();
+      ((bigQty['items']! as List).first as Map<String, Object?>)['qty'] = 250;
+      expect(
+        KitchenSpoolLocalPayload.fromJson(
+          _payloadJson(dispatch: bigQty),
+        ).dispatch.items.single.qty,
+        250,
+      );
+      // Prep quantity: fractional positive OK; zero/negative rejected.
+      final fractionalPrep = _dispatchJson();
+      (((fractionalPrep['items']! as List).first
+                  as Map<String, Object?>)['prep']!
+              as List)
+          .first = {
+        'name': 'Tahini',
+        'quantity': 0.5,
+        'unit': 'cup',
+      };
+      expect(
+        KitchenSpoolLocalPayload.fromJson(
+          _payloadJson(dispatch: fractionalPrep),
+        ).dispatch.items.single.prep.single.quantity,
+        0.5,
+      );
+      final zeroPrep = _dispatchJson();
+      (((zeroPrep['items']! as List).first as Map<String, Object?>)['prep']!
+              as List)
+          .first = {
+        'name': 'Tahini',
+        'quantity': 0,
+        'unit': 'cup',
+      };
+      expect(
+        () =>
+            KitchenSpoolLocalPayload.fromJson(_payloadJson(dispatch: zeroPrep)),
+        throwsA(isA<KitchenSpoolPayloadFormatException>()),
+      );
+    });
+
     test(
       'sanitizeDestinationDisplayLabel normalizes endpoint-looking labels',
       () {
@@ -280,6 +421,37 @@ void main() {
           sanitizeDestinationDisplayLabel('http://printer.local'),
           'kitchen-printer',
         );
+        // CLEANUP 5: IPv6 and disguised endpoint shapes.
+        for (final endpoint in [
+          '2001:db8::1',
+          '[2001:db8::1]:9100',
+          'fe80::1%wlan0',
+          '::1',
+          '192.168.1.5',
+          '192.168.1.5:9100',
+          'AA:BB:CC:DD:EE:FF',
+          'https://user:pass@printer.local',
+          'printer.local:9100',
+        ]) {
+          expect(
+            sanitizeDestinationDisplayLabel(endpoint),
+            'kitchen-printer',
+            reason: '"$endpoint" must be redacted',
+          );
+        }
+        // CLEANUP 5: ordinary names must NOT be over-redacted.
+        for (final name in [
+          'Kitchen Printer',
+          'Main Kitchen',
+          'Grill Station',
+          'Printer A',
+        ]) {
+          expect(
+            sanitizeDestinationDisplayLabel(name),
+            name,
+            reason: '"$name" must pass through',
+          );
+        }
       },
     );
   });
