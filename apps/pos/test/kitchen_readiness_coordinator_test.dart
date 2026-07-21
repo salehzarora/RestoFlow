@@ -43,6 +43,7 @@ const _context = DeviceContext(
 );
 
 const _readyEvidence = ReadyKitchenPrinterEvidence(
+  printerAssignmentId: 'assign-1',
   transportKind: KitchenReadinessTransportKind.network,
   paperWidth: KitchenReadinessPaperWidth.mm80,
   printerFingerprint:
@@ -56,7 +57,9 @@ const _spoolResult = KitchenSpoolReadinessProbeResult(
 
 void main() {
   late List<KitchenReadinessReport> sent;
+  late List<KitchenPosStatusReport> statusSent;
   late List<Object? Function()> sendScript;
+  late List<Object? Function()> statusScript;
   late List<KitchenModeResult Function()> modeScript;
   late int invalidations;
   late List<_ManualTimer> timers;
@@ -67,7 +70,9 @@ void main() {
 
   setUp(() {
     sent = [];
+    statusSent = [];
     sendScript = [];
+    statusScript = [];
     modeScript = [];
     invalidations = 0;
     timers = [];
@@ -95,6 +100,13 @@ void main() {
       expect(deviceId, 'dev-1');
       expect(branchId, 'branch-1');
       return _spoolResult;
+    },
+    sendStatus: (status) async {
+      statusSent.add(status);
+      if (statusScript.isEmpty) return const KitchenPosStatusAccepted();
+      final next = statusScript.removeAt(0)();
+      if (next is KitchenPosStatusResult) return next;
+      throw next as Object;
     },
     sendReport: (report) async {
       sent.add(report);
@@ -126,13 +138,127 @@ void main() {
     expect(timerIntervals, [kKitchenReadinessHeartbeatInterval]);
     expect(report.outcome, KitchenReadinessRunOutcome.reported);
     expect(report.activationReady, isTrue);
+    expect(report.statusReported, isTrue);
     final wire = sent.single;
     expect(wire.modeRevision, 3);
     expect(wire.appBuild, 'pos-test');
     expect(wire.secureSpoolAvailable, isTrue);
     expect(wire.unresolvedLocalJobs, 2);
     expect(wire.printerFingerprint, _readyEvidence.printerFingerprint);
+    // 001C3B1A: the readiness report carries the STABLE assignment id, and the
+    // config-independent status was filed FIRST from the SAME snapshot.
+    expect(wire.printerAssignmentId, 'assign-1');
+    expect(statusSent, hasLength(1));
+    expect(statusSent.single.modeRevision, 3);
+    expect(statusSent.single.unresolvedLocalJobs, 2);
     hb.dispose();
+  });
+
+  group('001C3B1A coherent status+readiness pipeline', () {
+    test(
+      'no printer evidence: status is RETAINED, readiness is SKIPPED',
+      () async {
+        evidence = const BlockedKitchenPrinterEvidence(
+          'kitchen_printer_assignment_missing',
+        );
+        final hb = heartbeat();
+        final report = await hb.reportNow(trigger: 't');
+        expect(
+          report.outcome,
+          KitchenReadinessRunOutcome.skippedEvidenceBlocked,
+        );
+        expect(report.detail, 'kitchen_printer_assignment_missing');
+        expect(report.statusReported, isTrue, reason: 'status stands alone');
+        expect(statusSent, hasLength(1));
+        expect(sent, isEmpty, reason: 'readiness needs a printer');
+        hb.dispose();
+      },
+    );
+
+    test('status is sent BEFORE readiness (deterministic order)', () async {
+      final order = <String>[];
+      final hb = KitchenReadinessHeartbeat(
+        deviceContext: () => context,
+        fetchMode: () async => KitchenModeVerifiedKds(
+          verifiedAt: DateTime.utc(2026, 7, 21),
+          revision: 3,
+        ),
+        printerEvidence: () async => _readyEvidence,
+        probeSpool: ({required deviceId, required branchId}) async =>
+            _spoolResult,
+        sendStatus: (status) async {
+          order.add('status');
+          return const KitchenPosStatusAccepted();
+        },
+        sendReport: (report) async {
+          order.add('readiness');
+          return const KitchenReadinessAccepted(activationReady: true);
+        },
+        invalidateModeCache: () async {},
+        periodicTimerFactory: (d, t) => _ManualTimer(t),
+      );
+      await hb.reportNow(trigger: 't');
+      expect(order, ['status', 'readiness']);
+      hb.dispose();
+    });
+
+    test('a STALE status revision recovers the WHOLE pipeline once (status + '
+        'readiness re-sent with the fresh revision)', () async {
+      modeScript
+        ..add(
+          () => KitchenModeVerifiedKds(
+            verifiedAt: DateTime.utc(2026, 7, 21),
+            revision: 3,
+          ),
+        )
+        ..add(
+          () => KitchenModeVerifiedKds(
+            verifiedAt: DateTime.utc(2026, 7, 21),
+            revision: 7,
+          ),
+        );
+      statusScript.add(
+        () => const KitchenPosStatusStaleModeRevision(serverRevision: 7),
+      );
+      final hb = heartbeat();
+      final report = await hb.reportNow(trigger: 't');
+      expect(report.outcome, KitchenReadinessRunOutcome.staleRecovered);
+      expect(invalidations, 1);
+      expect(statusSent, hasLength(2), reason: 'status re-sent on retry');
+      expect(statusSent.last.modeRevision, 7);
+      expect(sent, hasLength(1), reason: 'readiness only on the fresh pass');
+      expect(sent.single.modeRevision, 7);
+      hb.dispose();
+    });
+
+    test('REPEATED stale status does NOT loop (one retry, typed '
+        'unrecovered, no readiness)', () async {
+      statusScript
+        ..add(() => const KitchenPosStatusStaleModeRevision(serverRevision: 7))
+        ..add(() => const KitchenPosStatusStaleModeRevision(serverRevision: 8));
+      final hb = heartbeat();
+      final report = await hb.reportNow(trigger: 't');
+      expect(report.outcome, KitchenReadinessRunOutcome.staleUnrecovered);
+      expect(statusSent, hasLength(2));
+      expect(
+        sent,
+        isEmpty,
+        reason: 'readiness never reached under stale status',
+      );
+      hb.dispose();
+    });
+
+    test(
+      'a status leg failure short-circuits the run WITHOUT readiness',
+      () async {
+        statusScript.add(() => const KitchenPosStatusInvalidSession());
+        final hb = heartbeat();
+        final report = await hb.reportNow(trigger: 't');
+        expect(report.outcome, KitchenReadinessRunOutcome.invalidSession);
+        expect(sent, isEmpty);
+        hb.dispose();
+      },
+    );
   });
 
   test(
@@ -196,6 +322,10 @@ void main() {
       printerEvidence: () async => evidence,
       probeSpool: ({required deviceId, required branchId}) async =>
           _spoolResult,
+      sendStatus: (status) async {
+        statusSent.add(status);
+        return const KitchenPosStatusAccepted();
+      },
       sendReport: (report) async {
         sent.add(report);
         return const KitchenReadinessAccepted(activationReady: true);
@@ -362,6 +492,7 @@ void main() {
       printerEvidence: () => throw StateError('boom'),
       probeSpool: ({required deviceId, required branchId}) async =>
           _spoolResult,
+      sendStatus: (status) async => const KitchenPosStatusAccepted(),
       sendReport: (report) async =>
           const KitchenReadinessAccepted(activationReady: true),
       invalidateModeCache: () async {},

@@ -166,4 +166,44 @@ void main() {
             as ReadyKitchenPrinterEvidence;
     expect(evidence.paperWidth, KitchenReadinessPaperWidth.mm80);
   });
+
+  test('001C3B1A: the selected assignment id is carried, and it comes from '
+      'the SAME assignment as the fingerprint/width', () {
+    final evidence =
+        build(assignments: _assignments([_printer(id: 'pr-abc')]))
+            as ReadyKitchenPrinterEvidence;
+    expect(evidence.printerAssignmentId, 'pr-abc');
+  });
+
+  test('001C3B1A: DETERMINISTIC selection — permuting the SAME collection of '
+      'multiple same-transport 80mm printers selects the SAME id (lowest id, '
+      'never list order)', () {
+    final printers = [
+      _printer(id: 'pr-c'),
+      _printer(id: 'pr-a'),
+      _printer(id: 'pr-b'),
+    ];
+    String pick(List<AssignedPrinter> order) =>
+        (build(assignments: _assignments(order)) as ReadyKitchenPrinterEvidence)
+            .printerAssignmentId;
+    // Every permutation of the same three 80mm printers selects 'pr-a'.
+    expect(pick(printers), 'pr-a');
+    expect(pick(printers.reversed.toList()), 'pr-a');
+    expect(pick([printers[1], printers[2], printers[0]]), 'pr-a');
+    expect(pick([printers[2], printers[0], printers[1]]), 'pr-a');
+  });
+
+  test('001C3B1A: an 80mm printer wins over a lower-id 58mm printer (width '
+      'dominates the id tie-break)', () {
+    final evidence =
+        build(
+              assignments: _assignments([
+                _printer(id: 'pr-a', paperWidth: '58mm'),
+                _printer(id: 'pr-z', paperWidth: '80mm'),
+              ]),
+            )
+            as ReadyKitchenPrinterEvidence;
+    expect(evidence.printerAssignmentId, 'pr-z');
+    expect(evidence.paperWidth, KitchenReadinessPaperWidth.mm80);
+  });
 }

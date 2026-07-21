@@ -132,27 +132,32 @@ void main() {
     expect(outside, isNot(contains('package:restoflow_data_local')));
   });
 
-  test('001C3A EVOLUTION: raw kitchen RPC strings never appear in POS '
-      'sources (readiness is now SANCTIONED but only through the typed '
-      'feature_auth repository); mode setters stay fully banned', () {
-    final all = allSourcesExcept((_) => false);
-    for (final rpc in [
-      // Sanctioned CLIENTS exist in feature_auth — the raw strings still
-      // must never appear here (POS talks only through typed repositories).
-      'report_kitchen_printer_readiness',
-      'pull_kitchen_print_dispatches',
-      'acknowledge_kitchen_print_dispatch',
-      // Member-context RPCs have NO POS caller of any kind.
-      'get_kitchen_workflow_transition_readiness',
-      'list_kitchen_print_dispatches',
-      // NO workflow-mode writer exists anywhere (001C3B is unshipped, and
-      // its eventual activation is gated even later).
-      'set_kitchen_workflow_mode',
-      'set_branch_kitchen_workflow_mode',
-    ]) {
-      expect(all, isNot(contains(rpc)), reason: '$rpc must have NO caller');
-    }
-  });
+  test(
+    '001C3A/B1A EVOLUTION: raw kitchen RPC strings never appear in POS '
+    'sources (readiness/status are SANCTIONED but only through the typed '
+    'feature_auth repositories); mode setters/resolver stay fully banned',
+    () {
+      final all = allSourcesExcept((_) => false);
+      for (final rpc in [
+        // Sanctioned CLIENTS exist in feature_auth — the raw strings still
+        // must never appear here (POS talks only through typed repositories).
+        'report_kitchen_printer_readiness',
+        'report_kitchen_pos_status',
+        'pull_kitchen_print_dispatches',
+        'acknowledge_kitchen_print_dispatch',
+        // Member-context RPCs have NO POS caller of any kind.
+        'get_kitchen_workflow_transition_readiness',
+        'list_kitchen_print_dispatches',
+        // NO workflow-mode writer / resolver exists anywhere (001C3B is
+        // unshipped, and its eventual activation is gated even later).
+        'set_kitchen_workflow_mode',
+        'set_branch_kitchen_workflow_mode',
+        'resolve_kitchen_dispatch_ambiguous_hold',
+      ]) {
+        expect(all, isNot(contains(rpc)), reason: '$rpc must have NO caller');
+      }
+    },
+  );
 
   test('001C3A: the readiness heartbeat is the ONE sanctioned spool timer '
       'and is READINESS-ONLY (no worker, drain, transport, pull, or key '
