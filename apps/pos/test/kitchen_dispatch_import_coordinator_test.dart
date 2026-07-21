@@ -420,10 +420,21 @@ void main() {
       );
       await store.markServerAcked(seeded.localJobId, now);
       expect(
-        await store.claimRunnableForPrinting(seeded.localJobId, now),
+        await store.claimRunnableForQueued(
+          seeded.localJobId,
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+          deviceId: 'dev-1',
+          now: now,
+        ),
         isNotNull,
       );
-      expect(await store.markPossiblyPrintedOnRecovery(now), 1);
+      expect(await store.markPrinting(seeded.localJobId, now), isTrue);
+      expect(
+        await store.markPossiblyPrintedWithAck(seeded.localJobId, now),
+        isTrue,
+      );
 
       // d-3: the void notice for order-1 arrives and imports durably.
       transport.enqueue({'ok': true});
