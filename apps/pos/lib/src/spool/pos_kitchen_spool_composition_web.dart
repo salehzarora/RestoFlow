@@ -14,3 +14,8 @@ import 'pos_kitchen_spool_hooks.dart';
 /// touch the documents directory, provision keys, pull, or acknowledge.
 /// There is deliberately NO browser/localStorage fallback of any kind.
 PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) => null;
+
+/// KITCHEN-MODE-001C3A: web NEVER reports kitchen readiness — no readiness
+/// repository construction, no heartbeat, no secure storage, no database.
+PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) =>
+    null;

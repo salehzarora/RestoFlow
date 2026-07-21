@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart'
     show getApplicationDocumentsDirectory;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart'
-    show KitchenSpoolDatabaseFactory;
+    show KitchenSpoolDatabaseFactory, KitchenSpoolKeyManager;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show
         FlutterSecureDeviceSessionStore,
@@ -13,6 +13,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
         SupabaseDevicePrinterAssignmentsRepository,
         SupabaseKitchenDispatchAckRepository,
         SupabaseKitchenDispatchPullRepository,
+        SupabaseKitchenReadinessRepository,
         runtimeConfigProvider;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show
@@ -38,7 +39,11 @@ import '../state/pos_network_printer_config.dart'
 import '../state/pos_printer_transport.dart'
     show posKitchenSelectedPrinterTransportProvider;
 import '../state/pos_session.dart' show posAuthTransportProvider;
+import 'flutter_secure_kitchen_spool_key_store.dart';
 import 'kitchen_destination_resolver.dart';
+import 'kitchen_readiness_coordinator.dart';
+import 'kitchen_readiness_evidence.dart';
+import 'kitchen_spool_readiness_probe.dart';
 import 'kitchen_ticket_renderer.dart';
 import 'pos_kitchen_spool_capability.dart';
 import 'pos_kitchen_spool_composition.dart'
@@ -175,6 +180,101 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
       // The provider container may already be disposed mid-run teardown.
     }
   });
+}
+
+/// KITCHEN-MODE-001C3A — the NATIVE readiness-heartbeat composition.
+///
+/// READINESS-ONLY by construction: its dependency set is the mode getter,
+/// the pure printer-evidence derivation, the NON-MUTATING spool probe, the
+/// readiness repository, and the mode-cache invalidator — it can NOT reach
+/// the print worker, the dispatch drain, any transport send, key
+/// provisioning, or database creation. The device-context watch rebuilds
+/// (and thereby disposes) the heartbeat on any pairing/scope change;
+/// `ref.onDispose` stops the timer permanently. Immediate re-reports are
+/// wired to printer-configuration changes and to spool capability changes
+/// (each lifecycle run's derived capability), on top of the 5-minute
+/// foreground cadence and the startup/resume/paused hooks.
+PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
+  const platform = PosKitchenSpoolPlatform();
+  if (!platform.supportsSecureSpool) return null;
+  if (ref.watch(runtimeConfigProvider).isDemoMode) return null;
+  final transport = ref.watch(posAuthTransportProvider);
+  if (transport == null) return null;
+  // Scope transition = a DIFFERENT world: rebuild for the new scope.
+  ref.watch(posDeviceContextProvider);
+  final secretStore = FlutterSecureDeviceSessionStoreProvider.of();
+  final modeRepository = SupabaseDeviceKitchenModeRepository(
+    transport: transport,
+    secretStore: secretStore,
+  );
+  final readinessRepository = SupabaseKitchenReadinessRepository(
+    transport: transport,
+    secretStore: secretStore,
+  );
+  final modeCache = PosSecureKitchenModeCache(platform: platform);
+  final probe = KitchenSpoolReadinessProbe(
+    platform: platform,
+    databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
+      documentsDirectoryProvider: getApplicationDocumentsDirectory,
+    ),
+    keyManagerBuilder: () => KitchenSpoolKeyManager(
+      FlutterSecureKitchenSpoolKeyStore(platform: platform),
+    ),
+  );
+  final heartbeat = KitchenReadinessHeartbeat(
+    deviceContext: () => ref.read(posDeviceContextProvider),
+    fetchMode: modeRepository.fetchMode,
+    printerEvidence: () async {
+      final assignments = await SupabaseDevicePrinterAssignmentsRepository(
+        transport: transport,
+        secretStore: secretStore,
+      ).load();
+      final snapshot = assignments.fold<DevicePrinterAssignments?>(
+        (value) => value,
+        (_) => null,
+      );
+      if (snapshot == null) {
+        // Could not DETERMINE the assignment state — skip this report
+        // rather than filing evidence built on a guess.
+        return const BlockedKitchenPrinterEvidence('assignments_unavailable');
+      }
+      final selected = await ref.read(
+        posKitchenSelectedPrinterTransportProvider.future,
+      );
+      final network = await ref.read(
+        posKitchenNetworkPrinterConfigProvider.future,
+      );
+      final bluetooth = await ref.read(
+        posKitchenBluetoothPrinterConfigProvider.future,
+      );
+      return buildKitchenReadinessPrinterEvidence(
+        selectedTransport: selected,
+        networkConfig: network,
+        bluetoothConfig: bluetooth,
+        assignments: snapshot,
+      );
+    },
+    probeSpool: ({required deviceId, required branchId}) =>
+        probe.probe(deviceId: deviceId, branchId: branchId),
+    sendReport: readinessRepository.report,
+    invalidateModeCache: modeCache.invalidate,
+  );
+  // Immediate evidence-change triggers (fire-and-forget; single-flight
+  // inside the coordinator absorbs bursts).
+  ref.listen(posKitchenSelectedPrinterTransportProvider, (_, _) {
+    heartbeat.requestImmediate('printer_config_changed');
+  });
+  ref.listen(posKitchenNetworkPrinterConfigProvider, (_, _) {
+    heartbeat.requestImmediate('printer_config_changed');
+  });
+  ref.listen(posKitchenBluetoothPrinterConfigProvider, (_, _) {
+    heartbeat.requestImmediate('printer_config_changed');
+  });
+  ref.listen(posKitchenSpoolCapabilityProvider, (previous, next) {
+    if (previous != next) heartbeat.requestImmediate('spool_state_changed');
+  });
+  ref.onDispose(heartbeat.dispose);
+  return heartbeat;
 }
 
 /// Wraps the runtime so every lifecycle run's typed report also updates the

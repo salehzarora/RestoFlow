@@ -153,5 +153,12 @@ final class KitchenDestinationResolver {
   }
 
   static String _fingerprint(String canonical) =>
-      sha256.convert(utf8.encode(canonical)).toString();
+      kitchenDestinationFingerprint(canonical);
 }
+
+/// The ONE canonical routing-fingerprint derivation (`network|host|port` /
+/// `bluetooth|address`, trimmed + lowercased inputs). 001C3A: shared with the
+/// readiness evidence builder so a filed fingerprint always matches what the
+/// import path pins. NON-SECRET (see the accepted limitation above).
+String kitchenDestinationFingerprint(String canonical) =>
+    sha256.convert(utf8.encode(canonical)).toString();

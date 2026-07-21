@@ -6,7 +6,8 @@ import 'pos_kitchen_spool_composition_web.dart'
 import 'pos_kitchen_spool_hooks.dart';
 
 export 'pos_kitchen_spool_capability.dart' show PosKitchenSpoolCapability;
-export 'pos_kitchen_spool_hooks.dart' show PosKitchenSpoolLifecycleHooks;
+export 'pos_kitchen_spool_hooks.dart'
+    show PosKitchenReadinessLifecycle, PosKitchenSpoolLifecycleHooks;
 
 /// KITCHEN-MODE-001C2C — the typed operational capability of the kitchen
 /// spool (safe scalars only; updated by the native composition after each
@@ -29,3 +30,11 @@ final posKitchenSpoolCapabilityProvider =
 final posKitchenSpoolRuntimeProvider = Provider<PosKitchenSpoolLifecycleHooks?>(
   buildPosKitchenSpoolRuntime,
 );
+
+/// KITCHEN-MODE-001C3A — the platform-split READINESS heartbeat seam (same
+/// conditional-import rule: web branch is always null; only native platforms
+/// compose the real coordinator). Readiness-only by contract: the heartbeat
+/// never invokes the worker, the drain, a transport send, key provisioning,
+/// or database creation.
+final posKitchenReadinessHeartbeatProvider =
+    Provider<PosKitchenReadinessLifecycle?>(buildPosKitchenReadinessHeartbeat);

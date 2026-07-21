@@ -503,9 +503,11 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     if (cache == null) return;
     // RevisionUnavailable caches printer_only WITHOUT a revision — an
     // UNTRUSTED record under D1 (importing stays impossible while the
-    // revision is null). Only a trusted mode result carries one.
+    // revision is null). 001C3A: a verified KDS result now carries the
+    // server revision too (null only against an old server — that record
+    // stays readiness-ineligible but keeps normal KDS behavior).
     final (String? wire, int? revision) = switch (mode) {
-      KitchenModeVerifiedKds() => ('kds', null),
+      KitchenModeVerifiedKds(:final revision) => ('kds', revision),
       KitchenModePrinterOnlyWithRevision(:final revision) => (
         'printer_only',
         revision,
