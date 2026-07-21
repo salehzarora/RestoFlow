@@ -30,6 +30,8 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     this.columns = 48,
     this.rasterizer,
     this.rasterWidthDots = pp.kNativeRasterWidthDots,
+    this.sendGate,
+    this.destinationKey,
   });
 
   /// Builds a fresh transport per submit (a socket/BT connection is not reused).
@@ -37,6 +39,15 @@ class NativeTransportPrintBridge implements PosPrintBridge {
   final pp.EscPosPrintAdapter adapter;
   final pp.PrinterProfile profile;
   final int columns;
+
+  /// KITCHEN-MODE-001C2C (LOCKED DECISION 3): the SHARED per-physical-printer
+  /// FIFO gate. When set (with [destinationKey]), the physical send is
+  /// serialized against every other send — receipt OR kitchen — to the same
+  /// canonical endpoint. Encoding/rasterization stay OUTSIDE the gate.
+  final pp.PrinterDestinationSendGate? sendGate;
+
+  /// Canonical destination key for [sendGate] (never logged).
+  final String? destinationKey;
 
   /// PRINT-RTL-001: the raster renderer (null => ESC/POS text only). When set,
   /// Arabic/Hebrew (+ non-ASCII ₪/×) receipts render as a bitmap so they print
@@ -68,7 +79,13 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     final bytes = adapter.encode(doc, profile);
     final transport = transportFactory();
     try {
-      final result = await transport.send(bytes);
+      // Only the PHYSICAL transport operation runs under the shared
+      // destination gate; document building/encoding already happened.
+      final gate = sendGate;
+      final key = destinationKey;
+      final result = (gate != null && key != null)
+          ? await gate.withDestination(key, () => transport.send(bytes))
+          : await transport.send(bytes);
       if (result.ok) {
         return const pp.BridgeSubmitResult.sentToPrinter(mode: 'native');
       }
@@ -84,6 +101,15 @@ class NativeTransportPrintBridge implements PosPrintBridge {
   @override
   Future<pp.BridgeHealth> health() async => pp.BridgeHealth.connected;
 }
+
+/// KITCHEN-MODE-001C2C (LOCKED DECISION 3): the ONE process-wide send gate.
+/// Every physical send to a given printer endpoint — customer receipt today,
+/// kitchen ticket in the worker phase — must serialize through THIS instance
+/// so the same physical printer never receives interleaved byte streams.
+final posPrinterDestinationSendGateProvider =
+    Provider<pp.PrinterDestinationSendGate>(
+      (_) => pp.PrinterDestinationSendGate(),
+    );
 
 /// The active POS print target (ANDROID-003 transport resolver):
 /// - non-native (web): the compiled loopback print bridge (usually null — the
@@ -108,6 +134,10 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
         final connector = ref.watch(bluetoothPrinterConnectorProvider);
         return NativeTransportPrintBridge(
           rasterizer: rasterizer,
+          sendGate: ref.watch(posPrinterDestinationSendGateProvider),
+          destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(
+            bt.address,
+          ),
           transportFactory: () => BluetoothClassicPrintTransport(
             connector: connector,
             address: bt.address,
@@ -123,6 +153,11 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
       if (net != null) {
         return NativeTransportPrintBridge(
           rasterizer: rasterizer,
+          sendGate: ref.watch(posPrinterDestinationSendGateProvider),
+          destinationKey: pp.PrinterDestinationSendGate.networkKey(
+            net.host,
+            net.port,
+          ),
           transportFactory: () => pp.NetworkTcpPrintTransport(
             host: net.host,
             port: net.port,
