@@ -341,6 +341,7 @@ void main() {
       modeRevision: 4,
       secureSpoolAvailable: true,
       unresolvedLocalJobs: 2,
+      spoolCountState: KitchenSpoolCountState.counted,
     );
 
     test('exact wire payload: NO printer/endpoint/assignment/money keys; token '
@@ -362,6 +363,8 @@ void main() {
         'p_mode_revision': 4,
         'p_secure_spool_available': true,
         'p_unresolved_local_jobs': 2,
+        // 001C3B1A2: the count-state-aware 7-arg signature is ALWAYS used.
+        'p_spool_count_state': 'counted',
       });
       for (final banned in [
         'host',
@@ -453,6 +456,39 @@ void main() {
         expect(transport.calls, isEmpty);
       },
     );
+
+    test('001C3B1A2: every count-state is sent on the wire verbatim', () async {
+      for (final state in KitchenSpoolCountState.values) {
+        transport.enqueue({'ok': true, 'entity': 'kitchen_pos_status'});
+        await (await repo()).report(
+          KitchenPosStatusReport(
+            appBuild: 'b',
+            modeRevision: 1,
+            // 'absent' requires 0; keep it valid across the whole vocabulary.
+            secureSpoolAvailable: state == KitchenSpoolCountState.counted,
+            unresolvedLocalJobs: 0,
+            spoolCountState: state,
+          ),
+        );
+        expect(transport.calls.last.$2['p_spool_count_state'], state.wireName);
+      }
+    });
+
+    test('001C3B1A2: NO silent fallback — an old server rejecting the 7-arg '
+        'overload fails closed (server failure) with EXACTLY ONE call, never a '
+        '6-arg retry that would downgrade certainty to unknown', () async {
+      transport.enqueueThrow(
+        const SyncTransportException(SyncTransportErrorKind.server),
+      );
+      final r = await (await repo()).report(status);
+      expect(r, isA<KitchenPosStatusServerFailure>());
+      expect(transport.calls, hasLength(1), reason: 'never a fallback call');
+      expect(
+        transport.calls.single.$2.containsKey('p_spool_count_state'),
+        isTrue,
+        reason: 'the one and only attempt is the 7-arg signature',
+      );
+    });
   });
 
   group('SupabaseKitchenDispatchInspectionRepository', () {

@@ -63,6 +63,7 @@ const _diag58Evidence = ReadyKitchenPrinterEvidence(
 const _spoolResult = KitchenSpoolReadinessProbeResult(
   secureSpoolAvailable: true,
   unresolvedLocalJobs: 2,
+  spoolCountState: KitchenSpoolCountState.counted,
 );
 
 void main() {
@@ -161,6 +162,8 @@ void main() {
     expect(statusSent, hasLength(1));
     expect(statusSent.single.modeRevision, 3);
     expect(statusSent.single.unresolvedLocalJobs, 2);
+    // 001C3B1A2: the status carries the probe's count-certainty verbatim.
+    expect(statusSent.single.spoolCountState, KitchenSpoolCountState.counted);
     hb.dispose();
   });
 
@@ -236,6 +239,40 @@ void main() {
       );
       await hb.reportNow(trigger: 't');
       expect(order, ['status', 'readiness']);
+      hb.dispose();
+    });
+
+    test('001C3B1A2: the status count-state comes from the probe snapshot '
+        '(a proven-empty absent spool is filed verbatim, never faked to '
+        'counted)', () async {
+      final hb = KitchenReadinessHeartbeat(
+        deviceContext: () => context,
+        fetchMode: () async => KitchenModeVerifiedKds(
+          verifiedAt: DateTime.utc(2026, 7, 21),
+          revision: 3,
+        ),
+        printerEvidence: () async => const BlockedKitchenPrinterEvidence(
+          'kitchen_printer_assignment_missing',
+        ),
+        probeSpool: ({required deviceId, required branchId}) async =>
+            const KitchenSpoolReadinessProbeResult(
+              secureSpoolAvailable: false,
+              unresolvedLocalJobs: 0,
+              spoolCountState: KitchenSpoolCountState.absent,
+            ),
+        sendStatus: (status) async {
+          statusSent.add(status);
+          return const KitchenPosStatusAccepted();
+        },
+        sendReport: (report) async =>
+            const KitchenReadinessAccepted(activationReady: true),
+        invalidateModeCache: () async {},
+        periodicTimerFactory: (d, t) => _ManualTimer(t),
+      );
+      await hb.reportNow(trigger: 't');
+      expect(statusSent, hasLength(1));
+      expect(statusSent.single.spoolCountState, KitchenSpoolCountState.absent);
+      expect(statusSent.single.unresolvedLocalJobs, 0);
       hb.dispose();
     });
 

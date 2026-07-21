@@ -7,6 +7,8 @@ import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show KitchenSpoolCountState;
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_spool_readiness_probe.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
@@ -141,6 +143,7 @@ void main() {
     ).probe(deviceId: 'dev-1', branchId: 'branch-1');
     expect(result.secureSpoolAvailable, isFalse);
     expect(result.unresolvedLocalJobs, 0);
+    expect(result.spoolCountState, KitchenSpoolCountState.unknown);
     expect(result.blockerCode, 'web_unsupported');
     expect(touched, isFalse);
   });
@@ -150,6 +153,11 @@ void main() {
     final result = await probe().probe(deviceId: 'dev-1', branchId: 'branch-1');
     expect(result.secureSpoolAvailable, isFalse);
     expect(result.unresolvedLocalJobs, 0);
+    expect(
+      result.spoolCountState,
+      KitchenSpoolCountState.absent,
+      reason: 'no DB file => the count is a PROVEN 0, not unknown',
+    );
     expect(result.blockerCode, isNull);
     // NON-MUTATING: neither the spool directory nor the key appeared.
     expect(await factory().spoolFileExists(), isFalse);
@@ -179,6 +187,7 @@ void main() {
     final result = await probe().probe(deviceId: 'dev-1', branchId: 'branch-1');
     expect(result.secureSpoolAvailable, isTrue);
     expect(result.unresolvedLocalJobs, 1, reason: 'other scopes never count');
+    expect(result.spoolCountState, KitchenSpoolCountState.counted);
     expect(result.blockerCode, isNull);
     // Closed handle: tearDown's recursive delete proves no Windows lock.
   });
@@ -198,6 +207,11 @@ void main() {
     final result = await probe().probe(deviceId: 'dev-1', branchId: 'branch-1');
     expect(result.secureSpoolAvailable, isFalse);
     expect(result.unresolvedLocalJobs, 1);
+    expect(
+      result.spoolCountState,
+      KitchenSpoolCountState.counted,
+      reason: 'a readable DB is authoritatively COUNTED even with no key',
+    );
     expect(result.blockerCode, 'kitchen_spool_key_missing');
     expect(storage.values, isEmpty, reason: 'probe must not provision');
   });
@@ -213,6 +227,11 @@ void main() {
     storage.values[keyName] = 'not-base64!!';
     final result = await probe().probe(deviceId: 'dev-1', branchId: 'branch-1');
     expect(result.secureSpoolAvailable, isFalse);
+    expect(
+      result.spoolCountState,
+      KitchenSpoolCountState.absent,
+      reason: 'no DB file was created; a corrupt KEY never fakes a count',
+    );
     expect(result.blockerCode, 'kitchen_spool_key_corrupted');
     expect(
       storage.values[keyName],
@@ -232,11 +251,50 @@ void main() {
     final result = await probe().probe(deviceId: 'dev-1', branchId: 'branch-1');
     expect(result.secureSpoolAvailable, isFalse);
     expect(result.unresolvedLocalJobs, 0);
+    expect(
+      result.spoolCountState,
+      KitchenSpoolCountState.unknown,
+      reason: 'an unreadable DB yields an UNKNOWN count (0 is not a claim)',
+    );
     expect(result.blockerCode, 'spool_database_unavailable');
     expect(
       File(path).readAsStringSync(),
       'THIS IS NOT A SQLITE DATABASE',
       reason: 'no destructive recovery, ever',
     );
+  });
+
+  test('KITCHEN-MODE-001C3B1A2: a secure-storage/key inspection FAILURE must '
+      'NOT downgrade a successfully-counted DB to unknown', () async {
+    // Seed a real, readable DB with one job (count is authoritatively 1)...
+    await keyManager().provisionKey();
+    final db = await factory().open();
+    await seedJob(
+      DriftKitchenSpoolStore(db),
+      deviceId: 'dev-1',
+      branchId: 'branch-1',
+    );
+    await db.close();
+
+    // ...then make the WHOLE key path blow up (the harshest secure-storage
+    // failure: even building the inspector throws).
+    final result = await KitchenSpoolReadinessProbe(
+      platform: nativePlatform,
+      databaseFactoryBuilder: factory,
+      keyManagerBuilder: () => throw const FileSystemException('keystore down'),
+    ).probe(deviceId: 'dev-1', branchId: 'branch-1');
+
+    expect(
+      result.spoolCountState,
+      KitchenSpoolCountState.counted,
+      reason: 'the DB opened and counted; a key hiccup cannot erase that',
+    );
+    expect(result.unresolvedLocalJobs, 1, reason: 'the exact count is kept');
+    expect(
+      result.secureSpoolAvailable,
+      isFalse,
+      reason: 'still unprintable — no usable key',
+    );
+    expect(result.blockerCode, 'secure_storage_unavailable');
   });
 }
