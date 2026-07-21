@@ -21,12 +21,15 @@ export 'src/device_printer_assignments_section.dart';
 // RF-115: the shared print-bridge status view-model rendered in the section.
 export 'src/print_bridge_status.dart';
 export 'src/supabase_device_printer_assignments_repository.dart';
-// KITCHEN-MODE-001C2B: device-token kitchen clients (mode / dispatch pull /
-// import-acknowledgement). Production dispatch importing stays impossible
-// until 001C3 (no mode revision on the getter + no readiness reporting).
+// KITCHEN-MODE-001C2B/001C3A: kitchen clients — device-token (mode w/ trusted
+// revision / dispatch pull / import-acknowledgement / readiness reporting)
+// plus the member-JWT dispatch inspection read. Production printer_only stays
+// impossible through supported workflows (no mode setter exists).
 export 'src/kitchen_dispatch_ack_repository.dart';
+export 'src/kitchen_dispatch_inspection_repository.dart';
 export 'src/kitchen_dispatch_pull_repository.dart';
 export 'src/kitchen_mode_repository.dart';
+export 'src/kitchen_readiness_repository.dart';
 export 'src/supabase_device_shift_close_policy_repository.dart';
 // RF-117: the token-proven per-branch tax-setting read (BranchTax over the
 // device transport; default-OFF fail-soft).
