@@ -303,6 +303,7 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
           modeRevision: revision,
           secureSpoolAvailable: spool.secureSpoolAvailable,
           unresolvedLocalJobs: spool.unresolvedLocalJobs,
+          spoolCountState: spool.spoolCountState,
         ),
       ).timeout(_callTimeout);
     } on Object {
