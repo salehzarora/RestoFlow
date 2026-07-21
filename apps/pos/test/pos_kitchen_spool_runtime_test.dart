@@ -408,8 +408,36 @@ void main() {
       );
       expect(record, isNotNull);
       expect(record!.mode, 'kds');
-      expect(record.modeRevision, isNull); // D1
+      // OLD SERVER (no mode_revision key): readable, revision-less record.
+      expect(record.modeRevision, isNull);
       expect(record.verifiedAt, now);
+    });
+
+    test('001C3A: a kds envelope WITH mode_revision caches the SERVER '
+        'revision (readiness-eligible record)', () async {
+      transport.enqueue({
+        'ok': true,
+        'entity': 'kitchen_workflow_mode',
+        'kitchen_workflow_mode': 'kds',
+        'mode_revision': 5,
+        'server_ts': 'x',
+      });
+      final cache = PosSecureKitchenModeCache(
+        storage: secureStorage,
+        platform: native,
+        now: () => now,
+      );
+      final report = await runtime(modeCache: cache).onStartup();
+      expect(report.detail, 'kds_no_spool_footprint');
+      final record = await cache.read(
+        organizationId: 'org-1',
+        restaurantId: 'rest-1',
+        branchId: 'branch-1',
+        deviceId: 'dev-1',
+        sessionFingerprint: sessionFingerprint('tok-secret-1'),
+      );
+      expect(record!.mode, 'kds');
+      expect(record.modeRevision, 5);
     });
 
     test('mode failure with no spool -> mode_unknown_no_spool; the cache is '

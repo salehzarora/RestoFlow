@@ -112,6 +112,9 @@ void main() {
       (p) => !p.endsWith('lib/src/widgets/pos_sync_lifecycle.dart'),
     );
     expect(hook, contains('posKitchenSpoolRuntimeProvider'));
+    // 001C3A: the readiness heartbeat provider is the SECOND sanctioned
+    // reference (startup/resume/paused delegation only).
+    expect(hook, contains('posKitchenReadinessHeartbeatProvider'));
     for (final needle in [
       'DriftKitchenSpoolStore',
       'KitchenSpoolKeyManager',
@@ -129,20 +132,65 @@ void main() {
     expect(outside, isNot(contains('package:restoflow_data_local')));
   });
 
-  test('no readiness / mode-setter / member-inspection caller exists in POS '
-      '(pull/ack RPC strings live only in the feature_auth clients)', () {
+  test('001C3A EVOLUTION: raw kitchen RPC strings never appear in POS '
+      'sources (readiness is now SANCTIONED but only through the typed '
+      'feature_auth repository); mode setters stay fully banned', () {
     final all = allSourcesExcept((_) => false);
     for (final rpc in [
+      // Sanctioned CLIENTS exist in feature_auth — the raw strings still
+      // must never appear here (POS talks only through typed repositories).
       'report_kitchen_printer_readiness',
-      'set_kitchen_workflow_mode',
-      'get_kitchen_workflow_transition_readiness',
-      // The raw RPC strings must never appear in POS sources either —
-      // POS talks only through the typed feature_auth repositories.
       'pull_kitchen_print_dispatches',
       'acknowledge_kitchen_print_dispatch',
+      // Member-context RPCs have NO POS caller of any kind.
+      'get_kitchen_workflow_transition_readiness',
+      'list_kitchen_print_dispatches',
+      // NO workflow-mode writer exists anywhere (001C3B is unshipped, and
+      // its eventual activation is gated even later).
+      'set_kitchen_workflow_mode',
+      'set_branch_kitchen_workflow_mode',
     ]) {
       expect(all, isNot(contains(rpc)), reason: '$rpc must have NO caller');
     }
+  });
+
+  test('001C3A: the readiness heartbeat is the ONE sanctioned spool timer '
+      'and is READINESS-ONLY (no worker, drain, transport, pull, or key '
+      'provisioning in its dependency closure)', () {
+    final readinessFiles = allSourcesExcept(
+      (p) =>
+          !p.endsWith('lib/src/spool/kitchen_readiness_coordinator.dart') &&
+          !p.endsWith('lib/src/spool/kitchen_readiness_evidence.dart') &&
+          !p.endsWith('lib/src/spool/kitchen_spool_readiness_probe.dart'),
+    );
+    expect(readinessFiles, isNotEmpty);
+    for (final needle in [
+      'KitchenPrintWorker',
+      'KitchenDispatchDrainCoordinator',
+      'SupabaseKitchenDispatchPullRepository',
+      'sendKitchenBytesOverTcp',
+      'sendOnceForKitchen',
+      'classifyKitchenBluetoothAttempt',
+      'provisionKey',
+      'insertImportedJob',
+      'markPrinting',
+      'claimRunnable',
+    ]) {
+      expect(
+        readinessFiles,
+        isNot(contains(needle)),
+        reason: '"$needle" must never enter the readiness-only closure',
+      );
+    }
+    // Timers stay confined to the readiness coordinator: no OTHER spool
+    // file may create one (the worker/runtime remain lifecycle-driven, D4).
+    final otherSpool = allSourcesExcept(
+      (p) =>
+          !p.contains('lib/src/spool/') ||
+          p.endsWith('lib/src/spool/kitchen_readiness_coordinator.dart'),
+    );
+    expect(otherSpool, isNot(contains('Timer.periodic')));
+    expect(otherSpool, isNot(matches(RegExp(r'(?<![A-Za-z0-9_])Timer\('))));
   });
 
   test('the spool layer never calls print transport (no worker in 001C2B)', () {

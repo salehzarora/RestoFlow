@@ -66,6 +66,7 @@ void main() {
     String branchId = 'branch-1',
     String fingerprint = 'fp-1',
     String mode = 'kds',
+    int? modeRevision,
   }) => KitchenModeCacheRecord(
     organizationId: 'org-1',
     restaurantId: 'rest-1',
@@ -73,6 +74,7 @@ void main() {
     deviceId: 'dev-1',
     sessionFingerprint: fingerprint,
     mode: mode,
+    modeRevision: modeRevision,
     verifiedAt: verifiedAt,
   );
 
@@ -115,6 +117,39 @@ void main() {
       expect(back.modeRevision, isNull); // D1: no trusted revision yet.
       expect(back.verifiedAt, verifiedAt);
       expect(back.sessionFingerprint, 'fp-1');
+    });
+
+    test(
+      '001C3A: BOTH verified modes round-trip the server revision',
+      () async {
+        await cache.write(record(mode: 'kds', modeRevision: 7));
+        expect((await readScoped(cache))!.modeRevision, 7);
+        await cache.write(record(mode: 'printer_only', modeRevision: 4));
+        expect((await readScoped(cache))!.modeRevision, 4);
+        // Old records without a revision stay readable (normal KDS operation;
+        // readiness-INELIGIBLE by the coordinator's rules, not the cache's).
+        await cache.write(record(mode: 'kds'));
+        expect(await readScoped(cache), isNotNull);
+        expect((await readScoped(cache))!.modeRevision, isNull);
+      },
+    );
+
+    test('001C3A: a stored NON-POSITIVE revision is corruption — invalidated, '
+        'never clamped', () async {
+      for (final bad in ['0', '-2', '"seven"']) {
+        fake.values['restoflow.pos.kitchen_spool.mode_cache.v1'] =
+            '{"v":1,"organization_id":"org-1","restaurant_id":"rest-1",'
+            '"branch_id":"branch-1","device_id":"dev-1",'
+            '"session_fingerprint":"fp-1","mode":"kds",'
+            '"mode_revision":$bad,'
+            '"verified_at":"2026-07-20T12:00:00.000Z"}';
+        expect(
+          await readScoped(cache),
+          isNull,
+          reason: 'mode_revision=$bad must invalidate',
+        );
+        expect(fake.values, isEmpty);
+      }
     });
 
     test(
