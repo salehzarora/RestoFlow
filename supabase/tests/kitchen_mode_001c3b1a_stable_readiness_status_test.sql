@@ -367,12 +367,15 @@ select is(
   (public.report_kitchen_pos_status('00000000-0000-0000-0000-0003b1a0d003', 'tok-c3b1a-posk', 'b1', 1, true, 0) ->> 'error'),
   'invalid_session', 'status: a revoked session is denied');                                                     -- 51
 update device_sessions set revoked_at = null where id = '00000000-0000-0000-0000-0003b1a0e003';
--- scope is derived server-side: the caller supplies NO org/rest/branch.
+-- scope is derived server-side: the caller supplies NO org/rest/branch. Two
+-- overloads exist post-001C3B1A2 (legacy 6-arg + count-state 7-arg); neither
+-- adds a client scope id, so the arity set is exactly {6,7}.
 select is(
-  (select array_length(string_to_array(pg_get_function_identity_arguments(p.oid), ','), 1)
-     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'app' and p.proname = 'report_kitchen_pos_status'),
-  6, 'status RPC takes exactly 6 args (device/token/build/revision/spool/count) — NO client scope ids');         -- 52
+  (select string_agg(c::text, ',' order by c)
+     from (select array_length(string_to_array(pg_get_function_identity_arguments(p.oid), ','), 1) as c
+             from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'app' and p.proname = 'report_kitchen_pos_status') s),
+  '6,7', 'status RPC overloads take exactly 6 and 7 args (device/token/build/revision/spool/count[/count_state]) — NO client scope ids'); -- 52
 select ok(
   not has_function_privilege('anon', 'public.report_kitchen_pos_status(uuid, text, text, integer, boolean, integer)', 'execute')
   and has_function_privilege('authenticated', 'public.report_kitchen_pos_status(uuid, text, text, integer, boolean, integer)', 'execute')

@@ -1,22 +1,45 @@
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
-/// KITCHEN-MODE-001C3B1A — device-token client for
+/// KITCHEN-MODE-001C3B1A2: whether [KitchenPosStatusReport.unresolvedLocalJobs]
+/// is AUTHORITATIVE.
+///
+///  * [counted]  — the spool DB opened and the count is exact.
+///  * [absent]   — no spool DB file; the count is proven 0 (nothing spooled).
+///  * [unknown]  — the DB could not be opened/counted (or an old client); the
+///    count is NON-authoritative and the future escape gate must never treat
+///    it as empty.
+///
+/// INDEPENDENT of [KitchenPosStatusReport.secureSpoolAvailable] (printability):
+/// a readable DB with a missing/corrupt key is still `counted`.
+enum KitchenSpoolCountState {
+  counted('counted'),
+  absent('absent'),
+  unknown('unknown');
+
+  const KitchenSpoolCountState(this.wireName);
+
+  final String wireName;
+}
+
+/// KITCHEN-MODE-001C3B1A/001C3B1A2 — device-token client for
 /// `report_kitchen_pos_status`.
 ///
 /// A CONFIGURATION-INDEPENDENT spool/status report: it carries only the
-/// device's local spool health (availability + unresolved count) and the
-/// trusted server mode revision, so it stays fresh even when NO kitchen
-/// printer is configured — the future safe `printer_only → kds` escape gate
-/// needs an authoritative "unresolved_local_jobs = 0" statement regardless of
-/// printer state. Compile-time closed; NEVER carries a printer assignment,
-/// endpoint, fingerprint, payload, key, customer/order data, notes, or money.
+/// device's local spool health (usability + unresolved count + count
+/// certainty) and the trusted server mode revision, so it stays fresh even
+/// when NO kitchen printer is configured — the future safe `printer_only → kds`
+/// escape gate needs an AUTHORITATIVE "unresolved_local_jobs = 0" statement
+/// regardless of printer state. Compile-time closed; NEVER carries a printer
+/// assignment, endpoint, fingerprint, payload, key, customer/order data,
+/// notes, or money.
 final class KitchenPosStatusReport {
   const KitchenPosStatusReport({
     required this.appBuild,
     required this.modeRevision,
     required this.secureSpoolAvailable,
     required this.unresolvedLocalJobs,
+    required this.spoolCountState,
   });
 
   /// Short build identifier (server CHECK: 1..64 chars). Never an endpoint.
@@ -27,8 +50,13 @@ final class KitchenPosStatusReport {
 
   final bool secureSpoolAvailable;
 
-  /// Scope-specific durable spool count (0 when no spool exists).
+  /// Scope-specific durable spool count (0 when no spool exists). Authoritative
+  /// only when [spoolCountState] is `counted` or `absent`.
   final int unresolvedLocalJobs;
+
+  /// KITCHEN-MODE-001C3B1A2: whether the count above is authoritative. `absent`
+  /// requires [unresolvedLocalJobs] == 0 (server-enforced).
+  final KitchenSpoolCountState spoolCountState;
 }
 
 sealed class KitchenPosStatusResult {
@@ -52,7 +80,10 @@ final class KitchenPosStatusStaleModeRevision extends KitchenPosStatusResult {
 enum KitchenPosStatusRejectionReason {
   invalidAppBuild('invalid_app_build'),
   invalidSpoolState('invalid_spool_state'),
-  invalidUnresolvedCount('invalid_unresolved_count');
+  invalidUnresolvedCount('invalid_unresolved_count'),
+  // KITCHEN-MODE-001C3B1A2: the count-state was not a closed value, or the
+  // cross-field invariant (absent => 0) was violated.
+  invalidSpoolCountState('invalid_spool_count_state');
 
   const KitchenPosStatusRejectionReason(this.wireName);
 
@@ -106,6 +137,10 @@ class SupabaseKitchenPosStatusRepository {
 
     final Object? raw;
     try {
+      // KITCHEN-MODE-001C3B1A2: the count-state-aware 7-arg signature. This
+      // client NEVER falls back to the legacy 6-arg call — an old server
+      // without the 7-arg overload fails closed (server failure), never a
+      // silent downgrade of count certainty to unknown-pretending-success.
       raw = await _transport.invoke('report_kitchen_pos_status', {
         'p_device_id': cred.deviceId,
         'p_session_token': cred.sessionToken,
@@ -113,6 +148,7 @@ class SupabaseKitchenPosStatusRepository {
         'p_mode_revision': status.modeRevision,
         'p_secure_spool_available': status.secureSpoolAvailable,
         'p_unresolved_local_jobs': status.unresolvedLocalJobs,
+        'p_spool_count_state': status.spoolCountState.wireName,
       });
     } on SyncTransportException catch (e) {
       return switch (e.kind) {

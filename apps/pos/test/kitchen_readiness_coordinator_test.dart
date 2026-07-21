@@ -63,6 +63,7 @@ const _diag58Evidence = ReadyKitchenPrinterEvidence(
 const _spoolResult = KitchenSpoolReadinessProbeResult(
   secureSpoolAvailable: true,
   unresolvedLocalJobs: 2,
+  spoolCountState: KitchenSpoolCountState.counted,
 );
 
 void main() {
@@ -161,6 +162,8 @@ void main() {
     expect(statusSent, hasLength(1));
     expect(statusSent.single.modeRevision, 3);
     expect(statusSent.single.unresolvedLocalJobs, 2);
+    // 001C3B1A2: the status carries the probe's count-certainty verbatim.
+    expect(statusSent.single.spoolCountState, KitchenSpoolCountState.counted);
     hb.dispose();
   });
 
@@ -236,6 +239,91 @@ void main() {
       );
       await hb.reportNow(trigger: 't');
       expect(order, ['status', 'readiness']);
+      hb.dispose();
+    });
+
+    test('001C3B1A2: the status count-state comes from the probe snapshot '
+        '(a proven-empty absent spool is filed verbatim, never faked to '
+        'counted)', () async {
+      final hb = KitchenReadinessHeartbeat(
+        deviceContext: () => context,
+        fetchMode: () async => KitchenModeVerifiedKds(
+          verifiedAt: DateTime.utc(2026, 7, 21),
+          revision: 3,
+        ),
+        printerEvidence: () async => const BlockedKitchenPrinterEvidence(
+          'kitchen_printer_assignment_missing',
+        ),
+        probeSpool: ({required deviceId, required branchId}) async =>
+            const KitchenSpoolReadinessProbeResult(
+              secureSpoolAvailable: false,
+              unresolvedLocalJobs: 0,
+              spoolCountState: KitchenSpoolCountState.absent,
+            ),
+        sendStatus: (status) async {
+          statusSent.add(status);
+          return const KitchenPosStatusAccepted();
+        },
+        sendReport: (report) async =>
+            const KitchenReadinessAccepted(activationReady: true),
+        invalidateModeCache: () async {},
+        periodicTimerFactory: (d, t) => _ManualTimer(t),
+      );
+      await hb.reportNow(trigger: 't');
+      expect(statusSent, hasLength(1));
+      expect(statusSent.single.spoolCountState, KitchenSpoolCountState.absent);
+      expect(statusSent.single.unresolvedLocalJobs, 0);
+      hb.dispose();
+    });
+
+    test('001C3B1A2 (F1-E): an UNKNOWN-presence probe (e.g. a documents-'
+        'directory failure) sends p_spool_count_state=unknown, NEVER absent, '
+        'and its 0 is not interpreted as proven-empty; status stays first with '
+        'no readiness/worker/drain/transport side effect', () async {
+      final hb = KitchenReadinessHeartbeat(
+        deviceContext: () => context,
+        fetchMode: () async => KitchenModeVerifiedKds(
+          verifiedAt: DateTime.utc(2026, 7, 21),
+          revision: 3,
+        ),
+        printerEvidence: () async => const BlockedKitchenPrinterEvidence(
+          'kitchen_printer_assignment_missing',
+        ),
+        probeSpool: ({required deviceId, required branchId}) async =>
+            const KitchenSpoolReadinessProbeResult(
+              secureSpoolAvailable: false,
+              unresolvedLocalJobs: 0,
+              spoolCountState: KitchenSpoolCountState.unknown,
+              blockerCode: 'spool_presence_unknown',
+            ),
+        sendStatus: (status) async {
+          statusSent.add(status);
+          return const KitchenPosStatusAccepted();
+        },
+        sendReport: (report) async {
+          sent.add(report);
+          return const KitchenReadinessAccepted(activationReady: true);
+        },
+        invalidateModeCache: () async {},
+        periodicTimerFactory: (d, t) => _ManualTimer(t),
+      );
+      final report = await hb.reportNow(trigger: 't');
+      expect(statusSent, hasLength(1));
+      expect(
+        statusSent.single.spoolCountState,
+        KitchenSpoolCountState.unknown,
+        reason: 'a provider failure is filed as unknown, never absent',
+      );
+      expect(
+        statusSent.single.spoolCountState,
+        isNot(KitchenSpoolCountState.absent),
+      );
+      expect(statusSent.single.unresolvedLocalJobs, 0);
+      // Status is first; readiness is skipped (no printer) — no readiness send,
+      // and the heartbeat structurally has no worker/drain/transport to reach.
+      expect(report.statusReported, isTrue);
+      expect(report.outcome, KitchenReadinessRunOutcome.skippedEvidenceBlocked);
+      expect(sent, isEmpty);
       hb.dispose();
     });
 
