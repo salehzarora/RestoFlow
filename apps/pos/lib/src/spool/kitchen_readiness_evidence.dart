@@ -23,10 +23,23 @@ sealed class KitchenReadinessPrinterEvidence {
 final class ReadyKitchenPrinterEvidence
     extends KitchenReadinessPrinterEvidence {
   const ReadyKitchenPrinterEvidence({
+    required this.printerAssignmentId,
     required this.transportKind,
     required this.paperWidth,
     required this.printerFingerprint,
   });
+
+  /// KITCHEN-MODE-001C3B1A: the STABLE server assignment identity
+  /// (`AssignedPrinter.id`) of the deterministically selected printer — the
+  /// transport, width and fingerprint below all come from THIS assignment.
+  ///
+  /// F1 correction: NULL when the selected assignment is NOT exactly 80mm. A
+  /// non-80mm assignment can never be a qualifying pinned identity (the server
+  /// would reject a pinned non-80mm id as `invalid_printer_assignment`), so
+  /// leaving the id NULL lets the truthful non-80mm evidence be STORED as a
+  /// diagnostic report — which is what surfaces the precise
+  /// `paper_width_80mm_required` blocker instead of a generic absence.
+  final String? printerAssignmentId;
 
   final KitchenReadinessTransportKind transportKind;
   final KitchenReadinessPaperWidth paperWidth;
@@ -76,12 +89,17 @@ KitchenReadinessPrinterEvidence buildKitchenReadinessPrinterEvidence({
   if (matchingTransport.isEmpty) {
     return const BlockedKitchenPrinterEvidence('kitchen_transport_mismatch');
   }
-  // ONE selected assignment: prefer an 80mm row (the qualifying width),
-  // mirroring the resolver's selection, then report the actual width.
-  final assignment = matchingTransport.firstWhere(
-    (printer) => printer.paperWidth == '80mm',
-    orElse: () => matchingTransport.first,
-  );
+  // KITCHEN-MODE-001C3B1A: DETERMINISTIC selection — 80mm assignments first,
+  // then the stable assignment id as the tie-breaker, so shuffling the same
+  // collection always selects the SAME printer (never list arrival order).
+  final ordered = [...matchingTransport]
+    ..sort((a, b) {
+      final aw = a.paperWidth == '80mm' ? 0 : 1;
+      final bw = b.paperWidth == '80mm' ? 0 : 1;
+      if (aw != bw) return aw.compareTo(bw);
+      return a.id.compareTo(b.id);
+    });
+  final assignment = ordered.first;
   final KitchenReadinessPaperWidth paperWidth;
   switch (assignment.paperWidth) {
     case '80mm':
@@ -93,6 +111,14 @@ KitchenReadinessPrinterEvidence buildKitchenReadinessPrinterEvidence({
         'kitchen_paper_width_unsupported',
       );
   }
+  // F1 correction: the STABLE assignment identity is pinned ONLY for an
+  // exactly-80mm assignment (the sole width a qualifying pinned assignment may
+  // carry). For a 58mm selection the id stays NULL so the truthful 58mm
+  // evidence is STORED as a diagnostic report (server accepts a NULL
+  // assignment) and surfaces the precise paper_width_80mm_required blocker,
+  // rather than being rejected and leaving a generic no_fresh_pos_readiness.
+  final String? selectedAssignmentId =
+      paperWidth == KitchenReadinessPaperWidth.mm80 ? assignment.id : null;
 
   switch (transport) {
     case PosPrinterTransportKind.network:
@@ -104,6 +130,7 @@ KitchenReadinessPrinterEvidence buildKitchenReadinessPrinterEvidence({
       }
       final host = config.host.trim().toLowerCase();
       return ReadyKitchenPrinterEvidence(
+        printerAssignmentId: selectedAssignmentId,
         transportKind: KitchenReadinessTransportKind.network,
         paperWidth: paperWidth,
         printerFingerprint: kitchenDestinationFingerprint(
@@ -119,6 +146,7 @@ KitchenReadinessPrinterEvidence buildKitchenReadinessPrinterEvidence({
       }
       final address = config.address.trim().toLowerCase();
       return ReadyKitchenPrinterEvidence(
+        printerAssignmentId: selectedAssignmentId,
         transportKind: KitchenReadinessTransportKind.bluetooth,
         paperWidth: paperWidth,
         printerFingerprint: kitchenDestinationFingerprint('bluetooth|$address'),

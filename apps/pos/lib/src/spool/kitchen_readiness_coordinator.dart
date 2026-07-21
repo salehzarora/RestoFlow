@@ -74,9 +74,14 @@ final class KitchenReadinessRunReport {
     required this.outcome,
     this.activationReady,
     this.detail,
+    this.statusReported = false,
   });
 
   final String trigger;
+
+  /// The READINESS-leg outcome (the run's headline). When no printer evidence
+  /// exists this is [KitchenReadinessRunOutcome.skippedEvidenceBlocked] while
+  /// [statusReported] can still be true.
   final KitchenReadinessRunOutcome outcome;
 
   /// Server qualifying evaluation, present only when a report was accepted.
@@ -85,6 +90,11 @@ final class KitchenReadinessRunReport {
   /// Safe typed code (blocker/rejection reason) — never raw text, never an
   /// endpoint.
   final String? detail;
+
+  /// KITCHEN-MODE-001C3B1A: whether the configuration-INDEPENDENT POS status
+  /// report was accepted this run (it is sent BEFORE readiness and does not
+  /// require a printer, so it can be true even when readiness was skipped).
+  final bool statusReported;
 }
 
 final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
@@ -97,6 +107,8 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
       required String branchId,
     })
     probeSpool,
+    required Future<KitchenPosStatusResult> Function(KitchenPosStatusReport)
+    sendStatus,
     required Future<KitchenReadinessResult> Function(KitchenReadinessReport)
     sendReport,
     required Future<void> Function() invalidateModeCache,
@@ -107,6 +119,7 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
   }) : _deviceContext = deviceContext,
        _fetchMode = fetchMode,
        _printerEvidence = printerEvidence,
+       _sendStatus = sendStatus,
        _probeSpool = probeSpool,
        _sendReport = sendReport,
        _invalidateModeCache = invalidateModeCache,
@@ -125,6 +138,8 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     required String branchId,
   })
   _probeSpool;
+  final Future<KitchenPosStatusResult> Function(KitchenPosStatusReport)
+  _sendStatus;
   final Future<KitchenReadinessResult> Function(KitchenReadinessReport)
   _sendReport;
   final Future<void> Function() _invalidateModeCache;
@@ -266,17 +281,10 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
         );
     }
 
-    final evidence = await _printerEvidence();
-    if (evidence is BlockedKitchenPrinterEvidence) {
-      return KitchenReadinessRunReport(
-        trigger: trigger,
-        outcome: KitchenReadinessRunOutcome.skippedEvidenceBlocked,
-        detail: evidence.reasonCode,
-      );
-    }
-    final printer = evidence as ReadyKitchenPrinterEvidence;
+    // ONE coherent snapshot: the SAME spool probe and the SAME server
+    // revision feed both the config-independent status and (when a printer
+    // exists) the assignment-aware readiness, so the two can never disagree.
     final spool = await _probeSpool(deviceId: deviceId, branchId: branchId);
-
     if (_disposed) {
       return KitchenReadinessRunReport(
         trigger: trigger,
@@ -284,6 +292,89 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
       );
     }
 
+    // (3) Config-independent POS status — filed FIRST and regardless of any
+    // printer, so the future printer_only -> kds escape gate always has a
+    // fresh authoritative statement of unresolved_local_jobs.
+    final KitchenPosStatusResult statusResult;
+    try {
+      statusResult = await _sendStatus(
+        KitchenPosStatusReport(
+          appBuild: _appBuild,
+          modeRevision: revision,
+          secureSpoolAvailable: spool.secureSpoolAvailable,
+          unresolvedLocalJobs: spool.unresolvedLocalJobs,
+        ),
+      ).timeout(_callTimeout);
+    } on Object {
+      return KitchenReadinessRunReport(
+        trigger: trigger,
+        outcome: KitchenReadinessRunOutcome.transientFailure,
+      );
+    }
+    switch (statusResult) {
+      case KitchenPosStatusAccepted():
+        break; // continue to readiness
+      case KitchenPosStatusStaleModeRevision():
+        return _recoverStaleOrGiveUp(trigger, isStaleRetry: isStaleRetry);
+      case KitchenPosStatusInvalidSession():
+        return KitchenReadinessRunReport(
+          trigger: trigger,
+          outcome: KitchenReadinessRunOutcome.invalidSession,
+        );
+      case KitchenPosStatusRejected(:final reason):
+        return KitchenReadinessRunReport(
+          trigger: trigger,
+          outcome: KitchenReadinessRunOutcome.rejected,
+          detail: reason.wireName,
+        );
+      case KitchenPosStatusServerFailure():
+        return KitchenReadinessRunReport(
+          trigger: trigger,
+          outcome: KitchenReadinessRunOutcome.serverFailure,
+        );
+      case KitchenPosStatusTransientFailure():
+        return KitchenReadinessRunReport(
+          trigger: trigger,
+          outcome: KitchenReadinessRunOutcome.transientFailure,
+        );
+      case KitchenPosStatusMalformedResponse():
+        return KitchenReadinessRunReport(
+          trigger: trigger,
+          outcome: KitchenReadinessRunOutcome.malformed,
+        );
+    }
+    // From here the status report succeeded.
+
+    if (_disposed) {
+      return const KitchenReadinessRunReport(
+        trigger: 'disposed',
+        outcome: KitchenReadinessRunOutcome.disposed,
+        statusReported: true,
+      );
+    }
+
+    // (4) Printer evidence. No printer -> readiness is SKIPPED but the status
+    // above stands (retained), so the escape gate still works.
+    final evidence = await _printerEvidence();
+    if (evidence is BlockedKitchenPrinterEvidence) {
+      return KitchenReadinessRunReport(
+        trigger: trigger,
+        outcome: KitchenReadinessRunOutcome.skippedEvidenceBlocked,
+        detail: evidence.reasonCode,
+        statusReported: true,
+      );
+    }
+    final printer = evidence as ReadyKitchenPrinterEvidence;
+
+    if (_disposed) {
+      return const KitchenReadinessRunReport(
+        trigger: 'disposed',
+        outcome: KitchenReadinessRunOutcome.disposed,
+        statusReported: true,
+      );
+    }
+
+    // (5) Assignment-aware readiness, using the SAME spool + revision snapshot.
     final KitchenReadinessResult result;
     try {
       result = await _sendReport(
@@ -295,12 +386,14 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
           secureSpoolAvailable: spool.secureSpoolAvailable,
           unresolvedLocalJobs: spool.unresolvedLocalJobs,
           modeRevision: revision,
+          printerAssignmentId: printer.printerAssignmentId,
         ),
       ).timeout(_callTimeout);
     } on Object {
       return KitchenReadinessRunReport(
         trigger: trigger,
         outcome: KitchenReadinessRunOutcome.transientFailure,
+        statusReported: true,
       );
     }
 
@@ -312,49 +405,63 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
               ? KitchenReadinessRunOutcome.staleRecovered
               : KitchenReadinessRunOutcome.reported,
           activationReady: activationReady,
+          statusReported: true,
         );
       case KitchenReadinessStaleModeRevision():
-        if (isStaleRetry) {
-          // AT MOST one recovery attempt per lifecycle trigger — no loop.
-          return KitchenReadinessRunReport(
-            trigger: trigger,
-            outcome: KitchenReadinessRunOutcome.staleUnrecovered,
-          );
-        }
-        // Recovery: the cached mode is no longer trustworthy for the exact
-        // scope/session — invalidate, then refetch + rebuild + retry ONCE.
-        try {
-          await _invalidateModeCache();
-        } on Exception {
-          // Best effort; the refetch below is the authoritative step.
-        }
-        return _runOnce(trigger, isStaleRetry: true);
+        return _recoverStaleOrGiveUp(trigger, isStaleRetry: isStaleRetry);
       case KitchenReadinessRejected(:final reason):
         return KitchenReadinessRunReport(
           trigger: trigger,
           outcome: KitchenReadinessRunOutcome.rejected,
           detail: reason.wireName,
+          statusReported: true,
         );
       case KitchenReadinessInvalidSession():
         return KitchenReadinessRunReport(
           trigger: trigger,
           outcome: KitchenReadinessRunOutcome.invalidSession,
+          statusReported: true,
         );
       case KitchenReadinessTransientFailure():
         return KitchenReadinessRunReport(
           trigger: trigger,
           outcome: KitchenReadinessRunOutcome.transientFailure,
+          statusReported: true,
         );
       case KitchenReadinessServerFailure():
         return KitchenReadinessRunReport(
           trigger: trigger,
           outcome: KitchenReadinessRunOutcome.serverFailure,
+          statusReported: true,
         );
       case KitchenReadinessMalformedResponse():
         return KitchenReadinessRunReport(
           trigger: trigger,
           outcome: KitchenReadinessRunOutcome.malformed,
+          statusReported: true,
         );
     }
+  }
+
+  /// Stale-revision recovery shared by BOTH the status and readiness legs: the
+  /// cached mode is no longer trustworthy for this exact scope/session, so
+  /// invalidate it, then re-run the WHOLE coherent pipeline ONCE (never a
+  /// mixed old/new snapshot, never a loop).
+  Future<KitchenReadinessRunReport> _recoverStaleOrGiveUp(
+    String trigger, {
+    required bool isStaleRetry,
+  }) async {
+    if (isStaleRetry) {
+      return KitchenReadinessRunReport(
+        trigger: trigger,
+        outcome: KitchenReadinessRunOutcome.staleUnrecovered,
+      );
+    }
+    try {
+      await _invalidateModeCache();
+    } on Exception {
+      // Best effort; the refetch inside the retried pipeline is authoritative.
+    }
+    return _runOnce(trigger, isStaleRetry: true);
   }
 }

@@ -167,6 +167,9 @@ void main() {
         'p_secure_spool_available': true,
         'p_unresolved_local_jobs': 0,
         'p_mode_revision': 3,
+        // 001C3B1A: the assignment-aware 12-arg signature; null here (the base
+        // fixture pins no assignment) is a legal, non-qualifying value.
+        'p_printer_assignment_id': null,
       });
       // Privacy: the request map carries NO endpoint/payload/money keys.
       // ('p_transport_kind' legitimately contains "port"; everything else on
@@ -282,6 +285,171 @@ void main() {
           secretStore: InMemoryDeviceSessionSecretStore(),
         );
         expect(await r.report(_report), isA<KitchenReadinessInvalidSession>());
+        expect(transport.calls, isEmpty);
+      },
+    );
+
+    test('001C3B1A: an assignment-aware report sends the STABLE assignment id '
+        'and never leaks an endpoint', () async {
+      transport.enqueue({'ok': true, 'activation_ready': true});
+      const report = KitchenReadinessReport(
+        appBuild: 'pos-test-build',
+        transportKind: KitchenReadinessTransportKind.network,
+        paperWidth: KitchenReadinessPaperWidth.mm80,
+        printerFingerprint:
+            'aaaabbbbccccddddeeeeffff00001111aaaabbbbccccddddeeeeffff00001111',
+        secureSpoolAvailable: true,
+        unresolvedLocalJobs: 0,
+        modeRevision: 3,
+        printerAssignmentId: 'assign-42',
+      );
+      final result = await (await repo()).report(report);
+      expect(result, isA<KitchenReadinessAccepted>());
+      final (_, params) = transport.calls.single;
+      expect(params['p_printer_assignment_id'], 'assign-42');
+      // The assignment id is an opaque server uuid, never an endpoint.
+      expect(params.keys, isNot(contains('p_host')));
+      expect(params.keys, isNot(contains('p_port')));
+      expect(params.keys, isNot(contains('p_address')));
+    });
+
+    test('001C3B1A: the server invalid_printer_assignment rejection maps to '
+        'its typed reason', () async {
+      transport.enqueue({'ok': false, 'error': 'invalid_printer_assignment'});
+      final result = await (await repo()).report(_report);
+      expect(result, isA<KitchenReadinessRejected>());
+      expect(
+        (result as KitchenReadinessRejected).reason,
+        KitchenReadinessRejectionReason.invalidPrinterAssignment,
+      );
+    });
+  });
+
+  group('SupabaseKitchenPosStatusRepository', () {
+    late _FakeTransport transport;
+
+    Future<SupabaseKitchenPosStatusRepository> repo() async =>
+        SupabaseKitchenPosStatusRepository(
+          transport: transport,
+          secretStore: await _storeWithCred(),
+        );
+
+    setUp(() => transport = _FakeTransport());
+
+    const status = KitchenPosStatusReport(
+      appBuild: 'pos-test-build',
+      modeRevision: 4,
+      secureSpoolAvailable: true,
+      unresolvedLocalJobs: 2,
+    );
+
+    test('exact wire payload: NO printer/endpoint/assignment/money keys; token '
+        'read per request', () async {
+      transport.enqueue({
+        'ok': true,
+        'entity': 'kitchen_pos_status',
+        'expires_at': 'x',
+        'server_ts': 'x',
+      });
+      final result = await (await repo()).report(status);
+      expect(result, isA<KitchenPosStatusAccepted>());
+      final (fn, params) = transport.calls.single;
+      expect(fn, 'report_kitchen_pos_status');
+      expect(params, {
+        'p_device_id': 'dev-1',
+        'p_session_token': 'tok-secret-1',
+        'p_app_build': 'pos-test-build',
+        'p_mode_revision': 4,
+        'p_secure_spool_available': true,
+        'p_unresolved_local_jobs': 2,
+      });
+      for (final banned in [
+        'host',
+        'address',
+        'endpoint',
+        'payload',
+        'customer',
+        'note',
+        'minor',
+        'secret',
+        'assignment',
+        'fingerprint',
+        'printer',
+        'transport',
+        'paper',
+      ]) {
+        expect(
+          params.keys.where((k) => k.toLowerCase().contains(banned)),
+          isEmpty,
+          reason: 'no status request key may contain "$banned"',
+        );
+      }
+    });
+
+    test('stale_mode_revision carries the authoritative revision; a bad value '
+        'is malformed', () async {
+      transport.enqueue({
+        'ok': false,
+        'error': 'stale_mode_revision',
+        'mode_revision': 8,
+      });
+      final r = await (await repo()).report(status);
+      expect(r, isA<KitchenPosStatusStaleModeRevision>());
+      expect((r as KitchenPosStatusStaleModeRevision).serverRevision, 8);
+      for (final bad in [null, 0, -2, 'x']) {
+        transport.enqueue({
+          'ok': false,
+          'error': 'stale_mode_revision',
+          'mode_revision': bad,
+        });
+        expect(
+          await (await repo()).report(status),
+          isA<KitchenPosStatusMalformedResponse>(),
+        );
+      }
+    });
+
+    test('closed rejection + session/transport taxonomy', () async {
+      for (final reason in KitchenPosStatusRejectionReason.values) {
+        transport.enqueue({'ok': false, 'error': reason.wireName});
+        final r = await (await repo()).report(status);
+        expect(r, isA<KitchenPosStatusRejected>());
+        expect((r as KitchenPosStatusRejected).reason, reason);
+      }
+      transport.enqueue({'ok': false, 'error': 'invalid_session'});
+      expect(
+        await (await repo()).report(status),
+        isA<KitchenPosStatusInvalidSession>(),
+      );
+      transport.enqueueThrow(
+        const SyncTransportException(SyncTransportErrorKind.transient),
+      );
+      expect(
+        await (await repo()).report(status),
+        isA<KitchenPosStatusTransientFailure>(),
+      );
+      transport.enqueueThrow(
+        const SyncTransportException(SyncTransportErrorKind.server),
+      );
+      expect(
+        await (await repo()).report(status),
+        isA<KitchenPosStatusServerFailure>(),
+      );
+      transport.enqueue('nope');
+      expect(
+        await (await repo()).report(status),
+        isA<KitchenPosStatusMalformedResponse>(),
+      );
+    });
+
+    test(
+      'missing credential -> invalidSession WITHOUT any network call',
+      () async {
+        final r = SupabaseKitchenPosStatusRepository(
+          transport: transport,
+          secretStore: InMemoryDeviceSessionSecretStore(),
+        );
+        expect(await r.report(status), isA<KitchenPosStatusInvalidSession>());
         expect(transport.calls, isEmpty);
       },
     );

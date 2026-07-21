@@ -46,6 +46,11 @@ insert into restaurants (id, organization_id, name) values
 insert into branches (id, organization_id, restaurant_id, name, kitchen_workflow_mode) values
   ('7e000000-0000-0000-0000-00000000a1b1', '7e000000-0000-0000-0000-0000000000a0', '7e000000-0000-0000-0000-0000000000a1', 'Branch KC1', 'printer_only')
   on conflict (id) do nothing;
+-- KITCHEN-MODE-001C3B1A: readiness now requires a stable, valid kitchen 80mm
+-- assignment; both devices report against this one.
+insert into printer_devices (id, organization_id, restaurant_id, branch_id, display_name, connection_type, role, paper_width, is_enabled) values
+  ('7e000000-0000-0000-0000-00000000ba11', '7e000000-0000-0000-0000-0000000000a0', '7e000000-0000-0000-0000-0000000000a1', '7e000000-0000-0000-0000-00000000a1b1', 'ZZ Kitchen 80', 'network', 'kitchen', '80mm', true)
+  on conflict (id) do nothing;
 insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
   ('7e000000-0000-0000-0000-00000000da11', '7e000000-0000-0000-0000-0000000000a0', '7e000000-0000-0000-0000-0000000000a1', '7e000000-0000-0000-0000-00000000a1b1', 'pos'),
   ('7e000000-0000-0000-0000-00000000da22', '7e000000-0000-0000-0000-0000000000a0', '7e000000-0000-0000-0000-0000000000a1', '7e000000-0000-0000-0000-00000000a1b1', 'pos')
@@ -169,14 +174,16 @@ create temp table t_s1 as
   select app.report_kitchen_printer_readiness(
     '7e000000-0000-0000-0000-00000000da11', 'tok-zz-c1-1',
     'kitchen_printer_only_v1', 'zz-build', 'kitchen_ticket',
-    'network', '80mm', repeat('7e', 16), true, 0, 1) as res;
+    'network', '80mm', repeat('7e', 16), true, 0, 1,
+    '7e000000-0000-0000-0000-00000000ba11') as res;
 select ok((select (res ->> 'ok')::boolean and (res ->> 'activation_ready')::boolean from t_s1),
   'setup: device 1 files an activation-capable readiness report');
 create temp table t_s2 as
   select app.report_kitchen_printer_readiness(
     '7e000000-0000-0000-0000-00000000da22', 'tok-zz-c1-2',
     'kitchen_printer_only_v1', 'zz-build', 'kitchen_ticket',
-    'network', '80mm', repeat('7e', 16), true, 0, 1) as res;
+    'network', '80mm', repeat('7e', 16), true, 0, 1,
+    '7e000000-0000-0000-0000-00000000ba11') as res;
 select ok((select (res ->> 'ok')::boolean and (res ->> 'activation_ready')::boolean from t_s2),
   'setup: device 2 files an activation-capable readiness report');
 
@@ -270,6 +277,7 @@ delete from devices              where organization_id = '7e000000-0000-0000-000
 delete from employee_profiles    where organization_id = '7e000000-0000-0000-0000-0000000000a0';
 delete from memberships          where organization_id = '7e000000-0000-0000-0000-0000000000a0';
 delete from app_users            where id::text like '7e000000%';
+delete from printer_devices      where organization_id = '7e000000-0000-0000-0000-0000000000a0';
 delete from branches             where organization_id = '7e000000-0000-0000-0000-0000000000a0';
 delete from restaurants          where organization_id = '7e000000-0000-0000-0000-0000000000a0';
 delete from organizations        where id = '7e000000-0000-0000-0000-0000000000a0';

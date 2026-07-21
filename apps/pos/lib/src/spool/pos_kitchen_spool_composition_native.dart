@@ -13,6 +13,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
         SupabaseDevicePrinterAssignmentsRepository,
         SupabaseKitchenDispatchAckRepository,
         SupabaseKitchenDispatchPullRepository,
+        SupabaseKitchenPosStatusRepository,
         SupabaseKitchenReadinessRepository,
         runtimeConfigProvider;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
@@ -211,6 +212,10 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     transport: transport,
     secretStore: secretStore,
   );
+  final statusRepository = SupabaseKitchenPosStatusRepository(
+    transport: transport,
+    secretStore: secretStore,
+  );
   final modeCache = PosSecureKitchenModeCache(platform: platform);
   final probe = KitchenSpoolReadinessProbe(
     platform: platform,
@@ -256,6 +261,7 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     },
     probeSpool: ({required deviceId, required branchId}) =>
         probe.probe(deviceId: deviceId, branchId: branchId),
+    sendStatus: statusRepository.report,
     sendReport: readinessRepository.report,
     invalidateModeCache: modeCache.invalidate,
   );

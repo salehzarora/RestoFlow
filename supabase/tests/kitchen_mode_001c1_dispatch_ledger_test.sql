@@ -45,6 +45,11 @@ insert into branches (id, organization_id, restaurant_id, name) values
 -- privileged fixture flips (the ONLY write path; no setter exists).
 update branches set kitchen_workflow_mode = 'printer_only'
   where id in ('00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c1000b1a');
+-- KITCHEN-MODE-001C3B1A: readiness now requires a stable valid kitchen 80mm
+-- assignment; the activation-ready/pull fixtures below pin these.
+insert into printer_devices (id, organization_id, restaurant_id, branch_id, display_name, connection_type, role, paper_width, is_enabled) values
+  ('00000000-0000-0000-0000-0001c1000ba2', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', 'C1 Kitchen 80 A', 'network', 'kitchen', '80mm', true),
+  ('00000000-0000-0000-0000-0001c1000bb1', '00000000-0000-0000-0000-0001c1000b00', '00000000-0000-0000-0000-0001c1000b10', '00000000-0000-0000-0000-0001c1000b1a', 'C1 Kitchen 80 B', 'network', 'kitchen', '80mm', true);
 
 insert into app_users (id, email) values
   ('00000000-0000-0000-0000-0001c1000e01', 'kmc1-owner@example.test'),
@@ -387,7 +392,8 @@ create temp table t_rr1 as
   select app.report_kitchen_printer_readiness(
     '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
     'kitchen_printer_only_v1', 'build-2026-07-20', 'kitchen_ticket',
-    'network', '80mm', repeat('ab', 16), true, 0, 1) as res;
+    'network', '80mm', repeat('ab', 16), true, 0, 1,
+    '00000000-0000-0000-0000-0001c1000ba2') as res;
 select ok(
   (select (res ->> 'ok')::boolean and (res ->> 'activation_ready')::boolean
       and res ->> 'meaning' = 'transport_accepted_not_paper_confirmed' from t_rr1),
@@ -433,7 +439,8 @@ select ok(
 select app.report_kitchen_printer_readiness(
   '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
   'kitchen_printer_only_v1', 'build-2026-07-20', 'kitchen_ticket',
-  'network', '80mm', repeat('ab', 16), true, 0, 1);
+  'network', '80mm', repeat('ab', 16), true, 0, 1,
+  '00000000-0000-0000-0000-0001c1000ba2');
 select is(
   (select res ->> 'error' from (select app.report_kitchen_printer_readiness(
     '00000000-0000-0000-0000-0001c100d001', 'tok-c1-posp',
@@ -497,7 +504,8 @@ select ok(
 select app.report_kitchen_printer_readiness(
   '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2',
   'kitchen_printer_only_v1', 'build-2', 'kitchen_ticket',
-  'network', '80mm', repeat('cd', 16), true, 0, 1);
+  'network', '80mm', repeat('cd', 16), true, 0, 1,
+  '00000000-0000-0000-0000-0001c1000ba2');
 create temp table t_p3 as
   select app.pull_kitchen_print_dispatches(
     '00000000-0000-0000-0000-0001c100d005', 'tok-c1-posp2', 20, null, null) as res;
@@ -520,7 +528,8 @@ select ok(
 select app.report_kitchen_printer_readiness(
   '00000000-0000-0000-0000-0001c100d00b', 'tok-c1-posb',
   'kitchen_printer_only_v1', 'build-b', 'kitchen_ticket',
-  'network', '80mm', repeat('ef', 16), true, 0, 1);
+  'network', '80mm', repeat('ef', 16), true, 0, 1,
+  '00000000-0000-0000-0000-0001c1000bb1');
 create temp table t_p5 as
   select app.pull_kitchen_print_dispatches(
     '00000000-0000-0000-0000-0001c100d00b', 'tok-c1-posb', 20, null, null) as res;
@@ -1228,6 +1237,9 @@ insert into branches (id, organization_id, restaurant_id, name) values
   ('00000000-0000-0000-0000-0001c1000a3c', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', 'Branch Q (printer-only)');
 update branches set kitchen_workflow_mode = 'printer_only'
   where id = '00000000-0000-0000-0000-0001c1000a3c';
+-- KITCHEN-MODE-001C3B1A: branch Q's kitchen 80mm assignment for the P5 tests.
+insert into printer_devices (id, organization_id, restaurant_id, branch_id, display_name, connection_type, role, paper_width, is_enabled) values
+  ('00000000-0000-0000-0000-0001c1000bc3', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a3c', 'C1 Kitchen 80 Q', 'network', 'kitchen', '80mm', true);
 insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
   ('00000000-0000-0000-0000-0001c100d006', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a3c', 'pos');
 insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
@@ -1237,7 +1249,8 @@ insert into device_sessions (id, organization_id, restaurant_id, branch_id, devi
 select app.report_kitchen_printer_readiness(
   '00000000-0000-0000-0000-0001c100d006', 'tok-c1-posq',
   'kitchen_printer_only_v1', 'build-q', 'kitchen_ticket',
-  'network', '80mm', repeat('ee', 16), true, 0, 1);
+  'network', '80mm', repeat('ee', 16), true, 0, 1,
+  '00000000-0000-0000-0000-0001c1000bc3');
 set local role authenticated;
 set local app.current_app_user_id = '00000000-0000-0000-0000-0001c1000e01';
 create temp table t_p5a as
@@ -1268,7 +1281,8 @@ select is(
 select app.report_kitchen_printer_readiness(
   '00000000-0000-0000-0000-0001c100d006', 'tok-c1-posq',
   'kitchen_printer_only_v1', 'build-q2', 'kitchen_ticket',
-  'network', '80mm', repeat('ee', 16), true, 0, 2);
+  'network', '80mm', repeat('ee', 16), true, 0, 2,
+  '00000000-0000-0000-0000-0001c1000bc3');
 select ok(
   (select (res ->> 'ok')::boolean and jsonb_array_length(res -> 'dispatches') = 0
    from (select app.pull_kitchen_print_dispatches(
@@ -1578,7 +1592,8 @@ insert into device_sessions (id, organization_id, restaurant_id, branch_id, devi
 select app.report_kitchen_printer_readiness(
   '00000000-0000-0000-0000-0001c100d008', 'tok-c1-x8',
   'kitchen_printer_only_v1', 'build-x8', 'kitchen_ticket',
-  'network', '80mm', repeat('88', 16), true, 0, 1);
+  'network', '80mm', repeat('88', 16), true, 0, 1,
+  '00000000-0000-0000-0000-0001c1000ba2');
 insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, local_operation_id, revision) values
   ('00000000-0000-0000-0000-0001c1000d32', '00000000-0000-0000-0000-0001c1000a00', '00000000-0000-0000-0000-0001c1000a10', '00000000-0000-0000-0000-0001c1000a2b', '00000000-0000-0000-0000-0001c100d008', '00000000-0000-0000-0000-0001c10c5001', '00000000-0000-0000-0000-0001c10ef002', '00000000-0000-0000-0000-0001c1000f02', 'takeaway', 'submitted', 'ILS', 100, 0, 0, 100, 'c1-d32', 1);
 insert into kitchen_print_dispatches (id, organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key) values
