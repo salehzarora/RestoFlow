@@ -50,6 +50,16 @@ const _readyEvidence = ReadyKitchenPrinterEvidence(
       'aaaabbbbccccddddeeeeffff00001111aaaabbbbccccddddeeeeffff00001111',
 );
 
+/// F1: a truthful 58mm diagnostic — Ready (not Blocked), so readiness is still
+/// sent, but with a NULL assignment id and a non-qualifying width.
+const _diag58Evidence = ReadyKitchenPrinterEvidence(
+  printerAssignmentId: null,
+  transportKind: KitchenReadinessTransportKind.network,
+  paperWidth: KitchenReadinessPaperWidth.mm58,
+  printerFingerprint:
+      'ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000',
+);
+
 const _spoolResult = KitchenSpoolReadinessProbeResult(
   secureSpoolAvailable: true,
   unresolvedLocalJobs: 2,
@@ -174,6 +184,33 @@ void main() {
         hb.dispose();
       },
     );
+
+    test('F1: a 58mm-only printer still files STATUS first and a DIAGNOSTIC '
+        'readiness (paper_width=58mm, assignment id=null, not '
+        'activation-ready) — no worker/drain/transport reached', () async {
+      evidence = _diag58Evidence;
+      // The server records the diagnostic report and returns not-ready.
+      sendScript.add(
+        () => const KitchenReadinessAccepted(activationReady: false),
+      );
+      final hb = heartbeat();
+      final report = await hb.reportNow(trigger: 't');
+      expect(report.statusReported, isTrue);
+      expect(report.outcome, KitchenReadinessRunOutcome.reported);
+      expect(report.activationReady, isFalse, reason: '58mm never activates');
+      // Status is filed BEFORE the readiness, from the same snapshot.
+      expect(statusSent, hasLength(1));
+      // The readiness IS sent (diagnostic), carrying the honest 58mm width and
+      // a NULL assignment id.
+      expect(sent, hasLength(1));
+      expect(sent.single.paperWidth, KitchenReadinessPaperWidth.mm58);
+      expect(sent.single.printerAssignmentId, isNull);
+      expect(
+        sent.single.printerFingerprint,
+        _diag58Evidence.printerFingerprint,
+      );
+      hb.dispose();
+    });
 
     test('status is sent BEFORE readiness (deterministic order)', () async {
       final order = <String>[];

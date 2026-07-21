@@ -147,13 +147,31 @@ void main() {
     expect(evidence.printerFingerprint, _fp('bluetooth|dc:0d:30:aa:bb:cc'));
   });
 
-  test('a 58mm assignment reports HONESTLY as 58mm (non-qualifying — the '
-      'server names paper_width_80mm_required; never blocked locally)', () {
-    final evidence =
-        build(assignments: _assignments([_printer(paperWidth: '58mm')]))
-            as ReadyKitchenPrinterEvidence;
-    expect(evidence.paperWidth, KitchenReadinessPaperWidth.mm58);
-  });
+  test(
+    'F1: a 58mm-only assignment reports HONESTLY as 58mm with a NULL '
+    'assignment id, but keeps its transport + fingerprint — so it is stored '
+    'as a diagnostic report (never blocked locally, never activation-ready)',
+    () {
+      final evidence =
+          build(
+                network: const NetworkPrinterConfig(
+                  host: '10.0.0.7',
+                  port: 9100,
+                ),
+                assignments: _assignments([
+                  _printer(id: 'pr-58', paperWidth: '58mm'),
+                ]),
+              )
+              as ReadyKitchenPrinterEvidence;
+      expect(evidence.paperWidth, KitchenReadinessPaperWidth.mm58);
+      // F1: a non-80mm assignment can never be a qualifying pinned identity, so
+      // the id is NULL — the truthful evidence still carries transport + a
+      // fingerprint from that assignment's endpoint.
+      expect(evidence.printerAssignmentId, isNull);
+      expect(evidence.transportKind, KitchenReadinessTransportKind.network);
+      expect(evidence.printerFingerprint, _fp('network|10.0.0.7|9100'));
+    },
+  );
 
   test('an 80mm assignment is PREFERRED when both widths exist', () {
     final evidence =
@@ -183,10 +201,11 @@ void main() {
       _printer(id: 'pr-a'),
       _printer(id: 'pr-b'),
     ];
-    String pick(List<AssignedPrinter> order) =>
+    String? pick(List<AssignedPrinter> order) =>
         (build(assignments: _assignments(order)) as ReadyKitchenPrinterEvidence)
             .printerAssignmentId;
-    // Every permutation of the same three 80mm printers selects 'pr-a'.
+    // Every permutation of the same three 80mm printers selects 'pr-a' — and
+    // pins its stable id (80mm, so eligible to be a qualifying identity).
     expect(pick(printers), 'pr-a');
     expect(pick(printers.reversed.toList()), 'pr-a');
     expect(pick([printers[1], printers[2], printers[0]]), 'pr-a');

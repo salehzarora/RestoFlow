@@ -22,7 +22,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(63);
+select plan(68);
 
 -- ===== fixture ===============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -245,6 +245,42 @@ select is(
         '00000000-0000-0000-0000-0003b1a00a00', '00000000-0000-0000-0000-0003b1a00a10',
         '00000000-0000-0000-0000-0003b1a00a2b') -> 'readiness_report' ->> 'qualifying'),
   'false', 'transition: a NULL-assignment report is reported NON-qualifying');                                   -- 30
+
+-- F1: a 58mm client files paper_width=58mm + printer_assignment_id=NULL (the
+-- corrected POS behavior). The RPC ACCEPTS it as a stored diagnostic report
+-- (a NULL assignment is legal), it is never activation-ready, and the
+-- transition diagnostic names the PRECISE paper_width_80mm_required blocker
+-- rather than degrading to a generic no_fresh_pos_readiness.
+create temp table t_c3b1a_58 as
+  select public.report_kitchen_printer_readiness(
+    '00000000-0000-0000-0000-0003b1a0d001', 'tok-c3b1a-posp',
+    'kitchen_printer_only_v1', 'b58', 'kitchen_ticket', 'network', '58mm',
+    'abcdef0123456789abcdef0123456789', true, 0, 1, null) as res;
+select is((select res ->> 'ok' from t_c3b1a_58), 'true',
+  'F1: a 58mm + NULL-assignment report is ACCEPTED (stored diagnostic)');                                         -- 30a
+select is((select res ->> 'activation_ready' from t_c3b1a_58), 'false',
+  'F1: the 58mm diagnostic report is never activation_ready');                                                    -- 30b
+select is(
+  (select paper_width from kitchen_printer_readiness_reports
+    where device_id = '00000000-0000-0000-0000-0003b1a0d001'),
+  '58mm', 'F1: the stored report keeps its truthful 58mm width');                                                 -- 30c
+select is(
+  (select printer_assignment_id from kitchen_printer_readiness_reports
+    where device_id = '00000000-0000-0000-0000-0003b1a0d001'),
+  null, 'F1: the stored 58mm report keeps a NULL assignment id');                                                 -- 30d
+select ok(
+  (public.get_kitchen_workflow_transition_readiness(
+        '00000000-0000-0000-0000-0003b1a00a00', '00000000-0000-0000-0000-0003b1a00a10',
+        '00000000-0000-0000-0000-0003b1a00a2b') -> 'to_printer_only' -> 'blockers' ? 'paper_width_80mm_required'),
+  'F1: the transition names the PRECISE paper_width_80mm_required (not a '
+  'generic no_fresh_pos_readiness)');                                                                             -- 30e
+-- Restore d001 to the 80mm + NULL-assignment state the section began with, so
+-- the pull-gate tests below are unaffected by this inserted F1 scenario
+-- (readiness_required for NULL, then a valid-assignment update -> pass).
+select public.report_kitchen_printer_readiness(
+  '00000000-0000-0000-0000-0003b1a0d001', 'tok-c3b1a-posp',
+  'kitchen_printer_only_v1', 'b1', 'kitchen_ticket', 'network', '80mm',
+  'abcdef0123456789abcdef0123456789', true, 0, 1, null);
 -- pull claim gate: a NULL-assignment report cannot unlock the claim.
 select is(
   (public.pull_kitchen_print_dispatches('00000000-0000-0000-0000-0003b1a0d001', 'tok-c3b1a-posp', 5) ->> 'error'),
