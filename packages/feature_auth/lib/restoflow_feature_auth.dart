@@ -29,6 +29,7 @@ export 'src/kitchen_dispatch_ack_repository.dart';
 export 'src/kitchen_dispatch_inspection_repository.dart';
 export 'src/kitchen_dispatch_pull_repository.dart';
 export 'src/kitchen_mode_repository.dart';
+export 'src/kitchen_pos_status_repository.dart';
 export 'src/kitchen_readiness_repository.dart';
 export 'src/supabase_device_shift_close_policy_repository.dart';
 // RF-117: the token-proven per-branch tax-setting read (BranchTax over the

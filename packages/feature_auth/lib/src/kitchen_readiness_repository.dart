@@ -42,6 +42,7 @@ final class KitchenReadinessReport {
     required this.secureSpoolAvailable,
     required this.unresolvedLocalJobs,
     required this.modeRevision,
+    this.printerAssignmentId,
   });
 
   /// Short build identifier (server CHECK: 1..64 chars). Never an endpoint.
@@ -62,6 +63,12 @@ final class KitchenReadinessReport {
   /// The SERVER-authoritative branch mode revision (from the trusted mode
   /// snapshot — never fabricated locally).
   final int modeRevision;
+
+  /// KITCHEN-MODE-001C3B1A: the STABLE server printer-assignment identity
+  /// (`AssignedPrinter.id`) this report describes — the exact `printer_devices`
+  /// row, never list position. Null means no stable assignment was selected;
+  /// the server stores it but the report can never qualify for activation.
+  final String? printerAssignmentId;
 }
 
 sealed class KitchenReadinessResult {
@@ -96,7 +103,10 @@ enum KitchenReadinessRejectionReason {
   invalidAppBuild('invalid_app_build'),
   invalidFingerprint('invalid_fingerprint'),
   invalidSpoolState('invalid_spool_state'),
-  invalidUnresolvedCount('invalid_unresolved_count');
+  invalidUnresolvedCount('invalid_unresolved_count'),
+  // KITCHEN-MODE-001C3B1A: the pinned assignment does not belong to this
+  // scope or is no longer a live/enabled/kitchen-capable/80mm/matching printer.
+  invalidPrinterAssignment('invalid_printer_assignment');
 
   const KitchenReadinessRejectionReason(this.wireName);
 
@@ -154,6 +164,10 @@ class SupabaseKitchenReadinessRepository {
 
     final Object? raw;
     try {
+      // KITCHEN-MODE-001C3B1A: the assignment-aware 12-arg signature. The
+      // named-argument set (with p_printer_assignment_id) resolves
+      // deterministically to the 12-arg overload; a null id is a legal value
+      // the server stores as a non-qualifying report.
       raw = await _transport.invoke('report_kitchen_printer_readiness', {
         'p_device_id': cred.deviceId,
         'p_session_token': cred.sessionToken,
@@ -166,6 +180,7 @@ class SupabaseKitchenReadinessRepository {
         'p_secure_spool_available': evidence.secureSpoolAvailable,
         'p_unresolved_local_jobs': evidence.unresolvedLocalJobs,
         'p_mode_revision': evidence.modeRevision,
+        'p_printer_assignment_id': evidence.printerAssignmentId,
       });
     } on SyncTransportException catch (e) {
       return switch (e.kind) {
