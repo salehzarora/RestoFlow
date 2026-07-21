@@ -19,7 +19,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(44);
+select plan(54);
 
 -- ===== fixture ===============================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -353,6 +353,109 @@ select ok(
   (select kitchen_workflow_mode = 'kds' and kitchen_workflow_mode_revision = 1
      from branches where id = '00000000-0000-0000-0000-0001c3a00a1a'),
   'dormancy: untouched branches remain kds at revision 1');                                                      -- 44
+
+-- ===== E. SAME-TIMESTAMP keyset pagination (review finding F1) ===============
+-- Every fixture above has a DISTINCT created_at, so the (created_at, id)
+-- tie-breaker is never directly exercised. This section adds an ISOLATED
+-- branch (org A, read by the org-owner — no existing count/order assertion is
+-- disturbed) carrying THREE dispatches with an IDENTICAL created_at, then
+-- walks them limit=1 passing BOTH cursor fields. IDs are chosen so the
+-- expected id-DESC order is explicit: cc03 > cc02 > cc01.
+insert into branches (id, organization_id, restaurant_id, name) values
+  ('00000000-0000-0000-0000-0001c3a00a3c', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', 'Branch PG (pagination)');
+insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
+  ('00000000-0000-0000-0000-0001c3a0d00c', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', '00000000-0000-0000-0000-0001c3a00a3c', 'pos');
+insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
+  ('00000000-0000-0000-0000-0001c3a0c00c', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', '00000000-0000-0000-0000-0001c3a00a3c', '00000000-0000-0000-0000-0001c3a0d00c', 'active');
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id, session_token_ref, is_active, revoked_at) values
+  ('00000000-0000-0000-0000-0001c3a0e00c', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', '00000000-0000-0000-0000-0001c3a00a3c', '00000000-0000-0000-0000-0001c3a0d00c', '00000000-0000-0000-0000-0001c3a0c00c', app.hash_provisioning_secret('tok-c3a-pospg'), true, null);
+-- employee ef04 + membership f04 are ORG-scoped FK targets (reused).
+insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
+  ('00000000-0000-0000-0000-0001c3a0c50c', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', '00000000-0000-0000-0000-0001c3a00a3c', '00000000-0000-0000-0000-0001c3a0e00c', '00000000-0000-0000-0000-0001c3a0ef04', '00000000-0000-0000-0000-0001c3a00f04', now() + interval '1 hour');
+insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, discount_total_minor, tax_total_minor, grand_total_minor, local_operation_id, revision) values
+  ('00000000-0000-0000-0000-0001c3a00d0c', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', '00000000-0000-0000-0000-0001c3a00a3c', '00000000-0000-0000-0000-0001c3a0d00c', '00000000-0000-0000-0000-0001c3a0c50c', '00000000-0000-0000-0000-0001c3a0ef04', '00000000-0000-0000-0000-0001c3a00f04', 'takeaway', 'submitted', 'ILS', 300, 0, 0, 300, 'c3a-opg', 1);
+-- THREE unresolved dispatches with the SAME created_at; distinct ids cc01..cc03.
+insert into kitchen_print_dispatches (id, organization_id, restaurant_id, branch_id, order_id, dispatch_type, money_free_payload, idempotency_key, created_at) values
+  ('00000000-0000-0000-0000-0001c3a0cc01', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', '00000000-0000-0000-0000-0001c3a00a3c', '00000000-0000-0000-0000-0001c3a00d0c', 'initial_order', '{"v": 1, "kind": "initial_order", "items": [{"qty": 1, "name": "SecretFixtureDish"}]}'::jsonb, 'c3a:pg1', timestamptz '2026-07-20 12:00:00+00'),
+  ('00000000-0000-0000-0000-0001c3a0cc02', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', '00000000-0000-0000-0000-0001c3a00a3c', '00000000-0000-0000-0000-0001c3a00d0c', 'initial_order', '{"v": 1, "kind": "initial_order", "items": [{"qty": 1, "name": "SecretFixtureDish"}]}'::jsonb, 'c3a:pg2', timestamptz '2026-07-20 12:00:00+00'),
+  ('00000000-0000-0000-0000-0001c3a0cc03', '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10', '00000000-0000-0000-0000-0001c3a00a3c', '00000000-0000-0000-0000-0001c3a00d0c', 'initial_order', '{"v": 1, "kind": "initial_order", "items": [{"qty": 1, "name": "SecretFixtureDish"}]}'::jsonb, 'c3a:pg3', timestamptz '2026-07-20 12:00:00+00');
+
+set local app.current_app_user_id = '00000000-0000-0000-0000-0001c3a00e01';
+select is(
+  (select count(distinct created_at)::int from kitchen_print_dispatches
+    where branch_id = '00000000-0000-0000-0000-0001c3a00a3c'),
+  1, 'pagination: the three fixtures share ONE identical created_at');                                            -- 45
+
+-- Walk the three EQUAL-timestamp rows limit=1, feeding BOTH cursor fields.
+create temp table t_c3a_ts1 as
+  select public.list_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10',
+    '00000000-0000-0000-0000-0001c3a00a3c', 'unresolved', 1) as r;
+select ok(
+  (select (r -> 'dispatches' -> 0 ->> 'dispatch_id') = '00000000-0000-0000-0000-0001c3a0cc03'
+      and (r ->> 'has_more')::boolean from t_c3a_ts1),
+  'pagination: page 1 = the HIGHEST id among equal timestamps (cc03), has_more true');                            -- 46
+select ok(
+  (select (r -> 'next_cursor' ->> 'created_at')::timestamptz = timestamptz '2026-07-20 12:00:00+00'
+      and (r -> 'next_cursor' ->> 'id') = '00000000-0000-0000-0000-0001c3a0cc03' from t_c3a_ts1),
+  'pagination: the cursor advances using BOTH created_at AND id');                                                -- 47
+
+create temp table t_c3a_ts2 as
+  select public.list_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10',
+    '00000000-0000-0000-0000-0001c3a00a3c', 'unresolved', 1,
+    (select ((r -> 'next_cursor' ->> 'created_at')::timestamptz) from t_c3a_ts1),
+    (select ((r -> 'next_cursor' ->> 'id')::uuid) from t_c3a_ts1)) as r;
+select ok(
+  (select (r -> 'dispatches' -> 0 ->> 'dispatch_id') = '00000000-0000-0000-0000-0001c3a0cc02'
+      and (r ->> 'has_more')::boolean from t_c3a_ts2),
+  'pagination: page 2 = cc02 (the id tie-break EXCLUDES cc03; no dup, no empty page)');                           -- 48
+
+create temp table t_c3a_ts3 as
+  select public.list_kitchen_print_dispatches(
+    '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10',
+    '00000000-0000-0000-0000-0001c3a00a3c', 'unresolved', 1,
+    (select ((r -> 'next_cursor' ->> 'created_at')::timestamptz) from t_c3a_ts2),
+    (select ((r -> 'next_cursor' ->> 'id')::uuid) from t_c3a_ts2)) as r;
+select ok(
+  (select (r -> 'dispatches' -> 0 ->> 'dispatch_id') = '00000000-0000-0000-0000-0001c3a0cc01'
+      and not (r ->> 'has_more')::boolean
+      and (r -> 'next_cursor') = 'null'::jsonb from t_c3a_ts3),
+  'pagination: page 3 = cc01, FINAL page has_more false + null cursor');                                          -- 49
+select is(
+  array[
+    (select r -> 'dispatches' -> 0 ->> 'dispatch_id' from t_c3a_ts1),
+    (select r -> 'dispatches' -> 0 ->> 'dispatch_id' from t_c3a_ts2),
+    (select r -> 'dispatches' -> 0 ->> 'dispatch_id' from t_c3a_ts3)
+  ],
+  array['00000000-0000-0000-0000-0001c3a0cc03',
+        '00000000-0000-0000-0000-0001c3a0cc02',
+        '00000000-0000-0000-0000-0001c3a0cc01'],
+  'pagination: every equal-timestamp row returned EXACTLY once, id DESC, no skip/dup');                           -- 50
+select is(
+  (select array_agg(e ->> 'dispatch_id') from (
+     select jsonb_array_elements(
+       public.list_kitchen_print_dispatches(
+         '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10',
+         '00000000-0000-0000-0000-0001c3a00a3c', 'all', 5) -> 'dispatches') as e) s),
+  array['00000000-0000-0000-0000-0001c3a0cc03',
+        '00000000-0000-0000-0000-0001c3a0cc02',
+        '00000000-0000-0000-0000-0001c3a0cc01'],
+  'pagination: status filtering stays consistent under the SAME tie-break order');                               -- 51
+select is(
+  (select array_agg(k order by k) from jsonb_object_keys((select r -> 'dispatches' -> 0 from t_c3a_ts1)) as k),
+  array['claimed','completed_at','created_at','dispatch_id','dispatch_type','last_client_status',
+        'last_error_code','order_id','possibly_printed','superseded'],
+  'pagination: an equal-timestamp row still exposes EXACTLY the 10 safe scalars');                                -- 52
+select ok(
+  (select r::text not like '%SecretFixtureDish%' and r::text not like '%c3a:pg%' from t_c3a_ts1),
+  'pagination: payload content + idempotency keys never leak on the paginated rows');                            -- 53
+set local app.current_app_user_id = '00000000-0000-0000-0000-0001c3a00e03';
+select is(
+  (select public.list_kitchen_print_dispatches(
+     '00000000-0000-0000-0000-0001c3a00a00', '00000000-0000-0000-0000-0001c3a00a10',
+     '00000000-0000-0000-0000-0001c3a00a3c') ->> 'error'),
+  'not_found', 'pagination: a CROSS-TENANT owner still gets not_found on the pagination branch');                 -- 54
 
 select * from finish();
 rollback;
