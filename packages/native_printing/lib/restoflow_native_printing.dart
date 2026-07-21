@@ -11,6 +11,7 @@
 library;
 
 export 'src/bluetooth_printer.dart';
+export 'src/kitchen_bluetooth_send.dart';
 export 'src/native_print_target.dart';
 export 'src/native_printer_settings.dart';
 export 'src/native_printer_store.dart';

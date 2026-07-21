@@ -64,6 +64,9 @@ export 'src/spool/print_spool.dart';
 export 'src/spool/print_spool_store.dart';
 export 'src/spool/reprint_audit_sink.dart';
 export 'src/transport/in_memory_print_transport.dart';
+export 'src/transport/kitchen_network_sender.dart';
+export 'src/transport/kitchen_transport_outcome.dart';
+export 'src/transport/printer_destination_send_gate.dart';
 // ANDROID-002: the real on-device network (Wi-Fi/Ethernet) RAW ESC/POS TCP
 // transport (port 9100). Web-safe — direct sockets link only on native.
 export 'src/transport/network_tcp_print_transport.dart';
