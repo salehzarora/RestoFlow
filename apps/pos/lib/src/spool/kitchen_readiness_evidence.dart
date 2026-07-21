@@ -23,10 +23,16 @@ sealed class KitchenReadinessPrinterEvidence {
 final class ReadyKitchenPrinterEvidence
     extends KitchenReadinessPrinterEvidence {
   const ReadyKitchenPrinterEvidence({
+    required this.printerAssignmentId,
     required this.transportKind,
     required this.paperWidth,
     required this.printerFingerprint,
   });
+
+  /// KITCHEN-MODE-001C3B1A: the STABLE server assignment identity
+  /// (`AssignedPrinter.id`) of the deterministically selected printer — the
+  /// transport, width and fingerprint below all come from THIS assignment.
+  final String printerAssignmentId;
 
   final KitchenReadinessTransportKind transportKind;
   final KitchenReadinessPaperWidth paperWidth;
@@ -76,12 +82,17 @@ KitchenReadinessPrinterEvidence buildKitchenReadinessPrinterEvidence({
   if (matchingTransport.isEmpty) {
     return const BlockedKitchenPrinterEvidence('kitchen_transport_mismatch');
   }
-  // ONE selected assignment: prefer an 80mm row (the qualifying width),
-  // mirroring the resolver's selection, then report the actual width.
-  final assignment = matchingTransport.firstWhere(
-    (printer) => printer.paperWidth == '80mm',
-    orElse: () => matchingTransport.first,
-  );
+  // KITCHEN-MODE-001C3B1A: DETERMINISTIC selection — 80mm assignments first,
+  // then the stable assignment id as the tie-breaker, so shuffling the same
+  // collection always selects the SAME printer (never list arrival order).
+  final ordered = [...matchingTransport]
+    ..sort((a, b) {
+      final aw = a.paperWidth == '80mm' ? 0 : 1;
+      final bw = b.paperWidth == '80mm' ? 0 : 1;
+      if (aw != bw) return aw.compareTo(bw);
+      return a.id.compareTo(b.id);
+    });
+  final assignment = ordered.first;
   final KitchenReadinessPaperWidth paperWidth;
   switch (assignment.paperWidth) {
     case '80mm':
@@ -104,6 +115,7 @@ KitchenReadinessPrinterEvidence buildKitchenReadinessPrinterEvidence({
       }
       final host = config.host.trim().toLowerCase();
       return ReadyKitchenPrinterEvidence(
+        printerAssignmentId: assignment.id,
         transportKind: KitchenReadinessTransportKind.network,
         paperWidth: paperWidth,
         printerFingerprint: kitchenDestinationFingerprint(
@@ -119,6 +131,7 @@ KitchenReadinessPrinterEvidence buildKitchenReadinessPrinterEvidence({
       }
       final address = config.address.trim().toLowerCase();
       return ReadyKitchenPrinterEvidence(
+        printerAssignmentId: assignment.id,
         transportKind: KitchenReadinessTransportKind.bluetooth,
         paperWidth: paperWidth,
         printerFingerprint: kitchenDestinationFingerprint('bluetooth|$address'),
