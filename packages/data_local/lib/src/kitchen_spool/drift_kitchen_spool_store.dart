@@ -126,6 +126,19 @@ abstract interface class KitchenSpoolStore {
     required DateTime now,
   });
 
+  /// KITCHEN-MODE-001C2C PASS 2 — the NARROW post-boundary blocked
+  /// transition: `printing` → `blockedConfiguration`, permitted ONLY when
+  /// the transport outcome PROVED zero bytes were dispatched (a permanent
+  /// incapability like an unbonded Bluetooth target discovered by the
+  /// native pre-write checks). Never for ambiguous/lost/partial outcomes —
+  /// those are possiblyPrinted. Writes the pending `blocked_configuration`
+  /// acknowledgement atomically.
+  Future<bool> markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+    String localJobId, {
+    required String errorCode,
+    required DateTime now,
+  });
+
   /// Startup crash recovery: every STALE `printing` row in scope becomes
   /// `possiblyPrinted` WITH its pending `possibly_printed` acknowledgement
   /// in the same UPDATE. Idempotent; `transportAccepted` rows are never
@@ -594,6 +607,31 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
     return _transition(
       localJobId,
       from: const {KitchenSpoolJobStatus.queued},
+      write: KitchenSpoolJobsCompanion(
+        status: const Value(KitchenSpoolJobStatus.blockedConfiguration),
+        lastErrorCode: Value(errorCode),
+        nextAttemptAt: const Value(null),
+        pendingServerAckStatus: const Value(
+          KitchenServerAckStatus.blockedConfiguration,
+        ),
+        serverAckNextAttemptAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  @override
+  Future<bool> markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+    String localJobId, {
+    required String errorCode,
+    required DateTime now,
+  }) {
+    // From printing ONLY, and only for caller-proven zero-write permanent
+    // incapability. Deliberately separate from the queued-only variant so
+    // the general blocked transition never widens silently.
+    return _transition(
+      localJobId,
+      from: const {KitchenSpoolJobStatus.printing},
       write: KitchenSpoolJobsCompanion(
         status: const Value(KitchenSpoolJobStatus.blockedConfiguration),
         lastErrorCode: Value(errorCode),

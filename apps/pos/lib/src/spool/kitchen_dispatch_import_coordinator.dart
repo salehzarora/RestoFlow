@@ -332,8 +332,13 @@ final class KitchenDispatchImportCoordinator {
 
 enum KitchenAckFlushOutcome { acked, retryScheduled, terminal, skipped }
 
-/// Shared single-job acknowledgement flush (used by the import path and the
-/// pending-ack coordinator). 001C2B sends ONLY imported/blocked_configuration.
+/// Shared single-job acknowledgement flush (import path, the pending-ack
+/// coordinator, and the 001C2C worker).
+///
+/// The wire status is derived ONLY from the DURABLE pending marker — which
+/// every transition writes atomically with `row.status` — never invented
+/// from current settings. Each pending is consumed exactly once
+/// (markServerAcked / markServerAckTerminal clear it).
 Future<KitchenAckFlushOutcome> flushAck(
   KitchenSpoolStore store,
   SupabaseKitchenDispatchAckRepository ackRepository,
@@ -343,26 +348,33 @@ Future<KitchenAckFlushOutcome> flushAck(
   required Duration backoffCap,
 }) async {
   final pending = job.pendingServerAckStatus;
-  final KitchenImportAckStatus status;
-  switch (pending) {
-    case KitchenServerAckStatus.imported:
-      status = KitchenImportAckStatus.imported;
-    case KitchenServerAckStatus.blockedConfiguration:
-      status = KitchenImportAckStatus.blockedConfiguration;
-    case null:
-      return KitchenAckFlushOutcome.skipped;
-    default:
-      // Any other pending status belongs to the 001C2C worker phase; this
-      // coordinator must not touch it.
-      return KitchenAckFlushOutcome.skipped;
-  }
+  if (pending == null) return KitchenAckFlushOutcome.skipped;
+  final status = switch (pending) {
+    KitchenServerAckStatus.imported => KitchenImportAckStatus.imported,
+    KitchenServerAckStatus.transportAccepted =>
+      KitchenImportAckStatus.transportAccepted,
+    KitchenServerAckStatus.possiblyPrinted =>
+      KitchenImportAckStatus.possiblyPrinted,
+    KitchenServerAckStatus.failedRetryable =>
+      KitchenImportAckStatus.failedRetryable,
+    KitchenServerAckStatus.blockedConfiguration =>
+      KitchenImportAckStatus.blockedConfiguration,
+  };
+  // The server accepts an optional safe error code for the failure-class
+  // statuses; the durable row's bounded lastErrorCode is the only source.
+  final errorCode = switch (status) {
+    KitchenImportAckStatus.blockedConfiguration =>
+      job.lastErrorCode ?? 'kitchen_printer_not_configured',
+    KitchenImportAckStatus.failedRetryable ||
+    KitchenImportAckStatus.possiblyPrinted => job.lastErrorCode,
+    KitchenImportAckStatus.imported ||
+    KitchenImportAckStatus.transportAccepted => null,
+  };
 
   final result = await ackRepository.acknowledge(
     dispatchId: job.dispatchId,
     status: status,
-    errorCode: status == KitchenImportAckStatus.blockedConfiguration
-        ? (job.lastErrorCode ?? 'kitchen_printer_not_configured')
-        : null,
+    errorCode: errorCode,
   );
   switch (result) {
     case KitchenAckAccepted():

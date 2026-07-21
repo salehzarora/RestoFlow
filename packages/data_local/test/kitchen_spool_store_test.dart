@@ -518,6 +518,48 @@ void main() {
       );
     });
 
+    test('the NARROW confirmed-no-write blocked transition works from '
+        'printing ONLY and pairs its pending ack atomically', () async {
+      final row = await importAcked(await newJob('d-nw'));
+      // Not from imported.
+      expect(
+        await store.markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+          row.localJobId,
+          errorCode: 'not_bonded',
+          now: t1,
+        ),
+        isFalse,
+      );
+      expect(await claimQ(row.localJobId, t1), isNotNull);
+      // Not from queued (that is the general queued-only variant's job).
+      expect(
+        await store.markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+          row.localJobId,
+          errorCode: 'not_bonded',
+          now: t1,
+        ),
+        isFalse,
+      );
+      expect(await store.markPrinting(row.localJobId, t1), isTrue);
+      expect(
+        await store.markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+          row.localJobId,
+          errorCode: 'not_bonded',
+          now: t1,
+        ),
+        isTrue,
+      );
+      final blocked = (await store.getByLocalJobId(row.localJobId))!;
+      expect(blocked.status, KitchenSpoolJobStatus.blockedConfiguration);
+      expect(
+        blocked.pendingServerAckStatus,
+        KitchenServerAckStatus.blockedConfiguration,
+      );
+      expect(blocked.lastErrorCode, 'not_bonded');
+      expect(blocked.nextAttemptAt, isNull);
+      expect(blocked.encryptedPayloadBlob, isNotEmpty);
+    });
+
     test('a forced SQL CHECK failure proves NO half-transition (status and '
         'pending move together or not at all)', () async {
       final row = await importAcked(await newJob('d-atomic'));
