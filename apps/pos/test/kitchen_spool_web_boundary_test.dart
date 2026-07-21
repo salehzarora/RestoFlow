@@ -170,6 +170,16 @@ void main() {
     },
   );
 
+  test('001C3A: the WEB readiness-heartbeat branch returns null too — web '
+      'never reports kitchen readiness', () {
+    final probe = Provider<Object?>(
+      (ref) => web.buildPosKitchenReadinessHeartbeat(ref),
+    );
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    expect(container.read(probe), isNull);
+  });
+
   test('the NATIVE composition provider stays wired and inert in demo mode '
       '(VM links the io branch of the SAME conditional)', () {
     final container = ProviderContainer(
@@ -181,5 +191,18 @@ void main() {
     );
     addTearDown(container.dispose);
     expect(container.read(posKitchenSpoolRuntimeProvider), isNull);
+  });
+
+  test('001C3A: the NATIVE readiness-heartbeat provider is equally inert in '
+      'demo mode', () {
+    final container = ProviderContainer(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(
+          RuntimeConfig.test(isDemoMode: true),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    expect(container.read(posKitchenReadinessHeartbeatProvider), isNull);
   });
 }

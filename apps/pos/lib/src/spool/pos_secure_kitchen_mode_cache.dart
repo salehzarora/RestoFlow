@@ -149,6 +149,13 @@ final class PosSecureKitchenModeCache {
       if (record.mode != 'kds' && record.mode != 'printer_only') {
         throw const FormatException();
       }
+      // 001C3A: a stored revision must be a POSITIVE integer for EITHER mode
+      // (kds records now legitimately carry one for readiness reporting); a
+      // zero/negative value is corruption — invalidate, never clamp.
+      final revision = record.modeRevision;
+      if (revision != null && revision <= 0) {
+        throw const FormatException();
+      }
       final tupleMatches =
           record.organizationId == organizationId &&
           record.restaurantId == restaurantId &&

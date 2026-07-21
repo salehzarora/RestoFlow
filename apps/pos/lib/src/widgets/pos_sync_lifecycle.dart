@@ -48,6 +48,10 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
       // fire-and-forget: the runtime converts EVERY failure into a typed
       // redacted report, so no unhandled async error can escape this hook.
       unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onStartup());
+      // KITCHEN-MODE-001C3A: the READINESS-ONLY heartbeat (the one sanctioned
+      // spool-layer timer — it files kitchen readiness reports and can never
+      // reach the worker/drain/transport). Null on web/demo/unpaired.
+      ref.read(posKitchenReadinessHeartbeatProvider)?.onStartup();
     });
   }
 
@@ -67,6 +71,10 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     // an invisible surface is pure waste — and resumes with an immediate poll.
     if (state != AppLifecycleState.resumed) {
       ref.read(posReadyNotificationsControllerProvider.notifier).onPaused();
+      // KITCHEN-MODE-001C3A: the readiness heartbeat pauses with the surface
+      // too — a report against a backgrounded app is waste; the server row
+      // simply expires (read-side, ~10 minutes).
+      ref.read(posKitchenReadinessHeartbeatProvider)?.onPaused();
       return;
     }
     // RESUME. The coordinator collapses concurrent callers onto the ONE in-flight
@@ -77,6 +85,8 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     // KITCHEN-MODE-001C2B (D4): resume-time spool reconciliation (see the
     // startup hook above; same inert/no-op + typed-failure guarantees).
     unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onResume());
+    // KITCHEN-MODE-001C3A: re-arm the readiness heartbeat + report now.
+    ref.read(posKitchenReadinessHeartbeatProvider)?.onResume();
     // PILOT-OPERATIONS-CORRECTIONS-001: also refresh the MENU (and therefore
     // availability) on resume — a Dashboard availability change made while the POS
     // was backgrounded would otherwise stay invisible until the session changed.

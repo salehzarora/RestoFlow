@@ -1,19 +1,26 @@
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
-/// KITCHEN-MODE-001C2B — device-token client for
+/// KITCHEN-MODE-001C2B/001C3A — device-token client for
 /// `get_device_kitchen_workflow_mode`.
 ///
-/// LOCKED DECISION D1: the current server envelope carries NO mode revision
-/// (`{ok, entity, kitchen_workflow_mode, server_ts}` only), and printer-only
-/// importing must never run without a TRUSTED non-null revision. Therefore
-/// this production repository can yield [KitchenModeVerifiedKds] or
-/// [KitchenModeRevisionUnavailable] — it can NEVER fabricate
-/// [KitchenModePrinterOnlyWithRevision] (no fake revision, no default `1`).
-/// The additive getter-envelope extension belongs to 001C3; until then,
-/// production dispatch importing is structurally impossible (in addition to
-/// the server-side readiness gate). Tests may construct the revision-bearing
-/// result directly to drive coordinators.
+/// 001C3A closes LOCKED DECISION D1's client half: the server envelope now
+/// carries an ADDITIVE `mode_revision` (`branches.kitchen_workflow_mode_revision`,
+/// server-authoritative, CHECK > 0). The parsing contract:
+///
+///  * `kds` + valid positive integer revision  -> [KitchenModeVerifiedKds]
+///    WITH the revision (readiness-report eligible);
+///  * `kds` + ABSENT revision key (old server) -> [KitchenModeVerifiedKds]
+///    with a null revision — normal KDS operation is unchanged, but the
+///    result is NOT eligible to produce a readiness report;
+///  * `printer_only` + valid positive revision -> [KitchenModePrinterOnlyWithRevision]
+///    (the trusted result — parseable ONLY when the server branch already is
+///    printer_only; no supported workflow can put a branch there yet);
+///  * `printer_only` + ABSENT revision key     -> [KitchenModeRevisionUnavailable]
+///    (fail closed, old-server compatibility);
+///  * a PRESENT-but-invalid revision (non-integer, zero, negative) in EITHER
+///    mode -> [KitchenModeMalformedResponse] — a revision is NEVER fabricated,
+///    NEVER defaulted to 1, and NEVER reused from another scope.
 ///
 /// There is NO silent-kds fallback: every failure is its own typed result.
 sealed class KitchenModeResult {
@@ -22,13 +29,20 @@ sealed class KitchenModeResult {
 
 /// The server verified this device's branch is in `kds` mode.
 final class KitchenModeVerifiedKds extends KitchenModeResult {
-  const KitchenModeVerifiedKds({required this.verifiedAt});
+  const KitchenModeVerifiedKds({required this.verifiedAt, this.revision});
 
   final DateTime verifiedAt;
+
+  /// The server's `kitchen_workflow_mode_revision` (positive), or null when
+  /// the server predates 001C3A. A null revision keeps normal KDS behavior
+  /// but is NOT eligible to produce a readiness report.
+  final int? revision;
 }
 
 /// The server verified `printer_only` AND a trusted mode revision is known.
-/// (Never produced by the production repository in 001C2B — see D1.)
+/// Production-parseable since 001C3A — but ONLY when the server branch is
+/// already printer_only, which no supported workflow can produce until the
+/// guarded 001C3B setter ships and is explicitly activated.
 final class KitchenModePrinterOnlyWithRevision extends KitchenModeResult {
   const KitchenModePrinterOnlyWithRevision({
     required this.revision,
@@ -107,10 +121,28 @@ class SupabaseDeviceKitchenModeRepository {
       // The getter's only typed error is invalid_session (fail closed).
       return const KitchenModeInvalidSession();
     }
+    // 001C3A: the additive server revision. ABSENT is legal (old server);
+    // PRESENT-but-invalid is a contract violation — malformed, never
+    // fabricated, never defaulted, never clamped.
+    final hasRevisionKey = json.containsKey('mode_revision');
+    final Object? rawRevision = json['mode_revision'];
+    final int? revision = rawRevision is int && rawRevision > 0
+        ? rawRevision
+        : null;
+    if (hasRevisionKey && revision == null) {
+      return const KitchenModeMalformedResponse();
+    }
     return switch (json['kitchen_workflow_mode']) {
-      'kds' => KitchenModeVerifiedKds(verifiedAt: _now()),
-      // D1: printer_only WITHOUT a trusted revision must not enable work.
-      'printer_only' => const KitchenModeRevisionUnavailable(),
+      'kds' => KitchenModeVerifiedKds(verifiedAt: _now(), revision: revision),
+      // D1 fail-closed half preserved: printer_only without a TRUSTED
+      // server revision must not enable work.
+      'printer_only' =>
+        revision == null
+            ? const KitchenModeRevisionUnavailable()
+            : KitchenModePrinterOnlyWithRevision(
+                revision: revision,
+                verifiedAt: _now(),
+              ),
       _ => const KitchenModeMalformedResponse(),
     };
   }
