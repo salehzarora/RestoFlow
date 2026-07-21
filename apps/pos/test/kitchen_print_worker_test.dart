@@ -676,6 +676,49 @@ void main() {
       },
     );
 
+    test('REVIEW NOTE F2: disposal while a CLAIMED job waits behind the '
+        'shared gate — the in-gate check refuses the send, the row stays '
+        'queued, and the gate stays usable', () async {
+      final job = await seedRunnable('d-dispose-wait');
+      var disposed = false;
+      final receiptEntered = Completer<void>();
+      final release = Completer<void>();
+      final key = PrinterDestinationSendGate.networkKey('10.0.0.5', 9100);
+      // A simulated RECEIPT send occupies the same physical destination.
+      final receipt = gate.withDestination(key, () async {
+        receiptEntered.complete();
+        await release.future;
+        return 'receipt-done';
+      });
+      await receiptEntered.future;
+      final run = worker(isDisposed: () => disposed).run();
+      // Let the worker claim + prepare + park behind the gate.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(
+        (await store.getByLocalJobId(job.localJobId))!.status,
+        KitchenSpoolJobStatus.queued,
+        reason: 'claimed and parked, waiting for the gate',
+      );
+      // Scope disposal happens WHILE waiting.
+      disposed = true;
+      release.complete();
+      final report = await run;
+      expect(report.revalidationSkips, 1, reason: 'the in-gate check fired');
+      expect(report.accepted, 0);
+      expect(sends.networkCalls, isEmpty, reason: 'zero transport calls');
+      expect(sends.bluetoothCalls, isEmpty);
+      expect(transport.calls, isEmpty, reason: 'no acknowledgement sent');
+      final row = (await store.getByLocalJobId(job.localJobId))!;
+      expect(
+        row.status,
+        KitchenSpoolJobStatus.queued,
+        reason: 'markPrinting never succeeded; the row is preserved',
+      );
+      expect(await receipt, 'receipt-done');
+      // The gate released cleanly: a following waiter proceeds immediately.
+      expect(await gate.withDestination(key, () async => 42), 42);
+    });
+
     test('a VOID landing while the job waits for the gate refuses the send '
         '(durable revalidation under the gate)', () async {
       final job = await seedRunnable('d-race', orderId: 'order-race');

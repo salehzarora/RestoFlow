@@ -203,11 +203,25 @@ final class _CapabilityReportingHooks implements PosKitchenSpoolLifecycleHooks {
 /// Derives the typed operational capability from a run report — priority
 /// order: terminal conflict > review-required > blocked > transport down >
 /// waiting retry > idle; blocked/failed runs map to their typed causes.
+///
+/// REVIEW NOTE F1: a terminal ownership verdict can surface OUTSIDE the
+/// worker's own acknowledgements — from the run-level pre/post pending-ack
+/// flushes (`report.terminal`), including reconciled/drained runs with no
+/// worker at all. ANY terminal count > 0 maps to
+/// [PosKitchenSpoolCapability.terminalOwnershipConflict] at the highest
+/// priority; a run that saw one can never read as idle/success.
 PosKitchenSpoolCapability deriveKitchenSpoolCapability(
   PosKitchenSpoolRunReport report,
 ) => switch (report) {
-  KitchenSpoolRunWorked(:final worker, :final recoveredStale, :final drain) =>
-    worker.ackTerminal > 0
+  KitchenSpoolRunWorked(
+    :final worker,
+    :final recoveredStale,
+    :final drain,
+    :final terminal,
+  ) =>
+    (worker.ackTerminal > 0 ||
+            terminal > 0 ||
+            drain.acknowledgementsTerminal > 0)
         ? PosKitchenSpoolCapability.terminalOwnershipConflict
         : (worker.possiblyPrinted > 0 || recoveredStale > 0)
         ? PosKitchenSpoolCapability.possiblyPrintedReviewRequired
@@ -219,8 +233,14 @@ PosKitchenSpoolCapability deriveKitchenSpoolCapability(
         : worker.failedRetryable > 0
         ? PosKitchenSpoolCapability.waitingRetry
         : PosKitchenSpoolCapability.idle,
-  KitchenSpoolRunDrained() ||
-  KitchenSpoolRunReconciled() ||
+  KitchenSpoolRunDrained(:final terminal, :final drain) =>
+    (terminal > 0 || drain.acknowledgementsTerminal > 0)
+        ? PosKitchenSpoolCapability.terminalOwnershipConflict
+        : PosKitchenSpoolCapability.idle,
+  KitchenSpoolRunReconciled(:final terminal) =>
+    terminal > 0
+        ? PosKitchenSpoolCapability.terminalOwnershipConflict
+        : PosKitchenSpoolCapability.idle,
   KitchenSpoolRunSkipped() => PosKitchenSpoolCapability.idle,
   KitchenSpoolRunBlocked(:final detail) => switch (detail) {
     'unexpected_failure' => PosKitchenSpoolCapability.unexpectedFailure,

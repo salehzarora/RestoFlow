@@ -20,11 +20,14 @@ KitchenSpoolRunWorked _worked({
   int ackTerminal = 0,
   int recoveredStale = 0,
   int drainBlocked = 0,
+  int runTerminal = 0,
+  int drainTerminal = 0,
 }) => KitchenSpoolRunWorked(
   'worked',
   drain: KitchenDispatchDrainReport(
     stoppedReason: KitchenDrainStopReason.complete,
     rowsBlockedConfiguration: drainBlocked,
+    acknowledgementsTerminal: drainTerminal,
   ),
   worker: KitchenWorkerRunReport(
     stoppedReason: KitchenWorkerStopReason.complete,
@@ -40,7 +43,7 @@ KitchenSpoolRunWorked _worked({
   voidLinks: 0,
   acked: 0,
   retriesScheduled: 0,
-  terminal: 0,
+  terminal: runTerminal,
 );
 
 void main() {
@@ -79,6 +82,66 @@ void main() {
     expect(
       deriveKitchenSpoolCapability(_worked(ackTerminal: 1, possiblyPrinted: 1)),
       PosKitchenSpoolCapability.terminalOwnershipConflict,
+    );
+  });
+
+  test('REVIEW NOTE F1: RUN-LEVEL terminal verdicts (pre/post pending-ack '
+      'flush) map to terminalOwnershipConflict even when the worker saw '
+      'none', () {
+    // Worked run: worker.ackTerminal 0, but the run-level flush hit one.
+    expect(
+      deriveKitchenSpoolCapability(_worked(runTerminal: 1)),
+      PosKitchenSpoolCapability.terminalOwnershipConflict,
+    );
+    // The drain's own immediate-ack terminal counts too.
+    expect(
+      deriveKitchenSpoolCapability(_worked(drainTerminal: 1)),
+      PosKitchenSpoolCapability.terminalOwnershipConflict,
+    );
+    // Terminal beats every lower-priority signal.
+    expect(
+      deriveKitchenSpoolCapability(
+        _worked(
+          runTerminal: 1,
+          possiblyPrinted: 2,
+          blocked: 3,
+          failedRetryable: 4,
+          transportUnavailable: 1,
+        ),
+      ),
+      PosKitchenSpoolCapability.terminalOwnershipConflict,
+    );
+    // A RECONCILED run (kds existing-spool flush) with a terminal verdict.
+    expect(
+      deriveKitchenSpoolCapability(
+        const KitchenSpoolRunReconciled(
+          'reconciled',
+          acked: 0,
+          retriesScheduled: 0,
+          terminal: 1,
+        ),
+      ),
+      PosKitchenSpoolCapability.terminalOwnershipConflict,
+    );
+    // A DRAINED run whose pending-ack flush hit a terminal verdict.
+    expect(
+      deriveKitchenSpoolCapability(
+        const KitchenSpoolRunDrained(
+          'drained',
+          drain: KitchenDispatchDrainReport(
+            stoppedReason: KitchenDrainStopReason.complete,
+          ),
+          acked: 0,
+          retriesScheduled: 0,
+          terminal: 1,
+        ),
+      ),
+      PosKitchenSpoolCapability.terminalOwnershipConflict,
+    );
+    // Zero terminals everywhere: behavior unchanged.
+    expect(
+      deriveKitchenSpoolCapability(_worked(accepted: 2)),
+      PosKitchenSpoolCapability.idle,
     );
   });
 
