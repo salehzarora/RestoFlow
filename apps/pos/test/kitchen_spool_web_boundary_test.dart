@@ -105,9 +105,15 @@ void main() {
         'pos_kitchen_spool_composition.dart',
         'pos_kitchen_spool_composition_web.dart',
         'pos_kitchen_spool_hooks.dart',
+        // PASS 2: the capability surface is web-visible and must stay pure.
+        'pos_kitchen_spool_capability.dart',
       ]),
       reason: 'refuses to pass vacuously',
     );
+  });
+
+  test('the capability surface is PURE Dart (zero imports)', () {
+    expect(_importsOf(spoolFile('pos_kitchen_spool_capability.dart')), isEmpty);
   });
 
   test('the hooks surface is PURE Dart (zero imports)', () {

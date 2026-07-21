@@ -9,7 +9,9 @@ import 'package:restoflow_core/testing.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:test/test.dart';
 
-/// KITCHEN-MODE-001C2A §10 — the bounded KitchenSpoolStore invariants.
+/// KITCHEN-MODE-001C2A §10 + 001C2C PASS-1 — the bounded KitchenSpoolStore
+/// invariants: the queued claim state machine, atomic transition+ack
+/// writes, and the widened destination single-flight.
 void main() {
   late KitchenSpoolDatabase db;
   late DriftKitchenSpoolStore store;
@@ -24,6 +26,8 @@ void main() {
   const otherDevice = 'df000000-0000-0000-0000-00000000000d';
 
   final t0 = DateTime.utc(2026, 7, 20, 10);
+  final t1 = DateTime.utc(2026, 7, 20, 10, 1);
+  final t2 = DateTime.utc(2026, 7, 20, 10, 2);
 
   setUp(() async {
     db = KitchenSpoolDatabase(NativeDatabase.memory());
@@ -125,6 +129,29 @@ void main() {
     return (await store.getByLocalJobId(row.localJobId))!;
   }
 
+  /// KITCHEN-MODE-001C2C: THE atomic claim (runnable -> queued) with this
+  /// fixture's scope tuple.
+  Future<KitchenSpoolJobRow?> claimQ(
+    String localJobId,
+    DateTime now, {
+    String branch = branchId,
+    String device = deviceId,
+  }) => store.claimRunnableForQueued(
+    localJobId,
+    organizationId: orgId,
+    restaurantId: restId,
+    branchId: branch,
+    deviceId: device,
+    now: now,
+  );
+
+  /// The worker's two-step path: atomic claim to queued, then printing
+  /// immediately before the transport boundary.
+  Future<bool> claimToPrinting(String localJobId, DateTime now) async {
+    if (await claimQ(localJobId, now) == null) return false;
+    return store.markPrinting(localJobId, now);
+  }
+
   group('import', () {
     test('unique dispatch import + idempotent duplicate', () async {
       final a = await store.insertImportedJob(await newJob('disp-1'));
@@ -185,7 +212,7 @@ void main() {
         ),
         isEmpty,
       );
-      expect(await store.claimRunnableForPrinting(row.localJobId, t0), isNull);
+      expect(await claimQ(row.localJobId, t0), isNull);
     });
 
     test('destination display label is normalized before storage', () async {
@@ -196,7 +223,7 @@ void main() {
     });
   });
 
-  group('runnable + claim', () {
+  group('runnable + claim (001C2C LOCKED DECISION 1)', () {
     test(
       'runnable ordering is createdAt asc and respects nextAttemptAt',
       () async {
@@ -208,13 +235,19 @@ void main() {
           now: t0.add(const Duration(minutes: 5)),
         );
         expect(list.map((r) => r.localJobId), [a.localJobId, b.localJobId]);
-        // A future retry gate hides the job until due.
-        await store.markFailedRetryable(
-          a.localJobId,
-          errorCode: 'printer_unreachable',
-          nextAttemptAt: t0.add(const Duration(minutes: 30)),
-          now: t0.add(const Duration(minutes: 5)),
+        // A future retry gate hides the job until due: claim, enter the
+        // transport boundary, prove definitely-not-sent, and re-acknowledge.
+        expect(await claimToPrinting(a.localJobId, t1), isTrue);
+        expect(
+          await store.markFailedRetryableWithAck(
+            a.localJobId,
+            errorCode: 'printer_unreachable',
+            nextAttemptAt: t0.add(const Duration(minutes: 30)),
+            now: t1,
+          ),
+          isTrue,
         );
+        await store.markServerAcked(a.localJobId, t1);
         final gated = await store.listRunnable(
           deviceId: deviceId,
           branchId: branchId,
@@ -230,27 +263,57 @@ void main() {
       },
     );
 
-    test(
-      'claim is single-flight per job (second claim returns null)',
-      () async {
-        final row = await importAcked(await newJob('d-claim'));
-        final claimed = await store.claimRunnableForPrinting(
-          row.localJobId,
-          t0.add(const Duration(minutes: 1)),
-        );
-        expect(claimed, isNotNull);
-        expect(claimed!.status, KitchenSpoolJobStatus.printing);
-        expect(claimed.attemptCount, 1);
-        expect(claimed.lastAttemptAt, isNotNull);
-        final second = await store.claimRunnableForPrinting(
-          row.localJobId,
-          t0.add(const Duration(minutes: 1)),
-        );
-        expect(second, isNull);
-      },
-    );
+    test('the claim moves runnable -> QUEUED (never directly printing), '
+        'bookkeeping exactly once', () async {
+      final row = await importAcked(await newJob('d-claim'));
+      final claimed = await claimQ(row.localJobId, t1);
+      expect(claimed, isNotNull);
+      expect(claimed!.status, KitchenSpoolJobStatus.queued);
+      expect(claimed.attemptCount, 1);
+      expect(claimed.lastAttemptAt, t1);
+    });
 
-    test('claim is single-flight per DESTINATION fingerprint', () async {
+    test('a SAME-INSTANT duplicate claim has exactly one winner', () async {
+      final row = await importAcked(await newJob('d-dup'));
+      final first = await claimQ(row.localJobId, t1);
+      expect(first, isNotNull);
+      final second = await claimQ(row.localJobId, t1);
+      expect(second, isNull, reason: 'one winner per instant');
+      expect(
+        (await store.getByLocalJobId(row.localJobId))!.attemptCount,
+        1,
+        reason: 'attemptCount incremented exactly once',
+      );
+    });
+
+    test('a stale QUEUED row is reclaimable by a strictly LATER claim '
+        '(restart recovery), counting a fresh attempt', () async {
+      final row = await importAcked(await newJob('d-requeue'));
+      expect(await claimQ(row.localJobId, t1), isNotNull);
+      // Simulated restart: the row is still queued; a later claim adopts it.
+      final reclaimed = await claimQ(row.localJobId, t2);
+      expect(reclaimed, isNotNull);
+      expect(reclaimed!.status, KitchenSpoolJobStatus.queued);
+      expect(reclaimed.attemptCount, 2);
+    });
+
+    test('claim requires the FULL matching scope tuple', () async {
+      final row = await importAcked(await newJob('d-scope'));
+      expect(
+        await claimQ(row.localJobId, t1, branch: otherBranch),
+        isNull,
+        reason: 'wrong branch',
+      );
+      expect(
+        await claimQ(row.localJobId, t1, device: otherDevice),
+        isNull,
+        reason: 'wrong device',
+      );
+      expect(await claimQ(row.localJobId, t1), isNotNull);
+    });
+
+    test('destination single-flight blocks on QUEUED and PRINTING holders '
+        '(the widened predicate)', () async {
       final a = await importAcked(
         await newJob('d-dest-a', destinationFingerprint: 'fp-shared'),
       );
@@ -260,57 +323,333 @@ void main() {
       final c = await importAcked(
         await newJob('d-dest-c', destinationFingerprint: 'fp-other'),
       );
-      expect(await store.claimRunnableForPrinting(a.localJobId, t0), isNotNull);
-      // Same destination is busy -> refused; different destination fine.
-      expect(await store.claimRunnableForPrinting(b.localJobId, t0), isNull);
-      expect(await store.claimRunnableForPrinting(c.localJobId, t0), isNotNull);
-      // Once A resolves, B becomes claimable.
-      await store.markTransportAccepted(
-        a.localJobId,
-        t0.add(const Duration(minutes: 2)),
+      // A is QUEUED (not yet printing) — and that ALREADY blocks B.
+      expect(await claimQ(a.localJobId, t0), isNotNull);
+      expect(
+        await claimQ(b.localJobId, t0),
+        isNull,
+        reason: 'queued holder blocks the destination',
       );
-      expect(await store.claimRunnableForPrinting(b.localJobId, t0), isNotNull);
+      // A different destination is unaffected.
+      expect(await claimQ(c.localJobId, t0), isNotNull);
+      // A printing holder blocks too.
+      expect(await store.markPrinting(a.localJobId, t0), isTrue);
+      expect(await claimQ(b.localJobId, t1), isNull);
+      // Once A resolves (atomic transition+ack), B becomes claimable.
+      expect(
+        await store.markTransportAcceptedWithAck(
+          a.localJobId,
+          t0.add(const Duration(minutes: 2)),
+        ),
+        isTrue,
+      );
+      expect(await claimQ(b.localJobId, t2), isNotNull);
+    });
+
+    test('a row never blocks ITSELF on the destination check', () async {
+      final row = await importAcked(
+        await newJob('d-self', destinationFingerprint: 'fp-self'),
+      );
+      expect(await claimQ(row.localJobId, t1), isNotNull);
+      // Reclaim later: its own queued state must not refuse the claim.
+      expect(await claimQ(row.localJobId, t2), isNotNull);
     });
 
     test(
-      'markQueued only from imported; markPrinting only from runnable',
+      'markPrinting is queued-ONLY and refuses every other source',
       () async {
-        final row = await importAcked(await newJob('d-q'));
-        expect(await store.markQueued(row.localJobId, t0), isTrue);
-        expect(await store.markQueued(row.localJobId, t0), isFalse);
-        expect(await store.markPrinting(row.localJobId, t0), isTrue);
+        final row = await importAcked(await newJob('d-mp'));
+        // imported -> printing is forbidden (no bypass around the claim).
         expect(await store.markPrinting(row.localJobId, t0), isFalse);
+        expect(await claimQ(row.localJobId, t1), isNotNull);
+        expect(await store.markPrinting(row.localJobId, t1), isTrue);
+        // printing -> printing is refused.
+        expect(await store.markPrinting(row.localJobId, t1), isFalse);
+        final failed = await importAcked(
+          await newJob('d-mp2', destinationFingerprint: 'fp-mp2'),
+        );
+        expect(await claimToPrinting(failed.localJobId, t1), isTrue);
+        await store.markFailedRetryableWithAck(
+          failed.localJobId,
+          errorCode: 'printer_unreachable',
+          nextAttemptAt: t2,
+          now: t1,
+        );
+        // failedRetryable -> printing is forbidden without a fresh claim.
+        expect(await store.markPrinting(failed.localJobId, t2), isFalse);
       },
     );
   });
 
-  group('terminal + recovery invariants', () {
-    test(
-      'printing -> possiblyPrinted recovery maps ONLY printing rows',
-      () async {
-        final printing = await importAcked(await newJob('d-p1'));
-        await store.claimRunnableForPrinting(printing.localJobId, t0);
-        final queued = await importAcked(await newJob('d-p2'));
-        await store.markQueued(queued.localJobId, t0);
-        final changed = await store.markPossiblyPrintedOnRecovery(
-          t0.add(const Duration(minutes: 1)),
-        );
-        expect(changed, 1);
-        expect(
-          (await store.getByLocalJobId(printing.localJobId))!.status,
-          KitchenSpoolJobStatus.possiblyPrinted,
-        );
-        expect(
-          (await store.getByLocalJobId(queued.localJobId))!.status,
-          KitchenSpoolJobStatus.queued,
-        );
-      },
-    );
+  group('atomic transition+ack (001C2C)', () {
+    test('transportAccepted + pending transport_accepted are ONE write; the '
+        'pending status always describes row.status', () async {
+      final row = await importAcked(await newJob('d-taw'));
+      // Only printing may complete.
+      expect(
+        await store.markTransportAcceptedWithAck(row.localJobId, t0),
+        isFalse,
+      );
+      expect(await claimToPrinting(row.localJobId, t1), isTrue);
+      expect(
+        await store.markTransportAcceptedWithAck(row.localJobId, t1),
+        isTrue,
+      );
+      final done = (await store.getByLocalJobId(row.localJobId))!;
+      expect(done.status, KitchenSpoolJobStatus.transportAccepted);
+      expect(done.transportAcceptedAt, t1);
+      expect(
+        done.pendingServerAckStatus,
+        KitchenServerAckStatus.transportAccepted,
+      );
+      expect(done.serverAckNextAttemptAt, t1);
+      expect(done.lastErrorCode, isNull);
+      expect(done.nextAttemptAt, isNull);
+    });
 
+    test('failedRetryable + pending failed_retryable + retry time are ONE '
+        'write, from printing OR queued', () async {
+      // From printing (post-boundary definitely-not-sent).
+      final a = await importAcked(await newJob('d-frw-a'));
+      expect(await claimToPrinting(a.localJobId, t1), isTrue);
+      expect(
+        await store.markFailedRetryableWithAck(
+          a.localJobId,
+          errorCode: 'printer_unreachable',
+          nextAttemptAt: t2,
+          now: t1,
+        ),
+        isTrue,
+      );
+      final failedA = (await store.getByLocalJobId(a.localJobId))!;
+      expect(failedA.status, KitchenSpoolJobStatus.failedRetryable);
+      expect(
+        failedA.pendingServerAckStatus,
+        KitchenServerAckStatus.failedRetryable,
+      );
+      expect(failedA.nextAttemptAt, t2);
+      expect(failedA.lastErrorCode, 'printer_unreachable');
+      // From queued (pre-boundary failure that is retryable).
+      final b = await importAcked(await newJob('d-frw-b'));
+      expect(await claimQ(b.localJobId, t1), isNotNull);
+      expect(
+        await store.markFailedRetryableWithAck(
+          b.localJobId,
+          errorCode: 'printer_unreachable',
+          nextAttemptAt: t2,
+          now: t1,
+        ),
+        isTrue,
+      );
+      // From imported: forbidden.
+      final c = await importAcked(await newJob('d-frw-c'));
+      expect(
+        await store.markFailedRetryableWithAck(
+          c.localJobId,
+          errorCode: 'printer_unreachable',
+          nextAttemptAt: t2,
+          now: t1,
+        ),
+        isFalse,
+      );
+    });
+
+    test('possiblyPrinted + pending possibly_printed are ONE write, from '
+        'printing only, preserving destination + payload', () async {
+      final row = await importAcked(await newJob('d-ppw'));
+      expect(
+        await store.markPossiblyPrintedWithAck(row.localJobId, t1),
+        isFalse,
+      );
+      expect(await claimToPrinting(row.localJobId, t1), isTrue);
+      expect(
+        await store.markPossiblyPrintedWithAck(row.localJobId, t1),
+        isTrue,
+      );
+      final held = (await store.getByLocalJobId(row.localJobId))!;
+      expect(held.status, KitchenSpoolJobStatus.possiblyPrinted);
+      expect(
+        held.pendingServerAckStatus,
+        KitchenServerAckStatus.possiblyPrinted,
+      );
+      expect(held.nextAttemptAt, isNull, reason: 'no automatic retry');
+      expect(held.destinationFingerprint, 'fp-default');
+      expect(held.encryptedPayloadBlob, isNotEmpty);
+    });
+
+    test('blockedConfiguration + pending blocked_configuration are ONE '
+        'write, from QUEUED only (pre-transport, zero paper risk)', () async {
+      final row = await importAcked(await newJob('d-bcw'));
+      expect(
+        await store.markBlockedConfigurationWithAck(
+          row.localJobId,
+          errorCode: 'kitchen_payload_undecryptable',
+          now: t1,
+        ),
+        isFalse,
+        reason: 'imported may not blocked-transition here',
+      );
+      expect(await claimQ(row.localJobId, t1), isNotNull);
+      expect(
+        await store.markBlockedConfigurationWithAck(
+          row.localJobId,
+          errorCode: 'kitchen_payload_undecryptable',
+          now: t1,
+        ),
+        isTrue,
+      );
+      final blocked = (await store.getByLocalJobId(row.localJobId))!;
+      expect(blocked.status, KitchenSpoolJobStatus.blockedConfiguration);
+      expect(
+        blocked.pendingServerAckStatus,
+        KitchenServerAckStatus.blockedConfiguration,
+      );
+      expect(blocked.lastErrorCode, 'kitchen_payload_undecryptable');
+      // From printing: forbidden (past the boundary it is never "blocked").
+      final p = await importAcked(await newJob('d-bcw2'));
+      expect(await claimToPrinting(p.localJobId, t1), isTrue);
+      expect(
+        await store.markBlockedConfigurationWithAck(
+          p.localJobId,
+          errorCode: 'kitchen_payload_undecryptable',
+          now: t1,
+        ),
+        isFalse,
+      );
+    });
+
+    test('the NARROW confirmed-no-write blocked transition works from '
+        'printing ONLY and pairs its pending ack atomically', () async {
+      final row = await importAcked(await newJob('d-nw'));
+      // Not from imported.
+      expect(
+        await store.markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+          row.localJobId,
+          errorCode: 'not_bonded',
+          now: t1,
+        ),
+        isFalse,
+      );
+      expect(await claimQ(row.localJobId, t1), isNotNull);
+      // Not from queued (that is the general queued-only variant's job).
+      expect(
+        await store.markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+          row.localJobId,
+          errorCode: 'not_bonded',
+          now: t1,
+        ),
+        isFalse,
+      );
+      expect(await store.markPrinting(row.localJobId, t1), isTrue);
+      expect(
+        await store.markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+          row.localJobId,
+          errorCode: 'not_bonded',
+          now: t1,
+        ),
+        isTrue,
+      );
+      final blocked = (await store.getByLocalJobId(row.localJobId))!;
+      expect(blocked.status, KitchenSpoolJobStatus.blockedConfiguration);
+      expect(
+        blocked.pendingServerAckStatus,
+        KitchenServerAckStatus.blockedConfiguration,
+      );
+      expect(blocked.lastErrorCode, 'not_bonded');
+      expect(blocked.nextAttemptAt, isNull);
+      expect(blocked.encryptedPayloadBlob, isNotEmpty);
+    });
+
+    test('a forced SQL CHECK failure proves NO half-transition (status and '
+        'pending move together or not at all)', () async {
+      final row = await importAcked(await newJob('d-atomic'));
+      expect(await claimToPrinting(row.localJobId, t1), isTrue);
+      // Sabotage: a printing row with transport_accepted_at set violates the
+      // possibly_printed CHECK the moment the transition tries to commit.
+      await db.customStatement(
+        "UPDATE kitchen_spool_jobs SET transport_accepted_at = '2026-07-20T10:00:00.000Z' "
+        "WHERE local_job_id = '${row.localJobId}'",
+      );
+      await expectLater(
+        store.markPossiblyPrintedWithAck(row.localJobId, t1),
+        throwsA(anything),
+      );
+      final after = (await store.getByLocalJobId(row.localJobId))!;
+      expect(
+        after.status,
+        KitchenSpoolJobStatus.printing,
+        reason: 'status unchanged',
+      );
+      expect(
+        after.pendingServerAckStatus,
+        isNull,
+        reason: 'no orphaned pending acknowledgement',
+      );
+    });
+
+    test('recovery maps ONLY stale printing rows IN SCOPE to possiblyPrinted '
+        'WITH the pending ack, idempotently', () async {
+      final printing = await importAcked(await newJob('d-p1'));
+      expect(await claimToPrinting(printing.localJobId, t0), isTrue);
+      final queued = await importAcked(
+        await newJob('d-p2', destinationFingerprint: 'fp-p2'),
+      );
+      expect(await claimQ(queued.localJobId, t0), isNotNull);
+      final foreign = await importAcked(
+        await newJob(
+          'd-p3',
+          device: otherDevice,
+          destinationFingerprint: 'fp-p3',
+        ),
+      );
+      expect(
+        await claimQ(foreign.localJobId, t0, device: otherDevice),
+        isNotNull,
+      );
+      expect(await store.markPrinting(foreign.localJobId, t0), isTrue);
+      final changed = await store.markPossiblyPrintedOnRecoveryWithAck(
+        deviceId: deviceId,
+        branchId: branchId,
+        now: t1,
+      );
+      expect(changed, 1);
+      final recovered = (await store.getByLocalJobId(printing.localJobId))!;
+      expect(recovered.status, KitchenSpoolJobStatus.possiblyPrinted);
+      expect(
+        recovered.pendingServerAckStatus,
+        KitchenServerAckStatus.possiblyPrinted,
+        reason: 'the owed ack is set IN the recovery update',
+      );
+      expect(
+        (await store.getByLocalJobId(queued.localJobId))!.status,
+        KitchenSpoolJobStatus.queued,
+      );
+      expect(
+        (await store.getByLocalJobId(foreign.localJobId))!.status,
+        KitchenSpoolJobStatus.printing,
+        reason: 'out-of-scope printing rows are untouched',
+      );
+      // Idempotent: a second sweep changes nothing.
+      expect(
+        await store.markPossiblyPrintedOnRecoveryWithAck(
+          deviceId: deviceId,
+          branchId: branchId,
+          now: t2,
+        ),
+        0,
+      );
+    });
+  });
+
+  group('terminal + recovery invariants', () {
     test('possiblyPrinted can NEVER become runnable again', () async {
       final row = await importAcked(await newJob('d-pp'));
-      await store.claimRunnableForPrinting(row.localJobId, t0);
-      await store.markPossiblyPrintedOnRecovery(t0);
+      expect(await claimToPrinting(row.localJobId, t0), isTrue);
+      await store.markPossiblyPrintedOnRecoveryWithAck(
+        deviceId: deviceId,
+        branchId: branchId,
+        now: t0,
+      );
       expect(
         await store.listRunnable(
           deviceId: deviceId,
@@ -319,9 +658,8 @@ void main() {
         ),
         isEmpty,
       );
-      expect(await store.claimRunnableForPrinting(row.localJobId, t0), isNull);
-      expect(await store.markQueued(row.localJobId, t0), isFalse);
-      expect(await store.markPrinting(row.localJobId, t0), isFalse);
+      expect(await claimQ(row.localJobId, t1), isNull);
+      expect(await store.markPrinting(row.localJobId, t1), isFalse);
       // Still unresolved (needs an operator), never silently dropped.
       expect(
         await store.countUnresolved(deviceId: deviceId, branchId: branchId),
@@ -329,31 +667,27 @@ void main() {
       );
     });
 
-    test(
-      'transportAccepted is terminal for printing and never re-runnable',
-      () async {
-        final row = await importAcked(await newJob('d-ta'));
-        // Only printing may complete.
-        expect(await store.markTransportAccepted(row.localJobId, t0), isFalse);
-        await store.claimRunnableForPrinting(row.localJobId, t0);
-        expect(await store.markTransportAccepted(row.localJobId, t0), isTrue);
-        final done = (await store.getByLocalJobId(row.localJobId))!;
-        expect(done.status, KitchenSpoolJobStatus.transportAccepted);
-        expect(done.transportAcceptedAt, isNotNull);
-        expect(
-          await store.listRunnable(
-            deviceId: deviceId,
-            branchId: branchId,
-            now: t0.add(const Duration(days: 1)),
-          ),
-          isEmpty,
-        );
-        expect(
-          await store.claimRunnableForPrinting(row.localJobId, t0),
-          isNull,
-        );
-      },
-    );
+    test('transportAccepted is terminal and never re-runnable, even while '
+        'its acknowledgement retries', () async {
+      final row = await importAcked(await newJob('d-ta'));
+      expect(await claimToPrinting(row.localJobId, t0), isTrue);
+      expect(
+        await store.markTransportAcceptedWithAck(row.localJobId, t0),
+        isTrue,
+      );
+      final done = (await store.getByLocalJobId(row.localJobId))!;
+      expect(done.status, KitchenSpoolJobStatus.transportAccepted);
+      expect(done.transportAcceptedAt, isNotNull);
+      expect(
+        await store.listRunnable(
+          deviceId: deviceId,
+          branchId: branchId,
+          now: t0.add(const Duration(days: 1)),
+        ),
+        isEmpty,
+      );
+      expect(await claimQ(row.localJobId, t1), isNull);
+    });
 
     test(
       'superseded comes ONLY from server evidence and is terminal',
@@ -368,11 +702,8 @@ void main() {
         final sup = (await store.getByLocalJobId(row.localJobId))!;
         expect(sup.status, KitchenSpoolJobStatus.superseded);
         expect(sup.supersededByDispatchId, 'void-disp-9');
-        expect(
-          await store.claimRunnableForPrinting(row.localJobId, t0),
-          isNull,
-        );
-        expect(await store.markQueued(row.localJobId, t0), isFalse);
+        expect(await claimQ(row.localJobId, t1), isNull);
+        expect(await store.markPrinting(row.localJobId, t1), isFalse);
         // Resolved: no longer counted as unresolved.
         expect(
           await store.countUnresolved(deviceId: deviceId, branchId: branchId),
@@ -382,11 +713,25 @@ void main() {
     );
 
     test(
-      'server evidence does NOT supersede transportAccepted history or a job printing right now',
+      'server evidence supersedes a QUEUED job (it stops printing), but '
+      'never transportAccepted history or a job printing right now',
       () async {
+        final queued = await importAcked(await newJob('d-q-sup'));
+        expect(await claimQ(queued.localJobId, t0), isNotNull);
+        expect(
+          await store.markSupersededFromServerEvidence(
+            dispatchId: 'd-q-sup',
+            supersededByDispatchId: 'void-1',
+            now: t0,
+          ),
+          isTrue,
+        );
+        // A superseded queued row can no longer enter the transport boundary.
+        expect(await store.markPrinting(queued.localJobId, t1), isFalse);
+
         final done = await importAcked(await newJob('d-done'));
-        await store.claimRunnableForPrinting(done.localJobId, t0);
-        await store.markTransportAccepted(done.localJobId, t0);
+        expect(await claimToPrinting(done.localJobId, t0), isTrue);
+        await store.markTransportAcceptedWithAck(done.localJobId, t0);
         expect(
           await store.markSupersededFromServerEvidence(
             dispatchId: 'd-done',
@@ -396,7 +741,7 @@ void main() {
           isFalse,
         );
         final printing = await importAcked(await newJob('d-mid'));
-        await store.claimRunnableForPrinting(printing.localJobId, t0);
+        expect(await claimToPrinting(printing.localJobId, t0), isTrue);
         expect(
           await store.markSupersededFromServerEvidence(
             dispatchId: 'd-mid',
@@ -407,18 +752,37 @@ void main() {
         );
       },
     );
+
+    test('a TERMINAL server verdict can never be cleared by print-state '
+        'transitions and blocks every claim', () async {
+      final row = await store.insertImportedJob(await newJob('d-term-keep'));
+      await store.setPendingServerAck(
+        row.localJobId,
+        KitchenServerAckStatus.imported,
+        t0,
+      );
+      await store.markServerAckTerminal(
+        row.localJobId,
+        terminalCode: 'not_claim_owner',
+        now: t0,
+      );
+      expect(await claimQ(row.localJobId, t1), isNull);
+      expect(await store.markPrinting(row.localJobId, t1), isFalse);
+      final after = (await store.getByLocalJobId(row.localJobId))!;
+      expect(after.serverAckTerminalCode, 'not_claim_owner');
+      expect(after.encryptedPayloadBlob, isNotEmpty);
+    });
   });
 
   group('server acknowledgement independence', () {
     test('pending ack is retained independently; ack retries NEVER make a '
         'transportAccepted job runnable again', () async {
       final row = await importAcked(await newJob('d-ack'));
-      await store.claimRunnableForPrinting(row.localJobId, t0);
-      await store.markTransportAccepted(row.localJobId, t0);
-      await store.setPendingServerAck(
-        row.localJobId,
-        KitchenServerAckStatus.transportAccepted,
-        t0,
+      expect(await claimToPrinting(row.localJobId, t0), isTrue);
+      // The atomic transition sets the pending ack itself.
+      expect(
+        await store.markTransportAcceptedWithAck(row.localJobId, t0),
+        isTrue,
       );
       // Two failed ack attempts.
       for (var i = 1; i <= 2; i++) {
@@ -488,27 +852,17 @@ void main() {
         'older than the cutoff', () async {
       // Fully resolved + old -> prunable.
       final old = await importAcked(await newJob('d-old'));
-      await store.claimRunnableForPrinting(old.localJobId, t0);
-      await store.markTransportAccepted(old.localJobId, t0);
-      await store.setPendingServerAck(
-        old.localJobId,
-        KitchenServerAckStatus.transportAccepted,
-        t0,
-      );
+      expect(await claimToPrinting(old.localJobId, t0), isTrue);
+      await store.markTransportAcceptedWithAck(old.localJobId, t0);
       await store.markServerAcked(old.localJobId, t0);
       // Accepted but ack still pending -> NOT prunable.
       final pendingAck = await importAcked(await newJob('d-pa'));
-      await store.claimRunnableForPrinting(pendingAck.localJobId, t0);
-      await store.markTransportAccepted(pendingAck.localJobId, t0);
-      await store.setPendingServerAck(
-        pendingAck.localJobId,
-        KitchenServerAckStatus.transportAccepted,
-        t0,
-      );
+      expect(await claimToPrinting(pendingAck.localJobId, t0), isTrue);
+      await store.markTransportAcceptedWithAck(pendingAck.localJobId, t0);
       // possiblyPrinted -> NEVER prunable.
       final ambiguous = await importAcked(await newJob('d-amb'));
-      await store.claimRunnableForPrinting(ambiguous.localJobId, t0);
-      await store.markPossiblyPrintedOnRecovery(t0);
+      expect(await claimToPrinting(ambiguous.localJobId, t0), isTrue);
+      await store.markPossiblyPrintedWithAck(ambiguous.localJobId, t0);
       // blocked -> NEVER prunable.
       await store.insertImportedJob(
         await newJob(
@@ -608,12 +962,8 @@ void main() {
           ),
           isEmpty,
         );
-        expect(
-          await store.claimRunnableForPrinting(row.localJobId, t0),
-          isNull,
-        );
-        expect(await store.markQueued(row.localJobId, t0), isFalse);
-        expect(await store.markPrinting(row.localJobId, t0), isFalse);
+        expect(await claimQ(row.localJobId, t1), isNull);
+        expect(await store.markPrinting(row.localJobId, t1), isFalse);
       },
     );
 
@@ -630,13 +980,10 @@ void main() {
         nextAttemptAt: t0.add(const Duration(minutes: 5)),
         now: t0,
       );
-      expect(await store.claimRunnableForPrinting(row.localJobId, t0), isNull);
+      expect(await claimQ(row.localJobId, t1), isNull);
       // Once the server acknowledges, the job becomes runnable.
       await store.markServerAcked(row.localJobId, t0);
-      expect(
-        await store.claimRunnableForPrinting(row.localJobId, t0),
-        isNotNull,
-      );
+      expect(await claimQ(row.localJobId, t1), isNotNull);
     });
 
     test('a TERMINAL server verdict stops retries and is permanently '
@@ -669,8 +1016,7 @@ void main() {
         ),
         isEmpty,
       );
-      expect(await store.claimRunnableForPrinting(row.localJobId, t0), isNull);
-      expect(await store.markQueued(row.localJobId, t0), isFalse);
+      expect(await claimQ(row.localJobId, t1), isNull);
       // Terminal is one-shot: no pending ack remains to terminate.
       expect(
         await store.markServerAckTerminal(
@@ -687,8 +1033,8 @@ void main() {
       'attaching the void link; markSuperseded refuses possiblyPrinted',
       () async {
         final row = await importAcked(await newJob('d-pp-link'));
-        await store.claimRunnableForPrinting(row.localJobId, t0);
-        await store.markPossiblyPrintedOnRecovery(t0);
+        expect(await claimToPrinting(row.localJobId, t0), isTrue);
+        await store.markPossiblyPrintedWithAck(row.localJobId, t0);
         // The blunt supersession path must NOT erase the ambiguity.
         expect(
           await store.markSupersededFromServerEvidence(
@@ -799,6 +1145,7 @@ void twoConnectionClaimTests() {
     final store2 = DriftKitchenSpoolStore(db2);
 
     final t0 = DateTime.utc(2026, 7, 20, 12);
+    final t1 = DateTime.utc(2026, 7, 20, 12, 1);
     Future<void> seed(String jobId, String dispatchId) =>
         store1.insertImportedJob(
           NewKitchenSpoolJob(
@@ -832,28 +1179,46 @@ void twoConnectionClaimTests() {
       await store1.markServerAcked(jobId, t0);
     }
 
-    // Connection 1 claims job A.
-    final winner = await store1.claimRunnableForPrinting('conn-job-a', t0);
+    Future<KitchenSpoolJobRow?> claim(
+      DriftKitchenSpoolStore s,
+      String jobId,
+      DateTime now,
+    ) => s.claimRunnableForQueued(
+      jobId,
+      organizationId: 'org',
+      restaurantId: 'rest',
+      branchId: 'branch',
+      deviceId: 'dev',
+      now: now,
+    );
+
+    // Connection 1 claims job A into QUEUED.
+    final winner = await claim(store1, 'conn-job-a', t0);
     expect(winner, isNotNull);
+    expect(winner!.status, KitchenSpoolJobStatus.queued);
 
     // Connection 2 — a SEPARATE SQLite connection — must observe the
     // committed claim and REFUSE job B on the same destination.
-    final refused = await store2.claimRunnableForPrinting('conn-job-b', t0);
+    final refused = await claim(store2, 'conn-job-b', t0);
     expect(refused, isNull, reason: 'cross-connection single-flight');
 
-    // Never two printing jobs on one destination, from either view.
-    final printing =
+    // Never two queued/printing jobs on one destination, from either view.
+    final holders =
         await (db2.select(db2.kitchenSpoolJobs)..where(
-              (t) => t.status.equalsValue(KitchenSpoolJobStatus.printing),
+              (t) => t.status.isInValues(const [
+                KitchenSpoolJobStatus.queued,
+                KitchenSpoolJobStatus.printing,
+              ]),
             ))
             .get();
-    expect(printing, hasLength(1));
+    expect(holders, hasLength(1));
 
     // Winner resolves on connection 1 -> connection 2 can now claim B.
-    await store1.markTransportAccepted('conn-job-a', t0);
-    final second = await store2.claimRunnableForPrinting('conn-job-b', t0);
+    expect(await store1.markPrinting('conn-job-a', t0), isTrue);
+    expect(await store1.markTransportAcceptedWithAck('conn-job-a', t0), isTrue);
+    final second = await claim(store2, 'conn-job-b', t1);
     expect(second, isNotNull);
-    expect(second!.status, KitchenSpoolJobStatus.printing);
+    expect(second!.status, KitchenSpoolJobStatus.queued);
   });
 }
 

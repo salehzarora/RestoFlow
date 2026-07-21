@@ -2,8 +2,11 @@
 library;
 
 import 'dart:async' show Completer;
+import 'dart:convert' show utf8;
 import 'dart:io';
 import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart' show sha256;
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +18,14 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_destination_resolver.dart';
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_drain_coordinator.dart';
+import 'package:restoflow_pos/src/spool/kitchen_print_worker.dart';
+import 'package:restoflow_pos/src/spool/kitchen_ticket_renderer.dart';
 import 'package:restoflow_pos/src/spool/pending_kitchen_ack_coordinator.dart';
+import 'package:restoflow_printing/restoflow_printing.dart'
+    show
+        KitchenTransportOutcome,
+        KitchenTransportOutcomeKind,
+        PrinterDestinationSendGate;
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_runtime.dart';
 import 'package:restoflow_pos/src/spool/pos_secure_kitchen_mode_cache.dart';
@@ -127,6 +137,8 @@ void main() {
   late _FakeTransport transport;
   late InMemoryDeviceSessionSecretStore secretStore;
   late _FakeSecureStorage secureStorage;
+  final workerNetworkCalls = <(String, int)>[];
+  var workerOutcomes = <KitchenTransportOutcome>[];
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('rf_spool_runtime_test');
@@ -139,6 +151,8 @@ void main() {
       ),
     );
     secureStorage = _FakeSecureStorage();
+    workerNetworkCalls.clear();
+    workerOutcomes = [];
   });
 
   tearDown(() async {
@@ -183,6 +197,26 @@ void main() {
     fetchMode: fetchMode,
     destinationResolver: destinationResolver,
     localJobIdGenerator: wireDrain ? () => 'rt-${++localJobCounter}' : null,
+    renderer: wireDrain ? const KitchenTicketRenderer() : null,
+    networkSend: wireDrain
+        ? ({required host, required port, required bytes}) async {
+            workerNetworkCalls.add((host, port));
+            return workerOutcomes.isEmpty
+                ? const KitchenTransportOutcome(
+                    KitchenTransportOutcomeKind.accepted,
+                    'flushed',
+                  )
+                : workerOutcomes.removeAt(0);
+          }
+        : null,
+    bluetoothSend: wireDrain
+        ? ({required address, required bytes}) async =>
+              const KitchenTransportOutcome(
+                KitchenTransportOutcomeKind.accepted,
+                'native_flushed_drained',
+              )
+        : null,
+    sendGate: wireDrain ? PrinterDestinationSendGate() : null,
     modeCache: modeCache,
     keyStore: FlutterSecureKitchenSpoolKeyStore(
       storage: secureStorage,
@@ -554,20 +588,30 @@ void main() {
       'created_at': '2026-07-20T10:00:00Z',
     };
 
-    const resolved = ResolvedKitchenDestination(
-      destination: NetworkKitchenDestination(host: '10.0.0.9', port: 9100),
-      fingerprint: 'fp-rt',
+    // PASS 2: the fingerprint must be the REAL canonical digest — the
+    // worker's prep re-derives it from the decrypted endpoint and refuses a
+    // mismatch as corruption.
+    final resolved = ResolvedKitchenDestination(
+      destination: const NetworkKitchenDestination(
+        host: '10.0.0.9',
+        port: 9100,
+      ),
+      fingerprint: sha256
+          .convert(utf8.encode('network|10.0.0.9|9100'))
+          .toString(),
       displayLabel: 'Kitchen',
       transportKind: 'network',
       paperWidth: '80mm',
     );
 
     test(
-      'an injected trusted revision executes the FULL dormant chain: '
-      'provision key (zero rows) -> pull -> durable import -> ack -> cursor',
+      'an injected trusted revision executes the FULL chain: provision key '
+      '(zero rows) -> pull -> durable import -> ack -> claim -> decrypt/'
+      'render -> gated send -> atomic worker transition -> ack flush',
       () async {
         transport.enqueue(pageOf([dispatchRow('d-1')]));
-        transport.enqueue({'ok': true}); // ack d-1
+        transport.enqueue({'ok': true}); // import ack d-1
+        transport.enqueue({'ok': true, 'completed': true}); // worker TA ack
         final cache = PosSecureKitchenModeCache(
           storage: secureStorage,
           platform: native,
@@ -580,21 +624,30 @@ void main() {
           modeCache: cache,
         );
         final report = await rt.onStartup();
-        expect(report, isA<KitchenSpoolRunDrained>());
-        final drained = report as KitchenSpoolRunDrained;
-        expect(drained.drain.stoppedReason, KitchenDrainStopReason.complete);
-        expect(drained.drain.rowsImported, 1);
-        expect(drained.drain.acknowledgementsSucceeded, 1);
+        expect(report, isA<KitchenSpoolRunWorked>());
+        final worked = report as KitchenSpoolRunWorked;
+        expect(worked.drain.stoppedReason, KitchenDrainStopReason.complete);
+        expect(worked.drain.rowsImported, 1);
+        expect(worked.drain.acknowledgementsSucceeded, 1);
+        expect(worked.worker.claimed, 1);
+        expect(worked.worker.accepted, 1);
+        expect(worked.worker.acked, 1);
+        expect(worked.recoveredStale, 0);
+        expect(
+          workerNetworkCalls.single,
+          ('10.0.0.9', 9100),
+          reason: 'the pinned decrypted endpoint drove the send',
+        );
         await rt.dispose();
 
-        // The dedicated spool now exists with the durable acked row, the key
-        // was provisioned (zero rows at first run), and the TRUSTED revision
-        // is cached.
+        // The dedicated spool holds the fully-resolved job; the key was
+        // provisioned (zero rows at first run); the TRUSTED revision cached.
         final verifyDb = await factory().open();
         final verifyStore = DriftKitchenSpoolStore(verifyDb);
         final row = (await verifyStore.findByDispatchId('d-1'))!;
-        expect(row.status, KitchenSpoolJobStatus.imported);
+        expect(row.status, KitchenSpoolJobStatus.transportAccepted);
         expect(row.serverAcknowledgedAt, isNotNull);
+        expect(row.pendingServerAckStatus, isNull);
         await verifyDb.close();
         expect(
           secureStorage.values.keys,
@@ -612,6 +665,30 @@ void main() {
       },
     );
 
+    test('disposal stops the worker before any send (typed, no reprint '
+        'risk)', () async {
+      // Seed an acked runnable job through a first trusted run whose worker
+      // send is scripted definitelyNotSent (job stays failedRetryable but
+      // NOT due at the same clock, so the second run has nothing runnable —
+      // instead seed a fresh import for the disposed run).
+      transport.enqueue(pageOf([dispatchRow('d-disposed')]));
+      transport.enqueue({'ok': true}); // import ack
+      final rt = runtime(
+        fetchMode: trustedMode,
+        destinationResolver: () async => resolved,
+        wireDrain: true,
+      );
+      await rt.dispose(); // disposed BEFORE the run: worker must not send.
+      final report = await rt.onStartup();
+      expect(report, isA<KitchenSpoolRunWorked>());
+      final worked = report as KitchenSpoolRunWorked;
+      expect(worked.worker.stoppedReason, KitchenWorkerStopReason.disposed);
+      expect(worked.worker.claimed, 0);
+      expect(workerNetworkCalls, isEmpty, reason: 'no send after disposal');
+      // The run reopened the DB handle; release it for the tearDown delete.
+      await rt.dispose();
+    });
+
     test('readiness_required stops the drain TYPED and triggers no readiness '
         'reporting call', () async {
       transport.enqueue({'ok': false, 'error': 'readiness_required'});
@@ -621,11 +698,12 @@ void main() {
         wireDrain: true,
       );
       final report = await rt.onStartup();
-      final drained = report as KitchenSpoolRunDrained;
+      final worked = report as KitchenSpoolRunWorked;
       expect(
-        drained.drain.stoppedReason,
+        worked.drain.stoppedReason,
         KitchenDrainStopReason.readinessRequired,
       );
+      expect(worked.worker.claimed, 0, reason: 'nothing imported to print');
       expect(transport.calls, hasLength(1));
       expect(transport.calls.single.$1, 'pull_kitchen_print_dispatches');
       await rt.dispose();

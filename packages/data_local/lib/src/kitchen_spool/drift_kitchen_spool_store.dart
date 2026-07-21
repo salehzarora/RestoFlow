@@ -5,8 +5,13 @@
 /// `updateStatus` writer anywhere. Invariants enforced here (and, where
 /// SQLite can, by table CHECKs):
 ///
-///  * `claimRunnableForPrinting` is single-flight per job AND per pinned
-///    destination (a second concurrent claim updates 0 rows / is refused).
+///  * `claimRunnableForQueued` is THE one atomic claim (001C2C LOCKED 1):
+///    single-flight per job (a same-instant duplicate claim updates 0 rows)
+///    AND per pinned destination (no other `queued`/`printing` row on the
+///    same fingerprint). There is NO direct claim into `printing`; the
+///    transport boundary is entered only through `markPrinting` (queued
+///    only). Every print-state resolution writes its matching pending
+///    server acknowledgement IN THE SAME UPDATE (`*WithAck`).
 ///  * `printing` recovery maps ONLY `printing -> possiblyPrinted`.
 ///  * `possiblyPrinted` and `superseded` can never become runnable again.
 ///  * `superseded` is SERVER EVIDENCE ONLY (`markSupersededFromServerEvidence`).
@@ -63,25 +68,86 @@ abstract interface class KitchenSpoolStore {
     required DateTime now,
     int limit = 20,
   });
-  Future<KitchenSpoolJobRow?> claimRunnableForPrinting(
-    String localJobId,
-    DateTime now,
-  );
-  Future<bool> markQueued(String localJobId, DateTime now);
+
+  /// KITCHEN-MODE-001C2C (LOCKED DECISION 1): THE one atomic claim. A
+  /// runnable job (imported / queued / failedRetryable) moves to `queued`
+  /// through a single conditional UPDATE that additionally requires the full
+  /// scope tuple, the server-ack-complete gate, a DUE retry time, a NON-NULL
+  /// destination fingerprint (executable jobs only), and destination
+  /// single-flight: no OTHER row with the same fingerprint may be `queued`
+  /// or `printing`. Increments `attemptCount` exactly once and stamps
+  /// `lastAttemptAt`; a SAME-INSTANT duplicate claim updates zero rows (one
+  /// winner), while a strictly LATER claim may re-adopt a stale `queued`
+  /// row (restart recovery). There is deliberately NO direct claim into
+  /// `printing`.
+  Future<KitchenSpoolJobRow?> claimRunnableForQueued(
+    String localJobId, {
+    required String organizationId,
+    required String restaurantId,
+    required String branchId,
+    required String deviceId,
+    required DateTime now,
+  });
+
+  /// KITCHEN-MODE-001C2C (LOCKED DECISION 2): `queued` → `printing`,
+  /// invoked IMMEDIATELY before the transport boundary. Source state is
+  /// `queued` ONLY; re-verifies the ack-complete gate and destination
+  /// single-flight (no other queued/printing row on the same fingerprint).
   Future<bool> markPrinting(String localJobId, DateTime now);
-  Future<bool> markTransportAccepted(String localJobId, DateTime now);
-  Future<bool> markFailedRetryable(
+
+  /// Atomic `printing` → `transportAccepted` + pending `transport_accepted`
+  /// acknowledgement in ONE conditional UPDATE (no crash window between the
+  /// local transition and the owed server acknowledgement).
+  Future<bool> markTransportAcceptedWithAck(String localJobId, DateTime now);
+
+  /// Atomic `printing`/`queued` → `failedRetryable` + pending
+  /// `failed_retryable` acknowledgement. ONLY for outcomes the transport
+  /// proved DEFINITELY-NOT-SENT; the caller supplies the safe backoff time.
+  Future<bool> markFailedRetryableWithAck(
     String localJobId, {
     required String errorCode,
     required DateTime nextAttemptAt,
     required DateTime now,
   });
-  Future<bool> markBlockedConfiguration(
+
+  /// Atomic `printing` → `possiblyPrinted` + pending `possibly_printed`
+  /// acknowledgement. No retry time (the hold is permanent until an
+  /// operator acts); destination, encrypted payload, and any existing
+  /// supersession link are preserved.
+  Future<bool> markPossiblyPrintedWithAck(String localJobId, DateTime now);
+
+  /// Atomic `queued` → `blockedConfiguration` + pending
+  /// `blocked_configuration` acknowledgement (render/destination failure
+  /// BEFORE the transport boundary — zero paper risk). The error code is a
+  /// safe bounded token, never an endpoint or payload.
+  Future<bool> markBlockedConfigurationWithAck(
     String localJobId, {
     required String errorCode,
     required DateTime now,
   });
-  Future<int> markPossiblyPrintedOnRecovery(DateTime now);
+
+  /// KITCHEN-MODE-001C2C PASS 2 — the NARROW post-boundary blocked
+  /// transition: `printing` → `blockedConfiguration`, permitted ONLY when
+  /// the transport outcome PROVED zero bytes were dispatched (a permanent
+  /// incapability like an unbonded Bluetooth target discovered by the
+  /// native pre-write checks). Never for ambiguous/lost/partial outcomes —
+  /// those are possiblyPrinted. Writes the pending `blocked_configuration`
+  /// acknowledgement atomically.
+  Future<bool> markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+    String localJobId, {
+    required String errorCode,
+    required DateTime now,
+  });
+
+  /// Startup crash recovery: every STALE `printing` row in scope becomes
+  /// `possiblyPrinted` WITH its pending `possibly_printed` acknowledgement
+  /// in the same UPDATE. Idempotent; `transportAccepted` rows are never
+  /// touched; nothing ever maps back to a runnable state.
+  Future<int> markPossiblyPrintedOnRecoveryWithAck({
+    required String deviceId,
+    required String branchId,
+    required DateTime now,
+  });
   Future<bool> markSupersededFromServerEvidence({
     required String dispatchId,
     required String supersededByDispatchId,
@@ -356,45 +422,70 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
         .get();
   }
 
+  /// Destination single-flight predicate (LOCKED DECISION 1): another row
+  /// with the SAME non-null fingerprint in `queued` OR `printing` blocks a
+  /// claim/print for this destination. The old printing-only predicate was
+  /// insufficient — a second job could stage behind a queued holder.
+  Future<bool> _destinationBusy(String fingerprint, String localJobId) async {
+    final busy =
+        await (_db.select(_t)..where(
+              (t) =>
+                  t.destinationFingerprint.equals(fingerprint) &
+                  t.status.isInValues(const [
+                    KitchenSpoolJobStatus.queued,
+                    KitchenSpoolJobStatus.printing,
+                  ]) &
+                  t.localJobId.equals(localJobId).not(),
+            ))
+            .get();
+    return busy.isNotEmpty;
+  }
+
   @override
-  Future<KitchenSpoolJobRow?> claimRunnableForPrinting(
-    String localJobId,
-    DateTime now,
-  ) {
-    // Same shape as the RF071-B1 print-spool claim: one conditional UPDATE in
-    // a transaction is the atomic duplicate-dispatch guard — PLUS the
-    // destination single-flight guard (never two `printing` jobs on the same
-    // pinned destination; SQLite serializes writes, so the check inside the
-    // transaction is race-safe).
+  Future<KitchenSpoolJobRow?> claimRunnableForQueued(
+    String localJobId, {
+    required String organizationId,
+    required String restaurantId,
+    required String branchId,
+    required String deviceId,
+    required DateTime now,
+  }) {
+    // Same shape as the RF071-B1 print-spool claim: one conditional UPDATE
+    // in a transaction is the atomic duplicate-claim guard — PLUS the
+    // widened destination single-flight guard. SQLite serializes writes, so
+    // the pre-check inside the transaction is race-safe.
     return _db.transaction(() async {
       final row = await getByLocalJobId(localJobId);
       if (row == null) return null;
       final fingerprint = row.destinationFingerprint;
-      if (fingerprint != null) {
-        final busy =
-            await (_db.select(_t)..where(
-                  (t) =>
-                      t.destinationFingerprint.equals(fingerprint) &
-                      t.status.equalsValue(KitchenSpoolJobStatus.printing) &
-                      t.localJobId.equals(localJobId).not(),
-                ))
-                .get();
-        if (busy.isNotEmpty) return null;
-      }
+      // Executable jobs REQUIRE a pinned destination fingerprint; a
+      // blocked-shaped row (null fingerprint) is never claimable.
+      if (fingerprint == null) return null;
+      if (await _destinationBusy(fingerprint, localJobId)) return null;
       final updated =
           await (_db.update(_t)..where(
                 (t) =>
                     t.localJobId.equals(localJobId) &
+                    t.organizationId.equals(organizationId) &
+                    t.restaurantId.equals(restaurantId) &
+                    t.branchId.equals(branchId) &
+                    t.deviceId.equals(deviceId) &
                     t.status.isInValues(
                       KitchenSpoolJobStatus.runnable.toList(),
                     ) &
+                    t.destinationFingerprint.isNotNull() &
                     _serverAckComplete(t) &
                     (t.nextAttemptAt.isNull() |
-                        t.nextAttemptAt.isSmallerOrEqualValue(now)),
+                        t.nextAttemptAt.isSmallerOrEqualValue(now)) &
+                    // ONE WINNER per instant: a same-`now` duplicate claim
+                    // updates 0 rows, while a genuinely LATER claim (the
+                    // restart-reclaim of a stale queued row) proceeds.
+                    (t.lastAttemptAt.isNull() |
+                        t.lastAttemptAt.isSmallerThanValue(now)),
               ))
               .write(
                 KitchenSpoolJobsCompanion.custom(
-                  status: Constant(KitchenSpoolJobStatus.printing.wireName),
+                  status: Constant(KitchenSpoolJobStatus.queued.wireName),
                   attemptCount: _t.attemptCount + const Constant(1),
                   lastAttemptAt: Constant<DateTime>(now),
                   updatedAt: Constant<DateTime>(now),
@@ -406,38 +497,39 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
   }
 
   @override
-  Future<bool> markQueued(String localJobId, DateTime now) {
-    // Queueing is the first runnable step, so it carries the SAME server-ack
-    // gate: an unacknowledged import can never move toward printing.
-    return _transition(
-      localJobId,
-      from: const {KitchenSpoolJobStatus.imported},
-      requireServerAckComplete: true,
-      write: KitchenSpoolJobsCompanion(
-        status: const Value(KitchenSpoolJobStatus.queued),
-        updatedAt: Value(now),
-      ),
-    );
-  }
-
-  @override
   Future<bool> markPrinting(String localJobId, DateTime now) {
-    // Explicit transition variant of the claim (no attempt bookkeeping, no
-    // due-time gate) — still single-flight via the conditional WHERE and
-    // still server-ack gated.
-    return _transition(
-      localJobId,
-      from: KitchenSpoolJobStatus.runnable,
-      requireServerAckComplete: true,
-      write: KitchenSpoolJobsCompanion(
-        status: const Value(KitchenSpoolJobStatus.printing),
-        updatedAt: Value(now),
-      ),
-    );
+    // LOCKED DECISION 2: `queued` ONLY, immediately before the transport
+    // boundary — with the ack gate and the destination single-flight both
+    // re-verified (a superseded/blocked row is no longer `queued`, so
+    // supersession evidence structurally refuses the print).
+    return _db.transaction(() async {
+      final row = await getByLocalJobId(localJobId);
+      if (row == null) return false;
+      final fingerprint = row.destinationFingerprint;
+      if (fingerprint == null) return false;
+      if (await _destinationBusy(fingerprint, localJobId)) return false;
+      final updated =
+          await (_db.update(_t)..where(
+                (t) =>
+                    t.localJobId.equals(localJobId) &
+                    t.status.equalsValue(KitchenSpoolJobStatus.queued) &
+                    _serverAckComplete(t),
+              ))
+              .write(
+                KitchenSpoolJobsCompanion(
+                  status: const Value(KitchenSpoolJobStatus.printing),
+                  updatedAt: Value(now),
+                ),
+              );
+      return updated > 0;
+    });
   }
 
   @override
-  Future<bool> markTransportAccepted(String localJobId, DateTime now) {
+  Future<bool> markTransportAcceptedWithAck(String localJobId, DateTime now) {
+    // ONE conditional UPDATE: local resolution + the owed server
+    // acknowledgement are inseparable (the pending status ALWAYS describes
+    // row.status — no crash window can leave a silent local acceptance).
     return _transition(
       localJobId,
       from: const {KitchenSpoolJobStatus.printing},
@@ -446,69 +538,139 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
         transportAcceptedAt: Value(now),
         nextAttemptAt: const Value(null),
         lastErrorCode: const Value(null),
+        pendingServerAckStatus: const Value(
+          KitchenServerAckStatus.transportAccepted,
+        ),
+        serverAckNextAttemptAt: Value(now),
         updatedAt: Value(now),
       ),
     );
   }
 
   @override
-  Future<bool> markFailedRetryable(
+  Future<bool> markFailedRetryableWithAck(
     String localJobId, {
     required String errorCode,
     required DateTime nextAttemptAt,
     required DateTime now,
   }) {
+    // ONLY for DEFINITELY-NOT-SENT transport outcomes (the caller proves
+    // it); ambiguous outcomes must use markPossiblyPrintedWithAck instead.
     return _transition(
       localJobId,
       from: const {
         KitchenSpoolJobStatus.printing,
         KitchenSpoolJobStatus.queued,
-        KitchenSpoolJobStatus.imported,
       },
       write: KitchenSpoolJobsCompanion(
         status: const Value(KitchenSpoolJobStatus.failedRetryable),
         lastErrorCode: Value(errorCode),
         nextAttemptAt: Value(nextAttemptAt),
+        pendingServerAckStatus: const Value(
+          KitchenServerAckStatus.failedRetryable,
+        ),
+        serverAckNextAttemptAt: Value(now),
         updatedAt: Value(now),
       ),
     );
   }
 
   @override
-  Future<bool> markBlockedConfiguration(
+  Future<bool> markPossiblyPrintedWithAck(String localJobId, DateTime now) {
+    // Ambiguous transport result: paper MAY exist. Permanent hold (no retry
+    // time); destination, encrypted payload, and any existing supersession
+    // link are untouched. The table CHECK guarantees a transportAccepted
+    // row can never be relabeled ambiguous.
+    return _transition(
+      localJobId,
+      from: const {KitchenSpoolJobStatus.printing},
+      write: KitchenSpoolJobsCompanion(
+        status: const Value(KitchenSpoolJobStatus.possiblyPrinted),
+        nextAttemptAt: const Value(null),
+        pendingServerAckStatus: const Value(
+          KitchenServerAckStatus.possiblyPrinted,
+        ),
+        serverAckNextAttemptAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  @override
+  Future<bool> markBlockedConfigurationWithAck(
     String localJobId, {
     required String errorCode,
     required DateTime now,
   }) {
+    // Pre-transport failure only (`queued`): decrypt/render/destination
+    // decode failed BEFORE the boundary — zero paper risk, typed reason.
     return _transition(
       localJobId,
-      from: const {
-        KitchenSpoolJobStatus.imported,
-        KitchenSpoolJobStatus.queued,
-        KitchenSpoolJobStatus.printing,
-        KitchenSpoolJobStatus.failedRetryable,
-      },
+      from: const {KitchenSpoolJobStatus.queued},
       write: KitchenSpoolJobsCompanion(
         status: const Value(KitchenSpoolJobStatus.blockedConfiguration),
         lastErrorCode: Value(errorCode),
         nextAttemptAt: const Value(null),
+        pendingServerAckStatus: const Value(
+          KitchenServerAckStatus.blockedConfiguration,
+        ),
+        serverAckNextAttemptAt: Value(now),
         updatedAt: Value(now),
       ),
     );
   }
 
   @override
-  Future<int> markPossiblyPrintedOnRecovery(DateTime now) {
-    // Startup crash recovery maps ONLY printing -> possiblyPrinted (the
-    // transport may or may not have delivered bytes; paper MAY exist). The
-    // hold is permanent: nothing maps possiblyPrinted back to a runnable
-    // state anywhere in this API.
-    return (_db.update(_t)
-          ..where((t) => t.status.equalsValue(KitchenSpoolJobStatus.printing)))
+  Future<bool> markBlockedConfigurationAfterConfirmedNoWriteWithAck(
+    String localJobId, {
+    required String errorCode,
+    required DateTime now,
+  }) {
+    // From printing ONLY, and only for caller-proven zero-write permanent
+    // incapability. Deliberately separate from the queued-only variant so
+    // the general blocked transition never widens silently.
+    return _transition(
+      localJobId,
+      from: const {KitchenSpoolJobStatus.printing},
+      write: KitchenSpoolJobsCompanion(
+        status: const Value(KitchenSpoolJobStatus.blockedConfiguration),
+        lastErrorCode: Value(errorCode),
+        nextAttemptAt: const Value(null),
+        pendingServerAckStatus: const Value(
+          KitchenServerAckStatus.blockedConfiguration,
+        ),
+        serverAckNextAttemptAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  @override
+  Future<int> markPossiblyPrintedOnRecoveryWithAck({
+    required String deviceId,
+    required String branchId,
+    required DateTime now,
+  }) {
+    // Startup crash recovery maps ONLY stale printing -> possiblyPrinted
+    // (the transport may or may not have delivered bytes; paper MAY exist)
+    // and sets the owed possibly_printed acknowledgement in the SAME
+    // update. Idempotent (a second sweep finds no printing rows); the hold
+    // is permanent: nothing maps possiblyPrinted back to a runnable state
+    // anywhere in this API, and transportAccepted rows are never touched.
+    return (_db.update(_t)..where(
+          (t) =>
+              t.deviceId.equals(deviceId) &
+              t.branchId.equals(branchId) &
+              t.status.equalsValue(KitchenSpoolJobStatus.printing),
+        ))
         .write(
           KitchenSpoolJobsCompanion(
             status: const Value(KitchenSpoolJobStatus.possiblyPrinted),
             nextAttemptAt: const Value(null),
+            pendingServerAckStatus: const Value(
+              KitchenServerAckStatus.possiblyPrinted,
+            ),
+            serverAckNextAttemptAt: Value(now),
             updatedAt: Value(now),
           ),
         );

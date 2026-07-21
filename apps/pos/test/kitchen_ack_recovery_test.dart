@@ -310,27 +310,36 @@ void main() {
 
   test('C. rows in later/terminal states refuse any new acknowledgement: typed '
       'local-state conflict, rows untouched, ZERO transport calls', () async {
+    Future<void> ackAndPrint(String localJobId) async {
+      await store.setPendingServerAck(
+        localJobId,
+        KitchenServerAckStatus.imported,
+        now,
+      );
+      await store.markServerAcked(localJobId, now);
+      expect(
+        await store.claimRunnableForQueued(
+          localJobId,
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
+          deviceId: 'dev-1',
+          now: now,
+        ),
+        isNotNull,
+      );
+      expect(await store.markPrinting(localJobId, now), isTrue);
+    }
+
     // transportAccepted (d-ta): full lifecycle to transport-accepted.
     await seedCrashWindowRow(dispatchId: 'd-ta', blocked: false);
-    await store.setPendingServerAck(
-      'seed-d-ta',
-      KitchenServerAckStatus.imported,
-      now,
-    );
-    await store.markServerAcked('seed-d-ta', now);
-    expect(await store.claimRunnableForPrinting('seed-d-ta', now), isNotNull);
-    expect(await store.markTransportAccepted('seed-d-ta', now), isTrue);
+    await ackAndPrint('seed-d-ta');
+    expect(await store.markTransportAcceptedWithAck('seed-d-ta', now), isTrue);
 
-    // possiblyPrinted (d-pp): crash during print.
+    // possiblyPrinted (d-pp): ambiguous transport result during print.
     await seedCrashWindowRow(dispatchId: 'd-pp', blocked: false);
-    await store.setPendingServerAck(
-      'seed-d-pp',
-      KitchenServerAckStatus.imported,
-      now,
-    );
-    await store.markServerAcked('seed-d-pp', now);
-    expect(await store.claimRunnableForPrinting('seed-d-pp', now), isNotNull);
-    expect(await store.markPossiblyPrintedOnRecovery(now), 1);
+    await ackAndPrint('seed-d-pp');
+    expect(await store.markPossiblyPrintedWithAck('seed-d-pp', now), isTrue);
 
     // superseded (d-sup): server void evidence.
     await seedCrashWindowRow(dispatchId: 'd-sup', blocked: false);

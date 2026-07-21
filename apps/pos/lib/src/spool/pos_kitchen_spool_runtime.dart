@@ -15,10 +15,16 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
         SupabaseKitchenDispatchAckRepository,
         SupabaseKitchenDispatchPullRepository;
 
+import 'package:restoflow_printing/restoflow_printing.dart'
+    show PrinterDestinationSendGate;
+
 import 'flutter_secure_kitchen_spool_key_store.dart';
 import 'kitchen_destination_resolver.dart';
 import 'kitchen_dispatch_drain_coordinator.dart';
 import 'kitchen_dispatch_import_coordinator.dart';
+import 'kitchen_print_worker.dart';
+import 'kitchen_ticket_renderer.dart';
+import 'kitchen_void_reconciliation.dart';
 import 'pending_kitchen_ack_coordinator.dart';
 import 'pos_kitchen_spool_hooks.dart';
 import 'pos_kitchen_spool_key_flow.dart';
@@ -91,6 +97,36 @@ final class KitchenSpoolRunDrained extends PosKitchenSpoolRunReport {
   final int terminal;
 }
 
+/// KITCHEN-MODE-001C2C PASS 2 — the trusted printer-only FULL run report:
+/// stale-printing recovery, ack reconciliation, VOID sweeps, the dispatch
+/// drain, and the bounded worker run. Safe scalars only.
+final class KitchenSpoolRunWorked extends PosKitchenSpoolRunReport {
+  const KitchenSpoolRunWorked(
+    super.detail, {
+    required this.drain,
+    required this.worker,
+    required this.recoveredStale,
+    required this.voidSuperseded,
+    required this.voidLinks,
+    required this.acked,
+    required this.retriesScheduled,
+    required this.terminal,
+  });
+
+  final KitchenDispatchDrainReport drain;
+  final KitchenWorkerRunReport worker;
+
+  /// Stale printing rows recovered to possiblyPrinted at run start.
+  final int recoveredStale;
+  final int voidSuperseded;
+  final int voidLinks;
+
+  /// Pending-ack coordinator flush totals across the run's flush points.
+  final int acked;
+  final int retriesScheduled;
+  final int terminal;
+}
+
 /// The kitchen destination could not be DETERMINED (assignments unreachable,
 /// providers unavailable) — distinct from a definitive blocked resolution.
 /// The drain fails closed instead of importing rows as blocked on a guess.
@@ -110,6 +146,11 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     Future<KitchenModeResult> Function()? fetchMode,
     Future<KitchenDestinationResolution> Function()? destinationResolver,
     String Function()? localJobIdGenerator,
+    KitchenTicketRenderer? renderer,
+    KitchenNetworkSend? networkSend,
+    KitchenBluetoothSend? bluetoothSend,
+    PrinterDestinationSendGate? sendGate,
+    int maxWorkerJobsPerRun = 20,
     PosSecureKitchenModeCache? modeCache,
     SecureKeyStore? keyStore,
     DateTime Function()? now,
@@ -123,6 +164,11 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
        _fetchModeOverride = fetchMode,
        _destinationResolver = destinationResolver,
        _localJobIdGenerator = localJobIdGenerator,
+       _renderer = renderer,
+       _networkSend = networkSend,
+       _bluetoothSend = bluetoothSend,
+       _sendGate = sendGate,
+       _maxWorkerJobsPerRun = maxWorkerJobsPerRun,
        _modeCache = modeCache,
        _keyStore = keyStore,
        _now = now ?? DateTime.now;
@@ -141,12 +187,18 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   final Future<KitchenModeResult> Function()? _fetchModeOverride;
   final Future<KitchenDestinationResolution> Function()? _destinationResolver;
   final String Function()? _localJobIdGenerator;
+  final KitchenTicketRenderer? _renderer;
+  final KitchenNetworkSend? _networkSend;
+  final KitchenBluetoothSend? _bluetoothSend;
+  final PrinterDestinationSendGate? _sendGate;
+  final int _maxWorkerJobsPerRun;
   final PosSecureKitchenModeCache? _modeCache;
   final SecureKeyStore? _keyStore;
   final DateTime Function() _now;
 
   KitchenSpoolDatabase? _db;
   bool _running = false;
+  bool _disposed = false;
 
   /// Startup post-frame hook (D4).
   @override
@@ -265,14 +317,18 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     );
   }
 
-  /// CORRECTION-001: the bounded trusted printer-only sequence —
-  /// 1. open the dedicated spool (existing or new) under policy;
-  /// 2. inspect the key; provision ONLY in the missing-over-zero-rows state;
-  /// 3. flush acknowledgements owed from previous runs;
-  /// 4. pin the destination ONCE, fail closed if it cannot be determined;
-  /// 5. drain: pull → durable import → ack → exact next cursor;
-  /// 6. flush anything newly due;
-  /// 7. return the typed report. NEVER prints.
+  /// KITCHEN-MODE-001C2C PASS 2 — the LOCKED trusted printer-only run:
+  /// 1. open the dedicated spool DB under the existing policy;
+  /// 2. inspect/provision the key ONLY under D3;
+  /// 3. recover stale printing rows (→ possiblyPrinted + pending ack);
+  /// 4. flush due pending acknowledgements from previous runs;
+  /// 5. reconcile local VOID evidence before any new claim;
+  /// 6. drain/import new dispatches (the C2B coordinator);
+  /// 7. (import acks flush inside the drain + coordinator);
+  /// 8. re-run VOID reconciliation after the drain;
+  /// 9. run the bounded kitchen print worker;
+  /// 10. flush worker-generated pending acknowledgements;
+  /// 11. return the typed safe report. No timer; disposal-safe.
   Future<PosKitchenSpoolRunReport> _drainTrusted(
     DeviceContext context,
     String restaurantId,
@@ -282,9 +338,17 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     final pullRepository = _pullRepository;
     final resolveDestination = _destinationResolver;
     final newLocalJobId = _localJobIdGenerator;
+    final renderer = _renderer;
+    final networkSend = _networkSend;
+    final bluetoothSend = _bluetoothSend;
+    final sendGate = _sendGate;
     if (pullRepository == null ||
         resolveDestination == null ||
-        newLocalJobId == null) {
+        newLocalJobId == null ||
+        renderer == null ||
+        networkSend == null ||
+        bluetoothSend == null ||
+        sendGate == null) {
       return const KitchenSpoolRunSkipped('real_backend_not_wired');
     }
     final factory = _databaseFactoryBuilder();
@@ -322,15 +386,33 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       return const KitchenSpoolRunBlocked('KitchenSpoolKeyUnavailable');
     }
 
+    // 3: stale-printing recovery BEFORE anything else — a crash mid-print
+    // may have left paper; the row becomes possiblyPrinted with its owed
+    // acknowledgement in one update. Never sent, never retried.
+    final recoveredStale = await store.markPossiblyPrintedOnRecoveryWithAck(
+      deviceId: deviceId,
+      branchId: context.branchId,
+      now: _now(),
+    );
+
     final acks = PendingKitchenAckCoordinator(
       store: store,
       ackRepository: ackRepository,
       now: _now,
     );
-    // Acknowledgements owed from PREVIOUS runs flush before new work.
+    // 4: acknowledgements owed from PREVIOUS runs (including the recovery
+    // sweep's) flush before new work.
     final (preAcked, preRetries, preTerminal) = await acks.flush(
       deviceId: deviceId,
       branchId: context.branchId,
+    );
+
+    // 5: local VOID evidence applies BEFORE any new claim.
+    final voidsBefore = await reconcileLocalVoidEvidence(
+      store,
+      deviceId: deviceId,
+      branchId: context.branchId,
+      now: _now(),
     );
 
     // The destination pins ONCE per run. A typed BLOCKED resolution is a
@@ -344,18 +426,20 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       return const KitchenSpoolRunBlocked('kitchen_destination_unresolvable');
     }
 
+    final scope = KitchenImportScope(
+      organizationId: context.organizationId,
+      restaurantId: restaurantId,
+      branchId: context.branchId,
+      deviceId: deviceId,
+    );
+    // 6–7: drain/import (durable-before-ack, immediate import acks inside).
     final drainReport = await KitchenDispatchDrainCoordinator(
       pullRepository: pullRepository,
       importCoordinator: KitchenDispatchImportCoordinator(
         store: store,
         cipher: AesGcmKitchenSpoolCipher(),
         key: key,
-        scope: KitchenImportScope(
-          organizationId: context.organizationId,
-          restaurantId: restaurantId,
-          branchId: context.branchId,
-          deviceId: deviceId,
-        ),
+        scope: scope,
         destination: destination,
         ackRepository: ackRepository,
         localJobIdGenerator: newLocalJobId,
@@ -363,14 +447,45 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
       ),
     ).drain();
 
-    // Anything newly pending that is already due flushes before returning.
+    // 8: VOID evidence again — a void imported by THIS drain must stop its
+    // order's earlier jobs before the worker can claim them.
+    final voidsAfter = await reconcileLocalVoidEvidence(
+      store,
+      deviceId: deviceId,
+      branchId: context.branchId,
+      now: _now(),
+    );
+
+    // 9: the bounded worker (claim → decrypt/render → gated single send →
+    // atomic transition+ack). Disposal stops it before any further send.
+    final workerReport = await KitchenPrintWorker(
+      store: store,
+      cipher: AesGcmKitchenSpoolCipher(),
+      key: key,
+      renderer: renderer,
+      networkSend: networkSend,
+      bluetoothSend: bluetoothSend,
+      sendGate: sendGate,
+      ackRepository: ackRepository,
+      scope: scope,
+      now: _now,
+      maxJobsPerRun: _maxWorkerJobsPerRun,
+      isDisposed: () => _disposed,
+    ).run();
+
+    // 10: anything newly pending that is already due flushes before
+    // returning.
     final (postAcked, postRetries, postTerminal) = await acks.flush(
       deviceId: deviceId,
       branchId: context.branchId,
     );
-    return KitchenSpoolRunDrained(
-      'drained',
+    return KitchenSpoolRunWorked(
+      'worked',
       drain: drainReport,
+      worker: workerReport,
+      recoveredStale: recoveredStale,
+      voidSuperseded: voidsBefore.superseded + voidsAfter.superseded,
+      voidLinks: voidsBefore.links + voidsAfter.links,
       acked: preAcked + postAcked,
       retriesScheduled: preRetries + postRetries,
       terminal: preTerminal + postTerminal,
@@ -426,9 +541,14 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     }
   }
 
-  /// Disposes runtime handles on logout/scope change (rows and key are
-  /// deliberately preserved — scope-bound, never wiped automatically).
+  /// Disposes runtime handles on logout/unpair/scope change (rows and key
+  /// are deliberately preserved — scope-bound, never wiped automatically).
+  /// The disposal flag stops any in-flight worker BEFORE its next send;
+  /// once a transport attempt may already have started, its ambiguity is
+  /// preserved honestly (stale printing recovers to possiblyPrinted on the
+  /// next valid run).
   Future<void> dispose() async {
+    _disposed = true;
     await _db?.close();
     _db = null;
   }
