@@ -8,6 +8,17 @@ import 'package:path/path.dart' as p;
 import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:test/test.dart';
 
+/// A documents Directory that RESOLVES successfully but throws when its path is
+/// read — models a stat/path failure AFTER the directory resolved.
+class _ThrowingPathDirectory implements Directory {
+  @override
+  String get path => throw const FileSystemException('path inspection failed');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError(invocation.memberName.toString());
+}
+
 /// KITCHEN-MODE-001C2B — the DEDICATED kitchen-spool database + factory.
 void main() {
   const expectedSpoolIndexes = {
@@ -321,6 +332,71 @@ void main() {
         ).existsSync(),
         isFalse,
         reason: 'probing must not grow a spool footprint',
+      );
+    });
+
+    group('inspectSpoolFilePresence (001C3B1A2 truthful presence)', () {
+      test('a documents-directory PROVIDER failure is UNKNOWN, never absent, '
+          'and grows no footprint', () async {
+        final factory = KitchenSpoolDatabaseFactory(
+          documentsDirectoryProvider: () async =>
+              throw const FileSystemException('no docs dir'),
+        );
+        expect(
+          await factory.inspectSpoolFilePresence(),
+          KitchenSpoolFilePresence.unknown,
+          reason: 'a provider failure is not proof the spool is absent',
+        );
+        // The bool convenience still reports false (safe skip), never asserting
+        // presence.
+        expect(await factory.spoolFileExists(), isFalse);
+      });
+
+      test('a path/stat inspection failure AFTER the directory resolves is '
+          'UNKNOWN, never absent', () async {
+        final factory = KitchenSpoolDatabaseFactory(
+          documentsDirectoryProvider: () async => _ThrowingPathDirectory(),
+        );
+        expect(
+          await factory.inspectSpoolFilePresence(),
+          KitchenSpoolFilePresence.unknown,
+        );
+        expect(await factory.spoolFileExists(), isFalse);
+      });
+
+      test('a resolved directory with NO file is confirmed ABSENT, creating '
+          'nothing', () async {
+        final factory = KitchenSpoolDatabaseFactory(
+          documentsDirectoryProvider: () async => tempDir,
+        );
+        expect(
+          await factory.inspectSpoolFilePresence(),
+          KitchenSpoolFilePresence.absent,
+        );
+        expect(
+          Directory(
+            p.join(tempDir.path, kKitchenSpoolDatabaseDirectoryName),
+          ).existsSync(),
+          isFalse,
+          reason: 'presence inspection must not grow a footprint',
+        );
+      });
+
+      test(
+        'a resolved directory with an existing file is confirmed PRESENT',
+        () async {
+          final path = KitchenSpoolDatabaseFactory.databasePathUnder(tempDir);
+          Directory(p.dirname(path)).createSync(recursive: true);
+          File(path).writeAsStringSync('placeholder');
+          final factory = KitchenSpoolDatabaseFactory(
+            documentsDirectoryProvider: () async => tempDir,
+          );
+          expect(
+            await factory.inspectSpoolFilePresence(),
+            KitchenSpoolFilePresence.present,
+          );
+          expect(await factory.spoolFileExists(), isTrue);
+        },
       );
     });
   });

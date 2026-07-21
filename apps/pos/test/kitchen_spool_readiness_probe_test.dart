@@ -65,6 +65,13 @@ class _FakeSecureStorage extends Fake implements FlutterSecureStorage {
   }) async => Map.of(values);
 }
 
+/// A documents Directory that RESOLVES successfully but throws when its path is
+/// inspected — models a stat/path failure AFTER directory resolution (F1-B).
+class _ThrowingPathDirectory extends Fake implements Directory {
+  @override
+  String get path => throw const FileSystemException('path inspection failed');
+}
+
 void main() {
   late Directory tempDir;
   late _FakeSecureStorage storage;
@@ -296,5 +303,108 @@ void main() {
       reason: 'still unprintable — no usable key',
     );
     expect(result.blockerCode, 'secure_storage_unavailable');
+  });
+
+  test('KITCHEN-MODE-001C3B1A2 (F1-A): a documents-directory PROVIDER failure '
+      'is UNKNOWN, never absent — no proven-empty claim, no footprint, no '
+      'leaked exception', () async {
+    final result = await KitchenSpoolReadinessProbe(
+      platform: nativePlatform,
+      databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
+        documentsDirectoryProvider: () async =>
+            throw const FileSystemException('no docs dir'),
+      ),
+      keyManagerBuilder: keyManager,
+    ).probe(deviceId: 'dev-1', branchId: 'branch-1');
+
+    expect(
+      result.spoolCountState,
+      KitchenSpoolCountState.unknown,
+      reason: 'a directory-provider failure is NOT proof of absence',
+    );
+    expect(result.spoolCountState, isNot(KitchenSpoolCountState.absent));
+    expect(
+      result.unresolvedLocalJobs,
+      0,
+      reason: 'non-authoritative — never interpreted as proven empty',
+    );
+    expect(result.secureSpoolAvailable, isFalse);
+    expect(result.blockerCode, 'spool_presence_unknown');
+    // NON-MUTATING: no spool directory, no DB, no key provisioned anywhere.
+    expect(
+      Directory(
+        '${tempDir.path}${Platform.pathSeparator}restoflow_kitchen_spool',
+      ).existsSync(),
+      isFalse,
+    );
+    expect(storage.values, isEmpty);
+  });
+
+  test(
+    'KITCHEN-MODE-001C3B1A2 (F1-B): a path/stat inspection failure AFTER the '
+    'directory resolves is UNKNOWN, never absent',
+    () async {
+      final result = await KitchenSpoolReadinessProbe(
+        platform: nativePlatform,
+        databaseFactoryBuilder: () => KitchenSpoolDatabaseFactory(
+          // Resolves fine, but inspecting the resolved path throws.
+          documentsDirectoryProvider: () async => _ThrowingPathDirectory(),
+        ),
+        keyManagerBuilder: keyManager,
+      ).probe(deviceId: 'dev-1', branchId: 'branch-1');
+
+      expect(result.spoolCountState, KitchenSpoolCountState.unknown);
+      expect(result.spoolCountState, isNot(KitchenSpoolCountState.absent));
+      expect(result.unresolvedLocalJobs, 0);
+      expect(result.secureSpoolAvailable, isFalse);
+      expect(result.blockerCode, 'spool_presence_unknown');
+      expect(storage.values, isEmpty);
+    },
+  );
+
+  test('KITCHEN-MODE-001C3B1A2 (F2): a readable/COUNTED DB with a CORRUPT key '
+      'stays counted with the REAL count; secure=false; the key is neither '
+      'wiped nor regenerated and no row is claimed/mutated', () async {
+    await keyManager().provisionKey();
+    final db = await factory().open();
+    final store = DriftKitchenSpoolStore(db);
+    await seedJob(store, deviceId: 'dev-1', branchId: 'branch-1');
+    await seedJob(
+      store,
+      deviceId: 'dev-1',
+      branchId: 'branch-1',
+      dispatchId: 'disp-2',
+    );
+    await db.close();
+
+    final keyName = storage.values.keys.single;
+    storage.values[keyName] = 'not-base64!!'; // corrupt the key, keep the rows
+
+    final result = await probe().probe(deviceId: 'dev-1', branchId: 'branch-1');
+    expect(
+      result.spoolCountState,
+      KitchenSpoolCountState.counted,
+      reason: 'a readable DB is COUNTED even when the key is corrupt',
+    );
+    expect(
+      result.unresolvedLocalJobs,
+      2,
+      reason: 'the exact seeded count is retained, never erased by the key',
+    );
+    expect(
+      result.secureSpoolAvailable,
+      isFalse,
+      reason: 'a corrupt key is unprintable',
+    );
+    expect(result.blockerCode, 'kitchen_spool_key_corrupted');
+    // Key evidence preserved (never wiped/regenerated).
+    expect(storage.values[keyName], 'not-base64!!');
+    // The rows are untouched: the probe claimed/mutated nothing.
+    final reopened = await factory().open();
+    final remaining = await DriftKitchenSpoolStore(
+      reopened,
+    ).countUnresolved(deviceId: 'dev-1', branchId: 'branch-1');
+    await reopened.close();
+    expect(remaining, 2, reason: 'no row was claimed or modified');
   });
 }

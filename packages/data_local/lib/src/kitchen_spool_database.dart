@@ -66,6 +66,20 @@ final class KitchenSpoolDatabaseUnavailableException implements Exception {
   String toString() => 'KitchenSpoolDatabaseUnavailableException: $reason';
 }
 
+/// KITCHEN-MODE-001C3B1A2 — the TRUTHFUL, non-mutating result of asking whether
+/// a spool database file exists, distinguishing a CONFIRMED answer from an
+/// undeterminable one:
+///  * [present] — the documents directory resolved AND the file is confirmed
+///    to exist;
+///  * [absent]  — the documents directory resolved AND the file is confirmed
+///    NOT to exist (a proven-empty footprint);
+///  * [unknown] — the documents directory / path could not be resolved or
+///    inspected, so presence is UNDETERMINED. A provider/IO failure is NEVER
+///    proof of absence — collapsing it to [absent] would let the future
+///    `printer_only -> kds` escape gate treat an unreadable device as
+///    proven-empty. Fail closed to [unknown] instead.
+enum KitchenSpoolFilePresence { present, absent, unknown }
+
 /// KITCHEN-MODE-001C2B — the ONLY production factory for the dedicated
 /// spool database.
 ///
@@ -93,17 +107,51 @@ final class KitchenSpoolDatabaseFactory {
     kKitchenSpoolDatabaseFileName,
   );
 
-  /// Whether a spool database file already exists (WITHOUT creating the
-  /// directory — a verified-kds device must not grow a spool footprint).
-  Future<bool> spoolFileExists() async {
+  /// KITCHEN-MODE-001C3B1A2 — the NON-MUTATING, TRUTHFUL presence inspection.
+  ///
+  /// Distinguishes a confirmed [KitchenSpoolFilePresence.absent] file from an
+  /// undeterminable [KitchenSpoolFilePresence.unknown] one:
+  ///  * the documents-directory provider throwing → [unknown] (a provider
+  ///    failure is NOT proof the spool is empty);
+  ///  * any path/stat inspection failure AFTER the directory resolved →
+  ///    [unknown];
+  ///  * the path resolves and the file is confirmed present → [present];
+  ///  * the path resolves and the file is confirmed missing → [absent].
+  ///
+  /// NEVER creates the directory or database, NEVER touches a crypto key, and
+  /// NEVER leaks a raw exception (fail closed to [unknown] on ANY failure).
+  Future<KitchenSpoolFilePresence> inspectSpoolFilePresence() async {
     final Directory docs;
     try {
       docs = await _documentsDirectoryProvider();
-    } on Exception {
-      return false;
+    } on Object {
+      // Documents-directory resolution failed: presence is UNKNOWN, never
+      // absent (a directory-provider failure is not proof of an empty spool).
+      return KitchenSpoolFilePresence.unknown;
     }
-    return File(databasePathUnder(docs)).existsSync();
+    try {
+      return File(databasePathUnder(docs)).existsSync()
+          ? KitchenSpoolFilePresence.present
+          : KitchenSpoolFilePresence.absent;
+    } on Object {
+      // A path/stat inspection failure after the directory resolved is also
+      // UNKNOWN — confirmed absence requires a successful, negative check.
+      return KitchenSpoolFilePresence.unknown;
+    }
   }
+
+  /// Whether a spool database file is CONFIRMED present (WITHOUT creating the
+  /// directory — a verified-kds device must not grow a spool footprint).
+  ///
+  /// A convenience over [inspectSpoolFilePresence]: `true` ONLY for a confirmed
+  /// [KitchenSpoolFilePresence.present]; both [KitchenSpoolFilePresence.absent]
+  /// and [KitchenSpoolFilePresence.unknown] map to `false`. This is SAFE for
+  /// callers whose only reaction to `false` is to skip work and touch nothing
+  /// (e.g. the runtime drain worker's "no footprint" skip). Count-CERTAINTY
+  /// callers MUST use [inspectSpoolFilePresence] instead, because a `false`
+  /// here cannot tell a proven-empty spool from an undeterminable one.
+  Future<bool> spoolFileExists() async =>
+      await inspectSpoolFilePresence() == KitchenSpoolFilePresence.present;
 
   /// Opens (creating the directory/file when needed) and PROBES the database
   /// so corruption fails here, typed, instead of on first use. On probe
