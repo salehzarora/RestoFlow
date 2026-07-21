@@ -359,5 +359,74 @@ void main() {
         isA<KitchenAckMalformedResponse>(),
       );
     });
+
+    test('001C2C: the vocabulary is EXACTLY the five server statuses, each '
+        'sent with its exact wire name', () async {
+      expect(KitchenImportAckStatus.values, hasLength(5));
+      final wires = {
+        KitchenImportAckStatus.imported: 'imported',
+        KitchenImportAckStatus.transportAccepted: 'transport_accepted',
+        KitchenImportAckStatus.possiblyPrinted: 'possibly_printed',
+        KitchenImportAckStatus.failedRetryable: 'failed_retryable',
+        KitchenImportAckStatus.blockedConfiguration: 'blocked_configuration',
+      };
+      for (final entry in wires.entries) {
+        transport.enqueue({'ok': true, 'idempotency_replay': false});
+        await (await repo()).acknowledge(dispatchId: 'd-w', status: entry.key);
+        expect(
+          transport.calls.last.$2['p_client_status'],
+          entry.value,
+          reason: entry.key.name,
+        );
+      }
+    });
+
+    test('001C2C: transport_accepted parses the COMPLETED evidence', () async {
+      transport.enqueue({
+        'ok': true,
+        'completed': true,
+        'idempotency_replay': false,
+      });
+      final result = await (await repo()).acknowledge(
+        dispatchId: 'd-c',
+        status: KitchenImportAckStatus.transportAccepted,
+      );
+      expect((result as KitchenAckAccepted).completed, isTrue);
+      // The completing device's replay keeps both facts.
+      transport.enqueue({
+        'ok': true,
+        'completed': true,
+        'idempotency_replay': true,
+      });
+      final replay = await (await repo()).acknowledge(
+        dispatchId: 'd-c',
+        status: KitchenImportAckStatus.transportAccepted,
+      );
+      expect((replay as KitchenAckAccepted).completed, isTrue);
+      expect(replay.idempotencyReplay, isTrue);
+    });
+
+    test('001C2C: request-contract rejections are TYPED (never retried '
+        'blindly as transport errors)', () async {
+      transport.enqueue({'ok': false, 'error': 'invalid_status'});
+      final invalidStatus = await (await repo()).acknowledge(
+        dispatchId: 'd-1',
+        status: KitchenImportAckStatus.imported,
+      );
+      expect(
+        (invalidStatus as KitchenAckInvalidRequest).reason,
+        KitchenAckInvalidRequestReason.invalidStatus,
+      );
+      transport.enqueue({'ok': false, 'error': 'invalid_error_code'});
+      final invalidCode = await (await repo()).acknowledge(
+        dispatchId: 'd-1',
+        status: KitchenImportAckStatus.failedRetryable,
+        errorCode: 'x',
+      );
+      expect(
+        (invalidCode as KitchenAckInvalidRequest).reason,
+        KitchenAckInvalidRequestReason.invalidErrorCode,
+      );
+    });
   });
 }

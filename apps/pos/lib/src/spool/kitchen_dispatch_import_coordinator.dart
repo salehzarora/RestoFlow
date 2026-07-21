@@ -379,6 +379,7 @@ Future<KitchenAckFlushOutcome> flushAck(
     case KitchenAckTransientFailure():
     case KitchenAckServerFailure():
     case KitchenAckMalformedResponse():
+    case KitchenAckInvalidRequest():
       final attempt = job.serverAckAttemptCount + 1;
       var delay = backoffBase * (1 << (attempt > 8 ? 8 : attempt));
       if (delay > backoffCap) delay = backoffCap;
@@ -388,6 +389,9 @@ Future<KitchenAckFlushOutcome> flushAck(
           KitchenAckInvalidSession() => 'invalid_session',
           KitchenAckTransientFailure() => 'network_unreachable',
           KitchenAckServerFailure() => 'server_failure',
+          // A request-contract rejection is a CLIENT bug: kept visible in
+          // the ack error code (capped backoff; safe typed token only).
+          KitchenAckInvalidRequest() => 'invalid_request',
           _ => 'malformed_response',
         },
         nextAttemptAt: now.add(delay),

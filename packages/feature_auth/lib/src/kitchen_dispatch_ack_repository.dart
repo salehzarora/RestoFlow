@@ -1,15 +1,22 @@
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
-/// KITCHEN-MODE-001C2B — device-token client for
+/// KITCHEN-MODE-001C2B/001C2C — device-token client for
 /// `acknowledge_kitchen_print_dispatch`.
 ///
-/// COMPILE-TIME CLOSED: 001C2B may acknowledge ONLY `imported` and
-/// `blocked_configuration` — the transport/ambiguity statuses
-/// (`transport_accepted`, `possibly_printed`, `failed_retryable`) do not
-/// exist in this API and arrive with the 001C2C worker orchestration.
+/// COMPILE-TIME CLOSED to EXACTLY the five server-accepted client statuses
+/// (widened in 001C2C for the print worker). There is no arbitrary string
+/// constructor and no unknown-status passthrough — the server contract's
+/// vocabulary is the whole vocabulary. Semantics (verified 001C1 contract):
+/// `transport_accepted` COMPLETES the dispatch (never re-served);
+/// `possibly_printed` is a PERMANENT no-lease hold (operator-review);
+/// `imported` extends the claim lease; `failed_retryable` /
+/// `blocked_configuration` keep the natural lease for a later retry.
 enum KitchenImportAckStatus {
   imported('imported'),
+  transportAccepted('transport_accepted'),
+  possiblyPrinted('possibly_printed'),
+  failedRetryable('failed_retryable'),
   blockedConfiguration('blocked_configuration');
 
   const KitchenImportAckStatus(this.wireName);
@@ -37,9 +44,26 @@ sealed class KitchenAckResult {
 
 /// The server recorded the acknowledgement (idempotent replays included).
 final class KitchenAckAccepted extends KitchenAckResult {
-  const KitchenAckAccepted({required this.idempotencyReplay});
+  const KitchenAckAccepted({
+    required this.idempotencyReplay,
+    this.completed = false,
+  });
 
   final bool idempotencyReplay;
+
+  /// Whether the server marked the dispatch COMPLETED (true only for
+  /// `transport_accepted` — the dispatch is never re-served afterwards).
+  final bool completed;
+}
+
+/// The server rejected the REQUEST itself (a client-side contract bug —
+/// never retried blindly). Closed reasons; no raw server text.
+enum KitchenAckInvalidRequestReason { invalidStatus, invalidErrorCode }
+
+final class KitchenAckInvalidRequest extends KitchenAckResult {
+  const KitchenAckInvalidRequest(this.reason);
+
+  final KitchenAckInvalidRequestReason reason;
 }
 
 final class KitchenAckTerminal extends KitchenAckResult {
@@ -113,10 +137,17 @@ class SupabaseKitchenDispatchAckRepository {
     if (json['ok'] == true) {
       return KitchenAckAccepted(
         idempotencyReplay: json['idempotency_replay'] == true,
+        completed: json['completed'] == true,
       );
     }
     return switch (json['error']) {
       'invalid_session' => const KitchenAckInvalidSession(),
+      'invalid_status' => const KitchenAckInvalidRequest(
+        KitchenAckInvalidRequestReason.invalidStatus,
+      ),
+      'invalid_error_code' => const KitchenAckInvalidRequest(
+        KitchenAckInvalidRequestReason.invalidErrorCode,
+      ),
       'not_claim_owner' => const KitchenAckTerminal(
         KitchenAckTerminalCode.notClaimOwner,
       ),
