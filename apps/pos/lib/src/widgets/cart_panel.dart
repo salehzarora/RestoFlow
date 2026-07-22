@@ -20,10 +20,10 @@ import '../print/pos_kitchen_ticket_printer.dart'
     show
         kdsTicketViewFromCartLines,
         kitchenTicketPrintLabelsFromL10n,
-        posHasKitchenNativePrinterProvider,
         runAutoKitchenTicketPrintOnSubmit;
 import '../state/pos_auto_print_prefs.dart'
-    show posAutoPrintKitchenTicketEnabled, posAutoPrintKitchenTicketProvider;
+    show posAutoPrintKitchenTicketProvider;
+import '../state/pos_kitchen_workflow.dart';
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
@@ -112,23 +112,18 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
     // when the cashier edits a cart line. Null (still loading) falls back to a
     // note-only edit built from the line itself.
     final menu = ref.watch(posMenuProvider).valueOrNull;
-    // KITCHEN-PRINT-DUAL-001C: the direct-print DISPATCH decision is captured
-    // SYNCHRONOUSLY at submit time from the persisted "auto-print kitchen ticket"
-    // toggle. In REAL mode Send must therefore WAIT until that toggle has resolved:
-    // a cold-start tap would otherwise read AsyncLoading (valueOrNull == null) and
-    // wrongly fall back to the normal KDS workflow even when the persisted setting
-    // is ON. So watch (never discard) the toggle and expose a resolved-readiness
-    // gate; also warm the kitchen-printer bool the sync capture reads. In DEMO mode
-    // the toggle is never read, so readiness is trivially satisfied.
-    final isDemoMode = ref.watch(runtimeConfigProvider).isDemoMode;
-    final autoPrintKitchen = ref.watch(posAutoPrintKitchenTicketProvider);
-    ref.watch(posHasKitchenNativePrinterProvider);
-    final kitchenSettingLoading = !isDemoMode && autoPrintKitchen.isLoading;
-    // A genuine prefs READ ERROR blocks Send with an honest retry — never a silent
-    // fall-through into the KDS workflow when direct print may be expected.
-    final kitchenSettingError = !isDemoMode && autoPrintKitchen.hasError;
-    final kitchenWorkflowResolved =
-        !kitchenSettingLoading && !kitchenSettingError;
+    // KITCHEN-PRINT-DUAL-001C: the ONE explicit kitchen-workflow decision the Send
+    // action consumes, derived from the RESOLUTION STATE of the real async toggle
+    // AND printer-config providers (never a sync bool that hides AsyncLoading). Send
+    // enables only in a READY state — critically, a resolved ON toggle whose printer
+    // configuration is STILL LOADING stays `loading` (Send disabled), so a cold
+    // start can never fall back to KDS by mis-reading unresolved config as "no
+    // printer". The SAME decision is captured synchronously at submit time (see
+    // submitOrderFromCart). Watching it also warms the printer config while ON.
+    final kitchenDecision = ref.watch(posKitchenWorkflowDecisionProvider);
+    final kitchenWorkflowReady =
+        kitchenDecision == PosKitchenWorkflowDecision.normalKdsReady ||
+        kitchenDecision == PosKitchenWorkflowDecision.directPrintReady;
     // TABLET-UX-001 (B): the side cart (two-pane tablet/landscape) uses compact,
     // denser line rows so more of the order is visible at once; the phone
     // slide-up sheet keeps its roomier rows.
@@ -159,10 +154,11 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
           !_submitting &&
           !addition.sending &&
           !addition.awaitingRefresh &&
-          // KITCHEN-PRINT-DUAL-001C: in real mode, hold Send until the
-          // auto-kitchen workflow setting has resolved (never submit on a
-          // still-loading or errored setting — see the capture at submit time).
-          kitchenWorkflowResolved;
+          // KITCHEN-PRINT-DUAL-001C: hold Send until the kitchen-workflow decision
+          // is a READY state — never submit while the toggle OR (when ON) the
+          // printer configuration is still loading/errored, or while ON with no
+          // printer configured (see the capture at submit time).
+          kitchenWorkflowReady;
       final pendingSync = ref
           .watch(outboxControllerProvider)
           .where((e) => e.syncState.isPending)
@@ -261,15 +257,24 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                       },
                     ),
             ),
-            // KITCHEN-PRINT-DUAL-001C: an honest, minimal error+retry when the
-            // auto-kitchen workflow setting could not be read. Send stays disabled
-            // (canSend gated above) until it resolves — the operator retries here,
-            // or changes/disables the option in Device Settings (the escape hatch).
-            if (kitchenSettingError)
-              _KitchenSettingError(
-                l10n: l10n,
-                onRetry: () =>
-                    ref.invalidate(posAutoPrintKitchenTicketProvider),
+            // KITCHEN-PRINT-DUAL-001C: honest, minimal notices for the two
+            // Send-disabled kitchen-workflow states (loading needs no message —
+            // Send is simply disabled). ERROR: a toggle/printer-config read failed
+            // -> retry re-reads the failed provider. MISSING PRINTER: direct print
+            // is ON but no kitchen printer is configured -> configure one or turn
+            // the option off in Device Settings (no auto-fallback into the KDS).
+            if (kitchenDecision == PosKitchenWorkflowDecision.error)
+              _KitchenWorkflowNotice(
+                message: ref.watch(posAutoPrintKitchenTicketProvider).hasError
+                    ? l10n.posKitchenSettingLoadError
+                    : l10n.posKitchenPrinterConfigLoadError,
+                actionLabel: l10n.authTryAgain,
+                onAction: () => refreshKitchenWorkflowInputs(ref),
+              )
+            else if (kitchenDecision ==
+                PosKitchenWorkflowDecision.directPrintMissingPrinter)
+              _KitchenWorkflowNotice(
+                message: l10n.posKitchenNoPrinterConfigured,
               ),
             _CartFooter(
               l10n: l10n,
@@ -468,27 +473,22 @@ Future<void> submitOrderFromCart({
       for (final item in menu.items)
         if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
   };
-  // KITCHEN-PRINT-DUAL-001C: resolve the DIRECT-PRINT dispatch decision ONCE,
-  // HERE — SYNCHRONOUSLY, before the first submission await — from immutable
-  // inputs: real mode + the persisted "auto-print kitchen ticket" toggle + a
-  // configured kitchen printer. This ONE decision drives BOTH the order's
-  // dispatch_mode (sent in the submit op, so the server routes it out of the KDS
-  // active workflow) AND the post-submit kitchen print, so a toggle change while
-  // the submit is in flight can never split the behavior. The read is SYNC on
-  // purpose: it inserts no async hop before the authoritative submit — the
-  // full-identity mutation boundary AND the snapshot-race guarantee both require
-  // `outbox.submit` to be the FIRST await. The inputs are warmed by the cart
-  // build (above), so this sees their settled values; if either is still
-  // resolving (a cold start before the cart has painted) it FAILS SAFE to the
-  // normal KDS workflow — an order is never finalized out of the KDS while the
-  // setting is unknown. It NEVER changes payment/settlement or receipt behavior.
-  var directKitchenPrint = false;
-  if (!container.read(runtimeConfigProvider).isDemoMode) {
-    directKitchenPrint = posAutoPrintKitchenTicketEnabled(
-      stored: container.read(posAutoPrintKitchenTicketProvider).valueOrNull,
-      hasKitchenPrinter: container.read(posHasKitchenNativePrinterProvider),
-    );
-  }
+  // KITCHEN-PRINT-DUAL-001C: capture the RESOLVED kitchen-workflow decision ONCE,
+  // HERE — SYNCHRONOUSLY, before the first submission await. Send is only tappable
+  // in a READY state (see the gate in build), so this reads directPrintReady or
+  // normalKdsReady — a direct_print order is dispatched IFF the decision is
+  // directPrintReady. The decision is derived from the RESOLUTION STATE of the real
+  // async toggle + printer-config providers, so there is no valueOrNull-of-loading
+  // fallback: a still-loading printer config disables Send rather than being read as
+  // "no printer -> KDS". The read is SYNC on purpose (it inserts no async hop before
+  // the authoritative submit — the full-identity mutation boundary AND the
+  // snapshot-race guarantee both require `outbox.submit` to be the FIRST await), and
+  // this ONE captured value drives BOTH the order's dispatch_mode AND the post-submit
+  // print, so a toggle/printer change while the submit is in flight cannot split the
+  // workflow. It NEVER changes payment/settlement or receipt behavior.
+  final directKitchenPrint =
+      container.read(posKitchenWorkflowDecisionProvider) ==
+      PosKitchenWorkflowDecision.directPrintReady;
   try {
     final result = await outbox.submit(
       lines: cart.lines,
@@ -872,15 +872,21 @@ class _EmptyCart extends StatelessWidget {
   }
 }
 
-/// KITCHEN-PRINT-DUAL-001C: a compact, honest banner shown above the footer when
-/// the per-device auto-kitchen workflow setting could not be READ. Send is held
-/// disabled (gated in the build) until the setting resolves; this offers a retry.
-/// No redesign — one localized line + a Try again button.
-class _KitchenSettingError extends StatelessWidget {
-  const _KitchenSettingError({required this.l10n, required this.onRetry});
+/// KITCHEN-PRINT-DUAL-001C: a compact, honest banner shown above the footer for a
+/// Send-disabled kitchen-workflow state — a failed setting/printer-config read
+/// (with a retry action) or "direct print is on but no kitchen printer is
+/// configured" (message only). Send stays disabled (gated in the build) until the
+/// state clears. No redesign — one localized line + an optional action button.
+class _KitchenWorkflowNotice extends StatelessWidget {
+  const _KitchenWorkflowNotice({
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
 
-  final AppLocalizations l10n;
-  final VoidCallback onRetry;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -902,13 +908,14 @@ class _KitchenSettingError extends StatelessWidget {
           const SizedBox(width: RestoflowSpacing.sm),
           Expanded(
             child: Text(
-              l10n.posKitchenSettingLoadError,
+              message,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onErrorContainer,
               ),
             ),
           ),
-          TextButton(onPressed: onRetry, child: Text(l10n.authTryAgain)),
+          if (actionLabel != null && onAction != null)
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
         ],
       ),
     );
