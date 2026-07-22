@@ -132,6 +132,65 @@ void main() {
       await sub.cancel();
     });
 
+    test(
+      'KITCHEN-PRINT-DUAL-001C backstop: a direct_print order in local state is '
+      'never mapped to a ticket (defense-in-depth for a legacy/pre-migration '
+      'feed), while the normal order still maps',
+      () {
+        final source = _FakeKdsSyncSource();
+        final repo = KdsRepository(source);
+        addTearDown(repo.dispose);
+
+        // A malformed/pre-migration feed that still carried a direct_print order
+        // (as an un-migrated server would) alongside a normal one + both items.
+        // The authoritative fix omits this graph server-side; this proves the
+        // client read-back is still contained if one ever slips through.
+        source.emit(
+          _dataState(
+            [
+              {
+                'id': 'o-dp',
+                'status': 'submitted',
+                'dispatch_mode': 'direct_print',
+              },
+              {'id': 'o-kds', 'status': 'preparing', 'dispatch_mode': 'kds'},
+            ],
+            [
+              {
+                'id': 'i-dp',
+                'order_id': 'o-dp',
+                'station_id': 'grill',
+                'status': 'submitted',
+                'quantity': 1,
+                'menu_item_name_snapshot': 'Burger',
+              },
+              {
+                'id': 'i-kds',
+                'order_id': 'o-kds',
+                'station_id': 'grill',
+                'status': 'preparing',
+                'quantity': 1,
+                'menu_item_name_snapshot': 'Fries',
+              },
+            ],
+          ),
+        );
+
+        final vs = repo.viewState;
+        expect(
+          vs.tickets,
+          hasLength(1),
+          reason: 'only the normal order boards',
+        );
+        expect(vs.tickets.single.orderId, 'o-kds');
+        expect(
+          vs.tickets.any((t) => t.orderId == 'o-dp'),
+          isFalse,
+          reason: 'a direct_print order is never surfaced as a KDS ticket',
+        );
+      },
+    );
+
     test('exposes the reauthRequired state to the UI', () {
       final source = _FakeKdsSyncSource();
       final repo = KdsRepository(source);
