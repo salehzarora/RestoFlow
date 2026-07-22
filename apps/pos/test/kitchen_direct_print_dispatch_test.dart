@@ -13,6 +13,8 @@ import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:restoflow_pos/src/data/order_submission.dart' show OutboxEntry;
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
+import 'package:restoflow_pos/src/state/pos_kitchen_workflow.dart'
+    show posKitchenPrinterConfiguredProvider;
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/order_setup_controller.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
@@ -171,12 +173,13 @@ Future<void> _signInAndWarm(ProviderContainer c) async {
       );
   expect(err, isNull);
   await _settle();
-  // Warm the async decision inputs so the pre-await read sees them resolved
-  // (the toggle + the kitchen-printer config that posHasKitchenNativePrinterProvider
-  // reads via valueOrNull).
+  // Warm the async decision inputs so the pre-await sync read of the kitchen
+  // workflow decision sees them RESOLVED (the toggle + the real printer-config
+  // chain the decision derives from).
   await c.read(posAutoPrintKitchenTicketProvider.future);
   await c.read(posKitchenSelectedPrinterTransportProvider.future);
   await c.read(posKitchenNetworkPrinterConfigProvider.future);
+  await c.read(posKitchenPrinterConfiguredProvider.future);
   await _settle();
 }
 

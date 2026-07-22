@@ -21,8 +21,14 @@ import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_auto_print_prefs.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
+import 'package:restoflow_pos/src/state/pos_kitchen_workflow.dart'
+    show posKitchenPrinterConfiguredProvider;
+import 'package:restoflow_pos/src/state/pos_network_printer_config.dart'
+    show posKitchenNetworkPrinterConfigProvider;
 import 'package:restoflow_pos/src/state/pos_printer_transport.dart'
-    show posNativePrintingAvailableProvider;
+    show
+        posKitchenSelectedPrinterTransportProvider,
+        posNativePrintingAvailableProvider;
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/widgets/cart_panel.dart'
     show submitOrderFromCart;
@@ -177,10 +183,13 @@ Future<void> _signIn(ProviderContainer c) async {
         pin: '1234',
       );
   expect(err, isNull);
-  // KITCHEN-PRINT-DUAL-001C: warm the toggle so its valueOrNull is settled (true)
-  // when submitOrderFromCart reads it SYNCHRONOUSLY — this harness drives the Send
-  // handler directly, without painting the CartPanel that normally warms it.
+  // KITCHEN-PRINT-DUAL-001C: warm the kitchen-workflow decision inputs so the
+  // pre-await SYNC read resolves to directPrintReady — this harness drives the Send
+  // handler directly, without painting the CartPanel that normally warms them.
   await c.read(posAutoPrintKitchenTicketProvider.future);
+  await c.read(posKitchenSelectedPrinterTransportProvider.future);
+  await c.read(posKitchenNetworkPrinterConfigProvider.future);
+  await c.read(posKitchenPrinterConfiguredProvider.future);
   await _settle();
 }
 

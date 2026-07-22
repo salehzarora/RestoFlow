@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert' show jsonEncode;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/material.dart';
@@ -18,25 +17,29 @@ import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_auto_print_prefs.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
-import 'package:restoflow_pos/src/state/pos_printer_transport.dart'
-    show posNativePrintingAvailableProvider;
+import 'package:restoflow_pos/src/state/pos_network_printer_config.dart';
+import 'package:restoflow_pos/src/state/pos_printer_purpose.dart';
+import 'package:restoflow_pos/src/state/pos_printer_transport.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/widgets/cart_panel.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// KITCHEN-PRINT-DUAL-001C (cold start) — the CartPanel Send GATE.
+/// KITCHEN-PRINT-DUAL-001C (cold start) — the CartPanel Send GATE driven through
+/// the REAL async provider graph (the toggle AND the printer-config providers),
+/// NOT a final derived readiness boolean. The decisive proof: Send cannot enable
+/// while the toggle is ON and the printer configuration is still unresolved.
 ///
-/// The direct-print decision is captured SYNCHRONOUSLY at submit time from the
-/// persisted toggle. So in REAL mode Send must WAIT until that toggle resolves:
-///   A. persisted ON  — Send is DISABLED while AsyncLoading; once it resolves it
-///      ENABLES, and the submitted op then carries dispatch_mode='direct_print'.
-///   B. persisted OFF — Send waits for resolution too, then submits the NORMAL
-///      kds workflow (no dispatch_mode).
-///   C. read FAILURE  — Send stays unavailable + an honest localized error/retry
-///      is shown; no order is submitted.
-/// (D — a toggle change DURING an in-flight submit not splitting the workflow —
-///  is proven on the real Send handler in kitchen_direct_print_dispatch_test C.)
+///   A. Persisted ON — Send disabled while EITHER the toggle OR (once ON) the
+///      printer config is loading; enables only when a valid printer resolves,
+///      then submits dispatch_mode='direct_print' + one kitchen print.
+///   B. Persisted OFF — Send enables as soon as the toggle resolves false, WITHOUT
+///      waiting for printer config; submits normal kds (no dispatch_mode, no print).
+///   C. ON + no configured printer — Send disabled + a localized configure/disable
+///      message; nothing submitted, no KDS fallback.
+///   D. ON + printer-config read error — Send disabled + localized retry; retry
+///      re-reads the provider; after a valid printer, Send enables.
+///   E. Toggle/printer change DURING an in-flight submit — the captured
+///      directPrintReady decision governs dispatch + print.
 
 final _menuSource = StateProvider<PosMenuData>(
   (_) => const PosMenuData(
@@ -54,23 +57,38 @@ final _menuSource = StateProvider<PosMenuData>(
   ),
 );
 
-/// A toggle controller whose resolution the test drives: [gate] (if set) is
-/// awaited (held AsyncLoading until completed); otherwise it returns [seed].
+PosNetworkPrinterConfig _printer() =>
+    PosNetworkPrinterConfig.fromJson(const {'host': '10.0.0.9', 'port': 9100})!;
+
+/// Toggle controller the test drives: [gate] (held loading until completed), else [seed].
 class _GateKitchen extends PosAutoPrintKitchenTicketController {
   static Completer<bool?>? gate;
   static bool? seed;
   @override
-  Future<bool?> build() async {
-    final g = gate;
-    if (g != null) return g.future;
-    return seed;
-  }
+  Future<bool?> build() async => gate != null ? gate!.future : seed;
 }
 
-/// A toggle controller whose read FAILS (AsyncError) — a genuine prefs failure.
-class _ThrowKitchen extends PosAutoPrintKitchenTicketController {
+/// Kitchen-transport controller pinned to network (resolves immediately) — so the
+/// ONLY thing that can hold the printer-config chain loading is the config below.
+class _NetworkTransport extends PosSelectedPrinterTransportController {
   @override
-  Future<bool?> build() async => throw Exception('prefs read failed');
+  Future<PosPrinterTransportKind> build(PosPrinterPurpose arg) async =>
+      PosPrinterTransportKind.network;
+}
+
+/// Kitchen network-config controller the test drives: throws (read error), or
+/// awaits [gate] (held loading), or returns [seed] (a printer, or null = none).
+class _CtrlNetworkConfig extends PosNetworkPrinterConfigController {
+  static bool throwOnBuild = false;
+  static Completer<PosNetworkPrinterConfig?>? gate;
+  static PosNetworkPrinterConfig? seed;
+  @override
+  Future<PosNetworkPrinterConfig?> build(PosPrinterPurpose arg) async {
+    // Only the KITCHEN slot is under test; the receipt slot keeps its default.
+    if (arg != PosPrinterPurpose.kitchenTicket) return null;
+    if (throwOnBuild) throw Exception('printer config read failed');
+    return gate != null ? gate!.future : seed;
+  }
 }
 
 class _CapturingTransport implements pp.PrintTransport {
@@ -86,9 +104,14 @@ class _CapturingTransport implements pp.PrintTransport {
 }
 
 class _RecordingOutbox implements OutboxRepository {
+  _RecordingOutbox({this.gate});
+  final Completer<void>? gate;
+  final Completer<void> entered = Completer<void>();
   final List<OutboxEntry> enqueued = <OutboxEntry>[];
   @override
   Future<OutboxEntry> enqueue(OutboxEntry entry) async {
+    if (!entered.isCompleted) entered.complete();
+    if (gate != null) await gate!.future;
     enqueued.add(entry);
     return entry;
   }
@@ -133,15 +156,8 @@ Future<void> _settle() async {
 Future<
   ({ProviderContainer c, _RecordingOutbox outbox, _CapturingTransport print})
 >
-_bring(WidgetTester tester, {required List<Override> toggleOverride}) async {
-  SharedPreferences.setMockInitialValues({
-    'restoflow.printer.selected.pos.kitchen_ticket.device-1': 'network',
-    'restoflow.printer.network.pos.kitchen_ticket.device-1': jsonEncode({
-      'host': '10.0.0.9',
-      'port': 9100,
-    }),
-  });
-  final outbox = _RecordingOutbox();
+_bring(WidgetTester tester, {Completer<void>? outboxGate}) async {
+  final outbox = _RecordingOutbox(gate: outboxGate);
   final capture = _CapturingTransport();
   final c = ProviderContainer(
     overrides: [
@@ -152,11 +168,13 @@ _bring(WidgetTester tester, {required List<Override> toggleOverride}) async {
       posRealSessionConfigProvider.overrideWithValue(null),
       outboxRepositoryProvider.overrideWithValue(outbox),
       posMenuProvider.overrideWith((ref) => ref.watch(_menuSource)),
+      // Control the REAL underlying async graph — NOT posHasKitchenNativePrinter
+      // and NOT the derived readiness/decision providers.
       posNativePrintingAvailableProvider.overrideWithValue(true),
-      // A kitchen printer IS configured, so the direct-print decision can be ON.
-      posHasKitchenNativePrinterProvider.overrideWithValue(true),
+      posSelectedPrinterTransportFamily.overrideWith(_NetworkTransport.new),
+      posNetworkPrinterConfigFamily.overrideWith(_CtrlNetworkConfig.new),
+      posAutoPrintKitchenTicketProvider.overrideWith(_GateKitchen.new),
       kitchenPrintTransportOverrideProvider.overrideWithValue((_) => capture),
-      ...toggleOverride,
     ],
   );
   addTearDown(c.dispose);
@@ -196,8 +214,6 @@ Future<AppLocalizations> _pumpCart(
       ),
     ),
   );
-  // A ready-to-submit cart (the default takeaway setup + one line) so ONLY the
-  // toggle-readiness gate governs whether Send is enabled.
   c
       .read(cartControllerProvider.notifier)
       .addItem(
@@ -220,30 +236,45 @@ bool _sendEnabled(WidgetTester tester, String label) {
   return btn.onPressed != null;
 }
 
+Future<void> _pumpN(WidgetTester tester, [int n = 4]) async {
+  for (var i = 0; i < n; i++) {
+    await tester.pump();
+  }
+}
+
 void main() {
   tearDown(() {
     _GateKitchen.gate = null;
     _GateKitchen.seed = null;
+    _CtrlNetworkConfig.throwOnBuild = false;
+    _CtrlNetworkConfig.gate = null;
+    _CtrlNetworkConfig.seed = null;
   });
 
-  testWidgets('A: persisted ON — Send is DISABLED while the toggle loads, then '
-      'ENABLES and submits dispatch_mode=direct_print', (tester) async {
+  testWidgets('A: ON — Send stays DISABLED while the toggle loads AND (once ON) '
+      'while printer config loads; enables only when a valid printer resolves, '
+      'then submits direct_print', (tester) async {
     _GateKitchen.gate = Completer<bool?>();
-    final h = await _bring(
-      tester,
-      toggleOverride: [
-        posAutoPrintKitchenTicketProvider.overrideWith(_GateKitchen.new),
-      ],
-    );
+    _CtrlNetworkConfig.gate = Completer<PosNetworkPrinterConfig?>();
+    final h = await _bring(tester);
     final l10n = await _pumpCart(tester, h.c);
 
-    // Loading: Send is held disabled.
+    // Toggle loading -> disabled.
     expect(_sendEnabled(tester, l10n.posSendOrder), isFalse);
 
-    // The persisted setting resolves ON.
+    // Toggle resolves ON, but the printer config is STILL loading -> the decisive
+    // case: Send must REMAIN disabled (loading is never read as "no printer").
     _GateKitchen.gate!.complete(true);
-    await tester.pump();
-    await tester.pump();
+    await _pumpN(tester);
+    expect(
+      _sendEnabled(tester, l10n.posSendOrder),
+      isFalse,
+      reason: 'toggle ON + printer config unresolved must not enable Send',
+    );
+
+    // The printer config resolves with a valid kitchen printer -> enabled.
+    _CtrlNetworkConfig.gate!.complete(_printer());
+    await _pumpN(tester);
     expect(_sendEnabled(tester, l10n.posSendOrder), isTrue);
 
     await tester.tap(find.text(l10n.posSendOrder));
@@ -254,25 +285,23 @@ void main() {
         '"dispatch_mode":"direct_print"',
       ),
       isTrue,
-      reason: 'the resolved ON setting drives a direct_print dispatch',
     );
+    expect(h.print.sends, hasLength(1), reason: 'exactly one kitchen print');
   });
 
-  testWidgets('B: persisted OFF — Send waits for resolution, then submits the '
-      'normal kds workflow (no dispatch_mode)', (tester) async {
+  testWidgets('B: OFF — Send enables as soon as the toggle resolves false, '
+      'WITHOUT waiting for printer config; submits normal kds', (tester) async {
     _GateKitchen.gate = Completer<bool?>();
-    final h = await _bring(
-      tester,
-      toggleOverride: [
-        posAutoPrintKitchenTicketProvider.overrideWith(_GateKitchen.new),
-      ],
-    );
+    _CtrlNetworkConfig.gate =
+        Completer<PosNetworkPrinterConfig?>(); // never done
+    final h = await _bring(tester);
     final l10n = await _pumpCart(tester, h.c);
 
     expect(_sendEnabled(tester, l10n.posSendOrder), isFalse);
-    _GateKitchen.gate!.complete(false); // never chosen / off
-    await tester.pump();
-    await tester.pump();
+    _GateKitchen.gate!.complete(false); // OFF
+    await _pumpN(tester);
+    // Enabled even though the printer config gate is STILL pending — OFF does not
+    // wait for irrelevant printer configuration.
     expect(_sendEnabled(tester, l10n.posSendOrder), isTrue);
 
     await tester.tap(find.text(l10n.posSendOrder));
@@ -281,31 +310,82 @@ void main() {
     expect(
       h.outbox.enqueued.single.payloadJson.contains('dispatch_mode'),
       isFalse,
-      reason: 'OFF is the normal kds workflow — no dispatch_mode',
     );
-    expect(
-      h.print.sends,
-      isEmpty,
-      reason: 'no direct POS kitchen send when OFF',
-    );
+    expect(h.print.sends, isEmpty);
   });
 
-  testWidgets('C: a read FAILURE keeps Send unavailable, shows a localized '
-      'error + retry, and submits nothing', (tester) async {
-    final h = await _bring(
-      tester,
-      toggleOverride: [
-        posAutoPrintKitchenTicketProvider.overrideWith(_ThrowKitchen.new),
-      ],
-    );
+  testWidgets(
+    'C: ON + no configured printer — Send disabled + configure/disable '
+    'message; nothing submitted',
+    (tester) async {
+      _GateKitchen.seed = true;
+      _CtrlNetworkConfig.seed = null; // resolves: NO printer
+      final h = await _bring(tester);
+      final l10n = await _pumpCart(tester, h.c);
+      await _pumpN(tester);
+
+      expect(_sendEnabled(tester, l10n.posSendOrder), isFalse);
+      expect(find.text(l10n.posKitchenNoPrinterConfigured), findsOneWidget);
+      expect(h.outbox.enqueued, isEmpty);
+    },
+  );
+
+  testWidgets('D: ON + printer-config read error — Send disabled + localized '
+      'retry; retry re-reads and, with a valid printer, enables', (
+    tester,
+  ) async {
+    _GateKitchen.seed = true;
+    _CtrlNetworkConfig.throwOnBuild = true; // read error
+    final h = await _bring(tester);
     final l10n = await _pumpCart(tester, h.c);
-    await tester.pump();
+    await _pumpN(tester);
 
     expect(_sendEnabled(tester, l10n.posSendOrder), isFalse);
-    // Honest localized error + a retry affordance.
-    expect(find.text(l10n.posKitchenSettingLoadError), findsOneWidget);
+    expect(find.text(l10n.posKitchenPrinterConfigLoadError), findsOneWidget);
     expect(find.text(l10n.authTryAgain), findsOneWidget);
-    // Nothing was (or could be) submitted.
     expect(h.outbox.enqueued, isEmpty);
+
+    // The next read will succeed with a valid printer; retry re-reads it.
+    _CtrlNetworkConfig.throwOnBuild = false;
+    _CtrlNetworkConfig.seed = _printer();
+    await tester.tap(find.text(l10n.authTryAgain));
+    await _pumpN(tester, 8);
+    expect(_sendEnabled(tester, l10n.posSendOrder), isTrue);
+  });
+
+  testWidgets('E: a toggle/printer change DURING an in-flight submit does not '
+      'split the workflow — the captured direct_print decision governs', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    _GateKitchen.seed = true;
+    _CtrlNetworkConfig.seed = _printer();
+    final h = await _bring(tester, outboxGate: gate);
+    final l10n = await _pumpCart(tester, h.c);
+    await _pumpN(tester);
+    expect(_sendEnabled(tester, l10n.posSendOrder), isTrue);
+
+    await tester.tap(find.text(l10n.posSendOrder)); // decision captured now
+    await tester.pump();
+    await h.outbox.entered.future; // submit is in flight (enqueue blocked)
+
+    // Flip the toggle OFF mid-flight: the captured directPrintReady decision must
+    // still govern BOTH the dispatch AND the print (which reuses the immutable
+    // decision, not a re-read). The printer stays configured so the print can run.
+    h.c.read(posAutoPrintKitchenTicketProvider.notifier).setEnabled(false);
+    await _pumpN(tester);
+
+    gate.complete();
+    await tester.pumpAndSettle();
+
+    expect(h.outbox.enqueued, hasLength(1));
+    expect(
+      h.outbox.enqueued.single.payloadJson.contains(
+        '"dispatch_mode":"direct_print"',
+      ),
+      isTrue,
+      reason: 'the pre-submit directPrintReady decision is immutable',
+    );
+    expect(h.print.sends, hasLength(1));
   });
 }
