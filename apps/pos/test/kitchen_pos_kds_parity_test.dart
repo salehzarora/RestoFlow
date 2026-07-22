@@ -92,9 +92,12 @@ KdsTicketView _kdsTicket() {
     modifiers: [
       {
         'order_item_id': 'i1',
-        'option_name_snapshot': 'Double',
-        'quantity': 1,
-        'meat_snapshot': {'quantity': 2, 'unit': 'قطع لحم'},
+        'option_name_snapshot': 'Extra patty',
+        // MEAT MODIFIER QUANTITY = 2 (units), each adding 1 قطع لحم; item qty = 2.
+        // The shared aggregator must derive 1 × 2 (modifier units) × 2 (item
+        // units) = 4, exactly once — the 4 is NEVER written into the fixture.
+        'quantity': 2,
+        'meat_snapshot': {'quantity': 1, 'unit': 'قطع لحم'},
       },
       {'order_item_id': 'i1', 'option_name_snapshot': 'Ketchup', 'quantity': 2},
       {
@@ -130,11 +133,13 @@ KdsTicketView _posTicket() => kdsTicketViewFromCartLines(
       modifiers: [
         SelectedModifier(
           optionId: 'o1',
-          groupName: 'Size',
-          optionName: 'Double',
+          groupName: 'Extras',
+          optionName: 'Extra patty',
           priceDeltaMinor: 1500,
-          quantity: 1,
-          kitchenMeat: KitchenMeat(quantity: 2, unit: 'قطع لحم'),
+          // MEAT MODIFIER QUANTITY = 2 (units), each adding 1 قطع لحم; item qty
+          // = 2. The POS aggregator derives 1 × 2 × 2 = 4, exactly once.
+          quantity: 2,
+          kitchenMeat: KitchenMeat(quantity: 1, unit: 'قطع لحم'),
         ),
         SelectedModifier(
           optionId: 'o2',
@@ -198,9 +203,39 @@ void main() {
     // Whole-order counts (meat modifier×item + bread×item), order ref, context.
     expect(pos.kitchenCounts, kds.kitchenCounts);
     expect(pos.kitchenCounts, [
-      const KitchenCount(quantity: 4, label: 'قطع لحم'), // 2×1×2
-      const KitchenCount(quantity: 2, label: 'خبز'), // 1×2
+      // meat: 1 (per unit) × 2 (modifier units) × 2 (item units) = 4.
+      const KitchenCount(quantity: 4, label: 'قطع لحم'),
+      const KitchenCount(quantity: 2, label: 'خبز'), // bread 1 × 2 (item units)
     ]);
+
+    // EXPLICIT modifier-quantity parity: 2 (modifier units) × 2 (item units) = 4,
+    // derived by the shared aggregator EXACTLY ONCE — on BOTH real mapper paths.
+    final posMeat = pos.kitchenCounts.firstWhere((c) => c.label == 'قطع لحم');
+    final kdsMeat = kds.kitchenCounts.firstWhere((c) => c.label == 'قطع لحم');
+    expect(posMeat.quantity, 4, reason: 'POS: 1 × 2 × 2 = 4');
+    expect(kdsMeat.quantity, 4, reason: 'KDS: 1 × 2 × 2 = 4');
+    // These would FAIL for each classic mistake:
+    expect(
+      posMeat.quantity,
+      isNot(2),
+      reason: 'ignoring the modifier quantity would give 2 (POS)',
+    );
+    expect(
+      kdsMeat.quantity,
+      isNot(2),
+      reason: 'ignoring the modifier quantity would give 2 (KDS)',
+    );
+    expect(
+      posMeat.quantity,
+      isNot(8),
+      reason: 'multiplying the quantity twice would give 8 (POS)',
+    );
+    expect(
+      kdsMeat.quantity,
+      isNot(8),
+      reason: 'multiplying the quantity twice would give 8 (KDS)',
+    );
+
     expect(pos.orderNumber, kds.orderNumber, reason: 'order reference');
     expect(pos.orderType, kds.orderType);
     expect(pos.tableLabel, kds.tableLabel);
@@ -238,11 +273,16 @@ void main() {
       final joined = _docStrings(posDoc).join('\n');
       expect(joined, contains('Double Burger'));
       expect(joined, contains('2×'));
+      // The meat modifier's quantity is preserved on its label (×2), and its
+      // whole-order count is 4 (never 2, never 8).
+      expect(joined, contains('+ Extra patty ×2'));
       expect(joined, contains('+ Ketchup ×2'));
       expect(joined, contains('+ no onion'));
       expect(joined, contains('» Note: well done'));
       expect(joined, contains('» Note: call when ready'));
       expect(joined, contains('KTotal 4 قطع لحم'));
+      expect(joined, isNot(contains('KTotal 2 قطع لحم')));
+      expect(joined, isNot(contains('KTotal 8 قطع لحم')));
       expect(joined, contains('KTotal 2 خبز'));
       expect(joined, contains('Table 5'));
       expect(joined, contains('Customer: Dana'));
