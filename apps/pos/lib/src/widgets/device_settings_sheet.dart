@@ -295,7 +295,7 @@ class _AutoPrintSection extends ConsumerWidget {
           title: Text(l10n.posAutoPrintReceiptToggle),
           subtitle: hasEnabledPrinter
               ? null
-              : Text(l10n.autoPrintNoPrinterNote),
+              : Text(l10n.autoPrintReceiptNoPrinterNote),
           value: effective,
           onChanged: hasEnabledPrinter
               ? (value) => ref
@@ -309,7 +309,7 @@ class _AutoPrintSection extends ConsumerWidget {
           title: Text(l10n.posAutoPrintKitchenTicketToggle),
           subtitle: hasKitchenPrinter
               ? null
-              : Text(l10n.autoPrintNoPrinterNote),
+              : Text(l10n.autoPrintKitchenNoPrinterNote),
           value: effectiveKitchen,
           onChanged: hasKitchenPrinter
               ? (value) => ref

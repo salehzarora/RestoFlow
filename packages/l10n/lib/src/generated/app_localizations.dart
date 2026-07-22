@@ -2200,6 +2200,18 @@ abstract class AppLocalizations {
   /// **'Disabled — no printer assigned.'**
   String get autoPrintNoPrinterNote;
 
+  /// Scoped note under the RECEIPT auto-print toggle when no receipt printer is assigned (KITCHEN-PRINT-DUAL-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled — no receipt printer assigned.'**
+  String get autoPrintReceiptNoPrinterNote;
+
+  /// Scoped note under the KITCHEN auto-print toggle: the toggle controls automatic kitchen-ticket printing and requires a configured kitchen printer (KITCHEN-PRINT-DUAL-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic kitchen-ticket printing needs a configured kitchen printer.'**
+  String get autoPrintKitchenNoPrinterNote;
+
   /// POS device-settings toggle: print a money-free kitchen ticket automatically after a successful order creation (KITCHEN-PRINT-DUAL-001).
   ///
   /// In en, this message translates to:

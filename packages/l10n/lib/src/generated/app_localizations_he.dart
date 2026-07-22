@@ -1121,6 +1121,13 @@ class AppLocalizationsHe extends AppLocalizations {
   String get autoPrintNoPrinterNote => 'מושבת — לא הוקצתה מדפסת.';
 
   @override
+  String get autoPrintReceiptNoPrinterNote => 'מושבת — לא הוקצתה מדפסת קבלה.';
+
+  @override
+  String get autoPrintKitchenNoPrinterNote =>
+      'הדפסה אוטומטית של כרטיס מטבח דורשת מדפסת מטבח מוגדרת.';
+
+  @override
   String get posAutoPrintKitchenTicketToggle => 'הדפסה אוטומטית של כרטיס מטבח';
 
   @override

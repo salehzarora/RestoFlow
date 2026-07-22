@@ -350,6 +350,8 @@
   "posAutoPrintReceiptToggle": "הדפסת קבלה אוטומטית לאחר תשלום",
   "kdsAutoPrintAcknowledgeToggle": "הדפסת כרטיס מטבח אוטומטית באישור קבלה",
   "autoPrintNoPrinterNote": "מושבת — לא הוקצתה מדפסת.",
+  "autoPrintReceiptNoPrinterNote": "מושבת — לא הוקצתה מדפסת קבלה.",
+  "autoPrintKitchenNoPrinterNote": "הדפסה אוטומטית של כרטיס מטבח דורשת מדפסת מטבח מוגדרת.",
   "posAutoPrintKitchenTicketToggle": "הדפסה אוטומטית של כרטיס מטבח",
   "posPrintKitchenTicketAction": "הדפסה למטבח",
   "posKitchenTicketPrintedSnack": "כרטיס המטבח נשלח למדפסת",
