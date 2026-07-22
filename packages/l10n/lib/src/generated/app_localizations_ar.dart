@@ -1142,6 +1142,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posAutoPrintKitchenTicketToggle => 'طباعة تذكرة المطبخ تلقائيًا';
 
   @override
+  String get posAutoPrintKitchenTicketToggleExplanation =>
+      'عند تفعيل هذا الخيار، تُطبع تذكرة المطبخ من جهاز الكاشير ويُغلق الطلب مباشرة بدون إرساله إلى شاشة المطبخ. عند إيقافه، تتابع الطلبات مسار شاشة المطبخ المعتاد.';
+
+  @override
   String get posPrintKitchenTicketAction => 'طباعة للمطبخ';
 
   @override

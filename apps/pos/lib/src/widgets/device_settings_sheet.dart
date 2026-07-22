@@ -307,8 +307,11 @@ class _AutoPrintSection extends ConsumerWidget {
           key: const Key('auto-print-kitchen-ticket-toggle'),
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.posAutoPrintKitchenTicketToggle),
+          // KITCHEN-PRINT-DUAL-001C: with a kitchen printer configured, explain the
+          // TWO workflows (on = print here + close directly, off = normal KDS);
+          // without a printer, the existing "needs a printer" note.
           subtitle: hasKitchenPrinter
-              ? null
+              ? Text(l10n.posAutoPrintKitchenTicketToggleExplanation)
               : Text(l10n.autoPrintKitchenNoPrinterNote),
           value: effectiveKitchen,
           onChanged: hasKitchenPrinter

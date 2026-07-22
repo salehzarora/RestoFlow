@@ -1149,6 +1149,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatically print kitchen ticket';
 
   @override
+  String get posAutoPrintKitchenTicketToggleExplanation =>
+      'When on, the kitchen ticket prints from this device and the order is closed directly, without sending it to the kitchen display. When off, orders continue to the normal kitchen display workflow.';
+
+  @override
   String get posPrintKitchenTicketAction => 'Print kitchen ticket';
 
   @override

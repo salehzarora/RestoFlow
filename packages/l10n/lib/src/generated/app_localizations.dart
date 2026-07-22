@@ -2218,6 +2218,12 @@ abstract class AppLocalizations {
   /// **'Automatically print kitchen ticket'**
   String get posAutoPrintKitchenTicketToggle;
 
+  /// POS device-settings subtitle under the auto-print kitchen toggle when a kitchen printer is configured: explains the two workflows — ON prints from this device and dispatches the order out of the KDS active workflow; OFF uses the normal KDS workflow (KITCHEN-PRINT-DUAL-001C).
+  ///
+  /// In en, this message translates to:
+  /// **'When on, the kitchen ticket prints from this device and the order is closed directly, without sending it to the kitchen display. When off, orders continue to the normal kitchen display workflow.'**
+  String get posAutoPrintKitchenTicketToggleExplanation;
+
   /// POS action button on a created order: manually print a money-free kitchen ticket to the kitchen printer.
   ///
   /// In en, this message translates to:

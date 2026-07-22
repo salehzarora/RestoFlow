@@ -353,6 +353,7 @@
   "autoPrintReceiptNoPrinterNote": "מושבת — לא הוקצתה מדפסת קבלה.",
   "autoPrintKitchenNoPrinterNote": "הדפסה אוטומטית של כרטיס מטבח דורשת מדפסת מטבח מוגדרת.",
   "posAutoPrintKitchenTicketToggle": "הדפסה אוטומטית של כרטיס מטבח",
+  "posAutoPrintKitchenTicketToggleExplanation": "כשמופעל, כרטיס המטבח מודפס ממכשיר זה וההזמנה נסגרת ישירות, בלי לשלוח אותה למסך המטבח. כשכבוי, ההזמנות ממשיכות במהלך העבודה הרגיל של מסך המטבח.",
   "posPrintKitchenTicketAction": "הדפסה למטבח",
   "posKitchenTicketPrintedSnack": "כרטיס המטבח נשלח למדפסת",
   "posKitchenTicketPrintFailedSnack": "לא ניתן היה להדפיס את כרטיס המטבח",

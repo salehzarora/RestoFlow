@@ -908,6 +908,8 @@
   "@autoPrintKitchenNoPrinterNote": { "description": "Scoped note under the KITCHEN auto-print toggle: the toggle controls automatic kitchen-ticket printing and requires a configured kitchen printer (KITCHEN-PRINT-DUAL-001)." },
   "posAutoPrintKitchenTicketToggle": "Automatically print kitchen ticket",
   "@posAutoPrintKitchenTicketToggle": { "description": "POS device-settings toggle: print a money-free kitchen ticket automatically after a successful order creation (KITCHEN-PRINT-DUAL-001)." },
+  "posAutoPrintKitchenTicketToggleExplanation": "When on, the kitchen ticket prints from this device and the order is closed directly, without sending it to the kitchen display. When off, orders continue to the normal kitchen display workflow.",
+  "@posAutoPrintKitchenTicketToggleExplanation": { "description": "POS device-settings subtitle under the auto-print kitchen toggle when a kitchen printer is configured: explains the two workflows — ON prints from this device and dispatches the order out of the KDS active workflow; OFF uses the normal KDS workflow (KITCHEN-PRINT-DUAL-001C)." },
   "posPrintKitchenTicketAction": "Print kitchen ticket",
   "@posPrintKitchenTicketAction": { "description": "POS action button on a created order: manually print a money-free kitchen ticket to the kitchen printer." },
   "posKitchenTicketPrintedSnack": "Kitchen ticket sent to the printer",
