@@ -14,7 +14,7 @@ import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/spool/kitchen_ticket_bytes.dart'
-    show KitchenTicketInput, KitchenTicketLineInput, renderKitchenTicketBytes;
+    show renderKitchenTicketBytes;
 import 'package:restoflow_pos/src/state/cart_controller.dart'
     show CartLineView, SelectedModifier;
 import 'package:restoflow_pos/src/state/pos_auto_print_prefs.dart';

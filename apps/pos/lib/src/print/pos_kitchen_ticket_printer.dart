@@ -6,8 +6,13 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show kBluetoothPrintTimeout, nativePrintRasterizerProvider;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
-import '../spool/kitchen_ticket_bytes.dart'
-    show KitchenTicketInput, KitchenTicketLineInput, renderKitchenTicketBytes;
+import 'kitchen_ticket_contract.dart'
+    show KitchenTicketInput, KitchenTicketLineInput;
+// The money-free render imports drift (dart:ffi) — reach it ONLY through this
+// `dart.library.io` boundary so `flutter build web` never compiles drift.
+import 'kitchen_ticket_bytes_web.dart'
+    if (dart.library.io) '../spool/kitchen_ticket_bytes.dart'
+    as bytes;
 import '../state/cart_controller.dart' show CartLineView;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_bluetooth_printer_config.dart';
@@ -19,7 +24,7 @@ import 'native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 
 // Callers depend only on this print seam for the money-free kitchen input DTO.
-export '../spool/kitchen_ticket_bytes.dart'
+export 'kitchen_ticket_contract.dart'
     show KitchenTicketInput, KitchenTicketLineInput;
 
 /// KITCHEN-PRINT-DUAL-001 — the POS dual-print KITCHEN service.
@@ -154,7 +159,7 @@ typedef KitchenBytesBuilder =
 class PosKitchenTicketPrinter {
   PosKitchenTicketPrinter(
     this._container, {
-    KitchenBytesBuilder buildBytes = renderKitchenTicketBytes,
+    KitchenBytesBuilder buildBytes = bytes.renderKitchenTicketBytes,
     ResolvedKitchenPrinter? targetOverride,
   }) : _buildBytes = buildBytes,
        _targetOverride = targetOverride;
