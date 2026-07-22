@@ -298,7 +298,7 @@ class KdsTicketMapper {
           contribs.add(
             KitchenCountContribution(
               quantity: prep.quantity,
-              label: _countLabel(prep),
+              label: kitchenPrepCountLabel(prep),
               factor: quantity,
             ),
           );
@@ -366,15 +366,6 @@ class KdsTicketMapper {
     }
     if (clientCreatedAt is String) return DateTime.tryParse(clientCreatedAt);
     return null;
-  }
-
-  /// The resource label for an item-base prep component: its [name], plus the
-  /// [unit] when the owner set one (e.g. "خبز" / "Fish pcs"). This is the key the
-  /// whole-order counts group by, so item-base counts and modifier-option counts
-  /// with the same label merge into one total.
-  static String _countLabel(KitchenPrepComponent component) {
-    final unit = component.unit.trim();
-    return unit.isEmpty ? component.name : '${component.name} $unit';
   }
 
   /// Minimal order-status -> kitchen-ticket-status projection.
