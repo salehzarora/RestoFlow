@@ -448,6 +448,32 @@ Future<void> submitOrderFromCart({
   // Captured BEFORE the await: the widget's ref dies with the tree (an unpair
   // unmounts the POS), but the container and the notifiers it owns do not.
   final container = ProviderScope.containerOf(context, listen: false);
+  // KITCHEN-PRINT-DUAL-001C: FAIL-CLOSED workflow guard — the FIRST thing the
+  // authoritative new-order path does. Capture the resolved kitchen-workflow
+  // decision ONCE, SYNCHRONOUSLY, BEFORE any snapshot capture, outbox op, payment,
+  // printer send, or lifecycle op. The disabled Send button blocks a non-ready
+  // state in the UI; this is the authoritative backstop for a DIRECT handler
+  // invocation. An EXHAUSTIVE switch (not a boolean comparison) so a future enum
+  // value cannot silently fall back to KDS — a new unhandled case leaves
+  // `directKitchenPrint` unassigned, a compile error:
+  //   * directPrintReady -> submit + dispatch_mode='direct_print' + one kitchen print;
+  //   * normalKdsReady   -> submit the normal KDS workflow, no direct POS print;
+  //   * loading / error / directPrintMissingPrinter -> REJECT: return now, submit
+  //     nothing, never convert to KDS, never clear the cart, never report success
+  //     (the localized banner in build already explains the state).
+  // The read is SYNC (no async hop before outbox.submit); the ONE captured value
+  // drives BOTH dispatch_mode AND the post-submit print, immutable in flight.
+  final bool directKitchenPrint;
+  switch (container.read(posKitchenWorkflowDecisionProvider)) {
+    case PosKitchenWorkflowDecision.directPrintReady:
+      directKitchenPrint = true;
+    case PosKitchenWorkflowDecision.normalKdsReady:
+      directKitchenPrint = false;
+    case PosKitchenWorkflowDecision.loading:
+    case PosKitchenWorkflowDecision.error:
+    case PosKitchenWorkflowDecision.directPrintMissingPrinter:
+      return;
+  }
   // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1A): the COMPLETE submit-attempt identity,
   // captured BEFORE the first await. The FULL operational binding — org/restaurant/branch/
   // device scope AND the PIN session — not the scope alone, plus the exact draft, order
@@ -473,22 +499,6 @@ Future<void> submitOrderFromCart({
       for (final item in menu.items)
         if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
   };
-  // KITCHEN-PRINT-DUAL-001C: capture the RESOLVED kitchen-workflow decision ONCE,
-  // HERE — SYNCHRONOUSLY, before the first submission await. Send is only tappable
-  // in a READY state (see the gate in build), so this reads directPrintReady or
-  // normalKdsReady — a direct_print order is dispatched IFF the decision is
-  // directPrintReady. The decision is derived from the RESOLUTION STATE of the real
-  // async toggle + printer-config providers, so there is no valueOrNull-of-loading
-  // fallback: a still-loading printer config disables Send rather than being read as
-  // "no printer -> KDS". The read is SYNC on purpose (it inserts no async hop before
-  // the authoritative submit — the full-identity mutation boundary AND the
-  // snapshot-race guarantee both require `outbox.submit` to be the FIRST await), and
-  // this ONE captured value drives BOTH the order's dispatch_mode AND the post-submit
-  // print, so a toggle/printer change while the submit is in flight cannot split the
-  // workflow. It NEVER changes payment/settlement or receipt behavior.
-  final directKitchenPrint =
-      container.read(posKitchenWorkflowDecisionProvider) ==
-      PosKitchenWorkflowDecision.directPrintReady;
   try {
     final result = await outbox.submit(
       lines: cart.lines,
