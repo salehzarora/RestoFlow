@@ -153,6 +153,19 @@ CartLineView _line() => const CartLineView(
   currencyCode: 'ILS',
 );
 
+/// A plain en labels fixture (this suite exercises the send gate, not chrome).
+KitchenTicketPrintLabels _kdsLabels() => KitchenTicketPrintLabels(
+  ticketLabel: 'Ticket',
+  previewTitle: 'Kitchen ticket preview',
+  dineIn: 'Dine-in',
+  takeaway: 'Takeaway',
+  tableLabel: 'Table',
+  customerLabel: 'Customer',
+  stationLabel: 'Station',
+  noteLabel: 'Note',
+  kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',
+);
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(const {}));
 
@@ -282,11 +295,12 @@ void main() {
         // transport and occupies the destination BEFORE the Test is tapped.
         final autoFuture = printKitchenTicketForOrder(
           container: autoContainer,
-          input: kitchenTicketInputFromCartLines(
+          ticket: kdsTicketViewFromCartLines(
             orderCode: '#1',
             orderType: OrderType.dineIn,
             lines: [_line()],
           ),
+          labels: _kdsLabels(),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 30));

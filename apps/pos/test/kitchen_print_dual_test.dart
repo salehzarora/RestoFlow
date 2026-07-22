@@ -16,10 +16,10 @@ import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_l10n/restoflow_l10n.dart' show AppLocalizations;
 import 'package:restoflow_pos/src/data/order_submission.dart'
     show kPermanentRejectionCodes;
+import 'package:restoflow_pos/src/print/kitchen_ticket_render.dart'
+    show renderKitchenTicketBytes;
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
-import 'package:restoflow_pos/src/spool/kitchen_ticket_bytes.dart'
-    show renderKitchenTicketBytes;
 import 'package:restoflow_pos/src/state/cart_controller.dart'
     show CartLineView, SelectedModifier;
 import 'package:restoflow_pos/src/state/pos_auto_print_prefs.dart';
@@ -178,19 +178,64 @@ void _mockSlots({
   SharedPreferences.setMockInitialValues(m);
 }
 
-KitchenTicketInput _input() => const KitchenTicketInput(
+/// The representative kitchen ticket — built through the REAL cart projection
+/// [kdsTicketViewFromCartLines] (the SAME shared KdsTicketView the KDS renders):
+/// Falafel ×2 with Laffa + Hot ×3 and a "no onion" note, plus Hummus ×1.
+KdsTicketView _ticket() => kdsTicketViewFromCartLines(
   orderCode: '#000042',
-  orderType: 'dine_in',
+  orderType: OrderType.dineIn,
   tableLabel: 'T1',
-  lines: [
-    KitchenTicketLineInput(
-      qty: 2,
+  lines: const [
+    CartLineView(
+      lineId: 'l1',
+      menuItemId: 'm1',
       name: 'Falafel',
+      quantity: 2,
+      unitPriceMinor: 1500,
+      lineTotalMinor: 3000,
+      currencyCode: 'ILS',
       note: 'no onion',
-      modifiers: ['Laffa', 'Hot ×3'],
+      modifiers: [
+        SelectedModifier(
+          optionId: 'o1',
+          groupName: 'Bread',
+          optionName: 'Laffa',
+          priceDeltaMinor: 300,
+          quantity: 1,
+        ),
+        SelectedModifier(
+          optionId: 'o2',
+          groupName: 'Spice',
+          optionName: 'Hot',
+          priceDeltaMinor: 0,
+          quantity: 3,
+        ),
+      ],
     ),
-    KitchenTicketLineInput(qty: 1, name: 'Hummus'),
+    CartLineView(
+      lineId: 'l2',
+      menuItemId: 'm2',
+      name: 'Hummus',
+      quantity: 1,
+      unitPriceMinor: 1000,
+      lineTotalMinor: 1000,
+      currencyCode: 'ILS',
+    ),
   ],
+);
+
+/// A plain en labels fixture (these tests exercise render/routing/guard, not
+/// chrome — the chrome parity with the KDS is proven in the parity suite).
+KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
+  ticketLabel: 'Ticket',
+  previewTitle: 'Kitchen ticket preview',
+  dineIn: 'Dine-in',
+  takeaway: 'Takeaway',
+  tableLabel: 'Table',
+  customerLabel: 'Customer',
+  stationLabel: 'Station',
+  noteLabel: 'Note',
+  kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',
 );
 
 void main() {
@@ -198,7 +243,10 @@ void main() {
 
   group('money-free kitchen render (never the receipt renderer)', () {
     test('the rendered bytes carry the items but no money token', () async {
-      final bytes = await renderKitchenTicketBytes(input: _input());
+      final bytes = await renderKitchenTicketBytes(
+        ticket: _ticket(),
+        labels: _labels(),
+      );
       final text = utf8.decode(bytes, allowMalformed: true).toLowerCase();
       expect(text.contains('falafel'), isTrue, reason: 'item present');
       expect(text.contains('hummus'), isTrue);
@@ -214,7 +262,7 @@ void main() {
     test(
       'the cart projection drops every price/total (money-free by shape)',
       () async {
-        final input = kitchenTicketInputFromCartLines(
+        final ticket = kdsTicketViewFromCartLines(
           orderCode: '#000042',
           orderType: OrderType.dineIn,
           lines: [
@@ -247,14 +295,14 @@ void main() {
           ],
         );
         // Preserves qty/name/note/modifiers…
-        expect(input.lines.single.qty, 2);
-        expect(input.lines.single.name, 'Shawarma');
-        expect(input.lines.single.note, 'extra garlic');
-        expect(input.lines.single.modifiers, ['Laffa', 'Hot ×3']);
+        expect(ticket.items.single.quantity, 2);
+        expect(ticket.items.single.name, 'Shawarma');
+        expect(ticket.items.single.note, 'extra garlic');
+        expect(ticket.items.single.modifiers, ['Laffa', 'Hot ×3']);
         // …and renders with NO money (1500/3000/300 never reach the ticket).
         final text = utf8
             .decode(
-              await renderKitchenTicketBytes(input: input),
+              await renderKitchenTicketBytes(ticket: ticket, labels: _labels()),
               allowMalformed: true,
             )
             .toLowerCase();
@@ -348,7 +396,10 @@ void main() {
             transportFactory: () => fake,
           ),
         );
-        final outcome = await printer.printKitchenTicket(input: _input());
+        final outcome = await printer.printKitchenTicket(
+          ticket: _ticket(),
+          labels: _labels(),
+        );
         expect(outcome, PosKitchenPrintOutcome.printed);
         expect(fake.sent, hasLength(1), reason: 'exactly one physical send');
         expect(fake.disposed, isTrue);
@@ -375,7 +426,7 @@ void main() {
         ),
       );
       expect(
-        await printer.printKitchenTicket(input: _input()),
+        await printer.printKitchenTicket(ticket: _ticket(), labels: _labels()),
         PosKitchenPrintOutcome.failed,
       );
     });
@@ -384,7 +435,8 @@ void main() {
       expect(
         await printKitchenTicketForOrder(
           container: _container(),
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
         ),
         PosKitchenPrintOutcome.noPrinterConfigured,
       );
@@ -397,7 +449,8 @@ void main() {
         final fake = _FakeTransport(const pp.PrintResult.success());
         final outcome = await printKitchenTicketForOrder(
           container: c,
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: PosKitchenTicketPrinter(
             c,
             targetOverride: ResolvedKitchenPrinter(
@@ -464,7 +517,8 @@ void main() {
       final outcome = await runAutoKitchenTicketPrintOnSubmit(
         container: c,
         orderId: 'order-1',
-        input: _input(),
+        ticket: _ticket(),
+        labels: _labels(),
         printer: _printerTo(c, fake),
       );
       expect(outcome, PosKitchenPrintOutcome.noPrinterConfigured);
@@ -495,7 +549,8 @@ void main() {
         final first = await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'order-1',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: printer,
         );
         expect(first, PosKitchenPrintOutcome.printed);
@@ -504,7 +559,8 @@ void main() {
         final second = await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'order-1',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: printer,
         );
         expect(second, PosKitchenPrintOutcome.printed);
@@ -530,7 +586,8 @@ void main() {
         final outcome = await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'order-1',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: _printerTo(c, fake),
         );
         expect(outcome, PosKitchenPrintOutcome.printed);
@@ -550,7 +607,8 @@ void main() {
       final outcome = await runAutoKitchenTicketPrintOnSubmit(
         container: c,
         orderId: 'order-1',
-        input: _input(),
+        ticket: _ticket(),
+        labels: _labels(),
         printer: _printerTo(c, fake),
       );
       expect(outcome, PosKitchenPrintOutcome.noPrinterConfigured);
@@ -571,7 +629,8 @@ void main() {
         final outcome = await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'order-1',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: _printerTo(c, fake),
         );
         expect(outcome, PosKitchenPrintOutcome.failed);
@@ -590,13 +649,15 @@ void main() {
         final f1 = runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'o',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: printer,
         );
         final f2 = runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'o',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: printer,
         );
         // Let both reach the (blocked) send; the second must SHARE the first.
@@ -623,7 +684,8 @@ void main() {
         final first = await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'o',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
         );
         expect(first, PosKitchenPrintOutcome.noPrinterConfigured);
         // Second: a printer is now available => sends exactly once (not blocked).
@@ -631,7 +693,8 @@ void main() {
         final second = await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'o',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: _printerTo(c, fake),
         );
         expect(second, PosKitchenPrintOutcome.printed);
@@ -650,7 +713,8 @@ void main() {
           await runAutoKitchenTicketPrintOnSubmit(
             container: c,
             orderId: 'o',
-            input: _input(),
+            ticket: _ticket(),
+            labels: _labels(),
             printer: _printerTo(c, failing),
           ),
           PosKitchenPrintOutcome.failed,
@@ -661,7 +725,8 @@ void main() {
           await runAutoKitchenTicketPrintOnSubmit(
             container: c,
             orderId: 'o',
-            input: _input(),
+            ticket: _ticket(),
+            labels: _labels(),
             printer: _printerTo(c, ok),
           ),
           PosKitchenPrintOutcome.printed,
@@ -675,7 +740,7 @@ void main() {
       final fake = _FakeTransport(const pp.PrintResult.success());
       final throwing = PosKitchenTicketPrinter(
         c,
-        buildBytes: ({required input, languageCode, rasterizer}) =>
+        buildBytes: ({required ticket, required labels, rasterizer}) =>
             Future<Uint8List>.error(StateError('boom')),
         targetOverride: ResolvedKitchenPrinter(
           destinationKey: 'k',
@@ -686,7 +751,8 @@ void main() {
         await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'o',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: throwing,
         ),
         PosKitchenPrintOutcome.failed,
@@ -696,7 +762,8 @@ void main() {
         await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'o',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: _printerTo(c, fake),
         ),
         PosKitchenPrintOutcome.printed,
@@ -711,7 +778,8 @@ void main() {
         await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'o',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: _printerTo(c, fake),
         ),
         PosKitchenPrintOutcome.printed,
@@ -720,7 +788,8 @@ void main() {
         await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'o',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: _printerTo(c, fake),
         ),
         PosKitchenPrintOutcome.printed,
@@ -739,7 +808,8 @@ void main() {
         await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'a',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: _printerTo(c, ok),
         ),
         PosKitchenPrintOutcome.printed,
@@ -751,7 +821,8 @@ void main() {
         await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'b',
-          input: _input(),
+          ticket: _ticket(),
+          labels: _labels(),
           printer: _printerTo(c, bad),
         ),
         PosKitchenPrintOutcome.failed,
@@ -938,7 +1009,8 @@ void main() {
             orderId: 'ord-real',
             isDemoMode: false,
             rejectionCode: code,
-            input: _input(),
+            ticket: _ticket(),
+            labels: _labels(),
             printer: _printerTo(c, fake),
           );
           expect(outcome, PosKitchenPrintOutcome.ineligibleOrder, reason: code);
@@ -954,7 +1026,8 @@ void main() {
         container: c,
         orderId: 'demo-order-1',
         isDemoMode: true,
-        input: _input(),
+        ticket: _ticket(),
+        labels: _labels(),
         printer: _printerTo(c, fake),
       );
       expect(outcome, PosKitchenPrintOutcome.ineligibleOrder);
@@ -1036,7 +1109,7 @@ void main() {
 
   group('source boundaries', () {
     late final String printerSrc;
-    late final String bytesSrc;
+    late final String renderSrc;
     late final String allPosSrc;
 
     setUpAll(() {
@@ -1050,8 +1123,10 @@ void main() {
           'pos_kitchen_ticket_printer.dart',
         ),
       ).readAsStringSync();
-      bytesSrc = File(
-        p.join(root.path, 'lib', 'src', 'spool', 'kitchen_ticket_bytes.dart'),
+      // 001B: the ACTIVE kitchen bytes builder (the drift spool renderer is now
+      // dormant, confined to lib/src/spool).
+      renderSrc = File(
+        p.join(root.path, 'lib', 'src', 'print', 'kitchen_ticket_render.dart'),
       ).readAsStringSync();
       final buffer = StringBuffer();
       for (final f
@@ -1066,7 +1141,7 @@ void main() {
 
     test('the feature has NO pilot-flag dependency (abandoned pilot)', () {
       expect(printerSrc, isNot(contains('RESTOFLOW_PRINTER_ONLY_PILOT')));
-      expect(bytesSrc, isNot(contains('RESTOFLOW_PRINTER_ONLY_PILOT')));
+      expect(renderSrc, isNot(contains('RESTOFLOW_PRINTER_ONLY_PILOT')));
       // The abandoned printer-only pilot flag exists NOWHERE in POS sources.
       expect(allPosSrc, isNot(contains('RESTOFLOW_PRINTER_ONLY_PILOT')));
     });
@@ -1083,7 +1158,7 @@ void main() {
           'get_kitchen_workflow_transition_readiness',
         ]) {
           expect(printerSrc, isNot(contains(rpc)));
-          expect(bytesSrc, isNot(contains(rpc)));
+          expect(renderSrc, isNot(contains(rpc)));
         }
       },
     );

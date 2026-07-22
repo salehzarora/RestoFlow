@@ -115,11 +115,25 @@ ProviderContainer _kitchenContainer(
 
 Future<void> _sendKitchen(ProviderContainer c) => printKitchenTicketForOrder(
   container: c,
-  input: kitchenTicketInputFromCartLines(
+  ticket: kdsTicketViewFromCartLines(
     orderCode: '#000042',
     orderType: OrderType.dineIn,
     lines: [_line()],
   ),
+  labels: _kdsLabels(),
+);
+
+/// A plain en labels fixture (this suite exercises routing/bytes, not chrome).
+KitchenTicketPrintLabels _kdsLabels() => KitchenTicketPrintLabels(
+  ticketLabel: 'Ticket',
+  previewTitle: 'Kitchen ticket preview',
+  dineIn: 'Dine-in',
+  takeaway: 'Takeaway',
+  tableLabel: 'Table',
+  customerLabel: 'Customer',
+  stationLabel: 'Station',
+  noteLabel: 'Note',
+  kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',
 );
 
 class _StubAutoKitchen extends PosAutoPrintKitchenTicketController {
@@ -201,7 +215,7 @@ void main() {
         addTearDown(c.dispose);
 
         // The REAL projection CartPanel uses, from a REAL cart line (with prices).
-        final input = kitchenTicketInputFromCartLines(
+        final ticket = kdsTicketViewFromCartLines(
           orderCode: '#000042',
           orderType: OrderType.dineIn,
           lines: [_line()],
@@ -210,7 +224,8 @@ void main() {
         final outcome = await runAutoKitchenTicketPrintOnSubmit(
           container: c,
           orderId: 'ord-real-uuid',
-          input: input,
+          ticket: ticket,
+          labels: _kdsLabels(),
         );
 
         expect(outcome, PosKitchenPrintOutcome.printed);
