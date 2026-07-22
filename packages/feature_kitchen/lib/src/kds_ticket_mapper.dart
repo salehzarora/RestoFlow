@@ -187,7 +187,7 @@ class KdsTicketMapper {
     // top-of-ticket summary is the total that unit needs), but NEVER across
     // work units: a Round-2 ticket must not display the original order's
     // counts as if they were new work. Money-free; owner config only.
-    final countContribsByWorkUnit = <String, List<KitchenCountContribution>>{};
+    final countItemsByWorkUnit = <String, List<KitchenCountItemInput>>{};
     for (final it in orderItems) {
       if (it['deleted_at'] != null) continue;
       final itemId = it['id'];
@@ -269,49 +269,35 @@ class KdsTicketMapper {
         ),
       );
       // KDS-ALERTS-AND-KITCHEN-COUNTS-002: accumulate this item's counted-resource
-      // contributions for its OWN WORK UNIT (PSC-001C Finding 3: keyed by
+      // contribution for its OWN WORK UNIT (PSC-001C Finding 3: keyed by
       // order + round, so a round ticket never inherits the original order's
-      // counts) — factor = the ordered item quantity.
+      // counts). KITCHEN-PRINT-DUAL-001B: build the SHARED neutral
+      // [KitchenCountItemInput] — the per-OPTION meat counts (meatByItem, already
+      // × modifier units) and the per-ITEM prep counts — and let the SHARED
+      // [aggregateOrderKitchenCounts] apply factor = the ordered item quantity,
+      // exactly as the POS direct kitchen print does. No second aggregation.
       // PSC-001D: a cancellation card needs no cook-prep totals (nothing is
       // being prepared any more), so pending-ack orders contribute none.
       if (!pendingAck && quantity > 0) {
-        final contribs =
-            countContribsByWorkUnit['$orderId|${roundId ?? ''}'] ??=
-                <KitchenCountContribution>[];
-        // Per-OPTION counts (already × modifier units): label = the resource the
-        // owner typed as the option's count unit (e.g. "قطع لحم").
-        final itemMeat = meatByItem[itemId];
-        if (itemMeat != null) {
-          for (final meat in itemMeat) {
-            contribs.add(
-              KitchenCountContribution(
-                quantity: meat.quantity,
-                label: meat.unit,
-                factor: quantity,
+        (countItemsByWorkUnit['$orderId|${roundId ?? ''}'] ??=
+                <KitchenCountItemInput>[])
+            .add(
+              KitchenCountItemInput(
+                quantity: quantity,
+                meats: meatByItem[itemId] ?? const <KitchenMeat>[],
+                prepComponents: prepComponents,
               ),
             );
-          }
-        }
-        // Per-ITEM base counts (buns, wraps, trays, …): label = the prep
-        // component's resource name (+ unit when the owner set one).
-        for (final prep in prepComponents) {
-          contribs.add(
-            KitchenCountContribution(
-              quantity: prep.quantity,
-              label: kitchenPrepCountLabel(prep),
-              factor: quantity,
-            ),
-          );
-        }
       }
     }
 
     // KDS-ALERTS-AND-KITCHEN-COUNTS-002 + PSC-001C Finding 3: the count totals
     // per WORK UNIT (grouped by resource label), attached below to every
-    // STATION ticket of that unit — and only that unit.
+    // STATION ticket of that unit — and only that unit. The SHARED aggregator is
+    // the single source of truth for both the KDS and the POS direct print.
     final kitchenCountsByWorkUnit = <String, List<KitchenCount>>{
-      for (final entry in countContribsByWorkUnit.entries)
-        entry.key: aggregateKitchenCounts(entry.value),
+      for (final entry in countItemsByWorkUnit.entries)
+        entry.key: aggregateOrderKitchenCounts(entry.value),
     };
 
     final tickets =
