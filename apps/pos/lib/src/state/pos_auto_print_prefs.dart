@@ -64,3 +64,60 @@ bool posAutoPrintReceiptEnabled({
   required bool? stored,
   required bool hasEnabledPrinter,
 }) => hasEnabledPrinter && (stored ?? true);
+
+/// KITCHEN-PRINT-DUAL-001: per-DEVICE "automatically print a KITCHEN ticket
+/// after a successful order creation?" — the independent twin of
+/// [posAutoPrintReceiptProvider]. Same local `shared_preferences` mechanism,
+/// keyed by the paired device id, stores a plain bool. Unlike the receipt
+/// default (ON), this DEFAULTS OFF: normal POS behaviour is unchanged until a
+/// cashier deliberately enables it.
+const String kPosAutoPrintKitchenTicketKeyPrefix =
+    'restoflow.autoprint.pos.kitchenTicket.';
+
+final posAutoPrintKitchenTicketProvider =
+    AsyncNotifierProvider<PosAutoPrintKitchenTicketController, bool?>(
+      PosAutoPrintKitchenTicketController.new,
+    );
+
+class PosAutoPrintKitchenTicketController extends AsyncNotifier<bool?> {
+  String? get _key {
+    final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
+    return deviceId == null || deviceId.isEmpty
+        ? null
+        : '$kPosAutoPrintKitchenTicketKeyPrefix$deviceId';
+  }
+
+  @override
+  Future<bool?> build() async {
+    ref.watch(posDeviceContextProvider);
+    final key = _key;
+    if (key == null) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(key);
+    } catch (_) {
+      return null; // Unreadable prefs degrade to the default (OFF), never crash.
+    }
+  }
+
+  /// Persists the cashier's choice (state first, storage best-effort).
+  Future<void> setEnabled(bool value) async {
+    final key = _key;
+    if (key == null) return;
+    state = AsyncData(value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
+    } catch (_) {
+      // Best-effort persistence: the in-session choice still applies.
+    }
+  }
+}
+
+/// The EFFECTIVE auto-kitchen-print decision: a KITCHEN printer must be
+/// configured (no printer = OFF and not toggleable), and the DEFAULT is OFF
+/// (the cashier must opt in) — `stored ?? false`, never `?? true`.
+bool posAutoPrintKitchenTicketEnabled({
+  required bool? stored,
+  required bool hasKitchenPrinter,
+}) => hasKitchenPrinter && (stored ?? false);

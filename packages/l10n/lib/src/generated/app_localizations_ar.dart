@@ -1131,6 +1131,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get autoPrintNoPrinterNote => 'معطّل — لا توجد طابعة معيّنة.';
 
   @override
+  String get posAutoPrintKitchenTicketToggle => 'طباعة فاتورة المطبخ تلقائيًا';
+
+  @override
+  String get posPrintKitchenTicketAction => 'طباعة للمطبخ';
+
+  @override
+  String get posKitchenTicketPrintedSnack =>
+      'تم إرسال تذكرة المطبخ إلى الطابعة';
+
+  @override
+  String get posKitchenTicketPrintFailedSnack => 'تعذّرت طباعة تذكرة المطبخ';
+
+  @override
+  String get posKitchenPrinterNotConfiguredSnack =>
+      'لا توجد طابعة مطبخ مُعدّة. عيّن واحدة من إعدادات الجهاز.';
+
+  @override
   String get printStatusNotConfigured => 'لا توجد طابعة مُعدّة';
 
   @override

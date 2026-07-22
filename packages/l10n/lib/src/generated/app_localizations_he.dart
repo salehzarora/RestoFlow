@@ -1121,6 +1121,23 @@ class AppLocalizationsHe extends AppLocalizations {
   String get autoPrintNoPrinterNote => 'מושבת — לא הוקצתה מדפסת.';
 
   @override
+  String get posAutoPrintKitchenTicketToggle => 'הדפסה אוטומטית של כרטיס מטבח';
+
+  @override
+  String get posPrintKitchenTicketAction => 'הדפסה למטבח';
+
+  @override
+  String get posKitchenTicketPrintedSnack => 'כרטיס המטבח נשלח למדפסת';
+
+  @override
+  String get posKitchenTicketPrintFailedSnack =>
+      'לא ניתן היה להדפיס את כרטיס המטבח';
+
+  @override
+  String get posKitchenPrinterNotConfiguredSnack =>
+      'לא הוגדרה מדפסת מטבח. הגדר אחת בהגדרות המכשיר.';
+
+  @override
   String get printStatusNotConfigured => 'לא הוגדרה מדפסת';
 
   @override

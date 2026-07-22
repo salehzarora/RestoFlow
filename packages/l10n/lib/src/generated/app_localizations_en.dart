@@ -1137,6 +1137,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autoPrintNoPrinterNote => 'Disabled — no printer assigned.';
 
   @override
+  String get posAutoPrintKitchenTicketToggle =>
+      'Automatically print kitchen ticket';
+
+  @override
+  String get posPrintKitchenTicketAction => 'Print kitchen ticket';
+
+  @override
+  String get posKitchenTicketPrintedSnack =>
+      'Kitchen ticket sent to the printer';
+
+  @override
+  String get posKitchenTicketPrintFailedSnack =>
+      'Could not print the kitchen ticket';
+
+  @override
+  String get posKitchenPrinterNotConfiguredSnack =>
+      'No kitchen printer is configured. Set one in device settings.';
+
+  @override
   String get printStatusNotConfigured => 'No printer configured';
 
   @override

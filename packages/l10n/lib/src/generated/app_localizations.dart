@@ -2200,6 +2200,36 @@ abstract class AppLocalizations {
   /// **'Disabled — no printer assigned.'**
   String get autoPrintNoPrinterNote;
 
+  /// POS device-settings toggle: print a money-free kitchen ticket automatically after a successful order creation (KITCHEN-PRINT-DUAL-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically print kitchen ticket'**
+  String get posAutoPrintKitchenTicketToggle;
+
+  /// POS action button on a created order: manually print a money-free kitchen ticket to the kitchen printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Print kitchen ticket'**
+  String get posPrintKitchenTicketAction;
+
+  /// POS confirmation snackbar: the kitchen ticket bytes were delivered to the kitchen printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket sent to the printer'**
+  String get posKitchenTicketPrintedSnack;
+
+  /// POS error snackbar: the kitchen printer was configured but the send failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not print the kitchen ticket'**
+  String get posKitchenTicketPrintFailedSnack;
+
+  /// POS message when a manual kitchen print is requested but no kitchen printer is assigned for this device.
+  ///
+  /// In en, this message translates to:
+  /// **'No kitchen printer is configured. Set one in device settings.'**
+  String get posKitchenPrinterNotConfiguredSnack;
+
   /// Print-job status: nothing was prepared because no printer is assigned.
   ///
   /// In en, this message translates to:
