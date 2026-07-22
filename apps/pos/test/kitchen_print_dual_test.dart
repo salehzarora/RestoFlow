@@ -759,6 +759,123 @@ void main() {
     });
   });
 
+  group('guard synchronous-throw safety (final F1)', () {
+    test(
+      'a SYNCHRONOUS throw releases the order; a retry succeeds (calls==2)',
+      () async {
+        final guard = PosAutoKitchenPrintGuard();
+        var calls = 0;
+        // A NON-async attempt that throws SYNCHRONOUSLY (before returning a
+        // Future) on the first call, then returns success on the retry.
+        Future<PosKitchenPrintOutcome> attempt() {
+          calls++;
+          if (calls == 1) throw StateError('sync boom');
+          return Future.value(PosKitchenPrintOutcome.printed);
+        }
+
+        expect(
+          await guard.runGuarded('o', attempt),
+          PosKitchenPrintOutcome.failed,
+        );
+        expect(
+          await guard.runGuarded('o', attempt),
+          PosKitchenPrintOutcome.printed,
+        );
+        expect(
+          calls,
+          2,
+          reason: 'the sync-throw order was released for a retry',
+        );
+      },
+    );
+
+    test(
+      'an ASYNCHRONOUS failure releases the order; a retry succeeds',
+      () async {
+        final guard = PosAutoKitchenPrintGuard();
+        var calls = 0;
+        Future<PosKitchenPrintOutcome> attempt() async {
+          calls++;
+          return calls == 1
+              ? PosKitchenPrintOutcome.failed
+              : PosKitchenPrintOutcome.printed;
+        }
+
+        expect(
+          await guard.runGuarded('o', attempt),
+          PosKitchenPrintOutcome.failed,
+        );
+        expect(
+          await guard.runGuarded('o', attempt),
+          PosKitchenPrintOutcome.printed,
+        );
+        expect(calls, 2);
+      },
+    );
+
+    test(
+      'concurrent callers during the first attempt share ONE future',
+      () async {
+        final guard = PosAutoKitchenPrintGuard();
+        final release = Completer<void>();
+        var calls = 0;
+        Future<PosKitchenPrintOutcome> attempt() async {
+          calls++;
+          await release.future;
+          return PosKitchenPrintOutcome.printed;
+        }
+
+        final f1 = guard.runGuarded('o', attempt);
+        final f2 = guard.runGuarded('o', attempt);
+        expect(
+          identical(f1, f2),
+          isTrue,
+          reason: 'the duplicate shares the future',
+        );
+        release.complete();
+        expect(await Future.wait([f1, f2]), [
+          PosKitchenPrintOutcome.printed,
+          PosKitchenPrintOutcome.printed,
+        ]);
+        expect(calls, 1, reason: 'exactly one attempt for concurrent callers');
+      },
+    );
+
+    test(
+      'a confirmed success suppresses later duplicates; failure never lies',
+      () async {
+        final guard = PosAutoKitchenPrintGuard();
+        var calls = 0;
+        Future<PosKitchenPrintOutcome> succeed() async {
+          calls++;
+          return PosKitchenPrintOutcome.printed;
+        }
+
+        expect(
+          await guard.runGuarded('a', succeed),
+          PosKitchenPrintOutcome.printed,
+        );
+        expect(
+          await guard.runGuarded('a', succeed),
+          PosKitchenPrintOutcome.printed,
+        );
+        expect(
+          calls,
+          1,
+          reason: 'success suppressed the duplicate — no re-send',
+        );
+        // A failed order NEVER reports printed.
+        expect(
+          await guard.runGuarded(
+            'b',
+            () async => PosKitchenPrintOutcome.failed,
+          ),
+          PosKitchenPrintOutcome.failed,
+        );
+      },
+    );
+  });
+
   group('order eligibility (F3)', () {
     test('a real accepted order id is eligible', () {
       expect(
@@ -859,6 +976,42 @@ void main() {
         expect(ar.autoPrintKitchenNoPrinterNote, contains('تذكرة المطبخ'));
         expect(ar.autoPrintKitchenNoPrinterNote, isNot(contains('فاتورة')));
         expect(ar.posKitchenTicketPrintedSnack, contains('تذكرة المطبخ'));
+      },
+    );
+
+    test(
+      'the kitchen-printer notice no longer claims auto printing is unavailable',
+      () async {
+        final en = await AppLocalizations.delegate.load(const Locale('en'));
+        // Obsolete contradictory wording is GONE…
+        expect(
+          en.posKitchenPrinterPreparationBody,
+          isNot(contains('not printed automatically')),
+        );
+        // …replaced by: the toggle controls it, a kitchen printer is required,
+        // and manual printing stays available.
+        expect(
+          en.posKitchenPrinterPreparationBody,
+          contains('Automatically print kitchen ticket'),
+        );
+        expect(
+          en.posKitchenPrinterPreparationBody,
+          contains('kitchen printer'),
+        );
+        expect(en.posKitchenPrinterPreparationBody, contains('manual'));
+        final ar = await AppLocalizations.delegate.load(const Locale('ar'));
+        expect(
+          ar.posKitchenPrinterPreparationBody,
+          isNot(contains('لا تُطبع تذاكر المطبخ تلقائيًا بعد')),
+        );
+        expect(ar.posKitchenPrinterPreparationBody, contains('تذكرة المطبخ'));
+        expect(ar.posKitchenPrinterPreparationBody, isNot(contains('فاتورة')));
+        final he = await AppLocalizations.delegate.load(const Locale('he'));
+        expect(he.posKitchenPrinterPreparationBody, contains('מדפסת מטבח'));
+        expect(
+          he.posKitchenPrinterPreparationBody,
+          isNot(contains('אינם מודפסים אוטומטית')),
+        );
       },
     );
 

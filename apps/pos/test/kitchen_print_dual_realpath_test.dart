@@ -11,9 +11,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/print/native_print_bridges.dart'
-    show posPrinterDestinationSendGateProvider;
+    show NativeTransportPrintBridge, posPrinterDestinationSendGateProvider;
 import 'package:restoflow_pos/src/print/network_printer_tester.dart';
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
+import 'package:restoflow_pos/src/print/print_document.dart' as app;
 import 'package:restoflow_pos/src/state/cart_controller.dart'
     show CartLineView, SelectedModifier;
 import 'package:restoflow_pos/src/state/pos_auto_print_prefs.dart';
@@ -51,6 +52,75 @@ class _CapturingTransport implements pp.PrintTransport {
   @override
   Future<void> dispose() async {}
 }
+
+/// Records both the bytes and the send START/END order (optionally blocking on
+/// [block]) — to prove ACTUAL FIFO serialization through the shared gate.
+class _RecordingTransport implements pp.PrintTransport {
+  _RecordingTransport(this.label, this.order, {this.block});
+  final String label;
+  final List<String> order;
+  final Completer<void>? block;
+  final List<Uint8List> sent = [];
+  @override
+  Future<pp.PrintResult> send(Uint8List bytes) async {
+    sent.add(bytes);
+    order.add('$label-start');
+    if (block != null) await block!.future;
+    order.add('$label-end');
+    return const pp.PrintResult.success();
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// A REAL money-bearing receipt document (the customer_receipt path renders this
+/// through NativeTransportPrintBridge → receiptToEscPosDocument).
+app.PrintDocument _receiptDoc() => app.PrintDocument(
+  title: 'Receipt',
+  lines: [
+    app.PrintLine.title('RESTOFLOW'),
+    app.PrintLine.item('2 x Shawarma', '90.00'),
+    app.PrintLine.rule(),
+    app.PrintLine.kv('Total', '₪90.00', emphasised: true),
+    app.PrintLine.kv('Paid', '₪90.00'),
+  ],
+);
+
+/// A container whose kitchen slot resolves to [host]:[port], routing its send
+/// through [gate] and capturing via [transport].
+ProviderContainer _kitchenContainer(
+  String host,
+  int port,
+  pp.PrinterDestinationSendGate gate,
+  pp.PrintTransport transport,
+) {
+  SharedPreferences.setMockInitialValues({
+    'restoflow.printer.selected.pos.kitchen_ticket.local': 'network',
+    'restoflow.printer.network.pos.kitchen_ticket.local': jsonEncode({
+      'host': host,
+      'port': port,
+    }),
+  });
+  final c = ProviderContainer(
+    overrides: [
+      posNativePrintingAvailableProvider.overrideWithValue(true),
+      posPrinterDestinationSendGateProvider.overrideWithValue(gate),
+      kitchenPrintTransportOverrideProvider.overrideWithValue((_) => transport),
+    ],
+  );
+  addTearDown(c.dispose);
+  return c;
+}
+
+Future<void> _sendKitchen(ProviderContainer c) => printKitchenTicketForOrder(
+  container: c,
+  input: kitchenTicketInputFromCartLines(
+    orderCode: '#000042',
+    orderType: OrderType.dineIn,
+    lines: [_line()],
+  ),
+);
 
 class _StubAutoKitchen extends PosAutoPrintKitchenTicketController {
   _StubAutoKitchen(this._v);
@@ -166,85 +236,134 @@ void main() {
     );
   });
 
-  group('F5 same physical printer for both purposes', () {
-    test(
-      'kitchen + receipt sends to ONE endpoint serialize FIFO (shared gate)',
-      () async {
-        final gate = pp.PrinterDestinationSendGate();
-        final order = <String>[];
-        final firstDone = Completer<void>();
-        // "receipt" holds the destination; "kitchen" must wait behind it.
-        final key = pp.PrinterDestinationSendGate.networkKey('10.0.0.5', 9100);
-        final receipt = gate.withDestination(key, () async {
-          order.add('receipt-start');
-          await firstDone.future;
-          order.add('receipt-end');
-          return const pp.PrintResult.success();
-        });
-        final kitchen = gate.withDestination(key, () async {
-          order.add('kitchen-start');
-          return const pp.PrintResult.success();
-        });
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-        // The kitchen send has NOT started — it is serialized behind the receipt.
-        expect(order, ['receipt-start']);
-        firstDone.complete();
-        await Future.wait([receipt, kitchen]);
-        expect(order, ['receipt-start', 'receipt-end', 'kitchen-start']);
-      },
-    );
+  group('F3 same physical printer — REAL receipt + REAL kitchen sends', () {
+    test('the two real documents differ + use the correct renderers', () async {
+      final gate = pp.PrinterDestinationSendGate();
+      final key = pp.PrinterDestinationSendGate.networkKey('10.0.0.5', 9100);
+      // REAL receipt render+send through the PRODUCTION NativeTransportPrintBridge
+      // (receiptToEscPosDocument), captured.
+      final receiptCapture = _CapturingTransport();
+      await NativeTransportPrintBridge(
+        transportFactory: () => receiptCapture,
+        sendGate: gate,
+        destinationKey: key,
+      ).submit(_receiptDoc());
+      final receiptBytes = receiptCapture.sent.single;
+      // REAL kitchen render+send through the kitchen service (KitchenTicketRenderer)
+      // to the SAME endpoint, captured.
+      final kitchenCapture = _CapturingTransport();
+      await _sendKitchen(
+        _kitchenContainer('10.0.0.5', 9100, gate, kitchenCapture),
+      );
+      final kitchenBytes = kitchenCapture.sent.single;
+
+      // Distinct documents.
+      expect(receiptBytes, isNot(equals(kitchenBytes)));
+      final receiptText = utf8
+          .decode(receiptBytes, allowMalformed: true)
+          .toLowerCase();
+      final kitchenText = utf8
+          .decode(kitchenBytes, allowMalformed: true)
+          .toLowerCase();
+      // Receipt uses the RECEIPT renderer → carries money.
+      expect(receiptText.contains('total'), isTrue);
+      expect(receiptText.contains('90.00'), isTrue);
+      // Kitchen uses KitchenTicketRenderer → NEVER money.
+      for (final t in _money) {
+        expect(kitchenText.contains(t.toLowerCase()), isFalse);
+      }
+      expect(kitchenText.contains('shawarma'), isTrue);
+    });
 
     test(
-      'the two documents differ: receipt carries money, kitchen never does',
+      'a receipt + a kitchen send to ONE endpoint serialize FIFO (real bridges)',
       () async {
-        // The kitchen document (real renderer) is money-free…
-        final kitchenBytes = await runAndCapture('10.0.0.5', 9100);
-        final kitchenText = utf8
-            .decode(kitchenBytes, allowMalformed: true)
-            .toLowerCase();
-        for (final t in _money) {
-          expect(kitchenText.contains(t.toLowerCase()), isFalse);
-        }
-        expect(kitchenText.contains('shawarma'), isTrue);
+        final gate = pp.PrinterDestinationSendGate();
+        final key = pp.PrinterDestinationSendGate.networkKey('10.0.0.5', 9100);
+        final order = <String>[];
+        final receiptBlock = Completer<void>();
+        // The receipt occupies the destination through the REAL bridge.
+        final receiptFuture = NativeTransportPrintBridge(
+          transportFactory: () =>
+              _RecordingTransport('receipt', order, block: receiptBlock),
+          sendGate: gate,
+          destinationKey: key,
+        ).submit(_receiptDoc());
+        // The kitchen send targets the SAME endpoint through the SAME gate.
+        final kitchenFuture = _sendKitchen(
+          _kitchenContainer(
+            '10.0.0.5',
+            9100,
+            gate,
+            _RecordingTransport('kitchen', order),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        // The kitchen send is serialized BEHIND the receipt (FIFO through the key).
+        expect(order, ['receipt-start']);
+        receiptBlock.complete();
+        await Future.wait([receiptFuture, kitchenFuture]);
+        expect(order, [
+          'receipt-start',
+          'receipt-end',
+          'kitchen-start',
+          'kitchen-end',
+        ]);
       },
     );
   });
 
-  group('F5 different printers route independently', () {
+  group('F3 different printers route independently (no crossover)', () {
     test(
-      'the kitchen send reaches the KITCHEN endpoint, not the customer one',
+      'the receipt reaches the customer endpoint, the kitchen the kitchen one',
       () async {
-        // Kitchen configured to .9; a different customer endpoint (.1) is irrelevant.
+        final gate = pp.PrinterDestinationSendGate();
+        final custKey = pp.PrinterDestinationSendGate.networkKey(
+          '10.0.0.1',
+          9100,
+        );
+        final kitKey = pp.PrinterDestinationSendGate.networkKey(
+          '10.0.0.9',
+          9100,
+        );
+
+        // REAL receipt → the CUSTOMER endpoint.
+        final receiptCapture = _CapturingTransport();
+        await NativeTransportPrintBridge(
+          transportFactory: () => receiptCapture,
+          sendGate: gate,
+          destinationKey: custKey,
+        ).submit(_receiptDoc());
+
+        // REAL kitchen → the KITCHEN endpoint (resolved from the kitchen slot).
         _mockKitchenNet('10.0.0.9', 9100);
-        String? routedKey;
+        String? kitchenRoutedKey;
         final c = ProviderContainer(
           overrides: [
             posNativePrintingAvailableProvider.overrideWithValue(true),
+            posPrinterDestinationSendGateProvider.overrideWithValue(gate),
             kitchenPrintTransportOverrideProvider.overrideWithValue((target) {
-              routedKey = target.destinationKey;
+              kitchenRoutedKey = target.destinationKey;
               return _CapturingTransport();
             }),
           ],
         );
         addTearDown(c.dispose);
-        await printKitchenTicketForOrder(
-          container: c,
-          input: kitchenTicketInputFromCartLines(
-            orderCode: '#1',
-            orderType: OrderType.takeaway,
-            lines: [_line()],
-          ),
+        await _sendKitchen(c);
+
+        // No crossover: each document reached ITS intended, distinct endpoint.
+        expect(receiptCapture.sent, hasLength(1), reason: 'receipt delivered');
+        expect(
+          kitchenRoutedKey,
+          kitKey,
+          reason: 'kitchen reached the kitchen slot',
         );
         expect(
-          routedKey,
-          pp.PrinterDestinationSendGate.networkKey('10.0.0.9', 9100),
-          reason:
-              'routed to the KITCHEN endpoint, independent of any receipt one',
+          kitchenRoutedKey,
+          isNot(custKey),
+          reason: 'no assignment crossover',
         );
-        expect(
-          routedKey,
-          isNot(pp.PrinterDestinationSendGate.networkKey('10.0.0.1', 9100)),
-        );
+        expect(custKey, isNot(kitKey));
       },
     );
   });
@@ -311,33 +430,4 @@ void main() {
       },
     );
   });
-}
-
-/// Renders the REAL money-free kitchen bytes for a cart line and returns them
-/// (used to prove the kitchen document differs from a money-bearing receipt).
-Future<Uint8List> runAndCapture(String host, int port) async {
-  SharedPreferences.setMockInitialValues({
-    'restoflow.printer.selected.pos.kitchen_ticket.local': 'network',
-    'restoflow.printer.network.pos.kitchen_ticket.local': jsonEncode({
-      'host': host,
-      'port': port,
-    }),
-  });
-  final captured = _CapturingTransport();
-  final c = ProviderContainer(
-    overrides: [
-      posNativePrintingAvailableProvider.overrideWithValue(true),
-      kitchenPrintTransportOverrideProvider.overrideWithValue((_) => captured),
-    ],
-  );
-  addTearDown(c.dispose);
-  await printKitchenTicketForOrder(
-    container: c,
-    input: kitchenTicketInputFromCartLines(
-      orderCode: '#000042',
-      orderType: OrderType.dineIn,
-      lines: [_line()],
-    ),
-  );
-  return captured.sent.single;
 }
