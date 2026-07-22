@@ -1153,6 +1153,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'When on, the kitchen ticket prints from this device and the order is closed directly, without sending it to the kitchen display. When off, orders continue to the normal kitchen display workflow.';
 
   @override
+  String get posKitchenSettingLoadError =>
+      'Couldn\'t load the kitchen printing setting — sending is paused.';
+
+  @override
   String get posPrintKitchenTicketAction => 'Print kitchen ticket';
 
   @override

@@ -1146,6 +1146,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'عند تفعيل هذا الخيار، تُطبع تذكرة المطبخ من جهاز الكاشير ويُغلق الطلب مباشرة بدون إرساله إلى شاشة المطبخ. عند إيقافه، تتابع الطلبات مسار شاشة المطبخ المعتاد.';
 
   @override
+  String get posKitchenSettingLoadError =>
+      'تعذّر تحميل إعداد طباعة المطبخ — تم إيقاف الإرسال مؤقتًا.';
+
+  @override
   String get posPrintKitchenTicketAction => 'طباعة للمطبخ';
 
   @override

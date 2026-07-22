@@ -2224,6 +2224,12 @@ abstract class AppLocalizations {
   /// **'When on, the kitchen ticket prints from this device and the order is closed directly, without sending it to the kitchen display. When off, orders continue to the normal kitchen display workflow.'**
   String get posAutoPrintKitchenTicketToggleExplanation;
 
+  /// POS cart banner shown when the per-device auto-print kitchen workflow setting failed to read; Send stays disabled until it resolves. Paired with the Try again retry (KITCHEN-PRINT-DUAL-001C).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the kitchen printing setting — sending is paused.'**
+  String get posKitchenSettingLoadError;
+
   /// POS action button on a created order: manually print a money-free kitchen ticket to the kitchen printer.
   ///
   /// In en, this message translates to:

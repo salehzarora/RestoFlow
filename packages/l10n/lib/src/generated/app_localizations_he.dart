@@ -1135,6 +1135,10 @@ class AppLocalizationsHe extends AppLocalizations {
       'כשמופעל, כרטיס המטבח מודפס ממכשיר זה וההזמנה נסגרת ישירות, בלי לשלוח אותה למסך המטבח. כשכבוי, ההזמנות ממשיכות במהלך העבודה הרגיל של מסך המטבח.';
 
   @override
+  String get posKitchenSettingLoadError =>
+      'לא ניתן לטעון את הגדרת הדפסת המטבח — השליחה מושהית.';
+
+  @override
   String get posPrintKitchenTicketAction => 'הדפסה למטבח';
 
   @override
