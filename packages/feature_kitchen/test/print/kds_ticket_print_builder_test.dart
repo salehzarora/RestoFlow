@@ -45,7 +45,7 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
 /// (meat + bread), structured modifiers with ×N, item + order notes, table +
 /// order type. Station is unassigned (a POS whole-order ticket routes to no
 /// station) — the station line must therefore be suppressed.
-KdsTicketView _ticket() => KdsTicketView(
+KdsTicketView _ticket({DateTime? submittedAt}) => KdsTicketView(
   kitchenTicketId: '#000042',
   stationId: KdsTicketMapper.unassignedStation,
   status: KitchenTicketStatus.newTicket,
@@ -54,6 +54,7 @@ KdsTicketView _ticket() => KdsTicketView(
   tableLabel: '5',
   customerName: 'Dana',
   notes: 'call when ready',
+  submittedAt: submittedAt,
   kitchenCounts: const [
     KitchenCount(quantity: 4, label: 'قطع لحم'),
     KitchenCount(quantity: 2, label: 'خبز'),
@@ -181,5 +182,34 @@ void main() {
       expect(texts.any((t) => t.startsWith('KTotal')), isFalse);
       expect(texts, contains('Cola'));
     });
+
+    test(
+      'KITCHEN-PRINT-DUAL-001B (Finding 4): the printed kitchen ticket renders '
+      'NO creation/submission time — established KDS behavior. submittedAt drives '
+      'only the board FIFO/elapsed pill, never the print, so the POS carries no '
+      'timestamp either and the two surfaces stay aligned.',
+      () {
+        final labels = _labels();
+        final withoutTime = buildKdsTicketPrintDocument(
+          ticket: _ticket(),
+          labels: labels,
+        );
+        final withTime = buildKdsTicketPrintDocument(
+          ticket: _ticket(submittedAt: DateTime.utc(2026, 7, 22, 10, 30, 45)),
+          labels: labels,
+        );
+        // The submission time changes NOTHING in the printed document.
+        expect(
+          [for (final l in withTime.lines) '${l.kind}|${l.left}|${l.right}'],
+          [for (final l in withoutTime.lines) '${l.kind}|${l.left}|${l.right}'],
+        );
+        // And no line carries a timestamp-looking value.
+        for (final line in withTime.lines) {
+          final text = '${line.left ?? ''} ${line.right ?? ''}';
+          expect(text.contains('2026-07-22'), isFalse);
+          expect(text.contains('10:30'), isFalse);
+        }
+      },
+    );
   });
 }
