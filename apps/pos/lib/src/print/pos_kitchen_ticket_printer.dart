@@ -13,6 +13,7 @@ import 'kitchen_ticket_contract.dart'
 import 'kitchen_ticket_bytes_web.dart'
     if (dart.library.io) '../spool/kitchen_ticket_bytes.dart'
     as bytes;
+import '../data/order_submission.dart' show kPermanentRejectionCodes;
 import '../state/cart_controller.dart' show CartLineView;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_bluetooth_printer_config.dart';
@@ -52,6 +53,34 @@ enum PosKitchenPrintOutcome {
 
   /// A kitchen printer was configured but the send failed.
   failed,
+
+  /// The order is not eligible for kitchen printing (demo / blank / placeholder
+  /// id, or a permanently-rejected order with no real server order).
+  ineligibleOrder,
+}
+
+/// The SINGLE production eligibility rule for kitchen-printing an order — used by
+/// BOTH the automatic submit path and the manual OrderConfirmation button, so
+/// the two can never diverge. An order is eligible only when:
+///
+///  * it is NOT a demo order (demo mode, or a `demo-…` placeholder id);
+///  * it carries a real, non-blank server order id; and
+///  * it was NOT permanently rejected — any code in the canonical
+///    [kPermanentRejectionCodes] (a permanently-rejected order has no server
+///    order to cook).
+bool isOrderEligibleForKitchenPrint({
+  required String? orderId,
+  required bool isDemoMode,
+  String? rejectionCode,
+}) {
+  if (isDemoMode) return false;
+  final id = orderId?.trim();
+  if (id == null || id.isEmpty || id.startsWith('demo-')) return false;
+  if (rejectionCode != null &&
+      kPermanentRejectionCodes.contains(rejectionCode)) {
+    return false;
+  }
+  return true;
 }
 
 /// A resolved kitchen-ticket printer target for the current device.
@@ -132,20 +161,75 @@ final posHasKitchenNativePrinterProvider = Provider<bool>((ref) {
   };
 });
 
-/// The in-memory guard that stops a SINGLE order-creation operation from
-/// auto-printing its kitchen ticket twice (double-tap / rebuild / a callback
-/// firing twice). Session-scoped and best-effort — NOT crash-proof across
-/// device data loss (the manual action remains an intentional reprint).
+/// The retry-safe, in-memory guard for AUTOMATIC kitchen printing.
+///
+/// It tracks an explicit per-order lifecycle — idle → inFlight → succeeded — so
+/// that (unlike a claim-once set) a FAILED attempt releases the order for a
+/// later legitimate retry, and only a CONFIRMED success suppresses duplicate
+/// automatic callbacks. Concurrent callbacks for the same order share the one
+/// in-flight attempt. Session-scoped and best-effort — NOT crash-proof across
+/// device data loss. The MANUAL action never uses this guard (a deliberate
+/// reprint is always allowed).
 final class PosAutoKitchenPrintGuard {
-  final Set<String> _claimed = {};
+  final Map<String, Future<PosKitchenPrintOutcome>> _inFlight = {};
+  final Set<String> _succeeded = {};
 
-  /// Claims [orderId] for a first auto-print; returns false if already claimed.
-  bool claim(String orderId) => _claimed.add(orderId);
+  /// Runs [attempt] for [orderId] under the retry-safe lifecycle:
+  ///  * a prior CONFIRMED success returns [PosKitchenPrintOutcome.printed]
+  ///    without re-sending;
+  ///  * an in-flight attempt is SHARED (a concurrent duplicate callback awaits
+  ///    the same send, so exactly one physical send happens);
+  ///  * a non-`printed` outcome (no printer / render / transport / thrown)
+  ///    RELEASES the order so a later legitimate retry can run.
+  ///
+  /// The returned outcome always matches the real send result.
+  Future<PosKitchenPrintOutcome> runGuarded(
+    String orderId,
+    Future<PosKitchenPrintOutcome> Function() attempt,
+  ) {
+    if (_succeeded.contains(orderId)) {
+      return Future.value(PosKitchenPrintOutcome.printed);
+    }
+    final active = _inFlight[orderId];
+    if (active != null) return active;
+    final future = _run(orderId, attempt);
+    _inFlight[orderId] = future;
+    return future;
+  }
+
+  Future<PosKitchenPrintOutcome> _run(
+    String orderId,
+    Future<PosKitchenPrintOutcome> Function() attempt,
+  ) async {
+    PosKitchenPrintOutcome outcome;
+    try {
+      outcome = await attempt();
+    } catch (_) {
+      outcome = PosKitchenPrintOutcome.failed;
+    }
+    _inFlight.remove(orderId);
+    if (outcome == PosKitchenPrintOutcome.printed) {
+      _succeeded.add(orderId); // suppress duplicate auto callbacks this session
+    }
+    // Any non-success leaves the order un-succeeded → released for a real retry.
+    return outcome;
+  }
 }
 
 final posAutoKitchenPrintGuardProvider = Provider<PosAutoKitchenPrintGuard>(
   (_) => PosAutoKitchenPrintGuard(),
 );
+
+/// TEST SEAM: overrides how the kitchen printer builds its transport, so a
+/// real-path (CartPanel / OrderConfirmation) test can capture the routed
+/// endpoint + bytes without opening a socket. Null (the production default)
+/// uses the resolved target's real per-endpoint transport. It receives the
+/// resolved target — which carries the canonical destination key — so a test
+/// can assert the exact endpoint the kitchen ticket reached.
+final kitchenPrintTransportOverrideProvider =
+    Provider<pp.PrintTransport Function(ResolvedKitchenPrinter target)?>(
+      (_) => null,
+    );
 
 /// The signature of the money-free bytes builder (injectable for tests).
 typedef KitchenBytesBuilder =
@@ -196,7 +280,10 @@ class PosKitchenTicketPrinter {
     }
 
     final gate = _container.read(posPrinterDestinationSendGateProvider);
-    final transport = resolved.transportFactory();
+    final override = _container.read(kitchenPrintTransportOverrideProvider);
+    final transport = override != null
+        ? override(resolved)
+        : resolved.transportFactory();
     try {
       final result = await gate.withDestination(
         resolved.destinationKey,
@@ -227,33 +314,52 @@ Future<PosKitchenPrintOutcome> printKitchenTicketForOrder({
 );
 
 /// The AUTOMATIC entry point, called after a successful order creation. Prints
-/// exactly one kitchen ticket ONLY when the per-device setting is enabled and
-/// this order was not already auto-printed this session. Best-effort — any
-/// failure is swallowed so it can NEVER turn a successful order into a failure.
+/// exactly one kitchen ticket ONLY when the order is eligible, the per-device
+/// setting is enabled, and this order was not already auto-printed this session.
+/// Best-effort — any failure is swallowed so it can NEVER turn a successful
+/// order into a failure, and a failed attempt is released for a later retry.
 Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   required ProviderContainer container,
   required String orderId,
   required KitchenTicketInput input,
+  bool isDemoMode = false,
+  String? rejectionCode,
   String? languageCode,
   PosKitchenTicketPrinter? printer,
 }) async {
-  final stored = container.read(posAutoPrintKitchenTicketProvider).valueOrNull;
-  // The setting is OFF by default; when off the whole flow is inert.
-  if (!(stored ?? false)) return PosKitchenPrintOutcome.noPrinterConfigured;
-  // Duplicate protection: only the FIRST call for this order prints.
-  if (!container.read(posAutoKitchenPrintGuardProvider).claim(orderId)) {
-    return PosKitchenPrintOutcome.printed;
+  // Rejected / demo / blank / placeholder orders never print (shared rule).
+  if (!isOrderEligibleForKitchenPrint(
+    orderId: orderId,
+    isDemoMode: isDemoMode,
+    rejectionCode: rejectionCode,
+  )) {
+    return PosKitchenPrintOutcome.ineligibleOrder;
   }
+  // COLD-START CORRECT: await the RESOLVED persisted setting — it may still be
+  // AsyncLoading right after restart, so a sync read would wrongly see false.
+  // Fail closed (no print, order unaffected) only on a real read error.
+  final bool enabled;
   try {
-    return await printKitchenTicketForOrder(
-      container: container,
-      input: input,
-      languageCode: languageCode,
-      printer: printer,
-    );
+    enabled =
+        (await container.read(posAutoPrintKitchenTicketProvider.future)) ??
+        false;
   } catch (_) {
     return PosKitchenPrintOutcome.failed;
   }
+  if (!enabled) return PosKitchenPrintOutcome.noPrinterConfigured;
+  // Retry-safe: one confirmed send suppresses duplicate callbacks; any failure
+  // releases the order so a later legitimate retry can send exactly once.
+  return container
+      .read(posAutoKitchenPrintGuardProvider)
+      .runGuarded(
+        orderId,
+        () => printKitchenTicketForOrder(
+          container: container,
+          input: input,
+          languageCode: languageCode,
+          printer: printer,
+        ),
+      );
 }
 
 /// Maps a live cart (the rich submit-time lines) to a money-free
