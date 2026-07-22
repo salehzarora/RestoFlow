@@ -4765,11 +4765,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posPrinterPurposeKitchen => 'Kitchen tickets';
 
   @override
-  String get posKitchenPrinterPreparationTitle => 'Preparation only';
+  String get posKitchenPrinterPreparationTitle => 'Automatic kitchen printing';
 
   @override
   String get posKitchenPrinterPreparationBody =>
-      'Kitchen tickets are not printed automatically yet. You can prepare and test the kitchen printer now; printer-only kitchen activation is not yet available.';
+      'Automatic kitchen-ticket printing is controlled by the “Automatically print kitchen ticket” setting and requires a configured kitchen printer. You can also print a kitchen ticket manually from a created order.';
 
   @override
   String get posKitchenPrinterUseCustomerAction =>

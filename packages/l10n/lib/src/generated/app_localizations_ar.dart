@@ -4727,11 +4727,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posPrinterPurposeKitchen => 'تذاكر المطبخ';
 
   @override
-  String get posKitchenPrinterPreparationTitle => 'تجهيز فقط';
+  String get posKitchenPrinterPreparationTitle => 'الطباعة التلقائية للمطبخ';
 
   @override
   String get posKitchenPrinterPreparationBody =>
-      'لا تُطبع تذاكر المطبخ تلقائيًا بعد. يمكنك تجهيز طابعة المطبخ واختبارها الآن، وتفعيل مطبخ الطابعة فقط غير متاح بعد.';
+      'تُتحكَّم الطباعة التلقائية لتذكرة المطبخ عبر إعداد «طباعة تذكرة المطبخ تلقائيًا» وتتطلب طابعة مطبخ مُعدّة. ويمكنك أيضًا طباعة تذكرة المطبخ يدويًا من طلب مُنشأ.';
 
   @override
   String get posKitchenPrinterUseCustomerAction =>

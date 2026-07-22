@@ -8824,16 +8824,16 @@ abstract class AppLocalizations {
   /// **'Kitchen tickets'**
   String get posPrinterPurposeKitchen;
 
-  /// Title of the POS kitchen-slot preparation notice.
+  /// Title of the POS kitchen-printer settings notice (KITCHEN-PRINT-DUAL-001).
   ///
   /// In en, this message translates to:
-  /// **'Preparation only'**
+  /// **'Automatic kitchen printing'**
   String get posKitchenPrinterPreparationTitle;
 
-  /// Body of the POS kitchen-slot preparation notice — honest dormancy statement.
+  /// Body of the POS kitchen-printer settings notice — the toggle controls automatic kitchen-ticket printing, a kitchen printer is required, and manual printing stays available.
   ///
   /// In en, this message translates to:
-  /// **'Kitchen tickets are not printed automatically yet. You can prepare and test the kitchen printer now; printer-only kitchen activation is not yet available.'**
+  /// **'Automatic kitchen-ticket printing is controlled by the “Automatically print kitchen ticket” setting and requires a configured kitchen printer. You can also print a kitchen ticket manually from a created order.'**
   String get posKitchenPrinterPreparationBody;
 
   /// Button: copy the customer slot's endpoint into the kitchen slot (explicit one-time copy).
