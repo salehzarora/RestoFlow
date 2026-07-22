@@ -1,16 +1,21 @@
 @TestOn('vm')
 library;
 
+import 'dart:async' show Completer;
 import 'dart:convert' show jsonEncode, utf8;
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
     show DeviceContext;
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+import 'package:restoflow_l10n/restoflow_l10n.dart' show AppLocalizations;
+import 'package:restoflow_pos/src/data/order_submission.dart'
+    show kPermanentRejectionCodes;
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/spool/kitchen_ticket_bytes.dart'
@@ -58,6 +63,61 @@ class _StubAutoKitchen extends PosAutoPrintKitchenTicketController {
   @override
   Future<bool?> build() async => _value;
 }
+
+/// Cold-start simulation: the persisted value resolves only AFTER a delay (i.e.
+/// the provider is momentarily AsyncLoading), and is never primed before the
+/// first submit — a SYNC read would wrongly see null/false.
+class _SlowAutoKitchen extends PosAutoPrintKitchenTicketController {
+  _SlowAutoKitchen(this._value);
+  final bool _value;
+  @override
+  Future<bool?> build() async {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    return _value;
+  }
+}
+
+/// A storage read that fails — the setting future completes with an error.
+class _ThrowingAutoKitchen extends PosAutoPrintKitchenTicketController {
+  @override
+  Future<bool?> build() async => throw StateError('prefs read error');
+}
+
+/// A transport whose send blocks on a gate so an in-flight attempt can be
+/// observed by a concurrent duplicate callback.
+class _BlockingTransport implements pp.PrintTransport {
+  final Completer<void> _release = Completer<void>();
+  int sends = 0;
+  void release() => _release.complete();
+  @override
+  Future<pp.PrintResult> send(Uint8List bytes) async {
+    sends++;
+    await _release.future;
+    return const pp.PrintResult.success();
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+PosKitchenTicketPrinter _printerTo(
+  ProviderContainer c,
+  pp.PrintTransport transport,
+) => PosKitchenTicketPrinter(
+  c,
+  targetOverride: ResolvedKitchenPrinter(
+    destinationKey: 'k',
+    transportFactory: () => transport,
+  ),
+);
+
+ProviderContainer _onContainer() => _container(
+  overrides: [
+    posAutoPrintKitchenTicketProvider.overrideWith(
+      () => _StubAutoKitchen(true),
+    ),
+  ],
+);
 
 const _moneyTokens = [
   'total',
@@ -398,21 +458,18 @@ void main() {
       },
     );
 
-    test(
-      'OFF (default) => the auto flow is inert and claims no order',
-      () async {
-        final c = _container();
-        final guard = c.read(posAutoKitchenPrintGuardProvider);
-        final outcome = await runAutoKitchenTicketPrintOnSubmit(
-          container: c,
-          orderId: 'order-1',
-          input: _input(),
-        );
-        expect(outcome, PosKitchenPrintOutcome.noPrinterConfigured);
-        // Inert: the order was never claimed, so nothing was attempted.
-        expect(guard.claim('order-1'), isTrue);
-      },
-    );
+    test('OFF (default) => the auto flow is inert (no send)', () async {
+      final c = _container();
+      final fake = _FakeTransport(const pp.PrintResult.success());
+      final outcome = await runAutoKitchenTicketPrintOnSubmit(
+        container: c,
+        orderId: 'order-1',
+        input: _input(),
+        printer: _printerTo(c, fake),
+      );
+      expect(outcome, PosKitchenPrintOutcome.noPrinterConfigured);
+      expect(fake.sent, isEmpty);
+    });
 
     test(
       'ON => prints once, and a duplicate callback does not reprint',
@@ -456,13 +513,372 @@ void main() {
     );
   });
 
-  group('duplicate guard', () {
-    test('claims an order id exactly once', () {
-      final guard = PosAutoKitchenPrintGuard();
-      expect(guard.claim('a'), isTrue);
-      expect(guard.claim('a'), isFalse);
-      expect(guard.claim('b'), isTrue);
+  group('cold-start setting read (F1)', () {
+    // These use _SlowAutoKitchen (the value resolves AFTER a delay) WITHOUT ever
+    // priming the provider — proving the auto path AWAITS the resolved value.
+    test(
+      'persisted true + cold start + immediate first submit => one send',
+      () async {
+        final c = _container(
+          overrides: [
+            posAutoPrintKitchenTicketProvider.overrideWith(
+              () => _SlowAutoKitchen(true),
+            ),
+          ],
+        );
+        final fake = _FakeTransport(const pp.PrintResult.success());
+        final outcome = await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'order-1',
+          input: _input(),
+          printer: _printerTo(c, fake),
+        );
+        expect(outcome, PosKitchenPrintOutcome.printed);
+        expect(fake.sent, hasLength(1));
+      },
+    );
+
+    test('persisted false + cold start => zero sends', () async {
+      final c = _container(
+        overrides: [
+          posAutoPrintKitchenTicketProvider.overrideWith(
+            () => _SlowAutoKitchen(false),
+          ),
+        ],
+      );
+      final fake = _FakeTransport(const pp.PrintResult.success());
+      final outcome = await runAutoKitchenTicketPrintOnSubmit(
+        container: c,
+        orderId: 'order-1',
+        input: _input(),
+        printer: _printerTo(c, fake),
+      );
+      expect(outcome, PosKitchenPrintOutcome.noPrinterConfigured);
+      expect(fake.sent, isEmpty);
     });
+
+    test(
+      'a storage read error => zero sends, fail closed (order unaffected)',
+      () async {
+        final c = _container(
+          overrides: [
+            posAutoPrintKitchenTicketProvider.overrideWith(
+              () => _ThrowingAutoKitchen(),
+            ),
+          ],
+        );
+        final fake = _FakeTransport(const pp.PrintResult.success());
+        final outcome = await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'order-1',
+          input: _input(),
+          printer: _printerTo(c, fake),
+        );
+        expect(outcome, PosKitchenPrintOutcome.failed);
+        expect(fake.sent, isEmpty);
+      },
+    );
+  });
+
+  group('retry-safe guard (F2)', () {
+    test(
+      'concurrent duplicate callbacks share the in-flight attempt => one send',
+      () async {
+        final c = _onContainer();
+        final blocking = _BlockingTransport();
+        final printer = _printerTo(c, blocking);
+        final f1 = runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'o',
+          input: _input(),
+          printer: printer,
+        );
+        final f2 = runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'o',
+          input: _input(),
+          printer: printer,
+        );
+        // Let both reach the (blocked) send; the second must SHARE the first.
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        expect(
+          blocking.sends,
+          1,
+          reason: 'the duplicate shared the in-flight send',
+        );
+        blocking.release();
+        expect(await Future.wait([f1, f2]), [
+          PosKitchenPrintOutcome.printed,
+          PosKitchenPrintOutcome.printed,
+        ]);
+        expect(blocking.sends, 1, reason: 'exactly one physical send');
+      },
+    );
+
+    test(
+      'first NO-PRINTER failure releases => after configuring, second sends once',
+      () async {
+        final c = _onContainer();
+        // First: no printer override + no config => resolver null => noPrinter.
+        final first = await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'o',
+          input: _input(),
+        );
+        expect(first, PosKitchenPrintOutcome.noPrinterConfigured);
+        // Second: a printer is now available => sends exactly once (not blocked).
+        final fake = _FakeTransport(const pp.PrintResult.success());
+        final second = await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'o',
+          input: _input(),
+          printer: _printerTo(c, fake),
+        );
+        expect(second, PosKitchenPrintOutcome.printed);
+        expect(fake.sent, hasLength(1));
+      },
+    );
+
+    test(
+      'first TRANSPORT failure releases => second attempt sends once',
+      () async {
+        final c = _onContainer();
+        final failing = _FakeTransport(
+          const pp.PrintResult.failure(pp.PrinterErrorCategory.unreachable),
+        );
+        expect(
+          await runAutoKitchenTicketPrintOnSubmit(
+            container: c,
+            orderId: 'o',
+            input: _input(),
+            printer: _printerTo(c, failing),
+          ),
+          PosKitchenPrintOutcome.failed,
+        );
+        expect(failing.sent, hasLength(1));
+        final ok = _FakeTransport(const pp.PrintResult.success());
+        expect(
+          await runAutoKitchenTicketPrintOnSubmit(
+            container: c,
+            orderId: 'o',
+            input: _input(),
+            printer: _printerTo(c, ok),
+          ),
+          PosKitchenPrintOutcome.printed,
+        );
+        expect(ok.sent, hasLength(1));
+      },
+    );
+
+    test('a RENDER exception releases => later recovery succeeds', () async {
+      final c = _onContainer();
+      final fake = _FakeTransport(const pp.PrintResult.success());
+      final throwing = PosKitchenTicketPrinter(
+        c,
+        buildBytes: ({required input, languageCode, rasterizer}) =>
+            Future<Uint8List>.error(StateError('boom')),
+        targetOverride: ResolvedKitchenPrinter(
+          destinationKey: 'k',
+          transportFactory: () => fake,
+        ),
+      );
+      expect(
+        await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'o',
+          input: _input(),
+          printer: throwing,
+        ),
+        PosKitchenPrintOutcome.failed,
+      );
+      expect(fake.sent, isEmpty, reason: 'render threw before any send');
+      expect(
+        await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'o',
+          input: _input(),
+          printer: _printerTo(c, fake),
+        ),
+        PosKitchenPrintOutcome.printed,
+      );
+      expect(fake.sent, hasLength(1));
+    });
+
+    test('a confirmed success suppresses a later duplicate callback', () async {
+      final c = _onContainer();
+      final fake = _FakeTransport(const pp.PrintResult.success());
+      expect(
+        await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'o',
+          input: _input(),
+          printer: _printerTo(c, fake),
+        ),
+        PosKitchenPrintOutcome.printed,
+      );
+      expect(
+        await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'o',
+          input: _input(),
+          printer: _printerTo(c, fake),
+        ),
+        PosKitchenPrintOutcome.printed,
+      );
+      expect(
+        fake.sent,
+        hasLength(1),
+        reason: 'no reprint after a confirmed send',
+      );
+    });
+
+    test('the returned outcome always matches the real send result', () async {
+      final c = _onContainer();
+      final ok = _FakeTransport(const pp.PrintResult.success());
+      expect(
+        await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'a',
+          input: _input(),
+          printer: _printerTo(c, ok),
+        ),
+        PosKitchenPrintOutcome.printed,
+      );
+      final bad = _FakeTransport(
+        const pp.PrintResult.failure(pp.PrinterErrorCategory.unreachable),
+      );
+      expect(
+        await runAutoKitchenTicketPrintOnSubmit(
+          container: c,
+          orderId: 'b',
+          input: _input(),
+          printer: _printerTo(c, bad),
+        ),
+        PosKitchenPrintOutcome.failed,
+      );
+    });
+  });
+
+  group('order eligibility (F3)', () {
+    test('a real accepted order id is eligible', () {
+      expect(
+        isOrderEligibleForKitchenPrint(
+          orderId: 'ord-real-uuid',
+          isDemoMode: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('demo mode / demo-placeholder / blank ids are ineligible', () {
+      expect(
+        isOrderEligibleForKitchenPrint(orderId: 'ord-real', isDemoMode: true),
+        isFalse,
+      );
+      for (final id in ['demo-order', 'demo-order-7', '', '   ', null]) {
+        expect(
+          isOrderEligibleForKitchenPrint(orderId: id, isDemoMode: false),
+          isFalse,
+          reason: 'id "$id"',
+        );
+      }
+    });
+
+    test('EVERY permanent rejection code is ineligible', () {
+      expect(kPermanentRejectionCodes, isNotEmpty);
+      for (final code in kPermanentRejectionCodes) {
+        expect(
+          isOrderEligibleForKitchenPrint(
+            orderId: 'ord-real',
+            isDemoMode: false,
+            rejectionCode: code,
+          ),
+          isFalse,
+          reason: code,
+        );
+      }
+    });
+
+    test('a NON-permanent error code stays eligible', () {
+      expect(
+        isOrderEligibleForKitchenPrint(
+          orderId: 'ord-real',
+          isDemoMode: false,
+          rejectionCode: 'malformed_response',
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'the auto path sends NOTHING for each permanent rejection code',
+      () async {
+        for (final code in kPermanentRejectionCodes) {
+          final c = _onContainer();
+          final fake = _FakeTransport(const pp.PrintResult.success());
+          final outcome = await runAutoKitchenTicketPrintOnSubmit(
+            container: c,
+            orderId: 'ord-real',
+            isDemoMode: false,
+            rejectionCode: code,
+            input: _input(),
+            printer: _printerTo(c, fake),
+          );
+          expect(outcome, PosKitchenPrintOutcome.ineligibleOrder, reason: code);
+          expect(fake.sent, isEmpty, reason: code);
+        }
+      },
+    );
+
+    test('a demo order sends nothing on the auto path', () async {
+      final c = _onContainer();
+      final fake = _FakeTransport(const pp.PrintResult.success());
+      final outcome = await runAutoKitchenTicketPrintOnSubmit(
+        container: c,
+        orderId: 'demo-order-1',
+        isDemoMode: true,
+        input: _input(),
+        printer: _printerTo(c, fake),
+      );
+      expect(outcome, PosKitchenPrintOutcome.ineligibleOrder);
+      expect(fake.sent, isEmpty);
+    });
+  });
+
+  group('localization terminology (F7)', () {
+    test(
+      'the kitchen toggle uses تذكرة (ticket), never فاتورة (invoice)',
+      () async {
+        final ar = await AppLocalizations.delegate.load(const Locale('ar'));
+        expect(
+          ar.posAutoPrintKitchenTicketToggle,
+          'طباعة تذكرة المطبخ تلقائيًا',
+        );
+        expect(ar.posAutoPrintKitchenTicketToggle, isNot(contains('فاتورة')));
+        // Kitchen-document strings say تذكرة المطبخ, not a customer فاتورة.
+        expect(ar.autoPrintKitchenNoPrinterNote, contains('تذكرة المطبخ'));
+        expect(ar.autoPrintKitchenNoPrinterNote, isNot(contains('فاتورة')));
+        expect(ar.posKitchenTicketPrintedSnack, contains('تذكرة المطبخ'));
+      },
+    );
+
+    test(
+      'the scoped no-printer notes are distinct + correctly worded',
+      () async {
+        final en = await AppLocalizations.delegate.load(const Locale('en'));
+        expect(en.autoPrintReceiptNoPrinterNote, contains('receipt printer'));
+        // The kitchen note clarifies the toggle controls it + needs a printer
+        // (not the old "unavailable" wording).
+        expect(en.autoPrintKitchenNoPrinterNote, contains('kitchen printer'));
+        expect(
+          en.autoPrintReceiptNoPrinterNote,
+          isNot(en.autoPrintKitchenNoPrinterNote),
+        );
+        final he = await AppLocalizations.delegate.load(const Locale('he'));
+        expect(he.posAutoPrintKitchenTicketToggle, contains('כרטיס מטבח'));
+        expect(he.autoPrintKitchenNoPrinterNote, contains('מדפסת מטבח'));
+      },
+    );
   });
 
   group('source boundaries', () {

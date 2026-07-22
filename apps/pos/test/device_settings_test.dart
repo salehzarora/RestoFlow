@@ -255,7 +255,18 @@ void main() {
     final toggle = find.byKey(const Key('auto-print-receipt-toggle'));
     expect(tester.widget<SwitchListTile>(toggle).onChanged, isNull);
     expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
-    expect(find.text(l10n.autoPrintNoPrinterNote), findsOneWidget);
+    // KITCHEN-PRINT-DUAL-001 (F6): the disabled-why notes are SCOPED per toggle,
+    // not one ambiguous warning repeated twice.
+    expect(find.text(l10n.autoPrintReceiptNoPrinterNote), findsOneWidget);
+    expect(find.text(l10n.autoPrintKitchenNoPrinterNote), findsOneWidget);
+    expect(find.text(l10n.autoPrintNoPrinterNote), findsNothing);
+    // The KITCHEN toggle is present and, with no kitchen printer, disabled + off.
+    final kitchenToggle = find.byKey(
+      const Key('auto-print-kitchen-ticket-toggle'),
+    );
+    expect(kitchenToggle, findsOneWidget);
+    expect(tester.widget<SwitchListTile>(kitchenToggle).onChanged, isNull);
+    expect(tester.widget<SwitchListTile>(kitchenToggle).value, isFalse);
   });
 
   Future<ProviderContainer> pumpWithManager(
