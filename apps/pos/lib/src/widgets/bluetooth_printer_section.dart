@@ -7,6 +7,8 @@ import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 import '../print/bluetooth_printer.dart';
 import '../print/bluetooth_printer_tester.dart';
 import '../print/kitchen_test_document.dart';
+import '../print/native_print_bridges.dart'
+    show posPrinterDestinationSendGateProvider;
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_printer_purpose.dart';
@@ -164,16 +166,23 @@ class _BluetoothPrinterSectionState
           )
         : null;
     if (!mounted) return;
-    final result = await ref
-        .read(bluetoothPrinterTesterProvider)
-        .testPrint(
-          PosBluetoothPrinterConfig(
-            address: selection.address,
-            name: selection.name,
-          ),
-          deviceLabel: deviceLabel,
-          document: document,
-        );
+    // KITCHEN-PRINT-DUAL-001 (F4): serialize the test send through the SHARED
+    // per-destination gate + canonical key, so a Test print never interleaves
+    // with another Test or an automatic kitchen send to the same physical
+    // printer (FIFO). Only the physical send is wrapped.
+    final gate = ref.read(posPrinterDestinationSendGateProvider);
+    final tester = ref.read(bluetoothPrinterTesterProvider);
+    final result = await gate.withDestination(
+      pp.PrinterDestinationSendGate.bluetoothKey(selection.address),
+      () => tester.testPrint(
+        PosBluetoothPrinterConfig(
+          address: selection.address,
+          name: selection.name,
+        ),
+        deviceLabel: deviceLabel,
+        document: document,
+      ),
+    );
     if (!mounted) return;
     setState(() {
       _status = result.ok ? _BtStatus.success : _BtStatus.failure;

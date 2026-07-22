@@ -3,8 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart'
+    show PrinterDestinationSendGate;
 
 import '../print/kitchen_test_document.dart';
+import '../print/native_print_bridges.dart'
+    show posPrinterDestinationSendGateProvider;
 import '../print/network_printer_tester.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_network_printer_config.dart';
@@ -154,9 +158,20 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
           )
         : null;
     if (!mounted) return;
-    final result = await ref
-        .read(networkPrinterTesterProvider)
-        .testPrint(config, deviceLabel: deviceLabel, document: document);
+    // KITCHEN-PRINT-DUAL-001 (F4): serialize the test send through the SHARED
+    // per-destination gate + canonical key, so a Test print never interleaves
+    // with another Test or an automatic kitchen send to the same physical
+    // printer (FIFO). Only the physical send is wrapped.
+    final gate = ref.read(posPrinterDestinationSendGateProvider);
+    final tester = ref.read(networkPrinterTesterProvider);
+    final result = await gate.withDestination(
+      PrinterDestinationSendGate.networkKey(config.host, config.port),
+      () => tester.testPrint(
+        config,
+        deviceLabel: deviceLabel,
+        document: document,
+      ),
+    );
     if (!mounted) return;
     setState(
       () => _status = result.ok ? _TestStatus.success : _TestStatus.failure,
