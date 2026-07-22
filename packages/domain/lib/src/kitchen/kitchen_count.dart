@@ -1,3 +1,6 @@
+import 'kitchen_meat.dart';
+import 'kitchen_prep.dart';
+
 /// A single aggregated whole-order kitchen COUNT total (KDS-ALERTS-AND-KITCHEN-
 /// COUNTS-002).
 ///
@@ -83,4 +86,58 @@ List<KitchenCount> aggregateKitchenCounts(
     for (final key in order)
       KitchenCount(quantity: sums[key]!, label: labels[key]!),
   ];
+}
+
+/// One order line's contribution to the whole-order kitchen COUNT rollup, in the
+/// neutral shape BOTH the KDS mapper and the POS direct kitchen print can build:
+///  * [quantity] — the ordered item quantity (the count FACTOR).
+///  * [meats] — the item's per-option meat contributions, each ALREADY
+///    multiplied by its modifier units (so only × the item quantity remains).
+///  * [prepComponents] — the item's per-unit prep components (buns, wraps, …).
+/// Money-free (D-007).
+class KitchenCountItemInput {
+  const KitchenCountItemInput({
+    required this.quantity,
+    this.meats = const <KitchenMeat>[],
+    this.prepComponents = const <KitchenPrepComponent>[],
+  });
+
+  final int quantity;
+  final List<KitchenMeat> meats;
+  final List<KitchenPrepComponent> prepComponents;
+}
+
+/// Rolls a whole order's [items] up into [KitchenCount] totals — the SINGLE
+/// contribution mapping shared by the KDS live board and the POS direct kitchen
+/// print, so a ticket printed from either surface shows the SAME counts. Each
+/// meat contributes `meat.quantity × item.quantity` under its `unit` label; each
+/// prep component contributes `prep.quantity × item.quantity` under its
+/// [kitchenPrepCountLabel]. The actual summing/grouping is the existing
+/// [aggregateKitchenCounts]. Money-free (D-007); owner-configured counts only.
+List<KitchenCount> aggregateOrderKitchenCounts(
+  Iterable<KitchenCountItemInput> items,
+) {
+  final contributions = <KitchenCountContribution>[];
+  for (final item in items) {
+    if (item.quantity <= 0) continue;
+    for (final meat in item.meats) {
+      contributions.add(
+        KitchenCountContribution(
+          quantity: meat.quantity,
+          label: meat.unit,
+          factor: item.quantity,
+        ),
+      );
+    }
+    for (final prep in item.prepComponents) {
+      contributions.add(
+        KitchenCountContribution(
+          quantity: prep.quantity,
+          label: kitchenPrepCountLabel(prep),
+          factor: item.quantity,
+        ),
+      );
+    }
+  }
+  return aggregateKitchenCounts(contributions);
 }

@@ -20,7 +20,8 @@ import '../print/pos_kitchen_ticket_printer.dart'
     show
         PosKitchenPrintOutcome,
         isOrderEligibleForKitchenPrint,
-        kitchenTicketInputFromSubmittedOrder,
+        kdsTicketViewFromSubmittedOrder,
+        kitchenTicketPrintLabelsFromL10n,
         printKitchenTicketForOrder;
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/draft_recovery_controller.dart';
@@ -1203,8 +1204,8 @@ class _KitchenTicketPrintButtonState
     try {
       outcome = await printKitchenTicketForOrder(
         container: container,
-        input: kitchenTicketInputFromSubmittedOrder(widget.order),
-        languageCode: l10n.localeName,
+        ticket: kdsTicketViewFromSubmittedOrder(widget.order),
+        labels: kitchenTicketPrintLabelsFromL10n(l10n),
       );
     } catch (_) {
       outcome = PosKitchenPrintOutcome.failed;

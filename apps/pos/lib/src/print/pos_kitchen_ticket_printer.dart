@@ -2,18 +2,22 @@ import 'dart:async' show Completer, unawaited;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show
+        KitchenCountItemInput,
+        KitchenMeat,
+        KitchenPrepComponent,
+        KitchenTicketStatus,
+        OrderType,
+        aggregateOrderKitchenCounts;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show KitchenTicketPrintLabels;
+import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart'
+    show KdsItemView, KdsTicketMapper, KdsTicketView;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show kBluetoothPrintTimeout, nativePrintRasterizerProvider;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
-import 'kitchen_ticket_contract.dart'
-    show KitchenTicketInput, KitchenTicketLineInput;
-// The money-free render imports drift (dart:ffi) — reach it ONLY through this
-// `dart.library.io` boundary so `flutter build web` never compiles drift.
-import 'kitchen_ticket_bytes_web.dart'
-    if (dart.library.io) '../spool/kitchen_ticket_bytes.dart'
-    as bytes;
 import '../data/order_submission.dart' show kPermanentRejectionCodes;
 import '../state/cart_controller.dart' show CartLineView;
 import '../state/pos_auto_print_prefs.dart';
@@ -22,14 +26,19 @@ import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_transport.dart';
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import 'bluetooth_printer.dart';
+import 'kitchen_ticket_render.dart' show renderKitchenTicketBytes;
 import 'native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 
-// Callers depend only on this print seam for the money-free kitchen input DTO.
-export 'kitchen_ticket_contract.dart'
-    show KitchenTicketInput, KitchenTicketLineInput;
+// Callers depend on the SHARED kitchen contract: a KdsTicketView (the same model
+// the KDS renders) + its localized chrome labels.
+export 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show KitchenTicketPrintLabels;
+export 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart'
+    show KdsTicketView;
+export 'kitchen_ticket_labels.dart' show kitchenTicketPrintLabelsFromL10n;
 
-/// KITCHEN-PRINT-DUAL-001 — the POS dual-print KITCHEN service.
+/// KITCHEN-PRINT-DUAL-001 / 001B — the POS dual-print KITCHEN service.
 ///
 /// The cashier RECEIPT prints through the customer_receipt slot
 /// ([posActivePrintBridgeProvider]); this prints the money-free KITCHEN ticket
@@ -37,8 +46,12 @@ export 'kitchen_ticket_contract.dart'
 /// + kitchen network/bluetooth config). Both share the ONE process-wide
 /// [posPrinterDestinationSendGateProvider], so when both purposes point at the
 /// SAME physical printer the two documents serialize instead of interleaving.
-/// The bytes come from the existing money-free [renderKitchenTicketBytes]
-/// (never the receipt renderer).
+///
+/// 001B: the ticket bytes come from [renderKitchenTicketBytes], which renders the
+/// SHARED `buildKdsTicketPrintDocument` layout the KDS live print uses — so a
+/// ticket printed straight from the POS carries the SAME operational detail
+/// (structured modifiers, whole-order kitchen counts, prep, kitchen notes,
+/// table/order type) as one printed from the KDS. Never the receipt renderer.
 
 /// The honest outcome of a kitchen-ticket send (bytes delivered to the printer
 /// transport — never a hardware paper-print acknowledgement).
@@ -246,8 +259,8 @@ final kitchenPrintTransportOverrideProvider =
 /// The signature of the money-free bytes builder (injectable for tests).
 typedef KitchenBytesBuilder =
     Future<Uint8List> Function({
-      required KitchenTicketInput input,
-      String? languageCode,
+      required KdsTicketView ticket,
+      required KitchenTicketPrintLabels labels,
       pp.ReceiptRasterizer? rasterizer,
     });
 
@@ -255,7 +268,7 @@ typedef KitchenBytesBuilder =
 class PosKitchenTicketPrinter {
   PosKitchenTicketPrinter(
     this._container, {
-    KitchenBytesBuilder buildBytes = bytes.renderKitchenTicketBytes,
+    KitchenBytesBuilder buildBytes = renderKitchenTicketBytes,
     ResolvedKitchenPrinter? targetOverride,
   }) : _buildBytes = buildBytes,
        _targetOverride = targetOverride;
@@ -270,8 +283,8 @@ class PosKitchenTicketPrinter {
   /// Resolves the kitchen printer, renders the money-free ticket, and sends it
   /// under the shared destination gate.
   Future<PosKitchenPrintOutcome> printKitchenTicket({
-    required KitchenTicketInput input,
-    String? languageCode,
+    required KdsTicketView ticket,
+    required KitchenTicketPrintLabels labels,
   }) async {
     if (!_container.read(posNativePrintingAvailableProvider)) {
       return PosKitchenPrintOutcome.unavailable;
@@ -283,8 +296,8 @@ class PosKitchenTicketPrinter {
     final Uint8List bytes;
     try {
       bytes = await _buildBytes(
-        input: input,
-        languageCode: languageCode,
+        ticket: ticket,
+        labels: labels,
         rasterizer: _container.read(nativePrintRasterizerProvider),
       );
     } catch (_) {
@@ -317,12 +330,12 @@ class PosKitchenTicketPrinter {
 /// print again); it never changes order/payment/KDS state.
 Future<PosKitchenPrintOutcome> printKitchenTicketForOrder({
   required ProviderContainer container,
-  required KitchenTicketInput input,
-  String? languageCode,
+  required KdsTicketView ticket,
+  required KitchenTicketPrintLabels labels,
   PosKitchenTicketPrinter? printer,
 }) => (printer ?? PosKitchenTicketPrinter(container)).printKitchenTicket(
-  input: input,
-  languageCode: languageCode,
+  ticket: ticket,
+  labels: labels,
 );
 
 /// The AUTOMATIC entry point, called after a successful order creation. Prints
@@ -330,13 +343,17 @@ Future<PosKitchenPrintOutcome> printKitchenTicketForOrder({
 /// setting is enabled, and this order was not already auto-printed this session.
 /// Best-effort — any failure is swallowed so it can NEVER turn a successful
 /// order into a failure, and a failed attempt is released for a later retry.
+///
+/// 001B: this is ADDITIVE — it reads the per-device toggle and (when on) prints;
+/// it NEVER touches the order-submission or KDS-dispatch path, so turning the
+/// toggle off leaves the normal POS→KDS workflow exactly as it was.
 Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   required ProviderContainer container,
   required String orderId,
-  required KitchenTicketInput input,
+  required KdsTicketView ticket,
+  required KitchenTicketPrintLabels labels,
   bool isDemoMode = false,
   String? rejectionCode,
-  String? languageCode,
   PosKitchenTicketPrinter? printer,
 }) async {
   // Rejected / demo / blank / placeholder orders never print (shared rule).
@@ -367,64 +384,114 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
         orderId,
         () => printKitchenTicketForOrder(
           container: container,
-          input: input,
-          languageCode: languageCode,
+          ticket: ticket,
+          labels: labels,
           printer: printer,
         ),
       );
 }
 
-/// Maps a live cart (the rich submit-time lines) to a money-free
-/// [KitchenTicketInput]. Drops every price/total; keeps qty/name/note and the
-/// modifier display names (with any "×N" folded in).
-KitchenTicketInput kitchenTicketInputFromCartLines({
+/// Maps a live cart (the rich submit-time lines) + the menu's PER-ITEM prep
+/// snapshot into the SHARED [KdsTicketView] — the SAME model the KDS renders —
+/// so the POS direct kitchen print carries the SAME detail. Money-free: keeps
+/// only qty/name/note, the structured modifier display names (with any "×N"
+/// folded in), the item prep components, and the whole-order kitchen counts
+/// (owner-configured meat + prep, aggregated exactly as the KDS mapper does).
+/// Drops every price/total — a [KdsTicketView] cannot carry money.
+///
+/// [prepByItemId] is the live menu's `menuItemId -> prepComponents` snapshot
+/// (D-008), looked up the SAME way the outbox builds the order payload; empty
+/// for unconfigured items.
+KdsTicketView kdsTicketViewFromCartLines({
   required String orderCode,
   required OrderType orderType,
   required List<CartLineView> lines,
+  Map<String, List<KitchenPrepComponent>> prepByItemId =
+      const <String, List<KitchenPrepComponent>>{},
   String? tableLabel,
   String? customerName,
-  String? createdAtIso,
-}) => KitchenTicketInput(
-  orderCode: orderCode,
-  orderType: _orderTypeWire(orderType),
-  tableLabel: tableLabel,
-  customerName: customerName,
-  createdAtIso: createdAtIso,
-  lines: [
-    for (final line in lines)
-      KitchenTicketLineInput(
-        qty: line.quantity,
+  String? orderNote,
+}) {
+  final items = <KdsItemView>[];
+  final countInputs = <KitchenCountItemInput>[];
+  for (final line in lines) {
+    final prep =
+        prepByItemId[line.menuItemId] ?? const <KitchenPrepComponent>[];
+    items.add(
+      KdsItemView(
         name: line.name,
-        note: line.note,
+        quantity: line.quantity,
+        // Structured modifier lines (name first, ×N when >1 — the KDS convention).
         modifiers: [
           for (final modifier in line.modifiers)
             modifier.quantity > 1
                 ? '${modifier.optionName} ×${modifier.quantity}'
                 : modifier.optionName,
         ],
+        note: line.note,
+        prepComponents: prep,
       ),
-  ],
-);
+    );
+    // KITCHEN-MEAT-001: an option's meat_snapshot, PRE-multiplied by its modifier
+    // units (× the item quantity is the count factor, applied by the aggregator).
+    countInputs.add(
+      KitchenCountItemInput(
+        quantity: line.quantity,
+        meats: [
+          for (final modifier in line.modifiers)
+            if (modifier.kitchenMeat case final meat?)
+              if (modifier.quantity > 0)
+                KitchenMeat(
+                  quantity: meat.quantity * modifier.quantity,
+                  unit: meat.unit,
+                ),
+        ],
+        prepComponents: prep,
+      ),
+    );
+  }
+  return KdsTicketView(
+    // A POS direct ticket has no server kitchen-ticket id; the order code is the
+    // header (orderNumber) and the id fallback both.
+    kitchenTicketId: orderCode,
+    // Whole-order print — never station-routed, so the station line is suppressed.
+    stationId: KdsTicketMapper.unassignedStation,
+    items: items,
+    status: KitchenTicketStatus.newTicket,
+    orderNumber: orderCode,
+    orderType: _orderTypeWire(orderType),
+    tableLabel: tableLabel,
+    customerName: customerName,
+    notes: orderNote,
+    kitchenCounts: aggregateOrderKitchenCounts(countInputs),
+  );
+}
 
 /// Maps an already-created [SubmittedOrderView] (flattened lines) to a
-/// money-free [KitchenTicketInput] — used by the manual reprint action.
-KitchenTicketInput kitchenTicketInputFromSubmittedOrder(
-  SubmittedOrderView order,
-) => KitchenTicketInput(
-  orderCode: order.orderNumber,
-  orderType: _orderTypeWire(order.orderType),
-  tableLabel: order.tableLabel,
-  customerName: order.customerName,
-  lines: [
-    for (final line in order.lines)
-      KitchenTicketLineInput(
-        qty: line.quantity,
-        name: line.name,
-        note: line.note,
-        modifiers: line.modifiers,
-      ),
-  ],
-);
+/// [KdsTicketView] — used by the manual reprint action. The confirmation
+/// snapshot carries name/qty/modifiers/note/table/customer/type but NOT the
+/// per-item prep/meat snapshot, so a reprinted ticket omits the whole-order
+/// counts (it is a best-effort reprint of what the confirmation shows).
+KdsTicketView kdsTicketViewFromSubmittedOrder(SubmittedOrderView order) =>
+    KdsTicketView(
+      kitchenTicketId: order.orderNumber,
+      stationId: KdsTicketMapper.unassignedStation,
+      items: [
+        for (final line in order.lines)
+          KdsItemView(
+            name: line.name,
+            quantity: line.quantity,
+            // Already pre-formatted as `name ×N` on the submitted view.
+            modifiers: line.modifiers,
+            note: line.note,
+          ),
+      ],
+      status: KitchenTicketStatus.newTicket,
+      orderNumber: order.orderNumber,
+      orderType: _orderTypeWire(order.orderType),
+      tableLabel: order.tableLabel,
+      customerName: order.customerName,
+    );
 
 String _orderTypeWire(OrderType type) =>
     type == OrderType.dineIn ? 'dine_in' : 'takeaway';

@@ -17,7 +17,10 @@ import '../format/payment_method_label.dart';
 import '../format/tax_math.dart';
 import '../pos_palette.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
-    show kitchenTicketInputFromCartLines, runAutoKitchenTicketPrintOnSubmit;
+    show
+        kdsTicketViewFromCartLines,
+        kitchenTicketPrintLabelsFromL10n,
+        runAutoKitchenTicketPrintOnSubmit;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
@@ -518,6 +521,16 @@ Future<void> submitOrderFromCart({
     final kitchenPrintEntry = container
         .read(outboxControllerProvider.notifier)
         .entryById(result.entry.id);
+    // KITCHEN-PRINT-DUAL-001B: the ORDER-TIME (D-008) prep snapshot the KDS
+    // aggregates — looked up from the live menu by menuItemId the SAME way the
+    // outbox builds the order payload, so the POS kitchen ticket shows the same
+    // whole-order prep/meat counts the KDS does. Money-free; empty when unset.
+    final kitchenMenu = container.read(posMenuProvider).valueOrNull;
+    final prepByItemId = <String, List<KitchenPrepComponent>>{
+      if (kitchenMenu != null)
+        for (final item in kitchenMenu.items)
+          if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
+    };
     unawaited(
       runAutoKitchenTicketPrintOnSubmit(
         container: container,
@@ -525,14 +538,15 @@ Future<void> submitOrderFromCart({
         // Shared eligibility: a permanently-rejected or demo order never cooks.
         isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
         rejectionCode: kitchenPrintEntry?.lastErrorCode,
-        input: kitchenTicketInputFromCartLines(
+        ticket: kdsTicketViewFromCartLines(
           orderCode: result.orderNumber,
           orderType: orderTypeBefore,
           lines: cart.lines,
+          prepByItemId: prepByItemId,
           tableLabel: tableBefore?.label,
           customerName: customerNameBefore,
         ),
-        languageCode: l10n.localeName,
+        labels: kitchenTicketPrintLabelsFromL10n(l10n),
       ),
     );
     setupController.reset();
