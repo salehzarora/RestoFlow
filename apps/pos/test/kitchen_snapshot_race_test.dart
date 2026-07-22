@@ -143,8 +143,13 @@ ProviderContainer _harness(
       outboxRepositoryProvider.overrideWithValue(outbox),
       // The mutable live menu.
       posMenuProvider.overrideWith((ref) => ref.watch(_menuSource)),
-      // A configured KITCHEN printer + the auto-print toggle ON.
+      // A configured KITCHEN printer + the auto-print toggle ON. The
+      // SharedPreferences kitchen config (setUp) drives the real target
+      // resolution for the send; this override makes "a kitchen printer is
+      // configured" true SYNCHRONOUSLY for the direct-print decision (whose
+      // pre-submit read is sync — see KITCHEN-PRINT-DUAL-001C in cart_panel).
       posNativePrintingAvailableProvider.overrideWithValue(true),
+      posHasKitchenNativePrinterProvider.overrideWithValue(true),
       posAutoPrintKitchenTicketProvider.overrideWith(_StubAutoKitchen.new),
       ...extra,
     ],
@@ -172,6 +177,10 @@ Future<void> _signIn(ProviderContainer c) async {
         pin: '1234',
       );
   expect(err, isNull);
+  // KITCHEN-PRINT-DUAL-001C: warm the toggle so its valueOrNull is settled (true)
+  // when submitOrderFromCart reads it SYNCHRONOUSLY — this harness drives the Send
+  // handler directly, without painting the CartPanel that normally warms it.
+  await c.read(posAutoPrintKitchenTicketProvider.future);
   await _settle();
 }
 

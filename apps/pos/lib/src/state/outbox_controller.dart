@@ -179,6 +179,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     int taxTotalMinor = 0,
     String? customerName,
     Map<String, List<KitchenPrepComponent>>? prepByItemId,
+    String dispatchMode = 'kds',
   }) {
     final existing = _inFlightSubmit;
     if (existing != null) return existing;
@@ -192,6 +193,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       taxTotalMinor: taxTotalMinor,
       customerName: customerName,
       prepByItemId: prepByItemId,
+      dispatchMode: dispatchMode,
     );
     _inFlightSubmit = future;
     // Release the lock once the submit settles (success OR failure) so the next
@@ -214,6 +216,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     int taxTotalMinor = 0,
     String? customerName,
     Map<String, List<KitchenPrepComponent>>? prepByItemId,
+    String dispatchMode = 'kds',
   }) async {
     if (lines.isEmpty) {
       throw const OrderSubmissionException('cannot submit an empty cart');
@@ -341,6 +344,9 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       items: items,
       clientCreatedAt: createdAt,
       customerName: normalizedCustomerName,
+      // KITCHEN-PRINT-DUAL-001C: only a REAL order can be direct-print dispatched
+      // (a demo order never reaches the server); demo keeps the normal 'kds'.
+      dispatchMode: isDemo ? 'kds' : dispatchMode,
     );
 
     final entry = OutboxEntry(

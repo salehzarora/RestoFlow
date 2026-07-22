@@ -344,14 +344,18 @@ Future<PosKitchenPrintOutcome> printKitchenTicketForOrder({
 /// Best-effort — any failure is swallowed so it can NEVER turn a successful
 /// order into a failure, and a failed attempt is released for a later retry.
 ///
-/// 001B: this is ADDITIVE — it reads the per-device toggle and (when on) prints;
-/// it NEVER touches the order-submission or KDS-dispatch path, so turning the
-/// toggle off leaves the normal POS→KDS workflow exactly as it was.
+/// 001B: this is ADDITIVE — when [enabled] it prints; it NEVER turns a successful
+/// order into a failure. 001C: [enabled] is the IMMUTABLE decision the caller
+/// resolved BEFORE the first submission await (the same decision that set the
+/// order's dispatch_mode), so the print and the dispatch can never disagree and a
+/// toggle change mid-submit cannot split the workflow — this NO LONGER re-reads
+/// the toggle here.
 Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   required ProviderContainer container,
   required String orderId,
   required KdsTicketView ticket,
   required KitchenTicketPrintLabels labels,
+  bool? enabled,
   bool isDemoMode = false,
   String? rejectionCode,
   PosKitchenTicketPrinter? printer,
@@ -364,18 +368,25 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   )) {
     return PosKitchenPrintOutcome.ineligibleOrder;
   }
-  // COLD-START CORRECT: await the RESOLVED persisted setting — it may still be
-  // AsyncLoading right after restart, so a sync read would wrongly see false.
-  // Fail closed (no print, order unaffected) only on a real read error.
-  final bool enabled;
-  try {
-    enabled =
-        (await container.read(posAutoPrintKitchenTicketProvider.future)) ??
-        false;
-  } catch (_) {
-    return PosKitchenPrintOutcome.failed;
+  // 001C: PREFER the caller's IMMUTABLE pre-await decision — the production path
+  // (CartPanel) resolves it ONCE before the submit await (the same decision that
+  // set the order's dispatch_mode) and never re-reads the toggle here. Only a
+  // caller that did NOT pre-resolve falls back to the cold-start-correct toggle
+  // read below (it may still be AsyncLoading right after restart; a sync read
+  // would wrongly see false — fail closed on a real read error).
+  final bool effectiveEnabled;
+  if (enabled != null) {
+    effectiveEnabled = enabled;
+  } else {
+    try {
+      effectiveEnabled =
+          (await container.read(posAutoPrintKitchenTicketProvider.future)) ??
+          false;
+    } catch (_) {
+      return PosKitchenPrintOutcome.failed;
+    }
   }
-  if (!enabled) return PosKitchenPrintOutcome.noPrinterConfigured;
+  if (!effectiveEnabled) return PosKitchenPrintOutcome.noPrinterConfigured;
   // Retry-safe: one confirmed send suppresses duplicate callbacks; any failure
   // releases the order so a later legitimate retry can send exactly once.
   return container

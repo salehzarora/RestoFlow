@@ -93,6 +93,13 @@ class KdsTicketMapper {
     final pendingAckOrders = <String>{};
     for (final o in orders) {
       if (o['deleted_at'] != null) continue;
+      // KITCHEN-PRINT-DUAL-001C: a direct_print order is dispatched to the kitchen
+      // via the POS printer (no KDS device). It is authoritatively routed OUT of
+      // the KDS active workflow (server-side it rests at `served`); exclude it from
+      // the active board REGARDLESS of status, so it never shows as an actionable
+      // ticket, never accumulates an open local ticket, and never contributes to
+      // the active/kitchen counts. Absent/'kds' = the normal workflow.
+      if (o['dispatch_mode'] == 'direct_print') continue;
       final id = o['id'];
       final status = o['status'];
       if (id is! String || status is! String) continue;

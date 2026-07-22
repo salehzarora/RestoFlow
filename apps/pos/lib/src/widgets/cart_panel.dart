@@ -20,7 +20,10 @@ import '../print/pos_kitchen_ticket_printer.dart'
     show
         kdsTicketViewFromCartLines,
         kitchenTicketPrintLabelsFromL10n,
+        posHasKitchenNativePrinterProvider,
         runAutoKitchenTicketPrintOnSubmit;
+import '../state/pos_auto_print_prefs.dart'
+    show posAutoPrintKitchenTicketEnabled, posAutoPrintKitchenTicketProvider;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
@@ -109,6 +112,13 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
     // when the cashier edits a cart line. Null (still loading) falls back to a
     // note-only edit built from the line itself.
     final menu = ref.watch(posMenuProvider).valueOrNull;
+    // KITCHEN-PRINT-DUAL-001C: eagerly resolve the direct-print decision inputs —
+    // the per-device auto-print toggle and whether a kitchen printer is
+    // configured — while the cart is on screen, so the SYNCHRONOUS pre-submit
+    // capture in [submitOrderFromCart] reads their settled values (never
+    // AsyncLoading) by the time Send is tapped. Warming only; not rendered here.
+    ref.watch(posAutoPrintKitchenTicketProvider);
+    ref.watch(posHasKitchenNativePrinterProvider);
     // TABLET-UX-001 (B): the side cart (two-pane tablet/landscape) uses compact,
     // denser line rows so more of the order is visible at once; the phone
     // slide-up sheet keeps its roomier rows.
@@ -434,6 +444,27 @@ Future<void> submitOrderFromCart({
       for (final item in menu.items)
         if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
   };
+  // KITCHEN-PRINT-DUAL-001C: resolve the DIRECT-PRINT dispatch decision ONCE,
+  // HERE — SYNCHRONOUSLY, before the first submission await — from immutable
+  // inputs: real mode + the persisted "auto-print kitchen ticket" toggle + a
+  // configured kitchen printer. This ONE decision drives BOTH the order's
+  // dispatch_mode (sent in the submit op, so the server routes it out of the KDS
+  // active workflow) AND the post-submit kitchen print, so a toggle change while
+  // the submit is in flight can never split the behavior. The read is SYNC on
+  // purpose: it inserts no async hop before the authoritative submit — the
+  // full-identity mutation boundary AND the snapshot-race guarantee both require
+  // `outbox.submit` to be the FIRST await. The inputs are warmed by the cart
+  // build (above), so this sees their settled values; if either is still
+  // resolving (a cold start before the cart has painted) it FAILS SAFE to the
+  // normal KDS workflow — an order is never finalized out of the KDS while the
+  // setting is unknown. It NEVER changes payment/settlement or receipt behavior.
+  var directKitchenPrint = false;
+  if (!container.read(runtimeConfigProvider).isDemoMode) {
+    directKitchenPrint = posAutoPrintKitchenTicketEnabled(
+      stored: container.read(posAutoPrintKitchenTicketProvider).valueOrNull,
+      hasKitchenPrinter: container.read(posHasKitchenNativePrinterProvider),
+    );
+  }
   try {
     final result = await outbox.submit(
       lines: cart.lines,
@@ -448,6 +479,9 @@ Future<void> submitOrderFromCart({
       // The ONE immutable prep snapshot (captured above, pre-await) — the same
       // map the POS kitchen ticket reuses below.
       prepByItemId: kitchenPrepByItemId,
+      // The IMMUTABLE dispatch decision: a direct_print order is authoritatively
+      // routed out of the KDS active workflow (server-side, in the same op txn).
+      dispatchMode: directKitchenPrint ? 'direct_print' : 'kds',
     );
     // Finding 1B — THE FULL-IDENTITY MUTATION BOUNDARY. Everything below this line mutates
     // state the CURRENT session would see — the cart's submitted-order view, the
@@ -550,6 +584,11 @@ Future<void> submitOrderFromCart({
         // Shared eligibility: a permanently-rejected or demo order never cooks.
         isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
         rejectionCode: kitchenPrintEntry?.lastErrorCode,
+        // KITCHEN-PRINT-DUAL-001C: reuse the SAME immutable pre-await decision that
+        // set the order's dispatch_mode — never re-read the toggle. So the print and
+        // the authoritative dispatch can never disagree, and a printer failure (the
+        // order is already finalized server-side) does NOT send it back to the KDS.
+        enabled: directKitchenPrint,
         ticket: kdsTicketViewFromCartLines(
           orderCode: result.orderNumber,
           orderType: orderTypeBefore,
