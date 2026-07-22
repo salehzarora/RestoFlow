@@ -112,13 +112,23 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
     // when the cashier edits a cart line. Null (still loading) falls back to a
     // note-only edit built from the line itself.
     final menu = ref.watch(posMenuProvider).valueOrNull;
-    // KITCHEN-PRINT-DUAL-001C: eagerly resolve the direct-print decision inputs —
-    // the per-device auto-print toggle and whether a kitchen printer is
-    // configured — while the cart is on screen, so the SYNCHRONOUS pre-submit
-    // capture in [submitOrderFromCart] reads their settled values (never
-    // AsyncLoading) by the time Send is tapped. Warming only; not rendered here.
-    ref.watch(posAutoPrintKitchenTicketProvider);
+    // KITCHEN-PRINT-DUAL-001C: the direct-print DISPATCH decision is captured
+    // SYNCHRONOUSLY at submit time from the persisted "auto-print kitchen ticket"
+    // toggle. In REAL mode Send must therefore WAIT until that toggle has resolved:
+    // a cold-start tap would otherwise read AsyncLoading (valueOrNull == null) and
+    // wrongly fall back to the normal KDS workflow even when the persisted setting
+    // is ON. So watch (never discard) the toggle and expose a resolved-readiness
+    // gate; also warm the kitchen-printer bool the sync capture reads. In DEMO mode
+    // the toggle is never read, so readiness is trivially satisfied.
+    final isDemoMode = ref.watch(runtimeConfigProvider).isDemoMode;
+    final autoPrintKitchen = ref.watch(posAutoPrintKitchenTicketProvider);
     ref.watch(posHasKitchenNativePrinterProvider);
+    final kitchenSettingLoading = !isDemoMode && autoPrintKitchen.isLoading;
+    // A genuine prefs READ ERROR blocks Send with an honest retry — never a silent
+    // fall-through into the KDS workflow when direct print may be expected.
+    final kitchenSettingError = !isDemoMode && autoPrintKitchen.hasError;
+    final kitchenWorkflowResolved =
+        !kitchenSettingLoading && !kitchenSettingError;
     // TABLET-UX-001 (B): the side cart (two-pane tablet/landscape) uses compact,
     // denser line rows so more of the order is visible at once; the phone
     // slide-up sheet keeps its roomier rows.
@@ -148,7 +158,11 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
           (addition.active || setup.isReadyToSubmit) &&
           !_submitting &&
           !addition.sending &&
-          !addition.awaitingRefresh;
+          !addition.awaitingRefresh &&
+          // KITCHEN-PRINT-DUAL-001C: in real mode, hold Send until the
+          // auto-kitchen workflow setting has resolved (never submit on a
+          // still-loading or errored setting — see the capture at submit time).
+          kitchenWorkflowResolved;
       final pendingSync = ref
           .watch(outboxControllerProvider)
           .where((e) => e.syncState.isPending)
@@ -247,6 +261,16 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                       },
                     ),
             ),
+            // KITCHEN-PRINT-DUAL-001C: an honest, minimal error+retry when the
+            // auto-kitchen workflow setting could not be read. Send stays disabled
+            // (canSend gated above) until it resolves — the operator retries here,
+            // or changes/disables the option in Device Settings (the escape hatch).
+            if (kitchenSettingError)
+              _KitchenSettingError(
+                l10n: l10n,
+                onRetry: () =>
+                    ref.invalidate(posAutoPrintKitchenTicketProvider),
+              ),
             _CartFooter(
               l10n: l10n,
               subtotalMinor: cart.subtotalMinor,
@@ -844,6 +868,49 @@ class _EmptyCart extends StatelessWidget {
     return RestoflowStateView(
       icon: Icons.remove_shopping_cart_outlined,
       title: message,
+    );
+  }
+}
+
+/// KITCHEN-PRINT-DUAL-001C: a compact, honest banner shown above the footer when
+/// the per-device auto-kitchen workflow setting could not be READ. Send is held
+/// disabled (gated in the build) until the setting resolves; this offers a retry.
+/// No redesign — one localized line + a Try again button.
+class _KitchenSettingError extends StatelessWidget {
+  const _KitchenSettingError({required this.l10n, required this.onRetry});
+
+  final AppLocalizations l10n;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: RestoflowSpacing.sm,
+        vertical: RestoflowSpacing.xs,
+      ),
+      color: theme.colorScheme.errorContainer,
+      child: Row(
+        children: [
+          Icon(
+            Icons.print_disabled_outlined,
+            size: 18,
+            color: theme.colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: RestoflowSpacing.sm),
+          Expanded(
+            child: Text(
+              l10n.posKitchenSettingLoadError,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: Text(l10n.authTryAgain)),
+        ],
+      ),
     );
   }
 }

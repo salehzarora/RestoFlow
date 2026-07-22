@@ -92,15 +92,20 @@ class PosAutoPrintKitchenTicketController extends AsyncNotifier<bool?> {
     ref.watch(posDeviceContextProvider);
     final key = _key;
     if (key == null) return null;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(key);
-    } catch (_) {
-      return null; // Unreadable prefs degrade to the default (OFF), never crash.
-    }
+    // KITCHEN-PRINT-DUAL-001C: a genuine prefs READ FAILURE must SURFACE as
+    // AsyncError, NOT silently degrade to null (OFF). CartPanel gates Send on this
+    // setting being RESOLVED, so a swallowed read error would let a cold-start
+    // order submit into the normal KDS workflow when the operator may expect a
+    // direct kitchen print. A MISSING key is NOT an error — getBool returns null
+    // (the cashier never chose), which resolves to the OFF default downstream.
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(key);
   }
 
-  /// Persists the cashier's choice (state first, storage best-effort).
+  /// Persists the cashier's choice (state first, storage best-effort). Setting the
+  /// state to AsyncData FIRST also clears any prior read-error state — so toggling
+  /// the option through Device Settings is the operator's escape hatch if a read
+  /// ever failed and blocked Send.
   Future<void> setEnabled(bool value) async {
     final key = _key;
     if (key == null) return;
