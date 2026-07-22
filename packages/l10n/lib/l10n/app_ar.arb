@@ -355,6 +355,8 @@
   "posAutoPrintKitchenTicketToggle": "طباعة تذكرة المطبخ تلقائيًا",
   "posAutoPrintKitchenTicketToggleExplanation": "عند تفعيل هذا الخيار، تُطبع تذكرة المطبخ من جهاز الكاشير ويُغلق الطلب مباشرة بدون إرساله إلى شاشة المطبخ. عند إيقافه، تتابع الطلبات مسار شاشة المطبخ المعتاد.",
   "posKitchenSettingLoadError": "تعذّر تحميل إعداد طباعة المطبخ — تم إيقاف الإرسال مؤقتًا.",
+  "posKitchenPrinterConfigLoadError": "تعذّر تحميل إعدادات طابعة المطبخ. حاول مرة أخرى.",
+  "posKitchenNoPrinterConfigured": "لا توجد طابعة مطبخ مُعدّة. عيّن طابعة مطبخ أو عطّل الطباعة التلقائية.",
   "posPrintKitchenTicketAction": "طباعة للمطبخ",
   "posKitchenTicketPrintedSnack": "تم إرسال تذكرة المطبخ إلى الطابعة",
   "posKitchenTicketPrintFailedSnack": "تعذّرت طباعة تذكرة المطبخ",

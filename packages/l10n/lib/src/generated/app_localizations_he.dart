@@ -1139,6 +1139,14 @@ class AppLocalizationsHe extends AppLocalizations {
       'לא ניתן לטעון את הגדרת הדפסת המטבח — השליחה מושהית.';
 
   @override
+  String get posKitchenPrinterConfigLoadError =>
+      'לא ניתן לטעון את הגדרות מדפסת המטבח. נסה שוב.';
+
+  @override
+  String get posKitchenNoPrinterConfigured =>
+      'לא מוגדרת מדפסת מטבח. הגדר מדפסת מטבח או כבה את ההדפסה האוטומטית.';
+
+  @override
   String get posPrintKitchenTicketAction => 'הדפסה למטבח';
 
   @override

@@ -1150,6 +1150,14 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذّر تحميل إعداد طباعة المطبخ — تم إيقاف الإرسال مؤقتًا.';
 
   @override
+  String get posKitchenPrinterConfigLoadError =>
+      'تعذّر تحميل إعدادات طابعة المطبخ. حاول مرة أخرى.';
+
+  @override
+  String get posKitchenNoPrinterConfigured =>
+      'لا توجد طابعة مطبخ مُعدّة. عيّن طابعة مطبخ أو عطّل الطباعة التلقائية.';
+
+  @override
   String get posPrintKitchenTicketAction => 'طباعة للمطبخ';
 
   @override

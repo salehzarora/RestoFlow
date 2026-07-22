@@ -355,6 +355,8 @@
   "posAutoPrintKitchenTicketToggle": "הדפסה אוטומטית של כרטיס מטבח",
   "posAutoPrintKitchenTicketToggleExplanation": "כשמופעל, כרטיס המטבח מודפס ממכשיר זה וההזמנה נסגרת ישירות, בלי לשלוח אותה למסך המטבח. כשכבוי, ההזמנות ממשיכות במהלך העבודה הרגיל של מסך המטבח.",
   "posKitchenSettingLoadError": "לא ניתן לטעון את הגדרת הדפסת המטבח — השליחה מושהית.",
+  "posKitchenPrinterConfigLoadError": "לא ניתן לטעון את הגדרות מדפסת המטבח. נסה שוב.",
+  "posKitchenNoPrinterConfigured": "לא מוגדרת מדפסת מטבח. הגדר מדפסת מטבח או כבה את ההדפסה האוטומטית.",
   "posPrintKitchenTicketAction": "הדפסה למטבח",
   "posKitchenTicketPrintedSnack": "כרטיס המטבח נשלח למדפסת",
   "posKitchenTicketPrintFailedSnack": "לא ניתן היה להדפיס את כרטיס המטבח",

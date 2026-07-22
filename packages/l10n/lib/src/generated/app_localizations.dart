@@ -2230,6 +2230,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t load the kitchen printing setting — sending is paused.'**
   String get posKitchenSettingLoadError;
 
+  /// POS cart banner shown when the kitchen printer configuration could not be read while automatic kitchen printing is on; Send stays disabled until it resolves. Paired with Try again (KITCHEN-PRINT-DUAL-001C).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the kitchen printer settings. Try again.'**
+  String get posKitchenPrinterConfigLoadError;
+
+  /// POS cart banner shown when automatic kitchen printing is on but no usable kitchen printer is configured; Send stays disabled and the order is not sent to the KDS automatically (KITCHEN-PRINT-DUAL-001C).
+  ///
+  /// In en, this message translates to:
+  /// **'No kitchen printer is configured. Set a kitchen printer or turn off automatic kitchen-ticket printing.'**
+  String get posKitchenNoPrinterConfigured;
+
   /// POS action button on a created order: manually print a money-free kitchen ticket to the kitchen printer.
   ///
   /// In en, this message translates to:

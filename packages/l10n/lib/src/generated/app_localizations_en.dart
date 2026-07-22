@@ -1157,6 +1157,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t load the kitchen printing setting — sending is paused.';
 
   @override
+  String get posKitchenPrinterConfigLoadError =>
+      'Couldn\'t load the kitchen printer settings. Try again.';
+
+  @override
+  String get posKitchenNoPrinterConfigured =>
+      'No kitchen printer is configured. Set a kitchen printer or turn off automatic kitchen-ticket printing.';
+
+  @override
   String get posPrintKitchenTicketAction => 'Print kitchen ticket';
 
   @override
