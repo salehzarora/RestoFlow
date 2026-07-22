@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
@@ -12,6 +14,8 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../format/tax_math.dart';
 import '../pos_palette.dart';
+import '../print/pos_kitchen_ticket_printer.dart'
+    show kitchenTicketInputFromCartLines, runAutoKitchenTicketPrintOnSubmit;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
@@ -503,6 +507,26 @@ Future<void> submitOrderFromCart({
         recent.markLocallyRejected(submitted.identity);
       }
     }
+    // KITCHEN-PRINT-DUAL-001: optionally print the money-free KITCHEN ticket for
+    // the just-created order. Best-effort + fully decoupled — it prints to the
+    // INDEPENDENT kitchen printer, never touches the cashier receipt, and a
+    // kitchen-print failure can NEVER turn this successful submit into a
+    // failure. Inert unless the per-device "auto-print kitchen ticket" setting
+    // is on; the in-memory guard makes a double-tap/rebuild print at most once.
+    unawaited(
+      runAutoKitchenTicketPrintOnSubmit(
+        container: container,
+        orderId: result.entry.targetId,
+        input: kitchenTicketInputFromCartLines(
+          orderCode: result.orderNumber,
+          orderType: orderTypeBefore,
+          lines: cart.lines,
+          tableLabel: tableBefore?.label,
+          customerName: customerNameBefore,
+        ),
+        languageCode: l10n.localeName,
+      ),
+    );
     setupController.reset();
   } on OrderSubmissionException {
     // A failure that belongs to a session we have LEFT is not this session's failure;
