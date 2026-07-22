@@ -422,6 +422,18 @@ Future<void> submitOrderFromCart({
   final orderTypeBefore = setup.orderType;
   final tableBefore = setup.assignedTable;
   final customerNameBefore = setup.customerName;
+  // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): capture the ORDER-TIME (D-008)
+  // prep snapshot ONCE, HERE — BEFORE the first await — from the SAME live menu
+  // the outbox payload is built from. This exact immutable map feeds BOTH the
+  // authoritative submission payload (passed into outbox.submit below) AND the
+  // post-submit POS kitchen ticket, so a menu/prep edit while the submit is in
+  // flight can never make the printed ticket disagree with what the KDS receives.
+  // Money-free; empty for unconfigured items.
+  final kitchenPrepByItemId = <String, List<KitchenPrepComponent>>{
+    if (container.read(posMenuProvider).valueOrNull case final menu?)
+      for (final item in menu.items)
+        if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
+  };
   try {
     final result = await outbox.submit(
       lines: cart.lines,
@@ -433,6 +445,9 @@ Future<void> submitOrderFromCart({
       taxTotalMinor: taxTotalMinor,
       // ORDER-CUSTOMER-001: the optional customer name (null when not entered).
       customerName: customerNameBefore,
+      // The ONE immutable prep snapshot (captured above, pre-await) — the same
+      // map the POS kitchen ticket reuses below.
+      prepByItemId: kitchenPrepByItemId,
     );
     // Finding 1B — THE FULL-IDENTITY MUTATION BOUNDARY. Everything below this line mutates
     // state the CURRENT session would see — the cart's submitted-order view, the
@@ -521,16 +536,13 @@ Future<void> submitOrderFromCart({
     final kitchenPrintEntry = container
         .read(outboxControllerProvider.notifier)
         .entryById(result.entry.id);
-    // KITCHEN-PRINT-DUAL-001B: the ORDER-TIME (D-008) prep snapshot the KDS
-    // aggregates — looked up from the live menu by menuItemId the SAME way the
-    // outbox builds the order payload, so the POS kitchen ticket shows the same
-    // whole-order prep/meat counts the KDS does. Money-free; empty when unset.
-    final kitchenMenu = container.read(posMenuProvider).valueOrNull;
-    final prepByItemId = <String, List<KitchenPrepComponent>>{
-      if (kitchenMenu != null)
-        for (final item in kitchenMenu.items)
-          if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
-    };
+    // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): the POS kitchen ticket is built
+    // from the SAME immutable pre-await snapshot the authoritative payload used —
+    // the cart lines captured before the await (immutable; carry the modifier
+    // names/quantities + SelectedModifier.kitchenMeat + item notes) and the ONE
+    // [kitchenPrepByItemId] map. NOTHING here re-reads a menu/prep/modifier
+    // provider after the await, so the printed ticket cannot diverge from what the
+    // KDS receives.
     unawaited(
       runAutoKitchenTicketPrintOnSubmit(
         container: container,
@@ -542,7 +554,7 @@ Future<void> submitOrderFromCart({
           orderCode: result.orderNumber,
           orderType: orderTypeBefore,
           lines: cart.lines,
-          prepByItemId: prepByItemId,
+          prepByItemId: kitchenPrepByItemId,
           tableLabel: tableBefore?.label,
           customerName: customerNameBefore,
         ),

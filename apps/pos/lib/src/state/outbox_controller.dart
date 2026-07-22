@@ -178,6 +178,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     String? tableLabel,
     int taxTotalMinor = 0,
     String? customerName,
+    Map<String, List<KitchenPrepComponent>>? prepByItemId,
   }) {
     final existing = _inFlightSubmit;
     if (existing != null) return existing;
@@ -190,6 +191,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       tableLabel: tableLabel,
       taxTotalMinor: taxTotalMinor,
       customerName: customerName,
+      prepByItemId: prepByItemId,
     );
     _inFlightSubmit = future;
     // Release the lock once the submit settles (success OR failure) so the next
@@ -211,6 +213,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     String? tableLabel,
     int taxTotalMinor = 0,
     String? customerName,
+    Map<String, List<KitchenPrepComponent>>? prepByItemId,
   }) async {
     if (lines.isEmpty) {
       throw const OrderSubmissionException('cannot submit an empty cart');
@@ -267,12 +270,24 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // menuItemId from the live menu the POS is selling from. Non-money; empty
     // for unconfigured items. Snapshotted into the payload so the outbox
     // preserves it and the KDS can aggregate a prep summary offline.
-    final menuData = ref.read(posMenuProvider).valueOrNull;
-    final prepByItemId = <String, List<KitchenPrepComponent>>{
-      if (menuData != null)
-        for (final item in menuData.items)
-          if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
-    };
+    //
+    // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): when the caller captured this
+    // map BEFORE the first await (CartPanel does, and reuses the SAME map for the
+    // POS kitchen ticket), use it verbatim so the authoritative payload and the
+    // printed ticket consume ONE immutable snapshot — a menu/prep edit while the
+    // submit is in flight can never make them disagree. Only fall back to reading
+    // the live menu here when no snapshot was supplied (other callers / tests).
+    final resolvedPrepByItemId =
+        prepByItemId ??
+        () {
+          final menuData = ref.read(posMenuProvider).valueOrNull;
+          return <String, List<KitchenPrepComponent>>{
+            if (menuData != null)
+              for (final item in menuData.items)
+                if (item.prepComponents.isNotEmpty)
+                  item.id: item.prepComponents,
+          };
+        }();
 
     final items = lines
         .map(
@@ -287,7 +302,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
             lineTotalMinor: l.lineTotalMinor,
             notes: l.note,
             prepComponents:
-                prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
+                resolvedPrepByItemId[l.menuItemId] ??
+                const <KitchenPrepComponent>[],
             modifiers: [
               for (final m in l.modifiers)
                 OrderSubmissionModifier(
