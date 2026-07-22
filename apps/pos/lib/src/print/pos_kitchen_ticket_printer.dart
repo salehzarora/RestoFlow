@@ -1,3 +1,4 @@
+import 'dart:async' show Completer, unawaited;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -192,27 +193,38 @@ final class PosAutoKitchenPrintGuard {
     }
     final active = _inFlight[orderId];
     if (active != null) return active;
-    final future = _run(orderId, attempt);
-    _inFlight[orderId] = future;
-    return future;
+
+    // Race-safe: publish the in-flight future via a Completer FIRST, then invoke
+    // attempt() inside a guarded driver. This holds even if attempt() throws
+    // SYNCHRONOUSLY (before returning a Future) — the `finally` always removes
+    // the in-flight entry, so a failed order is never permanently retained.
+    final completer = Completer<PosKitchenPrintOutcome>();
+    _inFlight[orderId] = completer.future;
+    unawaited(_drive(orderId, attempt, completer));
+    return completer.future;
   }
 
-  Future<PosKitchenPrintOutcome> _run(
+  Future<void> _drive(
     String orderId,
     Future<PosKitchenPrintOutcome> Function() attempt,
+    Completer<PosKitchenPrintOutcome> completer,
   ) async {
     PosKitchenPrintOutcome outcome;
     try {
+      // A synchronous throw from attempt() is caught here just like an async one.
       outcome = await attempt();
     } catch (_) {
       outcome = PosKitchenPrintOutcome.failed;
+    } finally {
+      // ALWAYS release: any non-success leaves the order un-succeeded, so a
+      // later legitimate retry can run; a concurrent duplicate shared this same
+      // future while it was in flight.
+      _inFlight.remove(orderId);
     }
-    _inFlight.remove(orderId);
     if (outcome == PosKitchenPrintOutcome.printed) {
       _succeeded.add(orderId); // suppress duplicate auto callbacks this session
     }
-    // Any non-success leaves the order un-succeeded → released for a real retry.
-    return outcome;
+    completer.complete(outcome);
   }
 }
 
