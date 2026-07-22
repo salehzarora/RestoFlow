@@ -1052,3 +1052,334 @@ comment on function app.sync_push(uuid, uuid, jsonb) is
 revoke all on function app.sync_push(uuid, uuid, jsonb) from public;
 revoke all on function app.sync_push(uuid, uuid, jsonb) from anon;
 grant execute on function app.sync_push(uuid, uuid, jsonb) to authenticated;
+
+
+-- ============================================================================
+-- KITCHEN-PRINT-DUAL-001C (KDS-SYNC-FILTER): exclude the direct_print order graph
+-- from the KDS sync feed at the SERVER. Faithful re-creation of the current
+-- authoritative app.sync_pull body (20260723090000 lines 865-1118) with the
+-- KDS-only direct_print graph filter injected (device_type='kds', post-pager so
+-- the cursor advances over examined rows). Extends THIS unshipped migration; no
+-- migration already applied to hosted is modified. app.sync_pull_changes and the
+-- public.sync_pull wrapper are UNCHANGED.
+-- ============================================================================
+create or replace function app.sync_pull(
+  p_pin_session_id uuid,
+  p_device_id      uuid,
+  p_entities       text[]  default null,
+  p_cursors        jsonb   default '{}'::jsonb,
+  p_limit          integer default 500
+)
+  returns jsonb
+  language plpgsql
+  security definer
+  set search_path = ''
+as $$
+declare
+  v_org         uuid;
+  v_rest        uuid;
+  v_branch      uuid;
+  v_dsid        uuid;
+  v_emp         uuid;
+  v_membership  uuid;
+  v_ds_device   uuid;
+  v_ds_active   boolean;
+  v_ds_revoked  timestamptz;
+  v_pairing     text;
+  v_role        text;
+  v_m_status    text;
+  v_m_deleted   timestamptz;
+  v_limit       integer;
+  v_allowed     text[];
+  v_requested   text[];
+  v_include_ops boolean;
+  v_entity      text;
+  v_cur         jsonb;
+  v_c_uat       timestamptz;
+  v_c_id        uuid;
+  v_changes     jsonb := '{}'::jsonb;
+  v_op_rows     jsonb;
+  v_op_count    integer;
+  v_op_last     jsonb;
+  v_op_statuses jsonb;
+  v_kitchen_mode text;      -- KITCHEN-MODE-001A: branch workflow mode (kitchen gate)
+  v_ops_suppressed boolean := false;  -- KITCHEN-MODE-001A (HIGH-1): op-status feed off for printer-only kitchen
+  v_device_type text;                 -- KITCHEN-PRINT-DUAL-001C: kind of the session-backing device
+  v_is_kds boolean := false;          -- KITCHEN-PRINT-DUAL-001C: caller is a KDS device (device_type='kds')
+  c_financial   constant text[] := array['payments', 'shifts', 'cash_drawer_sessions'];
+  c_business    constant text[] := array['orders', 'order_items', 'order_item_modifiers', 'order_service_rounds', 'payments', 'shifts', 'cash_drawer_sessions'];
+  -- RF-109: the six menu reference entities. Price-capable roles only (menu rows carry money, T-003).
+  c_menu        constant text[] := array['menu_categories', 'menu_items', 'item_sizes', 'item_variants', 'modifiers', 'modifier_options'];
+  -- MVP: the money-free floor entity — EVERY device role may pull it (the KDS
+  -- maps orders.table_id -> a human table label through this feed).
+  c_floor       constant text[] := array['tables'];
+begin
+  -- (0) limit validation (A7): default 500, reject <=0 or >1000 (validation-error style).
+  v_limit := coalesce(p_limit, 500);
+  if v_limit <= 0 or v_limit > 1000 then
+    raise exception 'sync_pull: p_limit must be between 1 and 1000 (got %)', v_limit using errcode = '42501';
+  end if;
+  if p_cursors is null or jsonb_typeof(p_cursors) <> 'object' then
+    raise exception 'sync_pull: p_cursors must be a JSON object' using errcode = '42501';
+  end if;
+
+  -- (a) PIN session + backing device session/pairing active; device match (A8).
+  --     Scope (org/restaurant/branch) + actor + role are derived HERE, never from payload.
+  select ps.organization_id, ps.restaurant_id, ps.branch_id, ps.device_session_id,
+         ps.employee_profile_id, ps.resolved_membership_id
+    into v_org, v_rest, v_branch, v_dsid, v_emp, v_membership
+    from public.pin_sessions ps where ps.id = p_pin_session_id;
+  if not found then
+    raise exception 'sync_pull: PIN session not found' using errcode = '42501';
+  end if;
+  if not app.is_pin_session_valid(p_pin_session_id) then
+    raise exception 'sync_pull: PIN session is not valid (inactive/ended/expired)' using errcode = '42501';
+  end if;
+  select ds.device_id, ds.is_active, ds.revoked_at, dp.status
+    into v_ds_device, v_ds_active, v_ds_revoked, v_pairing
+    from public.device_sessions ds join public.device_pairings dp on dp.id = ds.device_pairing_id
+    where ds.id = v_dsid;
+  if not found or not (v_ds_active and v_ds_revoked is null and v_pairing = 'active') then
+    raise exception 'sync_pull: backing device session/pairing is not active' using errcode = '42501';
+  end if;
+  if v_ds_device <> p_device_id then
+    raise exception 'sync_pull: device_id does not match the PIN session device' using errcode = '42501';
+  end if;
+  select m.role, m.status, m.deleted_at
+    into v_role, v_m_status, v_m_deleted
+    from public.memberships m where m.id = v_membership and m.organization_id = v_org;
+  if not found or v_m_status <> 'active' or v_m_deleted is not null then
+    raise exception 'sync_pull: resolved membership is not active' using errcode = '42501';
+  end if;
+
+  -- KITCHEN-PRINT-DUAL-001C: resolve the TRUSTED device kind for the KDS filter.
+  -- v_ds_device is the session-backing device (validated == p_device_id above), so
+  -- devices.device_type here is server-owned and NOT client-spoofable; this mirrors
+  -- the shipped KDS-class gate in app.kitchen_ack_void / app.update_round_status.
+  select d.device_type into v_device_type
+    from public.devices d
+    where d.id = v_ds_device;
+  v_is_kds := coalesce(v_device_type, '') = 'kds';
+
+  -- (b) role-permitted entities (A5): kitchen_staff -> non-financial operational
+  --     + the money-free `tables` floor entity (NO menu -- menu rows carry money,
+  --     T-003). Price-capable roles -> operational business + RF-109 menu + tables.
+  if v_role = 'kitchen_staff' then
+    -- KITCHEN-MODE-001A: the AUTHORITATIVE kitchen exclusion. In a
+    -- `printer_only` branch there is no kitchen board — the kitchen ticket is
+    -- paper — so a kitchen_staff session is served NO actionable order
+    -- entities (orders / order_items / order_item_modifiers /
+    -- order_service_rounds are all withheld). Only the money-free `tables`
+    -- floor entity remains, which is exactly enough for a safe, honest EMPTY
+    -- board on any KDS that is (accidentally) paired to such a branch. An
+    -- EXPLICIT request for an order entity rejects with the existing
+    -- not-permitted-for-role 42501 in (c) below — fail closed, never a
+    -- silently truncated feed dressed up as a full one. The mode read
+    -- fail-closes to 'kds', so a missing branch row can only ever produce the
+    -- historical allow-list. No other role's exposure changes.
+    select b.kitchen_workflow_mode into v_kitchen_mode
+      from public.branches b
+      where b.id              = v_branch
+        and b.organization_id = v_org
+        and b.deleted_at is null;
+    if coalesce(v_kitchen_mode, 'kds') = 'printer_only' then
+      v_allowed := c_floor;
+      -- KITCHEN-MODE-001A (HIGH-1): the paper-only kitchen does not consume
+      -- order sync operations — the operation-status feed projects target_id,
+      -- result and conflict_info, which carry order identifiers and
+      -- money-shaped keys (e.g. change_due_minor) and must remain
+      -- money-free and order-identifier-free on this surface. Suppressed
+      -- authoritatively below (empty collection), even when explicitly
+      -- requested.
+      v_ops_suppressed := true;
+    else
+      -- KDS MODE (default) — BYTE-EQUIVALENT to the PSC-001C allow-list:
+      -- order_service_rounds is MONEY-FREE by schema — the kitchen needs it
+      -- to render Addition/Round N tickets with the round's own status.
+      v_allowed := array['orders', 'order_items', 'order_item_modifiers', 'order_service_rounds'] || c_floor;
+    end if;
+  elsif v_role in ('cashier', 'manager', 'restaurant_owner', 'org_owner', 'accountant') then
+    v_allowed := c_business || c_menu || c_floor;
+  else
+    v_allowed := array[]::text[];
+  end if;
+
+  -- (c) resolve the requested set. null -> all role-permitted + operation_statuses.
+  --     Otherwise validate each name: unknown -> reject; not-permitted-for-role -> reject.
+  if p_entities is null then
+    v_requested   := v_allowed;
+    v_include_ops := true;
+  else
+    v_requested   := array[]::text[];
+    v_include_ops := false;
+    foreach v_entity in array p_entities loop
+      if v_entity = 'operation_statuses' then
+        v_include_ops := true;
+      elsif v_entity = any(c_business) or v_entity = any(c_menu) or v_entity = any(c_floor) then
+        if not (v_entity = any(v_allowed)) then
+          raise exception 'sync_pull: entity % is not permitted for role %', v_entity, v_role using errcode = '42501';
+        end if;
+        if not (v_entity = any(v_requested)) then
+          v_requested := array_append(v_requested, v_entity);
+        end if;
+      else
+        raise exception 'sync_pull: unknown entity %', v_entity using errcode = '42501';
+      end if;
+    end loop;
+  end if;
+
+  -- KITCHEN-MODE-001A (HIGH-1): the AUTHORITATIVE operation-status exclusion
+  -- for the printer-only kitchen. Forcing v_include_ops off routes section (e)
+  -- to its existing empty-collection branch — {rows: [], next_cursor: null,
+  -- has_more: false} — a valid envelope carrying NO operation metadata, order
+  -- identifier or money-shaped key. Backend-side by design: cosmetic
+  -- client-side redaction would leave the wire payload exposed. kitchen_staff
+  -- in kds mode and every other role keep the existing feed unchanged.
+  if v_ops_suppressed then
+    v_include_ops := false;
+  end if;
+
+  -- (d) page each requested entity by its per-entity (updated_at, id) cursor.
+  foreach v_entity in array v_requested loop
+    v_cur   := p_cursors -> v_entity;
+    v_c_uat := nullif(v_cur ->> 'updated_at', '')::timestamptz;
+    v_c_id  := nullif(v_cur ->> 'id', '')::uuid;
+    v_changes := v_changes || jsonb_build_object(
+      v_entity, app.sync_pull_changes(v_entity, v_org, v_branch, v_c_uat, v_c_id, v_limit));
+  end loop;
+
+  -- (d1) KITCHEN-PRINT-DUAL-001C: a KDS DEVICE never receives the graph of a
+  --      direct_print order. Such an order is authoritatively finalized OUT of the
+  --      active KDS workflow (the POS printed its ticket in app.sync_push), so its
+  --      complete order graph must never enter KDS local state. The entity-generic
+  --      pager (app.sync_pull_changes) ships full rows and has no dispatch awareness,
+  --      so the exclusion is applied HERE, keyed on the TRUSTED device kind
+  --      (v_is_kds), never the membership role (a manager may sit at a KDS;
+  --      kitchen_staff may sit at a POS) nor the client p_device_id. It runs AFTER
+  --      the pager has already computed each entity's next_cursor + has_more over the
+  --      EXAMINED rows, and it DROPS ROWS ONLY (never touches next_cursor/has_more) —
+  --      so the KDS cursor still advances PAST filtered direct_print rows (a branch
+  --      that runs direct_print as its primary workflow never stalls or re-scans the
+  --      backlog) and pagination is preserved verbatim. The graph is the four order
+  --      entities a KDS can pull: orders (dispatch_mode inline), order_items +
+  --      order_service_rounds (direct order_id), order_item_modifiers (TRANSITIVE via
+  --      its parent order_item). Money/menu entities are role-gated out of a KDS, so
+  --      these four are the complete KDS-visible graph. Non-KDS callers are untouched.
+  if v_is_kds then
+    select coalesce(
+             jsonb_object_agg(
+               ent,
+               case
+                 when jsonb_typeof(val -> 'rows') <> 'array' then val
+                 when ent = 'orders' then
+                   jsonb_set(val, '{rows}', coalesce((
+                     select jsonb_agg(r)
+                       from jsonb_array_elements(val -> 'rows') as r
+                      where coalesce(r ->> 'dispatch_mode', 'kds') <> 'direct_print'), '[]'::jsonb))
+                 when ent in ('order_items', 'order_service_rounds') then
+                   jsonb_set(val, '{rows}', coalesce((
+                     select jsonb_agg(r)
+                       from jsonb_array_elements(val -> 'rows') as r
+                      where not exists (
+                        select 1 from public.orders o
+                         where o.organization_id = v_org
+                           and o.id = (r ->> 'order_id')::uuid
+                           and coalesce(o.dispatch_mode, 'kds') = 'direct_print')), '[]'::jsonb))
+                 when ent = 'order_item_modifiers' then
+                   jsonb_set(val, '{rows}', coalesce((
+                     select jsonb_agg(r)
+                       from jsonb_array_elements(val -> 'rows') as r
+                      where not exists (
+                        select 1 from public.order_items oi
+                          join public.orders o
+                            on o.organization_id = oi.organization_id and o.id = oi.order_id
+                         where oi.organization_id = v_org
+                           and oi.id = (r ->> 'order_item_id')::uuid
+                           and coalesce(o.dispatch_mode, 'kds') = 'direct_print')), '[]'::jsonb))
+                 else val
+               end),
+             '{}'::jsonb)
+      into v_changes
+      from jsonb_each(v_changes) as ec(ent, val);
+  end if;
+
+  -- (d2) KITCHEN MONEY REDACTION (RF-059, A3/T-003): kitchen_staff must receive NO money figure.
+  --      Preserved verbatim. (Kitchen never reaches the paging loop for a menu entity -- a menu
+  --      request is rejected in (c) -- so this strips money only from the operational rows kitchen
+  --      legitimately receives; it remains a defence-in-depth backstop for any *_minor key.
+  --      `tables` rows are money-free, so redact_money is a harmless no-op on them.)
+  if v_role = 'kitchen_staff' then
+    select coalesce(
+             jsonb_object_agg(
+               ent,
+               case when jsonb_typeof(val -> 'rows') = 'array'
+                 then jsonb_set(val, '{rows}',
+                        coalesce((select jsonb_agg(app.redact_money(r))
+                                  from jsonb_array_elements(val -> 'rows') as r), '[]'::jsonb))
+                 else val end),
+             '{}'::jsonb)
+      into v_changes
+      from jsonb_each(v_changes) as ec(ent, val);
+  end if;
+
+  -- (e) current-device operation-status feed (A4): sync_operations for THIS org + THIS device
+  --     only. Projects status/conflict fields; excludes raw payload. Empty when not requested.
+  if v_include_ops then
+    v_cur   := p_cursors -> 'operation_statuses';
+    v_c_uat := nullif(v_cur ->> 'updated_at', '')::timestamptz;
+    v_c_id  := nullif(v_cur ->> 'id', '')::uuid;
+    with look as (
+      select so.id as _id, so.updated_at as _uat,
+             jsonb_build_object(
+               'id',                 so.id,
+               'local_operation_id', so.local_operation_id,
+               'operation_type',     so.operation_type,
+               'target_entity',      so.target_entity,
+               'target_id',          so.target_id,
+               'status',             so.status,
+               'result',             so.result,
+               'last_error_code',    so.last_error_code,
+               'last_error_class',   so.last_error_class,
+               'conflict_info',      so.conflict_info,
+               'rejection_reason',   so.rejection_reason,
+               'retry_count',        so.retry_count,
+               'updated_at',         so.updated_at,
+               'applied_at',         so.applied_at,
+               'server_received_at', so.server_received_at) as _row,
+             row_number() over (order by so.updated_at asc, so.id asc) as _rn
+      from public.sync_operations so
+      where so.organization_id = v_org
+        and so.device_id = p_device_id
+        and (v_c_uat is null or so.updated_at > v_c_uat or (so.updated_at = v_c_uat and so.id > v_c_id))
+      order by so.updated_at asc, so.id asc
+      limit v_limit + 1
+    ),
+    page as (
+      select _id, _uat, _row from look where _rn <= v_limit
+    )
+    select coalesce(jsonb_agg(_row order by _uat asc, _id asc), '[]'::jsonb),
+           (select count(*) from look)::int,
+           (select jsonb_build_object('updated_at', _uat, 'id', _id) from page order by _uat desc, _id desc limit 1)
+      into v_op_rows, v_op_count, v_op_last
+      from page;
+    v_op_statuses := jsonb_build_object(
+      'rows', v_op_rows,
+      'next_cursor', case when v_op_count > 0 then v_op_last else null end,
+      'has_more', (v_op_count > v_limit));
+  else
+    v_op_statuses := jsonb_build_object('rows', '[]'::jsonb, 'next_cursor', null, 'has_more', false);
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'server_ts', now(),
+    'changes', v_changes,
+    'operation_statuses', v_op_statuses);
+end;
+$$;
+
+comment on function app.sync_pull(uuid, uuid, text[], jsonb, integer) is
+  'RF-057 pull RPC, hardened by RF-059 (A3/T-003), extended by RF-109 (menu), the MVP `tables` floor entity, PSC-001C (order_service_rounds) and KITCHEN-MODE-001A. Session/device validation (A8), role-permitted entity set (A5), per-entity (updated_at,id) cursor (A1), tombstones inline (A9), limit default 500/cap 1000, current-device operation_statuses feed (A4), RF057-B1 lookahead, and kitchen money redaction are preserved verbatim. KITCHEN-MODE-001A: a kitchen_staff session in a `printer_only` branch resolves the money-free `tables` floor entity ONLY — no orders/order_items/order_item_modifiers/order_service_rounds — so an (accidentally) paired KDS renders a safe, honest EMPTY board; an explicit order-entity request rejects with the existing not-permitted 42501 (fail closed); the current-device operation_statuses feed is likewise SUPPRESSED to an empty collection for that session (HIGH-1 — target_id/result/conflict_info carry order identifiers and money-shaped keys such as change_due_minor, and the paper-only kitchen consumes no sync operations); the mode read fail-closes to kds; NO other role''s exposure changes; tenant/branch isolation unchanged (R-003). Faithful re-creation of the 20260722090000 body. KITCHEN-PRINT-DUAL-001C: for a caller whose session-backing device is a KDS (devices.device_type = ''kds''), the COMPLETE graph of every direct_print order (orders + order_items + order_item_modifiers + order_service_rounds) is dropped from the changes feed AFTER per-entity next_cursor/has_more are computed, so the KDS never stores that graph while its cursor still advances past it (no stall or re-scan when direct_print is the primary workflow); the filter is keyed on the trusted server-owned device kind, never the role or the client device_id; non-KDS callers (POS history/reports/payments/audit) are unchanged. Read-only; no audit.';
+
+revoke all on function app.sync_pull(uuid, uuid, text[], jsonb, integer) from public;
+grant execute on function app.sync_pull(uuid, uuid, text[], jsonb, integer) to authenticated;
