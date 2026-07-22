@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
@@ -513,10 +515,16 @@ Future<void> submitOrderFromCart({
     // kitchen-print failure can NEVER turn this successful submit into a
     // failure. Inert unless the per-device "auto-print kitchen ticket" setting
     // is on; the in-memory guard makes a double-tap/rebuild print at most once.
+    final kitchenPrintEntry = container
+        .read(outboxControllerProvider.notifier)
+        .entryById(result.entry.id);
     unawaited(
       runAutoKitchenTicketPrintOnSubmit(
         container: container,
         orderId: result.entry.targetId,
+        // Shared eligibility: a permanently-rejected or demo order never cooks.
+        isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
+        rejectionCode: kitchenPrintEntry?.lastErrorCode,
         input: kitchenTicketInputFromCartLines(
           orderCode: result.orderNumber,
           orderType: orderTypeBefore,

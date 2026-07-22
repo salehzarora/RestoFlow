@@ -19,6 +19,7 @@ import '../print/native_print_bridges.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
     show
         PosKitchenPrintOutcome,
+        isOrderEligibleForKitchenPrint,
         kitchenTicketInputFromSubmittedOrder,
         printKitchenTicketForOrder;
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
@@ -341,11 +342,16 @@ class OrderConfirmation extends ConsumerWidget {
                 ),
                 const SizedBox(height: RestoflowSpacing.md),
                 // KITCHEN-PRINT-DUAL-001: the manual "Print kitchen ticket"
-                // reprint — available for any REAL created order (never a
-                // rejected draft with no server order). It prints a money-free
-                // kitchen ticket to the INDEPENDENT kitchen printer; it never
-                // prints a receipt, changes order/payment status, or touches KDS.
-                if (!isRejectedDraft && order.orderId != null) ...[
+                // reprint — shown ONLY for an order eligible to cook (the SHARED
+                // rule: a real accepted server id, not demo, not permanently
+                // rejected). It prints a money-free kitchen ticket to the
+                // INDEPENDENT kitchen printer; it never prints a receipt, changes
+                // order/payment status, or touches KDS.
+                if (isOrderEligibleForKitchenPrint(
+                  orderId: order.orderId,
+                  isDemoMode: isDemo,
+                  rejectionCode: entry?.lastErrorCode,
+                )) ...[
                   _KitchenTicketPrintButton(order: order),
                   const SizedBox(height: RestoflowSpacing.md),
                 ],
@@ -1214,7 +1220,11 @@ class _KitchenTicketPrintButtonState
         PosKitchenPrintOutcome.noPrinterConfigured ||
         PosKitchenPrintOutcome.unavailable =>
           l10n.posKitchenPrinterNotConfiguredSnack,
-        PosKitchenPrintOutcome.failed => l10n.posKitchenTicketPrintFailedSnack,
+        // ineligibleOrder is defensive here (the button is hidden for such
+        // orders); surface it as a plain failure rather than a false success.
+        PosKitchenPrintOutcome.failed ||
+        PosKitchenPrintOutcome.ineligibleOrder =>
+          l10n.posKitchenTicketPrintFailedSnack,
       };
 
   @override
