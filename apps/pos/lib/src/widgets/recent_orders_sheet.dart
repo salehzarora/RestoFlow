@@ -484,23 +484,15 @@ class _FinishAllKitchenButton extends ConsumerWidget {
 
   Future<void> _run(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
-    // Capture the current branch's ACTIVE kitchen orders ONCE (the list is already
-    // branch-scoped by the sync window). Non-terminal, not served.
-    final targets = <KitchenFinishTarget>[
-      for (final o in ref.read(posRecentOrdersControllerProvider))
-        if (o.orderId != null &&
-            !o.isTerminal &&
-            o.serverStatus != null &&
-            kActiveKitchenStatuses.contains(o.serverStatus))
-          (orderId: o.orderId!, fromStatus: o.serverStatus!),
-    ];
-    if (targets.isEmpty) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.posFinishAllNoActiveOrders)),
-      );
-      return;
-    }
+    // App-scoped handles captured up front — valid for the whole batch even if
+    // the sheet is dismissed mid-run (Riverpod forbids a widget-ref read after
+    // dispose; the root container + the sync notifier outlive the sheet).
+    final sync = ref.read(posOrderSyncControllerProvider.notifier);
+    final container = ProviderScope.containerOf(context, listen: false);
 
+    // (1) CONFIRM FIRST — before reading the order window. A list captured now
+    //     could be stale by the time the operator confirms, so we derive the
+    //     eligible set only AFTER confirmation (step 2).
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -522,24 +514,52 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
+    // (2) Under the controller's running guard: refresh the authoritative window,
+    //     then derive the FRESH eligible list (active kitchen statuses only). If
+    //     nothing is eligible any more, the batch sends nothing (zero/zero).
+    List<KitchenFinishTarget> deriveActive() => [
+      for (final o in container.read(posRecentOrdersControllerProvider))
+        if (o.orderId != null &&
+            !o.isTerminal &&
+            o.serverStatus != null &&
+            kActiveKitchenStatuses.contains(o.serverStatus))
+          (orderId: o.orderId!, fromStatus: o.serverStatus!),
+    ];
+
     final summary = await ref
         .read(kitchenFinishControllerProvider.notifier)
-        .finishAll(targets);
-    // Refresh the authoritative order window (KDS self-corrects on its own poll).
-    await ref.read(posOrderSyncControllerProvider.notifier).refreshWindow();
+        .run(
+          resolveTargets: () async {
+            await sync.refreshWindow();
+            return deriveActive();
+          },
+          // Re-read one order's authoritative status for a result that carries
+          // none (a rare serialization conflict); null when it is gone.
+          refreshStatus: (orderId) async {
+            await sync.refreshWindow();
+            for (final o in container.read(posRecentOrdersControllerProvider)) {
+              if (o.orderId == orderId) return o.serverStatus;
+            }
+            return null;
+          },
+        );
     if (summary == null) return; // a batch was already running.
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          summary.failed == 0
-              ? l10n.posFinishAllResult(summary.finished)
-              : l10n.posFinishAllResultWithFailures(
-                  summary.finished,
-                  summary.failed,
-                ),
-        ),
-      ),
-    );
+
+    // (3) A final authoritative refresh, then an honest result message. An empty
+    //     post-confirmation set reports the same "no active orders" outcome.
+    await sync.refreshWindow();
+    final String message;
+    if (summary.total == 0) {
+      message = l10n.posFinishAllNoActiveOrders;
+    } else if (summary.failed == 0) {
+      message = l10n.posFinishAllResult(summary.finished);
+    } else {
+      message = l10n.posFinishAllResultWithFailures(
+        summary.finished,
+        summary.failed,
+      );
+    }
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

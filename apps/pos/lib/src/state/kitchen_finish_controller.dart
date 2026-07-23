@@ -18,22 +18,23 @@ final kitchenFinishRepositoryProvider = Provider<KitchenFinishRepository>((
   return RealKitchenFinishRepository(
     ref.watch(posAuthTransportProvider),
     ref.watch(posSyncSessionProvider),
-    ref.watch(clientIdGeneratorProvider),
   );
 });
 
-/// One order to advance in a bulk finish: its id + its CURRENT status (the step
-/// chain to `served` is derived from the status).
+/// One order to advance in a bulk finish: its id + its last-known status (the
+/// next step toward `served` is derived from the status, then re-derived
+/// authoritatively by the server on every push).
 typedef KitchenFinishTarget = ({String orderId, String fromStatus});
 
 /// The honest result of a bulk finish batch.
 class KitchenFinishSummary {
   const KitchenFinishSummary({required this.finished, required this.failed});
 
-  /// Orders removed from the active kitchen workflow (reached served/completed).
+  /// Orders removed from the active kitchen workflow — driven to served, or
+  /// resolved concurrently (served/completed/cancelled/voided by another device).
   final int finished;
 
-  /// Orders that failed a transition (remain visible + retryable).
+  /// Orders that stayed active (or unreadable) and remain visible + retryable.
   final int failed;
 
   int get total => finished + failed;
@@ -58,39 +59,59 @@ class KitchenFinishState {
 }
 
 /// Drives the bulk kitchen-finish batch. Re-entrant-safe (a second call while
-/// running is ignored), captures the target list by value, continues past a
-/// per-order failure, and reports an honest [KitchenFinishSummary].
+/// running is ignored). The eligible target list is resolved by [run] AFTER the
+/// caller has confirmed — inside the running guard — so it reflects the branch's
+/// state at execution time, never a snapshot taken before the confirmation.
 class KitchenFinishController extends Notifier<KitchenFinishState> {
   @override
   KitchenFinishState build() => const KitchenFinishState();
 
-  /// Advances every [targets] entry up to `served`. Returns the summary, or null
-  /// if a batch was already running (the caller must have blocked the press).
-  Future<KitchenFinishSummary?> finishAll(
-    List<KitchenFinishTarget> targets,
-  ) async {
+  /// Runs one bulk finish. [resolveTargets] is invoked ONCE, under the running
+  /// guard, to produce the fresh eligible list (the caller refreshes the
+  /// authoritative window first, then derives the active orders). An empty list
+  /// yields a zero/zero summary and sends nothing. Every target is advanced by
+  /// the repository's bounded authoritative-progress loop, sharing ONE
+  /// [batchRunId] so idempotency keys are stable across retries within the run.
+  /// A per-order failure never aborts the batch. Returns the summary, or null if
+  /// a batch was already running.
+  Future<KitchenFinishSummary?> run({
+    required Future<List<KitchenFinishTarget>> Function() resolveTargets,
+    required Future<String?> Function(String orderId) refreshStatus,
+  }) async {
     if (state.running) return null;
     state = state.copyWith(running: true);
-    final repo = ref.read(kitchenFinishRepositoryProvider);
-    // Capture the list once (the caller passes the snapshot taken AFTER confirm).
-    final work = List<KitchenFinishTarget>.of(targets);
+    // One id for the whole batch; each op keys off batchRunId + order + target.
+    final batchRunId = ref.read(clientIdGeneratorProvider).newId();
     var finished = 0;
     var failed = 0;
-    for (final t in work) {
-      try {
-        final result = await repo.advanceToServed(
-          orderId: t.orderId,
-          fromStatus: t.fromStatus,
-        );
-        if (result.isFinished) {
-          finished++;
-        } else {
-          failed++;
+    try {
+      final targets = await resolveTargets();
+      // Nothing eligible after confirmation -> zero/zero, and don't even build
+      // the repository (no transport is touched for an empty batch).
+      if (targets.isNotEmpty) {
+        final repo = ref.read(kitchenFinishRepositoryProvider);
+        for (final t in targets) {
+          try {
+            final result = await repo.advanceToServed(
+              orderId: t.orderId,
+              fromStatus: t.fromStatus,
+              batchRunId: batchRunId,
+              refreshStatus: refreshStatus,
+            );
+            if (result.isFinished) {
+              finished++;
+            } else {
+              failed++;
+            }
+          } catch (_) {
+            // Continue processing the rest of the batch on any per-order failure.
+            failed++;
+          }
         }
-      } catch (_) {
-        // Continue processing the rest of the batch on any per-order failure.
-        failed++;
       }
+    } catch (_) {
+      // A failure resolving the target list (or any unexpected error) must never
+      // leave the controller stuck "running" — fall through and clear it below.
     }
     final summary = KitchenFinishSummary(finished: finished, failed: failed);
     state = KitchenFinishState(running: false, lastSummary: summary);
