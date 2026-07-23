@@ -22,7 +22,9 @@ class NativeKdsPrintBridge implements KdsPrintBridge {
   const NativeKdsPrintBridge(
     this.sender, {
     this.rasterizer,
-    this.rasterWidthDots = pp.kNativeRasterWidthDots,
+    this.mediaProfile = pp.MediaProfile.continuous80,
+    this.pageLabel,
+    this.continuationHeader,
   });
 
   final NativeEscPosSender sender;
@@ -33,28 +35,37 @@ class NativeKdsPrintBridge implements KdsPrintBridge {
   /// money, so neither does the rasterized image (T-003).
   final pp.ReceiptRasterizer? rasterizer;
 
-  /// Raster width in dots (80mm = 576; multiple of 8).
-  final int rasterWidthDots;
+  /// PRINT-LAYOUT-001A: the KDS kitchen printer's selected media profile — text
+  /// columns + raster width + margins + fixed-media pagination. Default = the
+  /// backward-compatible 80mm continuous roll (576 dots / 48 columns / feed 3).
+  final pp.MediaProfile mediaProfile;
+
+  /// Localized page-number / continuation-header builders for a multi-page
+  /// fixed-media kitchen ticket (null => none).
+  final pp.PageLineLabel? pageLabel;
+  final pp.PageLineLabel? continuationHeader;
 
   @override
   Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) async {
+    // PRINT-LAYOUT-001A: columns + raster width + pagination from the profile.
     final text = kitchenTicketToEscPosDocument(
       document,
-      columns: sender.columns,
+      columns: mediaProfile.columns,
     );
-    // PRINT-RTL-001: raster Arabic/Hebrew (+ ×) tickets; ASCII-only stays text.
-    // A rasterizer failure falls back to the text ticket.
+    // Raster Arabic/Hebrew (+ ×) tickets; ASCII-only stays text on a continuous
+    // roll. A FIXED label always rasterizes + paginates at its real width. A
+    // rasterizer failure falls back to the text ticket. Money-free by contract.
     var doc = text;
-    if (rasterizer != null) {
-      try {
-        doc = await pp.maybeRasterizeForRtl(
-          text,
-          rasterizer: rasterizer,
-          widthDots: rasterWidthDots,
-        );
-      } catch (_) {
-        doc = text;
-      }
+    try {
+      doc = await pp.rasterizeForMediaProfile(
+        text,
+        rasterizer: rasterizer,
+        profile: mediaProfile,
+        pageLabel: pageLabel,
+        continuationHeader: continuationHeader,
+      );
+    } catch (_) {
+      doc = text;
     }
     return sender.send(doc);
   }
@@ -76,6 +87,8 @@ final kdsActivePrintBridgeProvider = Provider<KdsPrintBridge?>((ref) {
       NativeEscPosSender(transportFactory: transportFactory),
       // PRINT-RTL-001: the app injects the real raster renderer; null keeps text.
       rasterizer: ref.watch(nativePrintRasterizerProvider),
+      // PRINT-LAYOUT-001A: the KDS kitchen printer's selected media profile.
+      mediaProfile: ref.watch(activeNativeMediaProfileProvider),
     );
   }
   return ref.watch(kdsPrintBridgeProvider);

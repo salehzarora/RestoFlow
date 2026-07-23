@@ -740,8 +740,9 @@ void main() {
       final fake = _FakeTransport(const pp.PrintResult.success());
       final throwing = PosKitchenTicketPrinter(
         c,
-        buildBytes: ({required ticket, required labels, rasterizer}) =>
-            Future<Uint8List>.error(StateError('boom')),
+        buildBytes:
+            ({required ticket, required labels, rasterizer, mediaProfile}) =>
+                Future<Uint8List>.error(StateError('boom')),
         targetOverride: ResolvedKitchenPrinter(
           destinationKey: 'k',
           transportFactory: () => fake,

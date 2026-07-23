@@ -27,18 +27,32 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     required this.transportFactory,
     this.adapter = const pp.EscPosPrintAdapter(),
     this.profile = pp.PrinterProfile.escPos80mm,
-    this.columns = 48,
+    this.mediaProfile = pp.MediaProfile.continuous80,
     this.rasterizer,
-    this.rasterWidthDots = pp.kNativeRasterWidthDots,
     this.sendGate,
     this.destinationKey,
+    this.pageLabel,
+    this.continuationHeader,
   });
 
   /// Builds a fresh transport per submit (a socket/BT connection is not reused).
   final pp.PrintTransport Function() transportFactory;
   final pp.EscPosPrintAdapter adapter;
+
+  /// ESC/POS capabilities + code page for the adapter (the raster WIDTH comes
+  /// from [mediaProfile], not from here — the adapter never reads paper width).
   final pp.PrinterProfile profile;
-  final int columns;
+
+  /// PRINT-LAYOUT-001A: the selected print media profile for THIS assignment —
+  /// the single source of the text columns, raster width, safe margins, font
+  /// scale, feed, and fixed-media pagination. Defaults to the backward-compatible
+  /// continuous 80mm roll (576 dots / 48 columns / feed 3, no pagination).
+  final pp.MediaProfile mediaProfile;
+
+  /// Localized page-number / continuation-header builders for multi-page fixed
+  /// media (null => none; a paginated ticket then carries no page number).
+  final pp.PageLineLabel? pageLabel;
+  final pp.PageLineLabel? continuationHeader;
 
   /// KITCHEN-MODE-001C2C (LOCKED DECISION 3): the SHARED per-physical-printer
   /// FIFO gate. When set (with [destinationKey]), the physical send is
@@ -54,27 +68,29 @@ class NativeTransportPrintBridge implements PosPrintBridge {
   /// correctly on printers without a Unicode codepage.
   final pp.ReceiptRasterizer? rasterizer;
 
-  /// Raster width in dots (80mm = 576; multiple of 8).
-  final int rasterWidthDots;
-
   @override
   Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) async {
-    final escpos = receiptToEscPosDocument(document, columns: columns);
-    // PRINT-RTL-001: on native Android, render Arabic/Hebrew (+ ₪/×) content as a
-    // raster image so it prints correctly; ASCII-only content keeps the crisp
-    // text path. A rasterizer failure falls back to the text document (a receipt
+    // PRINT-LAYOUT-001A: text columns + raster width + margins + pagination all
+    // come from the selected media profile — never a hardcoded 80mm/576/48.
+    final escpos = receiptToEscPosDocument(
+      document,
+      columns: mediaProfile.columns,
+    );
+    // On native Android, render Arabic/Hebrew (+ ₪/×) content as a raster image
+    // so it prints correctly; a FIXED label always rasterizes + paginates at its
+    // real width. A rasterizer failure falls back to the text document (a receipt
     // with "?????" is still better than no print).
     pp.PrintDocument doc = escpos;
-    if (rasterizer != null) {
-      try {
-        doc = await pp.maybeRasterizeForRtl(
-          escpos,
-          rasterizer: rasterizer,
-          widthDots: rasterWidthDots,
-        );
-      } catch (_) {
-        doc = escpos;
-      }
+    try {
+      doc = await pp.rasterizeForMediaProfile(
+        escpos,
+        rasterizer: rasterizer,
+        profile: mediaProfile,
+        pageLabel: pageLabel,
+        continuationHeader: continuationHeader,
+      );
+    } catch (_) {
+      doc = escpos;
     }
     final bytes = adapter.encode(doc, profile);
     final transport = transportFactory();
@@ -134,6 +150,9 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
         final connector = ref.watch(bluetoothPrinterConnectorProvider);
         return NativeTransportPrintBridge(
           rasterizer: rasterizer,
+          // PRINT-LAYOUT-001A: the CUSTOMER-receipt assignment's selected media
+          // profile drives width + pagination for this send.
+          mediaProfile: bt.mediaProfile,
           sendGate: ref.watch(posPrinterDestinationSendGateProvider),
           destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(
             bt.address,
@@ -153,6 +172,7 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
       if (net != null) {
         return NativeTransportPrintBridge(
           rasterizer: rasterizer,
+          mediaProfile: net.mediaProfile,
           sendGate: ref.watch(posPrinterDestinationSendGateProvider),
           destinationKey: pp.PrinterDestinationSendGate.networkKey(
             net.host,

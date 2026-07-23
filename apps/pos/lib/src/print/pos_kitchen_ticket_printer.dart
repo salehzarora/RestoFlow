@@ -102,6 +102,7 @@ final class ResolvedKitchenPrinter {
   const ResolvedKitchenPrinter({
     required this.destinationKey,
     required this.transportFactory,
+    this.mediaProfile = pp.MediaProfile.continuous80,
   });
 
   /// Canonical per-endpoint key for the SHARED send gate (never logged). Equal
@@ -111,6 +112,10 @@ final class ResolvedKitchenPrinter {
 
   /// Builds a fresh transport per send (a socket/BT link is not reused).
   final pp.PrintTransport Function() transportFactory;
+
+  /// PRINT-LAYOUT-001A: the KITCHEN assignment's selected media profile — width
+  /// + margins + pagination for the ticket. Default = backward-compatible 80mm.
+  final pp.MediaProfile mediaProfile;
 }
 
 /// Resolves the KITCHEN slot into a send target, or null when native printing
@@ -136,6 +141,7 @@ Future<ResolvedKitchenPrinter?> resolveKitchenPrinterTarget(
           net.host,
           net.port,
         ),
+        mediaProfile: net.mediaProfile,
         transportFactory: () => pp.NetworkTcpPrintTransport(
           host: net.host,
           port: net.port,
@@ -150,6 +156,7 @@ Future<ResolvedKitchenPrinter?> resolveKitchenPrinterTarget(
       final connector = container.read(bluetoothPrinterConnectorProvider);
       return ResolvedKitchenPrinter(
         destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(bt.address),
+        mediaProfile: bt.mediaProfile,
         transportFactory: () => BluetoothClassicPrintTransport(
           connector: connector,
           address: bt.address,
@@ -262,6 +269,7 @@ typedef KitchenBytesBuilder =
       required KdsTicketView ticket,
       required KitchenTicketPrintLabels labels,
       pp.ReceiptRasterizer? rasterizer,
+      pp.MediaProfile? mediaProfile,
     });
 
 /// Sends a money-free kitchen ticket to the resolved KITCHEN printer.
@@ -299,6 +307,7 @@ class PosKitchenTicketPrinter {
         ticket: ticket,
         labels: labels,
         rasterizer: _container.read(nativePrintRasterizerProvider),
+        mediaProfile: resolved.mediaProfile,
       );
     } catch (_) {
       return PosKitchenPrintOutcome.failed;

@@ -33,25 +33,34 @@ Future<Uint8List> renderKitchenTicketBytes({
   pp.ReceiptRasterizer? rasterizer,
   pp.EscPosPrintAdapter adapter = const pp.EscPosPrintAdapter(),
   pp.PrinterProfile profile = pp.PrinterProfile.escPos80mm,
-  int columns = 48,
-  int rasterWidthDots = pp.kNativeRasterWidthDots,
+  // PRINT-LAYOUT-001A: text columns + raster width + margins + pagination all
+  // come from the selected KITCHEN media profile. Null/absent => the
+  // backward-compatible 80mm continuous default (byte-identical).
+  pp.MediaProfile? mediaProfile,
+  pp.PageLineLabel? pageLabel,
+  pp.PageLineLabel? continuationHeader,
 }) async {
+  final media = mediaProfile ?? pp.MediaProfile.continuous80;
   final document = buildKdsTicketPrintDocument(ticket: ticket, labels: labels);
-  final escPos = kitchenTicketToEscPosDocument(document, columns: columns);
-  // PRINT-RTL-001: raster Arabic/Hebrew (+ ×) tickets; ASCII-only stays text. A
+  final escPos = kitchenTicketToEscPosDocument(
+    document,
+    columns: media.columns,
+  );
+  // Raster Arabic/Hebrew (+ ×) tickets; ASCII-only stays text on a continuous
+  // roll. A FIXED label always rasterizes + paginates at its real width. A
   // rasterizer failure falls back to the text ticket (parity with the KDS
-  // native bridge).
+  // native bridge). Money-free: a KdsTicketView carries no money fields.
   pp.PrintDocument out = escPos;
-  if (rasterizer != null) {
-    try {
-      out = await pp.maybeRasterizeForRtl(
-        escPos,
-        rasterizer: rasterizer,
-        widthDots: rasterWidthDots,
-      );
-    } catch (_) {
-      out = escPos;
-    }
+  try {
+    out = await pp.rasterizeForMediaProfile(
+      escPos,
+      rasterizer: rasterizer,
+      profile: media,
+      pageLabel: pageLabel,
+      continuationHeader: continuationHeader,
+    );
+  } catch (_) {
+    out = escPos;
   }
   return adapter.encode(out, profile);
 }
