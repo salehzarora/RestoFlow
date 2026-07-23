@@ -11,7 +11,9 @@ import 'package:test/test.dart';
 /// Both the KDS live print (`buildKdsTicketDocument`) and the POS direct kitchen
 /// print render through [buildKdsTicketPrintDocument] + [kitchenTicketToEscPosDocument],
 /// so this suite pins the CANONICAL operational detail a kitchen ticket carries
-/// on EITHER surface, and that it is money-free.
+/// on EITHER surface, that it is money-free, and (PRINT-LAYOUT-001B) its typographic
+/// hierarchy: restaurant-name brand > big order reference > meta > counts > items
+/// (quantity-leading) > modifiers > distinct notes, with a gap between items.
 
 const _moneyTokens = [
   'total:',
@@ -30,6 +32,21 @@ const _moneyTokens = [
 ];
 
 KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
+  ticketLabel: 'Ticket',
+  previewTitle: 'Kitchen ticket preview',
+  dineIn: 'Dine-in',
+  takeaway: 'Takeaway',
+  tableLabel: 'Table',
+  customerLabel: 'Customer',
+  stationLabel: 'Station',
+  noteLabel: 'Note',
+  kitchenTotal: (count, unit) => 'KTotal $count $unit',
+  restaurantNameFallback: 'Restaurant',
+);
+
+/// Labels WITHOUT the localized fallback (an older/omitting build): the brand
+/// line is then simply absent — never a hardcoded placeholder.
+KitchenTicketPrintLabels _labelsNoFallback() => KitchenTicketPrintLabels(
   ticketLabel: 'Ticket',
   previewTitle: 'Kitchen ticket preview',
   dineIn: 'Dine-in',
@@ -77,12 +94,15 @@ void main() {
       final doc = buildKdsTicketPrintDocument(
         ticket: _ticket(),
         labels: _labels(),
+        restaurantName: 'Falafel House',
       );
       final texts = [for (final l in doc.lines) l.left ?? l.right ?? ''];
 
-      // Header, service type, table, customer.
-      expect(doc.lines.first.kind, PrintLineKind.title);
-      expect(doc.lines.first.left, '#000042');
+      // Brand hero (secondary heading) ABOVE the big order-number reference.
+      expect(doc.lines.first.kind, PrintLineKind.subtitle);
+      expect(doc.lines.first.left, 'Falafel House');
+      expect(doc.lines[1].kind, PrintLineKind.title);
+      expect(doc.lines[1].left, '#000042');
       expect(texts, contains('Dine-in'));
       expect(texts, contains('Table 5'));
       expect(texts, contains('Customer: Dana'));
@@ -97,34 +117,40 @@ void main() {
       expect(texts, contains('KTotal 4 قطع لحم'));
       expect(texts, contains('KTotal 2 خبز'));
 
-      // Item lines: name (left) + prominent quantity (right), emphasised.
+      // Item lines LEAD with the quantity at the emphasised item size.
       final burger = doc.lines.firstWhere(
-        (l) => l.kind == PrintLineKind.item && l.left == 'Double Burger',
+        (l) => l.kind == PrintLineKind.item && l.left == '2 × Double Burger',
       );
-      expect(burger.right, '2×');
       expect(burger.emphasised, isTrue);
       expect(
         doc.lines.any(
-          (l) =>
-              l.kind == PrintLineKind.item &&
-              l.left == 'Fries' &&
-              l.right == '1×',
+          (l) => l.kind == PrintLineKind.item && l.left == '1 × Fries',
         ),
         isTrue,
       );
 
-      // Structured modifier sub-lines (the ×N is preserved) + the item note.
+      // Modifiers stay sub-lines (the ×N is preserved); item + order notes use
+      // the DISTINCT note style so an instruction can't read as a modifier.
       expect(texts, contains('+ Double ×2'));
       expect(texts, contains('+ no onion'));
-      expect(texts, contains('» Note: well done'));
-      // The order-level note.
-      expect(texts, contains('» Note: call when ready'));
+      final itemNote = doc.lines.firstWhere(
+        (l) => l.left == '» Note: well done',
+      );
+      expect(itemNote.kind, PrintLineKind.note);
+      final orderNote = doc.lines.firstWhere(
+        (l) => l.left == '» Note: call when ready',
+      );
+      expect(orderNote.kind, PrintLineKind.note);
+
+      // A blank spacer separates the two item blocks.
+      expect(doc.lines.any((l) => l.kind == PrintLineKind.spacer), isTrue);
     });
 
     test('is money-free (no price/total/currency reaches the ticket)', () {
       final doc = buildKdsTicketPrintDocument(
         ticket: _ticket(),
         labels: _labels(),
+        restaurantName: 'Falafel House',
       );
       for (final line in doc.lines) {
         final text = '${line.left ?? ''} ${line.right ?? ''}'.toLowerCase();
@@ -138,8 +164,24 @@ void main() {
       }
     });
 
+    test('never emits a total style (money-free by construction)', () {
+      final escpos = kitchenTicketToEscPosDocument(
+        buildKdsTicketPrintDocument(
+          ticket: _ticket(),
+          labels: _labels(),
+          restaurantName: 'Falafel House',
+        ),
+      );
+      expect(
+        escpos.lines.whereType<pp.PrintTextLine>().any(
+          (l) => l.style == pp.PrintLineStyle.total,
+        ),
+        isFalse,
+      );
+    });
+
     test(
-      'converts to ESC/POS preserving sub-indent, item columns, feed + cut',
+      'converts to ESC/POS preserving sub-indent, item lead-quantity, feed + cut',
       () {
         final doc = buildKdsTicketPrintDocument(
           ticket: _ticket(),
@@ -150,12 +192,11 @@ void main() {
 
         // Sub-lines are indented by two spaces (chef reads modifiers under items).
         expect(textLines.any((l) => l.text == '  + Double ×2'), isTrue);
-        // Item lines are two-column: name left, quantity right-aligned to width.
+        // Item lines LEAD with the quantity at the emphasised item style.
         final burger = textLines.firstWhere(
-          (l) => l.text.startsWith('Double Burger'),
+          (l) => l.text.startsWith('2 × Double Burger'),
         );
-        expect(burger.text.trimRight().endsWith('2×'), isTrue);
-        expect(burger.text.length, 48);
+        expect(burger.style, pp.PrintLineStyle.item);
         // A rule spans the full width.
         expect(textLines.any((l) => l.text == '-' * 48), isTrue);
         // The document ends with the paper feed + cut.
@@ -180,7 +221,7 @@ void main() {
       expect(texts, contains('Takeaway'));
       expect(texts.any((t) => t.startsWith('Table')), isFalse);
       expect(texts.any((t) => t.startsWith('KTotal')), isFalse);
-      expect(texts, contains('Cola'));
+      expect(texts, contains('1 × Cola'));
     });
 
     test(
@@ -211,5 +252,52 @@ void main() {
         }
       },
     );
+  });
+
+  group('restaurant-name brand line (PRINT-LAYOUT-001B, test A)', () {
+    test('prints the real restaurant name as the brand line above the '
+        'order reference', () {
+      final doc = buildKdsTicketPrintDocument(
+        ticket: _ticket(),
+        labels: _labels(),
+        restaurantName: 'Falafel House',
+      );
+      expect(doc.lines.first.kind, PrintLineKind.subtitle);
+      expect(doc.lines.first.left, 'Falafel House');
+      expect(doc.lines[1].kind, PrintLineKind.title);
+      expect(doc.lines[1].left, '#000042');
+    });
+
+    test('falls back to the localized generic brand word when no real name '
+        'is supplied', () {
+      final doc = buildKdsTicketPrintDocument(
+        ticket: _ticket(),
+        labels: _labels(),
+      );
+      expect(doc.lines.first.kind, PrintLineKind.subtitle);
+      expect(doc.lines.first.left, 'Restaurant');
+    });
+
+    test('a blank/whitespace real name uses the fallback, never a blank '
+        'brand line', () {
+      final doc = buildKdsTicketPrintDocument(
+        ticket: _ticket(),
+        labels: _labels(),
+        restaurantName: '   ',
+      );
+      expect(doc.lines.first.kind, PrintLineKind.subtitle);
+      expect(doc.lines.first.left, 'Restaurant');
+    });
+
+    test('omits the brand line entirely when neither a real name nor a '
+        'fallback exists (never a hardcoded placeholder)', () {
+      final doc = buildKdsTicketPrintDocument(
+        ticket: _ticket(),
+        labels: _labelsNoFallback(),
+      );
+      expect(doc.lines.first.kind, PrintLineKind.title);
+      expect(doc.lines.first.left, '#000042');
+      expect(doc.lines.any((l) => l.kind == PrintLineKind.subtitle), isFalse);
+    });
   });
 }

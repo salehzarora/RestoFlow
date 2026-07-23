@@ -70,46 +70,59 @@ void main() {
   const he = ['פלאפל עם טחינה', 'חומוס גדול', 'שווארמה עוף'];
   const en = ['Falafel with tahini', 'Large hummus', 'Chicken shawarma'];
 
-  test('A. label50x50 RTL: exact 384 dots, page <= 400, ink in safe bounds', () async {
-    final imgs = await render(doc(ar), MediaProfile.label50x50);
-    expect(imgs, isNotEmpty);
-    for (final img in imgs) {
-      expect(img.widthBytes, 48); // 384 / 8
-      assertPage(img, MediaProfile.label50x50);
-    }
-  });
+  test(
+    'A. label50x50 RTL: exact 384 dots, page <= 400, ink in safe bounds',
+    () async {
+      final imgs = await render(doc(ar), MediaProfile.label50x50);
+      expect(imgs, isNotEmpty);
+      for (final img in imgs) {
+        expect(img.widthBytes, 48); // 384 / 8
+        assertPage(img, MediaProfile.label50x50);
+      }
+    },
+  );
 
-  test('B. label50x50 LTR: exact 384 dots, page <= 400, ink in safe bounds', () async {
-    for (final img in await render(doc(en), MediaProfile.label50x50)) {
-      expect(img.widthBytes, 48);
-      assertPage(img, MediaProfile.label50x50);
-    }
-  });
+  test(
+    'B. label50x50 LTR: exact 384 dots, page <= 400, ink in safe bounds',
+    () async {
+      for (final img in await render(doc(en), MediaProfile.label50x50)) {
+        expect(img.widthBytes, 48);
+        assertPage(img, MediaProfile.label50x50);
+      }
+    },
+  );
 
-  test('C. label80x80 RTL: exact 576 dots, page <= 640, ink in safe bounds', () async {
-    final imgs = await render(doc(he), MediaProfile.label80x80);
-    expect(imgs, isNotEmpty);
-    for (final img in imgs) {
-      expect(img.widthBytes, 72); // 576 / 8
-      assertPage(img, MediaProfile.label80x80);
-    }
-  });
+  test(
+    'C. label80x80 RTL: exact 576 dots, page <= 640, ink in safe bounds',
+    () async {
+      final imgs = await render(doc(he), MediaProfile.label80x80);
+      expect(imgs, isNotEmpty);
+      for (final img in imgs) {
+        expect(img.widthBytes, 72); // 576 / 8
+        assertPage(img, MediaProfile.label80x80);
+      }
+    },
+  );
 
-  test('D. label80x80 LTR: exact 576 dots, page <= 640, ink in safe bounds', () async {
-    for (final img in await render(doc(en), MediaProfile.label80x80)) {
-      expect(img.widthBytes, 72);
-      assertPage(img, MediaProfile.label80x80);
-    }
-  });
+  test(
+    'D. label80x80 LTR: exact 576 dots, page <= 640, ink in safe bounds',
+    () async {
+      for (final img in await render(doc(en), MediaProfile.label80x80)) {
+        expect(img.widthBytes, 72);
+        assertPage(img, MediaProfile.label80x80);
+      }
+    },
+  );
 
   test('E. a long kitchen ticket paginates; every page fits the 50x50 media '
       'and stays in bounds', () async {
     // ~30 item lines -> multiple 50x50 pages.
-    final lines = <String>[
-      for (var i = 0; i < 30; i++) 'صنف $i دجاج مشوي',
-    ];
+    final lines = <String>[for (var i = 0; i < 30; i++) 'صنف $i دجاج مشوي'];
     final styles = [for (var i = 0; i < 30; i++) PrintLineStyle.item];
-    final imgs = await render(doc(lines, styles: styles), MediaProfile.label50x50);
+    final imgs = await render(
+      doc(lines, styles: styles),
+      MediaProfile.label50x50,
+    );
     expect(imgs.length, greaterThan(1), reason: 'a long fixed ticket splits');
     for (final img in imgs) {
       expect(img.widthBytes, 48);
@@ -117,17 +130,18 @@ void main() {
     }
   });
 
-  test('F. a long customer receipt paginates on 80x80; every page fits + bounds', () async {
-    final lines = <String>[
-      for (var i = 0; i < 40; i++) 'منتج $i مع إضافات',
-    ];
-    final imgs = await render(doc(lines), MediaProfile.label80x80);
-    expect(imgs.length, greaterThan(1));
-    for (final img in imgs) {
-      expect(img.widthBytes, 72);
-      assertPage(img, MediaProfile.label80x80);
-    }
-  });
+  test(
+    'F. a long customer receipt paginates on 80x80; every page fits + bounds',
+    () async {
+      final lines = <String>[for (var i = 0; i < 40; i++) 'منتج $i مع إضافات'];
+      final imgs = await render(doc(lines), MediaProfile.label80x80);
+      expect(imgs.length, greaterThan(1));
+      for (final img in imgs) {
+        expect(img.widthBytes, 72);
+        assertPage(img, MediaProfile.label80x80);
+      }
+    },
+  );
 
   test('G. the diagnostic renders at the profile width — 50x50 is NEVER 576; '
       '80x80 is 576; content stays in bounds', () async {
@@ -171,5 +185,97 @@ void main() {
     expect(imgs.single.widthBytes, 72); // 576 / 8
     // No media-height bound on a roll: the single tall image is allowed.
     expect(imgs.single.heightDots, greaterThan(0));
+  });
+
+  // PRINT-LAYOUT-001B: the FULL new hierarchy — a brand heading, a secondary
+  // order reference, centered meta, a separator, quantity-leading items with a
+  // modifier + a note, an inter-item spacer, and a strong total — with the
+  // bigger 001B fonts, on BOTH fixed labels, RTL + LTR, never clips.
+  const fullStyles = <PrintLineStyle>[
+    PrintLineStyle.headingLarge, // brand
+    PrintLineStyle.subheading, // order reference
+    PrintLineStyle.separator,
+    PrintLineStyle.centered, // meta
+    PrintLineStyle.item, // qty-leading item
+    PrintLineStyle.sub, // modifier
+    PrintLineStyle.note, // item note
+    PrintLineStyle.spacer, // blank gap between items
+    PrintLineStyle.item, // second item
+    PrintLineStyle.separator,
+    PrintLineStyle.total, // strong total
+  ];
+  const fullAr = <String>[
+    'مطعم الاختبار',
+    'طلب #A17',
+    '----',
+    'صالة',
+    '2 × فلافل',
+    '+ طحينة إضافية',
+    '» ملاحظة: حار',
+    '',
+    '1 × حمص',
+    '----',
+    'الإجمالي        ₪42',
+  ];
+  const fullEn = <String>[
+    'Test Restaurant',
+    'Order #A17',
+    '----',
+    'Dine-in',
+    '2 × Falafel',
+    '+ Extra tahini',
+    '» Note: spicy',
+    '',
+    '1 × Hummus',
+    '----',
+    'TOTAL           42.00',
+  ];
+
+  for (final profile in const [
+    MediaProfile.label50x50,
+    MediaProfile.label80x80,
+  ]) {
+    for (final lang in const ['RTL', 'LTR']) {
+      test('I. 001B hierarchy on ${profile.id.name} ($lang): every new style '
+          'renders with the bigger fonts and no page clips', () async {
+        final lines = lang == 'RTL' ? fullAr : fullEn;
+        final imgs = await render(doc(lines, styles: fullStyles), profile);
+        expect(imgs, isNotEmpty);
+        for (final img in imgs) {
+          expect(img.widthBytes, profile.widthBytes);
+          assertPage(img, profile);
+        }
+      });
+    }
+  }
+
+  test('J. 001B typography is PROFILE-AWARE — the standard (80x80) brand hero '
+      'renders TALLER than the compact (50x50) hero', () async {
+    final measurer = rasterizer as RasterLineMeasurer;
+    Future<int> heroRows(MediaProfile p) async {
+      final rows = await measurer.measureLineRows(
+        ReceiptRasterRequest(
+          lines: const ['مطعم'],
+          styles: const [PrintLineStyle.headingLarge],
+          widthDots: p.widthDots,
+          direction: ReceiptTextDirection.rtl,
+          localeTag: 'ar',
+          fontScale: p.fontScale,
+          lineSpacing: p.lineSpacing,
+          safeLeftDots: p.safeLeftDots,
+          safeRightDots: p.safeRightDots,
+          typography: PrintTypography.forProfile(p),
+        ),
+      );
+      return rows.single;
+    }
+
+    final compactHero = await heroRows(MediaProfile.label50x50);
+    final standardHero = await heroRows(MediaProfile.label80x80);
+    expect(
+      standardHero,
+      greaterThan(compactHero),
+      reason: '80x80 standard hero taller than 50x50 compact hero',
+    );
   });
 }

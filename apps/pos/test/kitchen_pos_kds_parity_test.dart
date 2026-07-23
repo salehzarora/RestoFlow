@@ -271,8 +271,8 @@ void main() {
 
       // The rendered detail is actually present (not a vacuous empty match).
       final joined = _docStrings(posDoc).join('\n');
-      expect(joined, contains('Double Burger'));
-      expect(joined, contains('2×'));
+      // PRINT-LAYOUT-001B: the item line LEADS with the quantity.
+      expect(joined, contains('item|2 × Double Burger'));
       // The meat modifier's quantity is preserved on its label (×2), and its
       // whole-order count is 4 (never 2, never 8).
       expect(joined, contains('+ Extra patty ×2'));

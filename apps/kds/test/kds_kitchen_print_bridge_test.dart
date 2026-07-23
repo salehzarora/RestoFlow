@@ -194,8 +194,10 @@ void main() {
         .whereType<pp.PrintTextLine>()
         .map((l) => l.style)
         .toList();
-    // The order-number hero is a large heading.
-    expect(styles.first, pp.PrintLineStyle.headingLarge);
+    // PRINT-LAYOUT-001B: the brand line (secondary heading) leads, above the
+    // large order-number hero heading.
+    expect(styles.first, pp.PrintLineStyle.subheading);
+    expect(styles.contains(pp.PrintLineStyle.headingLarge), isTrue);
     // Item + indented sub-lines are present…
     expect(styles.contains(pp.PrintLineStyle.item), isTrue);
     expect(styles.contains(pp.PrintLineStyle.sub), isTrue);

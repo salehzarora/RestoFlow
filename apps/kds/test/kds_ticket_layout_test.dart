@@ -44,14 +44,32 @@ KdsTicketView _ticket({
 
 void main() {
   group('kitchen ticket layout', () {
-    test('the order number is a big title heading', () async {
+    test('the restaurant-name brand line sits above the big order-number '
+        'title heading', () async {
       final l10n = await _l10n('en');
       final doc = buildKdsTicketDocument(l10n, _ticket());
+      // Brand line (secondary heading) first — the localized fallback when no
+      // real restaurant name is configured, never a hardcoded placeholder.
+      expect(doc.lines.first.kind, PrintLineKind.subtitle);
+      expect(doc.lines.first.left, l10n.printRestaurantNameFallback);
+      // The order number is the big title heading (hero) just below it.
       expect(
-        doc.lines.first.kind == PrintLineKind.title &&
-            doc.lines.first.left == '#ABC123',
+        doc.lines.any(
+          (l) => l.kind == PrintLineKind.title && l.left == '#ABC123',
+        ),
         isTrue,
       );
+    });
+
+    test('the real restaurant name replaces the fallback brand line', () async {
+      final l10n = await _l10n('en');
+      final doc = buildKdsTicketDocument(
+        l10n,
+        _ticket(),
+        restaurantName: 'Falafel House',
+      );
+      expect(doc.lines.first.kind, PrintLineKind.subtitle);
+      expect(doc.lines.first.left, 'Falafel House');
     });
 
     test('order type / table / customer are grouped centered lines', () async {
@@ -66,31 +84,31 @@ void main() {
       expect(centered, contains('${l10n.customerNameKitchenLabel}: Dana'));
     });
 
-    test('the item is emphasised with a prominent quantity', () async {
-      final l10n = await _l10n('en');
-      final doc = buildKdsTicketDocument(l10n, _ticket());
-      final item = doc.lines.firstWhere((l) => l.kind == PrintLineKind.item);
-      expect(item.left, 'Burger');
-      expect(item.right, '2×');
-      expect(item.emphasised, isTrue);
-    });
-
     test(
-      'a note is flagged with a "»" marker so a chef never misses it',
+      'the item leads with a prominent quantity and is emphasised',
       () async {
         final l10n = await _l10n('en');
-        final doc = buildKdsTicketDocument(l10n, _ticket(note: 'no onion'));
-        expect(
-          doc.lines.any(
-            (l) =>
-                l.kind == PrintLineKind.sub &&
-                (l.left ?? '').startsWith('» ') &&
-                (l.left ?? '').contains('no onion'),
-          ),
-          isTrue,
-        );
+        final doc = buildKdsTicketDocument(l10n, _ticket());
+        final item = doc.lines.firstWhere((l) => l.kind == PrintLineKind.item);
+        expect(item.left, '2 × Burger');
+        expect(item.emphasised, isTrue);
       },
     );
+
+    test('a note is flagged with a "»" marker in the distinct note style so a '
+        'chef never misses it', () async {
+      final l10n = await _l10n('en');
+      final doc = buildKdsTicketDocument(l10n, _ticket(note: 'no onion'));
+      expect(
+        doc.lines.any(
+          (l) =>
+              l.kind == PrintLineKind.note &&
+              (l.left ?? '').startsWith('» ') &&
+              (l.left ?? '').contains('no onion'),
+        ),
+        isTrue,
+      );
+    });
 
     test('the ticket is MONEY-FREE (T-003)', () async {
       final l10n = await _l10n('en');

@@ -163,12 +163,10 @@ void main() {
       expect(texts, contains('Customer: Dana'));
       expect(texts, contains('KTotal 4 قطع لحم'));
       expect(texts, contains('KTotal 2 خبز'));
+      // PRINT-LAYOUT-001B: the item line LEADS with the quantity.
       expect(
         doc.lines.any(
-          (l) =>
-              l.kind == PrintLineKind.item &&
-              l.left == 'Double Burger' &&
-              l.right == '2×',
+          (l) => l.kind == PrintLineKind.item && l.left == '2 × Double Burger',
         ),
         isTrue,
       );
