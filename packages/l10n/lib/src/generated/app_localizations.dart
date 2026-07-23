@@ -2218,29 +2218,47 @@ abstract class AppLocalizations {
   /// **'Automatically print kitchen ticket'**
   String get posAutoPrintKitchenTicketToggle;
 
-  /// POS device-settings subtitle under the auto-print kitchen toggle when a kitchen printer is configured: explains the two workflows — ON prints from this device and dispatches the order out of the KDS active workflow; OFF uses the normal KDS workflow (KITCHEN-PRINT-DUAL-001C).
+  /// POS device-settings subtitle under the auto-print kitchen toggle when a kitchen printer is configured: ON auto-prints a money-free kitchen ticket from this cashier; the order always goes to the KDS as usual — no bypass (KITCHEN-PRINT-DUAL-001D).
   ///
   /// In en, this message translates to:
-  /// **'When on, the kitchen ticket prints from this device and the order is closed directly, without sending it to the kitchen display. When off, orders continue to the normal kitchen display workflow.'**
+  /// **'When on, a kitchen ticket prints automatically from this cashier device after a successful order. The order is still sent to the kitchen display as usual.'**
   String get posAutoPrintKitchenTicketToggleExplanation;
 
-  /// POS cart banner shown when the per-device auto-print kitchen workflow setting failed to read; Send stays disabled until it resolves. Paired with the Try again retry (KITCHEN-PRINT-DUAL-001C).
+  /// POS Order History header action + confirmation title: advance every active kitchen order to served, clearing the kitchen display (KITCHEN-PRINT-DUAL-001D).
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t load the kitchen printing setting — sending is paused.'**
-  String get posKitchenSettingLoadError;
+  /// **'Finish all kitchen orders'**
+  String get posFinishAllKitchenOrders;
 
-  /// POS cart banner shown when the kitchen printer configuration could not be read while automatic kitchen printing is on; Send stays disabled until it resolves. Paired with Try again (KITCHEN-PRINT-DUAL-001C).
+  /// Confirm button of the bulk finish-all-kitchen-orders dialog (KITCHEN-PRINT-DUAL-001D).
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t load the kitchen printer settings. Try again.'**
-  String get posKitchenPrinterConfigLoadError;
+  /// **'Finish all'**
+  String get posFinishAllConfirmAction;
 
-  /// POS cart banner shown when automatic kitchen printing is on but no usable kitchen printer is configured; Send stays disabled and the order is not sent to the KDS automatically (KITCHEN-PRINT-DUAL-001C).
+  /// Body of the bulk finish-all-kitchen-orders confirmation dialog (KITCHEN-PRINT-DUAL-001D).
   ///
   /// In en, this message translates to:
-  /// **'No kitchen printer is configured. Set a kitchen printer or turn off automatic kitchen-ticket printing.'**
-  String get posKitchenNoPrinterConfigured;
+  /// **'All active kitchen orders will be finished and removed from the kitchen display. Unpaid orders remain available for payment in Order History.'**
+  String get posFinishAllConfirmBody;
+
+  /// POS snackbar shown when the bulk finish action is pressed but there are no active kitchen orders to finish (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'No active kitchen orders'**
+  String get posFinishAllNoActiveOrders;
+
+  /// POS snackbar summary after a successful bulk kitchen finish (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'Finished {count} kitchen orders'**
+  String posFinishAllResult(int count);
+
+  /// POS snackbar summary after a partial bulk kitchen finish; the failed orders remain visible and retryable (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'Finished {finished} kitchen orders, {failed} couldn\'t finish (still shown to retry)'**
+  String posFinishAllResultWithFailures(int finished, int failed);
 
   /// POS action button on a created order: manually print a money-free kitchen ticket to the kitchen printer.
   ///

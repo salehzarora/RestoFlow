@@ -1132,19 +1132,30 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posAutoPrintKitchenTicketToggleExplanation =>
-      'כשמופעל, כרטיס המטבח מודפס ממכשיר זה וההזמנה נסגרת ישירות, בלי לשלוח אותה למסך המטבח. כשכבוי, ההזמנות ממשיכות במהלך העבודה הרגיל של מסך המטבח.';
+      'כשמופעל, כרטיס מטבח מודפס אוטומטית ממכשיר הקופה הזה לאחר הזמנה מוצלחת. ההזמנה עדיין נשלחת למסך המטבח כרגיל.';
 
   @override
-  String get posKitchenSettingLoadError =>
-      'לא ניתן לטעון את הגדרת הדפסת המטבח — השליחה מושהית.';
+  String get posFinishAllKitchenOrders => 'סיום כל הזמנות המטבח';
 
   @override
-  String get posKitchenPrinterConfigLoadError =>
-      'לא ניתן לטעון את הגדרות מדפסת המטבח. נסה שוב.';
+  String get posFinishAllConfirmAction => 'סיים הכול';
 
   @override
-  String get posKitchenNoPrinterConfigured =>
-      'לא מוגדרת מדפסת מטבח. הגדר מדפסת מטבח או כבה את ההדפסה האוטומטית.';
+  String get posFinishAllConfirmBody =>
+      'כל הזמנות המטבח הפעילות יסתיימו ויוסרו ממסך המטבח. הזמנות שלא שולמו יישארו זמינות לתשלום בהיסטוריית ההזמנות.';
+
+  @override
+  String get posFinishAllNoActiveOrders => 'אין הזמנות מטבח פעילות';
+
+  @override
+  String posFinishAllResult(int count) {
+    return 'הסתיימו $count הזמנות מטבח';
+  }
+
+  @override
+  String posFinishAllResultWithFailures(int finished, int failed) {
+    return 'הסתיימו $finished הזמנות מטבח, $failed לא הסתיימו (עדיין מוצגות לניסיון חוזר)';
+  }
 
   @override
   String get posPrintKitchenTicketAction => 'הדפסה למטבח';

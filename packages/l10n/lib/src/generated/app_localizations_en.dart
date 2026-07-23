@@ -1150,19 +1150,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posAutoPrintKitchenTicketToggleExplanation =>
-      'When on, the kitchen ticket prints from this device and the order is closed directly, without sending it to the kitchen display. When off, orders continue to the normal kitchen display workflow.';
+      'When on, a kitchen ticket prints automatically from this cashier device after a successful order. The order is still sent to the kitchen display as usual.';
 
   @override
-  String get posKitchenSettingLoadError =>
-      'Couldn\'t load the kitchen printing setting — sending is paused.';
+  String get posFinishAllKitchenOrders => 'Finish all kitchen orders';
 
   @override
-  String get posKitchenPrinterConfigLoadError =>
-      'Couldn\'t load the kitchen printer settings. Try again.';
+  String get posFinishAllConfirmAction => 'Finish all';
 
   @override
-  String get posKitchenNoPrinterConfigured =>
-      'No kitchen printer is configured. Set a kitchen printer or turn off automatic kitchen-ticket printing.';
+  String get posFinishAllConfirmBody =>
+      'All active kitchen orders will be finished and removed from the kitchen display. Unpaid orders remain available for payment in Order History.';
+
+  @override
+  String get posFinishAllNoActiveOrders => 'No active kitchen orders';
+
+  @override
+  String posFinishAllResult(int count) {
+    return 'Finished $count kitchen orders';
+  }
+
+  @override
+  String posFinishAllResultWithFailures(int finished, int failed) {
+    return 'Finished $finished kitchen orders, $failed couldn\'t finish (still shown to retry)';
+  }
 
   @override
   String get posPrintKitchenTicketAction => 'Print kitchen ticket';

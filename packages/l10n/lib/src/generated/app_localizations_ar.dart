@@ -1143,19 +1143,30 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posAutoPrintKitchenTicketToggleExplanation =>
-      'عند تفعيل هذا الخيار، تُطبع تذكرة المطبخ من جهاز الكاشير ويُغلق الطلب مباشرة بدون إرساله إلى شاشة المطبخ. عند إيقافه، تتابع الطلبات مسار شاشة المطبخ المعتاد.';
+      'عند تفعيل هذا الخيار، تُطبع تذكرة المطبخ تلقائيًا من جهاز الكاشير بعد نجاح الطلب. يبقى الطلب مرسلًا إلى شاشة المطبخ كالمعتاد.';
 
   @override
-  String get posKitchenSettingLoadError =>
-      'تعذّر تحميل إعداد طباعة المطبخ — تم إيقاف الإرسال مؤقتًا.';
+  String get posFinishAllKitchenOrders => 'إنهاء كل طلبات المطبخ';
 
   @override
-  String get posKitchenPrinterConfigLoadError =>
-      'تعذّر تحميل إعدادات طابعة المطبخ. حاول مرة أخرى.';
+  String get posFinishAllConfirmAction => 'إنهاء الكل';
 
   @override
-  String get posKitchenNoPrinterConfigured =>
-      'لا توجد طابعة مطبخ مُعدّة. عيّن طابعة مطبخ أو عطّل الطباعة التلقائية.';
+  String get posFinishAllConfirmBody =>
+      'سيتم إنهاء جميع طلبات المطبخ النشطة وإزالتها من شاشة المطبخ. الطلبات غير المدفوعة ستبقى متاحة للدفع في سجل الطلبات.';
+
+  @override
+  String get posFinishAllNoActiveOrders => 'لا توجد طلبات مطبخ نشطة';
+
+  @override
+  String posFinishAllResult(int count) {
+    return 'تم إنهاء $count من طلبات المطبخ';
+  }
+
+  @override
+  String posFinishAllResultWithFailures(int finished, int failed) {
+    return 'تم إنهاء $finished من طلبات المطبخ، وتعذّر إنهاء $failed (تبقى معروضة لإعادة المحاولة)';
+  }
 
   @override
   String get posPrintKitchenTicketAction => 'طباعة للمطبخ';
