@@ -215,9 +215,10 @@ void main() {
           1,
           reason: 'never concurrent — FIFO through one key',
         );
-        // Each Test keeps its own document/purpose: customer = classic diagnostic
-        // (null document), kitchen = the money-free kitchen test document.
-        expect(t.documents[0], isNull);
+        // PRINT-LAYOUT-001A: both Tests now send the profile-aware diagnostic
+        // (each for its own purpose slot). The FIFO serialization is what this
+        // test asserts; both documents are present.
+        expect(t.documents[0], isNotNull);
         expect(t.documents[1], isNotNull);
       },
     );
