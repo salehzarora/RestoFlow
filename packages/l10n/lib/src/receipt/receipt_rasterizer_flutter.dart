@@ -97,7 +97,13 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     final heightDots = layouts.isEmpty ? 1 : layouts.last.band.endRow;
     // The REAL first pass paints every line — production has no path that
     // intentionally skips painting a selected line.
-    final first = await _render(layouts, request.widthDots, heightDots);
+    final first = await _render(
+      layouts,
+      request.widthDots,
+      heightDots,
+      safeLeft: request.safeLeftDots,
+      safeRight: request.safeRightDots,
+    );
     return _recoverZeroInk(request, layouts, first);
   }
 
@@ -165,7 +171,13 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     final heightDots = layouts.isEmpty ? 1 : layouts.last.band.endRow;
     final retry =
         syntheticRetryResult ??
-        await _render(layouts, request.widthDots, heightDots);
+        await _render(
+          layouts,
+          request.widthDots,
+          heightDots,
+          safeLeft: request.safeLeftDots,
+          safeRight: request.safeRightDots,
+        );
     return ReceiptRasterRender(
       image: retry,
       bands: bands,
@@ -180,6 +192,12 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   /// band without moving later lines or changing the total height.
   List<_LineLayout> _layoutBands(ReceiptRasterRequest request) {
     final widthDots = request.widthDots;
+    // PRINT-LAYOUT-001A: a media profile scales type + line height and reserves
+    // safe side margins. All default to prior behavior (scale 1.0, built-in
+    // lineHeight, no margins), so an unchanged request is byte-identical.
+    final fontScale = request.fontScale;
+    final effLineHeight = request.lineSpacing ?? lineHeight;
+    final usableWidth = widthDots - request.safeLeftDots - request.safeRightDots;
     final textDirection = request.direction == ReceiptTextDirection.rtl
         ? ui.TextDirection.rtl
         : ui.TextDirection.ltr;
@@ -192,7 +210,7 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
           : PrintLineStyle.normal;
 
       if (style == PrintLineStyle.separator) {
-        final rows = math.max(1, _separatorHeight.ceil());
+        final rows = math.max(1, _separatorHeight(fontScale).ceil());
         layouts.add(
           _LineLayout.separator(
             band: ReceiptRasterBand(
@@ -208,9 +226,15 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
         continue;
       }
 
-      final styleSpec = _specFor(style);
-      final styled = _layoutLine(text, widthDots, textDirection, styleSpec);
-      var required = math.max(styleSpec.size * lineHeight, styled.height);
+      final styleSpec = _specFor(style, fontScale);
+      final styled = _layoutLine(
+        text,
+        usableWidth,
+        textDirection,
+        styleSpec,
+        effLineHeight,
+      );
+      var required = math.max(styleSpec.size * effLineHeight, styled.height);
 
       // FALLBACK HEIGHT SAFETY: a visible line may be re-rendered at the base
       // spec inside the same band, so reserve enough rows for EITHER render
@@ -218,14 +242,20 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
       ui.Paragraph? fallback;
       if (hasVisibleReceiptText(text)) {
         final fallbackSpec = _LineSpec(
-          size: fontSize,
+          size: fontSize * fontScale,
           weight: ui.FontWeight.w400,
           align: styleSpec.align,
         );
-        fallback = _layoutLine(text, widthDots, textDirection, fallbackSpec);
+        fallback = _layoutLine(
+          text,
+          usableWidth,
+          textDirection,
+          fallbackSpec,
+          effLineHeight,
+        );
         required = math.max(
           required,
-          math.max(fontSize * lineHeight, fallback.height),
+          math.max(fontSize * fontScale * effLineHeight, fallback.height),
         );
       }
 
@@ -251,9 +281,17 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   Future<ReceiptRasterImage> _render(
     List<_LineLayout> layouts,
     int widthDots,
-    int heightDots,
-  ) async {
-    final image = await _paint(layouts, widthDots, heightDots);
+    int heightDots, {
+    int safeLeft = 0,
+    int safeRight = 0,
+  }) async {
+    final image = await _paint(
+      layouts,
+      widthDots,
+      heightDots,
+      safeLeft: safeLeft,
+      safeRight: safeRight,
+    );
     try {
       final byteData = await image.toByteData(
         format: ui.ImageByteFormat.rawRgba,
@@ -267,50 +305,55 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     }
   }
 
-  double get _separatorHeight => fontSize * 0.85;
+  double _separatorHeight(double fontScale) =>
+      fontSize * printLineStyleSizeMultiplier(PrintLineStyle.separator) * fontScale;
 
-  _LineSpec _specFor(PrintLineStyle style) {
+  /// The render spec for [style], scaled by the profile [fontScale]. The SIZE
+  /// multiplier is the shared [printLineStyleSizeMultiplier] (one source for the
+  /// renderer + the pagination estimate); weight/alignment stay here.
+  _LineSpec _specFor(PrintLineStyle style, double fontScale) {
+    final size = fontSize * printLineStyleSizeMultiplier(style) * fontScale;
     switch (style) {
       case PrintLineStyle.headingLarge:
         return _LineSpec(
-          size: fontSize * 1.55,
+          size: size,
           weight: ui.FontWeight.w800,
           align: ui.TextAlign.center,
         );
       case PrintLineStyle.centered:
         return _LineSpec(
-          size: fontSize,
+          size: size,
           weight: ui.FontWeight.w400,
           align: ui.TextAlign.center,
         );
       case PrintLineStyle.item:
         return _LineSpec(
-          size: fontSize * 1.1,
+          size: size,
           weight: ui.FontWeight.w600,
           align: ui.TextAlign.start,
         );
       case PrintLineStyle.sub:
         return _LineSpec(
-          size: fontSize * 0.9,
+          size: size,
           weight: ui.FontWeight.w400,
           align: ui.TextAlign.start,
         );
       case PrintLineStyle.note:
         return _LineSpec(
-          size: fontSize,
+          size: size,
           weight: ui.FontWeight.w700,
           align: ui.TextAlign.start,
         );
       case PrintLineStyle.total:
         return _LineSpec(
-          size: fontSize * 1.2,
+          size: size,
           weight: ui.FontWeight.w800,
           align: ui.TextAlign.start,
         );
       case PrintLineStyle.normal:
       case PrintLineStyle.separator:
         return _LineSpec(
-          size: fontSize,
+          size: size,
           weight: ui.FontWeight.w400,
           align: ui.TextAlign.start,
         );
@@ -326,9 +369,10 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
 
   ui.Paragraph _layoutLine(
     String text,
-    int widthDots,
+    int usableWidth,
     ui.TextDirection textDirection,
     _LineSpec spec,
+    double lineHeightValue,
   ) {
     final weight = _concreteWeight(spec.weight);
     final builder =
@@ -338,7 +382,7 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
               textAlign: spec.align,
               fontFamily: _fontFamily,
               fontSize: spec.size,
-              height: lineHeight,
+              height: lineHeightValue,
               fontWeight: weight,
             ),
           )
@@ -352,15 +396,20 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
             ),
           )
           ..addText(text);
+    // Wrap to the USABLE width (widthDots minus safe side margins); the emitted
+    // bitmap is still full [widthDots] wide — content is offset by the left
+    // margin in _paint.
     return builder.build()
-      ..layout(ui.ParagraphConstraints(width: widthDots.toDouble()));
+      ..layout(ui.ParagraphConstraints(width: usableWidth.toDouble()));
   }
 
   Future<ui.Image> _paint(
     List<_LineLayout> layouts,
     int widthDots,
-    int heightDots,
-  ) async {
+    int heightDots, {
+    int safeLeft = 0,
+    int safeRight = 0,
+  }) async {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(
       recorder,
@@ -373,33 +422,40 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
     final rulePaint = ui.Paint()
       ..color = _black
       ..strokeWidth = 2.0;
-    final inset = widthDots * 0.03;
+    // Content lives inside the safe rectangle [safeLeft, widthDots - safeRight];
+    // the rule inset scales to the USABLE width. Both collapse to the prior
+    // full-width behavior when the margins are 0.
+    final usableWidth = widthDots - safeLeft - safeRight;
+    final inset = usableWidth * 0.03;
     for (final layout in layouts) {
       final band = layout.band;
-      // OWNERSHIP CLIP: nothing a line draws may escape its own rows, so a
-      // neighbour's ink can never satisfy this band's zero-ink scan. Every
-      // line is painted — there is no path that intentionally skips one.
+      // OWNERSHIP CLIP: nothing a line draws may escape its own rows OR the safe
+      // side margins, so a neighbour's ink can never satisfy this band's
+      // zero-ink scan and no glyph leaks into the margin. Every line is painted.
       canvas.save();
       canvas.clipRect(
         ui.Rect.fromLTRB(
-          0,
+          safeLeft.toDouble(),
           band.startRow.toDouble(),
-          widthDots.toDouble(),
+          (widthDots - safeRight).toDouble(),
           band.endRow.toDouble(),
         ),
       );
       if (layout.isSeparator) {
         final lineY = (band.startRow + band.endRow) / 2;
         canvas.drawLine(
-          ui.Offset(inset, lineY),
-          ui.Offset(widthDots - inset, lineY),
+          ui.Offset(safeLeft + inset, lineY),
+          ui.Offset(widthDots - safeRight - inset, lineY),
           rulePaint,
         );
       } else {
         final paragraph = layout.useFallback && layout.fallback != null
             ? layout.fallback!
             : layout.styled!;
-        canvas.drawParagraph(paragraph, ui.Offset(0, band.startRow.toDouble()));
+        canvas.drawParagraph(
+          paragraph,
+          ui.Offset(safeLeft.toDouble(), band.startRow.toDouble()),
+        );
       }
       canvas.restore();
     }

@@ -17,10 +17,18 @@ class ReceiptRasterRequest {
     required this.direction,
     required this.localeTag,
     List<PrintLineStyle>? styles,
+    this.fontScale = 1.0,
+    this.lineSpacing,
+    this.safeLeftDots = 0,
+    this.safeRightDots = 0,
   }) : assert(
          styles == null || styles.length == lines.length,
          'styles must be parallel to lines',
        ),
+       assert(fontScale > 0),
+       assert(lineSpacing == null || lineSpacing > 0),
+       assert(safeLeftDots >= 0 && safeRightDots >= 0),
+       assert(safeLeftDots + safeRightDots < widthDots),
        lines = List.unmodifiable(lines),
        styles = List.unmodifiable(
          styles ??
@@ -44,6 +52,20 @@ class ReceiptRasterRequest {
 
   /// BCP-47-ish locale tag (`ar` / `he` / `en`) — metadata for the rasterizer.
   final String localeTag;
+
+  /// PRINT-LAYOUT-001A: multiplier applied to every line's font size (a media
+  /// profile scales type up on an 80×80 label). Default `1.0` == prior output.
+  final double fontScale;
+
+  /// PRINT-LAYOUT-001A: line-height multiplier override (from the media profile);
+  /// null keeps the rasterizer's built-in line height (prior behavior).
+  final double? lineSpacing;
+
+  /// PRINT-LAYOUT-001A: safe left/right print margins in dots. Content is laid
+  /// out + painted inside `[safeLeftDots, widthDots - safeRightDots]`; the
+  /// emitted bitmap stays [widthDots] wide. Default `0` == full-width (prior).
+  final int safeLeftDots;
+  final int safeRightDots;
 }
 
 /// A rasterized monochrome bitmap ready to become a [PrintRasterImageLine].

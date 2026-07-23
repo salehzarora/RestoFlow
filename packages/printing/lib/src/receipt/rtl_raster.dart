@@ -1,4 +1,7 @@
+import '../media_profile.dart';
 import '../print_document.dart';
+import '../print_line_metrics.dart';
+import '../print_pagination.dart';
 import 'receipt_rasterizer.dart';
 
 /// PRINT-RTL-001: turn an already-laid-out ESC/POS TEXT [PrintDocument] into a
@@ -105,4 +108,124 @@ Future<PrintDocument> maybeRasterizeForRtl(
     widthDots: widthDots,
     feedLines: feedLines,
   );
+}
+
+/// A localized string for a fixed-media page (PRINT-LAYOUT-001A). [page] is
+/// 1-based; [total] is the page count. Supplied by the app layer (which owns
+/// l10n) so this pure package prints "Page 2 of 3" / "#A17 (cont.)" without an
+/// ARB dependency.
+typedef PageLineLabel = String Function(int page, int total);
+
+/// PRINT-LAYOUT-001A: render [textDoc] for a specific [profile], honoring its
+/// exact printable width, safe margins, font scale, line spacing, feed, and —
+/// for a FIXED medium — fixed-height PAGINATION so nothing runs off the label.
+///
+///  * `continuous80` (the default roll): behaves exactly like [maybeRasterizeForRtl]
+///    — ASCII-only English stays the crisp text path; non-ASCII rasterizes to ONE
+///    image at 576 dots, feed 3. Byte-identical to the pre-profile output.
+///  * `label50x50` / `label80x80` (fixed labels): ALWAYS rasterize (so the label
+///    width + pagination apply uniformly, never a narrow bitmap on a wide canvas
+///    or an unpaginated overflow), split into pages that each fit
+///    `profile.printableHeightDots`, and emit one image + feed + cut PER PAGE at
+///    the profile's exact width. A multi-page run adds a localized page number
+///    ([pageLabel]) to every page and a compact [continuationHeader] to pages
+///    2+, so a kitchen ticket stays identifiable across labels.
+///
+/// With no [rasterizer] the fixed-media path cannot render at the right width, so
+/// it returns [textDoc] unchanged (a degraded fallback that never crashes; the
+/// native bridges always inject a rasterizer).
+Future<PrintDocument> rasterizeForMediaProfile(
+  PrintDocument textDoc, {
+  required ReceiptRasterizer? rasterizer,
+  required MediaProfile profile,
+  PageLineLabel? pageLabel,
+  PageLineLabel? continuationHeader,
+}) async {
+  if (!profile.paginates) {
+    // Continuous roll: identical to the existing content-triggered raster path.
+    return maybeRasterizeForRtl(
+      textDoc,
+      rasterizer: rasterizer,
+      widthDots: profile.widthDots,
+      feedLines: profile.feedLines,
+    );
+  }
+  // Fixed label: without a rasterizer we cannot honor the width — degrade safely.
+  if (rasterizer == null) return textDoc;
+
+  final textLines = textDoc.lines.whereType<PrintTextLine>().toList(
+    growable: false,
+  );
+  final lines = textLines.map((l) => l.text).toList(growable: false);
+  final styles = textLines.map((l) => l.style).toList(growable: false);
+  final direction = baseDirectionForLines(lines);
+
+  final rows = estimateReceiptLineRows(
+    styles,
+    fontScale: profile.fontScale,
+    lineSpacing: profile.lineSpacing,
+  );
+  // A block (kept whole when it fits a page) starts at every line that is not a
+  // sub/note continuation of the item above it.
+  final blockStarts = <int>{
+    for (var i = 0; i < styles.length; i++)
+      if (styles[i] != PrintLineStyle.sub && styles[i] != PrintLineStyle.note) i,
+  };
+  // Reserve room for the per-page number + continuation header on multi-page
+  // output (two centered lines at this profile's scale).
+  final reserved =
+      pageLabel == null && continuationHeader == null
+      ? 0
+      : estimateReceiptLineRows(
+          const [PrintLineStyle.centered, PrintLineStyle.centered],
+          fontScale: profile.fontScale,
+          lineSpacing: profile.lineSpacing,
+        ).fold<int>(0, (s, r) => s + r);
+
+  final pages = planPrintPages(
+    lineHeights: rows,
+    maxPageRows: profile.printableHeightDots,
+    blockStartAt: blockStarts,
+    reservedRowsPerPage: reserved,
+  );
+  final total = pages.length;
+
+  final out = <PrintLine>[];
+  for (var p = 0; p < total; p++) {
+    final pageLines = <String>[];
+    final pageStyles = <PrintLineStyle>[];
+    // Compact continuation header on pages 2+ so the order stays identifiable.
+    if (p > 0 && continuationHeader != null) {
+      pageLines.add(continuationHeader(p + 1, total));
+      pageStyles.add(PrintLineStyle.centered);
+    }
+    for (final i in pages[p].lineIndexes) {
+      pageLines.add(lines[i]);
+      pageStyles.add(styles[i]);
+    }
+    // Page number on every page of a multi-page run.
+    if (total > 1 && pageLabel != null) {
+      pageLines.add(pageLabel(p + 1, total));
+      pageStyles.add(PrintLineStyle.centered);
+    }
+
+    final image = await rasterizer.rasterize(
+      ReceiptRasterRequest(
+        lines: pageLines,
+        styles: pageStyles,
+        widthDots: profile.widthDots,
+        direction: direction,
+        localeTag: textDoc.localeTag ?? '',
+        fontScale: profile.fontScale,
+        lineSpacing: profile.lineSpacing,
+        safeLeftDots: profile.safeLeftDots,
+        safeRightDots: profile.safeRightDots,
+      ),
+    );
+    out
+      ..add(image.toPrintLine())
+      ..add(PrintFeedLine(profile.feedLines))
+      ..add(const PrintCutLine());
+  }
+  return PrintDocument(out, localeTag: textDoc.localeTag);
 }
