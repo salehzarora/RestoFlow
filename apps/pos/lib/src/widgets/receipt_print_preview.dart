@@ -277,26 +277,38 @@ PrintDocument buildReceiptDocument(
   SubmittedOrderView order,
   CashPayment payment, {
   bool isDemo = true,
+  String? restaurantName,
 }) {
   final currency = payment.currencyCode;
   final dineIn = order.orderType == OrderType.dineIn;
+  // PRINT-LAYOUT-001B: the brand HERO is the restaurant name — the demo name in
+  // demo mode, else the real name threaded from the paired-device context (DATA,
+  // offline-safe). When it is absent (an unconfigured device) the receipt title
+  // stands in as the hero so nothing is fabricated; the dedicated localized
+  // fallback + the real-name wiring arrive with the call-site threading.
+  final brandName = isDemo
+      ? l10n.receiptDemoRestaurantName
+      : restaurantName?.trim();
+  final hasBrand = brandName != null && brandName.isNotEmpty;
+  final items = order.lines;
   // Built into a local (not an inline `title:` literal) so the RF-020
   // no-hardcoded-strings guard isn't tripped by this l10n-interpolated value.
   final docTitle = '${l10n.receiptPreviewTitle} ${order.orderNumber}';
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
-      // Header — restaurant brand + a PAID chip.
-      PrintLine.title(
-        isDemo ? l10n.receiptDemoRestaurantName : l10n.posReceiptTitle,
-      ),
+      // Header — restaurant-name brand HERO, then a secondary "Receipt" label
+      // (only when a real brand is shown, so the fallback never reads
+      // "Receipt / Receipt"), then a PAID chip.
+      PrintLine.title(hasBrand ? brandName : l10n.posReceiptTitle),
+      if (hasBrand) PrintLine.center(l10n.posReceiptTitle),
       PrintLine.center(l10n.posPaidChip),
       PrintLine.rule(),
-      // Hero — the big, customer-facing ORDER NUMBER. PRINT-LAYOUT-001: the
-      // INTERNAL receipt number (payment.receiptNumber) is intentionally NOT
-      // printed on the customer receipt; it stays in the data for reporting/
-      // support and is unchanged.
-      PrintLine.title(l10n.posReceiptOrderHeading(order.orderNumber)),
+      // The customer-facing ORDER NUMBER — a prominent secondary identifier
+      // below the brand (not the hero). PRINT-LAYOUT-001: the INTERNAL receipt
+      // number (payment.receiptNumber) is intentionally NOT printed on the
+      // customer receipt; it stays in the data for reporting/support, unchanged.
+      PrintLine.subtitle(l10n.posReceiptOrderHeading(order.orderNumber)),
       PrintLine.rule(),
       // Service details grouped + centered: type, table, customer, date/time.
       PrintLine.center(
@@ -309,17 +321,22 @@ PrintDocument buildReceiptDocument(
         PrintLine.center('${l10n.customerNameReceiptLabel}: $customer'),
       PrintLine.center(_formatReceiptTimestamp(payment.paidAt)),
       PrintLine.rule(),
-      // Items — quantity + name, line total on the right; modifiers and the note
-      // are indented underneath so they scan clearly and never get lost.
-      for (final line in order.lines) ...[
+      // Items — quantity + name at the larger item size, line total on the
+      // right; modifiers and the note indented underneath. A blank spacer before
+      // each item after the first so items don't run together.
+      for (var i = 0; i < items.length; i++) ...[
+        if (i > 0) PrintLine.spacer(),
         PrintLine.item(
-          '${line.quantity} × ${line.name}',
-          MoneyFormatter.formatMinor(line.lineTotalMinor, line.currencyCode),
+          '${items[i].quantity} × ${items[i].name}',
+          MoneyFormatter.formatMinor(
+            items[i].lineTotalMinor,
+            items[i].currencyCode,
+          ),
         ),
         // Modifier snapshots arrive pre-formatted ('name ×N' for quantities).
-        for (final modifier in line.modifiers) PrintLine.sub('+ $modifier'),
-        if (line.note != null)
-          PrintLine.sub('${l10n.posItemNoteLabel}: ${line.note}'),
+        for (final modifier in items[i].modifiers) PrintLine.sub('+ $modifier'),
+        if (items[i].note != null)
+          PrintLine.sub('${l10n.posItemNoteLabel}: ${items[i].note}'),
       ],
       PrintLine.rule(),
       // Totals — money/tax formatting is UNCHANGED (MoneyFormatter); the TOTAL
