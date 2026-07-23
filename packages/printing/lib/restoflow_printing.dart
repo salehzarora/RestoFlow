@@ -50,6 +50,10 @@ export 'src/escpos/escpos_print_adapter.dart';
 // single value threaded per printer endpoint to replace the hardcoded 576/48/3.
 export 'src/media_profile.dart';
 export 'src/print_adapter.dart';
+// PRINT-LAYOUT-001: the pure fixed-media page-break planner (no clipping) + the
+// 1bpp raster ink-bounds helper used to assert content stays inside safe margins.
+export 'src/print_pagination.dart';
+export 'src/raster_bounds.dart';
 export 'src/print_document.dart';
 export 'src/print_result.dart';
 export 'src/printer.dart';
