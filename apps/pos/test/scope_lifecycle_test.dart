@@ -26,7 +26,6 @@ import 'package:restoflow_pos/src/state/order_setup_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
-import 'package:restoflow_pos/src/state/pos_kitchen_workflow.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
@@ -88,13 +87,6 @@ void main() {
         // No dart-define auto-establish: sessions come only from sign-in.
         posRealSessionConfigProvider.overrideWithValue(null),
         posSyncClockProvider.overrideWithValue(() => t0),
-        // KITCHEN-PRINT-DUAL-001C: these tests exercise the scope/binding
-        // lifecycle of a NORMAL kds submit, not the kitchen-workflow decision.
-        // Force it READY (normalKdsReady) so the fail-closed submit guard admits
-        // the submit (an unresolved decision would correctly be rejected).
-        posKitchenWorkflowDecisionProvider.overrideWithValue(
-          PosKitchenWorkflowDecision.normalKdsReady,
-        ),
         orderSnapshotRepositoryProvider.overrideWithValue(repo ?? _SpyRepo()),
         if (outbox != null) outboxRepositoryProvider.overrideWithValue(outbox),
         if (store != null)

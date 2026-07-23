@@ -21,8 +21,6 @@ import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_auto_print_prefs.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
-import 'package:restoflow_pos/src/state/pos_kitchen_workflow.dart'
-    show posKitchenPrinterConfiguredProvider;
 import 'package:restoflow_pos/src/state/pos_network_printer_config.dart'
     show posKitchenNetworkPrinterConfigProvider;
 import 'package:restoflow_pos/src/state/pos_printer_transport.dart'
@@ -189,7 +187,6 @@ Future<void> _signIn(ProviderContainer c) async {
   await c.read(posAutoPrintKitchenTicketProvider.future);
   await c.read(posKitchenSelectedPrinterTransportProvider.future);
   await c.read(posKitchenNetworkPrinterConfigProvider.future);
-  await c.read(posKitchenPrinterConfiguredProvider.future);
   await _settle();
 }
 

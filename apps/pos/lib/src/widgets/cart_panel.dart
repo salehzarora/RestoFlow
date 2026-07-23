@@ -21,9 +21,6 @@ import '../print/pos_kitchen_ticket_printer.dart'
         kdsTicketViewFromCartLines,
         kitchenTicketPrintLabelsFromL10n,
         runAutoKitchenTicketPrintOnSubmit;
-import '../state/pos_auto_print_prefs.dart'
-    show posAutoPrintKitchenTicketProvider;
-import '../state/pos_kitchen_workflow.dart';
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
@@ -112,18 +109,6 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
     // when the cashier edits a cart line. Null (still loading) falls back to a
     // note-only edit built from the line itself.
     final menu = ref.watch(posMenuProvider).valueOrNull;
-    // KITCHEN-PRINT-DUAL-001C: the ONE explicit kitchen-workflow decision the Send
-    // action consumes, derived from the RESOLUTION STATE of the real async toggle
-    // AND printer-config providers (never a sync bool that hides AsyncLoading). Send
-    // enables only in a READY state — critically, a resolved ON toggle whose printer
-    // configuration is STILL LOADING stays `loading` (Send disabled), so a cold
-    // start can never fall back to KDS by mis-reading unresolved config as "no
-    // printer". The SAME decision is captured synchronously at submit time (see
-    // submitOrderFromCart). Watching it also warms the printer config while ON.
-    final kitchenDecision = ref.watch(posKitchenWorkflowDecisionProvider);
-    final kitchenWorkflowReady =
-        kitchenDecision == PosKitchenWorkflowDecision.normalKdsReady ||
-        kitchenDecision == PosKitchenWorkflowDecision.directPrintReady;
     // TABLET-UX-001 (B): the side cart (two-pane tablet/landscape) uses compact,
     // denser line rows so more of the order is visible at once; the phone
     // slide-up sheet keeps its roomier rows.
@@ -148,17 +133,15 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       // Finding 4: while APPLIED-AWAITING-REFRESH the send button stays off —
       // the operation must never be dispatched again; the banner offers the
       // refresh retry instead.
+      // KITCHEN-PRINT-DUAL-001D: Send is NEVER gated on the kitchen printer or the
+      // auto-print toggle — every order always uses the normal KDS workflow. The
+      // toggle drives only the additive post-submit kitchen print (best-effort).
       final canSend =
           !cart.isEmpty &&
           (addition.active || setup.isReadyToSubmit) &&
           !_submitting &&
           !addition.sending &&
-          !addition.awaitingRefresh &&
-          // KITCHEN-PRINT-DUAL-001C: hold Send until the kitchen-workflow decision
-          // is a READY state — never submit while the toggle OR (when ON) the
-          // printer configuration is still loading/errored, or while ON with no
-          // printer configured (see the capture at submit time).
-          kitchenWorkflowReady;
+          !addition.awaitingRefresh;
       final pendingSync = ref
           .watch(outboxControllerProvider)
           .where((e) => e.syncState.isPending)
@@ -257,25 +240,6 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                       },
                     ),
             ),
-            // KITCHEN-PRINT-DUAL-001C: honest, minimal notices for the two
-            // Send-disabled kitchen-workflow states (loading needs no message —
-            // Send is simply disabled). ERROR: a toggle/printer-config read failed
-            // -> retry re-reads the failed provider. MISSING PRINTER: direct print
-            // is ON but no kitchen printer is configured -> configure one or turn
-            // the option off in Device Settings (no auto-fallback into the KDS).
-            if (kitchenDecision == PosKitchenWorkflowDecision.error)
-              _KitchenWorkflowNotice(
-                message: ref.watch(posAutoPrintKitchenTicketProvider).hasError
-                    ? l10n.posKitchenSettingLoadError
-                    : l10n.posKitchenPrinterConfigLoadError,
-                actionLabel: l10n.authTryAgain,
-                onAction: () => refreshKitchenWorkflowInputs(ref),
-              )
-            else if (kitchenDecision ==
-                PosKitchenWorkflowDecision.directPrintMissingPrinter)
-              _KitchenWorkflowNotice(
-                message: l10n.posKitchenNoPrinterConfigured,
-              ),
             _CartFooter(
               l10n: l10n,
               subtotalMinor: cart.subtotalMinor,
@@ -448,32 +412,10 @@ Future<void> submitOrderFromCart({
   // Captured BEFORE the await: the widget's ref dies with the tree (an unpair
   // unmounts the POS), but the container and the notifiers it owns do not.
   final container = ProviderScope.containerOf(context, listen: false);
-  // KITCHEN-PRINT-DUAL-001C: FAIL-CLOSED workflow guard — the FIRST thing the
-  // authoritative new-order path does. Capture the resolved kitchen-workflow
-  // decision ONCE, SYNCHRONOUSLY, BEFORE any snapshot capture, outbox op, payment,
-  // printer send, or lifecycle op. The disabled Send button blocks a non-ready
-  // state in the UI; this is the authoritative backstop for a DIRECT handler
-  // invocation. An EXHAUSTIVE switch (not a boolean comparison) so a future enum
-  // value cannot silently fall back to KDS — a new unhandled case leaves
-  // `directKitchenPrint` unassigned, a compile error:
-  //   * directPrintReady -> submit + dispatch_mode='direct_print' + one kitchen print;
-  //   * normalKdsReady   -> submit the normal KDS workflow, no direct POS print;
-  //   * loading / error / directPrintMissingPrinter -> REJECT: return now, submit
-  //     nothing, never convert to KDS, never clear the cart, never report success
-  //     (the localized banner in build already explains the state).
-  // The read is SYNC (no async hop before outbox.submit); the ONE captured value
-  // drives BOTH dispatch_mode AND the post-submit print, immutable in flight.
-  final bool directKitchenPrint;
-  switch (container.read(posKitchenWorkflowDecisionProvider)) {
-    case PosKitchenWorkflowDecision.directPrintReady:
-      directKitchenPrint = true;
-    case PosKitchenWorkflowDecision.normalKdsReady:
-      directKitchenPrint = false;
-    case PosKitchenWorkflowDecision.loading:
-    case PosKitchenWorkflowDecision.error:
-    case PosKitchenWorkflowDecision.directPrintMissingPrinter:
-      return;
-  }
+  // KITCHEN-PRINT-DUAL-001D: every order ALWAYS uses the normal KDS workflow — no
+  // dispatch_mode decision, no printer gate. The auto-print toggle drives only the
+  // additive post-submit kitchen print (resolved AFTER submit inside
+  // runAutoKitchenTicketPrintOnSubmit); it never blocks or reroutes the order.
   // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1A): the COMPLETE submit-attempt identity,
   // captured BEFORE the first await. The FULL operational binding — org/restaurant/branch/
   // device scope AND the PIN session — not the scope alone, plus the exact draft, order
@@ -513,9 +455,6 @@ Future<void> submitOrderFromCart({
       // The ONE immutable prep snapshot (captured above, pre-await) — the same
       // map the POS kitchen ticket reuses below.
       prepByItemId: kitchenPrepByItemId,
-      // The IMMUTABLE dispatch decision: a direct_print order is authoritatively
-      // routed out of the KDS active workflow (server-side, in the same op txn).
-      dispatchMode: directKitchenPrint ? 'direct_print' : 'kds',
     );
     // Finding 1B — THE FULL-IDENTITY MUTATION BOUNDARY. Everything below this line mutates
     // state the CURRENT session would see — the cart's submitted-order view, the
@@ -618,11 +557,11 @@ Future<void> submitOrderFromCart({
         // Shared eligibility: a permanently-rejected or demo order never cooks.
         isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
         rejectionCode: kitchenPrintEntry?.lastErrorCode,
-        // KITCHEN-PRINT-DUAL-001C: reuse the SAME immutable pre-await decision that
-        // set the order's dispatch_mode — never re-read the toggle. So the print and
-        // the authoritative dispatch can never disagree, and a printer failure (the
-        // order is already finalized server-side) does NOT send it back to the KDS.
-        enabled: directKitchenPrint,
+        // KITCHEN-PRINT-DUAL-001D: purely ADDITIVE — `enabled` omitted so the print
+        // resolves the persisted auto-print toggle itself AFTER submit (it may
+        // await). ON prints one detailed ticket; OFF prints nothing; a failure or a
+        // missing printer is best-effort and NEVER alters the already-submitted KDS
+        // order. Manual "Print kitchen ticket" on the confirmation stays available.
         ticket: kdsTicketViewFromCartLines(
           orderCode: result.orderNumber,
           orderType: orderTypeBefore,
@@ -878,56 +817,6 @@ class _EmptyCart extends StatelessWidget {
     return RestoflowStateView(
       icon: Icons.remove_shopping_cart_outlined,
       title: message,
-    );
-  }
-}
-
-/// KITCHEN-PRINT-DUAL-001C: a compact, honest banner shown above the footer for a
-/// Send-disabled kitchen-workflow state — a failed setting/printer-config read
-/// (with a retry action) or "direct print is on but no kitchen printer is
-/// configured" (message only). Send stays disabled (gated in the build) until the
-/// state clears. No redesign — one localized line + an optional action button.
-class _KitchenWorkflowNotice extends StatelessWidget {
-  const _KitchenWorkflowNotice({
-    required this.message,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: RestoflowSpacing.sm,
-        vertical: RestoflowSpacing.xs,
-      ),
-      color: theme.colorScheme.errorContainer,
-      child: Row(
-        children: [
-          Icon(
-            Icons.print_disabled_outlined,
-            size: 18,
-            color: theme.colorScheme.onErrorContainer,
-          ),
-          const SizedBox(width: RestoflowSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
-              ),
-            ),
-          ),
-          if (actionLabel != null && onAction != null)
-            TextButton(onPressed: onAction, child: Text(actionLabel!)),
-        ],
-      ),
     );
   }
 }

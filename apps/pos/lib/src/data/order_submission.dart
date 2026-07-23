@@ -195,7 +195,6 @@ class OrderSubmissionPayload {
     required this.clientCreatedAt,
     this.notes,
     this.customerName,
-    this.dispatchMode = 'kds',
   });
 
   final String orderId;
@@ -226,14 +225,6 @@ class OrderSubmissionPayload {
   /// (trim/empty->null/<=80). Reaches the receipt + the kitchen ticket.
   final String? customerName;
 
-  /// KITCHEN-PRINT-DUAL-001C: how this order is dispatched to the kitchen —
-  /// 'kds' (the default, normal KDS active workflow) or 'direct_print' (dispatched
-  /// via the POS kitchen printer; the server routes it OUT of the KDS active
-  /// workflow to `served`, and the KDS excludes it). Non-money; a closed enum. It
-  /// NEVER changes payment/settlement — a chargeable direct_print order still
-  /// completes only through the unchanged served+paid rule.
-  final String dispatchMode;
-
   String get orderTypeWire =>
       orderType == OrderType.dineIn ? 'dine_in' : 'takeaway';
 
@@ -257,10 +248,9 @@ class OrderSubmissionPayload {
     'customer_name': customerName,
     'client_created_at': clientCreatedAt.toIso8601String(),
     'order_items': items.map((i) => i.toJson()).toList(growable: false),
-    // Emit ONLY for a direct_print dispatch; a 'kds' order's payload stays
-    // byte-identical to before (the server defaults a missing dispatch_mode to
-    // 'kds'), so the normal KDS workflow is untouched.
-    if (dispatchMode == 'direct_print') 'dispatch_mode': dispatchMode,
+    // KITCHEN-PRINT-DUAL-001D: the POS never emits dispatch_mode — every order
+    // uses the normal KDS workflow (the server defaults a missing dispatch_mode to
+    // 'kds'; the 001C direct_print column stays dormant for new POS orders).
   };
 }
 
