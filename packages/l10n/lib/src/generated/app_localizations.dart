@@ -6982,6 +6982,30 @@ abstract class AppLocalizations {
   /// **'Save printer'**
   String get posNetworkPrinterSaveAction;
 
+  /// PRINT-LAYOUT-001A: label for the printer media-profile selector (continuous roll vs a fixed 50x50 / 80x80 label).
+  ///
+  /// In en, this message translates to:
+  /// **'Print media size'**
+  String get posPrinterMediaSizeLabel;
+
+  /// PRINT-LAYOUT-001A: media-profile option for a continuous 80mm receipt roll (the backward-compatible default).
+  ///
+  /// In en, this message translates to:
+  /// **'80 mm roll (default)'**
+  String get posPrinterMediaSizeContinuous;
+
+  /// PRINT-LAYOUT-001A: media-profile option for a fixed 50 by 50 millimetre thermal label.
+  ///
+  /// In en, this message translates to:
+  /// **'50 × 50 mm label'**
+  String get posPrinterMediaSize50;
+
+  /// PRINT-LAYOUT-001A: media-profile option for a fixed 80 by 80 millimetre thermal label.
+  ///
+  /// In en, this message translates to:
+  /// **'80 × 80 mm label'**
+  String get posPrinterMediaSize80;
+
   /// POS action that sends a test print to the configured network printer.
   ///
   /// In en, this message translates to:

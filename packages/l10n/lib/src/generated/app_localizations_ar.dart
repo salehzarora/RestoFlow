@@ -3712,6 +3712,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posNetworkPrinterSaveAction => 'حفظ الطابعة';
 
   @override
+  String get posPrinterMediaSizeLabel => 'حجم وسائط الطباعة';
+
+  @override
+  String get posPrinterMediaSizeContinuous => 'لفة 80 مم (افتراضي)';
+
+  @override
+  String get posPrinterMediaSize50 => 'ملصق 50 × 50 مم';
+
+  @override
+  String get posPrinterMediaSize80 => 'ملصق 80 × 80 مم';
+
+  @override
   String get posNetworkPrinterTestAction => 'طباعة اختبار';
 
   @override

@@ -3684,6 +3684,18 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posNetworkPrinterSaveAction => 'שמירת מדפסת';
 
   @override
+  String get posPrinterMediaSizeLabel => 'גודל מדיית הדפסה';
+
+  @override
+  String get posPrinterMediaSizeContinuous => 'גליל 80 מ״מ (ברירת מחדל)';
+
+  @override
+  String get posPrinterMediaSize50 => 'תווית 50 × 50 מ״מ';
+
+  @override
+  String get posPrinterMediaSize80 => 'תווית 80 × 80 מ״מ';
+
+  @override
   String get posNetworkPrinterTestAction => 'הדפסת בדיקה';
 
   @override

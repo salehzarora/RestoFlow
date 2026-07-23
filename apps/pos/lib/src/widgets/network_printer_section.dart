@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_printing/restoflow_printing.dart'
-    show PrinterDestinationSendGate;
+    show MediaProfileId, PrinterDestinationSendGate;
+
+import 'media_profile_selector.dart';
 
 import '../print/kitchen_test_document.dart';
 import '../print/native_print_bridges.dart'
@@ -53,6 +55,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
   bool _prefilled = false;
   _TestStatus _status = _TestStatus.idle;
 
+  /// PRINT-LAYOUT-001A: the selected media profile for THIS purpose slot.
+  /// Prefilled from the saved config; defaults to the continuous-80 roll.
+  MediaProfileId _selectedProfile = MediaProfileId.continuous80;
+
   /// Purpose-suffixed widget keys: the customer slot keeps the LEGACY key
   /// names (existing tests unchanged); the kitchen slot gets its own so both
   /// sections can coexist in one tree.
@@ -86,6 +92,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
         _ipController.clear();
         _portController.text = '9100';
         _nameController.clear();
+        _selectedProfile = MediaProfileId.continuous80;
       });
     }
   }
@@ -115,6 +122,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
       host: host,
       port: port,
       name: name.isEmpty ? null : name,
+      mediaProfileId: _selectedProfile.name,
     );
   }
 
@@ -192,6 +200,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
         _ipController.text = saved.host;
         _portController.text = '${saved.port}';
         _nameController.text = saved.name ?? '';
+        _selectedProfile = saved.mediaProfile.id;
       }
     }
 
@@ -263,6 +272,12 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
               ),
             ),
           ],
+        ),
+        MediaProfileSelector(
+          fieldKey: _k('network-printer-media-size'),
+          value: _selectedProfile,
+          enabled: !busy,
+          onChanged: (id) => setState(() => _selectedProfile = id),
         ),
         if (_fieldError != null) ...[
           const SizedBox(height: RestoflowSpacing.sm),

@@ -184,6 +184,57 @@ void main() {
     expect(jsonDecode(raw!)['port'], 9200);
   });
 
+  testWidgets('PRINT-LAYOUT-001A: the media-size selector persists a fixed '
+      'label50x50 profile with the saved config', (tester) async {
+    final l10n = await _en();
+    await _pumpSection(
+      tester,
+      printerTester: _FakeTester(pp.PrintResult.success()),
+    );
+
+    // The selector is present, defaulting to the continuous-80 roll.
+    expect(find.byKey(const Key('network-printer-media-size')), findsOneWidget);
+    expect(find.text(l10n.posPrinterMediaSizeContinuous), findsWidgets);
+
+    await tester.enterText(
+      find.byKey(const Key('network-printer-ip-field')),
+      '192.168.1.60',
+    );
+    // Pick the 50×50 label from the dropdown.
+    await tester.tap(find.byKey(const Key('network-printer-media-size')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.posPrinterMediaSize50).last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('network-printer-save')));
+    await tester.pumpAndSettle();
+
+    // Persisted locally WITH the fixed-label profile (the host is untouched).
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(
+      '$kPosNetworkPrinterKeyPrefix$kPosNetworkPrinterLocalKey',
+    );
+    final decoded = jsonDecode(raw!) as Map<String, dynamic>;
+    expect(decoded['mediaProfile'], 'label50x50');
+    expect(decoded['host'], '192.168.1.60');
+  });
+
+  testWidgets('PRINT-LAYOUT-001A: a saved fixed profile restores in the '
+      'selector on reopen', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      '$kPosNetworkPrinterKeyPrefix$kPosNetworkPrinterLocalKey': jsonEncode(
+        const {'host': '10.0.0.9', 'port': 9100, 'mediaProfile': 'label80x80'},
+      ),
+    });
+    final l10n = await _en();
+    await _pumpSection(
+      tester,
+      printerTester: _FakeTester(pp.PrintResult.success()),
+    );
+    // The dropdown shows the restored 80×80 label (not the default roll).
+    expect(find.text(l10n.posPrinterMediaSize80), findsWidgets);
+  });
+
   // ---- device-settings integration: the "Requires print bridge" bypass ----
 
   testWidgets('device settings: NOT native (web) hides the network section '

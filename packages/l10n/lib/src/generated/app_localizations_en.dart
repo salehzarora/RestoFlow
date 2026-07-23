@@ -3740,6 +3740,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posNetworkPrinterSaveAction => 'Save printer';
 
   @override
+  String get posPrinterMediaSizeLabel => 'Print media size';
+
+  @override
+  String get posPrinterMediaSizeContinuous => '80 mm roll (default)';
+
+  @override
+  String get posPrinterMediaSize50 => '50 × 50 mm label';
+
+  @override
+  String get posPrinterMediaSize80 => '80 × 80 mm label';
+
+  @override
   String get posNetworkPrinterTestAction => 'Test print';
 
   @override

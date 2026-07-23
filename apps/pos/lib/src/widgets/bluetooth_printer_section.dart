@@ -12,6 +12,7 @@ import '../print/native_print_bridges.dart'
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_printer_purpose.dart';
+import 'media_profile_selector.dart';
 
 enum _BtStatus { idle, testing, success, failure }
 
@@ -42,6 +43,11 @@ class _BluetoothPrinterSectionState
   _BtStatus _status = _BtStatus.idle;
   String? _selectedAddress;
   String? _selectedName;
+
+  /// PRINT-LAYOUT-001A: the selected media profile for THIS slot (prefilled from
+  /// the saved config once; defaults to the continuous-80 roll).
+  pp.MediaProfileId _selectedProfile = pp.MediaProfileId.continuous80;
+  bool _profilePrefilled = false;
 
   /// PRINT-BLUETOOTH-RECOVERY-001: the last test failure's category (drives a
   /// specific message: permission / bluetooth-off / not-paired / connect /
@@ -95,6 +101,8 @@ class _BluetoothPrinterSectionState
         _selectedName = null;
         _failCategory = null;
         _failDetail = null;
+        _selectedProfile = pp.MediaProfileId.continuous80;
+        _profilePrefilled = false;
       });
     }
   }
@@ -120,6 +128,7 @@ class _BluetoothPrinterSectionState
           PosBluetoothPrinterConfig(
             address: selection.address,
             name: selection.name,
+            mediaProfileId: _selectedProfile.name,
           ),
         );
     if (!mounted) return;
@@ -178,6 +187,7 @@ class _BluetoothPrinterSectionState
         PosBluetoothPrinterConfig(
           address: selection.address,
           name: selection.name,
+          mediaProfileId: _selectedProfile.name,
         ),
         deviceLabel: deviceLabel,
         document: document,
@@ -200,6 +210,11 @@ class _BluetoothPrinterSectionState
     final saved = ref
         .watch(posBluetoothPrinterConfigFamily(widget.purpose))
         .valueOrNull;
+    // PRINT-LAYOUT-001A: prefill the media profile from the saved config once.
+    if (!_profilePrefilled && saved != null) {
+      _profilePrefilled = true;
+      _selectedProfile = saved.mediaProfile.id;
+    }
     // The effective selection: an in-session pick, else the saved printer.
     final selectedAddress = _selectedAddress ?? saved?.address;
     final canAct = selectedAddress != null && _status != _BtStatus.testing;
@@ -248,6 +263,12 @@ class _BluetoothPrinterSectionState
             _selectedName = device.name.isEmpty ? null : device.name;
             _status = _BtStatus.idle;
           }),
+        ),
+        MediaProfileSelector(
+          fieldKey: _k('bluetooth-printer-media-size'),
+          value: _selectedProfile,
+          enabled: _status != _BtStatus.testing,
+          onChanged: (id) => setState(() => _selectedProfile = id),
         ),
         const SizedBox(height: RestoflowSpacing.sm),
         Row(
