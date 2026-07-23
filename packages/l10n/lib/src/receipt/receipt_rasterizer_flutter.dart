@@ -42,7 +42,7 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 ///    that cannot draw the text on either pass still yields a blank band, and
 ///    real hardware remains the final glyph-fidelity arbiter. The attempt is
 ///    observable via [ReceiptRasterRender.retriedLineIndexes].
-class FlutterReceiptRasterizer implements ReceiptRasterizer {
+class FlutterReceiptRasterizer implements ReceiptRasterizer, RasterLineMeasurer {
   const FlutterReceiptRasterizer({
     this.fontSize = 22.0,
     this.lineHeight = 1.3,
@@ -84,6 +84,14 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer {
   @override
   Future<ReceiptRasterImage> rasterize(ReceiptRasterRequest request) async =>
       (await rasterizeDetailed(request)).image;
+
+  /// PRINT-LAYOUT-001A: the EXACT rendered row height of each line (the owned
+  /// band height), so fixed-media pagination plans on real dart:ui metrics —
+  /// never a font-independent estimate that could under-count and clip a label.
+  @override
+  Future<List<int>> measureLineRows(ReceiptRasterRequest request) async => [
+    for (final l in _layoutBands(request)) l.band.endRow - l.band.startRow,
+  ];
 
   /// [rasterize] plus per-line VISIBILITY: the exact, non-overlapping row
   /// range each logical line owns in the final bitmap ([ReceiptRasterBand]).

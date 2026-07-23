@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../media_profile.dart';
 import '../print_document.dart';
 import '../print_line_metrics.dart';
@@ -160,27 +162,44 @@ Future<PrintDocument> rasterizeForMediaProfile(
   final styles = textLines.map((l) => l.style).toList(growable: false);
   final direction = baseDirectionForLines(lines);
 
-  final rows = estimateReceiptLineRows(
-    styles,
-    fontScale: profile.fontScale,
-    lineSpacing: profile.lineSpacing,
-  );
+  // Plan on the REAL rendered heights when the rasterizer can measure them
+  // (dart:ui metrics) — an estimate could under-count and overflow the label.
+  // Fall back to the conservative estimate only for a non-measuring rasterizer.
+  final List<int> rows;
+  if (rasterizer is RasterLineMeasurer) {
+    rows = await (rasterizer as RasterLineMeasurer).measureLineRows(
+      ReceiptRasterRequest(
+        lines: lines,
+        styles: styles,
+        widthDots: profile.widthDots,
+        direction: direction,
+        localeTag: textDoc.localeTag ?? '',
+        fontScale: profile.fontScale,
+        lineSpacing: profile.lineSpacing,
+        safeLeftDots: profile.safeLeftDots,
+        safeRightDots: profile.safeRightDots,
+      ),
+    );
+  } else {
+    rows = estimateReceiptLineRows(
+      styles,
+      fontScale: profile.fontScale,
+      lineSpacing: profile.lineSpacing,
+    );
+  }
   // A block (kept whole when it fits a page) starts at every line that is not a
   // sub/note continuation of the item above it.
   final blockStarts = <int>{
     for (var i = 0; i < styles.length; i++)
       if (styles[i] != PrintLineStyle.sub && styles[i] != PrintLineStyle.note) i,
   };
-  // Reserve room for the per-page number + continuation header on multi-page
-  // output (two centered lines at this profile's scale).
-  final reserved =
-      pageLabel == null && continuationHeader == null
+  // Reserve room for the per-page continuation header + page number: at most two
+  // added lines, each no taller than the tallest content line — so a rendered
+  // page (content + those two) never exceeds printableHeightDots.
+  final maxRow = rows.isEmpty ? 1 : rows.reduce(math.max);
+  final reserved = (pageLabel == null && continuationHeader == null)
       ? 0
-      : estimateReceiptLineRows(
-          const [PrintLineStyle.centered, PrintLineStyle.centered],
-          fontScale: profile.fontScale,
-          lineSpacing: profile.lineSpacing,
-        ).fold<int>(0, (s, r) => s + r);
+      : 2 * maxRow;
 
   final pages = planPrintPages(
     lineHeights: rows,

@@ -100,4 +100,33 @@ void main() {
     );
     expect(identical(doc, input), isTrue);
   });
+
+  test('every source line appears EXACTLY ONCE across the fixed-media pages, in '
+      'order — no item/modifier/note lost or duplicated', () async {
+    final fake = FakeReceiptRasterizer(dotsPerLine: 40);
+    final source = [for (var i = 0; i < 25; i++) 'صنف-$i'];
+    final doc = await rasterizeForMediaProfile(
+      textDoc(source),
+      rasterizer: fake,
+      profile: MediaProfile.label50x50,
+      pageLabel: (p, t) => 'PGLABEL',
+      continuationHeader: (p, t) => 'CONTHDR',
+    );
+    expect(images(doc).length, greaterThan(1), reason: 'a long ticket splits');
+    // Reconstruct the source lines from what each page ACTUALLY rendered
+    // (the fake records one rasterize request per page), dropping the added
+    // page-number + continuation-header lines.
+    final rendered = <String>[
+      for (final req in fake.requests)
+        for (final line in req.lines)
+          if (line != 'PGLABEL' && line != 'CONTHDR') line,
+    ];
+    expect(
+      rendered,
+      source,
+      reason: 'every line once, in order, none dropped/duplicated',
+    );
+    // The final source line is present exactly once (no clipped tail).
+    expect(rendered.where((l) => l == source.last), hasLength(1));
+  });
 }

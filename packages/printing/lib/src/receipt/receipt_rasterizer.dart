@@ -106,13 +106,29 @@ abstract interface class ReceiptRasterizer {
   Future<ReceiptRasterImage> rasterize(ReceiptRasterRequest request);
 }
 
+/// PRINT-LAYOUT-001A: an OPTIONAL capability a [ReceiptRasterizer] may also
+/// implement — the EXACT rendered ROW height (in dots) each line will occupy,
+/// without painting. Fixed-media pagination uses this so a page is planned on
+/// the real dart:ui heights (never a font-independent estimate that could
+/// under-count and overflow the label). A rasterizer that does not implement it
+/// falls back to a conservative estimate.
+abstract interface class RasterLineMeasurer {
+  /// The per-line rendered row height for [request] (parallel to `request.lines`).
+  Future<List<int>> measureLineRows(ReceiptRasterRequest request);
+}
+
 /// A deterministic, dependency-free [ReceiptRasterizer] for tests (RF-073).
 ///
 /// It performs NO real shaping — it records every request (so tests can assert
 /// the localized text reached the rasterizer) and returns a correctly-sized,
 /// non-blank bitmap. Height is derived deterministically from the line count.
-class FakeReceiptRasterizer implements ReceiptRasterizer {
+class FakeReceiptRasterizer implements ReceiptRasterizer, RasterLineMeasurer {
   FakeReceiptRasterizer({this.dotsPerLine = 24, this.fillByte = 0x55});
+
+  @override
+  Future<List<int>> measureLineRows(ReceiptRasterRequest request) async => [
+    for (var i = 0; i < request.lines.length; i++) dotsPerLine,
+  ];
 
   /// Recorded requests, in call order (for test assertions).
   final List<ReceiptRasterRequest> requests = <ReceiptRasterRequest>[];
