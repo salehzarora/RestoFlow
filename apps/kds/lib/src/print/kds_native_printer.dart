@@ -135,4 +135,9 @@ NativePrinterStrings kdsNativePrinterStrings(
   btConnectFailed: l10n.posBluetoothConnectFailed,
   btWriteFailed: l10n.posBluetoothWriteFailed,
   btNotPaired: l10n.posBluetoothNotPaired,
+  // PRINT-LAYOUT-001A: the media-size selector (reuses the shared pos* keys).
+  mediaSizeLabel: l10n.posPrinterMediaSizeLabel,
+  mediaSizeContinuous: l10n.posPrinterMediaSizeContinuous,
+  mediaSize50: l10n.posPrinterMediaSize50,
+  mediaSize80: l10n.posPrinterMediaSize80,
 );

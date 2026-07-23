@@ -48,6 +48,10 @@ class NativePrinterStrings {
     required this.btConnectFailed,
     required this.btWriteFailed,
     required this.btNotPaired,
+    required this.mediaSizeLabel,
+    required this.mediaSizeContinuous,
+    required this.mediaSize50,
+    required this.mediaSize80,
   });
 
   final String transportHeading;
@@ -87,6 +91,13 @@ class NativePrinterStrings {
   final String btConnectFailed;
   final String btWriteFailed;
   final String btNotPaired;
+
+  /// PRINT-LAYOUT-001A: the media-size selector label + its three options
+  /// (continuous 80 mm roll / 50×50 label / 80×80 label).
+  final String mediaSizeLabel;
+  final String mediaSizeContinuous;
+  final String mediaSize50;
+  final String mediaSize80;
 }
 
 /// The on-device printer setup for a native app (ANDROID-003/004): a transport
@@ -193,6 +204,9 @@ class _NetworkPrinterSectionState
   String? _fieldError;
   String? _lastHostPort;
 
+  /// PRINT-LAYOUT-001A: the selected media profile (prefilled from saved once).
+  pp.MediaProfileId _selectedProfile = pp.MediaProfileId.continuous80;
+
   NativePrinterStrings get _s => widget.strings;
 
   @override
@@ -220,6 +234,7 @@ class _NetworkPrinterSectionState
       host: host,
       port: port,
       name: name.isEmpty ? null : name,
+      mediaProfileId: _selectedProfile.name,
     );
   }
 
@@ -264,6 +279,7 @@ class _NetworkPrinterSectionState
         _ipController.text = saved.host;
         _portController.text = '${saved.port}';
         _nameController.text = saved.name ?? '';
+        _selectedProfile = saved.mediaProfile.id;
       }
     }
 
@@ -332,6 +348,13 @@ class _NetworkPrinterSectionState
               ),
             ),
           ],
+        ),
+        _MediaSizeDropdown(
+          strings: _s,
+          value: _selectedProfile,
+          enabled: !busy,
+          fieldKey: const Key('network-printer-media-size'),
+          onChanged: (id) => setState(() => _selectedProfile = id),
         ),
         if (_fieldError != null) ...[
           const SizedBox(height: RestoflowSpacing.sm),
@@ -468,6 +491,58 @@ class _InlineError extends StatelessWidget {
   }
 }
 
+/// PRINT-LAYOUT-001A: the shared media-size selector for the native settings UI
+/// (KDS). Offers the two fixed labels (50×50, 80×80) + the backward-compatible
+/// 80 mm continuous roll (the default). Uses INJECTED strings (this package stays
+/// l10n-agnostic). RTL/LTR follow the ambient direction.
+class _MediaSizeDropdown extends StatelessWidget {
+  const _MediaSizeDropdown({
+    required this.strings,
+    required this.value,
+    required this.onChanged,
+    required this.enabled,
+    required this.fieldKey,
+  });
+
+  final NativePrinterStrings strings;
+  final pp.MediaProfileId value;
+  final ValueChanged<pp.MediaProfileId> onChanged;
+  final bool enabled;
+  final Key fieldKey;
+
+  String _label(pp.MediaProfileId id) => switch (id) {
+    pp.MediaProfileId.continuous80 => strings.mediaSizeContinuous,
+    pp.MediaProfileId.label50x50 => strings.mediaSize50,
+    pp.MediaProfileId.label80x80 => strings.mediaSize80,
+  };
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+    child: DropdownButtonFormField<pp.MediaProfileId>(
+      key: fieldKey,
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: strings.mediaSizeLabel,
+        border: const OutlineInputBorder(),
+      ),
+      items: [
+        for (final id in pp.MediaProfileId.values)
+          DropdownMenuItem<pp.MediaProfileId>(
+            value: id,
+            child: Text(_label(id)),
+          ),
+      ],
+      onChanged: enabled
+          ? (v) {
+              if (v != null) onChanged(v);
+            }
+          : null,
+    ),
+  );
+}
+
 enum _BtStatus { idle, testing, success, failure }
 
 /// The on-device Bluetooth printer setup (ANDROID-003): list bonded/paired
@@ -499,6 +574,10 @@ class _BluetoothPrinterSectionState
   pp.PrinterErrorCategory? _failCategory;
   String? _failDetail;
 
+  /// PRINT-LAYOUT-001A: the selected media profile (prefilled from saved once).
+  pp.MediaProfileId _selectedProfile = pp.MediaProfileId.continuous80;
+  bool _profilePrefilled = false;
+
   NativePrinterStrings get _s => widget.strings;
 
   @override
@@ -524,7 +603,13 @@ class _BluetoothPrinterSectionState
     final messenger = ScaffoldMessenger.of(context);
     await ref
         .read(bluetoothPrinterConfigProvider.notifier)
-        .save(BluetoothPrinterConfig(address: address, name: _selectedName));
+        .save(
+          BluetoothPrinterConfig(
+            address: address,
+            name: _selectedName,
+            mediaProfileId: _selectedProfile.name,
+          ),
+        );
     if (!mounted) return;
     setState(() => _status = _BtStatus.idle);
     messenger.showSnackBar(SnackBar(content: Text(_s.bluetoothSavedSnack)));
@@ -553,7 +638,11 @@ class _BluetoothPrinterSectionState
     final result = await ref
         .read(bluetoothPrinterTesterProvider)
         .testPrint(
-          BluetoothPrinterConfig(address: address, name: _selectedName),
+          BluetoothPrinterConfig(
+            address: address,
+            name: _selectedName,
+            mediaProfileId: _selectedProfile.name,
+          ),
           deviceLabel: widget.deviceLabel,
         );
     if (!mounted) return;
@@ -570,6 +659,11 @@ class _BluetoothPrinterSectionState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final saved = ref.watch(bluetoothPrinterConfigProvider).valueOrNull;
+    // PRINT-LAYOUT-001A: prefill the media profile from the saved config once.
+    if (!_profilePrefilled && saved != null) {
+      _profilePrefilled = true;
+      _selectedProfile = saved.mediaProfile.id;
+    }
     // The effective selection: an in-session pick, else the saved printer.
     final selectedAddress = _selectedAddress ?? saved?.address;
     final canAct = selectedAddress != null && _status != _BtStatus.testing;
@@ -615,6 +709,13 @@ class _BluetoothPrinterSectionState
             _selectedName = device.name.isEmpty ? null : device.name;
             _status = _BtStatus.idle;
           }),
+        ),
+        _MediaSizeDropdown(
+          strings: _s,
+          value: _selectedProfile,
+          enabled: _status != _BtStatus.testing,
+          fieldKey: const Key('bluetooth-printer-media-size'),
+          onChanged: (id) => setState(() => _selectedProfile = id),
         ),
         const SizedBox(height: RestoflowSpacing.sm),
         Row(
