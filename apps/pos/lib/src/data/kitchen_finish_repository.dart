@@ -52,6 +52,21 @@ const Set<String> _kResolvedStatuses = {
   'voided',
 };
 
+/// Every order status this finisher recognizes as authoritative (active +
+/// resolved + `draft`). A `from` that is absent, malformed, or outside this set
+/// is NOT trusted as authoritative — the loop re-reads the real status instead.
+const Set<String> _kKnownStatuses = {
+  'submitted',
+  'accepted',
+  'preparing',
+  'ready',
+  'served',
+  'completed',
+  'cancelled',
+  'voided',
+  'draft',
+};
+
 /// The ordered `new_status` steps to take [from] up to `served` (exclusive of
 /// [from]). E.g. submitted -> [accepted, preparing, ready, served]; ready ->
 /// [served]. Empty when [from] is not an active-advanceable status. Retained for
@@ -226,20 +241,36 @@ class RealKitchenFinishRepository implements KitchenFinishRepository {
           }
           status = target;
         case _OpKind.staleStatus:
-          // invalid_transition: the order is no longer at `status`. The server
-          // returned its AUTHORITATIVE current status in `from` — reclassify
-          // from it, NEVER from the stale local status. (`from` is strictly
-          // ahead, so the loop always makes progress.)
-          final serverStatus = outcome.currentStatus;
-          if (serverStatus == null) {
-            return KitchenFinishResult(
-              orderId,
-              KitchenFinishStatus.failed,
-              error: outcome.error ?? 'invalid_transition',
-            );
+          // invalid_transition: the order is no longer at `status`. Normally the
+          // server returns its AUTHORITATIVE current status in `from` — reclassify
+          // from it, NEVER from the stale local status. When `from` is absent,
+          // malformed, or an unrecognized status, DO NOT fail: re-read the real
+          // status through the same refreshStatus path and continue from THAT
+          // (still this one bounded loop — no second retry loop). Another KDS
+          // device may already have advanced the order.
+          final from = outcome.currentStatus;
+          final String reclassifyFrom;
+          if (from != null && _kKnownStatuses.contains(from)) {
+            // (A) A valid authoritative `from` — reclassify from it directly.
+            reclassifyFrom = from;
+          } else {
+            // (B) No usable `from` — re-read the authoritative current status.
+            final refreshed = await refreshStatus(orderId);
+            if (refreshed == null) {
+              // missing / unreadable order — fail honestly (no silent success).
+              return KitchenFinishResult(
+                orderId,
+                KitchenFinishStatus.failed,
+                error: outcome.error ?? 'invalid_transition',
+              );
+            }
+            reclassifyFrom = refreshed;
           }
+          // The next loop iteration classifies `reclassifyFrom`: resolved
+          // (served/completed/cancelled/voided) -> finished; active -> continue
+          // toward served; draft/unrecognized -> failed (never advanced).
           lastError = outcome.error;
-          status = serverStatus;
+          status = reclassifyFrom;
         case _OpKind.conflict:
           // A serialization conflict carries no status — re-read the authoritative
           // one so a concurrently-served order is reported finished, not failed.

@@ -41,6 +41,18 @@ class _FakeServer implements SyncRpcTransport {
   /// op ids whose successful apply also auto-completes the order.
   final Set<String> autoCompleteOps = {};
 
+  /// op ids whose invalid_transition result OMITS `from` entirely (missing).
+  final Set<String> omitFrom = {};
+
+  /// op ids whose invalid_transition `from` is malformed/unrecognized (a
+  /// non-string, or a status string outside the known set) -> parsed as absent.
+  final Map<String, Object> badFrom = {};
+
+  /// op ids that ALWAYS answer invalid_transition with NO `from`, regardless of
+  /// the order's real status (models a server response that lacks the field on a
+  /// step that otherwise would apply) -- used for the bound/unreadable cases.
+  final Set<String> forceInvalidNullFrom = {};
+
   static const _legal = {
     'submitted': 'accepted',
     'accepted': 'preparing',
@@ -99,6 +111,22 @@ class _FakeServer implements SyncRpcTransport {
       return _wrap(result);
     }
 
+    // Always-invalid-without-`from`, regardless of the real status.
+    if (forceInvalidNullFrom.contains(localOp)) {
+      final result = {
+        'local_operation_id': localOp,
+        'operation_type': 'order.status',
+        'ok': false,
+        'error': 'invalid_transition',
+        'status': 'rejected',
+        'to': newStatus,
+        'order_id': orderId,
+        // deliberately NO `from`
+      };
+      _ledger[localOp] = result;
+      return _wrap(result);
+    }
+
     final current = status[orderId];
     final Map<String, dynamic> result;
     if (current != null && _legal[current] == newStatus) {
@@ -116,16 +144,20 @@ class _FakeServer implements SyncRpcTransport {
         },
       };
     } else {
-      // invalid_transition — `from` is the order's authoritative current status.
+      // invalid_transition — normally `from` is the authoritative current status,
+      // but a test may omit or malform it to exercise the refresh fallback.
       result = {
         'local_operation_id': localOp,
         'operation_type': 'order.status',
         'ok': false,
         'error': 'invalid_transition',
         'status': 'rejected',
-        'from': current,
         'to': newStatus,
         'order_id': orderId,
+        if (badFrom.containsKey(localOp))
+          'from': badFrom[localOp]
+        else if (!omitFrom.contains(localOp))
+          'from': current,
       };
     }
     _ledger[localOp] = result;
@@ -150,6 +182,17 @@ Future<String?> Function(String) _serverRefresh(_FakeServer s) =>
 /// A refreshStatus that must NOT be consulted on the common (non-conflict) paths.
 Future<String?> _neverRefresh(String orderId) async {
   fail('refreshStatus must not be called on a non-conflict path');
+}
+
+/// A scripted, call-counting refreshStatus for the missing-`from` fallback tests.
+class _Refresh {
+  _Refresh(this._value);
+  final String? _value;
+  int calls = 0;
+  Future<String?> call(String orderId) async {
+    calls++;
+    return _value;
+  }
 }
 
 List<String> _newStatuses(_FakeServer s) => [
@@ -385,5 +428,163 @@ void main() {
     );
     expect(r.isFinished, isFalse);
     expect(r.error, 'unavailable');
+  });
+
+  // The one-defect correction: when an invalid_transition result carries no
+  // usable authoritative `from`, the loop re-reads the real status through
+  // refreshStatus and continues from THAT (same bounded loop), never failing
+  // just because `from` was absent while another device advanced the order.
+  group('missing/malformed `from` -> authoritative refresh fallback', () {
+    test('1: null `from` -> refresh returns accepted -> continues '
+        'preparing/ready/served (finished, not failed)', () async {
+      final s = _FakeServer({'o': 'accepted'})..omitFrom.add('b1:o:accepted');
+      final refresh = _Refresh('accepted');
+      final r = await _repo(s).advanceToServed(
+        orderId: 'o',
+        fromStatus: 'submitted',
+        batchRunId: 'b1',
+        refreshStatus: refresh.call,
+      );
+      expect(r.isFinished, isTrue);
+      expect(refresh.calls, 1);
+      expect(_newStatuses(s), ['accepted', 'preparing', 'ready', 'served']);
+    });
+
+    test(
+      '2: malformed/unrecognized `from` -> refresh returns preparing -> sends '
+      'only ready/served, no accepted or preparing replay',
+      () async {
+        for (final bad in <Object>[42, 'weird_status']) {
+          final s = _FakeServer({'o': 'preparing'})
+            ..badFrom['b1:o:accepted'] = bad;
+          final refresh = _Refresh('preparing');
+          final r = await _repo(s).advanceToServed(
+            orderId: 'o',
+            fromStatus: 'submitted',
+            batchRunId: 'b1',
+            refreshStatus: refresh.call,
+          );
+          expect(r.isFinished, isTrue, reason: '$bad');
+          expect(refresh.calls, 1, reason: '$bad');
+          expect(_newStatuses(s), [
+            'accepted',
+            'ready',
+            'served',
+          ], reason: '$bad');
+          expect(_newStatuses(s), isNot(contains('preparing')), reason: '$bad');
+        }
+      },
+    );
+
+    test('3: refresh returns ready -> sends only served (finished)', () async {
+      final s = _FakeServer({'o': 'ready'})..omitFrom.add('b1:o:accepted');
+      final refresh = _Refresh('ready');
+      final r = await _repo(s).advanceToServed(
+        orderId: 'o',
+        fromStatus: 'submitted',
+        batchRunId: 'b1',
+        refreshStatus: refresh.call,
+      );
+      expect(r.isFinished, isTrue);
+      expect(refresh.calls, 1);
+      expect(_newStatuses(s), ['accepted', 'served']);
+    });
+
+    test(
+      '4: refresh returns served -> zero additional ops (finished)',
+      () async {
+        final s = _FakeServer({'o': 'served'})..omitFrom.add('b1:o:accepted');
+        final refresh = _Refresh('served');
+        final r = await _repo(s).advanceToServed(
+          orderId: 'o',
+          fromStatus: 'submitted',
+          batchRunId: 'b1',
+          refreshStatus: refresh.call,
+        );
+        expect(r.isFinished, isTrue);
+        expect(refresh.calls, 1);
+        expect(s.ops, hasLength(1)); // only the initial invalid probe
+      },
+    );
+
+    test(
+      '5: refresh returns completed -> zero additional ops (finished)',
+      () async {
+        final s = _FakeServer({'o': 'completed'})
+          ..omitFrom.add('b1:o:accepted');
+        final refresh = _Refresh('completed');
+        final r = await _repo(s).advanceToServed(
+          orderId: 'o',
+          fromStatus: 'submitted',
+          batchRunId: 'b1',
+          refreshStatus: refresh.call,
+        );
+        expect(r.isFinished, isTrue);
+        expect(refresh.calls, 1);
+        expect(s.ops, hasLength(1));
+      },
+    );
+
+    test('6: refresh returns cancelled/voided -> resolved (not failed), no '
+        'cancel/void op emitted', () async {
+      for (final terminal in ['cancelled', 'voided']) {
+        final s = _FakeServer({'o': terminal})..omitFrom.add('b1:o:accepted');
+        final refresh = _Refresh(terminal);
+        final r = await _repo(s).advanceToServed(
+          orderId: 'o',
+          fromStatus: 'submitted',
+          batchRunId: 'b1',
+          refreshStatus: refresh.call,
+        );
+        expect(r.isFinished, isTrue, reason: terminal);
+        expect(s.ops, hasLength(1), reason: terminal);
+        // This batch NEVER emits a cancel/void status op.
+        expect(
+          _newStatuses(s).any((st) => st == 'cancelled' || st == 'voided'),
+          isFalse,
+          reason: terminal,
+        );
+      }
+    });
+
+    test('7: refresh returns an active status until the 12-attempt bound -> '
+        'failed honestly; the next order still processes', () async {
+      final s = _FakeServer({'o': 'ready', 'o2': 'ready'})
+        ..forceInvalidNullFrom.add('b1:o:served');
+      final refresh = _Refresh('ready');
+      final r = await _repo(s).advanceToServed(
+        orderId: 'o',
+        fromStatus: 'ready',
+        batchRunId: 'b1',
+        refreshStatus: refresh.call,
+      );
+      expect(r.isFinished, isFalse);
+      expect(refresh.calls, 12); // one re-read per bounded attempt, then failed
+      expect(s.ops.length, lessThanOrEqualTo(12));
+      // A DIFFERENT order in the same batch is unaffected by the stuck one.
+      final r2 = await _repo(s).advanceToServed(
+        orderId: 'o2',
+        fromStatus: 'ready',
+        batchRunId: 'b1',
+        refreshStatus: _neverRefresh,
+      );
+      expect(r2.isFinished, isTrue);
+    });
+
+    test('8: refresh returns null (missing/unreadable) -> failed honestly, no '
+        'silent success', () async {
+      final s = _FakeServer({'o': 'ready'})
+        ..forceInvalidNullFrom.add('b1:o:served');
+      final refresh = _Refresh(null);
+      final r = await _repo(s).advanceToServed(
+        orderId: 'o',
+        fromStatus: 'ready',
+        batchRunId: 'b1',
+        refreshStatus: refresh.call,
+      );
+      expect(r.isFinished, isFalse);
+      expect(refresh.calls, 1);
+      expect(s.ops, hasLength(1));
+    });
   });
 }
