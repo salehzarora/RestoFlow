@@ -17,6 +17,7 @@ class PosStaffCapabilities {
     required this.applyFullComp,
     this.manageMenuAvailability = false,
     this.manageTableOperations = false,
+    this.role,
   });
 
   /// FAIL-CLOSED default: knowing nothing, we assume nothing is granted.
@@ -25,7 +26,29 @@ class PosStaffCapabilities {
     applyFullComp: false,
     manageMenuAvailability: false,
     manageTableOperations: false,
+    role: null,
   );
+
+  /// KITCHEN-PRINT-DUAL-001D: the membership role of the current PIN session, as
+  /// resolved by the server (the SAME `pin_session_capabilities` envelope already
+  /// returns it — no new permission model). Advisory only; the server re-checks
+  /// every order.status push. Null when unknown.
+  final String? role;
+
+  /// The roles the server already authorizes to change order kitchen statuses
+  /// (`app.update_order_status`): kitchen_staff is a KDS role, so on the POS the
+  /// authorized set is cashier / manager / restaurant_owner / org_owner. Used ONLY
+  /// to gate a client affordance (the bulk finish button) — never to grant.
+  static const Set<String> _kitchenStatusRoles = {
+    'cashier',
+    'manager',
+    'restaurant_owner',
+    'org_owner',
+  };
+
+  /// Whether this session's role may drive the bulk kitchen-finish action.
+  bool get canFinishKitchenOrders =>
+      role != null && _kitchenStatusRoles.contains(role);
 
   /// May apply ordinary discounts.
   final bool applyDiscount;
@@ -46,13 +69,16 @@ class PosStaffCapabilities {
   /// All use `== true`, so a missing field, an old server that does not send the
   /// key, a null, or any malformed value resolves to DENIED. The client never
   /// invents a permission it was not explicitly given.
-  static PosStaffCapabilities fromJson(Map<Object?, Object?> json) =>
-      PosStaffCapabilities(
-        applyDiscount: json['apply_discount'] == true,
-        applyFullComp: json['apply_full_comp'] == true,
-        manageMenuAvailability: json['manage_menu_availability'] == true,
-        manageTableOperations: json['manage_table_operations'] == true,
-      );
+  static PosStaffCapabilities fromJson(
+    Map<Object?, Object?> json, {
+    Object? role,
+  }) => PosStaffCapabilities(
+    applyDiscount: json['apply_discount'] == true,
+    applyFullComp: json['apply_full_comp'] == true,
+    manageMenuAvailability: json['manage_menu_availability'] == true,
+    manageTableOperations: json['manage_table_operations'] == true,
+    role: role is String ? role : null,
+  );
 }
 
 /// Reads the effective capabilities of the current PIN session.
@@ -83,6 +109,7 @@ class DemoStaffCapabilitiesRepository implements StaffCapabilitiesRepository {
     // the operational controls.
     manageMenuAvailability: true,
     manageTableOperations: true,
+    role: 'cashier',
   );
 }
 
@@ -116,6 +143,6 @@ class RealStaffCapabilitiesRepository implements StaffCapabilitiesRepository {
     if (raw is! Map || raw['ok'] != true) return null;
     final caps = raw['capabilities'];
     if (caps is! Map) return null;
-    return PosStaffCapabilities.fromJson(caps);
+    return PosStaffCapabilities.fromJson(caps, role: raw['role']);
   }
 }

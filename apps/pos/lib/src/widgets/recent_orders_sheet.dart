@@ -13,15 +13,21 @@ import '../data/order_center_view.dart';
 import '../data/order_detail_repository.dart';
 import '../data/order_identity.dart';
 import '../data/order_reconciler.dart' show unpaidOrderCount;
+import '../data/kitchen_finish_repository.dart' show kActiveKitchenStatuses;
 import '../data/order_snapshot.dart';
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/payment.dart' show CashPayment;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
+import '../print/pos_kitchen_ticket_printer.dart'
+    show posHasKitchenNativePrinterProvider;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart' show cartControllerProvider;
 import '../state/discount_controller.dart';
+import '../state/kitchen_finish_controller.dart';
+import '../state/pos_auto_print_prefs.dart'
+    show posAutoPrintKitchenTicketEnabled, posAutoPrintKitchenTicketProvider;
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import '../state/draft_recovery_controller.dart';
 import '../state/order_sync_controller.dart';
@@ -412,6 +418,8 @@ class _Header extends ConsumerWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           ),
+        // KITCHEN-PRINT-DUAL-001D: the bulk kitchen-finish action (self-gated).
+        _FinishAllKitchenButton(l10n: l10n),
         IconButton(
           key: const Key('orders-refresh-button'),
           tooltip: l10n.posOrdersRefresh,
@@ -422,6 +430,115 @@ class _Header extends ConsumerWidget {
               ref.read(posOrderSyncControllerProvider.notifier).refreshWindow(),
         ),
       ],
+    );
+  }
+}
+
+/// KITCHEN-PRINT-DUAL-001D: the "Finish all kitchen orders" header action. VISIBLE
+/// only when automatic kitchen-ticket printing is enabled on THIS device AND the
+/// current session's role is already authorized to change order kitchen statuses
+/// (advisory — the server re-checks every push); hidden in demo mode. Pressing it
+/// captures the current branch's ACTIVE kitchen orders (submitted/accepted/
+/// preparing/ready), confirms once, then advances each to `served` via the
+/// existing `order.status` op — never cancel/void/delete, never a payment. Paid
+/// orders auto-complete through the existing rule; unpaid stay served + payable.
+class _FinishAllKitchenButton extends ConsumerWidget {
+  const _FinishAllKitchenButton({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Real-mode + toggle-enabled + authorized-role gate. Loading/errored inputs
+    // resolve to NOT enabled (button hidden) — fail closed.
+    if (ref.watch(runtimeConfigProvider).isDemoMode) {
+      return const SizedBox.shrink();
+    }
+    final autoPrintOn = posAutoPrintKitchenTicketEnabled(
+      stored: ref.watch(posAutoPrintKitchenTicketProvider).valueOrNull,
+      hasKitchenPrinter: ref.watch(posHasKitchenNativePrinterProvider),
+    );
+    final authorized =
+        ref
+            .watch(staffCapabilitiesProvider)
+            .valueOrNull
+            ?.canFinishKitchenOrders ??
+        false;
+    if (!autoPrintOn || !authorized) return const SizedBox.shrink();
+
+    final running = ref.watch(kitchenFinishControllerProvider).running;
+    return IconButton(
+      key: const Key('finish-all-kitchen-orders-button'),
+      tooltip: l10n.posFinishAllKitchenOrders,
+      icon: running
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.done_all),
+      // A second press while running is blocked here AND in the controller.
+      onPressed: running ? null : () => _run(context, ref),
+    );
+  }
+
+  Future<void> _run(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    // Capture the current branch's ACTIVE kitchen orders ONCE (the list is already
+    // branch-scoped by the sync window). Non-terminal, not served.
+    final targets = <KitchenFinishTarget>[
+      for (final o in ref.read(posRecentOrdersControllerProvider))
+        if (o.orderId != null &&
+            !o.isTerminal &&
+            o.serverStatus != null &&
+            kActiveKitchenStatuses.contains(o.serverStatus))
+          (orderId: o.orderId!, fromStatus: o.serverStatus!),
+    ];
+    if (targets.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posFinishAllNoActiveOrders)),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.posFinishAllKitchenOrders),
+        content: Text(l10n.posFinishAllConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              MaterialLocalizations.of(dialogContext).cancelButtonLabel,
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.posFinishAllConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final summary = await ref
+        .read(kitchenFinishControllerProvider.notifier)
+        .finishAll(targets);
+    // Refresh the authoritative order window (KDS self-corrects on its own poll).
+    await ref.read(posOrderSyncControllerProvider.notifier).refreshWindow();
+    if (summary == null) return; // a batch was already running.
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          summary.failed == 0
+              ? l10n.posFinishAllResult(summary.finished)
+              : l10n.posFinishAllResultWithFailures(
+                  summary.finished,
+                  summary.failed,
+                ),
+        ),
+      ),
     );
   }
 }
