@@ -140,4 +140,10 @@ NativePrinterStrings kdsNativePrinterStrings(
   mediaSizeContinuous: l10n.posPrinterMediaSizeContinuous,
   mediaSize50: l10n.posPrinterMediaSize50,
   mediaSize80: l10n.posPrinterMediaSize80,
+  // PRINT-LAYOUT-001A: the profile-aware Test-Print diagnostic labels.
+  diagHeading: l10n.posPrinterDiagHeading,
+  diagWidth: l10n.posPrinterDiagWidthDots,
+  diagHeight: l10n.posPrinterDiagHeightDots,
+  diagTopSafe: l10n.posPrinterDiagTopSafe,
+  diagBottomSafe: l10n.posPrinterDiagBottomSafe,
 );

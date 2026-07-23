@@ -3724,6 +3724,30 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posPrinterMediaSize80 => 'ملصق 80 × 80 مم';
 
   @override
+  String get posPrinterDiagHeading => 'تشخيص الطابعة';
+
+  @override
+  String posPrinterDiagWidthDots(int width) {
+    return 'العرض: $width نقطة';
+  }
+
+  @override
+  String posPrinterDiagHeightDots(int height) {
+    return 'ارتفاع الوسائط: $height نقطة';
+  }
+
+  @override
+  String get posPrinterDiagTopSafe => 'المنطقة الآمنة العلوية';
+
+  @override
+  String get posPrinterDiagBottomSafe => 'المنطقة الآمنة السفلية — غير مقصوصة';
+
+  @override
+  String posPrinterDiagPage(int page, int total) {
+    return 'صفحة $page من $total';
+  }
+
+  @override
   String get posNetworkPrinterTestAction => 'طباعة اختبار';
 
   @override

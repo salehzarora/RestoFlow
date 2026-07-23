@@ -1,7 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 import 'package:restoflow_printing/restoflow_printing.dart' show MediaProfileId;
+
+/// PRINT-LAYOUT-001A: builds the localized profile-aware diagnostic document for
+/// a POS Test Print. Rendered by the tester through `rasterizeForMediaProfile` at
+/// [profile]'s exact width — so a 50×50 diagnostic is 384 dots, an 80×80 is 576.
+pp.PrintDocument posMediaProfileDiagnosticDocument(
+  AppLocalizations l10n,
+  pp.MediaProfile profile,
+) => pp.buildMediaProfileDiagnosticDocument(
+  profile: profile,
+  labels: pp.MediaProfileDiagnosticLabels(
+    heading: l10n.posPrinterDiagHeading,
+    profileName: MediaProfileSelector.labelFor(l10n, profile.id),
+    widthLine: l10n.posPrinterDiagWidthDots(profile.widthDots),
+    heightLine: profile.paginates
+        ? l10n.posPrinterDiagHeightDots(profile.mediaHeightDots)
+        : null,
+    topSafe: l10n.posPrinterDiagTopSafe,
+    bottomSafe: l10n.posPrinterDiagBottomSafe,
+  ),
+);
 
 /// PRINT-LAYOUT-001A: the per-printer MEDIA-SIZE selector shown in the POS
 /// network + Bluetooth printer settings. It offers the two fixed labels (50×50,

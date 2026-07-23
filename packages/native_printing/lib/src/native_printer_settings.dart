@@ -52,6 +52,11 @@ class NativePrinterStrings {
     required this.mediaSizeContinuous,
     required this.mediaSize50,
     required this.mediaSize80,
+    required this.diagHeading,
+    required this.diagWidth,
+    required this.diagHeight,
+    required this.diagTopSafe,
+    required this.diagBottomSafe,
   });
 
   final String transportHeading;
@@ -98,6 +103,41 @@ class NativePrinterStrings {
   final String mediaSizeContinuous;
   final String mediaSize50;
   final String mediaSize80;
+
+  /// PRINT-LAYOUT-001A: the profile-aware Test-Print DIAGNOSTIC labels.
+  final String diagHeading;
+  final String Function(int width) diagWidth;
+  final String Function(int height) diagHeight;
+  final String diagTopSafe;
+  final String diagBottomSafe;
+}
+
+/// PRINT-LAYOUT-001A: builds the profile-aware Test-Print diagnostic document
+/// from the injected [strings] + a [profile], so the shared settings UI can send
+/// a diagnostic that renders at the selected media width (via the tester's
+/// rasterizeForMediaProfile).
+pp.PrintDocument _mediaDiagnosticDoc(
+  NativePrinterStrings strings,
+  pp.MediaProfile profile,
+) {
+  final name = switch (profile.id) {
+    pp.MediaProfileId.continuous80 => strings.mediaSizeContinuous,
+    pp.MediaProfileId.label50x50 => strings.mediaSize50,
+    pp.MediaProfileId.label80x80 => strings.mediaSize80,
+  };
+  return pp.buildMediaProfileDiagnosticDocument(
+    profile: profile,
+    labels: pp.MediaProfileDiagnosticLabels(
+      heading: strings.diagHeading,
+      profileName: name,
+      widthLine: strings.diagWidth(profile.widthDots),
+      heightLine: profile.paginates
+          ? strings.diagHeight(profile.mediaHeightDots)
+          : null,
+      topSafe: strings.diagTopSafe,
+      bottomSafe: strings.diagBottomSafe,
+    ),
+  );
 }
 
 /// The on-device printer setup for a native app (ANDROID-003/004): a transport
@@ -260,7 +300,13 @@ class _NetworkPrinterSectionState
     });
     final result = await ref
         .read(networkPrinterTesterProvider)
-        .testPrint(config, deviceLabel: widget.deviceLabel);
+        .testPrint(
+          config,
+          deviceLabel: widget.deviceLabel,
+          // PRINT-LAYOUT-001A: the profile-aware diagnostic, rendered at the
+          // selected media width by the tester.
+          document: _mediaDiagnosticDoc(_s, config.mediaProfile),
+        );
     if (!mounted) return;
     setState(
       () => _status = result.ok ? _TestStatus.success : _TestStatus.failure,
@@ -635,15 +681,17 @@ class _BluetoothPrinterSectionState
       _failCategory = null;
       _failDetail = null;
     });
+    final config = BluetoothPrinterConfig(
+      address: address,
+      name: _selectedName,
+      mediaProfileId: _selectedProfile.name,
+    );
     final result = await ref
         .read(bluetoothPrinterTesterProvider)
         .testPrint(
-          BluetoothPrinterConfig(
-            address: address,
-            name: _selectedName,
-            mediaProfileId: _selectedProfile.name,
-          ),
+          config,
           deviceLabel: widget.deviceLabel,
+          document: _mediaDiagnosticDoc(_s, config.mediaProfile),
         );
     if (!mounted) return;
     setState(() {

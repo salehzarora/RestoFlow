@@ -6,7 +6,6 @@ import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../print/bluetooth_printer.dart';
 import '../print/bluetooth_printer_tester.dart';
-import '../print/kitchen_test_document.dart';
 import '../print/native_print_bridges.dart'
     show posPrinterDestinationSendGateProvider;
 import '../state/pos_bluetooth_printer_config.dart';
@@ -163,17 +162,12 @@ class _BluetoothPrinterSectionState
       _failDetail = null;
     });
     final deviceLabel = ref.read(posDeviceContextProvider)?.displayName;
-    // KITCHEN-MODE-001B: the kitchen slot tests with the MONEY-FREE localized
-    // kitchen TEST document (shared raster path); the customer slot keeps the
-    // classic diagnostic. Result = bytes accepted by the transport only.
-    final document = widget.purpose == PosPrinterPurpose.kitchenTicket
-        ? await buildPosKitchenTestDocument(
-            ref,
-            l10n,
-            printerName: selection.name,
-            deviceLabel: deviceLabel,
-          )
-        : null;
+    // PRINT-LAYOUT-001A: the Test Print is the profile-aware DIAGNOSTIC (money-
+    // free), rendered by the tester at the SELECTED (unsaved) media profile.
+    final document = posMediaProfileDiagnosticDocument(
+      l10n,
+      pp.MediaProfile.fromId(_selectedProfile.name),
+    );
     if (!mounted) return;
     // KITCHEN-PRINT-DUAL-001 (F4): serialize the test send through the SHARED
     // per-destination gate + canonical key, so a Test print never interleaves

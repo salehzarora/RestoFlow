@@ -37,6 +37,9 @@ export 'src/codec/print_document_codec.dart';
 // (ASCII/English-only, money-free) for the printer-setup Test print button.
 export 'src/diagnostics/escpos_kitchen_test_document.dart';
 export 'src/diagnostics/escpos_test_document.dart';
+// PRINT-LAYOUT-001A: the profile-aware thermal diagnostic (heading, width/height
+// dots, edge ruler + safe-area markers, ar/he/en samples, bottom no-clip line).
+export 'src/diagnostics/media_profile_diagnostic.dart';
 // RF-074: cash-drawer kick trigger — a narrow input contract + a dispatcher
 // that enqueues a one-shot, no-retry `cashDrawer` job (consumes RF-070's
 // PrintDrawerKickLine + RF-071 spool + the RF-58 job type/reprint guard).

@@ -8,7 +8,6 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import 'media_profile_selector.dart';
 
-import '../print/kitchen_test_document.dart';
 import '../print/native_print_bridges.dart'
     show posPrinterDestinationSendGateProvider;
 import '../print/network_printer_tester.dart';
@@ -153,18 +152,12 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
       _lastHostPort = '${config.host}:${config.port}';
     });
     final deviceLabel = ref.read(posDeviceContextProvider)?.displayName;
-    // KITCHEN-MODE-001B: the kitchen slot tests with the MONEY-FREE localized
-    // kitchen TEST document (shared raster path); the customer slot keeps the
-    // classic diagnostic. Result = bytes accepted by the transport, never a
-    // paper-print claim; local/device-only, never reported to the Dashboard.
-    final document = widget.purpose == PosPrinterPurpose.kitchenTicket
-        ? await buildPosKitchenTestDocument(
-            ref,
-            l10n,
-            printerName: config.name,
-            deviceLabel: deviceLabel,
-          )
-        : null;
+    // PRINT-LAYOUT-001A: the Test Print is the profile-aware DIAGNOSTIC (money-
+    // free), rendered by the tester at the SELECTED (unsaved) media profile — so
+    // a 50×50 test prints at 384 dots and shows its own width + safe-area
+    // markers + ar/he/en samples + a bottom no-clip line. Result = bytes accepted
+    // by the transport, never a paper-print claim; local/device-only.
+    final document = posMediaProfileDiagnosticDocument(l10n, config.mediaProfile);
     if (!mounted) return;
     // KITCHEN-PRINT-DUAL-001 (F4): serialize the test send through the SHARED
     // per-destination gate + canonical key, so a Test print never interleaves

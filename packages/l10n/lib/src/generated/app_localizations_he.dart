@@ -3696,6 +3696,30 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posPrinterMediaSize80 => 'תווית 80 × 80 מ״מ';
 
   @override
+  String get posPrinterDiagHeading => 'אבחון מדפסת';
+
+  @override
+  String posPrinterDiagWidthDots(int width) {
+    return 'רוחב: $width נקודות';
+  }
+
+  @override
+  String posPrinterDiagHeightDots(int height) {
+    return 'גובה מדיה: $height נקודות';
+  }
+
+  @override
+  String get posPrinterDiagTopSafe => 'אזור בטוח עליון';
+
+  @override
+  String get posPrinterDiagBottomSafe => 'אזור בטוח תחתון — לא נחתך';
+
+  @override
+  String posPrinterDiagPage(int page, int total) {
+    return 'עמוד $page מתוך $total';
+  }
+
+  @override
   String get posNetworkPrinterTestAction => 'הדפסת בדיקה';
 
   @override

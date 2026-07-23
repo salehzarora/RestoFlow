@@ -3752,6 +3752,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posPrinterMediaSize80 => '80 × 80 mm label';
 
   @override
+  String get posPrinterDiagHeading => 'PRINTER DIAGNOSTIC';
+
+  @override
+  String posPrinterDiagWidthDots(int width) {
+    return 'Width: $width dots';
+  }
+
+  @override
+  String posPrinterDiagHeightDots(int height) {
+    return 'Media height: $height dots';
+  }
+
+  @override
+  String get posPrinterDiagTopSafe => 'TOP SAFE AREA';
+
+  @override
+  String get posPrinterDiagBottomSafe => 'BOTTOM SAFE AREA — not clipped';
+
+  @override
+  String posPrinterDiagPage(int page, int total) {
+    return 'Page $page of $total';
+  }
+
+  @override
   String get posNetworkPrinterTestAction => 'Test print';
 
   @override

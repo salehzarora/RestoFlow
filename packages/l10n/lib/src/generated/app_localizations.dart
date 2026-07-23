@@ -7006,6 +7006,42 @@ abstract class AppLocalizations {
   /// **'80 × 80 mm label'**
   String get posPrinterMediaSize80;
 
+  /// PRINT-LAYOUT-001A: heading printed at the top of the profile-aware test/diagnostic page.
+  ///
+  /// In en, this message translates to:
+  /// **'PRINTER DIAGNOSTIC'**
+  String get posPrinterDiagHeading;
+
+  /// PRINT-LAYOUT-001A: diagnostic line showing the printable raster width in dots.
+  ///
+  /// In en, this message translates to:
+  /// **'Width: {width} dots'**
+  String posPrinterDiagWidthDots(int width);
+
+  /// PRINT-LAYOUT-001A: diagnostic line showing the fixed media height in dots.
+  ///
+  /// In en, this message translates to:
+  /// **'Media height: {height} dots'**
+  String posPrinterDiagHeightDots(int height);
+
+  /// PRINT-LAYOUT-001A: diagnostic top safe-area marker line.
+  ///
+  /// In en, this message translates to:
+  /// **'TOP SAFE AREA'**
+  String get posPrinterDiagTopSafe;
+
+  /// PRINT-LAYOUT-001A: diagnostic bottom safe-area marker; the final visible line proving no clipping.
+  ///
+  /// In en, this message translates to:
+  /// **'BOTTOM SAFE AREA — not clipped'**
+  String get posPrinterDiagBottomSafe;
+
+  /// PRINT-LAYOUT-001A: page-number line for a multi-page fixed-media print.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} of {total}'**
+  String posPrinterDiagPage(int page, int total);
+
   /// POS action that sends a test print to the configured network printer.
   ///
   /// In en, this message translates to:
