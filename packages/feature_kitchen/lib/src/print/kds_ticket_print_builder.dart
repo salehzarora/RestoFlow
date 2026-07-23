@@ -63,10 +63,26 @@ class KitchenTicketPrintLabels {
 }
 
 /// Builds the render-neutral, money-free kitchen-ticket [PrintDocument] for
-/// [ticket] using [labels]. Byte-for-byte the layout the KDS live path emits.
+/// [ticket] using [labels].
+///
+/// PRINT-LAYOUT-001B — clearer operational hierarchy on the SAME shared layout
+/// (POS direct print and the KDS board stay byte-identical):
+///  * optional [restaurantName] brand line as a secondary heading ABOVE the
+///    big order-number hero (DATA passed in at the print call site — never a
+///    server-row pluck, never money; omitted when absent, the call site
+///    supplies a localized fallback, never a hardcoded placeholder here);
+///  * items lead with the QUANTITY (the kitchen scans the count first), the
+///    item name large + bold, modifiers indented under it, and a per-item note
+///    in the distinct bold note style (not the plain modifier style);
+///  * a blank spacer before each item after the first, so the gap BETWEEN
+///    items reads larger than the spacing WITHIN one item.
+///
+/// MONEY-FREE by construction (SECURITY T-003): a [KdsTicketView] carries no
+/// money field and nothing here (item right column stays empty) invents one.
 PrintDocument buildKdsTicketPrintDocument({
   required KdsTicketView ticket,
   required KitchenTicketPrintLabels labels,
+  String? restaurantName,
 }) {
   final header =
       ticket.orderNumber ?? '${labels.ticketLabel} ${ticket.kitchenTicketId}';
@@ -75,10 +91,13 @@ PrintDocument buildKdsTicketPrintDocument({
   final showStation =
       ticket.stationId != KdsTicketMapper.unassignedStation &&
       ticket.stationId.isNotEmpty;
+  final brand = restaurantName?.trim();
+  final items = ticket.items;
   final docTitle = '${labels.previewTitle} $header';
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
+      if (brand != null && brand.isNotEmpty) PrintLine.subtitle(brand),
       PrintLine.title(header),
       PrintLine.rule(),
       if (dineIn || takeaway)
@@ -100,15 +119,20 @@ PrintDocument buildKdsTicketPrintDocument({
           ),
         PrintLine.rule(),
       ],
-      for (final item in ticket.items) ...[
-        PrintLine.item(item.name, '${item.quantity}×', emphasised: true),
-        for (final modifier in item.modifiers) PrintLine.sub('+ $modifier'),
-        if (item.note case final note?)
-          PrintLine.sub('» ${labels.noteLabel}: $note'),
+      for (var i = 0; i < items.length; i++) ...[
+        if (i > 0) PrintLine.spacer(),
+        PrintLine.item(
+          '${items[i].quantity} × ${items[i].name}',
+          '',
+          emphasised: true,
+        ),
+        for (final modifier in items[i].modifiers) PrintLine.sub('+ $modifier'),
+        if (items[i].note case final note?)
+          PrintLine.note('» ${labels.noteLabel}: $note'),
       ],
       if (ticket.notes case final orderNote?) ...[
         PrintLine.rule(),
-        PrintLine.sub('» ${labels.noteLabel}: $orderNote'),
+        PrintLine.note('» ${labels.noteLabel}: $orderNote'),
       ],
     ],
   );
