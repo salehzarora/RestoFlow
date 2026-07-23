@@ -4,6 +4,7 @@ import '../media_profile.dart';
 import '../print_document.dart';
 import '../print_line_metrics.dart';
 import '../print_pagination.dart';
+import '../print_typography.dart';
 import 'receipt_rasterizer.dart';
 
 /// PRINT-RTL-001: turn an already-laid-out ESC/POS TEXT [PrintDocument] into a
@@ -20,6 +21,12 @@ import 'receipt_rasterizer.dart';
 
 /// The default 80mm printable raster width in dots (multiple of 8). 58mm = 384.
 const int kNativeRasterWidthDots = 576;
+
+/// A money row on a receipt — a plain key/value line ([PrintLineStyle.normal])
+/// or the emphasised [PrintLineStyle.total]. Used only to keep an unbroken run
+/// of money rows (the totals block) together across a fixed-label page break.
+bool _isMoneyRow(PrintLineStyle style) =>
+    style == PrintLineStyle.normal || style == PrintLineStyle.total;
 
 /// True when [doc] carries any non-ASCII text (Arabic/Hebrew letters, ₪, ×, …)
 /// that ESC/POS TEXT mode cannot reliably print — the signal to switch to
@@ -155,6 +162,10 @@ Future<PrintDocument> rasterizeForMediaProfile(
   // Fixed label: without a rasterizer we cannot honor the width — degrade safely.
   if (rasterizer == null) return textDoc;
 
+  // PRINT-LAYOUT-001B: the profile-aware type hierarchy (compact on the small
+  // 50×50 label, standard elsewhere). Threaded into BOTH the height measurement
+  // and every page render so the planned page heights match what is painted.
+  final typography = PrintTypography.forProfile(profile);
   final textLines = textDoc.lines.whereType<PrintTextLine>().toList(
     growable: false,
   );
@@ -178,6 +189,7 @@ Future<PrintDocument> rasterizeForMediaProfile(
         lineSpacing: profile.lineSpacing,
         safeLeftDots: profile.safeLeftDots,
         safeRightDots: profile.safeRightDots,
+        typography: typography,
       ),
     );
   } else {
@@ -185,13 +197,20 @@ Future<PrintDocument> rasterizeForMediaProfile(
       styles,
       fontScale: profile.fontScale,
       lineSpacing: profile.lineSpacing,
+      typography: typography,
     );
   }
   // A block (kept whole when it fits a page) starts at every line that is not a
-  // sub/note continuation of the item above it.
+  // sub/note continuation of the item above it — AND not a money row that
+  // continues an unbroken run of money rows, so the totals block (subtotal …
+  // total … change) stays together on one page instead of splitting at a page
+  // boundary (PRINT-LAYOUT-001B).
   final blockStarts = <int>{
     for (var i = 0; i < styles.length; i++)
-      if (styles[i] != PrintLineStyle.sub && styles[i] != PrintLineStyle.note) i,
+      if (styles[i] != PrintLineStyle.sub &&
+          styles[i] != PrintLineStyle.note &&
+          !(_isMoneyRow(styles[i]) && i > 0 && _isMoneyRow(styles[i - 1])))
+        i,
   };
   // Reserve room for the per-page continuation header + page number: at most two
   // added lines, each no taller than the tallest content line — so a rendered
@@ -239,6 +258,7 @@ Future<PrintDocument> rasterizeForMediaProfile(
         lineSpacing: profile.lineSpacing,
         safeLeftDots: profile.safeLeftDots,
         safeRightDots: profile.safeRightDots,
+        typography: typography,
       ),
     );
     out

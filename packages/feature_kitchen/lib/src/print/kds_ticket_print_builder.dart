@@ -136,6 +136,15 @@ pp.PrintDocument kitchenTicketToEscPosDocument(
             style: pp.PrintLineStyle.headingLarge,
           ),
         );
+      case PrintLineKind.subtitle:
+        lines.add(
+          pp.PrintTextLine(
+            line.left ?? '',
+            alignment: pp.PrintAlignment.center,
+            emphasis: pp.TextEmphasis.bold,
+            style: pp.PrintLineStyle.subheading,
+          ),
+        );
       case PrintLineKind.center:
         lines.add(
           pp.PrintTextLine(
@@ -183,6 +192,9 @@ pp.PrintDocument kitchenTicketToEscPosDocument(
         lines.add(
           pp.PrintTextLine('-' * columns, style: pp.PrintLineStyle.separator),
         );
+      case PrintLineKind.spacer:
+        // A blank, ink-free vertical gap between item blocks.
+        lines.add(const pp.PrintTextLine('', style: pp.PrintLineStyle.spacer));
     }
   }
   lines.add(const pp.PrintFeedLine(3));

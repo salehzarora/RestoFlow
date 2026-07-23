@@ -42,7 +42,8 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 ///    that cannot draw the text on either pass still yields a blank band, and
 ///    real hardware remains the final glyph-fidelity arbiter. The attempt is
 ///    observable via [ReceiptRasterRender.retriedLineIndexes].
-class FlutterReceiptRasterizer implements ReceiptRasterizer, RasterLineMeasurer {
+class FlutterReceiptRasterizer
+    implements ReceiptRasterizer, RasterLineMeasurer {
   const FlutterReceiptRasterizer({
     this.fontSize = 22.0,
     this.lineHeight = 1.3,
@@ -204,8 +205,11 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer, RasterLineMeasurer 
     // safe side margins. All default to prior behavior (scale 1.0, built-in
     // lineHeight, no margins), so an unchanged request is byte-identical.
     final fontScale = request.fontScale;
+    // PRINT-LAYOUT-001B: the per-role size/weight/align hierarchy (profile-aware).
+    final typography = request.typography;
     final effLineHeight = request.lineSpacing ?? lineHeight;
-    final usableWidth = widthDots - request.safeLeftDots - request.safeRightDots;
+    final usableWidth =
+        widthDots - request.safeLeftDots - request.safeRightDots;
     final textDirection = request.direction == ReceiptTextDirection.rtl
         ? ui.TextDirection.rtl
         : ui.TextDirection.ltr;
@@ -218,7 +222,10 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer, RasterLineMeasurer 
           : PrintLineStyle.normal;
 
       if (style == PrintLineStyle.separator) {
-        final rows = math.max(1, _separatorHeight(fontScale).ceil());
+        final rows = math.max(
+          1,
+          _separatorHeight(typography, fontScale).ceil(),
+        );
         layouts.add(
           _LineLayout.separator(
             band: ReceiptRasterBand(
@@ -234,7 +241,7 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer, RasterLineMeasurer 
         continue;
       }
 
-      final styleSpec = _specFor(style, fontScale);
+      final styleSpec = _specFor(style, typography, fontScale);
       final styled = _layoutLine(
         text,
         usableWidth,
@@ -313,59 +320,29 @@ class FlutterReceiptRasterizer implements ReceiptRasterizer, RasterLineMeasurer 
     }
   }
 
-  double _separatorHeight(double fontScale) =>
-      fontSize * printLineStyleSizeMultiplier(PrintLineStyle.separator) * fontScale;
+  double _separatorHeight(PrintTypography typography, double fontScale) =>
+      fontSize *
+      typography.sizeMultiplier(PrintLineStyle.separator) *
+      fontScale;
 
-  /// The render spec for [style], scaled by the profile [fontScale]. The SIZE
-  /// multiplier is the shared [printLineStyleSizeMultiplier] (one source for the
-  /// renderer + the pagination estimate); weight/alignment stay here.
-  _LineSpec _specFor(PrintLineStyle style, double fontScale) {
-    final size = fontSize * printLineStyleSizeMultiplier(style) * fontScale;
-    switch (style) {
-      case PrintLineStyle.headingLarge:
-        return _LineSpec(
-          size: size,
-          weight: ui.FontWeight.w800,
-          align: ui.TextAlign.center,
-        );
-      case PrintLineStyle.centered:
-        return _LineSpec(
-          size: size,
-          weight: ui.FontWeight.w400,
-          align: ui.TextAlign.center,
-        );
-      case PrintLineStyle.item:
-        return _LineSpec(
-          size: size,
-          weight: ui.FontWeight.w600,
-          align: ui.TextAlign.start,
-        );
-      case PrintLineStyle.sub:
-        return _LineSpec(
-          size: size,
-          weight: ui.FontWeight.w400,
-          align: ui.TextAlign.start,
-        );
-      case PrintLineStyle.note:
-        return _LineSpec(
-          size: size,
-          weight: ui.FontWeight.w700,
-          align: ui.TextAlign.start,
-        );
-      case PrintLineStyle.total:
-        return _LineSpec(
-          size: size,
-          weight: ui.FontWeight.w800,
-          align: ui.TextAlign.start,
-        );
-      case PrintLineStyle.normal:
-      case PrintLineStyle.separator:
-        return _LineSpec(
-          size: size,
-          weight: ui.FontWeight.w400,
-          align: ui.TextAlign.start,
-        );
-    }
+  /// The render spec for [style] from the centralized [typography], scaled by
+  /// the profile [fontScale]. PRINT-LAYOUT-001B: size, weight, and alignment ALL
+  /// come from [PrintTypography] (one source for the renderer + the pagination
+  /// estimate). The weight is already a concrete axis (bold→w700 / regular→w400),
+  /// so no synthetic axis is ever requested (PILOT-PRINT-FIDELITY-001).
+  _LineSpec _specFor(
+    PrintLineStyle style,
+    PrintTypography typography,
+    double fontScale,
+  ) {
+    final size = fontSize * typography.sizeMultiplier(style) * fontScale;
+    final weight = typography.weightFor(style) == PrintFontWeight.bold
+        ? ui.FontWeight.w700
+        : ui.FontWeight.w400;
+    final align = typography.alignFor(style) == PrintTextAlignRole.center
+        ? ui.TextAlign.center
+        : ui.TextAlign.start;
+    return _LineSpec(size: size, weight: weight, align: align);
   }
 
   /// Semantic weights collapse to the two CONCRETE axes every platform ships

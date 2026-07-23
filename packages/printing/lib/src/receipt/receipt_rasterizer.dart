@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../print_document.dart';
+import '../print_typography.dart';
 
 /// Text direction for a rasterized receipt block (RF-073).
 enum ReceiptTextDirection { ltr, rtl }
@@ -21,6 +22,7 @@ class ReceiptRasterRequest {
     this.lineSpacing,
     this.safeLeftDots = 0,
     this.safeRightDots = 0,
+    this.typography = PrintTypography.standard,
   }) : assert(
          styles == null || styles.length == lines.length,
          'styles must be parallel to lines',
@@ -66,6 +68,12 @@ class ReceiptRasterRequest {
   /// emitted bitmap stays [widthDots] wide. Default `0` == full-width (prior).
   final int safeLeftDots;
   final int safeRightDots;
+
+  /// PRINT-LAYOUT-001B: the per-role typography tokens (size multiplier + weight
+  /// + alignment) the renderer applies to each line's [PrintLineStyle]. Defaults
+  /// to [PrintTypography.standard]; the fixed-media path passes the profile-aware
+  /// config so the small 50×50 label uses the gentler compact hierarchy.
+  final PrintTypography typography;
 }
 
 /// A rasterized monochrome bitmap ready to become a [PrintRasterImageLine].

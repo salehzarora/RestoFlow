@@ -58,6 +58,10 @@ export 'src/print_adapter.dart';
 // page-break planner (no clipping), and the 1bpp raster ink-bounds helper used
 // to assert content stays inside safe margins.
 export 'src/print_line_metrics.dart';
+// PRINT-LAYOUT-001B: the centralized, profile-aware per-role typography tokens
+// (size multiplier + concrete weight + alignment) the raster renderer and the
+// pagination estimate both read — the single source that keeps them in lockstep.
+export 'src/print_typography.dart';
 export 'src/print_pagination.dart';
 export 'src/raster_bounds.dart';
 export 'src/print_document.dart';
