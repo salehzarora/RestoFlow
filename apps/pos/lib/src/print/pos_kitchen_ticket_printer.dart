@@ -23,6 +23,7 @@ import '../state/cart_controller.dart' show CartLineView;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_network_printer_config.dart';
+import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../state/pos_printer_transport.dart';
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import 'bluetooth_printer.dart';
@@ -270,6 +271,7 @@ typedef KitchenBytesBuilder =
       required KitchenTicketPrintLabels labels,
       pp.ReceiptRasterizer? rasterizer,
       pp.MediaProfile? mediaProfile,
+      String? restaurantName,
     });
 
 /// Sends a money-free kitchen ticket to the resolved KITCHEN printer.
@@ -308,6 +310,10 @@ class PosKitchenTicketPrinter {
         labels: labels,
         rasterizer: _container.read(nativePrintRasterizerProvider),
         mediaProfile: resolved.mediaProfile,
+        // PRINT-LAYOUT-001B: the station's own restaurant name for the brand
+        // header — a stable device-level value, offline-safe (null => the
+        // shared builder uses the localized fallback on [labels]).
+        restaurantName: _container.read(posRestaurantNameProvider),
       );
     } catch (_) {
       return PosKitchenPrintOutcome.failed;

@@ -741,8 +741,13 @@ void main() {
       final throwing = PosKitchenTicketPrinter(
         c,
         buildBytes:
-            ({required ticket, required labels, rasterizer, mediaProfile}) =>
-                Future<Uint8List>.error(StateError('boom')),
+            ({
+              required ticket,
+              required labels,
+              rasterizer,
+              mediaProfile,
+              restaurantName,
+            }) => Future<Uint8List>.error(StateError('boom')),
         targetOverride: ResolvedKitchenPrinter(
           destinationKey: 'k',
           transportFactory: () => fake,

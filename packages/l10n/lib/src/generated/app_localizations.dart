@@ -1942,6 +1942,12 @@ abstract class AppLocalizations {
   /// **'Receipt'**
   String get posReceiptTitle;
 
+  /// PRINT-LAYOUT-001B: the generic, localized brand word printed as the restaurant-name header on a receipt or kitchen ticket when the paired device has no configured restaurant name (never a hardcoded placeholder).
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant'**
+  String get printRestaurantNameFallback;
+
   /// POS receipt label preceding the receipt number/reference.
   ///
   /// In en, this message translates to:

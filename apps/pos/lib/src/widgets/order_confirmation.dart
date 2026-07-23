@@ -212,8 +212,13 @@ class OrderConfirmation extends ConsumerWidget {
             // centre's reprint (built from the reconciled row) printed 30.00 for the
             // very same order. The LINES are untouched: they are the order-time
             // price snapshot (D-008) and are never recomputed.
-            buildDocument: () =>
-                buildReceiptDocument(l10n, displayOrder, paid, isDemo: isDemo),
+            buildDocument: () => buildReceiptDocument(
+              l10n,
+              displayOrder,
+              paid,
+              isDemo: isDemo,
+              restaurantName: assignments?.restaurantName,
+            ),
             submitToBridge: bridge == null ? null : bridge.submit,
           );
     });
@@ -779,8 +784,13 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
           orderKey: order.identity.key,
           hasEnabledPrinter:
               (assignments?.hasEnabledPrinter ?? false) || nativeConfigured,
-          buildDocument: () =>
-              buildReceiptDocument(l10n, order, payment, isDemo: isDemo),
+          buildDocument: () => buildReceiptDocument(
+            l10n,
+            order,
+            payment,
+            isDemo: isDemo,
+            restaurantName: assignments?.restaurantName,
+          ),
           submitToBridge: bridge == null ? null : bridge.submit,
         );
   }

@@ -18,10 +18,12 @@ import 'print_document.dart';
 /// construction: a [KdsTicketView] carries no money fields at all (T-003).
 PrintDocument buildKdsTicketDocument(
   AppLocalizations l10n,
-  KdsTicketView ticket,
-) => buildKdsTicketPrintDocument(
+  KdsTicketView ticket, {
+  String? restaurantName,
+}) => buildKdsTicketPrintDocument(
   ticket: ticket,
   labels: kitchenTicketPrintLabelsFromL10n(l10n),
+  restaurantName: restaurantName,
 );
 
 /// Adapts the shared kitchen-ticket CHROME labels from `AppLocalizations`. The
@@ -39,4 +41,5 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
   stationLabel: l10n.kdsStationLabel,
   noteLabel: l10n.kdsNoteLabel,
   kitchenTotal: l10n.kdsMeatTotalLabel,
+  restaurantNameFallback: l10n.printRestaurantNameFallback,
 );

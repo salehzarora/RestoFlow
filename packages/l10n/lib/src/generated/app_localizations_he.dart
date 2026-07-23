@@ -983,6 +983,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posReceiptTitle => 'קבלה';
 
   @override
+  String get printRestaurantNameFallback => 'מסעדה';
+
+  @override
   String get posReceiptNumberLabel => 'מס׳ קבלה';
 
   @override

@@ -307,6 +307,7 @@
   "posPaymentMethodCash": "نقدًا",
   "posPaidAtLabel": "وقت الدفع",
   "posReceiptTitle": "إيصال",
+  "printRestaurantNameFallback": "مطعم",
   "posReceiptNumberLabel": "رقم الإيصال",
   "posReceiptTotal": "الإجمالي",
   "posReceiptProvisionalNote": "مؤقّت — تتم مطابقته مع إيصال الخادم عند المزامنة",

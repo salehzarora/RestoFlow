@@ -12,6 +12,7 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/print_document.dart';
 import '../print/print_service.dart';
+import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../state/submitted_order_view.dart';
 
 /// A browser-style RECEIPT print preview (RF-118): a narrow "paper" receipt over
@@ -46,6 +47,15 @@ class ReceiptPrintPreview extends ConsumerWidget {
     // Mode-honest: the demo restaurant name / demo + provisional notes belong
     // to demo mode only — a REAL receipt shows the true server receipt number.
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+    // PRINT-LAYOUT-001B: the on-screen brand mirrors the printed hero — the demo
+    // name in demo mode, else the real device restaurant name, else a localized
+    // generic word (never a hardcoded placeholder).
+    final realName = ref.watch(posRestaurantNameProvider)?.trim();
+    final brandName = isDemo
+        ? l10n.receiptDemoRestaurantName
+        : (realName != null && realName.isNotEmpty
+              ? realName
+              : l10n.printRestaurantNameFallback);
     final typeLabel = dineIn
         ? l10n.posOrderTypeDineIn
         : l10n.posOrderTypeTakeaway;
@@ -82,9 +92,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                           // joining under the ar default locale (D-014).
                           Center(
                             child: Text(
-                              isDemo
-                                  ? l10n.receiptDemoRestaurantName
-                                  : l10n.posReceiptTitle,
+                              brandName,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
@@ -260,7 +268,13 @@ class ReceiptPrintPreview extends ConsumerWidget {
               onPrint: () => ref
                   .read(printServiceProvider)
                   .printDocument(
-                    buildReceiptDocument(l10n, order, payment, isDemo: isDemo),
+                    buildReceiptDocument(
+                      l10n,
+                      order,
+                      payment,
+                      isDemo: isDemo,
+                      restaurantName: ref.read(posRestaurantNameProvider),
+                    ),
                   ),
             ),
           ],
@@ -283,13 +297,14 @@ PrintDocument buildReceiptDocument(
   final dineIn = order.orderType == OrderType.dineIn;
   // PRINT-LAYOUT-001B: the brand HERO is the restaurant name — the demo name in
   // demo mode, else the real name threaded from the paired-device context (DATA,
-  // offline-safe). When it is absent (an unconfigured device) the receipt title
-  // stands in as the hero so nothing is fabricated; the dedicated localized
-  // fallback + the real-name wiring arrive with the call-site threading.
-  final brandName = isDemo
+  // offline-safe). When it is absent (an unconfigured device) a localized
+  // generic brand word stands in, never a hardcoded placeholder.
+  final realName = isDemo
       ? l10n.receiptDemoRestaurantName
       : restaurantName?.trim();
-  final hasBrand = brandName != null && brandName.isNotEmpty;
+  final brandName = (realName != null && realName.isNotEmpty)
+      ? realName
+      : l10n.printRestaurantNameFallback;
   final items = order.lines;
   // Built into a local (not an inline `title:` literal) so the RF-020
   // no-hardcoded-strings guard isn't tripped by this l10n-interpolated value.
@@ -297,11 +312,10 @@ PrintDocument buildReceiptDocument(
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
-      // Header — restaurant-name brand HERO, then a secondary "Receipt" label
-      // (only when a real brand is shown, so the fallback never reads
-      // "Receipt / Receipt"), then a PAID chip.
-      PrintLine.title(hasBrand ? brandName : l10n.posReceiptTitle),
-      if (hasBrand) PrintLine.center(l10n.posReceiptTitle),
+      // Header — restaurant-name brand HERO, a secondary "Receipt" label, then
+      // a PAID chip.
+      PrintLine.title(brandName),
+      PrintLine.center(l10n.posReceiptTitle),
       PrintLine.center(l10n.posPaidChip),
       PrintLine.rule(),
       // The customer-facing ORDER NUMBER — a prominent secondary identifier

@@ -37,11 +37,19 @@ Future<Uint8List> renderKitchenTicketBytes({
   // come from the selected KITCHEN media profile. Null/absent => the
   // backward-compatible 80mm continuous default (byte-identical).
   pp.MediaProfile? mediaProfile,
+  // PRINT-LAYOUT-001B: the paired station's restaurant name for the brand
+  // header (offline-safe DATA). Null => the shared builder uses the localized
+  // fallback carried on [labels].
+  String? restaurantName,
   pp.PageLineLabel? pageLabel,
   pp.PageLineLabel? continuationHeader,
 }) async {
   final media = mediaProfile ?? pp.MediaProfile.continuous80;
-  final document = buildKdsTicketPrintDocument(ticket: ticket, labels: labels);
+  final document = buildKdsTicketPrintDocument(
+    ticket: ticket,
+    labels: labels,
+    restaurantName: restaurantName,
+  );
   final escPos = kitchenTicketToEscPosDocument(
     document,
     columns: media.columns,

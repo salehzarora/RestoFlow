@@ -307,6 +307,7 @@
   "posPaymentMethodCash": "מזומן",
   "posPaidAtLabel": "שולם בשעה",
   "posReceiptTitle": "קבלה",
+  "printRestaurantNameFallback": "מסעדה",
   "posReceiptNumberLabel": "מס׳ קבלה",
   "posReceiptTotal": "סך הכול",
   "posReceiptProvisionalNote": "זמני — יותאם לקבלת שרת בעת סנכרון",

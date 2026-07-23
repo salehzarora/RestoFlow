@@ -997,6 +997,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posReceiptTitle => 'Receipt';
 
   @override
+  String get printRestaurantNameFallback => 'Restaurant';
+
+  @override
   String get posReceiptNumberLabel => 'Receipt no.';
 
   @override

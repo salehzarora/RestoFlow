@@ -32,6 +32,7 @@ class KitchenTicketPrintLabels {
     required this.stationLabel,
     required this.noteLabel,
     required this.kitchenTotal,
+    this.restaurantNameFallback,
   });
 
   /// Header fallback prefix when the ticket has no order number (`kdsTicketLabel`).
@@ -60,6 +61,12 @@ class KitchenTicketPrintLabels {
 
   /// `kdsMeatTotalLabel(count, unit)` — the whole-order "Kitchen total: N unit".
   final String Function(String count, String unit) kitchenTotal;
+
+  /// PRINT-LAYOUT-001B: the localized GENERIC brand word printed as the
+  /// restaurant-name header when the device carries no real restaurant name
+  /// (`printRestaurantNameFallback`). Null on a label built without it — the
+  /// brand line is then simply omitted (never a hardcoded placeholder).
+  final String? restaurantNameFallback;
 }
 
 /// Builds the render-neutral, money-free kitchen-ticket [PrintDocument] for
@@ -91,7 +98,13 @@ PrintDocument buildKdsTicketPrintDocument({
   final showStation =
       ticket.stationId != KdsTicketMapper.unassignedStation &&
       ticket.stationId.isNotEmpty;
-  final brand = restaurantName?.trim();
+  // The brand line: the real restaurant name when the print path supplies one,
+  // else the localized generic fallback from [labels]; omitted only when neither
+  // exists (never a hardcoded placeholder).
+  final rawBrand = restaurantName?.trim();
+  final brand = (rawBrand != null && rawBrand.isNotEmpty)
+      ? rawBrand
+      : labels.restaurantNameFallback?.trim();
   final items = ticket.items;
   final docTitle = '${labels.previewTitle} $header';
   return PrintDocument(

@@ -792,6 +792,10 @@
   "@posReceiptTitle": {
     "description": "POS heading of the receipt preview card."
   },
+  "printRestaurantNameFallback": "Restaurant",
+  "@printRestaurantNameFallback": {
+    "description": "PRINT-LAYOUT-001B: the generic, localized brand word printed as the restaurant-name header on a receipt or kitchen ticket when the paired device has no configured restaurant name (never a hardcoded placeholder)."
+  },
   "posReceiptNumberLabel": "Receipt no.",
   "@posReceiptNumberLabel": {
     "description": "POS receipt label preceding the receipt number/reference."

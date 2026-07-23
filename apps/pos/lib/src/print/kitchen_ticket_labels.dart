@@ -21,4 +21,5 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
   stationLabel: l10n.kdsStationLabel,
   noteLabel: l10n.kdsNoteLabel,
   kitchenTotal: l10n.kdsMeatTotalLabel,
+  restaurantNameFallback: l10n.printRestaurantNameFallback,
 );
