@@ -128,12 +128,18 @@ void main() {
     expect(find.byKey(_finishKey), findsOneWidget);
   });
 
-  testWidgets('D: pressing it with no active kitchen orders shows an honest '
-      'localized message', (tester) async {
+  testWidgets('D: confirming with no active kitchen orders (post-confirmation '
+      'refresh) shows an honest localized message', (tester) async {
     await _pump(tester, toggleOn: true, role: 'cashier');
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    // Press -> the confirmation dialog appears FIRST (the eligible set is derived
+    // only AFTER confirmation, never captured before the dialog).
     await tester.tap(find.byKey(_finishKey));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.posFinishAllConfirmBody), findsOneWidget);
+    // Confirm -> refresh the (empty) window + derive -> honest zero/zero message.
+    await tester.tap(find.text(l10n.posFinishAllConfirmAction));
+    await tester.pumpAndSettle();
     expect(find.text(l10n.posFinishAllNoActiveOrders), findsOneWidget);
   });
 }
