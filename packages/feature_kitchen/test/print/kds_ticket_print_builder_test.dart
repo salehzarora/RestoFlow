@@ -192,11 +192,12 @@ void main() {
 
         // Sub-lines are indented by two spaces (chef reads modifiers under items).
         expect(textLines.any((l) => l.text == '  + Double ×2'), isTrue);
-        // Item lines LEAD with the quantity at the emphasised item style.
+        // Item lines LEAD with the quantity at the DEDICATED larger kitchen
+        // item style (PRINT-LAYOUT-001C).
         final burger = textLines.firstWhere(
           (l) => l.text.startsWith('2 × Double Burger'),
         );
-        expect(burger.style, pp.PrintLineStyle.item);
+        expect(burger.style, pp.PrintLineStyle.kitchenItem);
         // A rule spans the full width.
         expect(textLines.any((l) => l.text == '-' * 48), isTrue);
         // The document ends with the paper feed + cut.

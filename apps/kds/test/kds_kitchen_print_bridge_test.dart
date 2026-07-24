@@ -198,9 +198,12 @@ void main() {
     // large order-number hero heading.
     expect(styles.first, pp.PrintLineStyle.subheading);
     expect(styles.contains(pp.PrintLineStyle.headingLarge), isTrue);
-    // Item + indented sub-lines are present…
-    expect(styles.contains(pp.PrintLineStyle.item), isTrue);
-    expect(styles.contains(pp.PrintLineStyle.sub), isTrue);
+    // PRINT-LAYOUT-001C: the kitchen uses its DEDICATED larger item + modifier
+    // roles (never the smaller shared receipt item/sub).
+    expect(styles.contains(pp.PrintLineStyle.kitchenItem), isTrue);
+    expect(styles.contains(pp.PrintLineStyle.kitchenModifier), isTrue);
+    expect(styles.contains(pp.PrintLineStyle.item), isFalse);
+    expect(styles.contains(pp.PrintLineStyle.sub), isFalse);
     // …but NO money total style ever appears on the kitchen ticket.
     expect(styles.contains(pp.PrintLineStyle.total), isFalse);
   });

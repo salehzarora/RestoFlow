@@ -104,9 +104,10 @@ void main() {
       rasterizer: fake,
     ).submit(buildKdsTicketDocument(l10n, _arabicTicket()));
     final req = fake.requests.single;
-    // The order number is a large heading; the item is emphasised.
+    // The order number is a large heading; PRINT-LAYOUT-001C: the item uses the
+    // DEDICATED larger kitchen item role.
     expect(req.styles.contains(pp.PrintLineStyle.headingLarge), isTrue);
-    expect(req.styles.contains(pp.PrintLineStyle.item), isTrue);
+    expect(req.styles.contains(pp.PrintLineStyle.kitchenItem), isTrue);
     // The kitchen ticket is money-free — a `total` style must never appear.
     expect(req.styles.contains(pp.PrintLineStyle.total), isFalse);
   });

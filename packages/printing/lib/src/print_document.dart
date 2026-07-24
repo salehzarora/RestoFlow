@@ -50,6 +50,22 @@ enum PrintLineStyle {
   /// Its height is a profile-aware fraction of the base size; it expects no ink,
   /// so the zero-ink recovery + ink-bounds scans correctly ignore it.
   spacer,
+
+  /// PRINT-LAYOUT-001C: a KITCHEN-TICKET item name + quantity — deliberately
+  /// LARGER + bolder than the shared receipt [item] so a cook reads it across
+  /// the pass, while staying below the order-reference hero ([headingLarge]).
+  /// Kitchen-only; the receipt keeps [item] so its layout is untouched.
+  kitchenItem,
+
+  /// PRINT-LAYOUT-001C: a KITCHEN-TICKET modifier / preparation / removal line —
+  /// larger than the shared receipt [sub], but still below [kitchenItem] so the
+  /// item name stays the stronger element. Kitchen-only.
+  kitchenModifier,
+
+  /// PRINT-LAYOUT-001C: a KITCHEN-TICKET item / order note — as large as a
+  /// [kitchenModifier] but bold, so a special instruction can't be missed or
+  /// mistaken for a modifier. Kitchen-only.
+  kitchenNote,
 }
 
 /// Optional text-direction metadata carried on a line (RF-070).

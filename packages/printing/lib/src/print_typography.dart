@@ -96,9 +96,16 @@ class PrintTypography {
   /// separator > spacer.
   double sizeMultiplier(PrintLineStyle style) => switch (style) {
     PrintLineStyle.headingLarge => _compact ? 1.4 : 1.7,
+    // PRINT-LAYOUT-001C: the kitchen item is ~2 tiers above the receipt item
+    // (1.25/1.15) yet still below the order-reference hero (1.7/1.4).
+    PrintLineStyle.kitchenItem => _compact ? 1.3 : 1.5,
     PrintLineStyle.total => _compact ? 1.3 : 1.45,
     PrintLineStyle.subheading => _compact ? 1.15 : 1.3,
     PrintLineStyle.item => _compact ? 1.15 : 1.25,
+    // PRINT-LAYOUT-001C: kitchen modifiers / preparation / notes — ~2 tiers
+    // above the receipt sub (1.0/0.9), still below the kitchen item name.
+    PrintLineStyle.kitchenModifier => _compact ? 1.1 : 1.25,
+    PrintLineStyle.kitchenNote => _compact ? 1.1 : 1.25,
     PrintLineStyle.note => _compact ? 0.95 : 1.0,
     PrintLineStyle.centered => _compact ? 0.95 : 1.0,
     PrintLineStyle.normal => _compact ? 0.95 : 1.0,
@@ -114,12 +121,15 @@ class PrintTypography {
     PrintLineStyle.subheading ||
     PrintLineStyle.item ||
     PrintLineStyle.note ||
-    PrintLineStyle.total => PrintFontWeight.bold,
+    PrintLineStyle.total ||
+    PrintLineStyle.kitchenItem ||
+    PrintLineStyle.kitchenNote => PrintFontWeight.bold,
     PrintLineStyle.centered ||
     PrintLineStyle.normal ||
     PrintLineStyle.sub ||
     PrintLineStyle.separator ||
-    PrintLineStyle.spacer => PrintFontWeight.regular,
+    PrintLineStyle.spacer ||
+    PrintLineStyle.kitchenModifier => PrintFontWeight.regular,
   };
 
   /// The alignment role for [style]: the headings and brand / secondary lines
@@ -134,6 +144,9 @@ class PrintTypography {
     PrintLineStyle.normal ||
     PrintLineStyle.sub ||
     PrintLineStyle.separator ||
-    PrintLineStyle.spacer => PrintTextAlignRole.start,
+    PrintLineStyle.spacer ||
+    PrintLineStyle.kitchenItem ||
+    PrintLineStyle.kitchenModifier ||
+    PrintLineStyle.kitchenNote => PrintTextAlignRole.start,
   };
 }

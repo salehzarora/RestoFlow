@@ -207,14 +207,18 @@ pp.PrintDocument kitchenTicketToEscPosDocument(
             emphasis: line.emphasised
                 ? pp.TextEmphasis.bold
                 : pp.TextEmphasis.normal,
-            style: pp.PrintLineStyle.item,
+            // PRINT-LAYOUT-001C: the DEDICATED larger kitchen item role (the
+            // receipt keeps the smaller shared `item`, untouched).
+            style: pp.PrintLineStyle.kitchenItem,
           ),
         );
       case PrintLineKind.sub:
         lines.add(
           pp.PrintTextLine(
             '  ${line.left ?? ''}',
-            style: pp.PrintLineStyle.sub,
+            // PRINT-LAYOUT-001C: the DEDICATED larger kitchen modifier / prep
+            // role (the receipt keeps the smaller shared `sub`).
+            style: pp.PrintLineStyle.kitchenModifier,
           ),
         );
       case PrintLineKind.note:
@@ -222,7 +226,8 @@ pp.PrintDocument kitchenTicketToEscPosDocument(
           pp.PrintTextLine(
             line.left ?? '',
             alignment: pp.PrintAlignment.center,
-            style: pp.PrintLineStyle.note,
+            // PRINT-LAYOUT-001C: the DEDICATED larger + bold kitchen note role.
+            style: pp.PrintLineStyle.kitchenNote,
           ),
         );
       case PrintLineKind.rule:
