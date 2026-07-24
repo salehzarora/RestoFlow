@@ -28,6 +28,30 @@ const int kNativeRasterWidthDots = 576;
 bool _isMoneyRow(PrintLineStyle style) =>
     style == PrintLineStyle.normal || style == PrintLineStyle.total;
 
+/// PRINT-LAYOUT-001C: one blank, ink-free text line appended BELOW the last
+/// visible content so the final footer/item never sits against the physical
+/// cutter. It is rendered into the SAME raster image (before the feed + cut), so
+/// the printed page carries ~one line of blank paper as a bottom-safe tail. It
+/// is [PrintLineStyle.normal] height (a full text line, not the smaller spacer)
+/// and carries no text, so it expects no ink and never triggers zero-ink recovery.
+const PrintTextLine _bottomSafeTailLine = PrintTextLine(
+  '',
+  style: PrintLineStyle.normal,
+);
+
+/// The rendered ROW height (dots) of the bottom-safe tail for [profile] — one
+/// normal text line at the profile's font scale + line spacing. Fixed-label
+/// pagination reserves this so a page (content + tail) never exceeds the media
+/// height; content that would encroach moves to the next page instead of clipping.
+int bottomSafeTailRows(MediaProfile profile) {
+  final typography = PrintTypography.forProfile(profile);
+  final size =
+      typography.baseFontSize *
+      typography.sizeMultiplier(PrintLineStyle.normal) *
+      profile.fontScale;
+  return math.max(1, (size * profile.lineSpacing).ceil());
+}
+
 /// True when [doc] carries any non-ASCII text (Arabic/Hebrew letters, ₪, ×, …)
 /// that ESC/POS TEXT mode cannot reliably print — the signal to switch to
 /// raster. A document that is already a raster image (no text lines) returns
@@ -79,11 +103,20 @@ Future<PrintDocument> rasterizeTextDocument(
   final textLines = textDoc.lines.whereType<PrintTextLine>().toList(
     growable: false,
   );
-  final lines = textLines.map((l) => l.text).toList(growable: false);
   // PRINT-RASTER-STYLE-001: carry each line's semantic style so the rasterizer
   // can render large/centered headings, an emphasised total, indented sub-lines,
   // etc. Lines with no style stay [PrintLineStyle.normal] (prior behavior).
-  final styles = textLines.map((l) => l.style).toList(growable: false);
+  // PRINT-LAYOUT-001C: append the bottom-safe tail (one blank line) BELOW the
+  // content so the last visible line clears the physical cutter — it becomes
+  // blank raster rows in this single image, before the feed + cut.
+  final lines = <String>[
+    for (final l in textLines) l.text,
+    _bottomSafeTailLine.text,
+  ];
+  final styles = <PrintLineStyle>[
+    for (final l in textLines) l.style,
+    _bottomSafeTailLine.style,
+  ];
   final image = await rasterizer.rasterize(
     ReceiptRasterRequest(
       lines: lines,
@@ -220,9 +253,16 @@ Future<PrintDocument> rasterizeForMediaProfile(
       ? 0
       : 2 * maxRow;
 
+  // PRINT-LAYOUT-001C: reserve one blank text line at the BOTTOM of every page
+  // (the bottom-safe tail) so the last visible line clears the cutter. Because
+  // the tail is subtracted from the page budget, content that would reach the
+  // bottom moves to the next page instead of being clipped.
+  final tailRows = bottomSafeTailRows(profile);
+  final pageBudget = math.max(1, profile.printableHeightDots - tailRows);
+
   final pages = planPrintPages(
     lineHeights: rows,
-    maxPageRows: profile.printableHeightDots,
+    maxPageRows: pageBudget,
     blockStartAt: blockStarts,
     reservedRowsPerPage: reserved,
   );
@@ -246,6 +286,11 @@ Future<PrintDocument> rasterizeForMediaProfile(
       pageLines.add(pageLabel(p + 1, total));
       pageStyles.add(PrintLineStyle.centered);
     }
+    // PRINT-LAYOUT-001C: the bottom-safe tail closes every page BELOW its
+    // content + page number (its height was reserved from the page budget), so
+    // the final line never touches the cut.
+    pageLines.add(_bottomSafeTailLine.text);
+    pageStyles.add(_bottomSafeTailLine.style);
 
     final image = await rasterizer.rasterize(
       ReceiptRasterRequest(

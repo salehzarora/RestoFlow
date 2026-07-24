@@ -21,37 +21,43 @@ void main() {
   List<PrintRasterImageLine> images(PrintDocument doc) =>
       doc.lines.whereType<PrintRasterImageLine>().toList();
 
-  test('continuous80 => ONE image at 576 dots (72 bytes/row), feed 3, one cut', () async {
-    final doc = await rasterizeForMediaProfile(
-      textDoc(arLines(40)),
-      rasterizer: FakeReceiptRasterizer(),
-      profile: MediaProfile.continuous80,
-    );
-    final imgs = images(doc);
-    expect(imgs, hasLength(1), reason: 'continuous roll never paginates');
-    expect(imgs.single.widthBytes, 72, reason: '576 dots / 8');
-    expect(
-      doc.lines.whereType<PrintFeedLine>().single.lines,
-      3,
-      reason: 'continuous feed stays 3',
-    );
-    expect(doc.lines.whereType<PrintCutLine>(), hasLength(1));
-  });
+  test(
+    'continuous80 => ONE image at 576 dots (72 bytes/row), feed 3, one cut',
+    () async {
+      final doc = await rasterizeForMediaProfile(
+        textDoc(arLines(40)),
+        rasterizer: FakeReceiptRasterizer(),
+        profile: MediaProfile.continuous80,
+      );
+      final imgs = images(doc);
+      expect(imgs, hasLength(1), reason: 'continuous roll never paginates');
+      expect(imgs.single.widthBytes, 72, reason: '576 dots / 8');
+      expect(
+        doc.lines.whereType<PrintFeedLine>().single.lines,
+        3,
+        reason: 'continuous feed stays 3',
+      );
+      expect(doc.lines.whereType<PrintCutLine>(), hasLength(1));
+    },
+  );
 
-  test('label50x50 => raster width is 384 (48 bytes/row), NEVER 576/72', () async {
-    final doc = await rasterizeForMediaProfile(
-      textDoc(arLines(3)), // short => one page
-      rasterizer: FakeReceiptRasterizer(),
-      profile: MediaProfile.label50x50,
-    );
-    final imgs = images(doc);
-    expect(imgs, isNotEmpty);
-    for (final img in imgs) {
-      expect(img.widthBytes, 48, reason: '384 dots / 8 — never a 576 canvas');
-    }
-    // feed comes from the profile (labels eject 2, not 3).
-    expect(doc.lines.whereType<PrintFeedLine>().first.lines, 2);
-  });
+  test(
+    'label50x50 => raster width is 384 (48 bytes/row), NEVER 576/72',
+    () async {
+      final doc = await rasterizeForMediaProfile(
+        textDoc(arLines(3)), // short => one page
+        rasterizer: FakeReceiptRasterizer(),
+        profile: MediaProfile.label50x50,
+      );
+      final imgs = images(doc);
+      expect(imgs, isNotEmpty);
+      for (final img in imgs) {
+        expect(img.widthBytes, 48, reason: '384 dots / 8 — never a 576 canvas');
+      }
+      // feed comes from the profile (labels eject 2, not 3).
+      expect(doc.lines.whereType<PrintFeedLine>().first.lines, 2);
+    },
+  );
 
   test('label80x80 => raster width is 576 (72 bytes/row)', () async {
     final doc = await rasterizeForMediaProfile(
@@ -91,42 +97,53 @@ void main() {
     }
   });
 
-  test('with no rasterizer a fixed profile degrades to the text doc (no crash)', () async {
-    final input = textDoc(arLines(5));
-    final doc = await rasterizeForMediaProfile(
-      input,
-      rasterizer: null,
-      profile: MediaProfile.label50x50,
-    );
-    expect(identical(doc, input), isTrue);
-  });
+  test(
+    'with no rasterizer a fixed profile degrades to the text doc (no crash)',
+    () async {
+      final input = textDoc(arLines(5));
+      final doc = await rasterizeForMediaProfile(
+        input,
+        rasterizer: null,
+        profile: MediaProfile.label50x50,
+      );
+      expect(identical(doc, input), isTrue);
+    },
+  );
 
-  test('every source line appears EXACTLY ONCE across the fixed-media pages, in '
-      'order — no item/modifier/note lost or duplicated', () async {
-    final fake = FakeReceiptRasterizer(dotsPerLine: 40);
-    final source = [for (var i = 0; i < 25; i++) 'صنف-$i'];
-    final doc = await rasterizeForMediaProfile(
-      textDoc(source),
-      rasterizer: fake,
-      profile: MediaProfile.label50x50,
-      pageLabel: (p, t) => 'PGLABEL',
-      continuationHeader: (p, t) => 'CONTHDR',
-    );
-    expect(images(doc).length, greaterThan(1), reason: 'a long ticket splits');
-    // Reconstruct the source lines from what each page ACTUALLY rendered
-    // (the fake records one rasterize request per page), dropping the added
-    // page-number + continuation-header lines.
-    final rendered = <String>[
-      for (final req in fake.requests)
-        for (final line in req.lines)
-          if (line != 'PGLABEL' && line != 'CONTHDR') line,
-    ];
-    expect(
-      rendered,
-      source,
-      reason: 'every line once, in order, none dropped/duplicated',
-    );
-    // The final source line is present exactly once (no clipped tail).
-    expect(rendered.where((l) => l == source.last), hasLength(1));
-  });
+  test(
+    'every source line appears EXACTLY ONCE across the fixed-media pages, in '
+    'order — no item/modifier/note lost or duplicated',
+    () async {
+      final fake = FakeReceiptRasterizer(dotsPerLine: 40);
+      final source = [for (var i = 0; i < 25; i++) 'صنف-$i'];
+      final doc = await rasterizeForMediaProfile(
+        textDoc(source),
+        rasterizer: fake,
+        profile: MediaProfile.label50x50,
+        pageLabel: (p, t) => 'PGLABEL',
+        continuationHeader: (p, t) => 'CONTHDR',
+      );
+      expect(
+        images(doc).length,
+        greaterThan(1),
+        reason: 'a long ticket splits',
+      );
+      // Reconstruct the source lines from what each page ACTUALLY rendered
+      // (the fake records one rasterize request per page), dropping the added
+      // page-number + continuation-header lines and the blank bottom-safe tail
+      // (PRINT-LAYOUT-001C — an empty line closing every page).
+      final rendered = <String>[
+        for (final req in fake.requests)
+          for (final line in req.lines)
+            if (line != 'PGLABEL' && line != 'CONTHDR' && line != '') line,
+      ];
+      expect(
+        rendered,
+        source,
+        reason: 'every line once, in order, none dropped/duplicated',
+      );
+      // The final source line is present exactly once (no clipped tail).
+      expect(rendered.where((l) => l == source.last), hasLength(1));
+    },
+  );
 }
