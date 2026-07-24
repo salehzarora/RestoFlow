@@ -278,4 +278,135 @@ void main() {
       reason: '80x80 standard hero taller than 50x50 compact hero',
     );
   });
+
+  // PRINT-LAYOUT-001C (test A) — the bottom-safe tail: the last visible receipt
+  // line keeps ~one blank text line of raster below it, BEFORE the feed + cut,
+  // on every profile; fixed pages still fit the media.
+  for (final profile in const [
+    MediaProfile.label50x50,
+    MediaProfile.label80x80,
+    MediaProfile.continuous80,
+  ]) {
+    test('K. cashier bottom-safe tail on ${profile.id.name}: blank rows below '
+        'the footer, cut after the tail, page fits the media', () async {
+      final out = await rasterizeForMediaProfile(
+        doc(
+          const [
+            'مطعم الاختبار',
+            'طلب #A9',
+            '2 × فلافل',
+            'الإجمالي        ₪42',
+            'شكراً لكم',
+          ],
+          styles: const [
+            PrintLineStyle.headingLarge,
+            PrintLineStyle.subheading,
+            PrintLineStyle.item,
+            PrintLineStyle.total,
+            PrintLineStyle.centered,
+          ],
+        ),
+        rasterizer: rasterizer,
+        profile: profile,
+        pageLabel: (p, t) => 'ص $p/$t',
+        continuationHeader: (p, t) => 'تكملة',
+      );
+      // The document ends with image -> feed -> CUT (the blank tail is INSIDE
+      // the image, so the cut can only fall after it).
+      expect(out.lines.last, isA<PrintCutLine>());
+      expect(out.lines[out.lines.length - 2], isA<PrintFeedLine>());
+      final imgs = out.lines.whereType<PrintRasterImageLine>().toList();
+      expect(imgs, isNotEmpty);
+      final last = imgs.last;
+      if (profile.paginates) assertPage(last, profile);
+      final b = measureRasterInkBounds(
+        data: last.data,
+        widthBytes: last.widthBytes,
+        heightDots: last.heightDots,
+      );
+      expect(b.hasInk, isTrue);
+      // A full blank text-line of raster sits below the last inked content.
+      final tail = bottomSafeTailRows(profile);
+      expect(
+        last.heightDots - 1 - b.bottom,
+        greaterThanOrEqualTo(tail - 6),
+        reason: 'a full blank text-line tail below the footer, before the cut',
+      );
+    });
+  }
+
+  // PRINT-LAYOUT-001C (test B) — the kitchen ticket with the ENLARGED kitchen
+  // roles keeps its last item / modifier / note fully visible and paginates
+  // without clipping, on both fixed labels.
+  for (final profile in const [
+    MediaProfile.label50x50,
+    MediaProfile.label80x80,
+  ]) {
+    test('L. kitchen bottom-safe tail on ${profile.id.name}: the last item / '
+        'modifier / note stays visible with the LARGER kitchen fonts; page '
+        'fits the media', () async {
+      final imgs = await render(
+        doc(
+          const [
+            'مطعم',
+            'طلب #A9',
+            'صالة',
+            '2 × فلافل',
+            '+ طحينة إضافية',
+            '» ملاحظة: حار',
+          ],
+          styles: const [
+            PrintLineStyle.subheading,
+            PrintLineStyle.headingLarge,
+            PrintLineStyle.centered,
+            PrintLineStyle.kitchenItem,
+            PrintLineStyle.kitchenModifier,
+            PrintLineStyle.kitchenNote,
+          ],
+        ),
+        profile,
+      );
+      expect(imgs, isNotEmpty);
+      for (final img in imgs) {
+        expect(img.widthBytes, profile.widthBytes);
+        assertPage(img, profile);
+      }
+      final last = imgs.last;
+      final b = measureRasterInkBounds(
+        data: last.data,
+        widthBytes: last.widthBytes,
+        heightDots: last.heightDots,
+      );
+      final tail = bottomSafeTailRows(profile);
+      expect(
+        last.heightDots - 1 - b.bottom,
+        greaterThanOrEqualTo(tail - 6),
+        reason: 'a bottom-safe tail below the last kitchen line',
+      );
+    });
+  }
+
+  test(
+    'M. REGRESSION (test E): a short ticket stays ONE page — the bottom-safe '
+    'tail reserve never spawns an empty extra page',
+    () async {
+      final imgs = await render(
+        doc(
+          const ['مطعم', 'طلب #A9', '2 × فلافل'],
+          styles: const [
+            PrintLineStyle.headingLarge,
+            PrintLineStyle.subheading,
+            PrintLineStyle.kitchenItem,
+          ],
+        ),
+        MediaProfile.label50x50,
+      );
+      expect(
+        imgs,
+        hasLength(1),
+        reason: 'short content + tail = a single page',
+      );
+      assertPage(imgs.single, MediaProfile.label50x50);
+    },
+  );
 }

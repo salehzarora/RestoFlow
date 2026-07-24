@@ -301,4 +301,60 @@ void main() {
       expect(doc.lines.any((l) => l.kind == PrintLineKind.subtitle), isFalse);
     });
   });
+
+  group('kitchen item ordering (PRINT-LAYOUT-001C, test D)', () {
+    KdsTicketView mixedTicket() => KdsTicketView(
+      kitchenTicketId: '#900',
+      stationId: KdsTicketMapper.unassignedStation,
+      status: KitchenTicketStatus.newTicket,
+      orderNumber: '#900',
+      orderType: 'dine_in',
+      items: const [
+        KdsItemView(name: 'Burger A', quantity: 1, modifiers: ['no onion']),
+        KdsItemView(name: 'Cola', quantity: 1),
+        KdsItemView(name: 'Burger B', quantity: 1, note: 'well done'),
+        KdsItemView(name: 'Sprite', quantity: 1),
+        KdsItemView(name: 'Fries', quantity: 1),
+      ],
+    );
+
+    test('items print in their SUBMISSION order (stable, every item exactly '
+        'once, modifiers + notes attached to the right item) — food and drinks '
+        'are NOT reordered, because the kitchen snapshot carries no structured '
+        'beverage/category field to group by', () {
+      final doc = buildKdsTicketPrintDocument(
+        ticket: mixedTicket(),
+        labels: _labels(),
+        restaurantName: 'Falafel House',
+      );
+      final items = [
+        for (final l in doc.lines)
+          if (l.kind == PrintLineKind.item) l.left,
+      ];
+      // Exactly the submitted order — the food/drink interleaving the physical
+      // test flagged is preserved (drinks-last needs a structured field first).
+      expect(items, [
+        '1 × Burger A',
+        '1 × Cola',
+        '1 × Burger B',
+        '1 × Sprite',
+        '1 × Fries',
+      ]);
+      // Modifiers + notes stay attached to their item.
+      final texts = [for (final l in doc.lines) l.left ?? ''];
+      expect(texts, contains('+ no onion'));
+      expect(texts, contains('» Note: well done'));
+    });
+
+    test('the builder is a PURE function of the ticket — deterministic, so it '
+        'performs no live menu / network lookup during rendering', () {
+      final t = mixedTicket();
+      List<String> dump(KdsTicketView v) {
+        final doc = buildKdsTicketPrintDocument(ticket: v, labels: _labels());
+        return [for (final l in doc.lines) '${l.kind}|${l.left}|${l.right}'];
+      }
+
+      expect(dump(t), dump(t));
+    });
+  });
 }

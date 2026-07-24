@@ -162,4 +162,92 @@ void main() {
       expect(standard.lineHeight, kBaseReceiptLineHeight);
     });
   });
+
+  group('PrintTypography — kitchen roles (PRINT-LAYOUT-001C, test C)', () {
+    double m(PrintLineStyle s) => standard.sizeMultiplier(s);
+    double c(PrintLineStyle s) => compact.sizeMultiplier(s);
+
+    test(
+      'the kitchen item + modifier + note are LARGER than the shared receipt '
+      'item / sub / note baseline (standard + compact)',
+      () {
+        expect(
+          m(PrintLineStyle.kitchenItem),
+          greaterThan(m(PrintLineStyle.item)),
+        );
+        expect(
+          m(PrintLineStyle.kitchenModifier),
+          greaterThan(m(PrintLineStyle.sub)),
+        );
+        expect(
+          m(PrintLineStyle.kitchenNote),
+          greaterThan(m(PrintLineStyle.note)),
+        );
+        expect(
+          c(PrintLineStyle.kitchenItem),
+          greaterThan(c(PrintLineStyle.item)),
+        );
+        expect(
+          c(PrintLineStyle.kitchenModifier),
+          greaterThan(c(PrintLineStyle.sub)),
+        );
+      },
+    );
+
+    test('the item name stays STRONGER (larger) than the modifier, and both '
+        'stay below the order-reference hero (standard + compact)', () {
+      expect(
+        m(PrintLineStyle.kitchenItem),
+        greaterThan(m(PrintLineStyle.kitchenModifier)),
+      );
+      expect(
+        m(PrintLineStyle.kitchenItem),
+        lessThan(m(PrintLineStyle.headingLarge)),
+      );
+      expect(
+        c(PrintLineStyle.kitchenItem),
+        greaterThan(c(PrintLineStyle.kitchenModifier)),
+      );
+      expect(
+        c(PrintLineStyle.kitchenItem),
+        lessThan(c(PrintLineStyle.headingLarge)),
+      );
+    });
+
+    test('kitchen item + note are bold; the modifier is regular; all run from '
+        'the start edge', () {
+      expect(
+        standard.weightFor(PrintLineStyle.kitchenItem),
+        PrintFontWeight.bold,
+      );
+      expect(
+        standard.weightFor(PrintLineStyle.kitchenNote),
+        PrintFontWeight.bold,
+      );
+      expect(
+        standard.weightFor(PrintLineStyle.kitchenModifier),
+        PrintFontWeight.regular,
+      );
+      for (final role in const [
+        PrintLineStyle.kitchenItem,
+        PrintLineStyle.kitchenModifier,
+        PrintLineStyle.kitchenNote,
+      ]) {
+        expect(standard.alignFor(role), PrintTextAlignRole.start);
+      }
+    });
+
+    test('REGRESSION (test E): the shared RECEIPT item / sub / total sizes are '
+        'UNCHANGED by the kitchen enlargement', () {
+      // The receipt hierarchy the customer-receipt tests pin is untouched.
+      expect(m(PrintLineStyle.item), 1.25);
+      expect(m(PrintLineStyle.sub), 1.0);
+      expect(m(PrintLineStyle.total), 1.45);
+      expect(
+        m(PrintLineStyle.total),
+        greaterThan(m(PrintLineStyle.item)),
+        reason: 'the receipt total>item ranking still holds',
+      );
+    });
+  });
 }
