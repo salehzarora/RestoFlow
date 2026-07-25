@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_feature_kitchen/kitchen_print.dart' as kit;
+import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart'
+    show KdsTicketMapper;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart'
@@ -16,22 +18,21 @@ import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/receipt_print_preview.dart'
     show buildReceiptDocument;
 
-/// PRINT-LAYOUT-001D — CROSS-SURFACE ITEM-ORDER PARITY (POS surfaces).
+/// PRINT-LAYOUT-001D — CROSS-SURFACE ITEM-ORDER PARITY.
 ///
 /// The cashier receipt prints items in the cart INSERTION order (pure list
-/// order, no sort). This proves the two POS-side kitchen surfaces reproduce that
-/// EXACT sequence from the same order: the automatic kitchen print (built from
-/// the cart lines) and the manual kitchen print (built from the submitted-order
-/// view). All three iterate the same client `_cart` order, so their printed item
-/// identity sequence is identical — and complete item blocks (modifier + note)
-/// stay attached to the right item.
-///
-/// (The KDS-produced kitchen ticket is NOT covered here: it derives item order
-/// from the `sync_pull` wire, which is `ORDER BY (updated_at, id)` over rows with
-/// a batch-identical timestamp and a random uuid `id`, and `order_items` carries
-/// no persisted line ordinal — so it cannot reproduce cart order without an
-/// additive `order_items.line_position` migration. That is a documented,
-/// out-of-scope blocker for this phase.)
+/// order, no sort). This proves all four print surfaces reproduce that EXACT
+/// sequence for the same order:
+///   * the cashier receipt (buildReceiptDocument);
+///   * the POS AUTOMATIC kitchen print (built from the cart lines);
+///   * the POS MANUAL kitchen print (built from the submitted-order view); and
+///   * the KDS kitchen ticket / reprint — the KDS builds from `sync_pull` rows
+///     delivered `ORDER BY (updated_at, id)` (effectively random for a fresh
+///     order), but each row now carries the cart ordinal `order_items
+///     .line_position`, and KdsTicketMapper sorts items by it, so even a SHUFFLED
+///     wire order reassembles into cart order.
+/// Complete item blocks (modifier + note) stay attached to the right item on
+/// every surface.
 
 Future<AppLocalizations> _l10n(String locale) =>
     AppLocalizations.delegate.load(Locale(locale));
@@ -159,6 +160,47 @@ void main() {
         expect(_kitchenItems(manualKitchen), _expectedSequence);
       },
     );
+
+    test('the KDS kitchen ticket (mapped from a SHUFFLED sync_pull wire that '
+        'carries line_position) reassembles into the SAME sequence as the '
+        'cashier receipt', () async {
+      final l10n = await _l10n('en');
+      final labels = kitchenTicketPrintLabelsFromL10n(l10n);
+
+      // The cart ordinal for each item (1-based, in _spec / receipt order).
+      final positionByName = {
+        for (var i = 0; i < _spec.length; i++) _spec[i].$1: i + 1,
+      };
+      // Deliver the order_items rows in a SHUFFLED wire order (as sync_pull's
+      // (updated_at, id) does), each carrying its cart line_position.
+      final shuffled = [_spec[1], _spec[3], _spec[0], _spec[4], _spec[2]];
+      final tickets = KdsTicketMapper.map(
+        orders: const [
+          {
+            'id': 'o1',
+            'status': 'submitted',
+            'order_type': 'dine_in',
+            'created_at': '2026-07-24T10:00:00Z',
+          },
+        ],
+        orderItems: [
+          for (final s in shuffled)
+            {
+              'id': 'i-${s.$1}',
+              'order_id': 'o1',
+              'quantity': 1,
+              'menu_item_name_snapshot': s.$1,
+              'line_position': positionByName[s.$1],
+            },
+        ],
+        modifiers: const [],
+      );
+      final kdsDoc = kit.buildKdsTicketPrintDocument(
+        ticket: tickets.single,
+        labels: labels,
+      );
+      expect(_kitchenItems(kdsDoc), _expectedSequence);
+    });
 
     test(
       'no item is lost or duplicated across the surfaces (quantities kept)',

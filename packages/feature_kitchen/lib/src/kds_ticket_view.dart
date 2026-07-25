@@ -13,6 +13,7 @@ class KdsItemView {
     this.modifiers = const <String>[],
     this.note,
     this.prepComponents = const <KitchenPrepComponent>[],
+    this.linePosition = 0,
   });
 
   /// Display name snapshot (data — rendered as-is, not a localized string).
@@ -33,6 +34,33 @@ class KdsItemView {
   /// mapper rolls them up × [quantity] into the ticket's whole-order
   /// [KdsTicketView.kitchenCounts]. Empty when the item has no configured count.
   final List<KitchenPrepComponent> prepComponents;
+
+  /// PRINT-LAYOUT-001D: the STABLE per-order line ordinal (1-based) from
+  /// `order_items.line_position` — the submit-array (cart) insertion index. The
+  /// KDS mapper sorts a ticket's items by this so the printed kitchen sequence
+  /// matches the cashier receipt (which prints in cart order); the POS-direct
+  /// builders leave it 0 because they already build items in cart order. `0` is
+  /// the legacy sentinel (a pre-feature order_items row, or a POS-direct item):
+  /// such items keep their existing relative order (see [sortByLinePosition]).
+  final int linePosition;
+
+  /// PRINT-LAYOUT-001D: STABLY reorder [items] by [linePosition] (ascending) so
+  /// the KDS ticket + reprint print in cashier-receipt (cart) order. The sort is
+  /// stable — items sharing a `linePosition` (e.g. legacy `0` rows) keep their
+  /// current relative order, so a partially-migrated order never scrambles. In
+  /// place; keeps each item's modifiers/prep/note attached (they are its fields).
+  static void sortByLinePosition(List<KdsItemView> items) {
+    final indexed = <(int, KdsItemView)>[
+      for (var i = 0; i < items.length; i++) (i, items[i]),
+    ];
+    indexed.sort((a, b) {
+      final byPos = a.$2.linePosition.compareTo(b.$2.linePosition);
+      return byPos != 0 ? byPos : a.$1.compareTo(b.$1);
+    });
+    for (var i = 0; i < items.length; i++) {
+      items[i] = indexed[i].$2;
+    }
+  }
 }
 
 /// A KDS-local, mutable view model for one kitchen ticket.

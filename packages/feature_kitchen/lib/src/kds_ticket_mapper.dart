@@ -242,6 +242,14 @@ class KdsTicketMapper {
       // {name,quantity,unit}) plucked from the order_items snapshot. Tolerant
       // parse — a missing/bad value yields an empty list (no prep row).
       final prepComponents = parseKitchenPrepComponents(it['prep_snapshot']);
+      // PRINT-LAYOUT-001D: the stable per-order line ordinal (order_items
+      // .line_position). Tolerant pluck — an older server that predates the
+      // column yields 0 (the legacy sentinel), so those items keep their wire
+      // order. Non-money; used only to reorder items into cashier-receipt order.
+      final linePositionRaw = it['line_position'];
+      final linePosition = linePositionRaw is int
+          ? linePositionRaw
+          : int.tryParse('$linePositionRaw') ?? 0;
 
       // PSC-001C: a round item builds a SEPARATE per-round ticket keyed by
       // (order, station, round); the round's OWN status drives the column.
@@ -273,6 +281,7 @@ class KdsTicketMapper {
           modifiers: modsByItem[itemId] ?? const <String>[],
           note: note,
           prepComponents: prepComponents,
+          linePosition: linePosition,
         ),
       );
       // KDS-ALERTS-AND-KITCHEN-COUNTS-002: accumulate this item's counted-resource
@@ -306,6 +315,15 @@ class KdsTicketMapper {
       for (final entry in countItemsByWorkUnit.entries)
         entry.key: aggregateOrderKitchenCounts(entry.value),
     };
+
+    // PRINT-LAYOUT-001D: order each ticket's items by their persisted per-order
+    // line ordinal (order_items.line_position) so the KDS ticket + reprint print
+    // in cashier-receipt (cart) order, regardless of the (updated_at, id) wire
+    // order the rows arrived in. Stable — legacy rows (line_position 0) keep
+    // their wire order; whole items move, so modifiers/prep/notes stay attached.
+    for (final b in grouped.values) {
+      KdsItemView.sortByLinePosition(b.items);
+    }
 
     final tickets =
         grouped.values
