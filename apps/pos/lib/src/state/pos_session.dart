@@ -8,6 +8,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import '../data/ids.dart';
 import '../data/shift_repository.dart';
+import 'cart_controller.dart' show posActiveCorrectionSourceProvider;
 import 'pos_device_context.dart';
 import 'pos_shift.dart';
 
@@ -552,6 +553,12 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
     ref.read(posOpenShiftProvider.notifier).clear();
     ref.read(posSignedInStaffNameProvider.notifier).clear();
     ref.read(posSignedInEmployeeProfileIdProvider.notifier).clear();
+    // MENU-ORDER-001 (Codex correction-ownership §2/§9): drop the in-memory active
+    // correction source on sign-out / worker handover. Clearing the signed-in worker id
+    // already makes the DURABLE recovery inaccessible (binding mismatch) without deleting
+    // it — the same worker reclaims it on re-login — but the volatile active source must
+    // also be reset so the next worker's first submit can never re-link A's recovery.
+    ref.read(posActiveCorrectionSourceProvider.notifier).clear();
     _binding = null;
     _startedAt = null; // RF-118: close the client expiry window.
     _pausedAt = null;

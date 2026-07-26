@@ -179,6 +179,12 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     int taxTotalMinor = 0,
     String? customerName,
     Map<String, List<KitchenPrepComponent>>? prepByItemId,
+    Future<bool> Function(
+      String orderId,
+      String localOperationId,
+      String entryId,
+    )?
+    beforeDispatch,
   }) {
     final existing = _inFlightSubmit;
     if (existing != null) return existing;
@@ -192,6 +198,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       taxTotalMinor: taxTotalMinor,
       customerName: customerName,
       prepByItemId: prepByItemId,
+      beforeDispatch: beforeDispatch,
     );
     _inFlightSubmit = future;
     // Release the lock once the submit settles (success OR failure) so the next
@@ -214,6 +221,12 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     int taxTotalMinor = 0,
     String? customerName,
     Map<String, List<KitchenPrepComponent>>? prepByItemId,
+    Future<bool> Function(
+      String orderId,
+      String localOperationId,
+      String entryId,
+    )?
+    beforeDispatch,
   }) async {
     if (lines.isEmpty) {
       throw const OrderSubmissionException('cannot submit an empty cart');
@@ -367,6 +380,23 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       clientCreatedAt: createdAt,
     );
 
+    // MENU-ORDER-001 (Codex correction-ownership §4): pre-dispatch association hook. A
+    // CORRECTION submit uses this to durably LINK the source recovery to THIS submit's
+    // EXACT ids — the very [orderId] / [localOperationId] / [entryId] built above, never
+    // a second id minted in a deeper layer — BEFORE the order is enqueued or pushed. It
+    // runs inside the single-flight [submit] latch, so a concurrent second corrected
+    // submit joins this future instead of re-linking. A false/throw result ABORTS the
+    // submit before ANY durable enqueue or network push, so the correction association is
+    // never left in-memory-only and no order is ever sent while its link failed to
+    // persist (the caller surfaces the honest failure and keeps the cart for a retry).
+    if (beforeDispatch != null) {
+      final linked = await beforeDispatch(orderId, localOperationId, entryId);
+      if (!linked) {
+        throw const OrderSubmissionException(
+          'correction link could not be persisted; order not sent',
+        );
+      }
+    }
     final stored = await _repo.enqueue(entry);
     state = await _repo.recentEntries();
     if (!isDemo) {

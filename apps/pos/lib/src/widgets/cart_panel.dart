@@ -426,13 +426,25 @@ Future<void> submitOrderFromCart({
   final bindingBefore = container.read(posRecoveryBindingProvider);
   final scopeKeyBefore = container.read(posSyncScopeProvider)?.key;
   final draftBefore = cartController.captureDraft();
-  // MENU-ORDER-001 (correction-window durability): if this cart was RESTORED from a
-  // durable recovery (Back to cart), this is the source recovery's outbox entry id —
-  // captured before the await so the corrected resubmit can LINK back to it + RESOLVE
-  // it once the server responds. Null for a first-time (non-correction) submit.
-  final correctionSourceBefore = container.read(
-    posActiveCorrectionSourceProvider,
-  );
+  // MENU-ORDER-001 (Codex correction-ownership): if this cart was RESTORED from a durable
+  // recovery (Back to cart), the active correction source names it — but this is treated
+  // as a correction ONLY when that source is OWNED by the CURRENT signed-in worker + POS
+  // scope AND its recovery is still live. A stale source (a departed worker, a re-pair, or
+  // an already-resolved recovery) is inert: this submit is then an ordinary, unlinked
+  // order — it can never re-link someone else's, or a dead, recovery. Captured before the
+  // await (the widget ref dies with the tree; the container + notifiers outlive it).
+  final activeSourceBefore = container.read(posActiveCorrectionSourceProvider);
+  final correctionSource =
+      (activeSourceBefore != null &&
+          activeSourceBefore.ownedBy(
+            scopeKey: bindingBefore.scopeKey,
+            employeeProfileId: bindingBefore.employeeProfileId,
+          ) &&
+          container
+              .read(posDraftRecoveryProvider.notifier)
+              .hasRecoveryFor(activeSourceBefore.sourceOutboxEntryId))
+      ? activeSourceBefore
+      : null;
   final orderTypeBefore = setup.orderType;
   final tableBefore = setup.assignedTable;
   final customerNameBefore = setup.customerName;
@@ -448,6 +460,26 @@ Future<void> submitOrderFromCart({
       for (final item in menu.items)
         if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
   };
+  // MENU-ORDER-001 (Codex correction-ownership §4/§5): for a CORRECTION submit, the
+  // pre-dispatch link callback. It runs INSIDE outbox.submit — after the submit's exact
+  // ids are minted, BEFORE the order is enqueued/pushed — and durably supersedes the
+  // source recovery with THIS submit's entry id + the corrected cart (awaited, atomic,
+  // owner-revalidated). A false result (not owned, or the durable write failed) makes
+  // outbox.submit throw before any dispatch, so no order is sent while the association is
+  // in-memory-only. Null for an ordinary (non-correction) submit.
+  final beforeDispatch = correctionSource == null
+      ? null
+      : (String orderId, String localOperationId, String entryId) => container
+            .read(posDraftRecoveryProvider.notifier)
+            .linkCorrectedSubmit(
+              sourceOutboxEntryId: correctionSource.sourceOutboxEntryId,
+              correctedOutboxEntryId: entryId,
+              binding: bindingBefore,
+              correctedDraft: draftBefore,
+              orderType: orderTypeBefore,
+              table: tableBefore,
+              customerName: customerNameBefore,
+            );
   try {
     final result = await outbox.submit(
       lines: cart.lines,
@@ -462,6 +494,8 @@ Future<void> submitOrderFromCart({
       // The ONE immutable prep snapshot (captured above, pre-await) — the same
       // map the POS kitchen ticket reuses below.
       prepByItemId: kitchenPrepByItemId,
+      // §4 pre-dispatch correction link (null for a normal submit).
+      beforeDispatch: beforeDispatch,
     );
     // Finding 1B — THE FULL-IDENTITY MUTATION BOUNDARY. Everything below this line mutates
     // state the CURRENT session would see — the cart's submitted-order view, the
@@ -494,20 +528,28 @@ Future<void> submitOrderFromCart({
     // await, keyed to THIS submit's outbox entry) bound to THE SUBMITTING session's exact
     // binding. If the server permanently rejects it (item_unavailable), the confirmation
     // offers "Back to cart" to restore this exact draft; an accepted order clears it.
-    container
-        .read(posDraftRecoveryProvider.notifier)
-        .capture(
-          PosDraftRecovery(
-            draft: draftBefore,
-            orderType: orderTypeBefore,
-            table: tableBefore,
-            customerName: customerNameBefore,
-            outboxEntryId: result.entry.id,
-            // A2: bind to THIS exact context (scope + PIN session) so a later employee /
-            // branch / device can never see or restore this draft.
-            binding: bindingBefore,
-          ),
-        );
+    //
+    // MENU-ORDER-001 (Codex correction-ownership §3.F/§8.D): SKIP this for a CORRECTION
+    // resubmit. The pre-dispatch link already superseded the SINGLE source recovery with
+    // this corrected cart + this entry id — capturing a second recovery here would leave
+    // two records for one logical order. The source recovery IS the corrected order's
+    // record; it is cleared only on that order's authoritative acceptance.
+    if (correctionSource == null) {
+      container
+          .read(posDraftRecoveryProvider.notifier)
+          .capture(
+            PosDraftRecovery(
+              draft: draftBefore,
+              orderType: orderTypeBefore,
+              table: tableBefore,
+              customerName: customerNameBefore,
+              outboxEntryId: result.entry.id,
+              // A2: bind to THIS exact context (scope + PIN session) so a later employee /
+              // branch / device can never see or restore this draft.
+              binding: bindingBefore,
+            ),
+          );
+    }
 
     cartController.submitOrder(
       orderType: orderTypeBefore,
@@ -541,25 +583,31 @@ Future<void> submitOrderFromCart({
         recent.markLocallyRejected(submitted.identity);
       }
     }
-    // MENU-ORDER-001 (correction-window durability): if this submit is the corrected
-    // resubmit of a RESTORED recovery (Back to cart set the active-correction source),
-    // LINK the source to this corrected entry FIRST (persisted, so an accept-then-crash
-    // still reconciles the source via the corrected id), then RESOLVE the source — clear
-    // its record + retire its rejected shell. The source is superseded by this attempt:
-    // an accepted correction ends the chain; a fresh rejection (its own recovery was
-    // captured above) becomes the new correction source. Back to cart never reaches
-    // here — only a real resubmit does — so the recovery survived the correction window.
-    if (correctionSourceBefore != null &&
-        correctionSourceBefore != result.entry.id) {
-      final recoveryCtrl = container.read(posDraftRecoveryProvider.notifier);
-      recoveryCtrl.markCorrectedSubmit(correctionSourceBefore, result.entry.id);
-      recoveryCtrl.resolveCorrectedSource(correctionSourceBefore);
-      // The corrected attempt is the new source ONLY if it too was rejected (its own
-      // recovery was stored above); an accepted attempt ends the correction chain.
-      final stillRecoverable = recoveryCtrl.hasRecoveryFor(result.entry.id);
-      container
-          .read(posActiveCorrectionSourceProvider.notifier)
-          .set(stillRecoverable ? result.entry.id : null);
+    // MENU-ORDER-001 (Codex correction-ownership §6): if this submit was the corrected
+    // resubmit of a RESTORED recovery, the pre-dispatch link already superseded the SINGLE
+    // source recovery (draft = this corrected cart, correctionOutboxEntryId = this entry) —
+    // BEFORE the order was sent. NOTHING is cleared here: cleanup happens ONLY when the
+    // corrected order is authoritatively ACCEPTED, via the controller-seam acceptance
+    // listener matching the link (so an accept-then-crash still reconciles on the next
+    // startup). A rejected / retryable / network / timeout result NEVER clears the source.
+    if (correctionSource != null &&
+        correctionSource.sourceOutboxEntryId != result.entry.id) {
+      // If this corrected entry was itself PERMANENTLY rejected (another item_unavailable),
+      // retire ITS duplicate rejected shell so the single logical order stays surfaced by
+      // the source recovery's own shell — "Back to cart" then restores the corrected cart.
+      final correctedEntry = container
+          .read(outboxControllerProvider.notifier)
+          .entryById(result.entry.id);
+      if (correctedEntry != null && correctedEntry.isPermanentBusinessRejection) {
+        container
+            .read(posRecentOrdersControllerProvider.notifier)
+            .retireLocalRejectedByOutboxEntry(result.entry.id);
+      }
+      // This correction attempt is done — the cart was submitted (emptied) above. Drop the
+      // in-memory active source so no unrelated later submit re-links the (retained) source
+      // recovery; a further "Back to cart" re-establishes it. The DURABLE source recovery
+      // is untouched (retained unless/until its corrected order is accepted or discarded).
+      container.read(posActiveCorrectionSourceProvider.notifier).clear();
     }
     // KITCHEN-PRINT-DUAL-001: optionally print the money-free KITCHEN ticket for
     // the just-created order. Best-effort + fully decoupled — it prints to the

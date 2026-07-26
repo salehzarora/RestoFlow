@@ -113,18 +113,6 @@ class PosDraftRecovery {
   /// it). Null until a corrected resubmit; Back to cart alone never clears the record.
   final String? correctionOutboxEntryId;
 
-  /// Returns a copy carrying the corrected resubmit's [correctedEntryId] link (D-008
-  /// snapshots + stable line ids are untouched — only the correction pointer changes).
-  PosDraftRecovery withCorrection(String correctedEntryId) => PosDraftRecovery(
-    draft: draft,
-    orderType: orderType,
-    outboxEntryId: outboxEntryId,
-    binding: binding,
-    table: table,
-    customerName: customerName,
-    correctionOutboxEntryId: correctedEntryId,
-  );
-
   /// MENU-ORDER-001 (Codex #8/#9): durable serialization so a permanently-
   /// rejected order's recovery — its draft (products, quantities, modifiers,
   /// notes, AND the Dashboard menu ranks), order type, table and customer name —
@@ -192,7 +180,7 @@ class PosDraftRecoveryController
     // (a recovery stored while pending, later applied); the "applied before capture"
     // order is handled in [capture] below.
     ref.listen(outboxControllerProvider, (previous, next) {
-      _clearApplied(next);
+      unawaited(_clearApplied(next));
     });
     // Finding 4: an AUTHORITATIVE server snapshot for a device-owned order proves the
     // order exists (was accepted) — clear its recovery even when the local outbox entry
@@ -200,7 +188,7 @@ class PosDraftRecoveryController
     // listener, so no widget is required and the two acceptance signals (outbox-applied
     // AND server-snapshot) are both honoured.
     ref.listen(posRecentOrdersControllerProvider, (previous, next) {
-      _clearAcceptedBySnapshot(next);
+      unawaited(_clearAcceptedBySnapshot(next));
     });
     // MENU-ORDER-001 (Codex #8/#9): rehydrate any persisted recoveries so a
     // permanently-rejected order (item_unavailable) survives a restart — Back to
@@ -224,11 +212,30 @@ class PosDraftRecoveryController
   }
 
   /// MENU-ORDER-001 (Codex #8/#9): persist the current map (fire-and-forget; a
-  /// durability wobble must never break the till). A CLEARED recovery is also
-  /// persisted, so an accepted/discarded order does not resurrect on restart.
+  /// durability wobble must never break the till). Used ONLY by [capture] — a NEW
+  /// submit's recovery, whose loss simply means the operator re-keys that one order.
+  /// The correction LIFECYCLE (link / supersede / accepted cleanup / discard) instead
+  /// uses the AWAITED [_persistMap] so it never claims success on a failed write.
   void _persist() {
     if (_disposed) return;
     unawaited(_store.persist(state).catchError((Object _) {}));
+  }
+
+  /// MENU-ORDER-001 (Codex correction-ownership §5): AWAITED copy-on-write persist —
+  /// write [next] to the durable store and report whether it SUCCEEDED. The caller
+  /// publishes [next] as in-memory state ONLY on a true result, so persistence is never
+  /// "clear old then persist replacement": we persist the COMPLETE replacement first,
+  /// then replace in-memory. A false result (write threw, or the controller was
+  /// disposed) means the previous durable + in-memory state is intact — nothing is lost
+  /// and the operation may be retried / reconciled later. Never throws.
+  Future<bool> _persistMap(Map<String, PosDraftRecovery> next) async {
+    if (_disposed) return false;
+    try {
+      await _store.persist(next);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Capture the draft of a just-started submit under its own key. NEVER overwrites a
@@ -287,33 +294,98 @@ class PosDraftRecoveryController
   bool hasRecoveryFor(String? outboxEntryId) =>
       outboxEntryId != null && state.containsKey(outboxEntryId);
 
-  /// MENU-ORDER-001 (correction-window durability): durably LINK the source recovery
-  /// [sourceOutboxEntryId] to its corrected resubmit [correctedOutboxEntryId] BEFORE the
-  /// source can be cleared. If a crash lands between the corrected order's server
-  /// acceptance and local cleanup, the authoritative snapshot / outbox-applied signal
-  /// for [correctedOutboxEntryId] still clears the source THROUGH this link on the next
-  /// startup (see [_clearForAccepted]). No-op when the source is already gone.
-  void markCorrectedSubmit(
-    String sourceOutboxEntryId,
-    String correctedOutboxEntryId,
-  ) {
+  /// MENU-ORDER-001 (Codex correction-ownership §3.C/§3.F/§4/§5/§10): the SINGLE
+  /// pre-dispatch transition of a corrected resubmit. BEFORE the corrected order is
+  /// enqueued/pushed, atomically supersede the source recovery [sourceOutboxEntryId]:
+  ///   * its draft becomes [correctedDraft] (the exact cart being sent now), so a
+  ///     re-restore after a rejection yields the CORRECTED cart, never the stale one;
+  ///   * its [correctionOutboxEntryId] becomes [correctedOutboxEntryId] — the durable
+  ///     link that lets authoritative acceptance clear this source even across a crash
+  ///     between the server accepting and the client receiving the response.
+  /// The record key (its logical identity) and ownership binding NEVER change, so the
+  /// same worker keeps exactly one logical recovery across repeated corrections.
+  ///
+  /// Returns whether the association was DURABLY persisted. It returns false — WITHOUT
+  /// mutating in-memory state — when:
+  ///   * the source is already gone (nothing to link);
+  ///   * [binding] (the CURRENT signed-in worker + scope) does NOT own the source
+  ///     (§10 — never trust an upstream check; a different worker/scope is refused);
+  ///   * the corrected id equals the source id (a resubmit always mints a fresh op);
+  ///   * the durable write failed (§5 — never claim success; keep the prior state).
+  /// The caller MUST abort the network dispatch on a false result (§4) so no order is
+  /// ever sent while the correction association exists only in memory.
+  Future<bool> linkCorrectedSubmit({
+    required String sourceOutboxEntryId,
+    required String correctedOutboxEntryId,
+    required PosRecoveryBinding binding,
+    required CartDraftSnapshot correctedDraft,
+    required OrderType orderType,
+    DemoTable? table,
+    String? customerName,
+  }) async {
     final source = state[sourceOutboxEntryId];
-    if (source == null || sourceOutboxEntryId == correctedOutboxEntryId) return;
-    state = <String, PosDraftRecovery>{
+    if (source == null) return false;
+    if (sourceOutboxEntryId == correctedOutboxEntryId) return false;
+    if (!source.binding.matches(binding)) return false; // §10 owner/scope revalidation
+    final updated = PosDraftRecovery(
+      draft: correctedDraft,
+      orderType: orderType,
+      outboxEntryId: sourceOutboxEntryId, // logical identity is stable
+      binding: source.binding, // ownership never changes
+      table: table,
+      customerName: customerName,
+      correctionOutboxEntryId: correctedOutboxEntryId,
+    );
+    final next = <String, PosDraftRecovery>{
       ...state,
-      sourceOutboxEntryId: source.withCorrection(correctedOutboxEntryId),
+      sourceOutboxEntryId: updated,
     };
-    _persist();
+    final ok = await _persistMap(next); // §5 persist the replacement BEFORE publishing
+    if (!ok) return false;
+    state = next;
+    return true;
   }
 
-  /// MENU-ORDER-001 (correction-window durability): the source recovery has been
-  /// RESOLVED by its corrected resubmit (accepted, or superseded by a fresh rejected
-  /// attempt) — clear its record AND retire its Recent-Orders rejected shell. Only the
-  /// exact source is touched; idempotent. Back to cart itself never calls this — only a
-  /// resubmit or an authoritative acceptance does.
-  void resolveCorrectedSource(String sourceOutboxEntryId) {
-    clear(sourceOutboxEntryId);
-    _retireShell(sourceOutboxEntryId);
+  /// MENU-ORDER-001 (Codex correction-ownership §5/§10/§11.D): OWNER-CHECKED, awaited,
+  /// atomic terminal removal of the recovery for [outboxEntryId] — the explicit user
+  /// discard / Keep-current path. Verifies the CURRENT [binding] owns the record before
+  /// touching it (a different worker/scope is refused without revealing the draft), then
+  /// persists the removal copy-on-write (persist THEN publish) and retires its rejected
+  /// shell + drops any matching active-correction source. Returns whether the record was
+  /// actually removed: false on a not-authorized record OR a failed durable write (§11.D
+  /// — the record then REMAINS; the UI must not claim a permanent deletion). Idempotent —
+  /// an already-absent record is a success (its shell is still retired).
+  Future<bool> discardOwned(
+    String outboxEntryId,
+    PosRecoveryBinding binding,
+  ) async {
+    final r = state[outboxEntryId];
+    if (r == null) {
+      _retireShell(outboxEntryId); // orphan shell cleanup; nothing durable to remove
+      _clearActiveSourceIfMatches(outboxEntryId);
+      return true;
+    }
+    if (!r.binding.matches(binding)) return false; // §10 not authorized — keep it intact
+    final next = <String, PosDraftRecovery>{
+      for (final e in state.entries)
+        if (e.key != outboxEntryId) e.key: e.value,
+    };
+    final ok = await _persistMap(next); // §5/§11.D persist BEFORE publish
+    if (!ok) return false; // write failed — record remains recoverable
+    state = next;
+    _retireShell(outboxEntryId);
+    _clearActiveSourceIfMatches(outboxEntryId);
+    return true;
+  }
+
+  /// §2: an accepted / discarded source recovery must also drop the in-memory active
+  /// correction source that pointed at it, so a later UNRELATED submit never re-links a
+  /// dead source. Reads + clears only when the active source targets [outboxEntryId].
+  void _clearActiveSourceIfMatches(String outboxEntryId) {
+    final active = ref.read(posActiveCorrectionSourceProvider);
+    if (active != null && active.sourceOutboxEntryId == outboxEntryId) {
+      ref.read(posActiveCorrectionSourceProvider.notifier).clear();
+    }
   }
 
   /// Retire the rejected shell for [outboxEntryId], deferred to a microtask so it is
@@ -335,13 +407,13 @@ class PosDraftRecoveryController
   /// or permanently-rejected (item_unavailable) entry whose recovery must be retained —
   /// UNLESS that recovery is the SOURCE of a corrected resubmit that just applied (its
   /// correctionOutboxEntryId link, so the accepted correction clears its source).
-  void _clearApplied(List<OutboxEntry> entries) {
+  Future<void> _clearApplied(List<OutboxEntry> entries) async {
     final applied = <String>{
       for (final e in entries)
         if (e.syncState == OutboxSyncState.applied) e.id,
     };
     if (applied.isEmpty) return;
-    _clearForAccepted(applied);
+    await _clearForAccepted(applied);
   }
 
   /// Finding 4: clear the recovery of every order the SERVER has authoritatively
@@ -350,21 +422,29 @@ class PosDraftRecoveryController
   /// was never created), so its OWN recovery is never cleared here — but a source
   /// recovery WHOSE corrected resubmit was accepted IS cleared through its link (the
   /// accepted-then-crash reconcile). Idempotent; touches only matching entries.
-  void _clearAcceptedBySnapshot(List<PosRecentOrder> orders) {
+  Future<void> _clearAcceptedBySnapshot(List<PosRecentOrder> orders) async {
     final accepted = <String>{
       for (final o in orders)
         if (o.snapshot != null && o.order?.outboxEntryId != null)
           o.order!.outboxEntryId!,
     };
     if (accepted.isEmpty) return;
-    _clearForAccepted(accepted);
+    await _clearForAccepted(accepted);
   }
 
   /// Shared acceptance cleanup: clear every recovery whose OWN key OR whose
   /// correctionOutboxEntryId LINK is in [acceptedEntryIds] (its corrected order was
-  /// authoritatively accepted), and retire each cleared recovery's rejected shell.
-  /// Idempotent — nothing matched leaves the map untouched.
-  void _clearForAccepted(Set<String> acceptedEntryIds) {
+  /// authoritatively accepted), retire each cleared recovery's rejected shell, and drop
+  /// a matching active-correction source. Idempotent — nothing matched leaves the map
+  /// untouched.
+  ///
+  /// §5/§11.C: the cleared map is persisted BEFORE it is published in memory. If the
+  /// durable write FAILS, nothing is published — the recovery REMAINS (in memory and
+  /// durable), so the NEXT authoritative acceptance signal (this session's, or the next
+  /// startup's reconcile of the same applied entry / server snapshot) retries the
+  /// cleanup idempotently until it succeeds. Cleanup is therefore never lost, and a
+  /// half-applied clear can never resurrect on restart.
+  Future<void> _clearForAccepted(Set<String> acceptedEntryIds) async {
     final removed = <String>[];
     final next = <String, PosDraftRecovery>{};
     for (final e in state.entries) {
@@ -380,10 +460,12 @@ class PosDraftRecoveryController
       }
     }
     if (removed.isEmpty) return;
+    final ok = await _persistMap(next); // persist THEN publish (retry on failure)
+    if (!ok || _disposed) return;
     state = next;
-    _persist();
     for (final key in removed) {
       _retireShell(key);
+      _clearActiveSourceIfMatches(key);
     }
   }
 }

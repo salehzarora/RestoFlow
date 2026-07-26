@@ -877,28 +877,80 @@ final cartControllerProvider = NotifierProvider<CartController, CartViewState>(
   CartController.new,
 );
 
-/// MENU-ORDER-001 (Codex, correction-window durability): the outbox entry id of the
-/// durable recovery whose rejected draft the operator has RESTORED into the current
-/// cart and is now correcting. Set by [PosRecoveryCoordinator.restore]; consumed by
-/// `submitOrderFromCart` to LINK the corrected resubmit back to its source recovery
-/// (so acceptance clears exactly that source, never an orphan). Cleared when the cart
-/// is cleared / a new order is started, so an UNRELATED later submit never resolves a
-/// stale source. In-memory only — re-established on each restore, so a crash simply
-/// re-derives it; NO pin/token/secret. Lives here (not draft_recovery_controller) so
-/// the cart can reset it without an import cycle.
-class PosActiveCorrectionSource extends Notifier<String?> {
-  @override
-  String? build() => null;
+/// MENU-ORDER-001 (Codex, correction-ownership): the OWNER-BOUND active correction
+/// source — the durable recovery the operator has RESTORED (Back to cart) into the
+/// current cart and is now correcting. It is never a bare id: it carries the STABLE
+/// ownership of the recovery it points at (the scope + worker), so a corrected submit
+/// can revalidate that the CURRENT signed-in worker + POS scope still own it before it
+/// links/clears anything. A stale source left by a departed worker (different
+/// employeeProfileId) or a re-pair (different scopeKey) is therefore inert — it can
+/// never attach to a later, unrelated order.
+///
+/// The ownership fields mirror `PosRecoveryBinding` (scopeKey + employeeProfileId) but
+/// are stored as bare strings here — this file is a low-level leaf, and importing
+/// `draft_recovery_controller` (which imports this file) would create a cycle. The
+/// ephemeral pinSessionId is deliberately NOT part of ownership (D-006): a new one is
+/// minted per login, so the SAME worker across a restart + re-login still owns it.
+class ActiveCorrectionSource {
+  const ActiveCorrectionSource({
+    required this.sourceOutboxEntryId,
+    required this.scopeKey,
+    required this.employeeProfileId,
+  });
 
-  void set(String? outboxEntryId) =>
-      state = (outboxEntryId != null && outboxEntryId.isNotEmpty)
-      ? outboxEntryId
-      : null;
+  /// The outbox entry id (map key) of the source recovery being corrected.
+  final String sourceOutboxEntryId;
+
+  /// STABLE ownership of the source recovery (org/restaurant/branch/device scope).
+  final String? scopeKey;
+
+  /// STABLE authenticated worker id of the source recovery (D-006).
+  final String? employeeProfileId;
+
+  /// Whether the given CURRENT scope + worker exactly own this source — the only
+  /// context allowed to link/resolve it. A different worker or scope can never.
+  bool ownedBy({
+    required String? scopeKey,
+    required String? employeeProfileId,
+  }) =>
+      this.scopeKey == scopeKey && this.employeeProfileId == employeeProfileId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ActiveCorrectionSource &&
+      other.sourceOutboxEntryId == sourceOutboxEntryId &&
+      other.scopeKey == scopeKey &&
+      other.employeeProfileId == employeeProfileId;
+
+  @override
+  int get hashCode =>
+      Object.hash(sourceOutboxEntryId, scopeKey, employeeProfileId);
+
+  @override
+  String toString() =>
+      'ActiveCorrectionSource($sourceOutboxEntryId, scope:$scopeKey, '
+      'worker:$employeeProfileId)';
+}
+
+/// The current OWNER-BOUND active correction source, or null when the cart is not
+/// correcting a restored recovery. Set by [PosRecoveryCoordinator.restore] (only when
+/// the current worker+scope own the recovery); consumed by `submitOrderFromCart` to
+/// durably LINK the corrected resubmit back to its source recovery BEFORE dispatch (so
+/// authoritative acceptance clears exactly that source, never an orphan). Cleared when
+/// the cart is cleared / a new order is started / the worker signs out / the accepted
+/// source is reconciled — so an UNRELATED later submit never re-links a stale source.
+/// In-memory only — re-established on each restore, so a crash simply re-derives it; NO
+/// pin/token/secret. Lives here (not draft_recovery_controller) to avoid an import cycle.
+class PosActiveCorrectionSource extends Notifier<ActiveCorrectionSource?> {
+  @override
+  ActiveCorrectionSource? build() => null;
+
+  void set(ActiveCorrectionSource? source) => state = source;
 
   void clear() => state = null;
 }
 
 final posActiveCorrectionSourceProvider =
-    NotifierProvider<PosActiveCorrectionSource, String?>(
+    NotifierProvider<PosActiveCorrectionSource, ActiveCorrectionSource?>(
       PosActiveCorrectionSource.new,
     );
