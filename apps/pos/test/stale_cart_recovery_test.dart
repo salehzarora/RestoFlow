@@ -144,6 +144,97 @@ void main() {
       cart.restoreDraft(draft); // second delivery of the same recovery
       expect(c.read(cartControllerProvider).lines.length, 1);
     });
+
+    // MENU-ORDER-001 (Codex #8/#9): the Dashboard menu ranks must survive a
+    // submit -> reject(item_unavailable) -> Back-to-cart round-trip, so the
+    // corrected resubmit still prints in menu order (a submit clears the live
+    // _lineDisplayOrders, so the draft has to carry them).
+    const cola = DemoMenuItem(
+      id: 'cola-1',
+      name: 'Cola',
+      priceMinor: 1000,
+      categoryId: 'drinks',
+      categoryName: 'Drinks',
+      categoryDisplayOrder: 3,
+      itemDisplayOrder: 2,
+    );
+    const mealBurger = DemoMenuItem(
+      id: 'burger-9',
+      name: 'Burger',
+      priceMinor: 4200,
+      categoryId: 'meals',
+      categoryName: 'Meals',
+      categoryDisplayOrder: 1,
+      itemDisplayOrder: 1,
+    );
+
+    test('capture carries each line\'s Dashboard menu ranks', () {
+      final c = _demoContainer();
+      final cart = c.read(cartControllerProvider.notifier);
+      cart.addItem(cola); // inserted first, but menu-ranks last
+      cart.addItem(mealBurger); // inserted second, but menu-ranks first
+
+      final draft = cart.captureDraft();
+      final colaLine = draft.lines.firstWhere((l) => l.menuItemId == 'cola-1');
+      final burgerLine = draft.lines.firstWhere(
+        (l) => l.menuItemId == 'burger-9',
+      );
+      expect(
+        (colaLine.categoryDisplayOrder, colaLine.itemDisplayOrder),
+        (3, 2),
+      );
+      expect(
+        (burgerLine.categoryDisplayOrder, burgerLine.itemDisplayOrder),
+        (1, 1),
+      );
+    });
+
+    test('restore REPOPULATES the ranks (not reset to 0) for the resubmit', () {
+      final c = _demoContainer();
+      final cart = c.read(cartControllerProvider.notifier);
+      cart.addItem(cola);
+      cart.addItem(mealBurger);
+      final draft = cart.captureDraft();
+
+      // A submit clears the live _lineDisplayOrders; restore must rebuild them.
+      cart.clear();
+      cart.restoreDraft(draft);
+
+      final draft2 = cart.captureDraft();
+      final colaLine = draft2.lines.firstWhere((l) => l.menuItemId == 'cola-1');
+      final burgerLine = draft2.lines.firstWhere(
+        (l) => l.menuItemId == 'burger-9',
+      );
+      expect(
+        (colaLine.categoryDisplayOrder, colaLine.itemDisplayOrder),
+        (3, 2),
+        reason: 'restore rebuilt the ranks (would be (0,0) if lost)',
+      );
+      expect(
+        (burgerLine.categoryDisplayOrder, burgerLine.itemDisplayOrder),
+        (1, 1),
+      );
+    });
+
+    test('viewFromDraft carries the ranks onto the recovered submitted view', () {
+      final c = _demoContainer();
+      final cart = c.read(cartControllerProvider.notifier);
+      cart.addItem(cola);
+      cart.addItem(mealBurger);
+      final draft = cart.captureDraft();
+
+      final view = cart.viewFromDraft(draft: draft);
+      final colaLine = view.lines.firstWhere((l) => l.name == 'Cola');
+      final burgerLine = view.lines.firstWhere((l) => l.name == 'Burger');
+      expect(
+        (colaLine.categoryDisplayOrder, colaLine.itemDisplayOrder),
+        (3, 2),
+      );
+      expect(
+        (burgerLine.categoryDisplayOrder, burgerLine.itemDisplayOrder),
+        (1, 1),
+      );
+    });
   });
 
   group('PosDraftRecoveryController', () {
