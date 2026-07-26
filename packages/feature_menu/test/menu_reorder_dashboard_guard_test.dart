@@ -40,12 +40,16 @@ class _GatedMenuWriter extends ScriptedMenuWriter {
   @override
   Future<MenuWriteOutcome> reorder({
     required String organizationId,
+    required String restaurantId,
+    required String? branchId,
     required MenuEntityType entity,
     required List<String> orderedIds,
   }) async {
     reorderCalls++;
     lastReorderEntity = entity;
     lastReorderIds = orderedIds;
+    lastReorderRestaurantId = restaurantId;
+    lastReorderBranchId = branchId;
     final gate = _gate;
     if (gate != null) await gate.future;
     return outcome;
@@ -62,20 +66,21 @@ MenuCategory _cat(String id, String name, int order) => MenuCategory(
   isActive: true,
 );
 
-MenuItem _item(String id, String categoryId, String name, int order) => MenuItem(
-  id: id,
-  organizationId: demoMenuScope.organizationId,
-  restaurantId: demoMenuScope.restaurantId,
-  branchId: null,
-  menuCategoryId: categoryId,
-  name: name,
-  description: null,
-  basePriceMinor: 500,
-  currencyCode: demoMenuScope.currencyCode,
-  defaultStationId: null,
-  displayOrder: order,
-  isActive: true,
-);
+MenuItem _item(String id, String categoryId, String name, int order) =>
+    MenuItem(
+      id: id,
+      organizationId: demoMenuScope.organizationId,
+      restaurantId: demoMenuScope.restaurantId,
+      branchId: null,
+      menuCategoryId: categoryId,
+      name: name,
+      description: null,
+      basePriceMinor: 500,
+      currencyCode: demoMenuScope.currencyCode,
+      defaultStationId: null,
+      displayOrder: order,
+      isActive: true,
+    );
 
 Future<AppLocalizations> _pump(
   WidgetTester tester, {
@@ -115,6 +120,83 @@ Future<AppLocalizations> _pump(
 }
 
 void main() {
+  group(
+    'MenuReorderScope (Codex #5: distinct lists get distinct latch keys)',
+    () {
+      const itemsOfCatA = MenuReorderScope(
+        organizationId: 'o',
+        restaurantId: 'r',
+        branchId: null,
+        entity: MenuEntityType.item,
+        parentId: 'cat-A',
+      );
+      test('an identical scope is equal (one shared latch)', () {
+        expect(
+          itemsOfCatA,
+          const MenuReorderScope(
+            organizationId: 'o',
+            restaurantId: 'r',
+            branchId: null,
+            entity: MenuEntityType.item,
+            parentId: 'cat-A',
+          ),
+        );
+        expect(
+          itemsOfCatA.hashCode,
+          const MenuReorderScope(
+            organizationId: 'o',
+            restaurantId: 'r',
+            branchId: null,
+            entity: MenuEntityType.item,
+            parentId: 'cat-A',
+          ).hashCode,
+        );
+      });
+      test(
+        'another category\'s items are a DIFFERENT scope (independent latch)',
+        () {
+          expect(
+            itemsOfCatA ==
+                const MenuReorderScope(
+                  organizationId: 'o',
+                  restaurantId: 'r',
+                  branchId: null,
+                  entity: MenuEntityType.item,
+                  parentId: 'cat-B',
+                ),
+            isFalse,
+          );
+        },
+      );
+      test('a different entity kind is a different scope', () {
+        expect(
+          itemsOfCatA ==
+              const MenuReorderScope(
+                organizationId: 'o',
+                restaurantId: 'r',
+                branchId: null,
+                entity: MenuEntityType.category,
+                parentId: 'cat-A',
+              ),
+          isFalse,
+        );
+      });
+      test('a different branch is a different scope', () {
+        expect(
+          itemsOfCatA ==
+              const MenuReorderScope(
+                organizationId: 'o',
+                restaurantId: 'r',
+                branchId: 'b2',
+                entity: MenuEntityType.item,
+                parentId: 'cat-A',
+              ),
+          isFalse,
+        );
+      });
+    },
+  );
+
   testWidgets(
     'MENU-ORDER-001: a second drag while one reorder is in flight is IGNORED '
     '(single write, no stale-base race)',
@@ -131,7 +213,10 @@ void main() {
       expect(writer.reorderCalls, 1);
 
       // Second drag WHILE the first is in flight -> the latch swallows it.
-      await tester.drag(find.byIcon(Icons.drag_indicator).first, const Offset(0, 160));
+      await tester.drag(
+        find.byIcon(Icons.drag_indicator).first,
+        const Offset(0, 160),
+      );
       await tester.pump();
       expect(
         writer.reorderCalls,
@@ -153,9 +238,7 @@ void main() {
       // A load-counting read source proves the failure path invalidates.
       final backing = buildDemoMenuStore();
       final read = _CountingReadSource(backing);
-      final writer = ScriptedMenuWriter(
-        const Failure(MenuServerFailure()),
-      );
+      final writer = ScriptedMenuWriter(const Failure(MenuServerFailure()));
       final l10n = await _pump(tester, readSource: read, writer: writer);
       final loadsAfterFirstRender = read.loads;
 
@@ -169,7 +252,8 @@ void main() {
       expect(
         read.loads,
         greaterThan(loadsAfterFirstRender),
-        reason: 'the failure branch invalidated -> the snapshot reloaded (rollback)',
+        reason:
+            'the failure branch invalidated -> the snapshot reloaded (rollback)',
       );
     },
   );
@@ -212,7 +296,8 @@ void main() {
       expect(
         find.text('Alpha'),
         findsWidgets,
-        reason: 'selection stayed on Cat A (did not jump to the new first category)',
+        reason:
+            'selection stayed on Cat A (did not jump to the new first category)',
       );
     },
   );
@@ -221,9 +306,7 @@ void main() {
     'MENU-ORDER-001: the category edit dialog has NO display-order field and an '
     'edit PRESERVES the current display_order',
     (tester) async {
-      final store = InMemoryMenuStore(
-        categories: [_cat('c-7', 'Sevens', 7)],
-      );
+      final store = InMemoryMenuStore(categories: [_cat('c-7', 'Sevens', 7)]);
       final l10n = await _pump(tester, readSource: store, writer: store);
 
       // Open the category's edit dialog via its row menu.
@@ -243,9 +326,9 @@ void main() {
       await tester.tap(find.text(l10n.menuSaveAction));
       await tester.pumpAndSettle();
 
-      final saved = (await store.load(demoMenuScope))
-          .visibleCategories()
-          .firstWhere((c) => c.id == 'c-7');
+      final saved = (await store.load(
+        demoMenuScope,
+      )).visibleCategories().firstWhere((c) => c.id == 'c-7');
       expect(saved.name, 'Renamed');
       expect(
         saved.displayOrder,
