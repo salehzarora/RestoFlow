@@ -78,10 +78,9 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   late final TextEditingController _currency = TextEditingController(
     text: _item?.currencyCode ?? widget.scope.currencyCode,
   );
-  // MENU-ORDER-001 (Codex): items are drag-reordered in the items panel, so
-  // display_order is no longer hand-edited here — we PRESERVE the item's current
-  // value across an edit (0 for a new item) rather than resetting it.
-  late final int _displayOrder = _item?.displayOrder ?? 0;
+  // MENU-ORDER-001 (Codex #6): items are drag-reordered in the items panel — a
+  // normal edit sends NO display_order (null); the DB guard trigger preserves the
+  // live order, so nothing is hand-tracked here.
   late final TextEditingController _prepMinutes = TextEditingController(
     text: _item?.prepMinutes?.toString() ?? '',
   );
@@ -300,7 +299,8 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               : _description.text.trim(),
           basePriceMinor: priceMinor!,
           currencyCode: currencyText,
-          displayOrder: _displayOrder,
+          displayOrder:
+              null, // Codex #6: edit sends no order; guard trigger preserves it
           isActive: _active,
           // Full-state upsert: null p_image_path CLEARS the image server-side,
           // so a details save must carry the item's current image through.
@@ -565,10 +565,9 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
             ],
           ),
           const SizedBox(height: RestoflowSpacing.md),
-          // MENU-ORDER-001 (Codex): the item's display_order is now owned by
-          // drag-and-drop reorder in the items panel — the numeric field was
-          // removed so the two workflows can't fight. The item's current order is
-          // preserved on save (see _displayOrder).
+          // MENU-ORDER-001 (Codex #6): the item's display_order is owned by drag
+          // reorder — the numeric field is gone and a normal edit sends NO order
+          // (null); the DB guard trigger preserves the live order.
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(l10n.menuActiveLabel),
@@ -1075,44 +1074,30 @@ class _PricedChildSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _reorder(
+  void _reorder(
     BuildContext context,
     WidgetRef ref,
     int oldIndex,
     int newIndex,
-  ) async {
-    // MENU-ORDER-001 (Codex): one reorder at a time per EXACT sibling scope.
-    final latch = menuReorderInFlightProvider(_reorderScope(ref));
-    if (ref.read(latch)) return;
-    ref.read(latch.notifier).state = true;
-    try {
-      final l10n = AppLocalizations.of(context);
-      final ids = menuReorderedIds(
-        [for (final r in rows) r.id],
-        oldIndex,
-        newIndex,
-      );
-      final outcome = await ref
-          .read(menuWriteControllerProvider)
-          .reorder(entity: _entityForKind(kind), orderedIds: ids);
-      if (!outcome.isSuccess) {
-        ref.invalidate(menuSnapshotProvider); // exact rollback
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
-        }
-        return;
-      }
-      // MENU-ORDER-001 (Codex #7): reconcile the committed order before the latch
-      // releases (and re-enables controls). Swallow the disposed-surface race.
-      try {
-        ref.invalidate(menuSnapshotProvider);
-        await ref.read(menuSnapshotProvider.future);
-      } catch (_) {}
-    } finally {
-      ref.read(latch.notifier).state = false;
-    }
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final r in rows) r.id],
+      oldIndex,
+      newIndex,
+    );
+    // MENU-ORDER-001 (Codex #4): controller-owned lifecycle on the provider Ref
+    // — no WidgetRef-after-await, no latch leak on disposal.
+    ref
+        .read(menuWriteControllerProvider)
+        .reorderScoped(scope: _reorderScope(ref), orderedIds: ids)
+        .then((outcome) {
+          if (outcome != null && !outcome.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+          }
+        });
   }
 
   _PricedChildRow _row(
@@ -1149,16 +1134,6 @@ class _PricedChildSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final addButton = TextButton.icon(
-      onPressed: () => showPricedChildFormDialog(
-        context,
-        kind: kind,
-        parentId: parentId,
-        currencyCode: currencyCode,
-      ),
-      icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
-      label: Text(addLabel),
-    );
     // MENU-ORDER-001: modifier OPTIONS are drag-reorderable. Sizes/variants keep
     // their number-field ordering (out of this ticket's scope). Nested inside the
     // scrolling editor -> shrinkWrap + non-scrolling physics.
@@ -1168,6 +1143,21 @@ class _PricedChildSection extends ConsumerWidget {
     final reordering =
         reorderable &&
         ref.watch(menuReorderInFlightProvider(_reorderScope(ref)));
+    // Codex #5: the ADD control is outside the list IgnorePointer — disable it too
+    // while the reorder persists (null onPressed => the button reads as disabled;
+    // zero write calls).
+    final addButton = TextButton.icon(
+      onPressed: reordering
+          ? null
+          : () => showPricedChildFormDialog(
+              context,
+              kind: kind,
+              parentId: parentId,
+              currencyCode: currencyCode,
+            ),
+      icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
+      label: Text(addLabel),
+    );
     final body = rows.isEmpty
         ? Padding(
             padding: EdgeInsets.all(
@@ -1376,44 +1366,30 @@ class _ModifiersSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _reorderModifiers(
+  void _reorderModifiers(
     BuildContext context,
     WidgetRef ref,
     int oldIndex,
     int newIndex,
-  ) async {
-    // MENU-ORDER-001 (Codex): one reorder at a time per EXACT sibling scope.
-    final latch = menuReorderInFlightProvider(_reorderScope(ref));
-    if (ref.read(latch)) return;
-    ref.read(latch.notifier).state = true;
-    try {
-      final l10n = AppLocalizations.of(context);
-      final ids = menuReorderedIds(
-        [for (final m in modifiers) m.id],
-        oldIndex,
-        newIndex,
-      );
-      final outcome = await ref
-          .read(menuWriteControllerProvider)
-          .reorder(entity: MenuEntityType.modifier, orderedIds: ids);
-      if (!outcome.isSuccess) {
-        ref.invalidate(menuSnapshotProvider); // exact rollback
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
-        }
-        return;
-      }
-      // MENU-ORDER-001 (Codex #7): reconcile the committed order before the latch
-      // releases (and re-enables controls). Swallow the disposed-surface race.
-      try {
-        ref.invalidate(menuSnapshotProvider);
-        await ref.read(menuSnapshotProvider.future);
-      } catch (_) {}
-    } finally {
-      ref.read(latch.notifier).state = false;
-    }
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final m in modifiers) m.id],
+      oldIndex,
+      newIndex,
+    );
+    // MENU-ORDER-001 (Codex #4): controller-owned lifecycle on the provider Ref
+    // — no WidgetRef-after-await, no latch leak on disposal.
+    ref
+        .read(menuWriteControllerProvider)
+        .reorderScoped(scope: _reorderScope(ref), orderedIds: ids)
+        .then((outcome) {
+          if (outcome != null && !outcome.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+          }
+        });
   }
 
   @override
@@ -1447,17 +1423,22 @@ class _ModifiersSection extends ConsumerWidget {
           // Copy-on-attach templates: applying one creates ONE ordinary
           // modifier group + options via the same write path as the manual
           // form below (D-031 stays per-item; nothing is auto-applied).
+          // Codex #5: the ADD controls sit in the header (outside the list
+          // IgnorePointer) — disable both while THIS item's group reorder persists.
           TextButton.icon(
             key: const ValueKey('menu-template-add'),
-            onPressed: () =>
-                showModifierTemplatePicker(context, menuItemId: item.id),
+            onPressed: reordering
+                ? null
+                : () =>
+                      showModifierTemplatePicker(context, menuItemId: item.id),
             icon: const Icon(Icons.library_add_outlined, size: 18),
             label: Text(l10n.menuTemplateAddAction),
           ),
           const SizedBox(width: RestoflowSpacing.xs),
           TextButton.icon(
-            onPressed: () =>
-                showModifierFormDialog(context, menuItemId: item.id),
+            onPressed: reordering
+                ? null
+                : () => showModifierFormDialog(context, menuItemId: item.id),
             icon: const Icon(Icons.add, size: 18),
             label: Text(l10n.menuAddModifier),
           ),

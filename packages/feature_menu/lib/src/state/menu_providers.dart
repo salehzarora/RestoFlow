@@ -176,7 +176,7 @@ class MenuWriteController {
   Future<MenuWriteOutcome> upsertCategory({
     String? id,
     required String name,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _run(
     () => _repository.upsertCategory(
@@ -195,7 +195,7 @@ class MenuWriteController {
     String? description,
     required int basePriceMinor,
     required String currencyCode,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     String? imagePath,
     String? itemType,
@@ -235,7 +235,7 @@ class MenuWriteController {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _run(
     () => _repository.upsertSize(
@@ -254,7 +254,7 @@ class MenuWriteController {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _run(
     () => _repository.upsertVariant(
@@ -276,7 +276,7 @@ class MenuWriteController {
     int minSelect = 0,
     int? maxSelect,
     bool isRequired = false,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     bool allowQuantity = false,
     int? maxQuantity,
@@ -302,7 +302,7 @@ class MenuWriteController {
     required String modifierId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     Map<String, dynamic>? kitchenMeat,
   }) => _run(
@@ -345,6 +345,68 @@ class MenuWriteController {
       orderedIds: orderedIds,
     ),
   );
+
+  /// MENU-ORDER-001 (Codex #4): the FULL reorder lifecycle owned by the
+  /// controller, not a disposable widget callback — latch acquire, the RPC, the
+  /// authoritative reconcile (#7), rollback, and the latch RELEASE all run on the
+  /// provider [Ref], which outlives the menu widgets. So a widget disposed
+  /// mid-flight (navigation) can neither throw a WidgetRef-after-await error nor
+  /// leave the non-autoDispose per-scope latch stuck: the finally always runs on
+  /// the surviving Ref, and if the whole surface scope is torn down the latch is
+  /// disposed with it (and recreated false on return). Returns null when a
+  /// reorder for [scope] is ALREADY in flight (the second drag is ignored);
+  /// otherwise the outcome, which the caller may surface IF it is still mounted.
+  Future<MenuWriteOutcome?> reorderScoped({
+    required MenuReorderScope scope,
+    required List<String> orderedIds,
+  }) async {
+    final latch = menuReorderInFlightProvider(scope);
+    try {
+      if (_ref.read(latch))
+        return null; // already in flight for this exact scope
+    } catch (_) {
+      return null; // container already gone — nothing to do
+    }
+    _ref.read(latch.notifier).state = true;
+    try {
+      final MenuWriteOutcome outcome;
+      try {
+        outcome = await _repository.reorder(
+          organizationId: scope.organizationId,
+          restaurantId: scope.restaurantId,
+          branchId: scope.branchId,
+          entity: scope.entity,
+          orderedIds: orderedIds,
+        );
+      } catch (_) {
+        // A writer/wiring error that THROWS -> exact rollback + generic failure.
+        try {
+          _ref.invalidate(menuSnapshotProvider);
+        } catch (_) {}
+        return const Failure(MenuServerFailure());
+      }
+      if (outcome.isSuccess) {
+        // #7: reconcile the COMMITTED order before releasing the latch (and
+        // re-enabling controls), so no edit can capture a stale order in the gap.
+        try {
+          _ref.invalidate(menuSnapshotProvider);
+          await _ref.read(menuSnapshotProvider.future);
+        } catch (_) {}
+      } else {
+        // Exact rollback: re-assert the authoritative (unchanged) order.
+        try {
+          _ref.invalidate(menuSnapshotProvider);
+        } catch (_) {}
+      }
+      return outcome;
+    } finally {
+      // ALWAYS release — even when the surface was disposed mid-flight (the read
+      // then throws harmlessly; the latch went with the disposed container).
+      try {
+        _ref.read(latch.notifier).state = false;
+      } catch (_) {}
+    }
+  }
 
   /// RESTAURANT-OPERATIONS-V1-001: flips the item's PER-BRANCH availability.
   /// Only callable when the active scope names a branch (availability is

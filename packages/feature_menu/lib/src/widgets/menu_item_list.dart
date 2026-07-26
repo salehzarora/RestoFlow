@@ -106,45 +106,31 @@ class MenuItemList extends ConsumerWidget {
     parentId: categoryId, // the items' sibling owner is their category
   );
 
-  Future<void> _reorder(
+  void _reorder(
     BuildContext context,
     WidgetRef ref,
     List<MenuItem> items,
     int oldIndex,
     int newIndex,
-  ) async {
-    // MENU-ORDER-001 (Codex): one reorder at a time per EXACT sibling scope.
-    final latch = menuReorderInFlightProvider(_reorderScope);
-    if (ref.read(latch)) return;
-    ref.read(latch.notifier).state = true;
-    try {
-      final l10n = AppLocalizations.of(context);
-      final ids = menuReorderedIds(
-        [for (final i in items) i.id],
-        oldIndex,
-        newIndex,
-      );
-      final outcome = await ref
-          .read(menuWriteControllerProvider)
-          .reorder(entity: MenuEntityType.item, orderedIds: ids);
-      if (!outcome.isSuccess) {
-        ref.invalidate(menuSnapshotProvider); // exact rollback
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
-        }
-        return;
-      }
-      // MENU-ORDER-001 (Codex #7): reconcile the committed order before the latch
-      // releases (and re-enables controls). Swallow the disposed-surface race.
-      try {
-        ref.invalidate(menuSnapshotProvider);
-        await ref.read(menuSnapshotProvider.future);
-      } catch (_) {}
-    } finally {
-      ref.read(latch.notifier).state = false;
-    }
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final i in items) i.id],
+      oldIndex,
+      newIndex,
+    );
+    // MENU-ORDER-001 (Codex #4): controller-owned lifecycle on the provider Ref
+    // — no WidgetRef-after-await, no latch leak on disposal (see category list).
+    ref
+        .read(menuWriteControllerProvider)
+        .reorderScoped(scope: _reorderScope, orderedIds: ids)
+        .then((outcome) {
+          if (outcome != null && !outcome.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+          }
+        });
   }
 
   Widget _tile(
@@ -246,8 +232,12 @@ class MenuItemList extends ConsumerWidget {
         MenuPanelHeader(
           title: l10n.menuItemsHeading,
           actionLabel: l10n.menuAddItem,
-          onAction: () =>
-              onOpenEditor(MenuEditorTarget(categoryId: categoryId)),
+          // MENU-ORDER-001 (Codex #5): the ADD control lives in the header, OUTSIDE
+          // the list IgnorePointer — disable it too while THIS category's item
+          // reorder persists (a null onAction hides the button; zero write calls).
+          onAction: reordering
+              ? null
+              : () => onOpenEditor(MenuEditorTarget(categoryId: categoryId)),
         ),
         const Divider(height: 1),
         Expanded(

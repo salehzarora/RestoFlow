@@ -86,50 +86,35 @@ class MenuCategoryList extends ConsumerWidget {
     );
   }
 
-  Future<void> _reorder(
+  void _reorder(
     BuildContext context,
     WidgetRef ref,
     List<MenuCategory> categories,
     int oldIndex,
     int newIndex,
-  ) async {
-    // MENU-ORDER-001 (Codex): one reorder at a time per EXACT sibling scope. A
-    // second drag while this one persists is ignored, so two writes never race
-    // off a stale base order.
-    final latch = menuReorderInFlightProvider(_scope(ref));
-    if (ref.read(latch)) return;
-    ref.read(latch.notifier).state = true;
-    try {
-      final l10n = AppLocalizations.of(context);
-      final ids = menuReorderedIds(
-        [for (final c in categories) c.id],
-        oldIndex,
-        newIndex,
-      );
-      final outcome = await ref
-          .read(menuWriteControllerProvider)
-          .reorder(entity: MenuEntityType.category, orderedIds: ids);
-      if (!outcome.isSuccess) {
-        // Exact rollback: re-assert the authoritative (unchanged) snapshot so the
-        // dropped tile returns to its real slot, then show the honest error.
-        ref.invalidate(menuSnapshotProvider);
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
-        }
-        return;
-      }
-      // MENU-ORDER-001 (Codex #7): reconcile the COMMITTED order before the latch
-      // releases (and re-enables the controls), so no edit can capture a stale
-      // order in the refresh gap. Swallow the disposed-surface race.
-      try {
-        ref.invalidate(menuSnapshotProvider);
-        await ref.read(menuSnapshotProvider.future);
-      } catch (_) {}
-    } finally {
-      ref.read(latch.notifier).state = false;
-    }
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final c in categories) c.id],
+      oldIndex,
+      newIndex,
+    );
+    // MENU-ORDER-001 (Codex #4): the CONTROLLER owns the whole lifecycle (latch,
+    // RPC, authoritative reconcile #7, rollback, release) on the provider Ref,
+    // which outlives this widget — so disposing the surface mid-flight can
+    // neither leak the per-scope latch nor throw a WidgetRef-after-await error.
+    // We touch no ref/context after the await; the error is surfaced only if the
+    // widget is still mounted.
+    ref
+        .read(menuWriteControllerProvider)
+        .reorderScoped(scope: _scope(ref), orderedIds: ids)
+        .then((outcome) {
+          if (outcome != null && !outcome.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+          }
+        });
   }
 
   @override
