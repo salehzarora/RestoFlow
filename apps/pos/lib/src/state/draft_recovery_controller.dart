@@ -9,7 +9,7 @@ import '../data/draft_recovery_store.dart';
 import '../data/recent_order.dart' show PosRecentOrder;
 import 'cart_controller.dart';
 import 'outbox_controller.dart';
-import 'pos_session.dart' show posSyncSessionProvider;
+import 'pos_session.dart' show posSignedInEmployeeProfileIdProvider;
 import 'pos_sync_scope_provider.dart';
 import 'recent_orders_controller.dart';
 
@@ -20,43 +20,51 @@ import 'recent_orders_controller.dart';
 /// customer name, or its notes.
 ///
 /// [scopeKey] is the full operational scope (organization + restaurant + branch +
-/// device); [pinSessionId] is the human PIN session — a new employee login mints a new
-/// PIN session against the current device session, so it distinguishes the operator
-/// (and the device-session/pairing) even on the same device. Both are null in demo /
-/// unpaired mode, where there is a single implicit operator — a demo recovery therefore
-/// matches only another demo context, never a real paired one.
+/// device) — all durably persisted, so it is IDENTICAL before and after a restart.
+/// [employeeProfileId] (Codex #1) is the STABLE authenticated worker id (the server
+/// device-staff roster id), which is the SAME for a worker across every PIN login —
+/// so the SAME worker can reclaim their recovery after an app restart + re-login,
+/// while a different worker (different employeeProfileId) or a different till/branch
+/// (different scopeKey) cannot. The ephemeral pinSessionId is deliberately NOT part
+/// of the durable ownership (a new one is minted per login, which is exactly why the
+/// prior binding was unreclaimable after restart). Both are null in demo / unpaired
+/// mode — a demo recovery matches only another demo context, never a real paired one.
 class PosRecoveryBinding {
-  const PosRecoveryBinding({this.scopeKey, this.pinSessionId});
+  const PosRecoveryBinding({this.scopeKey, this.employeeProfileId});
 
   final String? scopeKey;
-  final String? pinSessionId;
+  final String? employeeProfileId;
 
-  /// EXACT match on every component — a recovery is never restored across a scope or
-  /// PIN-session boundary.
+  /// EXACT match on both stable components — a recovery is never restored across a
+  /// scope (org/restaurant/branch/device) or worker boundary.
   bool matches(PosRecoveryBinding other) =>
-      other.scopeKey == scopeKey && other.pinSessionId == pinSessionId;
+      other.scopeKey == scopeKey &&
+      other.employeeProfileId == employeeProfileId;
 
   @override
   bool operator ==(Object other) =>
       other is PosRecoveryBinding &&
       other.scopeKey == scopeKey &&
-      other.pinSessionId == pinSessionId;
+      other.employeeProfileId == employeeProfileId;
 
   @override
-  int get hashCode => Object.hash(scopeKey, pinSessionId);
+  int get hashCode => Object.hash(scopeKey, employeeProfileId);
 
-  /// MENU-ORDER-001 (Codex #8/#9): durable serialization so the recovery's scope
-  /// binding survives a restart — the restored draft is still gated to its own
-  /// scope + PIN session (a different operator never sees it).
+  /// MENU-ORDER-001 (Codex #1/#8/#9): durable serialization so the recovery's
+  /// STABLE ownership survives a restart — gated to its scope + worker id (a
+  /// different operator never sees it). No PIN / hash / token / JWT is persisted.
   Map<String, Object?> toJson() => <String, Object?>{
     if (scopeKey != null) 'scope_key': scopeKey,
-    if (pinSessionId != null) 'pin_session_id': pinSessionId,
+    if (employeeProfileId != null) 'employee_profile_id': employeeProfileId,
   };
 
+  /// Decode only the STABLE fields. A legacy record that carried the ephemeral
+  /// `pin_session_id` decodes with a null worker id (it is NOT re-attributed) — it
+  /// simply becomes unavailable and is cleaned by existing retention (Codex #2).
   static PosRecoveryBinding fromJson(Map<String, Object?> json) =>
       PosRecoveryBinding(
         scopeKey: json['scope_key']?.toString(),
-        pinSessionId: json['pin_session_id']?.toString(),
+        employeeProfileId: json['employee_profile_id']?.toString(),
       );
 }
 
@@ -307,13 +315,18 @@ final posDraftRecoveryProvider =
       PosDraftRecoveryController.new,
     );
 
-/// The CURRENT operational binding — the scope + PIN session a recovery may be
-/// captured against and restored in. Watched by the confirmation and the recent-orders
-/// surface so that a PIN switch or branch/device re-pair immediately makes a prior
-/// employee's recovery inaccessible (its binding no longer matches). Null components in
-/// demo / unpaired mode.
+/// The CURRENT operational binding — the STABLE scope (org/restaurant/branch/device)
+/// + STABLE worker id (employeeProfileId) a recovery may be captured against and
+/// restored in. Watched by the confirmation and the recent-orders surface so that a
+/// DIFFERENT worker signing in, or a branch/device re-pair, immediately makes a prior
+/// employee's recovery inaccessible (its binding no longer matches) — while the SAME
+/// worker re-signing-in (even with a fresh pinSessionId, e.g. after a restart) still
+/// matches and can reclaim it. Null components in demo / unpaired mode.
 final posRecoveryBindingProvider = Provider<PosRecoveryBinding>((ref) {
   final scopeKey = ref.watch(posSyncScopeProvider)?.key;
-  final pinSessionId = ref.watch(posSyncSessionProvider)?.pinSessionId;
-  return PosRecoveryBinding(scopeKey: scopeKey, pinSessionId: pinSessionId);
+  final employeeProfileId = ref.watch(posSignedInEmployeeProfileIdProvider);
+  return PosRecoveryBinding(
+    scopeKey: scopeKey,
+    employeeProfileId: employeeProfileId,
+  );
 });

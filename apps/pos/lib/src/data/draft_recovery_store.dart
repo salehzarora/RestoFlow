@@ -54,8 +54,12 @@ class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
   static const String _defaultKey = 'restoflow.pos.draft_recovery.v1';
 
   /// Bump ONLY on an incompatible envelope/record shape change; an unrecognised
-  /// version is ignored on load (start clean) rather than mis-parsed.
-  static const int schemaVersion = 1;
+  /// version is ignored on load (start clean) rather than mis-parsed. v2
+  /// (MENU-ORDER-001 Codex #1): ownership moved from the ephemeral pinSessionId to
+  /// the stable worker id (employee_profile_id) + the stable cart lineId is now
+  /// persisted — so a v1 record (pin-session-keyed, unattributable to the stable
+  /// worker) is intentionally dropped on load rather than silently mis-owned.
+  static const int schemaVersion = 2;
 
   @override
   Future<Map<String, PosDraftRecovery>> load() async {

@@ -327,6 +327,11 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         );
         _startedAt = clock(); // RF-118: start the client expiry window.
         _pausedAt = null;
+        // MENU-ORDER-001 (Codex #1): publish the stable worker id on the
+        // dart-define path too (recovery ownership).
+        ref
+            .read(posSignedInEmployeeProfileIdProvider.notifier)
+            .set(config.employeeProfileId);
         unawaited(_openShiftBestEffort(transport, session));
         return session;
       },
@@ -521,6 +526,12 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
         ref
             .read(posSignedInStaffNameProvider.notifier)
             .set(employeeDisplayName);
+        // MENU-ORDER-001 (Codex #1): publish the STABLE worker id so a durable
+        // recovery is owned by this worker (reclaimable after restart+re-login),
+        // not the ephemeral pinSessionId.
+        ref
+            .read(posSignedInEmployeeProfileIdProvider.notifier)
+            .set(employeeProfileId);
         // A cashier needs an open shift before payments (RF-055); best-effort.
         unawaited(_openShiftBestEffort(transport, session));
         return null;
@@ -540,6 +551,7 @@ class PosSessionController extends AsyncNotifier<SyncSession?> {
   void endSession() {
     ref.read(posOpenShiftProvider.notifier).clear();
     ref.read(posSignedInStaffNameProvider.notifier).clear();
+    ref.read(posSignedInEmployeeProfileIdProvider.notifier).clear();
     _binding = null;
     _startedAt = null; // RF-118: close the client expiry window.
     _pausedAt = null;
@@ -564,6 +576,28 @@ class PosSignedInStaffName extends Notifier<String?> {
 
 final posSignedInStaffNameProvider =
     NotifierProvider<PosSignedInStaffName, String?>(PosSignedInStaffName.new);
+
+/// MENU-ORDER-001 (Codex #1): the STABLE authenticated worker id of the signed-in
+/// POS operator — the server `employee_profile_id` (device-staff roster id), which
+/// is the SAME for a worker across every PIN login, unlike the ephemeral
+/// pinSessionId (a new one is minted per `start_pin_session`). Used to bind a
+/// durable draft recovery to its owner so the SAME worker can reclaim it after an
+/// app restart + re-login, while a different worker cannot. Identity id only — NO
+/// PIN / hash / token / JWT. Set at sign-in, cleared on sign-out.
+class PosSignedInEmployeeProfileId extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? id) =>
+      state = (id != null && id.trim().isNotEmpty) ? id.trim() : null;
+
+  void clear() => state = null;
+}
+
+final posSignedInEmployeeProfileIdProvider =
+    NotifierProvider<PosSignedInEmployeeProfileId, String?>(
+      PosSignedInEmployeeProfileId.new,
+    );
 
 /// RF-118: the POS staff PIN-session expiry policy (client-side). Defaults to an
 /// 8-hour absolute max age (mirroring the SERVER `pin_sessions.expires_at`

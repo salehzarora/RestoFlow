@@ -276,6 +276,7 @@ class CartDraftLine {
     required this.name,
     required this.basePriceMinor,
     required this.quantity,
+    this.lineId,
     this.modifiers = const <SelectedModifier>[],
     this.note,
     this.categoryDisplayOrder = 0,
@@ -286,6 +287,12 @@ class CartDraftLine {
   final String name;
   final int basePriceMinor;
   final int quantity;
+
+  /// MENU-ORDER-001 (Codex #2/#3): the line's STABLE cart line id, persisted so a
+  /// restored draft keeps its ORIGINAL line identity (edits/removals target the
+  /// right line; no duplicates). Null on a legacy record -> a fresh id is minted.
+  final String? lineId;
+
   final List<SelectedModifier> modifiers;
   final String? note;
 
@@ -295,10 +302,12 @@ class CartDraftLine {
   final int categoryDisplayOrder;
   final int itemDisplayOrder;
 
-  /// MENU-ORDER-001 (Codex #8/#9): durable serialization — carries the ranks,
-  /// modifiers, and note through a restart so a recovered order still prints in
-  /// menu order. Money is integer minor (D-007).
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization — carries the stable
+  /// lineId, ranks, modifiers, and note through a restart so a recovered order
+  /// keeps its line identity and still prints in menu order. Money is integer
+  /// minor (D-007).
   Map<String, Object?> toJson() => <String, Object?>{
+    if (lineId != null) 'line_id': lineId,
     'menu_item_id': menuItemId,
     'name': name,
     'base_price_minor': basePriceMinor,
@@ -316,6 +325,7 @@ class CartDraftLine {
     final rawMods = json['modifiers'];
     final rawNote = json['note'];
     return CartDraftLine(
+      lineId: json['line_id']?.toString(),
       menuItemId: (json['menu_item_id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
       basePriceMinor: intOf(json['base_price_minor']),
@@ -598,6 +608,9 @@ class CartController extends Notifier<CartViewState> {
     lines: <CartDraftLine>[
       for (final line in _cart.lines)
         CartDraftLine(
+          // MENU-ORDER-001 (Codex #2/#3): carry the STABLE line id so a restored
+          // draft keeps its original line identity.
+          lineId: line.lineId,
           menuItemId: line.menuItemId,
           name: line.itemNameSnapshot,
           basePriceMinor: line.basePriceMinorSnapshot,
@@ -629,7 +642,16 @@ class CartController extends Notifier<CartViewState> {
     _lineNotes.clear();
     _lineDisplayOrders.clear();
     for (final l in draft.lines) {
-      final lineId = 'line-${_lineSeq++}';
+      // MENU-ORDER-001 (Codex #2/#3): reuse the persisted STABLE line id so
+      // edits/removals target the original line and a re-restore never
+      // duplicates; a legacy record with no id mints a fresh one. Keep _lineSeq
+      // AHEAD of any restored `line-N` so a later add can never collide with it.
+      final lineId = l.lineId ?? 'line-${_lineSeq++}';
+      final seqMatch = RegExp(r'^line-(\d+)$').firstMatch(lineId);
+      if (seqMatch != null) {
+        final n = int.tryParse(seqMatch.group(1)!) ?? -1;
+        if (n >= _lineSeq) _lineSeq = n + 1;
+      }
       _cart.addLine(
         CartLine.snapshot(
           lineId: lineId,
