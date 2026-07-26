@@ -377,7 +377,10 @@ void main() {
         container.read(posDraftRecoveryProvider).containsKey('e1'),
         isTrue,
       );
-      expect(container.read(posActiveCorrectionSourceProvider), 'e1');
+      expect(
+        container.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
+        'e1',
+      );
     });
 
     testWidgets('an ACCEPTED (applied) order shows payment and NO recovery '

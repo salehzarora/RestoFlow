@@ -943,7 +943,12 @@ void main() {
             .hasRecoveryFor('entry-R'),
         isTrue,
       );
-      expect(container.read(posActiveCorrectionSourceProvider), 'entry-R');
+      expect(
+        container
+            .read(posActiveCorrectionSourceProvider)
+            ?.sourceOutboxEntryId,
+        'entry-R',
+      );
     });
   });
 }

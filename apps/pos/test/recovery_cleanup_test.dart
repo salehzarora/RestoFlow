@@ -121,8 +121,14 @@ PosRecentOrder _snapshotRow(String entryId) {
 }
 
 void main() {
+  // MENU-ORDER-001 (Codex correction-ownership §5): the controller-seam acceptance
+  // cleanup is now AWAITED copy-on-write (persist the cleared map, THEN publish it in
+  // memory) so it never claims success on a failed durable write and can retry. That
+  // makes the in-memory clear land on a microtask AFTER the accept signal, so these
+  // controller-level tests pump the event queue between the trigger and the assertion.
+  // The behaviour is unchanged; only the (durability-correct) timing is.
   group('Finding 3: applied recoveries are cleared at the controller seam', () {
-    test('1. captured while PENDING, then applied -> recovery cleared', () {
+    test('1. captured while PENDING, then applied -> recovery cleared', () async {
       final c = _container([_entry('e1', OutboxSyncState.created)]);
       final drafts = c.read(posDraftRecoveryProvider.notifier);
       // Register the controller (its outbox listener) then capture.
@@ -133,48 +139,53 @@ void main() {
       (c.read(outboxControllerProvider.notifier) as _MutableOutbox).setEntries([
         _entry('e1', OutboxSyncState.applied),
       ]);
+      await pumpEventQueue();
       expect(c.read(posDraftRecoveryProvider).containsKey('e1'), isFalse);
     });
 
-    test('2. already APPLIED before capture -> never stored', () {
+    test('2. already APPLIED before capture -> never stored', () async {
       final c = _container([_entry('e1', OutboxSyncState.applied)]);
       final drafts = c.read(posDraftRecoveryProvider.notifier);
       c.read(posDraftRecoveryProvider);
       drafts.capture(
         _rec('e1'),
       ); // capture returns after the entry already applied
+      await pumpEventQueue();
       expect(c.read(posDraftRecoveryProvider), isEmpty);
     });
 
-    test('4. duplicate applied delivery is idempotent', () {
+    test('4. duplicate applied delivery is idempotent', () async {
       final c = _container([_entry('e1', OutboxSyncState.created)]);
       c.read(posDraftRecoveryProvider.notifier).capture(_rec('e1'));
       final outbox =
           c.read(outboxControllerProvider.notifier) as _MutableOutbox;
       outbox.setEntries([_entry('e1', OutboxSyncState.applied)]);
       outbox.setEntries([_entry('e1', OutboxSyncState.applied)]); // again
+      await pumpEventQueue();
       expect(c.read(posDraftRecoveryProvider), isEmpty);
     });
 
-    test('5. a permanent item_unavailable rejection RETAINS the recovery', () {
+    test('5. a permanent item_unavailable rejection RETAINS the recovery', () async {
       final c = _container([_entry('e1', OutboxSyncState.created)]);
       c.read(posDraftRecoveryProvider.notifier).capture(_rec('e1'));
       (c.read(outboxControllerProvider.notifier) as _MutableOutbox).setEntries([
         _entry('e1', OutboxSyncState.rejected, code: 'item_unavailable'),
       ]);
+      await pumpEventQueue();
       expect(c.read(posDraftRecoveryProvider).containsKey('e1'), isTrue);
     });
 
-    test('6. a retryable transport failure RETAINS the recovery', () {
+    test('6. a retryable transport failure RETAINS the recovery', () async {
       final c = _container([_entry('e1', OutboxSyncState.created)]);
       c.read(posDraftRecoveryProvider.notifier).capture(_rec('e1'));
       (c.read(outboxControllerProvider.notifier) as _MutableOutbox).setEntries([
         _entry('e1', OutboxSyncState.pending),
       ]);
+      await pumpEventQueue();
       expect(c.read(posDraftRecoveryProvider).containsKey('e1'), isTrue);
     });
 
-    test('7. cleanup affects only the matching entry', () {
+    test('7. cleanup affects only the matching entry', () async {
       final c = _container([
         _entry('e1', OutboxSyncState.created),
         _entry('e2', OutboxSyncState.created),
@@ -187,34 +198,37 @@ void main() {
         _entry('e1', OutboxSyncState.applied),
         _entry('e2', OutboxSyncState.created),
       ]);
+      await pumpEventQueue();
       final map = c.read(posDraftRecoveryProvider);
       expect(map.containsKey('e1'), isFalse);
       expect(map.containsKey('e2'), isTrue); // untouched
     });
 
-    test('8. nothing is retained after accepted cleanup (no leaked draft)', () {
+    test('8. nothing is retained after accepted cleanup (no leaked draft)', () async {
       final c = _container([_entry('e1', OutboxSyncState.created)]);
       c.read(posDraftRecoveryProvider.notifier).capture(_rec('e1'));
       (c.read(outboxControllerProvider.notifier) as _MutableOutbox).setEntries([
         _entry('e1', OutboxSyncState.applied),
       ]);
+      await pumpEventQueue();
       // No record -> no customer name / notes retained for the accepted order.
       expect(c.read(posDraftRecoveryProvider), isEmpty);
     });
   });
 
   group('Finding 4: an accepted server SNAPSHOT clears the recovery', () {
-    test('snapshot clears the recovery even while the outbox stays PENDING', () {
+    test('snapshot clears the recovery even while the outbox stays PENDING', () async {
       // The outbox entry never reaches applied (e.g. a lost submit response)...
       final s = _snapshotContainer([_entry('e1', OutboxSyncState.pending)]);
       s.c.read(posDraftRecoveryProvider.notifier).capture(_rec('e1'));
       expect(s.c.read(posDraftRecoveryProvider).containsKey('e1'), isTrue);
       // ...but an authoritative snapshot arrives proving the order exists.
       s.recent.setOrders([_snapshotRow('e1')]);
+      await pumpEventQueue();
       expect(s.c.read(posDraftRecoveryProvider).containsKey('e1'), isFalse);
     });
 
-    test('only the matching recovery is cleared; others remain', () {
+    test('only the matching recovery is cleared; others remain', () async {
       final s = _snapshotContainer([
         _entry('e1', OutboxSyncState.pending),
         _entry('e2', OutboxSyncState.pending),
@@ -223,20 +237,22 @@ void main() {
         ..capture(_rec('e1'))
         ..capture(_rec('e2'));
       s.recent.setOrders([_snapshotRow('e1')]);
+      await pumpEventQueue();
       final map = s.c.read(posDraftRecoveryProvider);
       expect(map.containsKey('e1'), isFalse);
       expect(map.containsKey('e2'), isTrue); // unrelated recovery remains
     });
 
-    test('a duplicate snapshot delivery is idempotent', () {
+    test('a duplicate snapshot delivery is idempotent', () async {
       final s = _snapshotContainer([_entry('e1', OutboxSyncState.pending)]);
       s.c.read(posDraftRecoveryProvider.notifier).capture(_rec('e1'));
       s.recent.setOrders([_snapshotRow('e1')]);
       s.recent.setOrders([_snapshotRow('e1')]); // again
+      await pumpEventQueue();
       expect(s.c.read(posDraftRecoveryProvider), isEmpty);
     });
 
-    test('a device-owned row with NO snapshot does not clear the recovery', () {
+    test('a device-owned row with NO snapshot does not clear the recovery', () async {
       final s = _snapshotContainer([_entry('e1', OutboxSyncState.pending)]);
       s.c.read(posDraftRecoveryProvider.notifier).capture(_rec('e1'));
       // A row without a snapshot (never server-acknowledged) — recovery retained.
@@ -254,6 +270,7 @@ void main() {
           submittedAt: DateTime.utc(2026, 7, 16),
         ),
       ]);
+      await pumpEventQueue();
       expect(s.c.read(posDraftRecoveryProvider).containsKey('e1'), isTrue);
     });
   });
