@@ -87,6 +87,7 @@ class PosDraftRecovery {
     required this.binding,
     this.table,
     this.customerName,
+    this.correctionOutboxEntryId,
   });
 
   final CartDraftSnapshot draft;
@@ -102,6 +103,28 @@ class PosDraftRecovery {
   final DemoTable? table;
   final String? customerName;
 
+  /// MENU-ORDER-001 (Codex, correction-window durability): the outbox entry id of the
+  /// CORRECTED resubmit this recovery is now the source of — set when the operator
+  /// restores this rejected draft (Back to cart) and re-Sends it. It durably LINKS the
+  /// source recovery to the corrected order so the recovery is cleared when that
+  /// corrected order is authoritatively ACCEPTED — even across a crash between
+  /// acceptance and local cleanup (the authoritative snapshot/outbox-applied signal
+  /// keys on THIS corrected id, and the reconcile clears the source recovery through
+  /// it). Null until a corrected resubmit; Back to cart alone never clears the record.
+  final String? correctionOutboxEntryId;
+
+  /// Returns a copy carrying the corrected resubmit's [correctedEntryId] link (D-008
+  /// snapshots + stable line ids are untouched — only the correction pointer changes).
+  PosDraftRecovery withCorrection(String correctedEntryId) => PosDraftRecovery(
+    draft: draft,
+    orderType: orderType,
+    outboxEntryId: outboxEntryId,
+    binding: binding,
+    table: table,
+    customerName: customerName,
+    correctionOutboxEntryId: correctedEntryId,
+  );
+
   /// MENU-ORDER-001 (Codex #8/#9): durable serialization so a permanently-
   /// rejected order's recovery — its draft (products, quantities, modifiers,
   /// notes, AND the Dashboard menu ranks), order type, table and customer name —
@@ -114,6 +137,8 @@ class PosDraftRecovery {
     'binding': binding.toJson(),
     if (table != null) 'table': table!.toJson(),
     if (customerName != null) 'customer_name': customerName,
+    if (correctionOutboxEntryId != null)
+      'correction_outbox_entry_id': correctionOutboxEntryId,
   };
 
   static PosDraftRecovery fromJson(Map<String, Object?> json) {
@@ -138,6 +163,9 @@ class PosDraftRecovery {
           ? DemoTable.fromJson(rawTable.cast<String, Object?>())
           : null,
       customerName: json['customer_name']?.toString(),
+      // Backward-compatible: a record written before the correction-window fix has
+      // no link (null) and decodes as a plain, fully-recoverable rejected draft.
+      correctionOutboxEntryId: json['correction_outbox_entry_id']?.toString(),
     );
   }
 }
@@ -259,30 +287,69 @@ class PosDraftRecoveryController
   bool hasRecoveryFor(String? outboxEntryId) =>
       outboxEntryId != null && state.containsKey(outboxEntryId);
 
+  /// MENU-ORDER-001 (correction-window durability): durably LINK the source recovery
+  /// [sourceOutboxEntryId] to its corrected resubmit [correctedOutboxEntryId] BEFORE the
+  /// source can be cleared. If a crash lands between the corrected order's server
+  /// acceptance and local cleanup, the authoritative snapshot / outbox-applied signal
+  /// for [correctedOutboxEntryId] still clears the source THROUGH this link on the next
+  /// startup (see [_clearForAccepted]). No-op when the source is already gone.
+  void markCorrectedSubmit(
+    String sourceOutboxEntryId,
+    String correctedOutboxEntryId,
+  ) {
+    final source = state[sourceOutboxEntryId];
+    if (source == null || sourceOutboxEntryId == correctedOutboxEntryId) return;
+    state = <String, PosDraftRecovery>{
+      ...state,
+      sourceOutboxEntryId: source.withCorrection(correctedOutboxEntryId),
+    };
+    _persist();
+  }
+
+  /// MENU-ORDER-001 (correction-window durability): the source recovery has been
+  /// RESOLVED by its corrected resubmit (accepted, or superseded by a fresh rejected
+  /// attempt) — clear its record AND retire its Recent-Orders rejected shell. Only the
+  /// exact source is touched; idempotent. Back to cart itself never calls this — only a
+  /// resubmit or an authoritative acceptance does.
+  void resolveCorrectedSource(String sourceOutboxEntryId) {
+    clear(sourceOutboxEntryId);
+    _retireShell(sourceOutboxEntryId);
+  }
+
+  /// Retire the rejected shell for [outboxEntryId], deferred to a microtask so it is
+  /// safe to call from WITHIN the recent-orders listener (never mutate a provider during
+  /// its own notification). Swallows a disposed-container race.
+  void _retireShell(String outboxEntryId) {
+    Future<void>.microtask(() {
+      if (_disposed) return;
+      try {
+        ref
+            .read(posRecentOrdersControllerProvider.notifier)
+            .retireLocalRejectedByOutboxEntry(outboxEntryId);
+      } catch (_) {}
+    });
+  }
+
   /// Finding 3: clear the recovery of every APPLIED submit. Idempotent — a duplicate
   /// applied delivery finds nothing to clear. NEVER touches a pending, retryable-failed,
-  /// or permanently-rejected (item_unavailable) entry, whose recovery must be retained.
+  /// or permanently-rejected (item_unavailable) entry whose recovery must be retained —
+  /// UNLESS that recovery is the SOURCE of a corrected resubmit that just applied (its
+  /// correctionOutboxEntryId link, so the accepted correction clears its source).
   void _clearApplied(List<OutboxEntry> entries) {
     final applied = <String>{
       for (final e in entries)
         if (e.syncState == OutboxSyncState.applied) e.id,
     };
     if (applied.isEmpty) return;
-    final next = <String, PosDraftRecovery>{
-      for (final e in state.entries)
-        if (!applied.contains(e.key)) e.key: e.value,
-    };
-    if (next.length != state.length) {
-      state = next;
-      _persist();
-    }
+    _clearForAccepted(applied);
   }
 
   /// Finding 4: clear the recovery of every order the SERVER has authoritatively
   /// snapshotted (the order exists → it was accepted), keyed by the EXACT outbox entry
   /// the submit view carries. A permanently-rejected shell has NO snapshot (the order
-  /// was never created), so its recovery is never cleared here. Idempotent — a duplicate
-  /// snapshot finds nothing to clear — and it touches only the matching entries.
+  /// was never created), so its OWN recovery is never cleared here — but a source
+  /// recovery WHOSE corrected resubmit was accepted IS cleared through its link (the
+  /// accepted-then-crash reconcile). Idempotent; touches only matching entries.
   void _clearAcceptedBySnapshot(List<PosRecentOrder> orders) {
     final accepted = <String>{
       for (final o in orders)
@@ -290,13 +357,33 @@ class PosDraftRecoveryController
           o.order!.outboxEntryId!,
     };
     if (accepted.isEmpty) return;
-    final next = <String, PosDraftRecovery>{
-      for (final e in state.entries)
-        if (!accepted.contains(e.key)) e.key: e.value,
-    };
-    if (next.length != state.length) {
-      state = next;
-      _persist();
+    _clearForAccepted(accepted);
+  }
+
+  /// Shared acceptance cleanup: clear every recovery whose OWN key OR whose
+  /// correctionOutboxEntryId LINK is in [acceptedEntryIds] (its corrected order was
+  /// authoritatively accepted), and retire each cleared recovery's rejected shell.
+  /// Idempotent — nothing matched leaves the map untouched.
+  void _clearForAccepted(Set<String> acceptedEntryIds) {
+    final removed = <String>[];
+    final next = <String, PosDraftRecovery>{};
+    for (final e in state.entries) {
+      final rec = e.value;
+      final correctionId = rec.correctionOutboxEntryId;
+      final isAccepted =
+          acceptedEntryIds.contains(e.key) ||
+          (correctionId != null && acceptedEntryIds.contains(correctionId));
+      if (isAccepted) {
+        removed.add(e.key);
+      } else {
+        next[e.key] = rec;
+      }
+    }
+    if (removed.isEmpty) return;
+    state = next;
+    _persist();
+    for (final key in removed) {
+      _retireShell(key);
     }
   }
 }

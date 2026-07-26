@@ -595,6 +595,9 @@ class CartController extends Notifier<CartViewState> {
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
+    // Abandoning the cart ends any in-progress correction: a later unrelated
+    // submit must not resolve the previously-restored recovery.
+    ref.read(posActiveCorrectionSourceProvider.notifier).clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -839,6 +842,8 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _lineDisplayOrders.clear();
+    // A fresh order ends any in-progress correction (see [clear]).
+    ref.read(posActiveCorrectionSourceProvider.notifier).clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -871,3 +876,29 @@ class CartController extends Notifier<CartViewState> {
 final cartControllerProvider = NotifierProvider<CartController, CartViewState>(
   CartController.new,
 );
+
+/// MENU-ORDER-001 (Codex, correction-window durability): the outbox entry id of the
+/// durable recovery whose rejected draft the operator has RESTORED into the current
+/// cart and is now correcting. Set by [PosRecoveryCoordinator.restore]; consumed by
+/// `submitOrderFromCart` to LINK the corrected resubmit back to its source recovery
+/// (so acceptance clears exactly that source, never an orphan). Cleared when the cart
+/// is cleared / a new order is started, so an UNRELATED later submit never resolves a
+/// stale source. In-memory only — re-established on each restore, so a crash simply
+/// re-derives it; NO pin/token/secret. Lives here (not draft_recovery_controller) so
+/// the cart can reset it without an import cycle.
+class PosActiveCorrectionSource extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? outboxEntryId) =>
+      state = (outboxEntryId != null && outboxEntryId.isNotEmpty)
+      ? outboxEntryId
+      : null;
+
+  void clear() => state = null;
+}
+
+final posActiveCorrectionSourceProvider =
+    NotifierProvider<PosActiveCorrectionSource, String?>(
+      PosActiveCorrectionSource.new,
+    );

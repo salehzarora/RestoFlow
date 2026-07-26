@@ -426,6 +426,13 @@ Future<void> submitOrderFromCart({
   final bindingBefore = container.read(posRecoveryBindingProvider);
   final scopeKeyBefore = container.read(posSyncScopeProvider)?.key;
   final draftBefore = cartController.captureDraft();
+  // MENU-ORDER-001 (correction-window durability): if this cart was RESTORED from a
+  // durable recovery (Back to cart), this is the source recovery's outbox entry id —
+  // captured before the await so the corrected resubmit can LINK back to it + RESOLVE
+  // it once the server responds. Null for a first-time (non-correction) submit.
+  final correctionSourceBefore = container.read(
+    posActiveCorrectionSourceProvider,
+  );
   final orderTypeBefore = setup.orderType;
   final tableBefore = setup.assignedTable;
   final customerNameBefore = setup.customerName;
@@ -533,6 +540,26 @@ Future<void> submitOrderFromCart({
       if (entry != null && entry.isPermanentBusinessRejection) {
         recent.markLocallyRejected(submitted.identity);
       }
+    }
+    // MENU-ORDER-001 (correction-window durability): if this submit is the corrected
+    // resubmit of a RESTORED recovery (Back to cart set the active-correction source),
+    // LINK the source to this corrected entry FIRST (persisted, so an accept-then-crash
+    // still reconciles the source via the corrected id), then RESOLVE the source — clear
+    // its record + retire its rejected shell. The source is superseded by this attempt:
+    // an accepted correction ends the chain; a fresh rejection (its own recovery was
+    // captured above) becomes the new correction source. Back to cart never reaches
+    // here — only a real resubmit does — so the recovery survived the correction window.
+    if (correctionSourceBefore != null &&
+        correctionSourceBefore != result.entry.id) {
+      final recoveryCtrl = container.read(posDraftRecoveryProvider.notifier);
+      recoveryCtrl.markCorrectedSubmit(correctionSourceBefore, result.entry.id);
+      recoveryCtrl.resolveCorrectedSource(correctionSourceBefore);
+      // The corrected attempt is the new source ONLY if it too was rejected (its own
+      // recovery was stored above); an accepted attempt ends the correction chain.
+      final stillRecoverable = recoveryCtrl.hasRecoveryFor(result.entry.id);
+      container
+          .read(posActiveCorrectionSourceProvider.notifier)
+          .set(stillRecoverable ? result.entry.id : null);
     }
     // KITCHEN-PRINT-DUAL-001: optionally print the money-free KITCHEN ticket for
     // the just-created order. Best-effort + fully decoupled — it prints to the

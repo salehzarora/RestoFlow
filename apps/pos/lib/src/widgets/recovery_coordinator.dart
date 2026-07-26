@@ -84,7 +84,16 @@ class PosRecoveryCoordinator {
     final table = recovery.table;
     if (table != null) setup.assignTable(table);
     setup.setCustomerName(recovery.customerName);
-    _retire(recovery);
+    // MENU-ORDER-001 (correction-window durability): Back to cart is NOT a terminal
+    // event. The durable recovery AND its Recent-Orders rejected shell are KEPT so a
+    // crash/refresh before the corrected re-Send can recover the SAME order again. The
+    // record is cleared ONLY when the corrected order is authoritatively accepted (via
+    // its correctionOutboxEntryId link) or the operator explicitly discards it. Mark the
+    // current cart as the correction-in-progress of THIS recovery so the resubmit links
+    // back to it (submitOrderFromCart resolves the source on the corrected send).
+    ref
+        .read(posActiveCorrectionSourceProvider.notifier)
+        .set(recovery.outboxEntryId);
     return PosRecoveryOutcome.restored;
   }
 
