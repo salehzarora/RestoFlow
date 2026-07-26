@@ -199,27 +199,39 @@ create trigger assign_order_item_modifier_order_snapshot
 -- PART 3. app.menu_reorder — atomic display_order rewrite for a complete
 --         sibling set (menu_category / menu_item / modifier / modifier_option).
 --
--- SECURITY + CONCURRENCY (Codex MENU-ORDER-001 review):
---  * AUTHORIZATION FIRST: authenticate the actor, validate the org, and require
---    an active MENU-WRITE role in the org BEFORE any submitted id is inspected,
---    so a caller without edit rights can never probe whether foreign/missing ids
---    exist. Every id-level failure (foreign tenant / other restaurant / other
---    parent / missing / deleted / a scope the actor does not cover) collapses to
---    ONE generic 'invalid request' (42501) -> no existence oracle.
---  * PostgreSQL-17 SAFE: NO min(uuid)/max(uuid) (unsupported aggregate). The
---    sibling scope is resolved deterministically from the FIRST submitted row
---    (order by id limit 1) within the caller's org, then every id is validated
---    against it.
---  * CONCURRENCY SAFE: the PARENT row that owns the sibling scope is locked FOR
---    UPDATE (the restaurant for categories; the category/item/modifier for the
---    rest) BEFORE the complete-set validation + the write, so two overlapping
---    reorders of the same scope SERIALIZE into one gap-free 1..N (never mixed /
---    duplicated); replaying the same id list is idempotent. Never a global lock.
+-- SECURITY + CONCURRENCY (Codex MENU-ORDER-001 review, 2nd/3rd correction):
+--  * REAL PRODUCTION AUTH CONTRACT (identical to the 7 menu_upsert_* RPCs, the
+--    RF-109/MVP D-033 pattern): identity = app.current_app_user_id() (auth.uid()
+--    for real JWTs, GUC only in tests); authority = app.menu_guard() ->
+--    app.actor_rank_in_scope() over the CALLER-PASSED (org, restaurant, branch)
+--    scope. NO app.current_org_id()/GUC (no production client sets it) and NO
+--    hand-rolled memberships/role query. The scope is a PARAMETER, so the guard
+--    runs BEFORE any id is inspected.
+--  * NO EXISTENCE ORACLE: every id-level failure (foreign tenant / other
+--    restaurant / other branch / other parent / missing / deleted / incomplete /
+--    mixed / duplicate) raises ONE generic 'invalid request' (42501). The caller
+--    NEVER sees a matched count, an expected sibling count, a parent id, or an
+--    "exists but unauthorized" distinction. A covering member below manager gets
+--    {ok:false, error:'permission_denied'} + a server-only audit row.
+--  * PostgreSQL-17 SAFE: NO min(uuid)/max(uuid). The sibling PARENT is resolved
+--    deterministically (order by id limit 1) WITHIN the authorized scope.
+--  * NO STALE FOUND: PL/pgSQL FOUND is NOT set by EXECUTE, so every dynamic
+--    statement reports through EXECUTE ... INTO a variable that is then tested
+--    explicitly (v_parent is null / v_found <> v_n). No `if not found` anywhere.
+--  * CONCURRENCY SAFE: a TRANSACTION-scoped advisory lock keyed on the EXACT
+--    sibling scope (org + entity + resolved parent + branch) serializes two
+--    overlapping reorders of the SAME list into one gap-free 1..N, while
+--    unrelated category/item/group/option lists proceed independently. Auto-
+--    released at commit/rollback; never a global or restaurant-wide lock.
+--    (Advisory rather than a parent-row FOR UPDATE because a branch-scoped
+--    sibling set has no single owning row that cleanly represents it.)
 -- Write roles: org_owner / restaurant_owner / manager only (D-031/D-028).
 -- SECURITY DEFINER, search_path=''.
 -- ----------------------------------------------------------------------------
 create or replace function app.menu_reorder(
   p_organization_id uuid,
+  p_restaurant_id   uuid,
+  p_branch_id       uuid,
   p_entity          text,
   p_ids             uuid[]
 )
@@ -231,137 +243,113 @@ as $$
 declare
   v_table         text;
   v_parent_col    text;   -- the FK column that defines a sibling set
-  v_parent_tbl    text;   -- the parent table whose row owns the sibling scope
   v_actor         uuid;
-  v_lock_probe    int;
   v_n             int;
   v_found         int;
   v_sibling_total int;
-  v_rest          uuid;
-  v_branch        uuid;
   v_parent        uuid;
 begin
-  -- entity -> (child table, sibling-grouping parent column, parent table to lock)
+  -- entity -> (child table, sibling-grouping parent column)
   case p_entity
-    when 'menu_category'   then v_table := 'menu_categories';  v_parent_col := 'restaurant_id';    v_parent_tbl := 'restaurants';
-    when 'menu_item'       then v_table := 'menu_items';       v_parent_col := 'menu_category_id'; v_parent_tbl := 'menu_categories';
-    when 'modifier'        then v_table := 'modifiers';        v_parent_col := 'menu_item_id';     v_parent_tbl := 'menu_items';
-    when 'modifier_option' then v_table := 'modifier_options'; v_parent_col := 'modifier_id';      v_parent_tbl := 'modifiers';
-    else raise exception 'menu_reorder: unknown entity %', p_entity using errcode = '42501';
+    when 'menu_category'   then v_table := 'menu_categories';  v_parent_col := 'restaurant_id';
+    when 'menu_item'       then v_table := 'menu_items';       v_parent_col := 'menu_category_id';
+    when 'modifier'        then v_table := 'modifiers';        v_parent_col := 'menu_item_id';
+    when 'modifier_option' then v_table := 'modifier_options'; v_parent_col := 'modifier_id';
+    else raise exception 'menu_reorder: invalid request' using errcode = '42501';
   end case;
 
-  -- (1) authenticated actor.
+  -- (1) AUTHENTICATE + AUTHORIZE THE PASSED SCOPE, before any id is inspected,
+  --     via the SAME contract as menu_upsert_* (app.menu_guard). Unauthenticated
+  --     / non-member / cross-org / out-of-scope -> menu_guard raises 42501; a
+  --     covering member below manager -> FALSE -> permission_denied + audit.
   v_actor := app.current_app_user_id();
   if v_actor is null then
-    raise exception 'menu_reorder: authentication required' using errcode = '42501';
+    raise exception 'menu_reorder: invalid request' using errcode = '42501';
   end if;
-  -- (2) the caller's active org must be the target org.
-  if app.current_org_id() is null or app.current_org_id() <> p_organization_id then
-    raise exception 'menu_reorder: no active membership in the target organization'
-      using errcode = '42501';
-  end if;
-  -- (3) the actor must hold a MENU-WRITE role SOMEWHERE in the org, checked
-  --     BEFORE any id is inspected (no edit rights -> deny with no id oracle).
-  if not exists (
-    select 1 from public.memberships m
-     where m.app_user_id     = v_actor
-       and m.organization_id = p_organization_id
-       and m.status = 'active' and m.deleted_at is null
-       and m.role in ('org_owner', 'restaurant_owner', 'manager')
-  ) then
-    perform app.menu_audit(p_organization_id, null, null,
+  if not app.menu_guard(p_organization_id, p_restaurant_id, p_branch_id) then
+    perform app.menu_audit(p_organization_id, p_restaurant_id, p_branch_id,
       'menu.' || p_entity || '.reorder_denied', null,
       jsonb_build_object('entity', p_entity));
     return jsonb_build_object('ok', false, 'error', 'permission_denied', 'entity', p_entity);
   end if;
 
-  -- basic input shape (still no id lookup against the DB).
+  -- input shape (generic error; the caller learns nothing about ids).
   v_n := coalesce(array_length(p_ids, 1), 0);
   if v_n = 0 then
-    raise exception 'menu_reorder: ids required' using errcode = '42501';
+    raise exception 'menu_reorder: invalid request' using errcode = '42501';
   end if;
   if (select count(distinct u) from unnest(p_ids) u) <> v_n then
-    raise exception 'menu_reorder: duplicate ids' using errcode = '42501';
+    raise exception 'menu_reorder: invalid request' using errcode = '42501';
   end if;
 
-  -- (4) Resolve the sibling scope DETERMINISTICALLY from the first submitted row
-  --     (by id) within the caller's org. PG17-safe: order by id + limit 1 (no
-  --     min(uuid)). Nothing resolving -> generic 'invalid request' (foreign /
-  --     missing / deleted are indistinguishable).
+  -- (2) Resolve the sibling PARENT deterministically from the submitted ids,
+  --     CONSTRAINED to the AUTHORIZED (org, restaurant, branch) scope. PG17-safe
+  --     (order by id limit 1; no min(uuid)). EXECUTE ... INTO (never FOUND):
+  --     nothing resolving in-scope -> v_parent is null -> generic 42501 (foreign
+  --     / missing / deleted / cross-scope are indistinguishable).
   execute format($q$
-    select restaurant_id, branch_id, %1$I
+    select %1$I
       from public.%2$I
-     where organization_id = $1 and id = any($2) and deleted_at is null
+     where organization_id = $1
+       and restaurant_id   = $2
+       and branch_id is not distinct from $3
+       and id = any($4)
+       and deleted_at is null
      order by id
      limit 1
   $q$, v_parent_col, v_table)
-    into v_rest, v_branch, v_parent
-    using p_organization_id, p_ids;
-  if v_rest is null then          -- restaurant_id is NOT NULL on every menu table
+    into v_parent
+    using p_organization_id, p_restaurant_id, p_branch_id, p_ids;
+  if v_parent is null then
     raise exception 'menu_reorder: invalid request' using errcode = '42501';
   end if;
 
-  -- (5) LOCK the parent row that owns the sibling scope FOR UPDATE, so two
-  --     overlapping reorders of the same scope serialize (never mixed numbering).
-  --     v_parent is that parent's id (restaurant_id for categories; the FK else).
-  execute format($q$
-    select 1 from public.%1$I
-     where organization_id = $1 and id = $2
-     for update
-  $q$, v_parent_tbl)
-    into v_lock_probe
-    using p_organization_id, v_parent;
-  if not found then
-    raise exception 'menu_reorder: invalid request' using errcode = '42501';
-  end if;
+  -- (3) SERIALIZE the exact sibling scope with a TRANSACTION-scoped advisory
+  --     lock (org + entity + resolved parent + branch). Two overlapping reorders
+  --     of the SAME list serialize; unrelated lists never block. Auto-released at
+  --     commit/rollback. Never a global/restaurant-wide lock.
+  perform pg_advisory_xact_lock(hashtextextended(
+    p_organization_id::text || '|' || p_entity || '|' ||
+    v_parent::text || '|' || coalesce(p_branch_id::text, ''), 0));
 
-  -- (6) Under the lock: EVERY submitted id must belong to this org AND the one
-  --     resolved sibling scope (same restaurant/branch/parent). Any mismatch
-  --     (cross tenant / other restaurant / other parent / missing) -> generic.
-  execute format($q$
-    select count(*)
-      from public.%1$I
-     where organization_id = $1 and id = any($2) and deleted_at is null
-       and restaurant_id is not distinct from $3
-       and branch_id     is not distinct from $4
-       and %2$I          is not distinct from $5
-  $q$, v_table, v_parent_col)
-    into v_found
-    using p_organization_id, p_ids, v_rest, v_branch, v_parent;
-  if v_found <> v_n then
-    raise exception 'menu_reorder: invalid request' using errcode = '42501';
-  end if;
-
-  -- (7) The ids must be the COMPLETE non-deleted sibling set for that scope, so
-  --     the rewrite yields a gap-free, collision-free 1..N (no orphaned rows).
+  -- (4) Under the lock: EVERY submitted id must belong to the authorized scope
+  --     AND the one resolved sibling parent. EXECUTE ... INTO a count, tested
+  --     explicitly. Any mismatch -> generic 42501 (no count disclosed).
   execute format($q$
     select count(*)
       from public.%1$I
      where organization_id = $1
-       and restaurant_id is not distinct from $2
-       and branch_id     is not distinct from $3
-       and %2$I          is not distinct from $4
+       and restaurant_id   = $2
+       and branch_id is not distinct from $3
+       and %2$I            = $4
+       and id = any($5)
+       and deleted_at is null
+  $q$, v_table, v_parent_col)
+    into v_found
+    using p_organization_id, p_restaurant_id, p_branch_id, v_parent, p_ids;
+  if v_found <> v_n then
+    raise exception 'menu_reorder: invalid request' using errcode = '42501';
+  end if;
+
+  -- (5) The ids must be the COMPLETE non-deleted sibling set for that scope, so
+  --     the rewrite yields a gap-free 1..N (no orphaned rows). The sibling total
+  --     is NEVER disclosed to the caller (no oracle) -> generic 42501 on a miss.
+  execute format($q$
+    select count(*)
+      from public.%1$I
+     where organization_id = $1
+       and restaurant_id   = $2
+       and branch_id is not distinct from $3
+       and %2$I            = $4
        and deleted_at is null
   $q$, v_table, v_parent_col)
     into v_sibling_total
-    using p_organization_id, v_rest, v_branch, v_parent;
+    using p_organization_id, p_restaurant_id, p_branch_id, v_parent;
   if v_sibling_total <> v_n then
-    raise exception 'menu_reorder: ids must be the complete sibling set (% of %)',
-      v_n, v_sibling_total using errcode = '42501';
+    raise exception 'menu_reorder: invalid request' using errcode = '42501';
   end if;
 
-  -- (8) Final role gate against the RESOLVED scope. A scope the actor does not
-  --     cover collapses to the SAME generic 42501 as invalid ids (menu_guard
-  --     raises 42501 on a scope miss); a covered scope without a write role
-  --     returns permission_denied + audit.
-  if not app.menu_guard(p_organization_id, v_rest, v_branch) then
-    perform app.menu_audit(p_organization_id, v_rest, v_branch,
-      'menu.' || p_entity || '.reorder_denied', null,
-      jsonb_build_object('entity', p_entity, 'ids', to_jsonb(p_ids)));
-    return jsonb_build_object('ok', false, 'error', 'permission_denied', 'entity', p_entity);
-  end if;
-
-  -- (9) Atomic set-based rewrite: display_order = 1..N in p_ids order.
+  -- (6) Atomic set-based rewrite: display_order = 1..N in p_ids order.
   execute format($q$
     update public.%1$I t
        set display_order = v.ord
@@ -370,24 +358,26 @@ begin
   $q$, v_table)
     using p_ids, p_organization_id;
 
-  perform app.menu_audit(p_organization_id, v_rest, v_branch,
+  perform app.menu_audit(p_organization_id, p_restaurant_id, p_branch_id,
     'menu.' || p_entity || '.reordered', null,
     jsonb_build_object('entity', p_entity, 'ids', to_jsonb(p_ids)));
   return jsonb_build_object('ok', true, 'entity', p_entity, 'count', v_n, 'action', 'reordered');
 end;
 $$;
 
--- Thin public SECURITY INVOKER wrapper (RF-064 / RF-122 pattern).
+-- Thin public SECURITY INVOKER wrapper (RF-064 / RF-122 pattern) — same
+-- (org, restaurant, branch, entity, ids) contract as the menu_upsert_* wrappers.
 create or replace function public.menu_reorder(
-  p_organization_id uuid, p_entity text, p_ids uuid[])
+  p_organization_id uuid, p_restaurant_id uuid, p_branch_id uuid,
+  p_entity text, p_ids uuid[])
   returns jsonb language sql security invoker set search_path = ''
-as $$ select app.menu_reorder(p_organization_id, p_entity, p_ids); $$;
+as $$ select app.menu_reorder(p_organization_id, p_restaurant_id, p_branch_id, p_entity, p_ids); $$;
 
 -- Grants: authenticated only, on both the app function and the public wrapper.
-revoke all on function app.menu_reorder(uuid, text, uuid[]) from public;
-grant execute on function app.menu_reorder(uuid, text, uuid[]) to authenticated;
-revoke all on function public.menu_reorder(uuid, text, uuid[]) from public;
-grant execute on function public.menu_reorder(uuid, text, uuid[]) to authenticated;
+revoke all on function app.menu_reorder(uuid, uuid, uuid, text, uuid[]) from public;
+grant execute on function app.menu_reorder(uuid, uuid, uuid, text, uuid[]) to authenticated;
+revoke all on function public.menu_reorder(uuid, uuid, uuid, text, uuid[]) from public;
+grant execute on function public.menu_reorder(uuid, uuid, uuid, text, uuid[]) to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- PART 4. Redefine app.pos_order_detail so the SERVER-BACKED reprint carries +
