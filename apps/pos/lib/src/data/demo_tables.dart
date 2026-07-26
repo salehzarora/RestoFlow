@@ -87,6 +87,33 @@ class DemoTable {
   /// A table can be assigned to a dine-in order only when it is available.
   bool get isAssignable => status == TableStatusKind.available;
 
+  /// MENU-ORDER-001 (Codex #8/#9): a MINIMAL durable identity so a captured
+  /// draft's assigned table survives an app restart. Only the display essentials
+  /// are persisted; group/occupancy state is re-derived when the picker reloads.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'table_id': tableId,
+    'label': label,
+    if (seats != null) 'seats': seats,
+    if (area != null) 'area': area,
+  };
+
+  static DemoTable fromJson(Map<String, Object?> json) {
+    final rawSeats = json['seats'];
+    final rawArea = json['area'];
+    return DemoTable(
+      table: DiningTable(
+        tableId: (json['table_id'] ?? '').toString(),
+        label: (json['label'] ?? '').toString(),
+        organizationId: _demoOrgId,
+        restaurantId: _demoRestaurantId,
+        branchId: _demoBranchId,
+        seats: rawSeats is int ? rawSeats : int.tryParse('${rawSeats ?? ''}'),
+        area: rawArea is String && rawArea.isNotEmpty ? rawArea : null,
+      ),
+      status: TableStatusKind.available,
+    );
+  }
+
   /// PILOT-OPERATIONS-CORRECTIONS-001 (A4): a copy with the GROUP-WIDE effective
   /// state, count and derived status projected onto this member. Used only by
   /// [withGroupAggregation]; every other field is preserved.

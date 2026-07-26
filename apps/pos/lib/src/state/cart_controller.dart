@@ -46,6 +46,32 @@ class SelectedModifier {
   /// snapshot for a single unit, `name ×N` beyond (matches the KDS format).
   String get displayName =>
       quantity > 1 ? '$optionName ×$quantity' : optionName;
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization so a captured draft
+  /// survives an app restart (persisted with the recovery record). Money stays
+  /// integer minor (D-007); the kitchen count rides through KitchenMeat's json.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'option_id': optionId,
+    'group_name': groupName,
+    'option_name': optionName,
+    'price_delta_minor': priceDeltaMinor,
+    'quantity': quantity,
+    if (kitchenMeat != null) 'kitchen_meat': kitchenMeat!.toJson(),
+  };
+
+  /// Tolerant decode — a missing/absent field defaults safely so an older or
+  /// partial record never crashes the till on start.
+  static SelectedModifier fromJson(Map<String, Object?> json) {
+    int intOf(Object? v) => v is int ? v : int.tryParse('${v ?? ''}') ?? 0;
+    return SelectedModifier(
+      optionId: (json['option_id'] ?? '').toString(),
+      groupName: (json['group_name'] ?? '').toString(),
+      optionName: (json['option_name'] ?? '').toString(),
+      priceDeltaMinor: intOf(json['price_delta_minor']),
+      quantity: json['quantity'] == null ? 1 : intOf(json['quantity']),
+      kitchenMeat: KitchenMeat.tryFromJson(json['kitchen_meat']),
+    );
+  }
 }
 
 /// Immutable view of a single cart line for the POS UI.
@@ -223,6 +249,25 @@ class CartDraftSnapshot {
   final List<CartDraftLine> lines;
 
   bool get isEmpty => lines.isEmpty;
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization so a captured draft
+  /// (with its Dashboard menu ranks) survives an app restart.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'currency_code': currencyCode,
+    'lines': [for (final l in lines) l.toJson()],
+  };
+
+  static CartDraftSnapshot fromJson(Map<String, Object?> json) {
+    final rawLines = json['lines'];
+    return CartDraftSnapshot(
+      currencyCode: (json['currency_code'] ?? 'ILS').toString(),
+      lines: <CartDraftLine>[
+        if (rawLines is List)
+          for (final l in rawLines)
+            if (l is Map) CartDraftLine.fromJson(l.cast<String, Object?>()),
+      ],
+    );
+  }
 }
 
 class CartDraftLine {
@@ -249,6 +294,42 @@ class CartDraftLine {
   /// clears the live _lineDisplayOrders). 0 = unknown (falls back to cart order).
   final int categoryDisplayOrder;
   final int itemDisplayOrder;
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization — carries the ranks,
+  /// modifiers, and note through a restart so a recovered order still prints in
+  /// menu order. Money is integer minor (D-007).
+  Map<String, Object?> toJson() => <String, Object?>{
+    'menu_item_id': menuItemId,
+    'name': name,
+    'base_price_minor': basePriceMinor,
+    'quantity': quantity,
+    if (modifiers.isNotEmpty)
+      'modifiers': [for (final m in modifiers) m.toJson()],
+    if (note != null) 'note': note,
+    if (categoryDisplayOrder != 0)
+      'category_display_order': categoryDisplayOrder,
+    if (itemDisplayOrder != 0) 'item_display_order': itemDisplayOrder,
+  };
+
+  static CartDraftLine fromJson(Map<String, Object?> json) {
+    int intOf(Object? v) => v is int ? v : int.tryParse('${v ?? ''}') ?? 0;
+    final rawMods = json['modifiers'];
+    final rawNote = json['note'];
+    return CartDraftLine(
+      menuItemId: (json['menu_item_id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      basePriceMinor: intOf(json['base_price_minor']),
+      quantity: json['quantity'] == null ? 1 : intOf(json['quantity']),
+      modifiers: <SelectedModifier>[
+        if (rawMods is List)
+          for (final m in rawMods)
+            if (m is Map) SelectedModifier.fromJson(m.cast<String, Object?>()),
+      ],
+      note: rawNote == null ? null : rawNote.toString(),
+      categoryDisplayOrder: intOf(json['category_display_order']),
+      itemDisplayOrder: intOf(json['item_display_order']),
+    );
+  }
 }
 
 class CartController extends Notifier<CartViewState> {
@@ -566,10 +647,7 @@ class CartController extends Notifier<CartViewState> {
       if (note != null && note.isNotEmpty) _lineNotes[lineId] = note;
       // MENU-ORDER-001 (Codex): restore the Dashboard menu ranks so the corrected
       // resubmit prints in the same menu order the original attempt would have.
-      _lineDisplayOrders[lineId] = (
-        l.categoryDisplayOrder,
-        l.itemDisplayOrder,
-      );
+      _lineDisplayOrders[lineId] = (l.categoryDisplayOrder, l.itemDisplayOrder);
     }
     _submittedOrder = null;
     _emit();

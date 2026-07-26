@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/demo_tables.dart';
+import '../data/draft_recovery_store.dart';
 import '../data/recent_order.dart' show PosRecentOrder;
 import 'cart_controller.dart';
 import 'outbox_controller.dart';
@@ -41,6 +44,20 @@ class PosRecoveryBinding {
 
   @override
   int get hashCode => Object.hash(scopeKey, pinSessionId);
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization so the recovery's scope
+  /// binding survives a restart — the restored draft is still gated to its own
+  /// scope + PIN session (a different operator never sees it).
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (scopeKey != null) 'scope_key': scopeKey,
+    if (pinSessionId != null) 'pin_session_id': pinSessionId,
+  };
+
+  static PosRecoveryBinding fromJson(Map<String, Object?> json) =>
+      PosRecoveryBinding(
+        scopeKey: json['scope_key']?.toString(),
+        pinSessionId: json['pin_session_id']?.toString(),
+      );
 }
 
 /// PILOT-OPERATIONS-CORRECTIONS-001 — a recoverable snapshot of ONE submit attempt,
@@ -76,14 +93,62 @@ class PosDraftRecovery {
 
   final DemoTable? table;
   final String? customerName;
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization so a permanently-
+  /// rejected order's recovery — its draft (products, quantities, modifiers,
+  /// notes, AND the Dashboard menu ranks), order type, table and customer name —
+  /// survives an app restart. Restored under its [binding], so a different
+  /// operator can never see it.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'draft': draft.toJson(),
+    'order_type': orderType.name,
+    'outbox_entry_id': outboxEntryId,
+    'binding': binding.toJson(),
+    if (table != null) 'table': table!.toJson(),
+    if (customerName != null) 'customer_name': customerName,
+  };
+
+  static PosDraftRecovery fromJson(Map<String, Object?> json) {
+    final rawTable = json['table'];
+    final orderTypeName = (json['order_type'] ?? OrderType.takeaway.name)
+        .toString();
+    return PosDraftRecovery(
+      draft: CartDraftSnapshot.fromJson(
+        (json['draft'] as Map?)?.cast<String, Object?>() ??
+            const <String, Object?>{},
+      ),
+      orderType: OrderType.values.firstWhere(
+        (t) => t.name == orderTypeName,
+        orElse: () => OrderType.takeaway,
+      ),
+      outboxEntryId: (json['outbox_entry_id'] ?? '').toString(),
+      binding: PosRecoveryBinding.fromJson(
+        (json['binding'] as Map?)?.cast<String, Object?>() ??
+            const <String, Object?>{},
+      ),
+      table: rawTable is Map
+          ? DemoTable.fromJson(rawTable.cast<String, Object?>())
+          : null,
+      customerName: json['customer_name']?.toString(),
+    );
+  }
 }
 
 /// The recovery store: a map of outbox-entry-id -> [PosDraftRecovery]. Multi-slot and
 /// scope-bound — see [PosDraftRecovery].
 class PosDraftRecoveryController
     extends Notifier<Map<String, PosDraftRecovery>> {
+  // MENU-ORDER-001 (Codex #8/#9): the durable store (default in-memory; real app
+  // overrides with a SharedPrefs store). NOT `late final` — build() re-runs on
+  // the same instance.
+  PosDraftRecoveryStore _store = InMemoryDraftRecoveryStore();
+  bool _disposed = false;
+
   @override
   Map<String, PosDraftRecovery> build() {
+    _store = ref.watch(posDraftRecoveryStoreProvider);
+    _disposed = false;
+    ref.onDispose(() => _disposed = true);
     // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 3): CONTROLLER-SEAM cleanup of accepted
     // recoveries. Watching the outbox here — not a widget listener — means an order that
     // becomes APPLIED clears its recovery even if its confirmation was never opened, is
@@ -101,7 +166,33 @@ class PosDraftRecoveryController
     ref.listen(posRecentOrdersControllerProvider, (previous, next) {
       _clearAcceptedBySnapshot(next);
     });
+    // MENU-ORDER-001 (Codex #8/#9): rehydrate any persisted recoveries so a
+    // permanently-rejected order (item_unavailable) survives a restart — Back to
+    // cart restores the exact draft, IN Dashboard menu order.
+    _load();
     return const <String, PosDraftRecovery>{};
+  }
+
+  /// MENU-ORDER-001 (Codex #8/#9): load the durable recoveries UNDER the current
+  /// in-session state (in-session wins), so a restart rehydrates the map while a
+  /// recovery captured this session is never clobbered. Never throws.
+  Future<void> _load() async {
+    Map<String, PosDraftRecovery> loaded;
+    try {
+      loaded = await _store.load();
+    } catch (_) {
+      return;
+    }
+    if (_disposed || loaded.isEmpty) return;
+    state = <String, PosDraftRecovery>{...loaded, ...state};
+  }
+
+  /// MENU-ORDER-001 (Codex #8/#9): persist the current map (fire-and-forget; a
+  /// durability wobble must never break the till). A CLEARED recovery is also
+  /// persisted, so an accepted/discarded order does not resurrect on restart.
+  void _persist() {
+    if (_disposed) return;
+    unawaited(_store.persist(state).catchError((Object _) {}));
   }
 
   /// Capture the draft of a just-started submit under its own key. NEVER overwrites a
@@ -120,6 +211,7 @@ class PosDraftRecoveryController
       ...state,
       recovery.outboxEntryId: recovery,
     };
+    _persist();
   }
 
   /// Clear ONLY the record for [outboxEntryId] (after its restore, discard, or an
@@ -130,6 +222,7 @@ class PosDraftRecoveryController
       for (final e in state.entries)
         if (e.key != outboxEntryId) e.key: e.value,
     };
+    _persist();
   }
 
   /// Clear only if a record is held for [outboxEntryId] (used when that entry is
@@ -171,7 +264,10 @@ class PosDraftRecoveryController
       for (final e in state.entries)
         if (!applied.contains(e.key)) e.key: e.value,
     };
-    if (next.length != state.length) state = next;
+    if (next.length != state.length) {
+      state = next;
+      _persist();
+    }
   }
 
   /// Finding 4: clear the recovery of every order the SERVER has authoritatively
@@ -190,9 +286,21 @@ class PosDraftRecoveryController
       for (final e in state.entries)
         if (!accepted.contains(e.key)) e.key: e.value,
     };
-    if (next.length != state.length) state = next;
+    if (next.length != state.length) {
+      state = next;
+      _persist();
+    }
   }
 }
+
+/// MENU-ORDER-001 (Codex #8/#9): the draft-recovery persistence seam. Default:
+/// in-memory (demo mode / tests — session only). The real app overrides this in
+/// `main.dart` with a [SharedPrefsDraftRecoveryStore] so a rejected order's
+/// recovery (and its Dashboard menu ranks) survives a refresh / restart. Kept a
+/// singleton so the in-memory data survives controller rebuilds within a session.
+final posDraftRecoveryStoreProvider = Provider<PosDraftRecoveryStore>(
+  (ref) => InMemoryDraftRecoveryStore(),
+);
 
 final posDraftRecoveryProvider =
     NotifierProvider<PosDraftRecoveryController, Map<String, PosDraftRecovery>>(
