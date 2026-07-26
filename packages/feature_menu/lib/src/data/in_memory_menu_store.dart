@@ -432,6 +432,10 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
   @override
   Future<MenuWriteOutcome> reorder({
     required String organizationId,
+    // The in-memory store groups siblings by parent id alone; the scope
+    // (restaurant/branch) is validated server-side, so the demo ignores them.
+    String? restaurantId,
+    String? branchId,
     required MenuEntityType entity,
     required List<String> orderedIds,
   }) async {

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:meta/meta.dart' show immutable;
 import 'package:restoflow_core/restoflow_core.dart' show Failure;
 
 import '../data/image_file_picker.dart' as picker;
@@ -83,15 +84,54 @@ final selectedItemIdProvider = StateProvider.autoDispose<String?>(
   (ref) => null,
 );
 
-/// MENU-ORDER-001 (Codex correction): a PER-SCOPE reorder in-flight latch. While
-/// a drag reorder of one entity scope is persisting, a second drag on that SAME
-/// scope is ignored — so two overlapping reorders can never race two writes off a
-/// stale base order. Non-autoDispose (it must not reset mid-await) and defaults
-/// false, so existing wiring/tests are unaffected. Distinct family keys mean
-/// reordering options never blocks reordering groups, etc.
-final menuReorderInFlightProvider = StateProvider.family<bool, MenuEntityType>(
-  (ref, entity) => false,
-);
+/// MENU-ORDER-001 (Codex): identifies the EXACT sibling list a reorder targets —
+/// the org/restaurant/branch scope + entity kind + the sibling-set PARENT id
+/// (the restaurant for categories, the category for items, the item for modifier
+/// groups, the modifier for options). Two drags of the SAME list share this key;
+/// unrelated lists (a different category's items, a different modifier's options)
+/// get distinct keys and never block one another.
+@immutable
+class MenuReorderScope {
+  const MenuReorderScope({
+    required this.organizationId,
+    required this.restaurantId,
+    required this.branchId,
+    required this.entity,
+    required this.parentId,
+  });
+
+  final String organizationId;
+  final String restaurantId;
+  final String? branchId;
+  final MenuEntityType entity;
+
+  /// The sibling-set owner id: restaurantId (categories), the category id
+  /// (items), the item id (modifier groups), the modifier id (options).
+  final String parentId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MenuReorderScope &&
+      other.organizationId == organizationId &&
+      other.restaurantId == restaurantId &&
+      other.branchId == branchId &&
+      other.entity == entity &&
+      other.parentId == parentId;
+
+  @override
+  int get hashCode =>
+      Object.hash(organizationId, restaurantId, branchId, entity, parentId);
+}
+
+/// MENU-ORDER-001 (Codex correction): a PER-SIBLING-SCOPE reorder in-flight latch.
+/// While a drag reorder of one sibling list is persisting, a second drag on that
+/// SAME list is ignored AND its controls are disabled — so two overlapping
+/// reorders can never race two writes off a stale base order. Keyed by the exact
+/// [MenuReorderScope] (not the entity kind), so reordering one category's items
+/// never blocks another category's items. Non-autoDispose (must not reset
+/// mid-await) and defaults false.
+final menuReorderInFlightProvider =
+    StateProvider.family<bool, MenuReorderScope>((ref, scope) => false);
 
 /// Performs menu writes against the active scope, then reloads the snapshot on
 /// success (the UI shows the [MenuWriteFailure] on failure). Writes are
@@ -297,6 +337,10 @@ class MenuWriteController {
   }) => _run(
     () => _repository.reorder(
       organizationId: _scope.organizationId,
+      // MENU-ORDER-001 (Codex): the RPC authorizes this exact (org, restaurant,
+      // branch) scope BEFORE inspecting ids — the same MenuScope list_menu read.
+      restaurantId: _scope.restaurantId,
+      branchId: _scope.branchId,
       entity: entity,
       orderedIds: orderedIds,
     ),

@@ -121,6 +121,8 @@ abstract class MenuWriter {
   /// never client-supplied.
   Future<MenuWriteOutcome> reorder({
     required String organizationId,
+    required String restaurantId,
+    required String? branchId,
     required MenuEntityType entity,
     required List<String> orderedIds,
   });

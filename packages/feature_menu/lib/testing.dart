@@ -135,14 +135,22 @@ class ScriptedMenuWriter implements MenuWriter {
   MenuEntityType? lastReorderEntity;
   List<String>? lastReorderIds;
 
+  /// The most recent [reorder] scope (for assertions).
+  String? lastReorderRestaurantId;
+  String? lastReorderBranchId;
+
   @override
   Future<MenuWriteOutcome> reorder({
     required String organizationId,
+    required String restaurantId,
+    required String? branchId,
     required MenuEntityType entity,
     required List<String> orderedIds,
   }) {
     lastReorderEntity = entity;
     lastReorderIds = orderedIds;
+    lastReorderRestaurantId = restaurantId;
+    lastReorderBranchId = branchId;
     return _record('reorder');
   }
 

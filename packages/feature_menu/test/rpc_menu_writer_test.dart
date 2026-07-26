@@ -274,34 +274,42 @@ void main() {
       expect(transport.lastParams!['p_max_quantity'], 5);
     });
 
-    test('reorder calls menu_reorder with the entity wire + ordered ids', () async {
-      final transport = _FakeTransport()
-        ..returnValue = const {
-          'ok': true,
-          'entity': 'menu_category',
-          'count': 3,
-          'action': 'reordered',
-        };
-      final writer = RpcMenuWriter(transport);
+    test(
+      'reorder calls menu_reorder with the entity wire + ordered ids',
+      () async {
+        final transport = _FakeTransport()
+          ..returnValue = const {
+            'ok': true,
+            'entity': 'menu_category',
+            'count': 3,
+            'action': 'reordered',
+          };
+        final writer = RpcMenuWriter(transport);
 
-      final outcome = await writer.reorder(
-        organizationId: 'org-1',
-        entity: MenuEntityType.category,
-        orderedIds: const ['c3', 'c1', 'c2'],
-      );
+        final outcome = await writer.reorder(
+          organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: null,
+          entity: MenuEntityType.category,
+          orderedIds: const ['c3', 'c1', 'c2'],
+        );
 
-      expect(transport.lastFunction, 'menu_reorder');
-      expect(transport.lastParams!['p_organization_id'], 'org-1');
-      expect(transport.lastParams!['p_entity'], 'menu_category');
-      expect(transport.lastParams!['p_ids'], ['c3', 'c1', 'c2']);
-      // The reorder envelope carries no id and action:'reordered' (not a
-      // MenuWriteAction), so success synthesizes a minimal updated result (with
-      // the first id) purely to trigger the non-optimistic reload.
-      final result = _success(outcome);
-      expect(result, isNotNull);
-      expect(result!.entity, MenuEntityType.category);
-      expect(result.action, MenuWriteAction.updated);
-    });
+        expect(transport.lastFunction, 'menu_reorder');
+        expect(transport.lastParams!['p_organization_id'], 'org-1');
+        // MENU-ORDER-001 (Codex): the RPC authorizes the PASSED scope first.
+        expect(transport.lastParams!['p_restaurant_id'], 'rest-1');
+        expect(transport.lastParams!['p_branch_id'], null);
+        expect(transport.lastParams!['p_entity'], 'menu_category');
+        expect(transport.lastParams!['p_ids'], ['c3', 'c1', 'c2']);
+        // The reorder envelope carries no id and action:'reordered' (not a
+        // MenuWriteAction), so success synthesizes a minimal updated result (with
+        // the first id) purely to trigger the non-optimistic reload.
+        final result = _success(outcome);
+        expect(result, isNotNull);
+        expect(result!.entity, MenuEntityType.category);
+        expect(result.action, MenuWriteAction.updated);
+      },
+    );
 
     test('reorder maps a role denial to MenuPermissionDenied', () async {
       final transport = _FakeTransport()
@@ -315,6 +323,8 @@ void main() {
       final failure = _failure(
         await writer.reorder(
           organizationId: 'org-1',
+          restaurantId: 'rest-1',
+          branchId: 'branch-1',
           entity: MenuEntityType.modifierOption,
           orderedIds: const ['o1', 'o2'],
         ),

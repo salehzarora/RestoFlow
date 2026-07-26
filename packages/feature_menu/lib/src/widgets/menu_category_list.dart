@@ -73,6 +73,19 @@ class MenuCategoryList extends ConsumerWidget {
     );
   }
 
+  /// MENU-ORDER-001 (Codex): the exact sibling scope this list reorders — the
+  /// restaurant's category set. Keyed so it never blocks another list.
+  MenuReorderScope _scope(WidgetRef ref) {
+    final s = ref.read(menuScopeProvider);
+    return MenuReorderScope(
+      organizationId: s.organizationId,
+      restaurantId: s.restaurantId,
+      branchId: s.branchId,
+      entity: MenuEntityType.category,
+      parentId: s.restaurantId, // categories' sibling owner is the restaurant
+    );
+  }
+
   Future<void> _reorder(
     BuildContext context,
     WidgetRef ref,
@@ -80,10 +93,10 @@ class MenuCategoryList extends ConsumerWidget {
     int oldIndex,
     int newIndex,
   ) async {
-    // MENU-ORDER-001 (Codex): one reorder at a time per scope. A second drag
-    // while this one persists is ignored, so two writes never race off a stale
-    // base order.
-    final latch = menuReorderInFlightProvider(MenuEntityType.category);
+    // MENU-ORDER-001 (Codex): one reorder at a time per EXACT sibling scope. A
+    // second drag while this one persists is ignored, so two writes never race
+    // off a stale base order.
+    final latch = menuReorderInFlightProvider(_scope(ref));
     if (ref.read(latch)) return;
     ref.read(latch.notifier).state = true;
     try {
@@ -96,15 +109,24 @@ class MenuCategoryList extends ConsumerWidget {
       final outcome = await ref
           .read(menuWriteControllerProvider)
           .reorder(entity: MenuEntityType.category, orderedIds: ids);
-      if (!context.mounted) return;
       if (!outcome.isSuccess) {
         // Exact rollback: re-assert the authoritative (unchanged) snapshot so the
         // dropped tile returns to its real slot, then show the honest error.
         ref.invalidate(menuSnapshotProvider);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+        }
+        return;
       }
+      // MENU-ORDER-001 (Codex #7): reconcile the COMMITTED order before the latch
+      // releases (and re-enables the controls), so no edit can capture a stale
+      // order in the refresh gap. Swallow the disposed-surface race.
+      try {
+        ref.invalidate(menuSnapshotProvider);
+        await ref.read(menuSnapshotProvider.future);
+      } catch (_) {}
     } finally {
       ref.read(latch.notifier).state = false;
     }
@@ -127,6 +149,11 @@ class MenuCategoryList extends ConsumerWidget {
     // is on screen (no active search/filter) — the reorder RPC rewrites the
     // whole set to 1..N, so a partial/filtered list must not be draggable.
     final canReorder = needle.isEmpty && categories.length == all.length;
+
+    // MENU-ORDER-001 (Codex #5/#7): while THIS list's reorder is persisting,
+    // disable every control in it (drag + edit/delete) so no second drag and no
+    // stale edit can land before the authoritative refresh reconciles.
+    final reordering = ref.watch(menuReorderInFlightProvider(_scope(ref)));
 
     final Widget body;
     if (all.isEmpty) {
@@ -197,7 +224,13 @@ class MenuCategoryList extends ConsumerWidget {
       children: [
         MenuPanelHeader(title: l10n.menuCategoriesHeading),
         const Divider(height: 1),
-        Expanded(child: body),
+        // In-scope controls are inert + dimmed while the reorder persists.
+        Expanded(
+          child: IgnorePointer(
+            ignoring: reordering,
+            child: Opacity(opacity: reordering ? 0.6 : 1.0, child: body),
+          ),
+        ),
       ],
     );
   }

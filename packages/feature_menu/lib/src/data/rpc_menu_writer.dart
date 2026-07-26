@@ -311,6 +311,8 @@ class RpcMenuWriter implements MenuWriter {
   @override
   Future<MenuWriteOutcome> reorder({
     required String organizationId,
+    required String restaurantId,
+    required String? branchId,
     required MenuEntityType entity,
     required List<String> orderedIds,
   }) async {
@@ -319,9 +321,16 @@ class RpcMenuWriter implements MenuWriter {
     // is not a MenuWriteAction, so the generic parser cannot read it. Success
     // only needs to trigger the non-optimistic reload, so a minimal
     // updated-result is synthesized.
+    //
+    // MENU-ORDER-001 (Codex): the RPC authorizes the PASSED (org, restaurant,
+    // branch) scope via app.menu_guard BEFORE inspecting any id — the SAME
+    // contract as menu_upsert_*. The scope is the caller's MenuScope, identical
+    // to what list_menu read the shown list with.
     try {
       final raw = await _transport.invoke(MenuRpcNames.reorder, {
         'p_organization_id': organizationId,
+        'p_restaurant_id': restaurantId,
+        'p_branch_id': branchId,
         'p_entity': entity.wire,
         'p_ids': orderedIds,
       });

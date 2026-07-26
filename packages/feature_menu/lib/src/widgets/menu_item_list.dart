@@ -95,6 +95,17 @@ class MenuItemList extends ConsumerWidget {
     );
   }
 
+  /// MENU-ORDER-001 (Codex): the exact sibling scope this list reorders — the
+  /// items of THIS category. Distinct per category, so reordering one category's
+  /// items never blocks another's.
+  MenuReorderScope get _reorderScope => MenuReorderScope(
+    organizationId: scope.organizationId,
+    restaurantId: scope.restaurantId,
+    branchId: scope.branchId,
+    entity: MenuEntityType.item,
+    parentId: categoryId, // the items' sibling owner is their category
+  );
+
   Future<void> _reorder(
     BuildContext context,
     WidgetRef ref,
@@ -102,8 +113,8 @@ class MenuItemList extends ConsumerWidget {
     int oldIndex,
     int newIndex,
   ) async {
-    // MENU-ORDER-001 (Codex): one reorder at a time per scope (see category list).
-    final latch = menuReorderInFlightProvider(MenuEntityType.item);
+    // MENU-ORDER-001 (Codex): one reorder at a time per EXACT sibling scope.
+    final latch = menuReorderInFlightProvider(_reorderScope);
     if (ref.read(latch)) return;
     ref.read(latch.notifier).state = true;
     try {
@@ -116,13 +127,21 @@ class MenuItemList extends ConsumerWidget {
       final outcome = await ref
           .read(menuWriteControllerProvider)
           .reorder(entity: MenuEntityType.item, orderedIds: ids);
-      if (!context.mounted) return;
       if (!outcome.isSuccess) {
-        ref.invalidate(menuSnapshotProvider);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+        ref.invalidate(menuSnapshotProvider); // exact rollback
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+        }
+        return;
       }
+      // MENU-ORDER-001 (Codex #7): reconcile the committed order before the latch
+      // releases (and re-enables controls). Swallow the disposed-surface race.
+      try {
+        ref.invalidate(menuSnapshotProvider);
+        await ref.read(menuSnapshotProvider.future);
+      } catch (_) {}
     } finally {
       ref.read(latch.notifier).state = false;
     }
@@ -217,6 +236,10 @@ class MenuItemList extends ConsumerWidget {
       );
     }
 
+    // MENU-ORDER-001 (Codex #5/#7): disable THIS category's item controls while
+    // its reorder persists (no second drag, no stale edit before reconcile).
+    final reordering = ref.watch(menuReorderInFlightProvider(_reorderScope));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -227,7 +250,12 @@ class MenuItemList extends ConsumerWidget {
               onOpenEditor(MenuEditorTarget(categoryId: categoryId)),
         ),
         const Divider(height: 1),
-        Expanded(child: body),
+        Expanded(
+          child: IgnorePointer(
+            ignoring: reordering,
+            child: Opacity(opacity: reordering ? 0.6 : 1.0, child: body),
+          ),
+        ),
       ],
     );
   }

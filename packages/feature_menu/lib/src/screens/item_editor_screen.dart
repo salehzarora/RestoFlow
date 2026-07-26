@@ -1061,14 +1061,28 @@ class _PricedChildSection extends ConsumerWidget {
     );
   }
 
+  /// MENU-ORDER-001 (Codex): the exact sibling scope this section reorders — the
+  /// options of THIS modifier group ([parentId] is the modifier id). Distinct per
+  /// modifier, so reordering one group's options never blocks another's.
+  MenuReorderScope _reorderScope(WidgetRef ref) {
+    final s = ref.read(menuScopeProvider);
+    return MenuReorderScope(
+      organizationId: s.organizationId,
+      restaurantId: s.restaurantId,
+      branchId: s.branchId,
+      entity: _entityForKind(kind),
+      parentId: parentId,
+    );
+  }
+
   Future<void> _reorder(
     BuildContext context,
     WidgetRef ref,
     int oldIndex,
     int newIndex,
   ) async {
-    // MENU-ORDER-001 (Codex): one reorder at a time per scope (see category list).
-    final latch = menuReorderInFlightProvider(_entityForKind(kind));
+    // MENU-ORDER-001 (Codex): one reorder at a time per EXACT sibling scope.
+    final latch = menuReorderInFlightProvider(_reorderScope(ref));
     if (ref.read(latch)) return;
     ref.read(latch.notifier).state = true;
     try {
@@ -1081,13 +1095,21 @@ class _PricedChildSection extends ConsumerWidget {
       final outcome = await ref
           .read(menuWriteControllerProvider)
           .reorder(entity: _entityForKind(kind), orderedIds: ids);
-      if (!context.mounted) return;
       if (!outcome.isSuccess) {
-        ref.invalidate(menuSnapshotProvider);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+        ref.invalidate(menuSnapshotProvider); // exact rollback
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+        }
+        return;
       }
+      // MENU-ORDER-001 (Codex #7): reconcile the committed order before the latch
+      // releases (and re-enables controls). Swallow the disposed-surface race.
+      try {
+        ref.invalidate(menuSnapshotProvider);
+        await ref.read(menuSnapshotProvider.future);
+      } catch (_) {}
     } finally {
       ref.read(latch.notifier).state = false;
     }
@@ -1141,7 +1163,12 @@ class _PricedChildSection extends ConsumerWidget {
     // their number-field ordering (out of this ticket's scope). Nested inside the
     // scrolling editor -> shrinkWrap + non-scrolling physics.
     final reorderable = kind == PricedChildKind.option && rows.length > 1;
-    final content = rows.isEmpty
+    // MENU-ORDER-001 (Codex #5/#7): disable this option list while ITS reorder
+    // persists (options only; size/variant never reorder here).
+    final reordering =
+        reorderable &&
+        ref.watch(menuReorderInFlightProvider(_reorderScope(ref)));
+    final body = rows.isEmpty
         ? Padding(
             padding: EdgeInsets.all(
               embedded ? RestoflowSpacing.sm : RestoflowSpacing.lg,
@@ -1175,6 +1202,10 @@ class _PricedChildSection extends ConsumerWidget {
               ],
             ],
           );
+    final content = IgnorePointer(
+      ignoring: reordering,
+      child: Opacity(opacity: reordering ? 0.6 : 1.0, child: body),
+    );
     if (embedded) {
       // Chrome-free variant for nesting inside a modifier tile: a light
       // header row + the option rows, no extra card/border/divider layers.
@@ -1332,14 +1363,27 @@ class _ModifiersSection extends ConsumerWidget {
     );
   }
 
+  /// MENU-ORDER-001 (Codex): the exact sibling scope this section reorders — the
+  /// modifier groups of THIS item. Distinct per item.
+  MenuReorderScope _reorderScope(WidgetRef ref) {
+    final s = ref.read(menuScopeProvider);
+    return MenuReorderScope(
+      organizationId: s.organizationId,
+      restaurantId: s.restaurantId,
+      branchId: s.branchId,
+      entity: MenuEntityType.modifier,
+      parentId: item.id, // the groups' sibling owner is their item
+    );
+  }
+
   Future<void> _reorderModifiers(
     BuildContext context,
     WidgetRef ref,
     int oldIndex,
     int newIndex,
   ) async {
-    // MENU-ORDER-001 (Codex): one reorder at a time per scope (see category list).
-    final latch = menuReorderInFlightProvider(MenuEntityType.modifier);
+    // MENU-ORDER-001 (Codex): one reorder at a time per EXACT sibling scope.
+    final latch = menuReorderInFlightProvider(_reorderScope(ref));
     if (ref.read(latch)) return;
     ref.read(latch.notifier).state = true;
     try {
@@ -1352,13 +1396,21 @@ class _ModifiersSection extends ConsumerWidget {
       final outcome = await ref
           .read(menuWriteControllerProvider)
           .reorder(entity: MenuEntityType.modifier, orderedIds: ids);
-      if (!context.mounted) return;
       if (!outcome.isSuccess) {
-        ref.invalidate(menuSnapshotProvider);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+        ref.invalidate(menuSnapshotProvider); // exact rollback
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+        }
+        return;
       }
+      // MENU-ORDER-001 (Codex #7): reconcile the committed order before the latch
+      // releases (and re-enables controls). Swallow the disposed-surface race.
+      try {
+        ref.invalidate(menuSnapshotProvider);
+        await ref.read(menuSnapshotProvider.future);
+      } catch (_) {}
     } finally {
       ref.read(latch.notifier).state = false;
     }
@@ -1368,6 +1420,11 @@ class _ModifiersSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // MENU-ORDER-001 (Codex #5/#7): disable this item's modifier-group controls
+    // while ITS reorder persists.
+    final reordering =
+        modifiers.length > 1 &&
+        ref.watch(menuReorderInFlightProvider(_reorderScope(ref)));
     Widget cardFor(int index, {int? reorderIndex}) {
       final modifier = modifiers[index];
       return _ModifierCard(
@@ -1420,34 +1477,49 @@ class _ModifiersSection extends ConsumerWidget {
               padding: const EdgeInsets.all(RestoflowSpacing.md),
               // MENU-ORDER-001: modifier GROUPS are drag-reorderable. Nested in
               // the scrolling editor -> shrinkWrap + non-scrolling physics.
-              child: modifiers.length > 1
-                  ? ReorderableListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      buildDefaultDragHandles: false,
-                      itemCount: modifiers.length,
-                      // ignore: deprecated_member_use
-                      onReorder: (oldIndex, newIndex) =>
-                          _reorderModifiers(context, ref, oldIndex, newIndex),
-                      itemBuilder: (context, index) => Padding(
-                        key: ValueKey(modifiers[index].id),
-                        padding: const EdgeInsets.only(
-                          bottom: RestoflowSpacing.md,
-                        ),
-                        child: cardFor(index, reorderIndex: index),
-                      ),
-                    )
-                  : Column(
-                      children: [
-                        for (var index = 0; index < modifiers.length; index++)
-                          Padding(
+              // Codex #5/#7: inert + dimmed while this item's group reorder persists.
+              child: IgnorePointer(
+                ignoring: reordering,
+                child: Opacity(
+                  opacity: reordering ? 0.6 : 1.0,
+                  child: modifiers.length > 1
+                      ? ReorderableListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          buildDefaultDragHandles: false,
+                          itemCount: modifiers.length,
+                          // ignore: deprecated_member_use
+                          onReorder: (oldIndex, newIndex) => _reorderModifiers(
+                            context,
+                            ref,
+                            oldIndex,
+                            newIndex,
+                          ),
+                          itemBuilder: (context, index) => Padding(
+                            key: ValueKey(modifiers[index].id),
                             padding: const EdgeInsets.only(
                               bottom: RestoflowSpacing.md,
                             ),
-                            child: cardFor(index),
+                            child: cardFor(index, reorderIndex: index),
                           ),
-                      ],
-                    ),
+                        )
+                      : Column(
+                          children: [
+                            for (
+                              var index = 0;
+                              index < modifiers.length;
+                              index++
+                            )
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: RestoflowSpacing.md,
+                                ),
+                                child: cardFor(index),
+                              ),
+                          ],
+                        ),
+                ),
+              ),
             ),
     );
   }
