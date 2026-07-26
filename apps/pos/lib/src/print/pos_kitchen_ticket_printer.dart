@@ -9,7 +9,8 @@ import 'package:restoflow_domain/restoflow_domain.dart'
         KitchenPrepComponent,
         KitchenTicketStatus,
         OrderType,
-        aggregateOrderKitchenCounts;
+        aggregateOrderKitchenCounts,
+        sortByMenuPrintOrder;
 import 'package:restoflow_feature_kitchen/kitchen_print.dart'
     show KitchenTicketPrintLabels;
 import 'package:restoflow_feature_kitchen/restoflow_feature_kitchen.dart'
@@ -438,9 +439,18 @@ KdsTicketView kdsTicketViewFromCartLines({
   String? customerName,
   String? orderNote,
 }) {
+  // MENU-ORDER-001: order items by the shared canonical print order (category ->
+  // item display order -> cart index) so the POS-direct kitchen ticket matches
+  // the cashier receipt + KDS. Cart lines are already in cart order, so the
+  // helper's input-index tie-breaker reproduces the line_position order. The
+  // parallel countInputs follow the same sorted order (single loop).
+  final sortedLines = sortByMenuPrintOrder(
+    lines,
+    (l) => [l.categoryDisplayOrder, l.itemDisplayOrder],
+  );
   final items = <KdsItemView>[];
   final countInputs = <KitchenCountItemInput>[];
-  for (final line in lines) {
+  for (final line in sortedLines) {
     final prep =
         prepByItemId[line.menuItemId] ?? const <KitchenPrepComponent>[];
     items.add(
@@ -498,26 +508,30 @@ KdsTicketView kdsTicketViewFromCartLines({
 /// snapshot carries name/qty/modifiers/note/table/customer/type but NOT the
 /// per-item prep/meat snapshot, so a reprinted ticket omits the whole-order
 /// counts (it is a best-effort reprint of what the confirmation shows).
-KdsTicketView kdsTicketViewFromSubmittedOrder(SubmittedOrderView order) =>
-    KdsTicketView(
-      kitchenTicketId: order.orderNumber,
-      stationId: KdsTicketMapper.unassignedStation,
-      items: [
-        for (final line in order.lines)
-          KdsItemView(
-            name: line.name,
-            quantity: line.quantity,
-            // Already pre-formatted as `name ×N` on the submitted view.
-            modifiers: line.modifiers,
-            note: line.note,
-          ),
-      ],
-      status: KitchenTicketStatus.newTicket,
-      orderNumber: order.orderNumber,
-      orderType: _orderTypeWire(order.orderType),
-      tableLabel: order.tableLabel,
-      customerName: order.customerName,
-    );
+KdsTicketView kdsTicketViewFromSubmittedOrder(SubmittedOrderView order) {
+  // MENU-ORDER-001: items in the canonical menu-configured print order (shared
+  // getter) so the manual kitchen reprint matches the cashier receipt + KDS.
+  final sortedLines = order.printOrderedLines;
+  return KdsTicketView(
+    kitchenTicketId: order.orderNumber,
+    stationId: KdsTicketMapper.unassignedStation,
+    items: [
+      for (final line in sortedLines)
+        KdsItemView(
+          name: line.name,
+          quantity: line.quantity,
+          // Already pre-formatted as `name ×N` on the submitted view.
+          modifiers: line.modifiers,
+          note: line.note,
+        ),
+    ],
+    status: KitchenTicketStatus.newTicket,
+    orderNumber: order.orderNumber,
+    orderType: _orderTypeWire(order.orderType),
+    tableLabel: order.tableLabel,
+    customerName: order.customerName,
+  );
+}
 
 String _orderTypeWire(OrderType type) =>
     type == OrderType.dineIn ? 'dine_in' : 'takeaway';

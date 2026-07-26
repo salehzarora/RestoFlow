@@ -13,6 +13,8 @@ class KdsItemView {
     this.modifiers = const <String>[],
     this.note,
     this.prepComponents = const <KitchenPrepComponent>[],
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
     this.linePosition = 0,
   });
 
@@ -35,32 +37,25 @@ class KdsItemView {
   /// [KdsTicketView.kitchenCounts]. Empty when the item has no configured count.
   final List<KitchenPrepComponent> prepComponents;
 
-  /// PRINT-LAYOUT-001D: the STABLE per-order line ordinal (1-based) from
-  /// `order_items.line_position` — the submit-array (cart) insertion index. The
-  /// KDS mapper sorts a ticket's items by this so the printed kitchen sequence
-  /// matches the cashier receipt (which prints in cart order); the POS-direct
-  /// builders leave it 0 because they already build items in cart order. `0` is
-  /// the legacy sentinel (a pre-feature order_items row, or a POS-direct item):
-  /// such items keep their existing relative order (see [sortByLinePosition]).
-  final int linePosition;
+  /// MENU-ORDER-001: the item's CATEGORY rank (order_items
+  /// .category_display_order_snapshot) — the PRIMARY key of the menu-configured
+  /// print order. `0` = a legacy / POS-direct item (falls back to line_position
+  /// + input order). Non-money.
+  final int categoryDisplayOrder;
 
-  /// PRINT-LAYOUT-001D: STABLY reorder [items] by [linePosition] (ascending) so
-  /// the KDS ticket + reprint print in cashier-receipt (cart) order. The sort is
-  /// stable — items sharing a `linePosition` (e.g. legacy `0` rows) keep their
-  /// current relative order, so a partially-migrated order never scrambles. In
-  /// place; keeps each item's modifiers/prep/note attached (they are its fields).
-  static void sortByLinePosition(List<KdsItemView> items) {
-    final indexed = <(int, KdsItemView)>[
-      for (var i = 0; i < items.length; i++) (i, items[i]),
-    ];
-    indexed.sort((a, b) {
-      final byPos = a.$2.linePosition.compareTo(b.$2.linePosition);
-      return byPos != 0 ? byPos : a.$1.compareTo(b.$1);
-    });
-    for (var i = 0; i < items.length; i++) {
-      items[i] = indexed[i].$2;
-    }
-  }
+  /// MENU-ORDER-001: the item's rank WITHIN its category (order_items
+  /// .item_display_order_snapshot) — the SECONDARY print-order key. `0` = legacy.
+  final int itemDisplayOrder;
+
+  /// PRINT-LAYOUT-001D: the per-order line ordinal (1-based) from
+  /// `order_items.line_position` — the submit-array insertion index. Used as the
+  /// TIE-BREAKER of the menu-configured print order (after category + item
+  /// display order). `0` is the legacy sentinel (a pre-feature row, or a
+  /// POS-direct item) which then falls back to input order. The KDS mapper
+  /// orders a ticket's items with the shared `sortByMenuPrintOrder`
+  /// (category -> item -> line_position -> input index), so the KDS ticket +
+  /// reprint print in the same Dashboard-configured order as the cashier receipt.
+  final int linePosition;
 }
 
 /// A KDS-local, mutable view model for one kitchen ticket.

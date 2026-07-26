@@ -65,6 +65,7 @@ export 'src/kitchen/kitchen_ticket_status.dart';
 export 'src/kitchen/recall_audit_event.dart';
 export 'src/order/display_order_code.dart';
 export 'src/order/local_order.dart';
+export 'src/order/menu_print_order.dart';
 export 'src/order/local_order_item.dart';
 export 'src/order/order_action_authorization.dart';
 export 'src/order/order_exceptions.dart';

@@ -362,7 +362,8 @@ class OrderConfirmation extends ConsumerWidget {
                   const SizedBox(height: RestoflowSpacing.md),
                 ],
                 if (payment == null) ...[
-                  for (final line in order.lines) _ConfirmationLine(line: line),
+                  for (final line in order.printOrderedLines)
+                    _ConfirmationLine(line: line),
                   const Divider(),
                   // RF-117: subtotal always; discount/tax lines when present; the
                   // grand total (what the customer pays) is the loud figure once

@@ -158,6 +158,9 @@ class PosOrderDetailItem {
     this.notes,
     this.serviceRoundId,
     this.roundNumber,
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
+    this.linePosition = 0,
   });
 
   final String name;
@@ -167,6 +170,15 @@ class PosOrderDetailItem {
   final int lineTotalMinor;
   final List<PosOrderDetailModifier> modifiers;
   final String? notes;
+
+  /// MENU-ORDER-001: the item's immutable submit-time menu-order snapshots
+  /// (category rank, item-within-category rank) + the line_position tie-breaker,
+  /// as emitted by pos_order_detail. Used to reprint the server-backed receipt in
+  /// the SAME Dashboard-configured order as the live receipt. 0 = an order
+  /// predating the columns (falls back to the RPC's returned order). Non-money.
+  final int categoryDisplayOrder;
+  final int itemDisplayOrder;
+  final int linePosition;
 
   /// Null for the ORIGINAL submission; the owning round otherwise.
   final String? serviceRoundId;
@@ -213,6 +225,13 @@ class PosOrderDetailItem {
           ? raw['service_round_id'] as String
           : null,
       roundNumber: _int(raw['round_number']),
+      // MENU-ORDER-001: tolerant int-or-0 plucks (an order / an RPC predating the
+      // columns yields 0 -> keep the RPC's returned order). Money stays strict.
+      categoryDisplayOrder: menuPrintOrderInt(
+        raw['category_display_order_snapshot'],
+      ),
+      itemDisplayOrder: menuPrintOrderInt(raw['item_display_order_snapshot']),
+      linePosition: menuPrintOrderInt(raw['line_position']),
     );
   }
 }
@@ -460,33 +479,46 @@ final orderDetailRepositoryProvider = Provider<OrderDetailRepository>((ref) {
 /// detail — original AND added items as ONE list (locked: the customer
 /// receipt never shows round sections). This is what lets a DIFFERENT POS
 /// device of the branch review/reprint the complete order.
-SubmittedOrderView submittedOrderViewFromDetail(
-  PosOrderDetail d,
-) => SubmittedOrderView(
-  orderNumber: d.orderCode,
-  orderType: d.orderType == 'takeaway' ? OrderType.takeaway : OrderType.dineIn,
-  currencyCode: d.currencyCode,
-  subtotalMinor: d.subtotalMinor,
-  discountTotalMinor: d.discountTotalMinor,
-  taxTotalMinor: d.taxTotalMinor,
-  tableLabel: d.tableLabel,
-  customerName: d.customerName,
-  orderId: d.orderId,
-  lines: [
-    for (final i in d.items)
-      SubmittedLineView(
-        name: i.name,
-        quantity: i.quantity,
-        lineTotalMinor: i.lineTotalMinor,
-        currencyCode: d.currencyCode,
-        modifiers: [
-          for (final m in i.modifiers)
-            m.quantity > 1 ? '${m.optionName} ×${m.quantity}' : m.optionName,
-        ],
-        note: i.notes,
-      ),
-  ],
-);
+SubmittedOrderView submittedOrderViewFromDetail(PosOrderDetail d) {
+  // MENU-ORDER-001: order items by the shared canonical print order (category ->
+  // item display order -> line_position snapshots) so the SERVER-BACKED reprint
+  // matches the live receipt + KDS. pos_order_detail already ORDERs by these;
+  // sorting here makes the client authoritative + robust to any change.
+  final sortedItems = sortByMenuPrintOrder(
+    d.items,
+    (i) => [i.categoryDisplayOrder, i.itemDisplayOrder, i.linePosition],
+  );
+  return SubmittedOrderView(
+    orderNumber: d.orderCode,
+    orderType: d.orderType == 'takeaway'
+        ? OrderType.takeaway
+        : OrderType.dineIn,
+    currencyCode: d.currencyCode,
+    subtotalMinor: d.subtotalMinor,
+    discountTotalMinor: d.discountTotalMinor,
+    taxTotalMinor: d.taxTotalMinor,
+    tableLabel: d.tableLabel,
+    customerName: d.customerName,
+    orderId: d.orderId,
+    lines: [
+      for (final i in sortedItems)
+        SubmittedLineView(
+          name: i.name,
+          quantity: i.quantity,
+          lineTotalMinor: i.lineTotalMinor,
+          currencyCode: d.currencyCode,
+          modifiers: [
+            for (final m in i.modifiers)
+              m.quantity > 1 ? '${m.optionName} ×${m.quantity}' : m.optionName,
+          ],
+          note: i.notes,
+          categoryDisplayOrder: i.categoryDisplayOrder,
+          itemDisplayOrder: i.itemDisplayOrder,
+          linePosition: i.linePosition,
+        ),
+    ],
+  );
+}
 
 /// The completed payment as the receipt's [CashPayment], or null when the
 /// order is unpaid. Finding 3: the payment identity, method, status and time

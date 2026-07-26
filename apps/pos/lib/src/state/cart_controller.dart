@@ -64,6 +64,8 @@ class CartLineView {
     required this.currencyCode,
     this.modifiers = const <SelectedModifier>[],
     this.note,
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
   });
 
   final String lineId;
@@ -74,6 +76,13 @@ class CartLineView {
   final int lineTotalMinor;
   final String currencyCode;
   final List<SelectedModifier> modifiers;
+
+  /// MENU-ORDER-001: the item's Dashboard print-order ranks (category rank,
+  /// item-within-category rank), captured from the menu at add time. Used to
+  /// order items into Dashboard-configured order on the POS-direct kitchen
+  /// ticket. 0 = unknown (falls back to cart order). Non-money.
+  final int categoryDisplayOrder;
+  final int itemDisplayOrder;
 
   /// Optional per-item kitchen note the cashier typed ("بدون بصل") — shown
   /// under the cart line and sent as the payload item's `notes` (non-money).
@@ -138,6 +147,7 @@ class CartViewState {
     SubmittedOrderView? submittedOrder,
     Map<String, List<SelectedModifier>> lineModifiers = const {},
     Map<String, String> lineNotes = const {},
+    Map<String, (int, int)> lineDisplayOrders = const {},
     bool lockedByAddition = false,
   }) {
     var modifiersTotal = 0;
@@ -146,6 +156,7 @@ class CartViewState {
           final mods = lineModifiers[line.lineId] ?? const <SelectedModifier>[];
           final modSum = mods.fold<int>(0, (sum, m) => sum + m.totalDeltaMinor);
           modifiersTotal += modSum;
+          final order = lineDisplayOrders[line.lineId];
           return CartLineView(
             lineId: line.lineId,
             menuItemId: line.menuItemId,
@@ -156,6 +167,8 @@ class CartViewState {
             currencyCode: line.currencyCodeSnapshot,
             modifiers: mods,
             note: lineNotes[line.lineId],
+            categoryDisplayOrder: order?.$1 ?? 0,
+            itemDisplayOrder: order?.$2 ?? 0,
           );
         })
         .toList(growable: false);
@@ -253,6 +266,12 @@ class CartController extends Notifier<CartViewState> {
   /// the modifiers; sent as the payload item's `notes`.
   final Map<String, String> _lineNotes = {};
 
+  /// MENU-ORDER-001: the item's Dashboard print-order ranks per line id
+  /// (categoryDisplayOrder, itemDisplayOrder), captured from the DemoMenuItem at
+  /// add time and carried onto CartLineView + SubmittedLineView so every POS
+  /// print surface orders items into Dashboard-configured order. Non-money.
+  final Map<String, (int, int)> _lineDisplayOrders = {};
+
   /// The ACTIVE menu currency (real backend currency in real mode; the demo
   /// constant otherwise). Read at cart (re)creation so price snapshots and the
   /// cart currency always agree with the menu being sold from (D-007/D-008).
@@ -273,6 +292,7 @@ class CartController extends Notifier<CartViewState> {
     _submittedOrder = null;
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lineDisplayOrders.clear();
     _lockOwner = null;
     return CartViewState.fromCart(_cart);
   }
@@ -348,14 +368,19 @@ class CartController extends Notifier<CartViewState> {
         !_lineNotes.containsKey(existing.lineId)) {
       _cart.changeQuantity(existing.lineId, existing.quantity + 1);
     } else {
+      final lineId = 'line-${_lineSeq++}';
       _cart.addLine(
         CartLine.snapshot(
-          lineId: 'line-${_lineSeq++}',
+          lineId: lineId,
           menuItemId: item.id,
           itemNameSnapshot: item.name,
           basePriceMinorSnapshot: item.priceMinor,
           currencyCodeSnapshot: _cart.currencyCode,
         ),
+      );
+      _lineDisplayOrders[lineId] = (
+        item.categoryDisplayOrder,
+        item.itemDisplayOrder,
       );
     }
     _emit();
@@ -391,6 +416,10 @@ class CartController extends Notifier<CartViewState> {
     );
     _lineModifiers[lineId] = List.unmodifiable(modifiers);
     if (hasNote) _lineNotes[lineId] = trimmedNote;
+    _lineDisplayOrders[lineId] = (
+      item.categoryDisplayOrder,
+      item.itemDisplayOrder,
+    );
     _emit();
     return CartMutationResult.applied;
   }
@@ -555,13 +584,19 @@ class CartController extends Notifier<CartViewState> {
     // Line totals mirror the RF-052 server formula (each modifier delta
     // counted × its own quantity, once per line).
     var modifiersTotal = 0;
+    var linePosition = 0;
     final lines = <SubmittedLineView>[];
     for (final item in order.items) {
+      linePosition++;
       // LocalOrderItem.orderItemId carries the source cart line id.
       final mods =
           _lineModifiers[item.orderItemId] ?? const <SelectedModifier>[];
       final modSum = mods.fold<int>(0, (sum, m) => sum + m.totalDeltaMinor);
       modifiersTotal += modSum;
+      // MENU-ORDER-001: carry the item's Dashboard ranks + its 1-based cart
+      // position so every POS surface (receipt, kitchen ticket) orders items
+      // into the SAME Dashboard-configured sequence the KDS + server reprint use.
+      final dispOrder = _lineDisplayOrders[item.orderItemId];
       lines.add(
         SubmittedLineView(
           name: item.itemNameSnapshot,
@@ -572,6 +607,9 @@ class CartController extends Notifier<CartViewState> {
           // confirmation/receipt/print paths all show it unchanged.
           modifiers: [for (final m in mods) m.displayName],
           note: _lineNotes[item.orderItemId],
+          categoryDisplayOrder: dispOrder?.$1 ?? 0,
+          itemDisplayOrder: dispOrder?.$2 ?? 0,
+          linePosition: linePosition,
         ),
       );
     }
@@ -593,6 +631,7 @@ class CartController extends Notifier<CartViewState> {
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lineDisplayOrders.clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -618,8 +657,10 @@ class CartController extends Notifier<CartViewState> {
     int taxRateBp = 0,
   }) {
     var subtotal = 0;
+    var linePosition = 0;
     final lines = <SubmittedLineView>[];
     for (final l in draft.lines) {
+      linePosition++;
       final modSum = l.modifiers.fold<int>(
         0,
         (sum, m) => sum + m.totalDeltaMinor,
@@ -634,6 +675,10 @@ class CartController extends Notifier<CartViewState> {
           currencyCode: draft.currencyCode,
           modifiers: [for (final m in l.modifiers) m.displayName],
           note: l.note,
+          // MENU-ORDER-001: a recovered draft carries no menu ranks -> falls back
+          // to its captured (cart) order via line_position; identical to how it
+          // would have printed in its own session.
+          linePosition: linePosition,
         ),
       );
     }
@@ -672,6 +717,7 @@ class CartController extends Notifier<CartViewState> {
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lineDisplayOrders.clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -695,6 +741,7 @@ class CartController extends Notifier<CartViewState> {
     submittedOrder: _submittedOrder,
     lineModifiers: _lineModifiers,
     lineNotes: _lineNotes,
+    lineDisplayOrders: _lineDisplayOrders,
     lockedByAddition: _locked,
   );
 }

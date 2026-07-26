@@ -51,6 +51,8 @@ class DemoMenuItem {
     required this.priceMinor,
     required this.categoryId,
     required this.categoryName,
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
     this.imagePath,
     this.imageUrl,
     this.itemType,
@@ -74,6 +76,15 @@ class DemoMenuItem {
   /// Owning category id/name (data).
   final String categoryId;
   final String categoryName;
+
+  /// MENU-ORDER-001: the item's Dashboard print-order ranks — the category's
+  /// display order (menu_categories.display_order) and the item's display order
+  /// within its category (menu_items.display_order), served by the pos_menu RPC.
+  /// Carried onto the cart line at add time so every POS print surface can order
+  /// items into Dashboard-configured order. 0 = unknown (falls back to cart
+  /// order). Non-money.
+  final int categoryDisplayOrder;
+  final int itemDisplayOrder;
 
   /// The RF-110 storage object key of the item's image (real menu only; the
   /// backend `pos_menu` serves it as `image_path`). Null = no image.
@@ -123,6 +134,8 @@ class DemoMenuItem {
     int? priceMinor,
     String? categoryId,
     String? categoryName,
+    int? categoryDisplayOrder,
+    int? itemDisplayOrder,
     String? imagePath,
     String? imageUrl,
     String? itemType,
@@ -138,6 +151,8 @@ class DemoMenuItem {
     priceMinor: priceMinor ?? this.priceMinor,
     categoryId: categoryId ?? this.categoryId,
     categoryName: categoryName ?? this.categoryName,
+    categoryDisplayOrder: categoryDisplayOrder ?? this.categoryDisplayOrder,
+    itemDisplayOrder: itemDisplayOrder ?? this.itemDisplayOrder,
     imagePath: imagePath ?? this.imagePath,
     imageUrl: imageUrl ?? this.imageUrl,
     itemType: itemType ?? this.itemType,

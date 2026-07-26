@@ -139,7 +139,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             text: _formatReceiptTimestamp(payment.paidAt),
                           ),
                           const _Rule(),
-                          for (final line in order.lines) ...[
+                          for (final line in order.printOrderedLines) ...[
                             _ItemLine(
                               label: '${line.quantity}× ${line.name}',
                               value: MoneyFormatter.formatMinor(
@@ -305,7 +305,9 @@ PrintDocument buildReceiptDocument(
   final brandName = (realName != null && realName.isNotEmpty)
       ? realName
       : l10n.printRestaurantNameFallback;
-  final items = order.lines;
+  // MENU-ORDER-001: items in the canonical menu-configured print order (the
+  // shared getter), so the cashier receipt matches the POS kitchen ticket + KDS.
+  final items = order.printOrderedLines;
   // Built into a local (not an inline `title:` literal) so the RF-020
   // no-hardcoded-strings guard isn't tripped by this l10n-interpolated value.
   final docTitle = '${l10n.receiptPreviewTitle} ${order.orderNumber}';

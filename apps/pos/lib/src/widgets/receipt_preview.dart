@@ -96,7 +96,7 @@ class ReceiptPreview extends ConsumerWidget {
             if (dineIn && order.tableLabel != null)
               _ReceiptLine(label: l10n.posTableLabel, value: order.tableLabel!),
             const _DashedRule(),
-            for (final line in order.lines) ...[
+            for (final line in order.printOrderedLines) ...[
               _ReceiptItemLine(
                 label: '${line.quantity}× ${line.name}',
                 value: MoneyFormatter.formatMinor(

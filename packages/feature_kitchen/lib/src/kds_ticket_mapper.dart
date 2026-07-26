@@ -160,19 +160,18 @@ class KdsTicketMapper {
     // A modifier row carries an integer `quantity` (>=1, default 1); when it is
     // above 1 the display string gets a '×N' suffix (name first, U+00D7 — the
     // same convention as the KDS item line). Never money.
-    // MENU-ORDER-001: collect each item's modifier lines WITH their persisted
-    // per-item ordinal (order_item_modifiers.line_position) so they can be
-    // printed in the SAME order as the cashier receipt (menu display order).
-    // The wire delivers modifiers `ORDER BY (updated_at, id)` — random within an
-    // item for a freshly submitted order — so without this the KDS diverges from
-    // the receipt (the modifier-level twin of the PRINT-LAYOUT-001D item fix).
+    // MENU-ORDER-001: collect each item's modifier lines WITH their menu-
+    // configured print-order keys, snapshotted at submit (modifier GROUP display
+    // order + OPTION display order) + the line_position tie-breaker, so the KDS
+    // prints them in the SAME order as the cashier receipt. The wire delivers
+    // modifiers `ORDER BY (updated_at, id)` — random within an item for a fresh
+    // order — so the snapshot keys (not wire order) drive the sequence.
     final modLinesByItem = <String, List<_ModLine>>{};
     // KITCHEN-MEAT-001: each order item's meat contributions from its selected
     // options, PRE-MULTIPLIED by the modifier units (× the item quantity is
     // applied per item below). Money-free; only options carrying meat_snapshot
     // contribute (nothing is inferred from a name/price).
     final meatByItem = <String, List<KitchenMeat>>{};
-    var modWireIndex = 0;
     for (final m in modifiers) {
       if (m['deleted_at'] != null) continue;
       final itemId = m['order_item_id'];
@@ -180,14 +179,17 @@ class KdsTicketMapper {
       if (itemId is! String || option is! String) continue;
       final qtyRaw = m['quantity'];
       final qty = qtyRaw is int ? qtyRaw : int.tryParse('$qtyRaw') ?? 1;
-      // Tolerant pluck — an older server that predates the column yields 0 (the
-      // legacy sentinel), so those modifiers keep their wire order.
-      final posRaw = m['line_position'];
-      final linePosition = posRaw is int ? posRaw : int.tryParse('$posRaw') ?? 0;
+      // Tolerant int-or-0 plucks — an order/server predating the columns yields
+      // 0 (legacy sentinel), so those modifiers keep their wire (input) order.
       (modLinesByItem[itemId] ??= <_ModLine>[]).add(
         _ModLine(
-          linePosition: linePosition,
-          wireIndex: modWireIndex++,
+          groupDisplayOrder: menuPrintOrderInt(
+            m['modifier_group_display_order_snapshot'],
+          ),
+          optionDisplayOrder: menuPrintOrderInt(
+            m['modifier_option_display_order_snapshot'],
+          ),
+          linePosition: menuPrintOrderInt(m['line_position']),
           text: qty > 1 ? '$option ×$qty' : option,
         ),
       );
@@ -198,17 +200,16 @@ class KdsTicketMapper {
         );
       }
     }
-    // MENU-ORDER-001: stably order each item's modifiers by line_position, so the
-    // KDS ticket + reprint print them in the SAME sequence as the cashier
-    // receipt. Ties / legacy 0 rows keep their wire order (a partially-migrated
-    // order never scrambles).
+    // MENU-ORDER-001: order each item's modifiers by the shared canonical key
+    // (group -> option -> line_position -> input index), so the KDS prints them
+    // in the SAME Dashboard order as the cashier receipt. Legacy 0 keys fall back
+    // to input (wire) order — a partially-migrated order never scrambles.
     final modsByItem = <String, List<String>>{};
     for (final entry in modLinesByItem.entries) {
-      final lines = entry.value
-        ..sort((a, b) {
-          final byPos = a.linePosition.compareTo(b.linePosition);
-          return byPos != 0 ? byPos : a.wireIndex.compareTo(b.wireIndex);
-        });
+      final lines = sortByMenuPrintOrder(
+        entry.value,
+        (l) => [l.groupDisplayOrder, l.optionDisplayOrder, l.linePosition],
+      );
       modsByItem[entry.key] = [for (final l in lines) l.text];
     }
 
@@ -270,14 +271,18 @@ class KdsTicketMapper {
       // {name,quantity,unit}) plucked from the order_items snapshot. Tolerant
       // parse — a missing/bad value yields an empty list (no prep row).
       final prepComponents = parseKitchenPrepComponents(it['prep_snapshot']);
-      // PRINT-LAYOUT-001D: the stable per-order line ordinal (order_items
-      // .line_position). Tolerant pluck — an older server that predates the
-      // column yields 0 (the legacy sentinel), so those items keep their wire
-      // order. Non-money; used only to reorder items into cashier-receipt order.
-      final linePositionRaw = it['line_position'];
-      final linePosition = linePositionRaw is int
-          ? linePositionRaw
-          : int.tryParse('$linePositionRaw') ?? 0;
+      // MENU-ORDER-001: the item's menu-configured print-order keys — the
+      // category rank + within-category rank snapshotted at submit (order_items
+      // .category_display_order_snapshot / .item_display_order_snapshot) + the
+      // 001D line_position tie-breaker. Tolerant int-or-0 plucks (an order/server
+      // predating the columns yields 0 -> keep wire order). Non-money.
+      final categoryDisplayOrder = menuPrintOrderInt(
+        it['category_display_order_snapshot'],
+      );
+      final itemDisplayOrder = menuPrintOrderInt(
+        it['item_display_order_snapshot'],
+      );
+      final linePosition = menuPrintOrderInt(it['line_position']);
 
       // PSC-001C: a round item builds a SEPARATE per-round ticket keyed by
       // (order, station, round); the round's OWN status drives the column.
@@ -309,6 +314,8 @@ class KdsTicketMapper {
           modifiers: modsByItem[itemId] ?? const <String>[],
           note: note,
           prepComponents: prepComponents,
+          categoryDisplayOrder: categoryDisplayOrder,
+          itemDisplayOrder: itemDisplayOrder,
           linePosition: linePosition,
         ),
       );
@@ -344,13 +351,18 @@ class KdsTicketMapper {
         entry.key: aggregateOrderKitchenCounts(entry.value),
     };
 
-    // PRINT-LAYOUT-001D: order each ticket's items by their persisted per-order
-    // line ordinal (order_items.line_position) so the KDS ticket + reprint print
-    // in cashier-receipt (cart) order, regardless of the (updated_at, id) wire
-    // order the rows arrived in. Stable — legacy rows (line_position 0) keep
-    // their wire order; whole items move, so modifiers/prep/notes stay attached.
+    // MENU-ORDER-001: order each ticket's items by the shared canonical print
+    // order — category display order -> item display order -> line_position ->
+    // input index — so the KDS ticket + reprint print in the SAME Dashboard-
+    // configured order as the cashier receipt, regardless of the (updated_at, id)
+    // wire order the rows arrived in. Stable: whole items move, so each item's
+    // modifiers/prep/note stay attached; legacy 0 snapshots fall back to
+    // line_position + wire order (a partially-migrated order never scrambles).
     for (final b in grouped.values) {
-      KdsItemView.sortByLinePosition(b.items);
+      b.items = sortByMenuPrintOrder(
+        b.items,
+        (it) => [it.categoryDisplayOrder, it.itemDisplayOrder, it.linePosition],
+      );
     }
 
     final tickets =
@@ -439,7 +451,8 @@ class _TicketBuilder {
   /// PSC-001C: set when this ticket is an additional service round.
   final String? roundId;
   final _RoundInfo? round;
-  final List<KdsItemView> items = [];
+  // Reassigned once, after collection, by the shared menu-print-order sort.
+  List<KdsItemView> items = [];
 }
 
 /// PSC-001C: the explicit money-free pluck of one ACTIVE service round.
@@ -487,18 +500,20 @@ class _OrderInfo {
   final bool roundContextOnly;
 }
 
-/// MENU-ORDER-001: one modifier line with its persisted per-item ordinal
-/// (order_item_modifiers.line_position) and the wire index it arrived at, used
-/// to sort an item's modifiers into cashier-receipt (menu display) order before
-/// they are flattened to display strings. Money-free.
+/// MENU-ORDER-001: one modifier line with its menu-configured print-order keys
+/// (group display order, option display order) + the line_position tie-breaker,
+/// used to sort an item's modifiers into cashier-receipt (Dashboard) order
+/// before they are flattened to display strings. Money-free.
 class _ModLine {
   _ModLine({
+    required this.groupDisplayOrder,
+    required this.optionDisplayOrder,
     required this.linePosition,
-    required this.wireIndex,
     required this.text,
   });
 
+  final int groupDisplayOrder;
+  final int optionDisplayOrder;
   final int linePosition;
-  final int wireIndex;
   final String text;
 }

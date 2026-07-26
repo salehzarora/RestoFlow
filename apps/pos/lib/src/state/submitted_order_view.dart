@@ -128,6 +128,16 @@ class SubmittedOrderView {
   Money get subtotal => Money(subtotalMinor, currencyCode);
 
   int get itemCount => lines.fold(0, (count, line) => count + line.quantity);
+
+  /// MENU-ORDER-001: [lines] in the canonical menu-configured PRINT order —
+  /// category display order -> item display order -> line_position — used by
+  /// EVERY receipt + preview + kitchen surface so they all show the SAME
+  /// Dashboard-configured order. Whole line objects move, so each item's
+  /// modifiers + note stay attached; legacy 0 snapshots fall back to input order.
+  List<SubmittedLineView> get printOrderedLines => sortByMenuPrintOrder(
+    lines,
+    (l) => [l.categoryDisplayOrder, l.itemDisplayOrder, l.linePosition],
+  );
 }
 
 /// An immutable single line on a [SubmittedOrderView].
@@ -139,12 +149,27 @@ class SubmittedLineView {
     required this.currencyCode,
     this.modifiers = const <String>[],
     this.note,
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
+    this.linePosition = 0,
   });
 
   final String name;
   final int quantity;
   final int lineTotalMinor;
   final String currencyCode;
+
+  /// MENU-ORDER-001: the item's menu-configured PRINT-order keys — the category
+  /// rank (order_items.category_display_order_snapshot), the item-within-category
+  /// rank (item_display_order_snapshot), and the order line's original position
+  /// (line_position) as the tie-breaker. On the client submit path the ranks come
+  /// from the menu (via the cart line) and line_position is the 1-based cart
+  /// index; on the server-backed reprint they are the immutable submit-time
+  /// snapshots from pos_order_detail. 0 = unknown (falls back to input order).
+  /// Non-money; used only by the shared canonical print sort.
+  final int categoryDisplayOrder;
+  final int itemDisplayOrder;
+  final int linePosition;
 
   /// Selected modifier option names (order-time snapshots, D-008; a
   /// quantity-enabled option arrives pre-formatted as `name ×N`), rendered
