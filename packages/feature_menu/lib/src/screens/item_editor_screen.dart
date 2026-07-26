@@ -1046,7 +1046,14 @@ class _PricedChildSection extends ConsumerWidget {
     if (!await showMenuDeleteConfirm(context)) return;
     final outcome = await ref
         .read(menuWriteControllerProvider)
-        .softDelete(entity: _entityForKind(kind), id: id);
+        .softDelete(
+          entity: _entityForKind(kind),
+          id: id,
+          // A priced child's sibling owner is [parentId] (the item for a
+          // size/variant, the modifier group for an option) — refuse the delete
+          // while THAT list is mid-reorder.
+          parentId: parentId,
+        );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1339,7 +1346,13 @@ class _ModifiersSection extends ConsumerWidget {
     if (!await showMenuDeleteConfirm(context)) return;
     final outcome = await ref
         .read(menuWriteControllerProvider)
-        .softDelete(entity: MenuEntityType.modifier, id: id);
+        .softDelete(
+          entity: MenuEntityType.modifier,
+          id: id,
+          // Modifier groups' sibling owner is their item — refuse the delete
+          // while this item's modifier-group list is mid-reorder.
+          parentId: item.id,
+        );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

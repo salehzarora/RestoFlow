@@ -56,6 +56,9 @@ class MenuItemList extends ConsumerWidget {
         .read(menuWriteControllerProvider)
         .setItemAvailability(
           menuItemId: item.id,
+          // The item's sibling owner is this category — refuse the flip while
+          // this category's items are mid-reorder.
+          menuCategoryId: categoryId,
           availability: availability,
           reason: reason,
         );
@@ -81,7 +84,13 @@ class MenuItemList extends ConsumerWidget {
     if (!await showMenuDeleteConfirm(context)) return;
     final outcome = await ref
         .read(menuWriteControllerProvider)
-        .softDelete(entity: MenuEntityType.item, id: item.id);
+        .softDelete(
+          entity: MenuEntityType.item,
+          id: item.id,
+          // Items' sibling owner is their category — the same scope this list's
+          // reorder guards, so the delete is refused mid-reorder.
+          parentId: categoryId,
+        );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

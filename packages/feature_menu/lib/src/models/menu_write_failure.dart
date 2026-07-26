@@ -50,3 +50,12 @@ class MenuServerFailure extends MenuWriteFailure {
 class MenuInvalidResponseFailure extends MenuWriteFailure {
   const MenuInvalidResponseFailure();
 }
+
+/// MENU-ORDER-001 (Codex, same-scope write guard): the write was REFUSED
+/// LOCALLY — the exact sibling list is mid drag-reorder — so NO repository/RPC
+/// call, no optimistic mutation, and no audit event occurred. A distinct type
+/// (not a server failure) so the surface can show a transient busy note rather
+/// than a scary error, and so a test can assert the guard fired with zero writes.
+class MenuReorderInProgress extends MenuWriteFailure {
+  const MenuReorderInProgress();
+}

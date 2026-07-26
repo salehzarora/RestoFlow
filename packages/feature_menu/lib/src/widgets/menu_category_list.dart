@@ -59,7 +59,13 @@ class MenuCategoryList extends ConsumerWidget {
     if (!await showMenuDeleteConfirm(context)) return;
     final outcome = await ref
         .read(menuWriteControllerProvider)
-        .softDelete(entity: MenuEntityType.category, id: category.id);
+        .softDelete(
+          entity: MenuEntityType.category,
+          id: category.id,
+          // Categories' sibling owner is the restaurant — the same scope this
+          // list's reorder guards, so the delete is refused mid-reorder.
+          parentId: ref.read(menuScopeProvider).restaurantId,
+        );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
