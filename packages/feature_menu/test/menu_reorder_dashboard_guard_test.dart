@@ -435,6 +435,71 @@ void main() {
       expect(addButton().onPressed, isNotNull);
     },
   );
+
+  testWidgets(
+    'MENU-ORDER-001 (Codex 4th pass): a category edit dialog left OPEN when a '
+    'reorder starts issues ZERO writes on Save — the CONTROLLER guard, not just '
+    'the list IgnorePointer, refuses it (the exact overlay bypass)',
+    (tester) async {
+      final store = InMemoryMenuStore(categories: [_cat('c-7', 'Sevens', 7)]);
+      // A writer that would "succeed" if reached — so a non-zero lastOperation
+      // proves the guard leaked.
+      final writer = ScriptedMenuWriter(
+        const Success(
+          MenuWriteResult(
+            entity: MenuEntityType.category,
+            id: 'c-7',
+            action: MenuWriteAction.updated,
+          ),
+        ),
+      );
+      final l10n = await _pump(tester, readSource: store, writer: writer);
+
+      // Open the edit dialog — a ROOT-navigator overlay ABOVE the list's
+      // IgnorePointer (the documented bypass) — and stage a rename.
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.menuEditAction).last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('menu-category-name')),
+        'Renamed',
+      );
+
+      // A category reorder STARTS while the dialog is open (latch held).
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MenuManagementScreen)),
+      );
+      final categoryScope = MenuReorderScope(
+        organizationId: demoMenuScope.organizationId,
+        restaurantId: demoMenuScope.restaurantId,
+        branchId: demoMenuScope.branchId,
+        entity: MenuEntityType.category,
+        parentId: demoMenuScope.restaurantId,
+      );
+      container
+              .read(menuReorderInFlightProvider(categoryScope).notifier)
+              .state =
+          true;
+      await tester.pump();
+
+      // Tapping Save now routes through the controller guard -> refused.
+      await tester.tap(find.text(l10n.menuSaveAction));
+      await tester.pumpAndSettle();
+      expect(
+        writer.lastOperation,
+        isNull,
+        reason:
+            'the open dialog Save reached the controller guard and was '
+            'refused — no upsertCategory hit the writer',
+      );
+      // The category still carries its original name (nothing persisted).
+      expect(
+        (await store.load(demoMenuScope)).visibleCategories().single.name,
+        'Sevens',
+      );
+    },
+  );
 }
 
 /// A read source that delegates to [inner] and counts [load] calls, so a test
