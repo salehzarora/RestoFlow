@@ -121,7 +121,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     required MenuScope scope,
     String? id,
     required String name,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) async {
     if (readOnly) return _denied(MenuEntityType.category);
@@ -134,7 +134,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       restaurantId: scope.restaurantId,
       branchId: scope.branchId,
       name: name,
-      displayOrder: displayOrder,
+      displayOrder: displayOrder ?? existing?.displayOrder ?? 0,
       isActive: isActive,
       deletedAt: existing?.deletedAt,
     );
@@ -152,7 +152,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     required int basePriceMinor,
     required String currencyCode,
     String? defaultStationId,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     String? imagePath,
     String? itemType,
@@ -177,7 +177,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       basePriceMinor: basePriceMinor,
       currencyCode: currencyCode,
       defaultStationId: defaultStationId,
-      displayOrder: displayOrder,
+      displayOrder: displayOrder ?? existing?.displayOrder ?? 0,
       isActive: isActive,
       // Mirrors the server: null/blank = clear (full-state upsert).
       imagePath: (imagePath == null || imagePath.trim().isEmpty)
@@ -235,7 +235,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) async {
     if (readOnly) return _denied(MenuEntityType.size);
@@ -250,7 +250,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       menuItemId: menuItemId,
       name: name,
       priceDeltaMinor: priceDeltaMinor,
-      displayOrder: displayOrder,
+      displayOrder: displayOrder ?? existing?.displayOrder ?? 0,
       isActive: isActive,
       deletedAt: existing?.deletedAt,
     );
@@ -265,7 +265,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) async {
     if (readOnly) return _denied(MenuEntityType.variant);
@@ -280,7 +280,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       menuItemId: menuItemId,
       name: name,
       priceDeltaMinor: priceDeltaMinor,
-      displayOrder: displayOrder,
+      displayOrder: displayOrder ?? existing?.displayOrder ?? 0,
       isActive: isActive,
       deletedAt: existing?.deletedAt,
     );
@@ -298,7 +298,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     int minSelect = 0,
     int? maxSelect,
     bool isRequired = false,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     bool allowQuantity = false,
     int? maxQuantity,
@@ -328,7 +328,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       minSelect: minSelect,
       maxSelect: maxSelect,
       isRequired: isRequired,
-      displayOrder: displayOrder,
+      displayOrder: displayOrder ?? existing?.displayOrder ?? 0,
       isActive: isActive,
       allowQuantity: allowQuantity,
       maxQuantity: maxQuantity,
@@ -345,7 +345,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     required String modifierId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     Map<String, dynamic>? kitchenMeat,
   }) async {
@@ -361,7 +361,7 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
       modifierId: modifierId,
       name: name,
       priceDeltaMinor: priceDeltaMinor,
-      displayOrder: displayOrder,
+      displayOrder: displayOrder ?? existing?.displayOrder ?? 0,
       isActive: isActive,
       deletedAt: existing?.deletedAt,
       // KITCHEN-MEAT-001: round-trip the meat metadata for demo/widget saves.

@@ -225,11 +225,8 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
   late final TextEditingController _name = TextEditingController(
     text: widget.existing?.name ?? '',
   );
-  // MENU-ORDER-001 (Codex): display_order is no longer hand-edited here — it is
-  // owned by drag-and-drop reorder. We PRESERVE the entity's current value across
-  // an edit (new entities default to 0) so a details-save never resets ordering,
-  // and never competes with the drag workflow.
-  late final int _displayOrder = widget.existing?.displayOrder ?? 0;
+  // MENU-ORDER-001 (Codex #6): display_order is owned by drag reorder — a normal
+  // edit sends NO order (null); the DB guard trigger preserves the live order.
   late bool _active = widget.existing?.isActive ?? true;
   MenuFieldError? _nameError;
   MenuWriteFailure? _writeError;
@@ -253,7 +250,8 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
     final outcome = await widget.controller.upsertCategory(
       id: widget.existing?.id,
       name: _name.text.trim(),
-      displayOrder: _displayOrder,
+      displayOrder:
+          null, // Codex #6: edit sends no order; guard trigger preserves it
       isActive: _active,
     );
     if (!mounted) return;
@@ -440,7 +438,9 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
         modifierId: widget.parentId,
         name: name,
         priceDeltaMinor: deltaMinor!,
-        displayOrder: order,
+        // MENU-ORDER-001 (Codex #6): options are drag-reordered — a normal edit
+        // sends NO order (null); the DB guard trigger preserves the live order.
+        displayOrder: null,
         isActive: _active,
         kitchenMeat: kitchenMeat,
       ),
@@ -596,10 +596,8 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
   late final TextEditingController _max = TextEditingController(
     text: widget.initialMaxSelect?.toString() ?? '',
   );
-  // MENU-ORDER-001 (Codex): modifier groups are drag-reordered, so display_order
-  // is no longer hand-edited here — we PRESERVE the group's current value across
-  // an edit (0 for a new group) rather than resetting it.
-  late final int _displayOrder = widget.initialDisplayOrder;
+  // MENU-ORDER-001 (Codex #6): modifier groups are drag-reordered — a normal edit
+  // sends NO order (null); the DB guard trigger preserves the live order.
   // Pre-fill a friendly cap of 5 for a new group (or when no cap is stored) —
   // the owner clears the field for "no cap" (blank => null).
   late final TextEditingController _maxQuantity = TextEditingController(
@@ -687,7 +685,8 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
       minSelect: minSelect!,
       maxSelect: maxSelect,
       isRequired: _required,
-      displayOrder: _displayOrder,
+      displayOrder:
+          null, // Codex #6: edit sends no order; guard trigger preserves it
       isActive: _active,
       allowQuantity: allowQuantity,
       maxQuantity: allowQuantity ? maxQuantity : null,

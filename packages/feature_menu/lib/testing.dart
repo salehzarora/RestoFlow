@@ -45,7 +45,7 @@ class ScriptedMenuWriter implements MenuWriter {
     required MenuScope scope,
     String? id,
     required String name,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _record('upsertCategory');
 
@@ -59,7 +59,7 @@ class ScriptedMenuWriter implements MenuWriter {
     required int basePriceMinor,
     required String currencyCode,
     String? defaultStationId,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     String? imagePath,
     String? itemType,
@@ -77,7 +77,7 @@ class ScriptedMenuWriter implements MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _record('upsertSize');
 
@@ -88,7 +88,7 @@ class ScriptedMenuWriter implements MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _record('upsertVariant');
 
@@ -102,7 +102,7 @@ class ScriptedMenuWriter implements MenuWriter {
     int minSelect = 0,
     int? maxSelect,
     bool isRequired = false,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     bool allowQuantity = false,
     int? maxQuantity,
@@ -119,7 +119,7 @@ class ScriptedMenuWriter implements MenuWriter {
     required String modifierId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     Map<String, dynamic>? kitchenMeat,
   }) => _record('upsertModifierOption');

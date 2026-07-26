@@ -125,7 +125,7 @@ class RpcMenuWriter implements MenuWriter {
     required MenuScope scope,
     String? id,
     required String name,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) {
     return _invoke(MenuRpcNames.upsertCategory, {
@@ -149,7 +149,7 @@ class RpcMenuWriter implements MenuWriter {
     required int basePriceMinor,
     required String currencyCode,
     String? defaultStationId,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     String? imagePath,
     String? itemType,
@@ -192,7 +192,7 @@ class RpcMenuWriter implements MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) {
     return _invoke(MenuRpcNames.upsertSize, {
@@ -215,7 +215,7 @@ class RpcMenuWriter implements MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) {
     return _invoke(MenuRpcNames.upsertVariant, {
@@ -241,7 +241,7 @@ class RpcMenuWriter implements MenuWriter {
     int minSelect = 0,
     int? maxSelect,
     bool isRequired = false,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     bool allowQuantity = false,
     int? maxQuantity,
@@ -273,7 +273,7 @@ class RpcMenuWriter implements MenuWriter {
     required String modifierId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     Map<String, dynamic>? kitchenMeat,
   }) {

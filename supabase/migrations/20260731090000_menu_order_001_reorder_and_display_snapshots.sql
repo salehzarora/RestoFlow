@@ -349,7 +349,15 @@ begin
     raise exception 'menu_reorder: invalid request' using errcode = '42501';
   end if;
 
-  -- (6) Atomic set-based rewrite: display_order = 1..N in p_ids order.
+  -- (6) Atomic set-based rewrite: display_order = 1..N in p_ids order. This is
+  --     the ONLY sanctioned writer of display_order — PART 5's guard trigger
+  --     reverts any display_order change from any OTHER path (a normal
+  --     menu_upsert edit) UNLESS this flag is on. The flag is set ONLY around this
+  --     UPDATE and reset immediately after, so it can never leak to a later
+  --     statement in the SAME transaction (set_config(...,true) is
+  --     transaction-scoped, not statement-scoped) — belt-and-suspenders even
+  --     though every production RPC is already its own transaction.
+  perform set_config('app.menu_reordering', 'on', true);
   execute format($q$
     update public.%1$I t
        set display_order = v.ord
@@ -357,6 +365,7 @@ begin
      where t.id = v.id and t.organization_id = $2
   $q$, v_table)
     using p_ids, p_organization_id;
+  perform set_config('app.menu_reordering', 'off', true);
 
   perform app.menu_audit(p_organization_id, p_restaurant_id, p_branch_id,
     'menu.' || p_entity || '.reordered', null,
@@ -584,3 +593,62 @@ begin
     'payment', v_payment);
 end;
 $$;
+
+-- ----------------------------------------------------------------------------
+-- PART 5. DISPLAY_ORDER GUARD (Codex #6): app.menu_reorder is the ONLY sanctioned
+--   writer of display_order for categories / items / modifier groups / modifier
+--   options. A normal menu_upsert_* EDIT that happens to carry a (possibly STALE,
+--   pre-reorder) display_order must NOT overwrite the live drag-set order — the
+--   exact race Codex flagged: "a stale edit overwrite a newer drag order."
+--
+--   This BEFORE UPDATE trigger reverts ANY display_order change back to the OLD
+--   value UNLESS the transaction-local flag `app.menu_reordering = 'on'` is set —
+--   which is set ONLY inside app.menu_reorder (PART 3, step 6), local to that
+--   transaction (set_config(..., true) resets at commit/rollback). So the database
+--   UPDATE leaves display_order untouched unless the dedicated reorder operation
+--   is executing, regardless of what value the client sends. INSERTs (new rows)
+--   are unaffected (BEFORE UPDATE only). Sizes/variants are deliberately NOT
+--   guarded — their numeric ordering is out of this drag-order phase.
+--
+--   Defence-in-depth: the flag GUC is settable only inside the SECURITY DEFINER
+--   menu_reorder; the PostgREST data API exposes no arbitrary SET, so a client
+--   calling menu_upsert_* can never turn the guard off.
+-- ----------------------------------------------------------------------------
+create or replace function app.preserve_menu_display_order()
+  returns trigger
+  language plpgsql
+  set search_path = ''
+as $$
+begin
+  if new.display_order is distinct from old.display_order
+     and coalesce(current_setting('app.menu_reordering', true), '') <> 'on' then
+    new.display_order := old.display_order;
+  end if;
+  return new;
+end;
+$$;
+
+comment on function app.preserve_menu_display_order() is
+  'MENU-ORDER-001 (Codex #6): reverts any display_order change on menu_categories/menu_items/modifiers/modifier_options UNLESS app.menu_reordering=on (set only inside app.menu_reorder). Makes drag-reorder the sole writer of display_order so a stale menu_upsert edit cannot clobber the live order. INSERT-neutral; sizes/variants excluded.';
+
+revoke all on function app.preserve_menu_display_order() from public;
+
+drop trigger if exists preserve_menu_display_order on public.menu_categories;
+create trigger preserve_menu_display_order
+  before update on public.menu_categories
+  for each row execute function app.preserve_menu_display_order();
+
+drop trigger if exists preserve_menu_display_order on public.menu_items;
+create trigger preserve_menu_display_order
+  before update on public.menu_items
+  for each row execute function app.preserve_menu_display_order();
+
+drop trigger if exists preserve_menu_display_order on public.modifiers;
+create trigger preserve_menu_display_order
+  before update on public.modifiers
+  for each row execute function app.preserve_menu_display_order();
+
+drop trigger if exists preserve_menu_display_order on public.modifier_options;
+create trigger preserve_menu_display_order
+  before update on public.modifier_options
+  for each row execute function app.preserve_menu_display_order();
