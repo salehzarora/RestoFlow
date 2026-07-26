@@ -154,5 +154,64 @@ void main() {
       ]);
       expect(t.items.single.modifiers, const ['m1', 'm2', 'm3', 'm4']);
     });
+
+    test('sorts modifiers by (group display order, option display order) from a '
+        'SHUFFLED wire — the configured Dashboard modifier order', () {
+      // Dashboard: groups Bread(1), Meat(2), Extras(3); Extras options
+      // Cheese(1), Jalapeño(2). One selection per group + both Extras, delivered
+      // in a deliberately shuffled wire order carrying the snapshots.
+      final tickets = KdsTicketMapper.map(
+        orders: const [_order],
+        orderItems: const [
+          {
+            'id': 'it1',
+            'order_id': 'o1',
+            'quantity': 1,
+            'menu_item_name_snapshot': 'Burger',
+            'line_position': 1,
+          },
+        ],
+        modifiers: const [
+          {
+            'order_item_id': 'it1',
+            'option_name_snapshot': 'Jalapeño',
+            'modifier_group_display_order_snapshot': 3,
+            'modifier_option_display_order_snapshot': 2,
+            'line_position': 4,
+            'quantity': 1,
+          },
+          {
+            'order_item_id': 'it1',
+            'option_name_snapshot': 'Beef',
+            'modifier_group_display_order_snapshot': 2,
+            'modifier_option_display_order_snapshot': 1,
+            'line_position': 2,
+            'quantity': 1,
+          },
+          {
+            'order_item_id': 'it1',
+            'option_name_snapshot': 'Cheese',
+            'modifier_group_display_order_snapshot': 3,
+            'modifier_option_display_order_snapshot': 1,
+            'line_position': 3,
+            'quantity': 1,
+          },
+          {
+            'order_item_id': 'it1',
+            'option_name_snapshot': 'Sesame',
+            'modifier_group_display_order_snapshot': 1,
+            'modifier_option_display_order_snapshot': 1,
+            'line_position': 1,
+            'quantity': 1,
+          },
+        ],
+      );
+      expect(tickets.single.items.single.modifiers, const [
+        'Sesame',
+        'Beef',
+        'Cheese',
+        'Jalapeño',
+      ]);
+    });
   });
 }
