@@ -411,10 +411,26 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     );
   }
 
+  // MENU-ORDER-001 (Codex #12): present categories AND items in the owner's
+  // DASHBOARD order for browsing — categories by their display_order, items by
+  // the COMPOSITE (category rank -> item rank -> stable input index). The RPC
+  // does not guarantee row order, so without this the "All" view (and per-
+  // category views) could interleave categories (a rank-1 item in category B
+  // ahead of a rank-2 item in category A). Uses the SAME canonical sort the print
+  // surfaces use, so browse order and print order agree.
+  final orderedCategories = sortByMenuPrintOrder(
+    categories,
+    (c) => [catDisplayOrder[c.id] ?? 0],
+  );
+  final orderedItems = sortByMenuPrintOrder(
+    items,
+    (i) => [i.categoryDisplayOrder, i.itemDisplayOrder],
+  );
+
   final currency = (raw['currency_code'] ?? '').toString();
   return PosMenuData(
-    categories: categories,
-    items: items,
+    categories: orderedCategories,
+    items: orderedItems,
     currencyCode: currency.length == 3 ? currency : kDemoCurrencyCode,
     modifierGroups: groups,
   );
