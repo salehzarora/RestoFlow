@@ -1,0 +1,192 @@
+-- ============================================================================
+-- MENU-ORDER-001 — pgTAP:
+--   * order_items.menu_display_order snapshots the item's live menu rank at
+--     submit (assign_order_item_menu_display_order trigger);
+--   * order_item_modifiers.line_position is a stable per-item modifier ordinal
+--     populated in submit-array (menu) order (assign_order_item_modifier_line_position);
+--   * app.menu_reorder atomically rewrites display_order for a complete sibling
+--     set, manager+ only, siblings-in-one-scope only.
+--
+-- Fixtures inserted as the BYPASSRLS connection role (RF-056/RF-057 convention).
+-- Submit runs via the real public.sync_push -> app.submit_order path; the menu
+-- reorder runs via public.menu_reorder under the GUC principal (rf109 pattern).
+-- ============================================================================
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path to extensions, public, pg_catalog;
+
+select plan(17);
+
+-- ===== fixtures: Org M ======================================================
+insert into organizations (id, name, slug, default_currency) values
+  ('e0000000-0000-0000-0000-000000000001', 'Org M', 'org-m', 'USD');
+insert into restaurants (id, organization_id, name) values
+  ('e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000001', 'Rest M');
+insert into branches (id, organization_id, restaurant_id, name) values
+  ('e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'Branch M');
+insert into devices (id, organization_id, restaurant_id, branch_id, device_type) values
+  ('e0000000-0000-0000-0000-0000000000d1', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'pos');
+insert into device_pairings (id, organization_id, restaurant_id, branch_id, device_id, status) values
+  ('e0000000-0000-0000-0000-0000000000a1', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-0000000000d1', 'active');
+insert into device_sessions (id, organization_id, restaurant_id, branch_id, device_id, device_pairing_id) values
+  ('e0000000-0000-0000-0000-0000000000e1', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-0000000000d1', 'e0000000-0000-0000-0000-0000000000a1');
+-- A branch cashier (drives the PIN session that submits the order).
+insert into app_users (id, email) values
+  ('e0000000-0000-0000-0000-00000000ae01', 'm-cash@example.test');
+insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
+  ('e0000000-0000-0000-0000-00000000ab01', 'e0000000-0000-0000-0000-00000000ae01', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'cashier', '{}'::jsonb);
+insert into employee_profiles (id, organization_id, restaurant_id, branch_id, app_user_id, membership_id) values
+  ('e0000000-0000-0000-0000-00000000ac01', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-00000000ae01', 'e0000000-0000-0000-0000-00000000ab01');
+insert into pin_sessions (id, organization_id, restaurant_id, branch_id, device_session_id, employee_profile_id, resolved_membership_id, expires_at) values
+  ('e0000000-0000-0000-0000-00000000ad01', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-0000000000e1', 'e0000000-0000-0000-0000-00000000ac01', 'e0000000-0000-0000-0000-00000000ab01', now() + interval '1 hour');
+-- An org owner (write role) + a restaurant-scoped cashier (covers the menu
+-- scope but lacks a write role -> the role-denied path).
+insert into app_users (id, email) values
+  ('e0000000-0000-0000-0000-00000000ae02', 'm-owner@example.test'),
+  ('e0000000-0000-0000-0000-00000000ae03', 'm-restcash@example.test');
+insert into memberships (id, app_user_id, organization_id, restaurant_id, branch_id, role, permissions) values
+  ('e0000000-0000-0000-0000-00000000ab02', 'e0000000-0000-0000-0000-00000000ae02', 'e0000000-0000-0000-0000-000000000001', null, null, 'org_owner', '{}'::jsonb),
+  ('e0000000-0000-0000-0000-00000000ab03', 'e0000000-0000-0000-0000-00000000ae03', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'cashier', '{}'::jsonb);
+-- Two restaurant-scoped categories; three items in cat1 (distinct display_order
+-- 5/6/7) + one item in cat2; a modifier group on item A with three options.
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('e0000000-0000-0000-0000-0000000000c1', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'Cat 1', 1),
+  ('e0000000-0000-0000-0000-0000000000c2', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'Cat 2', 2);
+insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
+  ('e0000000-0000-0000-0000-0000000000f1', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000c1', 'Item A', 500, 'USD', 5),
+  ('e0000000-0000-0000-0000-0000000000f2', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000c1', 'Item B', 500, 'USD', 6),
+  ('e0000000-0000-0000-0000-0000000000f3', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000c1', 'Item C', 500, 'USD', 7),
+  ('e0000000-0000-0000-0000-0000000000e5', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000c2', 'Item D', 500, 'USD', 1);
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name, display_order) values
+  ('e0000000-0000-0000-0000-0000000000d5', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000f1', 'Extras', 1);
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor, display_order) values
+  ('e0000000-0000-0000-0000-0000000000d6', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000d5', 'Opt 1', 0, 1),
+  ('e0000000-0000-0000-0000-0000000000d7', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000d5', 'Opt 2', 0, 2),
+  ('e0000000-0000-0000-0000-0000000000d8', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000d5', 'Opt 3', 0, 3);
+insert into tables (id, organization_id, restaurant_id, branch_id, label) values
+  ('e0000000-0000-0000-0000-0000000000b1', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'T1');
+
+-- ===== column shape =========================================================
+select has_column('public', 'order_items', 'menu_display_order', 'order_items has menu_display_order');
+select col_type_is('public', 'order_items', 'menu_display_order', 'integer', 'menu_display_order is integer');
+select col_default_is('public', 'order_items', 'menu_display_order', '0', 'menu_display_order defaults to 0');
+select has_column('public', 'order_item_modifiers', 'line_position', 'order_item_modifiers has line_position');
+select col_type_is('public', 'order_item_modifiers', 'line_position', 'integer', 'modifier line_position is integer');
+select col_default_is('public', 'order_item_modifiers', 'line_position', '0', 'modifier line_position defaults to 0');
+
+-- ===== menu_reorder is exposed to authenticated only ========================
+select ok(
+  has_function_privilege('authenticated', 'public.menu_reorder(uuid, text, uuid[])', 'execute'),
+  'authenticated may execute public.menu_reorder');
+select ok(
+  not has_function_privilege('anon', 'public.menu_reorder(uuid, text, uuid[])', 'execute'),
+  'anon may NOT execute public.menu_reorder');
+
+-- ===== submit a DINE-IN order: Item A with three modifiers (Opt 1,2,3) ======
+select public.sync_push(
+  'e0000000-0000-0000-0000-00000000ad01'::uuid,
+  'e0000000-0000-0000-0000-0000000000d1'::uuid,
+  jsonb_build_array(jsonb_build_object(
+    'local_operation_id', 'm-op-submit-1',
+    'operation_type', 'order.submit',
+    'target_entity', 'order',
+    'payload', jsonb_build_object(
+      'order_id', 'e0000000-0000-0000-0000-0000000000f9',
+      'order_type', 'dine_in',
+      'table_id', 'e0000000-0000-0000-0000-0000000000b1',
+      'currency_code', 'USD',
+      'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+      'order_items', jsonb_build_array(
+        jsonb_build_object(
+          'menu_item_id', 'e0000000-0000-0000-0000-0000000000f1',
+          'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item A',
+          'modifiers', jsonb_build_array(
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1),
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1),
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d8', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 3', 'price_minor_snapshot', 0, 'quantity', 1))))))));
+
+-- The item's menu rank (menu_items.display_order = 5) was snapshotted.
+select is(
+  (select menu_display_order from public.order_items
+    where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item A'),
+  5, 'order_items.menu_display_order snapshots the item''s live menu rank at submit');
+
+-- The modifiers carry line_position 1,2,3 in the SUBMIT ARRAY (menu) order.
+select is(
+  (select array_agg(oim.option_name_snapshot order by oim.line_position)
+     from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'),
+  array['Opt 1', 'Opt 2', 'Opt 3'],
+  'modifiers sorted by line_position reproduce the submit-array (menu) order');
+select is(
+  (select array_agg(distinct oim.line_position order by oim.line_position)
+     from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'),
+  array[1, 2, 3],
+  'modifier line_position is a distinct, gap-free 1..N per item');
+
+-- ===== menu_reorder happy path (org owner) ==================================
+set local role authenticated;
+set local app.current_app_user_id = 'e0000000-0000-0000-0000-00000000ae02';
+set local app.current_organization_id = 'e0000000-0000-0000-0000-000000000001';
+
+select is(
+  (public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'menu_item',
+     array['e0000000-0000-0000-0000-0000000000f3',
+           'e0000000-0000-0000-0000-0000000000f1',
+           'e0000000-0000-0000-0000-0000000000f2']::uuid[]) ->> 'ok')::boolean,
+  true, 'org owner reorders the complete Cat 1 item set');
+
+reset role;
+select is(
+  (select array_agg(id order by display_order)
+     from public.menu_items
+    where menu_category_id = 'e0000000-0000-0000-0000-0000000000c1' and deleted_at is null),
+  array['e0000000-0000-0000-0000-0000000000f3',
+        'e0000000-0000-0000-0000-0000000000f1',
+        'e0000000-0000-0000-0000-0000000000f2']::uuid[],
+  'display_order was rewritten to 1..N in the requested order');
+
+-- ===== role denial: a covering-but-no-write-role cashier ====================
+set local role authenticated;
+set local app.current_app_user_id = 'e0000000-0000-0000-0000-00000000ae03';
+set local app.current_organization_id = 'e0000000-0000-0000-0000-000000000001';
+
+select is(
+  (public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'menu_item',
+     array['e0000000-0000-0000-0000-0000000000f1',
+           'e0000000-0000-0000-0000-0000000000f2',
+           'e0000000-0000-0000-0000-0000000000f3']::uuid[]) ->> 'error'),
+  'permission_denied', 'a restaurant cashier is role-denied (returns permission_denied)');
+
+reset role;
+select is(
+  (select count(*)::int from public.audit_events
+    where action = 'menu.menu_item.reorder_denied'
+      and actor_app_user_id = 'e0000000-0000-0000-0000-00000000ae03'),
+  1, 'the role denial wrote exactly one menu.menu_item.reorder_denied audit row');
+
+-- ===== enforcement: incomplete set + mixed-parent are rejected (42501) ======
+set local role authenticated;
+set local app.current_app_user_id = 'e0000000-0000-0000-0000-00000000ae02';
+set local app.current_organization_id = 'e0000000-0000-0000-0000-000000000001';
+
+select throws_ok(
+  $$ select public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'menu_item',
+       array['e0000000-0000-0000-0000-0000000000f1',
+             'e0000000-0000-0000-0000-0000000000f2']::uuid[]) $$,
+  '42501', null,
+  'an INCOMPLETE sibling set (2 of 3) is rejected');
+
+select throws_ok(
+  $$ select public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'menu_item',
+       array['e0000000-0000-0000-0000-0000000000f1',
+             'e0000000-0000-0000-0000-0000000000e5']::uuid[]) $$,
+  '42501', null,
+  'a MIXED-parent set (items from two categories) is rejected');
+
+reset role;
+select * from finish();
+rollback;
