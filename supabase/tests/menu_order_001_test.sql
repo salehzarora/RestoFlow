@@ -20,7 +20,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(27);
+select plan(37);
 
 -- ===== fixtures: Org M ======================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -70,6 +70,13 @@ insert into modifier_options (id, organization_id, restaurant_id, branch_id, mod
   ('e0000000-0000-0000-0000-0000000000d8', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', null, 'e0000000-0000-0000-0000-0000000000d5', 'Opt 3', 0, 3);
 insert into tables (id, organization_id, restaurant_id, branch_id, label) values
   ('e0000000-0000-0000-0000-0000000000b1', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000003', 'T1');
+-- A SECOND org (Org N) with its own category — for cross-tenant reorder rejection.
+insert into organizations (id, name, slug, default_currency) values
+  ('f0000000-0000-0000-0000-000000000001', 'Org N', 'org-n', 'USD');
+insert into restaurants (id, organization_id, name) values
+  ('f0000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-000000000001', 'Rest N');
+insert into menu_categories (id, organization_id, restaurant_id, branch_id, name, display_order) values
+  ('f0000000-0000-0000-0000-0000000000c1', 'f0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000002', null, 'Cat N', 1);
 
 -- ===== column shape =========================================================
 select has_column('public', 'order_items', 'category_display_order_snapshot', 'order_items has category_display_order_snapshot');
@@ -176,7 +183,31 @@ select is(
            'e0000000-0000-0000-0000-0000000000c1']::uuid[]) ->> 'ok')::boolean,
   true, 'org owner reorders the restaurant category set');
 
+-- min(uuid)-FIX PROOF: menu_reorder EXECUTES without a UUID-aggregate error for
+-- ALL FOUR entity types. Items + categories are exercised above; modifier
+-- options + groups here. (A min(uuid)/max(uuid) reference would raise
+-- 'function min(uuid) does not exist' at runtime.)
+select is(
+  (public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'modifier_option',
+     array['e0000000-0000-0000-0000-0000000000d8',
+           'e0000000-0000-0000-0000-0000000000d7',
+           'e0000000-0000-0000-0000-0000000000d6']::uuid[]) ->> 'ok')::boolean,
+  true, 'org owner reorders the modifier OPTION set (PG17-safe, no UUID aggregate)');
+select is(
+  (public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'modifier',
+     array['e0000000-0000-0000-0000-0000000000d5']::uuid[]) ->> 'ok')::boolean,
+  true, 'org owner reorders the modifier GROUP set (single-sibling complete set)');
+
 reset role;
+-- The modifier options' live display_order WAS rewritten to the requested order.
+select is(
+  (select array_agg(id order by display_order)
+     from public.modifier_options
+    where modifier_id = 'e0000000-0000-0000-0000-0000000000d5' and deleted_at is null),
+  array['e0000000-0000-0000-0000-0000000000d8',
+        'e0000000-0000-0000-0000-0000000000d7',
+        'e0000000-0000-0000-0000-0000000000d6']::uuid[],
+  'the modifier options were rewritten to display_order 1..N in the requested order');
 -- The submitted order's category snapshot is IMMUTABLE — still 1, NOT the new 2.
 select is(
   (select category_display_order_snapshot from public.order_items
@@ -187,6 +218,58 @@ select is(
 select is(
   (select display_order from public.menu_items where id = 'e0000000-0000-0000-0000-0000000000f1'),
   2, 'the live menu_items.display_order WAS rewritten by the reorder');
+
+-- ===== SERVICE ROUND (#11): a later add_order_items item snapshots the CURRENT
+--       menu (Cat 1 rank now 2, Item B rank now 3) and appends its line_position
+--       after the order's existing lines; the ORIGINAL item keeps its old snapshot.
+select public.sync_push(
+  'e0000000-0000-0000-0000-00000000ad01'::uuid,
+  'e0000000-0000-0000-0000-0000000000d1'::uuid,
+  jsonb_build_array(jsonb_build_object(
+    'local_operation_id', 'm-op-add-1',
+    'operation_type', 'order.items_add',
+    'target_entity', 'order',
+    'payload', jsonb_build_object(
+      'order_id', 'e0000000-0000-0000-0000-0000000000f9',
+      'round_id', 'e0000000-0000-0000-0000-0000000000e9',
+      'order_items', jsonb_build_array(
+        jsonb_build_object('menu_item_id', 'e0000000-0000-0000-0000-0000000000f2', 'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item B'))))));
+select is(
+  (select category_display_order_snapshot from public.order_items
+    where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item B'),
+  2, 'a service-round item snapshots the CURRENT category rank (2) at add time');
+select cmp_ok(
+  (select line_position from public.order_items
+    where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item B'),
+  '>',
+  (select line_position from public.order_items
+    where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item A'),
+  'the service-round item''s line_position is appended AFTER the original items');
+
+-- ===== NEW ORDER B (#10): an order submitted AFTER the reorder uses the NEW
+--       ranks (Cat 1 -> 2, Item A -> 2), while the old order keeps A (1, 5).
+select public.sync_push(
+  'e0000000-0000-0000-0000-00000000ad01'::uuid,
+  'e0000000-0000-0000-0000-0000000000d1'::uuid,
+  jsonb_build_array(jsonb_build_object(
+    'local_operation_id', 'm-op-submit-2',
+    'operation_type', 'order.submit',
+    'target_entity', 'order',
+    'payload', jsonb_build_object(
+      'order_id', 'e0000000-0000-0000-0000-0000000000f8',
+      'order_type', 'takeaway',
+      'currency_code', 'USD',
+      'subtotal_minor', 500, 'discount_total_minor', 0, 'tax_total_minor', 0, 'grand_total_minor', 500,
+      'order_items', jsonb_build_array(
+        jsonb_build_object('menu_item_id', 'e0000000-0000-0000-0000-0000000000f1', 'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item A'))))));
+select is(
+  (select category_display_order_snapshot from public.order_items
+    where order_id = 'e0000000-0000-0000-0000-0000000000f8' and menu_item_name_snapshot = 'Item A'),
+  2, 'a NEW order after the reorder uses the NEW category rank (2), not the old 1');
+select is(
+  (select item_display_order_snapshot from public.order_items
+    where order_id = 'e0000000-0000-0000-0000-0000000000f8' and menu_item_name_snapshot = 'Item A'),
+  2, 'a NEW order after the reorder uses the NEW item rank (2), not the old 5');
 
 -- ===== role denial: a covering-but-no-write-role cashier ====================
 set local role authenticated;
@@ -225,6 +308,34 @@ select throws_ok(
              'e0000000-0000-0000-0000-0000000000e5']::uuid[]) $$,
   '42501', null,
   'a MIXED-parent set (items from two categories) is rejected');
+
+-- Cross-tenant: an id from ANOTHER org (Org N) does not resolve in Org M ->
+-- generic 'invalid request' (no cross-tenant existence oracle).
+select throws_ok(
+  $$ select public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'menu_category',
+       array['f0000000-0000-0000-0000-0000000000c1']::uuid[]) $$,
+  '42501', null,
+  'a CROSS-TENANT id (Org N category under Org M) is rejected (generic invalid request)');
+-- A nonexistent id -> the SAME generic invalid request (missing == foreign).
+select throws_ok(
+  $$ select public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'menu_item',
+       array['e0000000-0000-0000-0000-0000000000ff']::uuid[]) $$,
+  '42501', null,
+  'a NONEXISTENT id is rejected as the SAME generic invalid request (no oracle)');
+
+reset role;
+
+-- Unauthenticated: no actor -> denied at step 1, BEFORE any id inspection.
+set local role authenticated;
+set local app.current_app_user_id = '';
+set local app.current_organization_id = '';
+select throws_ok(
+  $$ select public.menu_reorder('e0000000-0000-0000-0000-000000000001', 'menu_item',
+       array['e0000000-0000-0000-0000-0000000000f1',
+             'e0000000-0000-0000-0000-0000000000f2',
+             'e0000000-0000-0000-0000-0000000000f3']::uuid[]) $$,
+  '42501', null,
+  'an UNAUTHENTICATED reorder is denied (no actor, no id oracle)');
 
 reset role;
 select * from finish();
