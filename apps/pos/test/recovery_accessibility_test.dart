@@ -235,15 +235,15 @@ void main() {
   });
 
   test(
-    'a PIN/scope mismatch makes the recovery unavailable (not restorable)',
+    'a worker/scope mismatch makes the recovery unavailable (not restorable)',
     () {
       final c = _demo();
       _seedRejected(c, 'eA');
       final n = c.read(posDraftRecoveryProvider.notifier);
-      // A different PIN session cannot recover it.
+      // A DIFFERENT worker (employeeProfileId) cannot recover it (Codex #1).
       const otherBinding = PosRecoveryBinding(
         scopeKey: 'demo-org.demo-restaurant.demo-branch.demo-device',
-        pinSessionId: 'someone-else',
+        employeeProfileId: 'someone-else',
       );
       expect(n.recoverable('eA', otherBinding), isNull);
       // The rightful (current) context still can.

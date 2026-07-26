@@ -107,14 +107,18 @@ void main() {
     }
   }
 
-  Future<void> signIn(ProviderContainer c, DeviceContext device) async {
+  Future<void> signIn(
+    ProviderContainer c,
+    DeviceContext device, {
+    String employeeProfileId = 'emp-1',
+  }) async {
     final err = await c
         .read(posSessionControllerProvider.notifier)
         .signInWithPin(
           device: device,
           deviceId: device.deviceId!,
           deviceSessionId: device.deviceSessionId!,
-          employeeProfileId: 'emp-1',
+          employeeProfileId: employeeProfileId,
           pin: '1234',
         );
     expect(err, isNull);
@@ -474,16 +478,20 @@ void main() {
       );
       await tester.pump();
 
-      // THE HANDOVER: employee A signs out and a NEW PIN session signs in on the
-      // SAME till (same operational scope) while A's submit is still in flight.
+      // THE HANDOVER: employee A signs out and a DIFFERENT employee signs in on
+      // the SAME till (same operational scope) while A's submit is still in
+      // flight. MENU-ORDER-001 (Codex #1): ownership is the STABLE worker id
+      // (employeeProfileId), not the ephemeral pinSession — so a DIFFERENT worker
+      // makes the binding differ (a same-worker re-login would reclaim, which is
+      // the intended restart fix).
       c.read(posSessionControllerProvider.notifier).endSession();
       await settle();
-      await signIn(c, ctxA); // employee B — PIN session 2, SAME scope
+      await signIn(c, ctxA, employeeProfileId: 'emp-2'); // employee B
       final bindingB = c.read(posRecoveryBindingProvider);
       expect(
         bindingB == bindingA,
         isFalse,
-        reason: 'a new PIN session is a new session binding',
+        reason: 'a different worker (employeeProfileId) is a different binding',
       );
       expect(
         c.read(posSyncScopeProvider)?.key,

@@ -33,17 +33,19 @@ PosDraftRecovery _rec(
 );
 
 const _demoBinding = PosRecoveryBinding();
+// MENU-ORDER-001 (Codex #1): ownership is (stable scopeKey + stable worker id),
+// NOT the ephemeral pinSessionId — so the SAME worker reclaims after restart.
 const _branchA = PosRecoveryBinding(
   scopeKey: 'orgA.restA.branchA.dev1',
-  pinSessionId: 'pin-emp-A',
+  employeeProfileId: 'emp-A',
 );
 const _branchB = PosRecoveryBinding(
   scopeKey: 'orgA.restA.branchB.dev1',
-  pinSessionId: 'pin-emp-A',
+  employeeProfileId: 'emp-A', // same worker, different branch
 );
 const _empBOnA = PosRecoveryBinding(
   scopeKey: 'orgA.restA.branchA.dev1',
-  pinSessionId: 'pin-emp-B',
+  employeeProfileId: 'emp-B', // different worker, same branch/device
 );
 
 void main() {
@@ -86,14 +88,15 @@ void main() {
   });
 
   group('A2 scope / employee binding', () {
-    test('12. a different PIN session cannot restore the record', () {
+    test('12. a different WORKER cannot restore the record', () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
       final n = c.read(posDraftRecoveryProvider.notifier);
       n.capture(_rec('A', binding: _branchA));
-      // Employee A owns it; employee B (new PIN) on the same device cannot see it.
+      // Worker A owns it; worker B on the same device cannot see it.
       expect(n.recoverable('A', _empBOnA), isNull);
-      // The rightful owner still can.
+      // The rightful owner still can (regardless of PIN session — the binding
+      // no longer contains the ephemeral pinSessionId).
       expect(n.recoverable('A', _branchA), isNotNull);
     });
 
@@ -114,10 +117,10 @@ void main() {
       expect(n.recoverable('A', _demoBinding), isNotNull);
     });
 
-    test('PosRecoveryBinding matches only on an EXACT scope + PIN', () {
+    test('PosRecoveryBinding matches only on an EXACT scope + worker', () {
       expect(_branchA.matches(_branchA), isTrue);
-      expect(_branchA.matches(_branchB), isFalse);
-      expect(_branchA.matches(_empBOnA), isFalse);
+      expect(_branchA.matches(_branchB), isFalse); // different branch/scope
+      expect(_branchA.matches(_empBOnA), isFalse); // different worker
       expect(_demoBinding.matches(_demoBinding), isTrue);
     });
 

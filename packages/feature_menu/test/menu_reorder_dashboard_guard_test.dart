@@ -333,8 +333,106 @@ void main() {
       expect(
         saved.displayOrder,
         7,
-        reason: 'a details-save preserved the current display_order (no reset)',
+        reason:
+            'a details-save (client sends NULL) preserved display_order — the '
+            'demo store keeps the existing value; the real DB guard trigger does '
+            'the same server-side (Codex #6)',
       );
+    },
+  );
+
+  testWidgets(
+    'MENU-ORDER-001 (Codex #4): disposing the menu MID-REORDER throws no '
+    'exception and never leaks the scope latch (a later reorder still works)',
+    (tester) async {
+      final gated = _GatedMenuWriter()..gate();
+      await _pump(tester, readSource: buildDemoMenuStore(), writer: gated);
+
+      // Start a gated reorder — now in flight (latch held on the container).
+      await tester.drag(
+        find.byIcon(Icons.drag_indicator).first,
+        const Offset(0, 160),
+      );
+      await tester.pump();
+      expect(gated.reorderCalls, 1);
+
+      // Navigate AWAY mid-flight: the whole menu ProviderScope is torn down.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      // Complete the RPC AFTER disposal. The controller owns the lifecycle on the
+      // provider Ref; its reads/invalidate/release run on the now-disposed
+      // container and are swallowed — no WidgetRef-after-await exception, no stuck
+      // latch.
+      gated.release();
+      await tester.pumpAndSettle();
+      expect(
+        tester.takeException(),
+        isNull,
+        reason:
+            'no disposed-container / WidgetRef-after-await exception surfaced',
+      );
+
+      // Re-open a FRESH menu (new ProviderScope + container): its scope latch
+      // defaults false, so a new reorder executes normally.
+      final gated2 = _GatedMenuWriter();
+      await _pump(tester, readSource: buildDemoMenuStore(), writer: gated2);
+      await tester.drag(
+        find.byIcon(Icons.drag_indicator).first,
+        const Offset(0, 160),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        gated2.reorderCalls,
+        1,
+        reason: 'the latch did not leak — a later reorder still runs',
+      );
+    },
+  );
+
+  testWidgets(
+    'MENU-ORDER-001 (Codex #5): the ADD control is disabled while its scope '
+    'reorder is in flight (zero add writes), re-enabled after release',
+    (tester) async {
+      final store = buildDemoMenuStore();
+      final l10n = await _pump(tester, readSource: store, writer: store);
+
+      FilledButton addButton() => tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, l10n.menuAddCategory),
+      );
+      // The "Add category" toolbar control (OUTSIDE the category list's
+      // IgnorePointer) is enabled before any reorder.
+      expect(addButton().onPressed, isNotNull);
+
+      // Hold the CATEGORY sibling scope latch, exactly as a persisting reorder
+      // does (reorderScoped sets this synchronously before its RPC).
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MenuManagementScreen)),
+      );
+      final categoryScope = MenuReorderScope(
+        organizationId: demoMenuScope.organizationId,
+        restaurantId: demoMenuScope.restaurantId,
+        branchId: demoMenuScope.branchId,
+        entity: MenuEntityType.category,
+        parentId: demoMenuScope.restaurantId,
+      );
+      container
+              .read(menuReorderInFlightProvider(categoryScope).notifier)
+              .state =
+          true;
+      await tester.pump();
+
+      // Add is now DISABLED (onPressed null) — a new category cannot race the
+      // 1..N rewrite. A disabled button fires no callback, so zero write calls.
+      expect(addButton().onPressed, isNull);
+
+      // After the reorder completes + the latch releases, Add is re-enabled.
+      container
+              .read(menuReorderInFlightProvider(categoryScope).notifier)
+              .state =
+          false;
+      await tester.pump();
+      expect(addButton().onPressed, isNotNull);
     },
   );
 }

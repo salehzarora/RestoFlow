@@ -169,6 +169,14 @@ void main() {
       );
       addTearDown(c.dispose);
 
+      // Instantiate the switchable session controller before switchTo (the
+      // recovery binding no longer watches the session provider, so nothing else
+      // builds it early).
+      c.read(posSessionControllerProvider);
+      // MENU-ORDER-001 (Codex #1): ownership is the STABLE worker id
+      // (employeeProfileId), not the ephemeral pinSession — so A and B are
+      // DIFFERENT workers on the same till.
+      c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-A');
       // Employee A captures a recovery for the shell under A's binding.
       final bindingA = c.read(posRecoveryBindingProvider);
       c
@@ -187,8 +195,9 @@ void main() {
         isNotNull,
       );
 
-      // Employee A signs out; employee B signs in on the SAME till (new PIN session).
+      // Employee A signs out; a DIFFERENT employee B signs in on the SAME till.
       switchable.switchTo(sessionB);
+      c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-B');
       await pump(tester, c);
       await tester.tap(find.byKey(const Key('orders-section-all')));
       await tester.pumpAndSettle();
@@ -205,6 +214,7 @@ void main() {
       // Employee A returns (signs back in): the recovery is recoverable again and the
       // shell SURVIVED B's session — Restore + Discard are back for the rightful owner.
       switchable.switchTo(sessionA);
+      c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-A');
       await tester.pumpAndSettle();
       expect(
         find.byKey(const Key('recent-other-session-DEMO-eX')),

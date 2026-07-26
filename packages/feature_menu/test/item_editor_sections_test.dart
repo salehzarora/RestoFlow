@@ -35,7 +35,7 @@ class _RecordingStore extends InMemoryMenuStore {
     required int basePriceMinor,
     required String currencyCode,
     String? defaultStationId,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     String? imagePath,
     String? itemType,
