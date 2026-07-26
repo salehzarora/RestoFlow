@@ -25,7 +25,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(54);
+select plan(55);
 
 -- ===== fixtures: Org M ======================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -244,12 +244,16 @@ select public.sync_push(
       'round_id', 'e0000000-0000-0000-0000-0000000000e9',
       'order_items', jsonb_build_array(
         jsonb_build_object('menu_item_id', 'e0000000-0000-0000-0000-0000000000f2', 'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item B',
-          -- #8: modifiers through the REAL order.items_add path — the payload
-          -- carries NO line_position (the client cannot supply one); the trigger
-          -- derives it 1..N in insert order, and snapshots the CURRENT ranks.
+          -- #10: modifiers through the REAL order.items_add (app.add_order_items)
+          -- path, with a MALICIOUS client payload that DELIBERATELY supplies a
+          -- line_position (999) AND forged group/option display-order snapshots
+          -- (999). The RPC never reads those fields (it inserts only the option
+          -- id + name/price/qty/meat snapshots), and the BEFORE INSERT trigger
+          -- derives line_position 1..N and snapshots the CURRENT live-menu ranks —
+          -- so the forged 999s are ignored end to end (asserted below).
           'modifiers', jsonb_build_array(
-            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1),
-            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1))))))));
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999),
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999))))))));
 select is(
   (select category_display_order_snapshot from public.order_items
     where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item B'),
@@ -280,12 +284,11 @@ select public.sync_push(
       'round_id', 'e0000000-0000-0000-0000-0000000000e9',
       'order_items', jsonb_build_array(
         jsonb_build_object('menu_item_id', 'e0000000-0000-0000-0000-0000000000f2', 'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item B',
-          -- #8: modifiers through the REAL order.items_add path — the payload
-          -- carries NO line_position (the client cannot supply one); the trigger
-          -- derives it 1..N in insert order, and snapshots the CURRENT ranks.
+          -- #10: the idempotent replay carries the SAME malicious 999 fields; the
+          -- replay is a no-op (idempotency ledger), so nothing is re-derived either.
           'modifiers', jsonb_build_array(
-            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1),
-            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1))))))));
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999),
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1, 'line_position', 999, 'modifier_group_display_order_snapshot', 999, 'modifier_option_display_order_snapshot', 999))))))));
 select is(
   (select count(*)::int from public.order_items
     where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item B'),
@@ -297,11 +300,13 @@ select is(
       and oi.menu_item_name_snapshot = 'Item B'),
   2, 'the idempotent replay did NOT duplicate the service-round modifiers');
 
--- ===== #8 SERVICE-ROUND MODIFIERS (via the REAL order.items_add path) =========
+-- ===== #10 SERVICE-ROUND MODIFIERS (via the REAL order.items_add path, with a
+--       MALICIOUS client payload) ==================================================
 -- Item B's modifiers were inserted through app.add_order_items (NOT a standalone
--- insert): the trigger derived their line_position 1..N in payload order and
--- snapshotted the CURRENT menu ranks (after the reorders the group d5 -> 1 and
--- the options -> d8=1, d7=2, d6=3). The payload carries NO client line_position.
+-- insert), and the client payload DELIBERATELY forged line_position=999 and
+-- group/option display-order snapshots=999. The trigger derived their line_position
+-- 1..N in payload order and snapshotted the CURRENT menu ranks (after the reorders
+-- the group d5 -> 1 and the options -> d8=1, d7=2, d6=3). The forged 999s are ignored.
 select is(
   (select array_agg(oim.line_position order by oim.line_position)
      from public.order_item_modifiers oim
@@ -310,6 +315,16 @@ select is(
       and oi.menu_item_name_snapshot = 'Item B'),
   array[1, 2],
   'service-round modifiers get SERVER-derived line_position 1..N (real add path)');
+-- The forged 999s never reached ANY column of the stored rows.
+select is(
+  (select count(*)::int from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'
+      and oi.menu_item_name_snapshot = 'Item B'
+      and (oim.line_position = 999
+        or oim.modifier_group_display_order_snapshot = 999
+        or oim.modifier_option_display_order_snapshot = 999)),
+  0, 'the malicious client line_position/snapshots (999) never reach the stored rows');
 select is(
   (select oim.modifier_option_display_order_snapshot
      from public.order_item_modifiers oim
