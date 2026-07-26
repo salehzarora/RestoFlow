@@ -216,25 +216,28 @@ void main() {
       );
     });
 
-    test('viewFromDraft carries the ranks onto the recovered submitted view', () {
-      final c = _demoContainer();
-      final cart = c.read(cartControllerProvider.notifier);
-      cart.addItem(cola);
-      cart.addItem(mealBurger);
-      final draft = cart.captureDraft();
+    test(
+      'viewFromDraft carries the ranks onto the recovered submitted view',
+      () {
+        final c = _demoContainer();
+        final cart = c.read(cartControllerProvider.notifier);
+        cart.addItem(cola);
+        cart.addItem(mealBurger);
+        final draft = cart.captureDraft();
 
-      final view = cart.viewFromDraft(draft: draft);
-      final colaLine = view.lines.firstWhere((l) => l.name == 'Cola');
-      final burgerLine = view.lines.firstWhere((l) => l.name == 'Burger');
-      expect(
-        (colaLine.categoryDisplayOrder, colaLine.itemDisplayOrder),
-        (3, 2),
-      );
-      expect(
-        (burgerLine.categoryDisplayOrder, burgerLine.itemDisplayOrder),
-        (1, 1),
-      );
-    });
+        final view = cart.viewFromDraft(draft: draft);
+        final colaLine = view.lines.firstWhere((l) => l.name == 'Cola');
+        final burgerLine = view.lines.firstWhere((l) => l.name == 'Burger');
+        expect(
+          (colaLine.categoryDisplayOrder, colaLine.itemDisplayOrder),
+          (3, 2),
+        );
+        expect(
+          (burgerLine.categoryDisplayOrder, burgerLine.itemDisplayOrder),
+          (1, 1),
+        );
+      },
+    );
   });
 
   group('PosDraftRecoveryController', () {
@@ -363,11 +366,18 @@ void main() {
       expect(find.byKey(const Key('pay-cash-button')), findsNothing);
       expect(find.byKey(const Key('pay-later-button')), findsNothing);
 
-      // Back to cart restores the draft exactly once and clears the recovery.
+      // Back to cart restores the draft exactly once and — MENU-ORDER-001
+      // correction-window durability — RETAINS the durable recovery (Back to cart is
+      // not terminal; the record is cleared only on the corrected order's acceptance
+      // or an explicit discard), marking the cart as correcting THIS recovery.
       await tester.tap(find.byKey(const Key('recovery-back-to-cart')));
       await tester.pump();
       expect(container.read(cartControllerProvider).lines.length, 1);
-      expect(container.read(posDraftRecoveryProvider), isEmpty);
+      expect(
+        container.read(posDraftRecoveryProvider).containsKey('e1'),
+        isTrue,
+      );
+      expect(container.read(posActiveCorrectionSourceProvider), 'e1');
     });
 
     testWidgets('an ACCEPTED (applied) order shows payment and NO recovery '
