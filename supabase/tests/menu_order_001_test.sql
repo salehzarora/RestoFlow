@@ -25,7 +25,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(43);
+select plan(54);
 
 -- ===== fixtures: Org M ======================================================
 insert into organizations (id, name, slug, default_currency) values
@@ -243,7 +243,13 @@ select public.sync_push(
       'order_id', 'e0000000-0000-0000-0000-0000000000f9',
       'round_id', 'e0000000-0000-0000-0000-0000000000e9',
       'order_items', jsonb_build_array(
-        jsonb_build_object('menu_item_id', 'e0000000-0000-0000-0000-0000000000f2', 'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item B'))))));
+        jsonb_build_object('menu_item_id', 'e0000000-0000-0000-0000-0000000000f2', 'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item B',
+          -- #8: modifiers through the REAL order.items_add path — the payload
+          -- carries NO line_position (the client cannot supply one); the trigger
+          -- derives it 1..N in insert order, and snapshots the CURRENT ranks.
+          'modifiers', jsonb_build_array(
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1),
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1))))))));
 select is(
   (select category_display_order_snapshot from public.order_items
     where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item B'),
@@ -273,11 +279,74 @@ select public.sync_push(
       'order_id', 'e0000000-0000-0000-0000-0000000000f9',
       'round_id', 'e0000000-0000-0000-0000-0000000000e9',
       'order_items', jsonb_build_array(
-        jsonb_build_object('menu_item_id', 'e0000000-0000-0000-0000-0000000000f2', 'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item B'))))));
+        jsonb_build_object('menu_item_id', 'e0000000-0000-0000-0000-0000000000f2', 'quantity', 1, 'unit_price_minor_snapshot', 500, 'menu_item_name_snapshot', 'Item B',
+          -- #8: modifiers through the REAL order.items_add path — the payload
+          -- carries NO line_position (the client cannot supply one); the trigger
+          -- derives it 1..N in insert order, and snapshots the CURRENT ranks.
+          'modifiers', jsonb_build_array(
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d7', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 2', 'price_minor_snapshot', 0, 'quantity', 1),
+            jsonb_build_object('modifier_option_id', 'e0000000-0000-0000-0000-0000000000d6', 'modifier_name_snapshot', 'Extras', 'option_name_snapshot', 'Opt 1', 'price_minor_snapshot', 0, 'quantity', 1))))))));
 select is(
   (select count(*)::int from public.order_items
     where order_id = 'e0000000-0000-0000-0000-0000000000f9' and menu_item_name_snapshot = 'Item B'),
   1, 'an idempotent replay of the service-round add inserts NO duplicate Item B');
+select is(
+  (select count(*)::int from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'
+      and oi.menu_item_name_snapshot = 'Item B'),
+  2, 'the idempotent replay did NOT duplicate the service-round modifiers');
+
+-- ===== #8 SERVICE-ROUND MODIFIERS (via the REAL order.items_add path) =========
+-- Item B's modifiers were inserted through app.add_order_items (NOT a standalone
+-- insert): the trigger derived their line_position 1..N in payload order and
+-- snapshotted the CURRENT menu ranks (after the reorders the group d5 -> 1 and
+-- the options -> d8=1, d7=2, d6=3). The payload carries NO client line_position.
+select is(
+  (select array_agg(oim.line_position order by oim.line_position)
+     from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'
+      and oi.menu_item_name_snapshot = 'Item B'),
+  array[1, 2],
+  'service-round modifiers get SERVER-derived line_position 1..N (real add path)');
+select is(
+  (select oim.modifier_option_display_order_snapshot
+     from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'
+      and oi.menu_item_name_snapshot = 'Item B'
+      and oim.option_name_snapshot = 'Opt 2'),
+  2, 'a service-round modifier snapshots the CURRENT option rank (d7 is now 2)');
+select is(
+  (select oim.modifier_group_display_order_snapshot
+     from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'
+      and oi.menu_item_name_snapshot = 'Item B'
+      and oim.option_name_snapshot = 'Opt 2'),
+  1, 'a service-round modifier snapshots the CURRENT group rank (d5 is now 1)');
+
+-- ===== #9 HISTORICAL MODIFIER A/B: the OLD order A (submitted BEFORE the option
+--       + group reorder) keeps its ORIGINAL modifier snapshots — IMMUTABLE.
+select is(
+  (select array_agg(oim.modifier_option_display_order_snapshot order by oim.line_position)
+     from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'
+      and oi.menu_item_name_snapshot = 'Item A'
+      and oim.option_name_snapshot in ('Opt 1', 'Opt 2', 'Opt 3')),
+  array[1, 2, 3],
+  'order A''s modifier OPTION snapshots are immutable after the option reorder (D-008)');
+select is(
+  (select array_agg(distinct oim.modifier_group_display_order_snapshot)
+     from public.order_item_modifiers oim
+     join public.order_items oi on oi.id = oim.order_item_id
+    where oi.order_id = 'e0000000-0000-0000-0000-0000000000f9'
+      and oi.menu_item_name_snapshot = 'Item A'
+      and oim.option_name_snapshot in ('Opt 1', 'Opt 2', 'Opt 3')),
+  array[4],
+  'order A''s modifier GROUP snapshot is immutable (still 4) after the group reorder');
 
 -- ===== CLIENT line_position IS IGNORED (#10): a direct insert with 999 is
 --       overridden by the trigger to the server-derived max+1 (Item A had 3).
@@ -419,5 +488,54 @@ select throws_ok(
   'a caller with no membership in the target org is denied on the PASSED scope (before ids)');
 
 reset role;
+
+-- ===== #6 ORDER-NEUTRAL EDITS: a normal menu_upsert edit cannot clobber the
+--       drag-set display_order (PART 5 guard trigger). Cat 1 is rank 2 after the
+--       category reorder; an edit passing a STALE display_order (99) leaves it at
+--       2, while its OTHER fields (name) apply. menu_reorder stays the ONLY writer.
+set local role authenticated;
+set local app.current_app_user_id = 'e0000000-0000-0000-0000-00000000ae02';
+select public.menu_upsert_category(
+  'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002',
+  null, 'e0000000-0000-0000-0000-0000000000c1', 'Cat 1 renamed', 99, true);
+reset role;
+select is(
+  (select display_order from public.menu_categories where id = 'e0000000-0000-0000-0000-0000000000c1'),
+  2, 'a normal edit with a STALE display_order (99) does NOT change the drag-set order (guard trigger)');
+select is(
+  (select name from public.menu_categories where id = 'e0000000-0000-0000-0000-0000000000c1'),
+  'Cat 1 renamed', 'the edit''s OTHER fields (name) DID apply');
+
+-- ===== #7 DELETED/INACTIVE SIBLING SAFETY: soft-delete Item C, then a reorder
+--       INCLUDING the deleted id is rejected as the SAME generic 42501 (deleted ==
+--       foreign; no leak); the surviving set reorders fine; a rejected request
+--       leaves display_order UNCHANGED. (Runs LAST — it mutates the item set.)
+update public.menu_items set deleted_at = now()
+  where id = 'e0000000-0000-0000-0000-0000000000f3';
+set local role authenticated;
+set local app.current_app_user_id = 'e0000000-0000-0000-0000-00000000ae02';
+select is(
+  (public.menu_reorder('e0000000-0000-0000-0000-000000000001',
+     'e0000000-0000-0000-0000-000000000002', null, 'menu_item',
+     array['e0000000-0000-0000-0000-0000000000f2',
+           'e0000000-0000-0000-0000-0000000000f1']::uuid[]) ->> 'ok')::boolean,
+  true, 'a soft-deleted sibling is EXCLUDED; reordering the survivors [f2,f1] succeeds');
+select throws_ok(
+  $$ select public.menu_reorder('e0000000-0000-0000-0000-000000000001',
+       'e0000000-0000-0000-0000-000000000002', null, 'menu_item',
+       array['e0000000-0000-0000-0000-0000000000f1',
+             'e0000000-0000-0000-0000-0000000000f2',
+             'e0000000-0000-0000-0000-0000000000f3']::uuid[]) $$,
+  '42501', null,
+  'a reorder INCLUDING a soft-deleted id is rejected as the SAME generic 42501');
+reset role;
+select is(
+  (select array_agg(id order by display_order)
+     from public.menu_items
+    where menu_category_id = 'e0000000-0000-0000-0000-0000000000c1' and deleted_at is null),
+  array['e0000000-0000-0000-0000-0000000000f2',
+        'e0000000-0000-0000-0000-0000000000f1']::uuid[],
+  'the rejected (deleted-id) reorder left the survivors'' display_order unchanged');
+
 select * from finish();
 rollback;
