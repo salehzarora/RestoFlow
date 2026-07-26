@@ -233,6 +233,8 @@ class CartDraftLine {
     required this.quantity,
     this.modifiers = const <SelectedModifier>[],
     this.note,
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
   });
 
   final String menuItemId;
@@ -241,6 +243,12 @@ class CartDraftLine {
   final int quantity;
   final List<SelectedModifier> modifiers;
   final String? note;
+
+  /// MENU-ORDER-001 (Codex): the line's Dashboard print ranks, captured onto the
+  /// snapshot so they survive a submit -> reject -> restore round-trip (submit
+  /// clears the live _lineDisplayOrders). 0 = unknown (falls back to cart order).
+  final int categoryDisplayOrder;
+  final int itemDisplayOrder;
 }
 
 class CartController extends Notifier<CartViewState> {
@@ -515,6 +523,10 @@ class CartController extends Notifier<CartViewState> {
           quantity: line.quantity,
           modifiers: _lineModifiers[line.lineId] ?? const <SelectedModifier>[],
           note: _lineNotes[line.lineId],
+          // MENU-ORDER-001 (Codex): carry the line's Dashboard menu ranks onto the
+          // draft so a restored (item_unavailable) cart still prints in menu order.
+          categoryDisplayOrder: _lineDisplayOrders[line.lineId]?.$1 ?? 0,
+          itemDisplayOrder: _lineDisplayOrders[line.lineId]?.$2 ?? 0,
         ),
     ],
   );
@@ -534,6 +546,7 @@ class CartController extends Notifier<CartViewState> {
     );
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lineDisplayOrders.clear();
     for (final l in draft.lines) {
       final lineId = 'line-${_lineSeq++}';
       _cart.addLine(
@@ -551,6 +564,12 @@ class CartController extends Notifier<CartViewState> {
       }
       final note = l.note;
       if (note != null && note.isNotEmpty) _lineNotes[lineId] = note;
+      // MENU-ORDER-001 (Codex): restore the Dashboard menu ranks so the corrected
+      // resubmit prints in the same menu order the original attempt would have.
+      _lineDisplayOrders[lineId] = (
+        l.categoryDisplayOrder,
+        l.itemDisplayOrder,
+      );
     }
     _submittedOrder = null;
     _emit();
@@ -675,9 +694,11 @@ class CartController extends Notifier<CartViewState> {
           currencyCode: draft.currencyCode,
           modifiers: [for (final m in l.modifiers) m.displayName],
           note: l.note,
-          // MENU-ORDER-001: a recovered draft carries no menu ranks -> falls back
-          // to its captured (cart) order via line_position; identical to how it
-          // would have printed in its own session.
+          // MENU-ORDER-001 (Codex): the draft now carries the line's Dashboard menu
+          // ranks, so a recovered row prints in the SAME menu order it would have in
+          // its own session; line_position is the stable in-line tiebreak.
+          categoryDisplayOrder: l.categoryDisplayOrder,
+          itemDisplayOrder: l.itemDisplayOrder,
           linePosition: linePosition,
         ),
       );
