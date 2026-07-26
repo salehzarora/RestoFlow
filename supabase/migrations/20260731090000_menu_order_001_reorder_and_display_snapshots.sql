@@ -1,123 +1,152 @@
 -- ============================================================================
--- MENU-ORDER-001 — drag-and-drop menu ordering + order-time display-order
--- snapshots.
+-- MENU-ORDER-001 — menu-configured PRINT ordering: order-time display-order
+-- snapshots + the drag-and-drop reorder RPC.
 --
--- This one forward-only, ADDITIVE migration does three things:
+-- Every print surface (customer receipt, POS + KDS kitchen tickets, and every
+-- reprint) must list items in the owner's DASHBOARD-CONFIGURED order:
+--     1. category display order,
+--     2. item display order within that category,
+--     3. the order line's original position (line_position, 001D) as a
+--        deterministic tie-breaker,
+-- and an item's modifiers in:
+--     1. modifier-group display order,
+--     2. modifier-option display order,
+--     3. the modifier's original position (line_position) as a tie-breaker.
+-- Cart insertion order is NO LONGER the primary print order.
 --
---   PART 1 (order_items.menu_display_order) — snapshot the item's configured
---     menu rank (menu_items.display_order) at submit. Captured for future
---     menu-order grouping / reporting. It DELIBERATELY does NOT re-sort items:
---     PRINT-LAYOUT-001D's order_items.line_position (cart order) remains the
---     printed item sequence on every surface. Non-money.
+-- To make that order stable + IMMUTABLE (D-008: never re-derive from the live
+-- menu at print time, which may have been reordered since), the configured
+-- ranks are SNAPSHOTTED onto each order line + modifier at submit, server-side,
+-- from the authoritative menu/category records — NEVER from client-supplied
+-- values. Populated by BEFORE INSERT triggers so EVERY production insert path
+-- (app.submit_order, app.add_order_items, service-round inserts, any future
+-- path) is covered without touching those large RPCs (no stacked-definition
+-- rewrite). Those RPCs insert order_items + order_item_modifiers ROW BY ROW, so
+-- the modifier line_position tie-breaker's max()+1 is per-row correct.
 --
---   PART 2 (order_item_modifiers.line_position) — the modifier-level twin of
---     PRINT-LAYOUT-001D. Today an item's modifiers print in MENU order on the
---     cashier receipt & POS kitchen ticket (the POS dialog emits selections by
---     group→option display order), but the KDS builds from `app.sync_pull`
---     rows paged `ORDER BY (updated_at, id)`, which for a freshly submitted
---     order collapses to random-uuid id order — so KDS modifier order diverges.
---     A stable per-order-item ordinal, assigned in submit-array (menu) order,
---     lets the KDS reproduce the receipt's modifier sequence. Non-money.
+--   PART 1  order_items.category_display_order_snapshot + item_display_order_snapshot
+--   PART 2  order_item_modifiers.modifier_group_display_order_snapshot +
+--           modifier_option_display_order_snapshot (+ the line_position ordinal)
+--   PART 3  app.menu_reorder — atomic display_order rewrite for a sibling set
 --
---   PART 3 (app.menu_reorder) — the minimal atomic reorder RPC backing
---     drag-and-drop for menu categories, menu items, modifier groups, and
---     modifier options. The existing menu_upsert_* RPCs are FULL-STATE (they
---     rewrite name/price/attributes on every call), so a reorder cannot reuse
---     them without clobbering; this rewrites ONLY display_order for a complete
---     sibling set, atomically, under the existing app.menu_guard authorization.
---
--- Both snapshots are populated by BEFORE INSERT triggers (mirroring the 001D
--- line_position trigger) so the large app.submit_order / app.add_order_items
--- RPCs are NOT touched (no stacked-definition rewrite). Those RPCs insert
--- order_items and order_item_modifiers ROW BY ROW in submit-array order
--- (`for … in jsonb_array_elements(…) loop insert`), so `max(…)+1` reproduces
--- the presented (cart / menu) sequence.
---
--- No data reset, no destructive backfill, no change to any shipped migration.
--- Existing rows keep the new columns at 0 (a legacy sentinel) and are
--- untouched; readers fall back to their prior wire order for those. `sync_pull`
--- returns whole rows (`to_jsonb(t)`), so both new columns flow to the KDS with
+-- Additive + forward-only. No reset, no destructive backfill, no change to any
+-- shipped migration. Historical order rows keep the new columns at 0 (a legacy
+-- sentinel) and are UNTOUCHED; readers fall back to line_position + original
+-- input order for those. The already-shipped 20260730090000
+-- order_items.line_position migration is NOT modified. app.sync_pull returns
+-- whole rows (`to_jsonb(t)`), so the new snapshot columns flow to the KDS with
 -- NO change to the sync contract or the (updated_at, id) cursor.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- PART 1. order_items.menu_display_order — the item's menu rank at submit.
+-- PART 1. order_items: snapshot the item's CATEGORY rank + ITEM-within-category
+--         rank at submit -> the primary + secondary keys of the menu-configured
+--         print order (line_position, 001D, is the tie-breaker).
 -- ----------------------------------------------------------------------------
 alter table public.order_items
-  add column if not exists menu_display_order integer not null default 0;
+  add column if not exists category_display_order_snapshot integer not null default 0;
+alter table public.order_items
+  add column if not exists item_display_order_snapshot integer not null default 0;
 
-comment on column public.order_items.menu_display_order is
-  'MENU-ORDER-001: snapshot of the item''s configured menu rank '
-  '(menu_items.display_order) captured at submit by the '
-  'assign_order_item_menu_display_order trigger. 0 = legacy/unknown item. '
-  'Captured for menu-order grouping/reporting; it does NOT override the '
-  'PRINT-LAYOUT-001D cart order (line_position) used to print items. Non-money.';
+comment on column public.order_items.category_display_order_snapshot is
+  'MENU-ORDER-001: snapshot of the item''s category rank '
+  '(menu_categories.display_order) at submit, assigned by the '
+  'assign_order_item_display_order_snapshot trigger. 0 = legacy/unknown. PRIMARY '
+  'key of the menu-configured PRINT order (then item_display_order_snapshot, '
+  'then line_position). Immutable; never re-derived from the live menu at print '
+  'time (D-008). Non-money.';
+comment on column public.order_items.item_display_order_snapshot is
+  'MENU-ORDER-001: snapshot of the item''s rank within its category '
+  '(menu_items.display_order) at submit. 0 = legacy/unknown. SECONDARY key of '
+  'the menu-configured PRINT order. Non-money.';
 
-create or replace function app.assign_order_item_menu_display_order()
+create or replace function app.assign_order_item_display_order_snapshot()
   returns trigger
   language plpgsql
   security definer
   set search_path = ''
 as $$
+declare
+  v_item_order integer;
+  v_cat_order  integer;
 begin
-  -- Only derive when the caller left the default 0 (no caller sends this
-  -- column today, so it is always derived). Read the live menu rank as the
-  -- SECURITY DEFINER owner; submit_order already holds these menu_items rows
-  -- (FOR UPDATE availability check) in the same transaction. A missing/soft
-  -- reference yields 0 — the same sentinel as a legacy row. Scoped to
-  -- (organization_id, menu_item_id): never cross-tenant.
-  if new.menu_display_order = 0 then
-    new.menu_display_order := coalesce(
-      (select mi.display_order
-         from public.menu_items mi
-        where mi.organization_id = new.organization_id
-          and mi.id              = new.menu_item_id
-        limit 1),
-      0);
-  end if;
+  -- ALWAYS derive server-side from the authoritative menu (D-008: never trust a
+  -- client-supplied display order). submit_order already holds this menu_items
+  -- row (FOR UPDATE availability check) in the same transaction. Scoped to
+  -- (organization_id, menu_item_id); a missing item/category yields 0 (the
+  -- legacy sentinel -> readers fall back to line_position + original input
+  -- order). Runs on EVERY order_items insert (submit / add_order_items / rounds).
+  select mi.display_order, mc.display_order
+    into v_item_order, v_cat_order
+    from public.menu_items mi
+    left join public.menu_categories mc
+      on mc.organization_id = mi.organization_id
+     and mc.id = mi.menu_category_id
+   where mi.organization_id = new.organization_id
+     and mi.id = new.menu_item_id
+   limit 1;
+  new.item_display_order_snapshot := coalesce(v_item_order, 0);
+  new.category_display_order_snapshot := coalesce(v_cat_order, 0);
   return new;
 end;
 $$;
 
-comment on function app.assign_order_item_menu_display_order() is
-  'MENU-ORDER-001: BEFORE INSERT trigger fn — snapshots menu_items.display_order '
-  'onto order_items.menu_display_order at submit. Non-money; never a business key.';
+comment on function app.assign_order_item_display_order_snapshot() is
+  'MENU-ORDER-001: BEFORE INSERT trigger fn — snapshots the item''s category + '
+  'within-category menu ranks onto order_items at submit. Non-money; never a key.';
 
-revoke all on function app.assign_order_item_menu_display_order() from public;
+revoke all on function app.assign_order_item_display_order_snapshot() from public;
 
+-- Defensive: drop the earlier (unshipped) single-rank trigger/fn name if a prior
+-- local apply of THIS migration created it, so exactly one snapshot trigger runs.
 drop trigger if exists assign_order_item_menu_display_order on public.order_items;
-create trigger assign_order_item_menu_display_order
+drop function if exists app.assign_order_item_menu_display_order();
+drop trigger if exists assign_order_item_display_order_snapshot on public.order_items;
+create trigger assign_order_item_display_order_snapshot
   before insert on public.order_items
   for each row
-  execute function app.assign_order_item_menu_display_order();
+  execute function app.assign_order_item_display_order_snapshot();
 
 -- ----------------------------------------------------------------------------
--- PART 2. order_item_modifiers.line_position — a stable per-item modifier
---         ordinal in submit-array (menu display) order, so the KDS prints an
---         item's modifiers in the SAME order as the cashier receipt.
+-- PART 2. order_item_modifiers: snapshot the modifier GROUP rank + OPTION rank,
+--         plus a stable per-item modifier ordinal (line_position) tie-breaker,
+--         so every surface prints an item's modifiers in Dashboard group/option
+--         order regardless of the sequence the writer inserted them.
 -- ----------------------------------------------------------------------------
 alter table public.order_item_modifiers
   add column if not exists line_position integer not null default 0;
+alter table public.order_item_modifiers
+  add column if not exists modifier_group_display_order_snapshot integer not null default 0;
+alter table public.order_item_modifiers
+  add column if not exists modifier_option_display_order_snapshot integer not null default 0;
 
 comment on column public.order_item_modifiers.line_position is
-  'MENU-ORDER-001: stable per-order-item modifier ordinal (1-based) in '
-  'submit-array (menu display) insertion order, assigned by the '
-  'assign_order_item_modifier_line_position trigger. 0 = a legacy row created '
-  'before this feature (falls back to wire order). Used to print an item''s '
-  'modifiers in cashier-receipt order on the KDS. Non-money.';
+  'MENU-ORDER-001: stable per-order-item modifier ordinal (1-based) in insertion '
+  'order, assigned by assign_order_item_modifier_order_snapshot. 0 = legacy row. '
+  'TIE-BREAKER of the modifier PRINT order (after group + option display order). '
+  'Non-money.';
+comment on column public.order_item_modifiers.modifier_group_display_order_snapshot is
+  'MENU-ORDER-001: snapshot of the modifier GROUP rank (modifiers.display_order) '
+  'at submit. 0 = legacy/unknown. PRIMARY key of the modifier PRINT order. '
+  'Immutable; never re-derived at print time (D-008). Non-money.';
+comment on column public.order_item_modifiers.modifier_option_display_order_snapshot is
+  'MENU-ORDER-001: snapshot of the modifier OPTION rank '
+  '(modifier_options.display_order) at submit. 0 = legacy/unknown. SECONDARY key '
+  'of the modifier PRINT order. Non-money.';
 
-create or replace function app.assign_order_item_modifier_line_position()
+create or replace function app.assign_order_item_modifier_order_snapshot()
   returns trigger
   language plpgsql
   security definer
   set search_path = ''
 as $$
+declare
+  v_opt_order   integer;
+  v_group_order integer;
 begin
-  -- submit_order / add_order_items insert an item's modifiers row-by-row in
-  -- payload (menu display) order within one transaction, so this max() sees the
-  -- item's earlier modifiers and yields 1,2,3,… in that order. Scoped to
-  -- (organization_id, order_item_id) — never cross-item or cross-tenant. An
-  -- explicit non-zero (should a future caller set one) is respected.
+  -- 1) the stable per-item ordinal (insertion order) -> the TIE-BREAKER. Modifiers
+  --    are inserted row-by-row within one transaction, so max()+1 yields 1,2,3,…
+  --    Scoped to (organization_id, order_item_id).
   if new.line_position = 0 then
     new.line_position := coalesce(
       (select max(oim.line_position)
@@ -126,22 +155,39 @@ begin
           and oim.order_item_id   = new.order_item_id),
       0) + 1;
   end if;
+  -- 2) the group + option menu ranks, ALWAYS derived server-side from the
+  --    authoritative menu (never a client-supplied value; D-008). A missing
+  --    option/group yields 0 (readers fall back to line_position).
+  select mo.display_order, m.display_order
+    into v_opt_order, v_group_order
+    from public.modifier_options mo
+    left join public.modifiers m
+      on m.organization_id = mo.organization_id
+     and m.id = mo.modifier_id
+   where mo.organization_id = new.organization_id
+     and mo.id = new.modifier_option_id
+   limit 1;
+  new.modifier_option_display_order_snapshot := coalesce(v_opt_order, 0);
+  new.modifier_group_display_order_snapshot := coalesce(v_group_order, 0);
   return new;
 end;
 $$;
 
-comment on function app.assign_order_item_modifier_line_position() is
+comment on function app.assign_order_item_modifier_order_snapshot() is
   'MENU-ORDER-001: BEFORE INSERT trigger fn — assigns '
-  'order_item_modifiers.line_position sequentially per (organization_id, '
-  'order_item_id) in insert (menu display) order.';
+  'order_item_modifiers.line_position (insertion order) + snapshots the group/'
+  'option menu ranks. Non-money.';
 
-revoke all on function app.assign_order_item_modifier_line_position() from public;
+revoke all on function app.assign_order_item_modifier_order_snapshot() from public;
 
+-- Defensive: drop the earlier (unshipped) line_position-only trigger/fn name.
 drop trigger if exists assign_order_item_modifier_line_position on public.order_item_modifiers;
-create trigger assign_order_item_modifier_line_position
+drop function if exists app.assign_order_item_modifier_line_position();
+drop trigger if exists assign_order_item_modifier_order_snapshot on public.order_item_modifiers;
+create trigger assign_order_item_modifier_order_snapshot
   before insert on public.order_item_modifiers
   for each row
-  execute function app.assign_order_item_modifier_line_position();
+  execute function app.assign_order_item_modifier_order_snapshot();
 
 -- ----------------------------------------------------------------------------
 -- PART 3. app.menu_reorder — atomic display_order rewrite for a complete
@@ -271,3 +317,209 @@ revoke all on function app.menu_reorder(uuid, text, uuid[]) from public;
 grant execute on function app.menu_reorder(uuid, text, uuid[]) to authenticated;
 revoke all on function public.menu_reorder(uuid, text, uuid[]) from public;
 grant execute on function public.menu_reorder(uuid, text, uuid[]) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- PART 4. Redefine app.pos_order_detail so the SERVER-BACKED reprint carries +
+--         returns items/modifiers in the menu-configured PRINT order. The
+--         shipped function (20260722090000) builds items[]/modifiers[] with an
+--         EXPLICIT jsonb_build_object list (not to_jsonb), so the new snapshot
+--         columns do NOT auto-appear: this create-or-replace ADDS them to the
+--         item object and ORDERS BY them (created_at/id kept as the legacy-0
+--         fallback), and orders each item's modifiers by their snapshots too.
+--         ONLY section (d) changes; every auth check, scope rule, envelope and
+--         the signature are reproduced VERBATIM (stacked-definition convention).
+--         The shipped public.pos_order_detail SECURITY INVOKER wrapper is
+--         unchanged (its delegate's signature is identical). No shipped migration
+--         is edited; grants/signature are unchanged.
+-- ----------------------------------------------------------------------------
+create or replace function app.pos_order_detail(
+  p_pin_session_id uuid,
+  p_device_id      uuid,
+  p_order_id       uuid
+)
+  returns jsonb
+  language plpgsql
+  stable
+  security definer
+  set search_path = ''
+as $$
+declare
+  v_org         uuid;
+  v_rest        uuid;
+  v_branch      uuid;
+  v_dsid        uuid;
+  v_membership  uuid;
+  v_ds_device   uuid;
+  v_ds_active   boolean;
+  v_ds_revoked  timestamptz;
+  v_pairing     text;
+  v_role        text;
+  v_m_status    text;
+  v_m_deleted   timestamptz;
+  v_device_type text;
+  v_order       jsonb;
+  v_items       jsonb;
+  v_rounds      jsonb;
+  v_payment     jsonb;
+begin
+  -- (a) THE CANONICAL PIN-SESSION PREAMBLE (pos_order_snapshots parity):
+  --     every structural failure collapses to ONE indistinguishable envelope.
+  select ps.organization_id, ps.restaurant_id, ps.branch_id, ps.device_session_id, ps.resolved_membership_id
+    into v_org, v_rest, v_branch, v_dsid, v_membership
+    from public.pin_sessions ps
+    where ps.id = p_pin_session_id;
+  if not found or not app.is_pin_session_valid(p_pin_session_id) then
+    return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'order_detail');
+  end if;
+  select ds.device_id, ds.is_active, ds.revoked_at, dp.status
+    into v_ds_device, v_ds_active, v_ds_revoked, v_pairing
+    from public.device_sessions ds
+    join public.device_pairings dp on dp.id = ds.device_pairing_id
+    where ds.id = v_dsid;
+  if not found
+     or not (v_ds_active and v_ds_revoked is null and v_pairing = 'active')
+     or v_ds_device is distinct from p_device_id then
+    return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'order_detail');
+  end if;
+  select m.role, m.status, m.deleted_at
+    into v_role, v_m_status, v_m_deleted
+    from public.memberships m
+    where m.id = v_membership and m.organization_id = v_org;
+  if not found or v_m_status <> 'active' or v_m_deleted is not null then
+    return jsonb_build_object('ok', false, 'error', 'invalid_session', 'entity', 'order_detail');
+  end if;
+
+  -- (b) POS-class device + price-capable POS role (this read carries money).
+  select d.device_type into v_device_type
+    from public.devices d
+    where d.id = p_device_id and d.organization_id = v_org;
+  if v_device_type is distinct from 'pos' then
+    return jsonb_build_object('ok', false, 'error', 'invalid_device_type', 'entity', 'order_detail');
+  end if;
+  if v_role not in ('cashier', 'manager', 'restaurant_owner', 'org_owner') then
+    return jsonb_build_object('ok', false, 'error', 'permission_denied', 'entity', 'order_detail');
+  end if;
+
+  -- (c) the order — SESSION org+branch scope only. A nonexistent and a
+  --     foreign-scope order collapse to the SAME envelope (no oracle, R-003).
+  select jsonb_build_object(
+           'order_id',             o.id,
+           'order_code',           '#' || upper(right(replace(o.id::text, '-', ''), 6)),
+           'order_type',           o.order_type,
+           'status',               o.status,
+           'revision',             o.revision,
+           'table_label',          tbl.label,
+           'customer_name',        o.customer_name,
+           'currency_code',        o.currency_code,
+           'subtotal_minor',       o.subtotal_minor,
+           'discount_total_minor', o.discount_total_minor,
+           'tax_total_minor',      o.tax_total_minor,
+           'grand_total_minor',    o.grand_total_minor,
+           'receipt_number',       o.receipt_number,
+           'created_at',           o.created_at,
+           'updated_at',           o.updated_at)
+    into v_order
+    from public.orders o
+    left join public.tables tbl
+      on  tbl.organization_id = o.organization_id
+      and tbl.id              = o.table_id
+    where o.id              = p_order_id
+      and o.organization_id = v_org
+      and o.branch_id       = v_branch
+      and o.deleted_at is null;
+  if v_order is null then
+    return jsonb_build_object('ok', false, 'error', 'order_not_found', 'entity', 'order_detail');
+  end if;
+
+  -- (d) every ACTIVE customer-visible item, with modifiers and round
+  --     membership (NULL service_round_id = the original submission).
+  --     MENU-ORDER-001: carries + orders by the menu-configured print snapshots.
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'order_item_id',             oi.id,
+           'menu_item_id',              oi.menu_item_id,
+           'menu_item_name_snapshot',   oi.menu_item_name_snapshot,
+           'quantity',                  oi.quantity,
+           'unit_price_minor_snapshot', oi.unit_price_minor_snapshot,
+           'line_discount_minor',       oi.line_discount_minor,
+           'line_total_minor',          oi.line_total_minor,
+           -- MENU-ORDER-001: the menu-configured print-order snapshots so a
+           -- cross-device reprint matches the live receipt (the client sorts too).
+           'category_display_order_snapshot', oi.category_display_order_snapshot,
+           'item_display_order_snapshot',     oi.item_display_order_snapshot,
+           'line_position',             oi.line_position,
+           'status',                    oi.status,
+           'notes',                     oi.notes,
+           'item_size_snapshot',        oi.item_size_snapshot,
+           'item_variant_snapshot',     oi.item_variant_snapshot,
+           'service_round_id',          oi.service_round_id,
+           'round_number',              r.round_number,
+           'modifiers',                 coalesce(mods.list, '[]'::jsonb)
+         ) order by oi.category_display_order_snapshot asc,
+                    oi.item_display_order_snapshot asc,
+                    oi.line_position asc,
+                    oi.created_at asc, oi.id asc), '[]'::jsonb)
+    into v_items
+    from public.order_items oi
+    left join public.order_service_rounds r
+      on  r.organization_id = oi.organization_id
+      and r.id              = oi.service_round_id
+    left join lateral (
+      select jsonb_agg(jsonb_build_object(
+               'modifier_name_snapshot', m.modifier_name_snapshot,
+               'option_name_snapshot',   m.option_name_snapshot,
+               'price_minor_snapshot',   m.price_minor_snapshot,
+               'quantity',               m.quantity
+             ) order by m.modifier_group_display_order_snapshot asc,
+                        m.modifier_option_display_order_snapshot asc,
+                        m.line_position asc,
+                        m.created_at asc, m.id asc) as list
+        from public.order_item_modifiers m
+        where m.organization_id = oi.organization_id
+          and m.order_item_id   = oi.id
+          and m.deleted_at is null
+    ) mods on true
+    where oi.organization_id = v_org
+      and oi.order_id        = p_order_id
+      and oi.deleted_at is null
+      and oi.status not in ('voided', 'cancelled');
+
+  -- (e) the round list (voided rounds included — status says so).
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'round_id',     r.id,
+           'round_number', r.round_number,
+           'status',       r.status,
+           'ready_at',     r.ready_at,
+           'created_at',   r.created_at
+         ) order by r.round_number asc), '[]'::jsonb)
+    into v_rounds
+    from public.order_service_rounds r
+    where r.organization_id = v_org
+      and r.order_id        = p_order_id
+      and r.deleted_at is null;
+
+  -- (f) the (at most one) completed payment — enough for a faithful reprint.
+  select jsonb_build_object(
+           'payment_id',     p.id,
+           'payment_status', p.status,
+           'method',         p.method,
+           'amount_minor',   p.amount_minor,
+           'tendered_minor', p.tendered_minor,
+           'change_minor',   p.change_minor,
+           'receipt_number', p.receipt_number,
+           'created_at',     p.created_at)
+    into v_payment
+    from public.payments p
+    where p.organization_id = v_org
+      and p.order_id        = p_order_id
+      and p.status          = 'completed'
+      and p.deleted_at is null
+    limit 1;
+
+  return jsonb_build_object(
+    'ok', true, 'entity', 'order_detail', 'server_ts', now(),
+    'order',   v_order,
+    'items',   v_items,
+    'rounds',  v_rounds,
+    'payment', v_payment);
+end;
+$$;
