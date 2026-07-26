@@ -429,6 +429,52 @@ class InMemoryMenuStore implements MenuReadSource, MenuWriter {
     );
   }
 
+  @override
+  Future<MenuWriteOutcome> reorder({
+    required String organizationId,
+    required MenuEntityType entity,
+    required List<String> orderedIds,
+  }) async {
+    if (readOnly) return _denied(entity);
+    if (orderedIds.isEmpty) {
+      return const Failure(MenuValidationRejected('ids required'));
+    }
+    // Mirror the RPC: rewrite display_order to 1..N in orderedIds order.
+    void apply<T>(
+      List<T> rows,
+      String Function(T) idOf,
+      T Function(T, int) withOrder,
+    ) {
+      for (var i = 0; i < orderedIds.length; i++) {
+        final index = rows.indexWhere((r) => idOf(r) == orderedIds[i]);
+        if (index >= 0) rows[index] = withOrder(rows[index], i + 1);
+      }
+    }
+
+    switch (entity) {
+      case MenuEntityType.category:
+        apply(_categories, (c) => c.id, (c, o) => c.copyWith(displayOrder: o));
+      case MenuEntityType.item:
+        apply(_items, (i) => i.id, (i, o) => i.copyWith(displayOrder: o));
+      case MenuEntityType.modifier:
+        apply(_modifiers, (m) => m.id, (m, o) => m.copyWith(displayOrder: o));
+      case MenuEntityType.modifierOption:
+        apply(_options, (o) => o.id, (o, ord) => o.copyWith(displayOrder: ord));
+      case MenuEntityType.size:
+      case MenuEntityType.variant:
+        return const Failure(
+          MenuValidationRejected('unsupported reorder entity'),
+        );
+    }
+    return Success(
+      MenuWriteResult(
+        entity: entity,
+        id: orderedIds.first,
+        action: MenuWriteAction.updated,
+      ),
+    );
+  }
+
   static T? _findById<T>(List<T> rows, String id, String Function(T) idOf) {
     for (final row in rows) {
       if (idOf(row) == id) return row;

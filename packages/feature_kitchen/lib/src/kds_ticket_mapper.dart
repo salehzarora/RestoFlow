@@ -160,12 +160,19 @@ class KdsTicketMapper {
     // A modifier row carries an integer `quantity` (>=1, default 1); when it is
     // above 1 the display string gets a '×N' suffix (name first, U+00D7 — the
     // same convention as the KDS item line). Never money.
-    final modsByItem = <String, List<String>>{};
+    // MENU-ORDER-001: collect each item's modifier lines WITH their persisted
+    // per-item ordinal (order_item_modifiers.line_position) so they can be
+    // printed in the SAME order as the cashier receipt (menu display order).
+    // The wire delivers modifiers `ORDER BY (updated_at, id)` — random within an
+    // item for a freshly submitted order — so without this the KDS diverges from
+    // the receipt (the modifier-level twin of the PRINT-LAYOUT-001D item fix).
+    final modLinesByItem = <String, List<_ModLine>>{};
     // KITCHEN-MEAT-001: each order item's meat contributions from its selected
     // options, PRE-MULTIPLIED by the modifier units (× the item quantity is
     // applied per item below). Money-free; only options carrying meat_snapshot
     // contribute (nothing is inferred from a name/price).
     final meatByItem = <String, List<KitchenMeat>>{};
+    var modWireIndex = 0;
     for (final m in modifiers) {
       if (m['deleted_at'] != null) continue;
       final itemId = m['order_item_id'];
@@ -173,8 +180,16 @@ class KdsTicketMapper {
       if (itemId is! String || option is! String) continue;
       final qtyRaw = m['quantity'];
       final qty = qtyRaw is int ? qtyRaw : int.tryParse('$qtyRaw') ?? 1;
-      (modsByItem[itemId] ??= <String>[]).add(
-        qty > 1 ? '$option ×$qty' : option,
+      // Tolerant pluck — an older server that predates the column yields 0 (the
+      // legacy sentinel), so those modifiers keep their wire order.
+      final posRaw = m['line_position'];
+      final linePosition = posRaw is int ? posRaw : int.tryParse('$posRaw') ?? 0;
+      (modLinesByItem[itemId] ??= <_ModLine>[]).add(
+        _ModLine(
+          linePosition: linePosition,
+          wireIndex: modWireIndex++,
+          text: qty > 1 ? '$option ×$qty' : option,
+        ),
       );
       final meat = KitchenMeat.tryFromJson(m['meat_snapshot']);
       if (meat != null && qty > 0) {
@@ -182,6 +197,19 @@ class KdsTicketMapper {
           KitchenMeat(quantity: meat.quantity * qty, unit: meat.unit),
         );
       }
+    }
+    // MENU-ORDER-001: stably order each item's modifiers by line_position, so the
+    // KDS ticket + reprint print them in the SAME sequence as the cashier
+    // receipt. Ties / legacy 0 rows keep their wire order (a partially-migrated
+    // order never scrambles).
+    final modsByItem = <String, List<String>>{};
+    for (final entry in modLinesByItem.entries) {
+      final lines = entry.value
+        ..sort((a, b) {
+          final byPos = a.linePosition.compareTo(b.linePosition);
+          return byPos != 0 ? byPos : a.wireIndex.compareTo(b.wireIndex);
+        });
+      modsByItem[entry.key] = [for (final l in lines) l.text];
     }
 
     // Group active items into (order, station) tickets.
@@ -457,4 +485,20 @@ class _OrderInfo {
   /// PSC-001C: TRUE for a SERVED parent admitted only so its still-active
   /// rounds can render — its original (already bumped) items never re-appear.
   final bool roundContextOnly;
+}
+
+/// MENU-ORDER-001: one modifier line with its persisted per-item ordinal
+/// (order_item_modifiers.line_position) and the wire index it arrived at, used
+/// to sort an item's modifiers into cashier-receipt (menu display) order before
+/// they are flattened to display strings. Money-free.
+class _ModLine {
+  _ModLine({
+    required this.linePosition,
+    required this.wireIndex,
+    required this.text,
+  });
+
+  final int linePosition;
+  final int wireIndex;
+  final String text;
 }

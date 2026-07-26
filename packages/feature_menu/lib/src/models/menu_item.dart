@@ -205,7 +205,7 @@ class MenuItem {
     availabilityReason: reason,
   );
 
-  MenuItem copyWith({DateTime? deletedAt}) => MenuItem(
+  MenuItem copyWith({int? displayOrder, DateTime? deletedAt}) => MenuItem(
     id: id,
     organizationId: organizationId,
     restaurantId: restaurantId,
@@ -216,7 +216,7 @@ class MenuItem {
     basePriceMinor: basePriceMinor,
     currencyCode: currencyCode,
     defaultStationId: defaultStationId,
-    displayOrder: displayOrder,
+    displayOrder: displayOrder ?? this.displayOrder,
     isActive: isActive,
     imagePath: imagePath,
     itemType: itemType,

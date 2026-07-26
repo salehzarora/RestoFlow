@@ -15,6 +15,7 @@ import 'menu_components.dart';
 import 'menu_entity_forms.dart';
 import 'menu_item_thumbnail.dart';
 import 'menu_panel_header.dart';
+import 'menu_reorder.dart';
 
 /// The items detail panel for the selected category (RF-111 + menu/media
 /// sprint Part F — a product-catalog read): rows carry a real image thumbnail
@@ -94,6 +95,58 @@ class MenuItemList extends ConsumerWidget {
     );
   }
 
+  Future<void> _reorder(
+    BuildContext context,
+    WidgetRef ref,
+    List<MenuItem> items,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final i in items) i.id],
+      oldIndex,
+      newIndex,
+    );
+    final outcome = await ref
+        .read(menuWriteControllerProvider)
+        .reorder(entity: MenuEntityType.item, orderedIds: ids);
+    if (!context.mounted) return;
+    if (!outcome.isSuccess) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+    }
+  }
+
+  Widget _tile(
+    BuildContext context,
+    WidgetRef ref,
+    MenuItem item, {
+    int? reorderIndex,
+  }) {
+    return _ItemTile(
+      item: item,
+      // Live (non-deleted) modifier groups from the snapshot the screen
+      // already holds — no extra read.
+      modifierGroupCount: snapshot.modifiersForItem(item.id).length,
+      // Availability is PER-BRANCH: with no branch in scope there is no single
+      // truthful state, so the control is withheld (an honest hint replaces it).
+      branchScoped: scope.branchId != null,
+      onTap: () => onOpenEditor(MenuEditorTarget(item: item)),
+      onEdit: () => onOpenEditor(MenuEditorTarget(item: item)),
+      onDelete: () => _delete(context, ref, item),
+      onSetAvailability: (availability, reason) => _setAvailability(
+        context,
+        ref,
+        item,
+        availability: availability,
+        reason: reason,
+      ),
+      reorderIndex: reorderIndex,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -106,6 +159,10 @@ class MenuItemList extends ConsumerWidget {
               (needle.isEmpty || i.name.toLowerCase().contains(needle)),
         )
         .toList();
+
+    // MENU-ORDER-001: drag-reorder only when the COMPLETE set of the category's
+    // items is shown (no active search/filter) — reorder rewrites the whole set.
+    final canReorder = needle.isEmpty && items.length == all.length;
 
     final Widget body;
     if (all.isEmpty) {
@@ -126,34 +183,28 @@ class MenuItemList extends ConsumerWidget {
         title: l10n.menuNoResults,
         body: l10n.menuNoResultsBody,
       );
+    } else if (canReorder) {
+      body = ReorderableListView.builder(
+        padding: const EdgeInsets.all(RestoflowSpacing.sm),
+        buildDefaultDragHandles: false,
+        itemCount: items.length,
+        // onReorder is the stable callback (see menu_category_list.dart);
+        // onReorderItem is too new to depend on across the toolchain.
+        // ignore: deprecated_member_use
+        onReorder: (oldIndex, newIndex) =>
+            _reorder(context, ref, items, oldIndex, newIndex),
+        itemBuilder: (context, index) => Padding(
+          key: ValueKey(items[index].id),
+          padding: const EdgeInsets.only(bottom: RestoflowSpacing.xs),
+          child: _tile(context, ref, items[index], reorderIndex: index),
+        ),
+      );
     } else {
       body = ListView.separated(
         padding: const EdgeInsets.all(RestoflowSpacing.sm),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(height: RestoflowSpacing.xs),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return _ItemTile(
-            item: item,
-            // Live (non-deleted) modifier groups from the snapshot the screen
-            // already holds — no extra read.
-            modifierGroupCount: snapshot.modifiersForItem(item.id).length,
-            // Availability is PER-BRANCH: with no branch in scope there is no
-            // single truthful state, so the control is withheld (an honest
-            // hint replaces it in the menu).
-            branchScoped: scope.branchId != null,
-            onTap: () => onOpenEditor(MenuEditorTarget(item: item)),
-            onEdit: () => onOpenEditor(MenuEditorTarget(item: item)),
-            onDelete: () => _delete(context, ref, item),
-            onSetAvailability: (availability, reason) => _setAvailability(
-              context,
-              ref,
-              item,
-              availability: availability,
-              reason: reason,
-            ),
-          );
-        },
+        itemBuilder: (context, index) => _tile(context, ref, items[index]),
       );
     }
 
@@ -200,6 +251,7 @@ class _ItemTile extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onSetAvailability,
+    this.reorderIndex,
   });
 
   final MenuItem item;
@@ -213,6 +265,10 @@ class _ItemTile extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final void Function(String availability, String? reason) onSetAvailability;
+
+  /// MENU-ORDER-001: when non-null this tile is inside a reorderable list and
+  /// shows a leading drag handle bound to this index.
+  final int? reorderIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +285,17 @@ class _ItemTile extends StatelessWidget {
           padding: const EdgeInsets.all(RestoflowSpacing.sm),
           child: Row(
             children: [
+              if (reorderIndex != null) ...[
+                ReorderableDragStartListener(
+                  index: reorderIndex!,
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: RestoflowIconSizes.md,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+              ],
               // Real thumbnail when this surface has image storage wired and
               // the item carries an image; the familiar placeholder otherwise.
               MenuItemThumbnail(item: item),

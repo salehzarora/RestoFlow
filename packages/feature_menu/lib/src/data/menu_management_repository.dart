@@ -189,6 +189,17 @@ class MenuManagementRepository implements MenuWriter {
     entity: entity,
     id: id,
   );
+
+  @override
+  Future<MenuWriteOutcome> reorder({
+    required String organizationId,
+    required MenuEntityType entity,
+    required List<String> orderedIds,
+  }) => _writer.reorder(
+    organizationId: organizationId,
+    entity: entity,
+    orderedIds: orderedIds,
+  );
 }
 
 /// Convenience to keep the success type explicit at call sites.

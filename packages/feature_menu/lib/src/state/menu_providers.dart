@@ -279,6 +279,19 @@ class MenuWriteController {
     ),
   );
 
+  /// MENU-ORDER-001: drag-and-drop reorder of a complete sibling set, then
+  /// reloads the snapshot on success (non-optimistic, like every other write).
+  Future<MenuWriteOutcome> reorder({
+    required MenuEntityType entity,
+    required List<String> orderedIds,
+  }) => _run(
+    () => _repository.reorder(
+      organizationId: _scope.organizationId,
+      entity: entity,
+      orderedIds: orderedIds,
+    ),
+  );
+
   /// RESTAURANT-OPERATIONS-V1-001: flips the item's PER-BRANCH availability.
   /// Only callable when the active scope names a branch (availability is
   /// per-branch by definition — the UI hides the control otherwise).

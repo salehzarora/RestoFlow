@@ -11,6 +11,7 @@ import 'menu_badges.dart';
 import 'menu_components.dart';
 import 'menu_entity_forms.dart';
 import 'menu_panel_header.dart';
+import 'menu_reorder.dart';
 
 /// The categories master panel (RF-111): a polished, search/filter-aware list of
 /// categories. Add / edit / soft-delete and select-to-drive-the-items-panel.
@@ -72,6 +73,32 @@ class MenuCategoryList extends ConsumerWidget {
     );
   }
 
+  Future<void> _reorder(
+    BuildContext context,
+    WidgetRef ref,
+    List<MenuCategory> categories,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final c in categories) c.id],
+      oldIndex,
+      newIndex,
+    );
+    final outcome = await ref
+        .read(menuWriteControllerProvider)
+        .reorder(entity: MenuEntityType.category, orderedIds: ids);
+    // Non-optimistic: the snapshot reloads on success; only a failure needs a
+    // message (the list snaps back to the reloaded server order).
+    if (!context.mounted) return;
+    if (!outcome.isSuccess) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -84,6 +111,11 @@ class MenuCategoryList extends ConsumerWidget {
               (needle.isEmpty || c.name.toLowerCase().contains(needle)),
         )
         .toList();
+
+    // MENU-ORDER-001: drag-reorder is offered ONLY when the COMPLETE sibling set
+    // is on screen (no active search/filter) — the reorder RPC rewrites the
+    // whole set to 1..N, so a partial/filtered list must not be draggable.
+    final canReorder = needle.isEmpty && categories.length == all.length;
 
     final Widget body;
     if (all.isEmpty) {
@@ -102,6 +134,33 @@ class MenuCategoryList extends ConsumerWidget {
         icon: Icons.search_off,
         title: l10n.menuNoResults,
         body: l10n.menuNoResultsBody,
+      );
+    } else if (canReorder) {
+      body = ReorderableListView.builder(
+        padding: const EdgeInsets.all(RestoflowSpacing.sm),
+        buildDefaultDragHandles: false,
+        itemCount: categories.length,
+        // onReorder is the stable, well-defined callback; onReorderItem is too
+        // new to depend on across the toolchain.
+        // ignore: deprecated_member_use
+        onReorder: (oldIndex, newIndex) =>
+            _reorder(context, ref, categories, oldIndex, newIndex),
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          return Padding(
+            key: ValueKey(category.id),
+            padding: const EdgeInsets.only(bottom: RestoflowSpacing.xs),
+            child: _CategoryTile(
+              category: category,
+              itemCount: snapshot.itemsForCategory(category.id).length,
+              selected: category.id == selectedCategoryId,
+              onTap: () => onSelect(category.id),
+              onEdit: () => _edit(context, category),
+              onDelete: () => _delete(context, ref, category),
+              reorderIndex: index,
+            ),
+          );
+        },
       );
     } else {
       body = ListView.separated(
@@ -141,6 +200,7 @@ class _CategoryTile extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    this.reorderIndex,
   });
 
   final MenuCategory category;
@@ -149,6 +209,10 @@ class _CategoryTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+
+  /// MENU-ORDER-001: when non-null this tile is inside a reorderable list and
+  /// shows a leading drag handle bound to this index.
+  final int? reorderIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +235,17 @@ class _CategoryTile extends StatelessWidget {
           padding: const EdgeInsets.all(RestoflowSpacing.sm),
           child: Row(
             children: [
+              if (reorderIndex != null) ...[
+                ReorderableDragStartListener(
+                  index: reorderIndex!,
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: RestoflowIconSizes.md,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+              ],
               Container(
                 width: 36,
                 height: 36,

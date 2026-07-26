@@ -15,6 +15,9 @@ export 'src/widgets/menu_entity_forms.dart'
         showModifierFormDialog,
         showPricedChildFormDialog;
 
+// MENU-ORDER-001: the pure drag-reorder index helper, exposed for unit tests.
+export 'src/widgets/menu_reorder.dart' show menuReorderedIds;
+
 /// A [MenuWriter] that returns a preset [outcome] for every operation and
 /// records the last operation name. Lets a widget test drive a specific
 /// success/failure (e.g. a `MenuPermissionDenied`) without a backend.
@@ -127,6 +130,21 @@ class ScriptedMenuWriter implements MenuWriter {
     required MenuEntityType entity,
     required String id,
   }) => _record('softDelete');
+
+  /// The most recent [reorder] arguments (for assertions).
+  MenuEntityType? lastReorderEntity;
+  List<String>? lastReorderIds;
+
+  @override
+  Future<MenuWriteOutcome> reorder({
+    required String organizationId,
+    required MenuEntityType entity,
+    required List<String> orderedIds,
+  }) {
+    lastReorderEntity = entity;
+    lastReorderIds = orderedIds;
+    return _record('reorder');
+  }
 
   /// The most recent [setItemAvailability] arguments (for assertions).
   String? lastAvailability;

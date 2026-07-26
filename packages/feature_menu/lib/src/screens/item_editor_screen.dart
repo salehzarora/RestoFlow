@@ -21,6 +21,7 @@ import '../widgets/menu_entity_forms.dart';
 import '../widgets/menu_image_panel.dart';
 import '../widgets/menu_item_thumbnail.dart';
 import '../widgets/menu_l10n.dart';
+import '../widgets/menu_reorder.dart';
 import '../widgets/modifier_template_picker.dart';
 
 /// What the item editor is editing: an existing [item], or a new item in
@@ -1065,6 +1066,57 @@ class _PricedChildSection extends ConsumerWidget {
     );
   }
 
+  Future<void> _reorder(
+    BuildContext context,
+    WidgetRef ref,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final r in rows) r.id],
+      oldIndex,
+      newIndex,
+    );
+    final outcome = await ref
+        .read(menuWriteControllerProvider)
+        .reorder(entity: _entityForKind(kind), orderedIds: ids);
+    if (!context.mounted) return;
+    if (!outcome.isSuccess) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+    }
+  }
+
+  _PricedChildRow _row(
+    BuildContext context,
+    WidgetRef ref,
+    int i, {
+    int? reorderIndex,
+  }) {
+    return _PricedChildRow(
+      row: rows[i],
+      currencyCode: currencyCode,
+      onEdit: () => showPricedChildFormDialog(
+        context,
+        kind: kind,
+        parentId: parentId,
+        currencyCode: currencyCode,
+        id: rows[i].id,
+        initialName: rows[i].name,
+        initialDeltaMinor: rows[i].deltaMinor,
+        initialActive: rows[i].isActive,
+        // KITCHEN-MEAT-001: carry the option's current meat metadata.
+        initialKitchenMeatEnabled: rows[i].kitchenMeatEnabled,
+        initialKitchenMeatQuantity: rows[i].kitchenMeatQuantity,
+        initialKitchenMeatUnit: rows[i].kitchenMeatUnit,
+      ),
+      onDelete: () => _delete(context, ref, rows[i].id),
+      reorderIndex: reorderIndex,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -1078,6 +1130,10 @@ class _PricedChildSection extends ConsumerWidget {
       icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
       label: Text(addLabel),
     );
+    // MENU-ORDER-001: modifier OPTIONS are drag-reorderable. Sizes/variants keep
+    // their number-field ordering (out of this ticket's scope). Nested inside the
+    // scrolling editor -> shrinkWrap + non-scrolling physics.
+    final reorderable = kind == PricedChildKind.option && rows.length > 1;
     final content = rows.isEmpty
         ? Padding(
             padding: EdgeInsets.all(
@@ -1090,29 +1146,25 @@ class _PricedChildSection extends ConsumerWidget {
               ),
             ),
           )
+        : reorderable
+        ? ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: rows.length,
+            // ignore: deprecated_member_use
+            onReorder: (oldIndex, newIndex) =>
+                _reorder(context, ref, oldIndex, newIndex),
+            itemBuilder: (context, i) => KeyedSubtree(
+              key: ValueKey(rows[i].id),
+              child: _row(context, ref, i, reorderIndex: i),
+            ),
+          )
         : Column(
             children: [
               for (var i = 0; i < rows.length; i++) ...[
                 if (i > 0) const Divider(height: 1),
-                _PricedChildRow(
-                  row: rows[i],
-                  currencyCode: currencyCode,
-                  onEdit: () => showPricedChildFormDialog(
-                    context,
-                    kind: kind,
-                    parentId: parentId,
-                    currencyCode: currencyCode,
-                    id: rows[i].id,
-                    initialName: rows[i].name,
-                    initialDeltaMinor: rows[i].deltaMinor,
-                    initialActive: rows[i].isActive,
-                    // KITCHEN-MEAT-001: carry the option's current meat metadata.
-                    initialKitchenMeatEnabled: rows[i].kitchenMeatEnabled,
-                    initialKitchenMeatQuantity: rows[i].kitchenMeatQuantity,
-                    initialKitchenMeatUnit: rows[i].kitchenMeatUnit,
-                  ),
-                  onDelete: () => _delete(context, ref, rows[i].id),
-                ),
+                _row(context, ref, i),
               ],
             ],
           );
@@ -1161,12 +1213,17 @@ class _PricedChildRow extends StatelessWidget {
     required this.currencyCode,
     required this.onEdit,
     required this.onDelete,
+    this.reorderIndex,
   });
 
   final _PricedChildVm row;
   final String currencyCode;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+
+  /// MENU-ORDER-001: when non-null this row is inside a reorderable option list
+  /// and shows a leading drag handle bound to this index.
+  final int? reorderIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -1181,6 +1238,17 @@ class _PricedChildRow extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (reorderIndex != null) ...[
+            ReorderableDragStartListener(
+              index: reorderIndex!,
+              child: Icon(
+                Icons.drag_indicator,
+                size: RestoflowIconSizes.sm,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: RestoflowSpacing.sm),
+          ],
           Expanded(
             child: Row(
               children: [
@@ -1257,10 +1325,45 @@ class _ModifiersSection extends ConsumerWidget {
     );
   }
 
+  Future<void> _reorderModifiers(
+    BuildContext context,
+    WidgetRef ref,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final m in modifiers) m.id],
+      oldIndex,
+      newIndex,
+    );
+    final outcome = await ref
+        .read(menuWriteControllerProvider)
+        .reorder(entity: MenuEntityType.modifier, orderedIds: ids);
+    if (!context.mounted) return;
+    if (!outcome.isSuccess) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    Widget cardFor(int index, {int? reorderIndex}) {
+      final modifier = modifiers[index];
+      return _ModifierCard(
+        modifier: modifier,
+        item: item,
+        currencyCode: currencyCode,
+        options: snapshot.optionsForModifier(modifier.id),
+        onDelete: () => _deleteModifier(context, ref, modifier.id),
+        reorderIndex: reorderIndex,
+      );
+    }
+
     return MenuSectionCard(
       title: l10n.menuModifiersHeading,
       icon: Icons.layers_outlined,
@@ -1299,24 +1402,36 @@ class _ModifiersSection extends ConsumerWidget {
             )
           : Padding(
               padding: const EdgeInsets.all(RestoflowSpacing.md),
-              child: Column(
-                children: [
-                  for (final modifier in modifiers)
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: RestoflowSpacing.md,
+              // MENU-ORDER-001: modifier GROUPS are drag-reorderable. Nested in
+              // the scrolling editor -> shrinkWrap + non-scrolling physics.
+              child: modifiers.length > 1
+                  ? ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      itemCount: modifiers.length,
+                      // ignore: deprecated_member_use
+                      onReorder: (oldIndex, newIndex) =>
+                          _reorderModifiers(context, ref, oldIndex, newIndex),
+                      itemBuilder: (context, index) => Padding(
+                        key: ValueKey(modifiers[index].id),
+                        padding: const EdgeInsets.only(
+                          bottom: RestoflowSpacing.md,
+                        ),
+                        child: cardFor(index, reorderIndex: index),
                       ),
-                      child: _ModifierCard(
-                        modifier: modifier,
-                        item: item,
-                        currencyCode: currencyCode,
-                        options: snapshot.optionsForModifier(modifier.id),
-                        onDelete: () =>
-                            _deleteModifier(context, ref, modifier.id),
-                      ),
+                    )
+                  : Column(
+                      children: [
+                        for (var index = 0; index < modifiers.length; index++)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: RestoflowSpacing.md,
+                            ),
+                            child: cardFor(index),
+                          ),
+                      ],
                     ),
-                ],
-              ),
             ),
     );
   }
@@ -1329,6 +1444,7 @@ class _ModifierCard extends StatelessWidget {
     required this.currencyCode,
     required this.options,
     required this.onDelete,
+    this.reorderIndex,
   });
 
   final Modifier modifier;
@@ -1336,6 +1452,10 @@ class _ModifierCard extends StatelessWidget {
   final String currencyCode;
   final List<ModifierOption> options;
   final VoidCallback onDelete;
+
+  /// MENU-ORDER-001: when non-null this card is inside a reorderable group list
+  /// and shows a leading drag handle bound to this index.
+  final int? reorderIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -1355,6 +1475,17 @@ class _ModifierCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (reorderIndex != null) ...[
+                ReorderableDragStartListener(
+                  index: reorderIndex!,
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: RestoflowIconSizes.md,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+              ],
               Icon(
                 Icons.layers_outlined,
                 size: RestoflowIconSizes.md,

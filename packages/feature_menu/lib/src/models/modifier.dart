@@ -65,7 +65,7 @@ class Modifier {
     deletedAt: parseTimestamp(json['deleted_at']),
   );
 
-  Modifier copyWith({DateTime? deletedAt}) => Modifier(
+  Modifier copyWith({int? displayOrder, DateTime? deletedAt}) => Modifier(
     id: id,
     organizationId: organizationId,
     restaurantId: restaurantId,
@@ -76,7 +76,7 @@ class Modifier {
     minSelect: minSelect,
     maxSelect: maxSelect,
     isRequired: isRequired,
-    displayOrder: displayOrder,
+    displayOrder: displayOrder ?? this.displayOrder,
     isActive: isActive,
     allowQuantity: allowQuantity,
     maxQuantity: maxQuantity,

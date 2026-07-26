@@ -63,18 +63,19 @@ class ModifierOption {
     kitchenMeat: optJsonMapOrNull(json, 'kitchen_meat'),
   );
 
-  ModifierOption copyWith({DateTime? deletedAt}) => ModifierOption(
-    id: id,
-    organizationId: organizationId,
-    restaurantId: restaurantId,
-    branchId: branchId,
-    modifierId: modifierId,
-    name: name,
-    priceDeltaMinor: priceDeltaMinor,
-    displayOrder: displayOrder,
-    isActive: isActive,
-    deletedAt: deletedAt ?? this.deletedAt,
-    // Preserve meat across a soft-delete tombstone copyWith.
-    kitchenMeat: kitchenMeat,
-  );
+  ModifierOption copyWith({int? displayOrder, DateTime? deletedAt}) =>
+      ModifierOption(
+        id: id,
+        organizationId: organizationId,
+        restaurantId: restaurantId,
+        branchId: branchId,
+        modifierId: modifierId,
+        name: name,
+        priceDeltaMinor: priceDeltaMinor,
+        displayOrder: displayOrder ?? this.displayOrder,
+        isActive: isActive,
+        deletedAt: deletedAt ?? this.deletedAt,
+        // Preserve meat across a soft-delete tombstone copyWith.
+        kitchenMeat: kitchenMeat,
+      );
 }

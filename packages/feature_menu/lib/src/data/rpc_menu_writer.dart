@@ -20,6 +20,7 @@ class MenuRpcNames {
   static const upsertModifierOption = 'menu_upsert_modifier_option';
   static const softDelete = 'menu_soft_delete';
   static const setItemAvailability = 'menu_set_item_availability';
+  static const reorder = 'menu_reorder';
 }
 
 /// Calls the RF-109 `public.menu_*` RPCs over the neutral [SyncRpcTransport].
@@ -305,5 +306,48 @@ class RpcMenuWriter implements MenuWriter {
       'p_entity': entity.wire,
       'p_id': id,
     }, entity);
+  }
+
+  @override
+  Future<MenuWriteOutcome> reorder({
+    required String organizationId,
+    required MenuEntityType entity,
+    required List<String> orderedIds,
+  }) async {
+    // Bespoke result handling: the reorder envelope is
+    // `{ok:true, entity, count, action:'reordered'}` — no `id`, and 'reordered'
+    // is not a MenuWriteAction, so the generic parser cannot read it. Success
+    // only needs to trigger the non-optimistic reload, so a minimal
+    // updated-result is synthesized.
+    try {
+      final raw = await _transport.invoke(MenuRpcNames.reorder, {
+        'p_organization_id': organizationId,
+        'p_entity': entity.wire,
+        'p_ids': orderedIds,
+      });
+      if (raw is! Map) return const Failure(MenuInvalidResponseFailure());
+      final body = Map<String, dynamic>.from(raw);
+      if (body['ok'] == true) {
+        return Success(
+          MenuWriteResult(
+            entity: entity,
+            id: orderedIds.isEmpty ? '' : orderedIds.first,
+            action: MenuWriteAction.updated,
+          ),
+        );
+      }
+      if (body['error'] == 'permission_denied') {
+        return Failure(MenuPermissionDenied(entity));
+      }
+      return const Failure(MenuInvalidResponseFailure());
+    } on SyncTransportException catch (e) {
+      if (e.code == '42501') {
+        return Failure(MenuValidationRejected(e.message ?? ''));
+      }
+      if (e.kind == SyncTransportErrorKind.transient) {
+        return Failure(MenuTransientFailure(e.message));
+      }
+      return Failure(MenuServerFailure(e.message));
+    }
   }
 }

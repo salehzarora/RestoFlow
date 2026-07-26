@@ -111,6 +111,20 @@ abstract class MenuWriter {
     required String id,
   });
 
+  /// MENU-ORDER-001: drag-and-drop reorder. Atomically rewrites `display_order`
+  /// to 1..N in [orderedIds] order for a COMPLETE sibling set (all categories of
+  /// a restaurant, all items of a category, all groups of an item, or all
+  /// options of a group). [entity] must be [MenuEntityType.category],
+  /// [MenuEntityType.item], [MenuEntityType.modifier], or
+  /// [MenuEntityType.modifierOption]. The server resolves the rows' scope and
+  /// enforces the same manager+ authorization as the other menu writes; scope is
+  /// never client-supplied.
+  Future<MenuWriteOutcome> reorder({
+    required String organizationId,
+    required MenuEntityType entity,
+    required List<String> orderedIds,
+  });
+
   /// RESTAURANT-OPERATIONS-V1-001: sets the item's PER-BRANCH availability
   /// override — a day-to-day operational flip, distinct from editing the item
   /// or toggling is_active. Requires [MenuScope.branchId] (availability is

@@ -273,6 +273,58 @@ void main() {
       expect(transport.lastParams!['p_allow_quantity'], true);
       expect(transport.lastParams!['p_max_quantity'], 5);
     });
+
+    test('reorder calls menu_reorder with the entity wire + ordered ids', () async {
+      final transport = _FakeTransport()
+        ..returnValue = const {
+          'ok': true,
+          'entity': 'menu_category',
+          'count': 3,
+          'action': 'reordered',
+        };
+      final writer = RpcMenuWriter(transport);
+
+      final outcome = await writer.reorder(
+        organizationId: 'org-1',
+        entity: MenuEntityType.category,
+        orderedIds: const ['c3', 'c1', 'c2'],
+      );
+
+      expect(transport.lastFunction, 'menu_reorder');
+      expect(transport.lastParams!['p_organization_id'], 'org-1');
+      expect(transport.lastParams!['p_entity'], 'menu_category');
+      expect(transport.lastParams!['p_ids'], ['c3', 'c1', 'c2']);
+      // The reorder envelope carries no id and action:'reordered' (not a
+      // MenuWriteAction), so success synthesizes a minimal updated result (with
+      // the first id) purely to trigger the non-optimistic reload.
+      final result = _success(outcome);
+      expect(result, isNotNull);
+      expect(result!.entity, MenuEntityType.category);
+      expect(result.action, MenuWriteAction.updated);
+    });
+
+    test('reorder maps a role denial to MenuPermissionDenied', () async {
+      final transport = _FakeTransport()
+        ..returnValue = const {
+          'ok': false,
+          'error': 'permission_denied',
+          'entity': 'modifier_option',
+        };
+      final writer = RpcMenuWriter(transport);
+
+      final failure = _failure(
+        await writer.reorder(
+          organizationId: 'org-1',
+          entity: MenuEntityType.modifierOption,
+          orderedIds: const ['o1', 'o2'],
+        ),
+      );
+      expect(failure, isA<MenuPermissionDenied>());
+      expect(
+        (failure! as MenuPermissionDenied).entity,
+        MenuEntityType.modifierOption,
+      );
+    });
   });
 
   group('RpcMenuWriter — error mapping (the load-bearing part)', () {

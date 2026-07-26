@@ -37,14 +37,15 @@ class MenuCategory {
     deletedAt: parseTimestamp(json['deleted_at']),
   );
 
-  MenuCategory copyWith({DateTime? deletedAt}) => MenuCategory(
-    id: id,
-    organizationId: organizationId,
-    restaurantId: restaurantId,
-    branchId: branchId,
-    name: name,
-    displayOrder: displayOrder,
-    isActive: isActive,
-    deletedAt: deletedAt ?? this.deletedAt,
-  );
+  MenuCategory copyWith({int? displayOrder, DateTime? deletedAt}) =>
+      MenuCategory(
+        id: id,
+        organizationId: organizationId,
+        restaurantId: restaurantId,
+        branchId: branchId,
+        name: name,
+        displayOrder: displayOrder ?? this.displayOrder,
+        isActive: isActive,
+        deletedAt: deletedAt ?? this.deletedAt,
+      );
 }
