@@ -83,6 +83,16 @@ final selectedItemIdProvider = StateProvider.autoDispose<String?>(
   (ref) => null,
 );
 
+/// MENU-ORDER-001 (Codex correction): a PER-SCOPE reorder in-flight latch. While
+/// a drag reorder of one entity scope is persisting, a second drag on that SAME
+/// scope is ignored — so two overlapping reorders can never race two writes off a
+/// stale base order. Non-autoDispose (it must not reset mid-await) and defaults
+/// false, so existing wiring/tests are unaffected. Distinct family keys mean
+/// reordering options never blocks reordering groups, etc.
+final menuReorderInFlightProvider = StateProvider.family<bool, MenuEntityType>(
+  (ref, entity) => false,
+);
+
 /// Performs menu writes against the active scope, then reloads the snapshot on
 /// success (the UI shows the [MenuWriteFailure] on failure). Writes are
 /// non-optimistic: nothing changes locally until the reload reflects the server.

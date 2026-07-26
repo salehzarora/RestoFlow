@@ -83,6 +83,20 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
             onClose: _closeEditor,
           );
         }
+        // MENU-ORDER-001 (Codex): pin the AUTO-selected first category into
+        // explicit state on first load, so a later category reorder cannot drift
+        // the items panel. Once pinned, _resolveSelected keys on the id (stable
+        // across a reorder+reload — only display_order changes, not ids).
+        if (_selectedCategoryId == null) {
+          final resolved = _resolveSelected(snapshot);
+          if (resolved != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _selectedCategoryId == null) {
+                setState(() => _selectedCategoryId = resolved);
+              }
+            });
+          }
+        }
         return _surface(context, l10n, snapshot, scope);
       },
     );

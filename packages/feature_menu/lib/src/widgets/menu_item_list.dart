@@ -102,20 +102,29 @@ class MenuItemList extends ConsumerWidget {
     int oldIndex,
     int newIndex,
   ) async {
-    final l10n = AppLocalizations.of(context);
-    final ids = menuReorderedIds(
-      [for (final i in items) i.id],
-      oldIndex,
-      newIndex,
-    );
-    final outcome = await ref
-        .read(menuWriteControllerProvider)
-        .reorder(entity: MenuEntityType.item, orderedIds: ids);
-    if (!context.mounted) return;
-    if (!outcome.isSuccess) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+    // MENU-ORDER-001 (Codex): one reorder at a time per scope (see category list).
+    final latch = menuReorderInFlightProvider(MenuEntityType.item);
+    if (ref.read(latch)) return;
+    ref.read(latch.notifier).state = true;
+    try {
+      final l10n = AppLocalizations.of(context);
+      final ids = menuReorderedIds(
+        [for (final i in items) i.id],
+        oldIndex,
+        newIndex,
+      );
+      final outcome = await ref
+          .read(menuWriteControllerProvider)
+          .reorder(entity: MenuEntityType.item, orderedIds: ids);
+      if (!context.mounted) return;
+      if (!outcome.isSuccess) {
+        ref.invalidate(menuSnapshotProvider);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+      }
+    } finally {
+      ref.read(latch.notifier).state = false;
     }
   }
 

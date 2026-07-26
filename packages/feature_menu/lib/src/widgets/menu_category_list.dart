@@ -80,22 +80,33 @@ class MenuCategoryList extends ConsumerWidget {
     int oldIndex,
     int newIndex,
   ) async {
-    final l10n = AppLocalizations.of(context);
-    final ids = menuReorderedIds(
-      [for (final c in categories) c.id],
-      oldIndex,
-      newIndex,
-    );
-    final outcome = await ref
-        .read(menuWriteControllerProvider)
-        .reorder(entity: MenuEntityType.category, orderedIds: ids);
-    // Non-optimistic: the snapshot reloads on success; only a failure needs a
-    // message (the list snaps back to the reloaded server order).
-    if (!context.mounted) return;
-    if (!outcome.isSuccess) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+    // MENU-ORDER-001 (Codex): one reorder at a time per scope. A second drag
+    // while this one persists is ignored, so two writes never race off a stale
+    // base order.
+    final latch = menuReorderInFlightProvider(MenuEntityType.category);
+    if (ref.read(latch)) return;
+    ref.read(latch.notifier).state = true;
+    try {
+      final l10n = AppLocalizations.of(context);
+      final ids = menuReorderedIds(
+        [for (final c in categories) c.id],
+        oldIndex,
+        newIndex,
+      );
+      final outcome = await ref
+          .read(menuWriteControllerProvider)
+          .reorder(entity: MenuEntityType.category, orderedIds: ids);
+      if (!context.mounted) return;
+      if (!outcome.isSuccess) {
+        // Exact rollback: re-assert the authoritative (unchanged) snapshot so the
+        // dropped tile returns to its real slot, then show the honest error.
+        ref.invalidate(menuSnapshotProvider);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+      }
+    } finally {
+      ref.read(latch.notifier).state = false;
     }
   }
 

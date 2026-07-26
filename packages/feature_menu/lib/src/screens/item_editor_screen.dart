@@ -78,9 +78,10 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   late final TextEditingController _currency = TextEditingController(
     text: _item?.currencyCode ?? widget.scope.currencyCode,
   );
-  late final TextEditingController _order = TextEditingController(
-    text: (_item?.displayOrder ?? 0).toString(),
-  );
+  // MENU-ORDER-001 (Codex): items are drag-reordered in the items panel, so
+  // display_order is no longer hand-edited here — we PRESERVE the item's current
+  // value across an edit (0 for a new item) rather than resetting it.
+  late final int _displayOrder = _item?.displayOrder ?? 0;
   late final TextEditingController _prepMinutes = TextEditingController(
     text: _item?.prepMinutes?.toString() ?? '',
   );
@@ -132,7 +133,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     _description.dispose();
     _price.dispose();
     _currency.dispose();
-    _order.dispose();
     _prepMinutes.dispose();
     _kitchenNote.dispose();
     _sku.dispose();
@@ -300,7 +300,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               : _description.text.trim(),
           basePriceMinor: priceMinor!,
           currencyCode: currencyText,
-          displayOrder: int.tryParse(_order.text.trim()) ?? 0,
+          displayOrder: _displayOrder,
           isActive: _active,
           // Full-state upsert: null p_image_path CLEARS the image server-side,
           // so a details save must carry the item's current image through.
@@ -407,6 +407,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                                 deltaMinor: s.priceDeltaMinor,
                                 isActive: s.isActive,
                                 branchId: s.branchId,
+                                displayOrder: s.displayOrder,
                               ),
                             )
                             .toList(),
@@ -428,6 +429,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                                 deltaMinor: v.priceDeltaMinor,
                                 isActive: v.isActive,
                                 branchId: v.branchId,
+                                displayOrder: v.displayOrder,
                               ),
                             )
                             .toList(),
@@ -563,28 +565,15 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
             ],
           ),
           const SizedBox(height: RestoflowSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _order,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: l10n.menuDisplayOrderLabel,
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: RestoflowSpacing.md),
-              Expanded(
-                child: SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l10n.menuActiveLabel),
-                  value: _active,
-                  onChanged: (value) => setState(() => _active = value),
-                ),
-              ),
-            ],
+          // MENU-ORDER-001 (Codex): the item's display_order is now owned by
+          // drag-and-drop reorder in the items panel — the numeric field was
+          // removed so the two workflows can't fight. The item's current order is
+          // preserved on save (see _displayOrder).
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.menuActiveLabel),
+            value: _active,
+            onChanged: (value) => setState(() => _active = value),
           ),
         ],
       ),
@@ -998,6 +987,7 @@ class _PricedChildVm {
     required this.deltaMinor,
     required this.isActive,
     required this.branchId,
+    this.displayOrder = 0,
     this.kitchenMeatEnabled = false,
     this.kitchenMeatQuantity,
     this.kitchenMeatUnit = '',
@@ -1008,6 +998,11 @@ class _PricedChildVm {
   final int deltaMinor;
   final bool isActive;
   final String? branchId;
+
+  /// MENU-ORDER-001 (Codex): the row's current display_order, carried so an edit
+  /// PRESERVES it (options are drag-reordered, not hand-numbered; sizes/variants
+  /// keep their numeric field but must still open showing the current value).
+  final int displayOrder;
 
   /// KITCHEN-MEAT-001: the option's current meat metadata (options only;
   /// size/variant rows leave these at their defaults).
@@ -1072,20 +1067,29 @@ class _PricedChildSection extends ConsumerWidget {
     int oldIndex,
     int newIndex,
   ) async {
-    final l10n = AppLocalizations.of(context);
-    final ids = menuReorderedIds(
-      [for (final r in rows) r.id],
-      oldIndex,
-      newIndex,
-    );
-    final outcome = await ref
-        .read(menuWriteControllerProvider)
-        .reorder(entity: _entityForKind(kind), orderedIds: ids);
-    if (!context.mounted) return;
-    if (!outcome.isSuccess) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+    // MENU-ORDER-001 (Codex): one reorder at a time per scope (see category list).
+    final latch = menuReorderInFlightProvider(_entityForKind(kind));
+    if (ref.read(latch)) return;
+    ref.read(latch.notifier).state = true;
+    try {
+      final l10n = AppLocalizations.of(context);
+      final ids = menuReorderedIds(
+        [for (final r in rows) r.id],
+        oldIndex,
+        newIndex,
+      );
+      final outcome = await ref
+          .read(menuWriteControllerProvider)
+          .reorder(entity: _entityForKind(kind), orderedIds: ids);
+      if (!context.mounted) return;
+      if (!outcome.isSuccess) {
+        ref.invalidate(menuSnapshotProvider);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+      }
+    } finally {
+      ref.read(latch.notifier).state = false;
     }
   }
 
@@ -1106,6 +1110,9 @@ class _PricedChildSection extends ConsumerWidget {
         id: rows[i].id,
         initialName: rows[i].name,
         initialDeltaMinor: rows[i].deltaMinor,
+        // MENU-ORDER-001 (Codex): open showing the CURRENT display_order so a
+        // details-save preserves it (options hide the field; size/variant keep it).
+        initialDisplayOrder: rows[i].displayOrder,
         initialActive: rows[i].isActive,
         // KITCHEN-MEAT-001: carry the option's current meat metadata.
         initialKitchenMeatEnabled: rows[i].kitchenMeatEnabled,
@@ -1331,20 +1338,29 @@ class _ModifiersSection extends ConsumerWidget {
     int oldIndex,
     int newIndex,
   ) async {
-    final l10n = AppLocalizations.of(context);
-    final ids = menuReorderedIds(
-      [for (final m in modifiers) m.id],
-      oldIndex,
-      newIndex,
-    );
-    final outcome = await ref
-        .read(menuWriteControllerProvider)
-        .reorder(entity: MenuEntityType.modifier, orderedIds: ids);
-    if (!context.mounted) return;
-    if (!outcome.isSuccess) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+    // MENU-ORDER-001 (Codex): one reorder at a time per scope (see category list).
+    final latch = menuReorderInFlightProvider(MenuEntityType.modifier);
+    if (ref.read(latch)) return;
+    ref.read(latch.notifier).state = true;
+    try {
+      final l10n = AppLocalizations.of(context);
+      final ids = menuReorderedIds(
+        [for (final m in modifiers) m.id],
+        oldIndex,
+        newIndex,
+      );
+      final outcome = await ref
+          .read(menuWriteControllerProvider)
+          .reorder(entity: MenuEntityType.modifier, orderedIds: ids);
+      if (!context.mounted) return;
+      if (!outcome.isSuccess) {
+        ref.invalidate(menuSnapshotProvider);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+      }
+    } finally {
+      ref.read(latch.notifier).state = false;
     }
   }
 
@@ -1551,6 +1567,7 @@ class _ModifierCard extends StatelessWidget {
                     deltaMinor: o.priceDeltaMinor,
                     isActive: o.isActive,
                     branchId: o.branchId,
+                    displayOrder: o.displayOrder,
                     // KITCHEN-MEAT-001: pre-fill the option's meat metadata so the
                     // edit dialog shows the current values.
                     kitchenMeatEnabled: o.hasKitchenMeat,
