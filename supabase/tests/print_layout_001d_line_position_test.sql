@@ -11,7 +11,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(11);
+select plan(10);
 
 -- ===== fixtures: Org D (1 POS device, cashier PIN) ==========================
 insert into organizations (id, name, slug, default_currency) values
@@ -101,6 +101,7 @@ select public.sync_push(
     'local_operation_id', 'd-op-add-1',
     'operation_type', 'order.items_add',
     'target_entity', 'order',
+    'target_id', 'd0000000-0000-0000-0000-0000000000f9',
     'payload', jsonb_build_object(
       'order_id', 'd0000000-0000-0000-0000-0000000000f9',
       'round_id', 'd0000000-0000-0000-0000-0000000000e9',
