@@ -231,7 +231,9 @@ void main() {
         recoveryStore ?? SharedPrefsDraftRecoveryStore(prefs),
       ),
       orderSnapshotRepositoryProvider.overrideWithValue(_EmptySnapshotRepo()),
-      posRecentOrdersStoreProvider.overrideWithValue(InMemoryRecentOrdersStore()),
+      posRecentOrdersStoreProvider.overrideWithValue(
+        InMemoryRecentOrdersStore(),
+      ),
       posSyncClockProvider.overrideWithValue(() => _t0),
     ],
   );
@@ -304,7 +306,9 @@ void main() {
     final cart = c.read(cartControllerProvider.notifier);
     cart.addItem(_cola);
     cart.addItem(_burgerB);
-    c.read(orderSetupControllerProvider.notifier).setOrderType(OrderType.takeaway);
+    c
+        .read(orderSetupControllerProvider.notifier)
+        .setOrderType(OrderType.takeaway);
     await tester.pump();
     await submitOrderFromCart(
       ref: ref,
@@ -330,7 +334,9 @@ void main() {
           .firstWhere((l) => l.menuItemId == 'cola')
           .lineId,
     );
-    c.read(orderSetupControllerProvider.notifier).setOrderType(OrderType.takeaway);
+    c
+        .read(orderSetupControllerProvider.notifier)
+        .setOrderType(OrderType.takeaway);
     await tester.pump();
     return (ref, context, e1);
   }
@@ -366,9 +372,8 @@ void main() {
       transport
         ..interceptNextOrder = true
         ..correctedResult = _itemUnavailable
-        ..onIntercept = () => c
-            .read(posSignedInEmployeeProfileIdProvider.notifier)
-            .set('emp-B');
+        ..onIntercept = () =>
+            c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-B');
       await submitOrderFromCart(
         ref: ref,
         context: context,
@@ -386,11 +391,17 @@ void main() {
       final map = c.read(posDraftRecoveryProvider);
       expect(map, hasLength(1), reason: 'exactly one logical recovery');
       expect(map.containsKey(e1), isTrue);
-      expect(map.containsKey(e2), isFalse, reason: 'NO standalone recovery keyed by e2');
+      expect(
+        map.containsKey(e2),
+        isFalse,
+        reason: 'NO standalone recovery keyed by e2',
+      );
       expect(map[e1]!.binding.employeeProfileId, ownerA.employeeProfileId);
       expect(map[e1]!.binding.scopeKey, ownerA.scopeKey);
       expect(map[e1]!.correctionOutboxEntryId, e2);
-      expect(map[e1]!.draft.lines.map((l) => l.menuItemId).toList(), ['burger-b']);
+      expect(map[e1]!.draft.lines.map((l) => l.menuItemId).toList(), [
+        'burger-b',
+      ]);
       expect(rejectedShellCount(c), 1, reason: 'exactly one rejected shell');
 
       // Worker B (current) cannot list / restore / discard it, and sees no draft.
@@ -401,10 +412,15 @@ void main() {
         isNull,
       );
       expect(
-        await c.read(posDraftRecoveryProvider.notifier).discardOwned(e1, bindingB),
+        await c
+            .read(posDraftRecoveryProvider.notifier)
+            .discardOwned(e1, bindingB),
         isFalse,
       );
-      expect(c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1), isTrue);
+      expect(
+        c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1),
+        isTrue,
+      );
 
       // Worker A returns to a fresh till, and restores the ONE recovery: one copy of
       // each line (the departed corrected submit left the cart untouched, so clear it
@@ -450,9 +466,8 @@ void main() {
           code: '503',
           message: 'unavailable',
         )
-        ..onIntercept = () => c
-            .read(posSignedInEmployeeProfileIdProvider.notifier)
-            .set('emp-B');
+        ..onIntercept = () =>
+            c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-B');
       await submitOrderFromCart(
         ref: ref,
         context: context,
@@ -508,9 +523,8 @@ void main() {
           code: '503',
           message: 'lost after acceptance',
         )
-        ..onIntercept = () => c
-            .read(posSignedInEmployeeProfileIdProvider.notifier)
-            .set('emp-B');
+        ..onIntercept = () =>
+            c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-B');
       await submitOrderFromCart(
         ref: ref,
         context: context,
@@ -557,7 +571,10 @@ void main() {
         ),
       ]);
       await settle();
-      expect(c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1), isFalse);
+      expect(
+        c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1),
+        isFalse,
+      );
       expect(c.read(posDraftRecoveryProvider), isEmpty);
     },
   );
@@ -585,9 +602,8 @@ void main() {
       transport
         ..interceptNextOrder = true
         ..correctedResult = _itemUnavailable
-        ..onIntercept = () => c
-            .read(posSignedInEmployeeProfileIdProvider.notifier)
-            .set('emp-B');
+        ..onIntercept = () =>
+            c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-B');
       await submitOrderFromCart(
         ref: ref,
         context: context,
@@ -616,7 +632,9 @@ void main() {
         isNull,
       );
       expect(
-        await c.read(posDraftRecoveryProvider.notifier).discardOwned(e1, scopeZ),
+        await c
+            .read(posDraftRecoveryProvider.notifier)
+            .discardOwned(e1, scopeZ),
         isFalse,
       );
       // Returning to the ORIGINAL scope + worker reveals exactly one recovery.
@@ -648,15 +666,16 @@ void main() {
       final (ref, context) = await pumpApp(tester, c);
       final ownerA = c.read(posRecoveryBindingProvider);
       c.read(cartControllerProvider.notifier).addItem(_burgerB);
-      c.read(orderSetupControllerProvider.notifier).setOrderType(OrderType.takeaway);
+      c
+          .read(orderSetupControllerProvider.notifier)
+          .setOrderType(OrderType.takeaway);
       await tester.pump();
       // Intercept the FIRST (ordinary) submit; hand over; return item_unavailable.
       transport
         ..interceptNextOrder = true
         ..correctedResult = _itemUnavailable
-        ..onIntercept = () => c
-            .read(posSignedInEmployeeProfileIdProvider.notifier)
-            .set('emp-B');
+        ..onIntercept = () =>
+            c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-B');
       await submitOrderFromCart(
         ref: ref,
         context: context,
@@ -673,7 +692,11 @@ void main() {
       expect(map, hasLength(1));
       final rec = map.values.single;
       expect(rec.binding.employeeProfileId, ownerA.employeeProfileId);
-      expect(rec.correctionOutboxEntryId, isNull, reason: 'ordinary: no correction link');
+      expect(
+        rec.correctionOutboxEntryId,
+        isNull,
+        reason: 'ordinary: no correction link',
+      );
       expect(
         c
             .read(posDraftRecoveryProvider.notifier)
@@ -694,7 +717,9 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final l10n = await l10nEn();
       final transport = _HandoverTransport()..orderScript.add(_itemUnavailable);
-      final toggle = _ToggleFailRecoveryStore(SharedPrefsDraftRecoveryStore(prefs));
+      final toggle = _ToggleFailRecoveryStore(
+        SharedPrefsDraftRecoveryStore(prefs),
+      );
       final c = makeContainer(prefs, transport, recoveryStore: toggle);
       addTearDown(c.dispose);
       final (ref, context, e1) = await captureRestoreCorrect(
@@ -730,8 +755,16 @@ void main() {
 
       final map = c.read(posDraftRecoveryProvider);
       final e2 = map[e1]!.correctionOutboxEntryId;
-      expect(e2, isNotNull, reason: 'the pre-dispatch link committed before the failure');
-      expect(map, hasLength(1), reason: 'old e1 intact; no standalone e2 published');
+      expect(
+        e2,
+        isNotNull,
+        reason: 'the pre-dispatch link committed before the failure',
+      );
+      expect(
+        map,
+        hasLength(1),
+        reason: 'old e1 intact; no standalone e2 published',
+      );
       expect(map.containsKey(e1), isTrue);
       expect(map[e1]!.correctionOutboxEntryId, e2);
       expect(map[e1]!.binding.employeeProfileId, ownerA.employeeProfileId);
@@ -761,9 +794,8 @@ void main() {
       transport
         ..interceptNextOrder = true
         ..correctedResult = _itemUnavailable
-        ..onIntercept = () => c
-            .read(posSignedInEmployeeProfileIdProvider.notifier)
-            .set('emp-B');
+        ..onIntercept = () =>
+            c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-B');
       await submitOrderFromCart(
         ref: ref,
         context: context,
@@ -808,7 +840,10 @@ void main() {
       await settle();
       await orders.applySnapshots([snap(1)]);
       await settle();
-      expect(c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1), isFalse);
+      expect(
+        c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1),
+        isFalse,
+      );
       // A duplicate authoritative delivery cannot resurrect the cleared recovery.
       await orders.applySnapshots([snap(2)]);
       await settle();
@@ -845,10 +880,16 @@ void main() {
       ], note: 'well done');
       cart.addItem(_fries);
       cart.increaseQuantity(
-        c.read(cartControllerProvider).lines.firstWhere((l) => l.name == 'Fries').lineId,
+        c
+            .read(cartControllerProvider)
+            .lines
+            .firstWhere((l) => l.name == 'Fries')
+            .lineId,
       );
       cart.addItem(_burgerB);
-      c.read(orderSetupControllerProvider.notifier).setOrderType(OrderType.takeaway);
+      c
+          .read(orderSetupControllerProvider.notifier)
+          .setOrderType(OrderType.takeaway);
       await tester.pump();
       Future<void> submit() => submitOrderFromCart(
         ref: ref,
@@ -869,9 +910,15 @@ void main() {
       await PosRecoveryCoordinator(ref).restore(context, rec);
       await tester.pump();
       cart.removeLine(
-        c.read(cartControllerProvider).lines.firstWhere((l) => l.menuItemId == 'cola').lineId,
+        c
+            .read(cartControllerProvider)
+            .lines
+            .firstWhere((l) => l.menuItemId == 'cola')
+            .lineId,
       );
-      c.read(orderSetupControllerProvider.notifier).setOrderType(OrderType.takeaway);
+      c
+          .read(orderSetupControllerProvider.notifier)
+          .setOrderType(OrderType.takeaway);
       await tester.pump();
 
       // Corrected submit with A->B handover, item_unavailable -> the ONE recovery is
@@ -879,9 +926,8 @@ void main() {
       transport
         ..interceptNextOrder = true
         ..correctedResult = _itemUnavailable
-        ..onIntercept = () => c
-            .read(posSignedInEmployeeProfileIdProvider.notifier)
-            .set('emp-B');
+        ..onIntercept = () =>
+            c.read(posSignedInEmployeeProfileIdProvider.notifier).set('emp-B');
       await submit();
       await tester.pump();
       await settle();
@@ -932,7 +978,12 @@ void main() {
         receiptNumber: 'R-1',
         paidAt: _t0,
       );
-      final receipt = buildReceiptDocument(l10n, submitted, payment, isDemo: false);
+      final receipt = buildReceiptDocument(
+        l10n,
+        submitted,
+        payment,
+        isDemo: false,
+      );
       final receiptItems = [
         for (final line in receipt.lines)
           if (line.kind == PrintLineKind.item) line.left,
@@ -949,7 +1000,8 @@ void main() {
       );
       expect(submitted.grandTotalMinor, isA<int>());
       final kitchenText = [
-        for (final line in kitchen.lines) '${line.left ?? ''} ${line.right ?? ''}',
+        for (final line in kitchen.lines)
+          '${line.left ?? ''} ${line.right ?? ''}',
       ];
       expect(
         kitchenText.any((t) => t.contains('ILS') || t.contains('₪')),

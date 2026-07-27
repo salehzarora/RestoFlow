@@ -306,11 +306,10 @@ void main() {
       );
       // And it persisted with the config (Test also saves).
       final prefs = await SharedPreferences.getInstance();
-      final key = prefs
-          .getKeys()
-          .firstWhere((k) => k.startsWith('restoflow.printer.network.'));
-      final decoded =
-          jsonDecode(prefs.getString(key)!) as Map<String, dynamic>;
+      final key = prefs.getKeys().firstWhere(
+        (k) => k.startsWith('restoflow.printer.network.'),
+      );
+      final decoded = jsonDecode(prefs.getString(key)!) as Map<String, dynamic>;
       expect(decoded['mediaProfile'], 'label50x50');
       expect(decoded['host'], '10.0.0.7');
     });

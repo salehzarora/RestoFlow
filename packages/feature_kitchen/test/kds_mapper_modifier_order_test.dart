@@ -78,10 +78,7 @@ void main() {
     });
 
     test('the ×N quantity suffix survives the sort', () {
-      final t = _ticket(const [
-        ('Bacon', 2, 2),
-        ('Ketchup', 1, 1),
-      ]);
+      final t = _ticket(const [('Bacon', 2, 2), ('Ketchup', 1, 1)]);
       expect(t.items.single.modifiers, const ['Ketchup', 'Bacon ×2']);
     });
 
@@ -135,14 +132,14 @@ void main() {
       );
       final items = tickets.single.items;
       expect(items.map((i) => i.name).toList(), const ['A', 'B']);
-      expect(
-        items.firstWhere((i) => i.name == 'A').modifiers,
-        const ['a1', 'a2'],
-      );
-      expect(
-        items.firstWhere((i) => i.name == 'B').modifiers,
-        const ['b1', 'b2'],
-      );
+      expect(items.firstWhere((i) => i.name == 'A').modifiers, const [
+        'a1',
+        'a2',
+      ]);
+      expect(items.firstWhere((i) => i.name == 'B').modifiers, const [
+        'b1',
+        'b2',
+      ]);
     });
 
     test('no modifier is lost or duplicated regardless of wire order', () {

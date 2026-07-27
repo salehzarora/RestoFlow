@@ -30,7 +30,10 @@ class MediaProfile {
     this.fontScale = 1.0,
     this.lineSpacing = 1.3,
     this.feedLines = 3,
-  }) : assert(widthDots > 0 && widthDots % 8 == 0, 'widthDots must be a positive multiple of 8'),
+  }) : assert(
+         widthDots > 0 && widthDots % 8 == 0,
+         'widthDots must be a positive multiple of 8',
+       ),
        assert(mediaHeightDots >= 0),
        assert(columns > 0),
        assert(safeLeftDots >= 0 && safeRightDots >= 0),

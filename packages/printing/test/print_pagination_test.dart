@@ -6,8 +6,9 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 /// PRINT-LAYOUT-001 — the pure page planner + ink-bounds helper.
 void main() {
   group('planPrintPages', () {
-    List<int> flatten(List<PrintPagePlan> pages) =>
-        [for (final p in pages) ...p.lineIndexes];
+    List<int> flatten(List<PrintPagePlan> pages) => [
+      for (final p in pages) ...p.lineIndexes,
+    ];
 
     test('continuous (budget 0) => exactly one page with every line', () {
       final pages = planPrintPages(
@@ -58,7 +59,8 @@ void main() {
         expect(blockStarts.contains(p.lineIndexes.first), isTrue);
         // And it never ends leaving a block's tail for the next page.
         final last = p.lineIndexes.last;
-        final endsBlock = last == heights.length - 1 || blockStarts.contains(last + 1);
+        final endsBlock =
+            last == heights.length - 1 || blockStarts.contains(last + 1);
         expect(endsBlock, isTrue, reason: 'block kept whole');
       }
       expect(flatten(pages), List<int>.generate(9, (i) => i));
@@ -98,7 +100,11 @@ void main() {
   group('measureRasterInkBounds', () {
     test('all-white => no ink', () {
       final data = Uint8List(6 * 4); // 48 dots wide, 4 rows
-      final b = measureRasterInkBounds(data: data, widthBytes: 6, heightDots: 4);
+      final b = measureRasterInkBounds(
+        data: data,
+        widthBytes: 6,
+        heightDots: 4,
+      );
       expect(b.hasInk, isFalse);
       expect(b.left, -1);
     });
@@ -108,7 +114,11 @@ void main() {
       final data = Uint8List(2 * 3);
       // x=10 -> byte 1, bit index 2 (0x80>>2 = 0x20).
       data[1 * 2 + 1] = 0x20;
-      final b = measureRasterInkBounds(data: data, widthBytes: 2, heightDots: 3);
+      final b = measureRasterInkBounds(
+        data: data,
+        widthBytes: 2,
+        heightDots: 3,
+      );
       expect(b.hasInk, isTrue);
       expect(b.left, 10);
       expect(b.right, 10);
@@ -116,28 +126,34 @@ void main() {
       expect(b.bottom, 1);
     });
 
-    test('bounds span the inked region and prove no bottom clip / left inset', () {
-      // 24 dots wide (3 bytes), 5 rows. Ink from x=3..20, y=1..3.
-      const widthBytes = 3, height = 5;
-      final data = Uint8List(widthBytes * height);
-      for (var y = 1; y <= 3; y++) {
-        for (var x = 3; x <= 20; x++) {
-          data[y * widthBytes + (x >> 3)] |= 0x80 >> (x & 7);
+    test(
+      'bounds span the inked region and prove no bottom clip / left inset',
+      () {
+        // 24 dots wide (3 bytes), 5 rows. Ink from x=3..20, y=1..3.
+        const widthBytes = 3, height = 5;
+        final data = Uint8List(widthBytes * height);
+        for (var y = 1; y <= 3; y++) {
+          for (var x = 3; x <= 20; x++) {
+            data[y * widthBytes + (x >> 3)] |= 0x80 >> (x & 7);
+          }
         }
-      }
-      final b = measureRasterInkBounds(
-        data: data,
-        widthBytes: widthBytes,
-        heightDots: height,
-      );
-      expect(b.left, 3);
-      expect(b.right, 20);
-      expect(b.top, 1);
-      expect(b.bottom, 3);
-      // Safe-margin style assertions a page-bounds test would make:
-      expect(b.left, greaterThanOrEqualTo(2)); // left safe margin
-      expect(b.right, lessThanOrEqualTo(24 - 2)); // right safe margin
-      expect(b.bottom, lessThanOrEqualTo(height - 1)); // nothing past the page
-    });
+        final b = measureRasterInkBounds(
+          data: data,
+          widthBytes: widthBytes,
+          heightDots: height,
+        );
+        expect(b.left, 3);
+        expect(b.right, 20);
+        expect(b.top, 1);
+        expect(b.bottom, 3);
+        // Safe-margin style assertions a page-bounds test would make:
+        expect(b.left, greaterThanOrEqualTo(2)); // left safe margin
+        expect(b.right, lessThanOrEqualTo(24 - 2)); // right safe margin
+        expect(
+          b.bottom,
+          lessThanOrEqualTo(height - 1),
+        ); // nothing past the page
+      },
+    );
   });
 }

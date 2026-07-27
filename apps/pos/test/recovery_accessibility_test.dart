@@ -147,7 +147,10 @@ void main() {
       expect(c.read(posDraftRecoveryProvider).containsKey('eA'), isTrue);
       expect(_hasShell(c, 'eA'), isTrue);
       // The current cart is marked as the correction-in-progress of THIS recovery.
-      expect(c.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId, 'eA');
+      expect(
+        c.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
+        'eA',
+      );
     },
   );
 
@@ -194,7 +197,10 @@ void main() {
       // MENU-ORDER-001: Back to cart is not terminal — the recovery + shell survive.
       expect(c.read(posDraftRecoveryProvider).containsKey('eA'), isTrue);
       expect(_hasShell(c, 'eA'), isTrue);
-      expect(c.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId, 'eA');
+      expect(
+        c.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
+        'eA',
+      );
     },
   );
 

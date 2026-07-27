@@ -181,7 +181,10 @@ String _ipFieldText(WidgetTester tester, {required bool kitchen}) {
 /// PRINT-LAYOUT-001A: every Test Print (customer + kitchen, network + Bluetooth)
 /// is now the profile-aware DIAGNOSTIC — it carries the diagnostic heading + the
 /// ar/he/en script samples and stays money-free.
-void _assertProfileDiagnostic(pp.PrintDocument document, AppLocalizations l10n) {
+void _assertProfileDiagnostic(
+  pp.PrintDocument document,
+  AppLocalizations l10n,
+) {
   final texts = [
     for (final line in document.lines)
       if (line is pp.PrintTextLine) line.text,

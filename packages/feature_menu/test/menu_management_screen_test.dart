@@ -221,11 +221,9 @@ void main() {
     (tester) async {
       final store = buildDemoMenuStore();
       await pumpMenu(tester, readSource: store, writer: store);
-      Future<List<String>> categoryOrder() async =>
-          (await store.load(demoMenuScope))
-              .visibleCategories()
-              .map((c) => c.id)
-              .toList();
+      Future<List<String>> categoryOrder() async => (await store.load(
+        demoMenuScope,
+      )).visibleCategories().map((c) => c.id).toList();
 
       final before = await categoryOrder();
       expect(before.length, greaterThanOrEqualTo(3));

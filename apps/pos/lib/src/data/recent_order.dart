@@ -516,7 +516,8 @@ Map<String, Object?> _lineToJson(SubmittedLineView l) => <String, Object?>{
   // records simply lack the keys and load as 0 (keep their stored order).
   if (l.categoryDisplayOrder != 0)
     'category_display_order_snapshot': l.categoryDisplayOrder,
-  if (l.itemDisplayOrder != 0) 'item_display_order_snapshot': l.itemDisplayOrder,
+  if (l.itemDisplayOrder != 0)
+    'item_display_order_snapshot': l.itemDisplayOrder,
   if (l.linePosition != 0) 'line_position': l.linePosition,
 };
 

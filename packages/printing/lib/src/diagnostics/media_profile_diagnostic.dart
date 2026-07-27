@@ -71,10 +71,7 @@ PrintDocument buildMediaProfileDiagnosticDocument({
     if (labels.heightLine case final h?)
       PrintTextLine(h, style: PrintLineStyle.normal),
     // TOP safe-area marker + the full-width edge ruler (left/right edges).
-    PrintTextLine(
-      labels.topSafe,
-      style: PrintLineStyle.centered,
-    ),
+    PrintTextLine(labels.topSafe, style: PrintLineStyle.centered),
     PrintTextLine(edgeRuler, style: PrintLineStyle.normal),
     const PrintTextLine('', style: PrintLineStyle.separator),
     // Script proofs — the raster path shapes RTL runs correctly.

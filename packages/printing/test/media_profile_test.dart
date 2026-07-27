@@ -4,19 +4,22 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 /// PRINT-LAYOUT-001 — the typed media profile geometry + the backward-compatible
 /// default resolution.
 void main() {
-  test('the continuous-80 default is byte-compatible geometry (576/48, no page)', () {
-    const p = MediaProfile.continuous80;
-    expect(p.widthDots, 576);
-    expect(p.widthBytes, 72);
-    expect(p.columns, 48);
-    expect(p.mediaHeightDots, 0);
-    expect(p.paginates, isFalse, reason: 'a continuous roll never paginates');
-    expect(p.printableHeightDots, 0);
-    expect(p.feedLines, 3);
-    expect(p.fontScale, 1.0);
-    expect(p.safeLeftDots, 0);
-    expect(p.safeRightDots, 0);
-  });
+  test(
+    'the continuous-80 default is byte-compatible geometry (576/48, no page)',
+    () {
+      const p = MediaProfile.continuous80;
+      expect(p.widthDots, 576);
+      expect(p.widthBytes, 72);
+      expect(p.columns, 48);
+      expect(p.mediaHeightDots, 0);
+      expect(p.paginates, isFalse, reason: 'a continuous roll never paginates');
+      expect(p.printableHeightDots, 0);
+      expect(p.feedLines, 3);
+      expect(p.fontScale, 1.0);
+      expect(p.safeLeftDots, 0);
+      expect(p.safeRightDots, 0);
+    },
+  );
 
   test('50×50 is a narrow fixed label (384 dots, paginates, safe margins)', () {
     const p = MediaProfile.label50x50;

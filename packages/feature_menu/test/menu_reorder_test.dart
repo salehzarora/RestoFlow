@@ -77,10 +77,11 @@ void main() {
 
       final snapshot = await store.load(_scope);
       // visibleCategories sorts by (displayOrder, name); the new order wins.
-      expect(
-        snapshot.visibleCategories().map((c) => c.id).toList(),
-        ['c3', 'c1', 'c2'],
-      );
+      expect(snapshot.visibleCategories().map((c) => c.id).toList(), [
+        'c3',
+        'c1',
+        'c2',
+      ]);
       expect(
         {for (final c in snapshot.visibleCategories()) c.id: c.displayOrder},
         {'c3': 1, 'c1': 2, 'c2': 3},
@@ -97,24 +98,31 @@ void main() {
         orderedIds: const ['o2', 'o3', 'o1'],
       );
       final snapshot = await store.load(_scope);
-      expect(
-        snapshot.optionsForModifier('mod-1').map((o) => o.id).toList(),
-        ['o2', 'o3', 'o1'],
-      );
+      expect(snapshot.optionsForModifier('mod-1').map((o) => o.id).toList(), [
+        'o2',
+        'o3',
+        'o1',
+      ]);
     });
 
-    test('a read-only store denies reorder (server role-deny parity)', () async {
-      final store = InMemoryMenuStore(
-        categories: [_cat('c1', 1), _cat('c2', 2)],
-        readOnly: true,
-      );
-      final outcome = await store.reorder(
-        organizationId: 'org-1',
-        entity: MenuEntityType.category,
-        orderedIds: const ['c2', 'c1'],
-      );
-      expect(outcome.fold((_) => null, (f) => f), isA<MenuPermissionDenied>());
-    });
+    test(
+      'a read-only store denies reorder (server role-deny parity)',
+      () async {
+        final store = InMemoryMenuStore(
+          categories: [_cat('c1', 1), _cat('c2', 2)],
+          readOnly: true,
+        );
+        final outcome = await store.reorder(
+          organizationId: 'org-1',
+          entity: MenuEntityType.category,
+          orderedIds: const ['c2', 'c1'],
+        );
+        expect(
+          outcome.fold((_) => null, (f) => f),
+          isA<MenuPermissionDenied>(),
+        );
+      },
+    );
 
     test('empty ids are rejected', () async {
       final store = InMemoryMenuStore(categories: [_cat('c1', 1)]);
@@ -123,7 +131,10 @@ void main() {
         entity: MenuEntityType.category,
         orderedIds: const [],
       );
-      expect(outcome.fold((_) => null, (f) => f), isA<MenuValidationRejected>());
+      expect(
+        outcome.fold((_) => null, (f) => f),
+        isA<MenuValidationRejected>(),
+      );
     });
   });
 }

@@ -944,9 +944,7 @@ void main() {
         isTrue,
       );
       expect(
-        container
-            .read(posActiveCorrectionSourceProvider)
-            ?.sourceOutboxEntryId,
+        container.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
         'entry-R',
       );
     });

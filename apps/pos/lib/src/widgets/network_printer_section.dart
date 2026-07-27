@@ -157,7 +157,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
     // a 50×50 test prints at 384 dots and shows its own width + safe-area
     // markers + ar/he/en samples + a bottom no-clip line. Result = bytes accepted
     // by the transport, never a paper-print claim; local/device-only.
-    final document = posMediaProfileDiagnosticDocument(l10n, config.mediaProfile);
+    final document = posMediaProfileDiagnosticDocument(
+      l10n,
+      config.mediaProfile,
+    );
     if (!mounted) return;
     // KITCHEN-PRINT-DUAL-001 (F4): serialize the test send through the SHARED
     // per-destination gate + canonical key, so a Test print never interleaves

@@ -722,7 +722,8 @@ void _retainDepartedSessionResult({
   final entry = container
       .read(outboxControllerProvider.notifier)
       .entryById(result.entry.id);
-  final permanentlyRejected = entry != null && entry.isPermanentBusinessRejection;
+  final permanentlyRejected =
+      entry != null && entry.isPermanentBusinessRejection;
 
   // MENU-ORDER-001 (Codex correction-result settlement §3): a CORRECTED submission that
   // settles after the submitting worker/scope departed must NEVER be captured as a second

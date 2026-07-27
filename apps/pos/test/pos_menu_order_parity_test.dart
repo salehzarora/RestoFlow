@@ -196,48 +196,51 @@ void main() {
       expect(_receiptItems(reprint), _expected);
     });
 
-    test('the KDS ticket + reprint (mapped from a SHUFFLED sync_pull wire that '
-        'carries the category/item snapshots) print the SAME Dashboard order', () async {
-      final l10n = await _l10n();
-      final labels = kitchenTicketPrintLabelsFromL10n(l10n);
+    test(
+      'the KDS ticket + reprint (mapped from a SHUFFLED sync_pull wire that '
+      'carries the category/item snapshots) print the SAME Dashboard order',
+      () async {
+        final l10n = await _l10n();
+        final labels = kitchenTicketPrintLabelsFromL10n(l10n);
 
-      final shuffled = <(String, int, int)>[
-        _cart[0], // Cola
-        _cart[4], // Burger B
-        _cart[2], // Fries
-        _cart[1], // Burger A
-        _cart[3], // Fanta
-      ];
-      final tickets = KdsTicketMapper.map(
-        orders: const [
-          {
-            'id': 'o1',
-            'status': 'submitted',
-            'order_type': 'dine_in',
-            'created_at': '2026-07-31T10:00:00Z',
-          },
-        ],
-        orderItems: [
-          for (final c in shuffled)
+        final shuffled = <(String, int, int)>[
+          _cart[0], // Cola
+          _cart[4], // Burger B
+          _cart[2], // Fries
+          _cart[1], // Burger A
+          _cart[3], // Fanta
+        ];
+        final tickets = KdsTicketMapper.map(
+          orders: const [
             {
-              'id': 'i-${c.$1}',
-              'order_id': 'o1',
-              'quantity': 1,
-              'menu_item_name_snapshot': c.$1,
-              'category_display_order_snapshot': c.$2,
-              'item_display_order_snapshot': c.$3,
-              'line_position': _cartPos(c.$1),
+              'id': 'o1',
+              'status': 'submitted',
+              'order_type': 'dine_in',
+              'created_at': '2026-07-31T10:00:00Z',
             },
-        ],
-        modifiers: const [],
-      );
-      // The KDS reprint reuses the same mapped ticket, so proving the mapped
-      // ticket's order proves both surfaces.
-      final kdsDoc = kit.buildKdsTicketPrintDocument(
-        ticket: tickets.single,
-        labels: labels,
-      );
-      expect(_kitchenItems(kdsDoc), _expected);
-    });
+          ],
+          orderItems: [
+            for (final c in shuffled)
+              {
+                'id': 'i-${c.$1}',
+                'order_id': 'o1',
+                'quantity': 1,
+                'menu_item_name_snapshot': c.$1,
+                'category_display_order_snapshot': c.$2,
+                'item_display_order_snapshot': c.$3,
+                'line_position': _cartPos(c.$1),
+              },
+          ],
+          modifiers: const [],
+        );
+        // The KDS reprint reuses the same mapped ticket, so proving the mapped
+        // ticket's order proves both surfaces.
+        final kdsDoc = kit.buildKdsTicketPrintDocument(
+          ticket: tickets.single,
+          labels: labels,
+        );
+        expect(_kitchenItems(kdsDoc), _expected);
+      },
+    );
   });
 }

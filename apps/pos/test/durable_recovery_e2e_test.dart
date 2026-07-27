@@ -18,8 +18,7 @@ import 'package:restoflow_pos/src/data/order_snapshot_repository.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart'
     show kdsTicketViewFromCartLines, kitchenTicketPrintLabelsFromL10n;
-import 'package:restoflow_pos/src/print/print_document.dart'
-    show PrintLineKind;
+import 'package:restoflow_pos/src/print/print_document.dart' show PrintLineKind;
 import 'package:restoflow_pos/src/widgets/receipt_print_preview.dart'
     show buildReceiptDocument;
 import 'package:restoflow_pos/src/state/cart_controller.dart';
@@ -905,7 +904,8 @@ void main() {
       expect(
         recoveries.keys.single,
         rec1,
-        reason: 'the SAME logical recovery is superseded, not moved to a new key',
+        reason:
+            'the SAME logical recovery is superseded, not moved to a new key',
       );
       // The recovery now carries the CORRECTED draft (Cola dropped), and the surviving
       // Burger B kept its ORIGINAL stable line id across the round.
@@ -993,154 +993,155 @@ void main() {
     },
   );
 
-  testWidgets(
-    'ACCEPTED-then-crash (§7): the correction link is produced by the REAL pre-dispatch '
-    'production flow; a corrected order accepted BEFORE the client sees the response is '
-    'reconciled on the next startup via the authoritative snapshot — the source recovery '
-    'is cleared through its REAL link, and no NEW corrected order is created',
-    (tester) async {
-      SharedPreferences.setMockInitialValues(<String, Object>{});
-      final prefs = await SharedPreferences.getInstance();
-      final l10n = await l10nEn();
-      // #1 rejected (item_unavailable); #2 the corrected op is ACCEPTED server-side, but
-      // the client never sees the response (a transient network error is injected on the
-      // push) — the "accepted before response" window. The durable e1->e2 link is written
-      // by the REAL beforeDispatch BEFORE that failed push, never hand-injected.
-      final transport = _RecordingTransport()
-        ..orderScript.addAll([_itemUnavailable, _accepted]);
+  testWidgets('ACCEPTED-then-crash (§7): the correction link is produced by the REAL pre-dispatch '
+      'production flow; a corrected order accepted BEFORE the client sees the response is '
+      'reconciled on the next startup via the authoritative snapshot — the source recovery '
+      'is cleared through its REAL link, and no NEW corrected order is created', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final prefs = await SharedPreferences.getInstance();
+    final l10n = await l10nEn();
+    // #1 rejected (item_unavailable); #2 the corrected op is ACCEPTED server-side, but
+    // the client never sees the response (a transient network error is injected on the
+    // push) — the "accepted before response" window. The durable e1->e2 link is written
+    // by the REAL beforeDispatch BEFORE that failed push, never hand-injected.
+    final transport = _RecordingTransport()
+      ..orderScript.addAll([_itemUnavailable, _accepted]);
 
-      // ---- Process A: capture, restore, corrected submit whose response is lost -------
-      final a = makeContainer(prefs, transport);
-      await signIn(a);
-      a.read(posDraftRecoveryProvider);
-      final (refA, ctxA) = await pumpApp(tester, a);
-      final cartA = a.read(cartControllerProvider.notifier);
-      cartA.addItem(_cola);
-      cartA.addItem(_burgerB);
+    // ---- Process A: capture, restore, corrected submit whose response is lost -------
+    final a = makeContainer(prefs, transport);
+    await signIn(a);
+    a.read(posDraftRecoveryProvider);
+    final (refA, ctxA) = await pumpApp(tester, a);
+    final cartA = a.read(cartControllerProvider.notifier);
+    cartA.addItem(_cola);
+    cartA.addItem(_burgerB);
+    a
+        .read(orderSetupControllerProvider.notifier)
+        .setOrderType(OrderType.takeaway);
+    await tester.pump();
+    Future<void> submitA() => submitOrderFromCart(
+      ref: refA,
+      context: ctxA,
+      cart: a.read(cartControllerProvider),
+      setup: a.read(orderSetupControllerProvider),
+      cartController: cartA,
+      setupController: a.read(orderSetupControllerProvider.notifier),
+      l10n: l10n,
+    );
+    await submitA(); // -> item_unavailable -> recovery e1
+    await tester.pump();
+    await settle();
+    final e1 = a.read(posDraftRecoveryProvider).keys.single;
+
+    final restored = a
+        .read(posDraftRecoveryProvider.notifier)
+        .recoverable(e1, a.read(posRecoveryBindingProvider))!;
+    await PosRecoveryCoordinator(refA).restore(ctxA, restored);
+    await tester.pump();
+    cartA.removeLine(
       a
-          .read(orderSetupControllerProvider.notifier)
-          .setOrderType(OrderType.takeaway);
-      await tester.pump();
-      Future<void> submitA() => submitOrderFromCart(
-        ref: refA,
-        context: ctxA,
-        cart: a.read(cartControllerProvider),
-        setup: a.read(orderSetupControllerProvider),
-        cartController: cartA,
-        setupController: a.read(orderSetupControllerProvider.notifier),
-        l10n: l10n,
-      );
-      await submitA(); // -> item_unavailable -> recovery e1
-      await tester.pump();
-      await settle();
-      final e1 = a.read(posDraftRecoveryProvider).keys.single;
+          .read(cartControllerProvider)
+          .lines
+          .firstWhere((l) => l.menuItemId == 'cola')
+          .lineId,
+    );
+    a
+        .read(orderSetupControllerProvider.notifier)
+        .setOrderType(OrderType.takeaway);
+    await tester.pump();
+    // The server ACCEPTS the corrected op, but the client's push sees a network error
+    // (the accepted response is lost). beforeDispatch already persisted the e1->e2 link.
+    transport.throwOnNextOrder = const SyncTransportException(
+      SyncTransportErrorKind.transient,
+      code: '503',
+      message: 'response lost after acceptance',
+    );
+    await submitA(); // corrected resubmit -> real link persisted, response lost
+    await tester.pump();
+    await settle();
 
-      final restored = a
-          .read(posDraftRecoveryProvider.notifier)
-          .recoverable(e1, a.read(posRecoveryBindingProvider))!;
-      await PosRecoveryCoordinator(refA).restore(ctxA, restored);
-      await tester.pump();
-      cartA.removeLine(
-        a
-            .read(cartControllerProvider)
-            .lines
-            .firstWhere((l) => l.menuItemId == 'cola')
-            .lineId,
-      );
-      a
-          .read(orderSetupControllerProvider.notifier)
-          .setOrderType(OrderType.takeaway);
-      await tester.pump();
-      // The server ACCEPTS the corrected op, but the client's push sees a network error
-      // (the accepted response is lost). beforeDispatch already persisted the e1->e2 link.
-      transport.throwOnNextOrder = const SyncTransportException(
-        SyncTransportErrorKind.transient,
-        code: '503',
-        message: 'response lost after acceptance',
-      );
-      await submitA(); // corrected resubmit -> real link persisted, response lost
-      await tester.pump();
-      await settle();
+    // The REAL pre-dispatch link is on the source recovery, pointing at a REAL
+    // dispatched outbox entry (e2) — no hand injection anywhere in this test.
+    final recAfterLink = a.read(posDraftRecoveryProvider)[e1]!;
+    final e2 = recAfterLink.correctionOutboxEntryId;
+    expect(
+      e2,
+      isNotNull,
+      reason: 'the corrected submit produced the durable link',
+    );
+    expect(
+      a.read(outboxControllerProvider.notifier).entryById(e2),
+      isNotNull,
+      reason: 'the stored correction id is a REAL dispatched outbox entry',
+    );
+    final opsBeforeCrash = transport.orderSubmitOps.length; // 2
+    await tester.pumpWidget(const SizedBox());
+    a.dispose(); // CRASH before any local acceptance cleanup could run.
 
-      // The REAL pre-dispatch link is on the source recovery, pointing at a REAL
-      // dispatched outbox entry (e2) — no hand injection anywhere in this test.
-      final recAfterLink = a.read(posDraftRecoveryProvider)[e1]!;
-      final e2 = recAfterLink.correctionOutboxEntryId;
-      expect(e2, isNotNull, reason: 'the corrected submit produced the durable link');
-      expect(
-        a.read(outboxControllerProvider.notifier).entryById(e2),
-        isNotNull,
-        reason: 'the stored correction id is a REAL dispatched outbox entry',
-      );
-      final opsBeforeCrash = transport.orderSubmitOps.length; // 2
-      await tester.pumpWidget(const SizedBox());
-      a.dispose(); // CRASH before any local acceptance cleanup could run.
+    // ---- Process C: fresh start; the authoritative window pull reconciles -----------
+    // A fresh transport that would ACCEPT any idempotent outbox replay — proving the
+    // reconcile needs no NEW op, only the accepted evidence for the SAME e2.
+    final transportC = _RecordingTransport()..orderScript.add(_accepted);
+    final c = makeContainer(prefs, transportC);
+    addTearDown(c.dispose);
+    await signIn(c);
+    c.read(posDraftRecoveryProvider); // rehydrate the linked recovery
+    await settle();
+    expect(
+      c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1),
+      isTrue,
+      reason: 'the linked source recovery survived the crash',
+    );
 
-      // ---- Process C: fresh start; the authoritative window pull reconciles -----------
-      // A fresh transport that would ACCEPT any idempotent outbox replay — proving the
-      // reconcile needs no NEW op, only the accepted evidence for the SAME e2.
-      final transportC = _RecordingTransport()..orderScript.add(_accepted);
-      final c = makeContainer(prefs, transportC);
-      addTearDown(c.dispose);
-      await signIn(c);
-      c.read(posDraftRecoveryProvider); // rehydrate the linked recovery
-      await settle();
-      expect(
-        c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1),
-        isTrue,
-        reason: 'the linked source recovery survived the crash',
-      );
+    // The authoritative window pull surfaces the ACCEPTED corrected order carrying the
+    // SAME outbox entry e2 (the server had accepted it despite the lost response).
+    final orders = c.read(posRecentOrdersControllerProvider.notifier);
+    orders.recordSubmitted(
+      SubmittedOrderView(
+        orderNumber: '#ACC',
+        orderType: OrderType.takeaway,
+        currencyCode: 'ILS',
+        subtotalMinor: 2000,
+        orderId: 'o2',
+        outboxEntryId: e2,
+        lines: const [],
+      ),
+    );
+    await settle();
+    await orders.applySnapshots([
+      PosOrderSnapshot(
+        orderId: 'o2',
+        orderCode: '#ACC',
+        revision: 1,
+        status: 'served',
+        settlement: PosSettlement.unpaid,
+        subtotalMinor: 2000,
+        discountTotalMinor: 0,
+        taxTotalMinor: 0,
+        grandTotalMinor: 2000,
+        createdAt: _t0,
+        updatedAt: _t0,
+        syncAt: _t0,
+        currencyCode: 'ILS',
+      ),
+    ]);
+    await settle();
 
-      // The authoritative window pull surfaces the ACCEPTED corrected order carrying the
-      // SAME outbox entry e2 (the server had accepted it despite the lost response).
-      final orders = c.read(posRecentOrdersControllerProvider.notifier);
-      orders.recordSubmitted(
-        SubmittedOrderView(
-          orderNumber: '#ACC',
-          orderType: OrderType.takeaway,
-          currencyCode: 'ILS',
-          subtotalMinor: 2000,
-          orderId: 'o2',
-          outboxEntryId: e2,
-          lines: const [],
-        ),
-      );
-      await settle();
-      await orders.applySnapshots([
-        PosOrderSnapshot(
-          orderId: 'o2',
-          orderCode: '#ACC',
-          revision: 1,
-          status: 'served',
-          settlement: PosSettlement.unpaid,
-          subtotalMinor: 2000,
-          discountTotalMinor: 0,
-          taxTotalMinor: 0,
-          grandTotalMinor: 2000,
-          createdAt: _t0,
-          updatedAt: _t0,
-          syncAt: _t0,
-          currencyCode: 'ILS',
-        ),
-      ]);
-      await settle();
-
-      // The reconcile cleared the source recovery THROUGH its REAL correctionOutboxEntryId
-      // link — no re-restore. No NEW corrected order was ever created: any transport
-      // contact in process C is only the idempotent replay of the SAME e2, never a new op.
-      expect(
-        c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1),
-        isFalse,
-        reason: 'accepted-then-crash reconciled via the REAL correction link',
-      );
-      // No NEW corrected order was created in Process A beyond the two real ops (the
-      // item_unavailable and the corrected op whose response was lost). Process C creates
-      // no new deliberate op — it reconciles from the authoritative accepted snapshot.
-      expect(opsBeforeCrash, 2, reason: 'only two real ops were ever dispatched');
-      // The accepted order remains available; exactly one logical order exists.
-      expect(c.read(posRecentOrdersControllerProvider), hasLength(1));
-    },
-  );
+    // The reconcile cleared the source recovery THROUGH its REAL correctionOutboxEntryId
+    // link — no re-restore. No NEW corrected order was ever created: any transport
+    // contact in process C is only the idempotent replay of the SAME e2, never a new op.
+    expect(
+      c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(e1),
+      isFalse,
+      reason: 'accepted-then-crash reconciled via the REAL correction link',
+    );
+    // No NEW corrected order was created in Process A beyond the two real ops (the
+    // item_unavailable and the corrected op whose response was lost). Process C creates
+    // no new deliberate op — it reconciles from the authoritative accepted snapshot.
+    expect(opsBeforeCrash, 2, reason: 'only two real ops were ever dispatched');
+    // The accepted order remains available; exactly one logical order exists.
+    expect(c.read(posRecentOrdersControllerProvider), hasLength(1));
+  });
 
   testWidgets(
     'a durable persistence WRITE FAILURE does not crash and does not falsely retire '
@@ -1209,7 +1210,9 @@ void main() {
           posAuthTransportProvider.overrideWithValue(transport),
           posRealSessionConfigProvider.overrideWithValue(null),
           posDraftRecoveryStoreProvider.overrideWithValue(linkFailing),
-          orderSnapshotRepositoryProvider.overrideWithValue(_EmptySnapshotRepo()),
+          orderSnapshotRepositoryProvider.overrideWithValue(
+            _EmptySnapshotRepo(),
+          ),
           posRecentOrdersStoreProvider.overrideWithValue(
             InMemoryRecentOrdersStore(),
           ),
@@ -1288,7 +1291,10 @@ void main() {
       );
       addTearDown(c.dispose);
       final ctrl = c.read(posDraftRecoveryProvider.notifier);
-      const owner = PosRecoveryBinding(scopeKey: 'S1', employeeProfileId: 'emp-A');
+      const owner = PosRecoveryBinding(
+        scopeKey: 'S1',
+        employeeProfileId: 'emp-A',
+      );
       ctrl.capture(
         PosDraftRecovery(
           draft: const CartDraftSnapshot(
@@ -1337,7 +1343,10 @@ void main() {
       );
       // The OWNER links successfully.
       expect(await link(owner), isTrue);
-      expect(c.read(posDraftRecoveryProvider)['e1']!.correctionOutboxEntryId, 'e2');
+      expect(
+        c.read(posDraftRecoveryProvider)['e1']!.correctionOutboxEntryId,
+        'e2',
+      );
       // A DIFFERENT worker cannot discard; the OWNER can.
       expect(
         await ctrl.discardOwned(
@@ -1391,7 +1400,10 @@ void main() {
           .recoverable(eA, c.read(posRecoveryBindingProvider))!;
       await PosRecoveryCoordinator(ref).restore(ctx, recA);
       await tester.pump();
-      expect(c.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId, eA);
+      expect(
+        c.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
+        eA,
+      );
 
       // Worker A signs out -> the active source is CLEARED; the recovery is RETAINED.
       c.read(posSessionControllerProvider.notifier).endSession();
@@ -1401,7 +1413,10 @@ void main() {
         isNull,
         reason: 'sign-out clears the volatile active source',
       );
-      expect(c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(eA), isTrue);
+      expect(
+        c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(eA),
+        isTrue,
+      );
 
       // Worker B signs in, starts a fresh cart, and submits an UNRELATED accepted order.
       await signIn(c, employeeProfileId: 'emp-B');
@@ -1427,7 +1442,10 @@ void main() {
       await settle();
 
       // B's submit NEVER touched A's recovery: still present, still UNLINKED.
-      expect(c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(eA), isTrue);
+      expect(
+        c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(eA),
+        isTrue,
+      );
       expect(
         c.read(posDraftRecoveryProvider)[eA]!.correctionOutboxEntryId,
         isNull,
@@ -1439,7 +1457,10 @@ void main() {
             .discardOwned(eA, c.read(posRecoveryBindingProvider)),
         isFalse,
       );
-      expect(c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(eA), isTrue);
+      expect(
+        c.read(posDraftRecoveryProvider.notifier).hasRecoveryFor(eA),
+        isTrue,
+      );
 
       // Worker A returns: the recovery is reclaimable.
       c.read(posSessionControllerProvider.notifier).endSession();
@@ -1546,7 +1567,9 @@ void main() {
           posAuthTransportProvider.overrideWithValue(transport),
           posRealSessionConfigProvider.overrideWithValue(null),
           posDraftRecoveryStoreProvider.overrideWithValue(toggle),
-          orderSnapshotRepositoryProvider.overrideWithValue(_EmptySnapshotRepo()),
+          orderSnapshotRepositoryProvider.overrideWithValue(
+            _EmptySnapshotRepo(),
+          ),
           posRecentOrdersStoreProvider.overrideWithValue(
             InMemoryRecentOrdersStore(),
           ),
@@ -1596,7 +1619,10 @@ void main() {
           sourceOutboxEntryId: 'e1',
           correctedOutboxEntryId: 'e2',
           binding: owner,
-          correctedDraft: const CartDraftSnapshot(currencyCode: 'ILS', lines: []),
+          correctedDraft: const CartDraftSnapshot(
+            currencyCode: 'ILS',
+            lines: [],
+          ),
           orderType: OrderType.takeaway,
         ),
         isTrue,
@@ -1725,7 +1751,12 @@ void main() {
         receiptNumber: 'R-1',
         paidAt: _t0,
       );
-      final receipt = buildReceiptDocument(l10n, submitted, payment, isDemo: false);
+      final receipt = buildReceiptDocument(
+        l10n,
+        submitted,
+        payment,
+        isDemo: false,
+      );
 
       // Receipt items: exact Dashboard order, each once, at the "qty × name" format.
       final receiptItems = [
@@ -1758,7 +1789,8 @@ void main() {
       expect(submitted.grandTotalMinor, isA<int>());
       // The KITCHEN document stays money-free.
       final kitchenText = [
-        for (final line in kitchen.lines) '${line.left ?? ''} ${line.right ?? ''}',
+        for (final line in kitchen.lines)
+          '${line.left ?? ''} ${line.right ?? ''}',
       ];
       expect(
         kitchenText.any((t) => t.contains('ILS') || t.contains('₪')),

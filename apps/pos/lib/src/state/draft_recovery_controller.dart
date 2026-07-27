@@ -355,7 +355,8 @@ class PosDraftRecoveryController
     final source = state[sourceOutboxEntryId];
     if (source == null) return false;
     if (sourceOutboxEntryId == correctedOutboxEntryId) return false;
-    if (!source.binding.matches(binding)) return false; // §10 owner/scope revalidation
+    if (!source.binding.matches(binding))
+      return false; // §10 owner/scope revalidation
     final updated = PosDraftRecovery(
       draft: correctedDraft,
       orderType: orderType,
@@ -369,7 +370,9 @@ class PosDraftRecoveryController
       ...state,
       sourceOutboxEntryId: updated,
     };
-    final ok = await _persistMap(next); // §5 persist the replacement BEFORE publishing
+    final ok = await _persistMap(
+      next,
+    ); // §5 persist the replacement BEFORE publishing
     if (!ok) return false;
     state = next;
     return true;
@@ -390,11 +393,14 @@ class PosDraftRecoveryController
   ) async {
     final r = state[outboxEntryId];
     if (r == null) {
-      _retireShell(outboxEntryId); // orphan shell cleanup; nothing durable to remove
+      _retireShell(
+        outboxEntryId,
+      ); // orphan shell cleanup; nothing durable to remove
       _clearActiveSourceIfMatches(outboxEntryId);
       return true;
     }
-    if (!r.binding.matches(binding)) return false; // §10 not authorized — keep it intact
+    if (!r.binding.matches(binding))
+      return false; // §10 not authorized — keep it intact
     final next = <String, PosDraftRecovery>{
       for (final e in state.entries)
         if (e.key != outboxEntryId) e.key: e.value,
@@ -537,7 +543,9 @@ class PosDraftRecoveryController
       }
     }
     if (removed.isEmpty) return;
-    final ok = await _persistMap(next); // persist THEN publish (retry on failure)
+    final ok = await _persistMap(
+      next,
+    ); // persist THEN publish (retry on failure)
     if (!ok || _disposed) return;
     state = next;
     for (final key in removed) {
