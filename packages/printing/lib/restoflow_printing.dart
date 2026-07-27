@@ -72,6 +72,11 @@ export 'src/printer_profile.dart';
 // builder/input/money-formatter/dispatcher are pure-Dart; the real Flutter
 // rasterizer implementing ReceiptRasterizer lives in packages/l10n.
 export 'src/receipt/customer_receipt_print_builder.dart';
+// PRINT-BRANDING-LOGO-001: the pure, deterministic receipt-logo rasterizer
+// (RGBA -> aspect-preserved, dithered, centered 1bpp bitmap for a thermal head),
+// the shared image validator + input limits, and the per-profile logo bounds.
+// The Flutter/dart:ui decoder that feeds it lives in packages/l10n.
+export 'src/receipt/logo_rasterizer.dart';
 export 'src/receipt/receipt_input.dart';
 export 'src/receipt/receipt_money_format.dart';
 export 'src/receipt/receipt_print_dispatcher.dart';

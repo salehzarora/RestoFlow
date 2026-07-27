@@ -10,6 +10,10 @@ library;
 
 export 'src/generated/app_localizations.dart';
 export 'src/localization_wiring.dart';
+// PRINT-BRANDING-LOGO-001: the Flutter/dart:ui logo decoder (compressed image
+// bytes -> straight-alpha RGBA DecodedLogoImage) that feeds the pure printing
+// LogoRasterizer; enforces the shared image limits + a typed decode exception.
+export 'src/receipt/flutter_logo_decoder.dart';
 // RF-073: the real Flutter/dart:ui implementation of the printing package's
 // ReceiptRasterizer port (Arabic/Hebrew/English shaping -> 1bpp bitmap).
 export 'src/receipt/receipt_rasterizer_flutter.dart';
