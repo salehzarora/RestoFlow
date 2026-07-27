@@ -330,11 +330,14 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     return _toPrintResult(attempt);
   }
 
+  // PRINT-BRANDING-LOGO-001 (§4/§5): only PRE-WRITE failures (the connect never
+  // succeeded, so no bytes reached the printer) are safe to auto-retry. A
+  // writeFailed is a MID-WRITE failure — bytes were already sent and a partial
+  // print may exist — so it is NOT retried (a retry would risk a duplicate).
+  // unknown is ambiguous about whether the send began, so it is not retried
+  // either.
   static bool _retryable(BluetoothJobCode code) => switch (code) {
-    BluetoothJobCode.connectFailed ||
-    BluetoothJobCode.timeout ||
-    BluetoothJobCode.writeFailed ||
-    BluetoothJobCode.unknown => true,
+    BluetoothJobCode.connectFailed || BluetoothJobCode.timeout => true,
     _ => false,
   };
 

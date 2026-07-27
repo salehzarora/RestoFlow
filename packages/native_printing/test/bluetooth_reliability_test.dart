@@ -148,17 +148,45 @@ void main() {
       },
     );
 
-    test('first fails, retry succeeds -> success', () async {
-      final api = _FakeApi(
-        jobs: const [
-          BluetoothJobResult(code: BluetoothJobCode.writeFailed),
-          BluetoothJobResult(code: BluetoothJobCode.ok),
-        ],
-      );
-      final result = await _connector(api).send(address: 'AA', bytes: _bytes());
-      expect(api.printCalls, hasLength(2));
-      expect(result.ok, isTrue);
-    });
+    test(
+      'a pre-write (connect) failure then success -> retry succeeds',
+      () async {
+        final api = _FakeApi(
+          jobs: const [
+            BluetoothJobResult(code: BluetoothJobCode.connectFailed),
+            BluetoothJobResult(code: BluetoothJobCode.ok),
+          ],
+        );
+        final result = await _connector(
+          api,
+        ).send(address: 'AA', bytes: _bytes());
+        expect(api.printCalls, hasLength(2));
+        expect(result.ok, isTrue);
+      },
+    );
+
+    test(
+      'a MID-WRITE failure (writeFailed) is NOT retried — partial print risk '
+      '(§4)',
+      () async {
+        final api = _FakeApi(
+          jobs: const [
+            BluetoothJobResult(
+              code: BluetoothJobCode.writeFailed,
+              bytesSent: 64,
+            ),
+            BluetoothJobResult(code: BluetoothJobCode.ok),
+          ],
+        );
+        final result = await _connector(
+          api,
+        ).send(address: 'AA', bytes: _bytes());
+        expect(api.printCalls, hasLength(1), reason: 'no resend after a write');
+        expect(result.ok, isFalse);
+        expect(result.sendStarted, isTrue);
+        expect(result.bytesSent, 64);
+      },
+    );
 
     test('bluetoothOff / notBonded fail FAST — no pointless retry', () async {
       for (final (code, category) in [
