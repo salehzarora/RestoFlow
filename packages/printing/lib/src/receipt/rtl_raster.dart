@@ -60,6 +60,21 @@ bool printDocumentNeedsRaster(PrintDocument doc) => doc.lines
     .whereType<PrintTextLine>()
     .any((l) => l.text.codeUnits.any((c) => c > 0x7f));
 
+/// PRINT-BRANDING-LOGO-001: the leading lines a caller placed BEFORE the first
+/// text line — a customer-receipt logo raster + its feed. Text rasterization
+/// keeps only [PrintTextLine]s, so without preserving this preamble the logo
+/// would vanish whenever a receipt rasterizes (ar/he — Arabic is the default
+/// locale — and every fixed-media label). Returns the leading non-text run only
+/// (the trailing feed/cut are re-emitted by the raster paths).
+List<PrintLine> leadingPreambleLines(PrintDocument doc) {
+  final preamble = <PrintLine>[];
+  for (final line in doc.lines) {
+    if (line is PrintTextLine) break;
+    preamble.add(line);
+  }
+  return preamble;
+}
+
 /// Whether [r] is an Arabic or Hebrew letter (used to pick the base direction).
 bool _isRtlLetter(int r) =>
     (r >= 0x0590 && r <= 0x05ff) || // Hebrew
@@ -127,6 +142,9 @@ Future<PrintDocument> rasterizeTextDocument(
     ),
   );
   return PrintDocument([
+    // PRINT-BRANDING-LOGO-001: keep the leading logo raster (+ its feed) above
+    // the rasterized text so it still prints on ar/he receipts.
+    ...leadingPreambleLines(textDoc),
     image.toPrintLine(),
     PrintFeedLine(feedLines),
     const PrintCutLine(),
@@ -269,6 +287,19 @@ Future<PrintDocument> rasterizeForMediaProfile(
   final total = pages.length;
 
   final out = <PrintLine>[];
+  // PRINT-BRANDING-LOGO-001: on a FIXED label the logo can't share page 1
+  // without risking an overflow of the label height, so it prints as its own
+  // leading label (image + feed + cut) at the profile's exact width — before the
+  // paginated receipt. Continuous rolls keep it inline (rasterizeTextDocument).
+  final logoImages = leadingPreambleLines(
+    textDoc,
+  ).whereType<PrintRasterImageLine>();
+  for (final logo in logoImages) {
+    out
+      ..add(logo)
+      ..add(PrintFeedLine(profile.feedLines))
+      ..add(const PrintCutLine());
+  }
   for (var p = 0; p < total; p++) {
     final pageLines = <String>[];
     final pageStyles = <PrintLineStyle>[];
