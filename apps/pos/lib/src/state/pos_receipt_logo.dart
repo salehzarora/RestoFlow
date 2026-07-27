@@ -173,22 +173,34 @@ class PosReceiptLogoController extends StateNotifier<ReceiptLogoAsset?> {
       return;
     }
 
-    // 3. Decode + rasterize for the active profile. A decode/convert failure
-    //    still yields an asset with source bytes (HTML/preview) but no raster
-    //    (native then prints text-only).
+    // 3. DECODE + validate first. An asset is published ONLY after the bytes
+    //    decode into a valid image (format accepted, dimensions/content checks
+    //    pass). A decode/validation failure yields NO asset — the receipt (POS
+    //    web <img> included) stays text-only, never a broken image or blank gap.
+    final pp.DecodedLogoImage decoded;
+    try {
+      decoded = await decoder.decode(fetched.bytes);
+    } catch (_) {
+      _set(
+        epoch,
+        null,
+      ); // §13: no source-bytes-only asset after a failed decode
+      return;
+    }
+    if (epoch != _epoch) return;
+
+    // 4. The source is a valid image. Rasterize for the active profile (native
+    //    ESC/POS); a rasterize-only failure still leaves a valid source asset
+    //    (web renders it; native then prints text-only).
     pp.LogoRaster? raster;
     try {
-      raster = await decoder.decodeAndRasterize(
-        fetched.bytes,
-        profile,
-        rasterizer: _rasterizer,
-      );
+      raster = _rasterizer.rasterizeForProfile(decoded, profile);
     } catch (_) {
       raster = null;
     }
     if (epoch != _epoch) return;
 
-    // 4. Persist the raster (best-effort) so the next print is instant + offline.
+    // 5. Persist the raster (best-effort) so the next print is instant + offline.
     if (raster != null) {
       await _safeWrite(
         key,
