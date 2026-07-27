@@ -9183,6 +9183,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your receipt logo is managed at the restaurant level.'**
   String get brandingReadOnlyNote;
+
+  /// Shown when a branding write outcome is uncertain (no RPC response and no readback) — nothing was deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not confirm the change. Refresh and check before trying again.'**
+  String get brandingErrorUncertain;
 }
 
 class _AppLocalizationsDelegate

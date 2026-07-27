@@ -1519,5 +1519,6 @@
   "brandingUnavailable": "ניהול הלוגו אינו זמין כאן.",
   "brandingDemoNote": "התחברו לסביבת עבודה חיה כדי לנהל את לוגו הקבלה.",
   "brandingPickerUnsupported": "העלאה זמינה רק בלוח הבקרה בדפדפן.",
-  "brandingReadOnlyNote": "לוגו הקבלה מנוהל ברמת המסעדה."
+  "brandingReadOnlyNote": "לוגו הקבלה מנוהל ברמת המסעדה.",
+  "brandingErrorUncertain": "לא הצלחנו לאמת את השינוי. רעננו ובדקו לפני ניסיון נוסף."
 }

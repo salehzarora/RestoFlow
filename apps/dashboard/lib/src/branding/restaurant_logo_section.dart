@@ -185,37 +185,56 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
       return; // the authoritative old setting is untouched
     }
 
-    // 2. Commit the pointer via CAS.
+    // 2. Commit the pointer via CAS (with idempotent-retry + readback
+    //    reconciliation inside the repository).
     final result = await widget.repository!.save(
       path: objectKey,
       enabled: true,
       expectedVersion: settings.version,
     );
     if (!mounted) return;
+    final previousPath = settings.path;
+    final authoritativePath = result.settings?.path;
 
-    if (result.status == RestaurantLogoWriteStatus.ok) {
-      final previousPath = settings.path;
-      await _applyAuthoritative(result.settings);
-      // 3. Best-effort delete the PREVIOUS object AFTER the new pointer commits.
-      var cleanupFailed = false;
-      if (previousPath != null && previousPath != objectKey) {
-        cleanupFailed = !await _bestEffortRemove(previousPath);
-      }
-      setState(() {
-        _picked = null;
-        _busy = false;
-      });
-      _setMessage(
-        cleanupFailed ? l10n.brandingCleanupWarning : l10n.brandingSaved,
-        isError: false,
-      );
-      return;
+    switch (result.status) {
+      case RestaurantLogoWriteStatus.ok:
+        // WE committed: refresh, then best-effort delete the PREVIOUS object.
+        await _applyAuthoritative(result.settings);
+        var cleanupFailed = false;
+        if (previousPath != null && previousPath != objectKey) {
+          cleanupFailed = !await _bestEffortRemove(previousPath);
+        }
+        _finish(
+          cleanupFailed ? l10n.brandingCleanupWarning : l10n.brandingSaved,
+          isError: false,
+        );
+        return;
+      case RestaurantLogoWriteStatus.uncertain:
+        // §7.D: outcome unknown — delete NOTHING (an orphan is safer than
+        // deleting an authoritative object); refresh + ask to retry.
+        await _applyAuthoritative(result.settings);
+        _finish(l10n.brandingErrorUncertain, isError: true);
+        return;
+      case RestaurantLogoWriteStatus.conflict:
+        // Someone else won: delete OUR orphan ONLY if it is not the
+        // authoritative path (never delete another user's object).
+        if (authoritativePath != objectKey) {
+          await _bestEffortRemove(objectKey);
+        }
+        await _applyAuthoritative(result.settings);
+        _finish(l10n.brandingErrorConflict, isError: true);
+        return;
+      case RestaurantLogoWriteStatus.notCommitted:
+      case RestaurantLogoWriteStatus.denied:
+      case RestaurantLogoWriteStatus.invalid:
+      case RestaurantLogoWriteStatus.unavailable:
+      case RestaurantLogoWriteStatus.storageFailure:
+        // The write did NOT commit: delete OUR just-uploaded orphan, keep old.
+        await _bestEffortRemove(objectKey);
+        await _applyAuthoritative(result.settings);
+        _finish(_messageForWriteStatus(result.status, l10n), isError: true);
+        return;
     }
-
-    // Failure/conflict: best-effort delete the orphan we just uploaded, then
-    // refresh to the authoritative state (never leave the pointer half-set).
-    await _bestEffortRemove(objectKey);
-    await _handleWriteFailure(result, l10n);
   }
 
   Future<void> _onRemove() async {
@@ -251,17 +270,16 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
       expectedVersion: settings.version,
     );
     if (!mounted) return;
+    // The OLD object is deleted ONLY when removal is CONFIRMED committed. For
+    // notCommitted / conflict / uncertain the logo may still be authoritative,
+    // so the old object is KEPT (never deleted on an ambiguous outcome). §8.
+    await _applyAuthoritative(result.settings);
     if (result.status == RestaurantLogoWriteStatus.ok) {
-      await _applyAuthoritative(result.settings);
       if (previousPath != null) await _bestEffortRemove(previousPath);
-      setState(() {
-        _picked = null;
-        _busy = false;
-      });
-      _setMessage(l10n.brandingRemoved, isError: false);
+      _finish(l10n.brandingRemoved, isError: false);
       return;
     }
-    await _handleWriteFailure(result, l10n);
+    _finish(_messageForWriteStatus(result.status, l10n), isError: true);
   }
 
   Future<void> _onToggle(bool value) async {
@@ -276,36 +294,39 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
       expectedVersion: settings.version,
     );
     if (!mounted) return;
+    // A toggle mutates no storage object — just reconcile to the authoritative
+    // state and report the outcome (uncertain => refresh + retry hint). §8.
+    await _applyAuthoritative(result.settings);
     if (result.status == RestaurantLogoWriteStatus.ok) {
-      await _applyAuthoritative(result.settings);
-      setState(() => _busy = false);
+      _finish(null, isError: false);
       return;
     }
-    await _handleWriteFailure(result, l10n);
+    _finish(_messageForWriteStatus(result.status, l10n), isError: true);
   }
 
-  Future<void> _handleWriteFailure(
-    RestaurantLogoWriteResult result,
-    AppLocalizations l10n,
-  ) async {
-    // Refresh to the authoritative state where the server returned it.
-    if (result.settings != null) {
-      await _applyAuthoritative(result.settings);
-    }
+  /// Clear the busy/pick state and (optionally) set a status message.
+  void _finish(String? message, {required bool isError}) {
     if (!mounted) return;
     setState(() {
       _picked = null;
       _busy = false;
     });
-    _setMessage(switch (result.status) {
-      RestaurantLogoWriteStatus.conflict => l10n.brandingErrorConflict,
-      RestaurantLogoWriteStatus.denied => l10n.brandingErrorDenied,
-      RestaurantLogoWriteStatus.invalid => l10n.brandingErrorInvalidType,
-      RestaurantLogoWriteStatus.storageFailure =>
-        l10n.brandingErrorUploadFailed,
-      _ => l10n.brandingErrorSaveFailed,
-    }, isError: true);
+    if (message != null) _setMessage(message, isError: isError);
   }
+
+  String _messageForWriteStatus(
+    RestaurantLogoWriteStatus status,
+    AppLocalizations l10n,
+  ) => switch (status) {
+    RestaurantLogoWriteStatus.conflict => l10n.brandingErrorConflict,
+    RestaurantLogoWriteStatus.denied => l10n.brandingErrorDenied,
+    RestaurantLogoWriteStatus.invalid => l10n.brandingErrorInvalidType,
+    RestaurantLogoWriteStatus.uncertain => l10n.brandingErrorUncertain,
+    RestaurantLogoWriteStatus.storageFailure => l10n.brandingErrorUploadFailed,
+    RestaurantLogoWriteStatus.notCommitted ||
+    RestaurantLogoWriteStatus.unavailable => l10n.brandingErrorSaveFailed,
+    RestaurantLogoWriteStatus.ok => l10n.brandingSaved,
+  };
 
   Future<void> _applyAuthoritative(RestaurantLogoSettings? settings) async {
     if (settings == null) return;

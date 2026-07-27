@@ -46,11 +46,22 @@ enum RestaurantLogoWriteStatus {
   /// The request was structurally invalid (bad path / enable-with-null).
   invalid,
 
-  /// A transport/session failure — nothing changed.
+  /// The RPC RESPONDED but rejected the write for an unrecognised reason — no
+  /// commit happened, so the caller may clean up its just-uploaded orphan.
   unavailable,
 
   /// The storage object upload/delete failed (set by the workflow layer).
   storageFailure,
+
+  /// A readback CONFIRMED the write did not commit (authoritative version is
+  /// still the expected one) — the caller may delete its just-uploaded orphan.
+  notCommitted,
+
+  /// The outcome is UNKNOWN: neither the RPC (even after an idempotent retry) nor
+  /// a readback could determine whether the write committed. The caller must
+  /// delete NOTHING — an orphan is safer than deleting an authoritative object —
+  /// and offer a refresh/retry.
+  uncertain,
 }
 
 /// A branding write result. On [ok]/[conflict] it carries the authoritative
@@ -123,30 +134,51 @@ class SupabaseRestaurantLogoRepository implements RestaurantLogoRepository {
     required bool enabled,
     required int expectedVersion,
   }) async {
-    final Object? raw;
+    // ONE STABLE idempotency id for this logical save, so an ambiguous-outcome
+    // RETRY replays the SAME request: a committed write returns its stored result
+    // via the server ledger (never a duplicate mutation, never a second version
+    // bump). §7.
+    final requestId = _requestId([
+      path ?? '',
+      enabled.toString(),
+      expectedVersion.toString(),
+    ]);
+
+    // Attempt once; on a TRANSPORT failure retry EXACTLY once with the SAME id.
+    var raw = await _tryInvokeSave(requestId, path, enabled, expectedVersion);
+    raw ??= await _tryInvokeSave(requestId, path, enabled, expectedVersion);
+    if (raw != null) return _classifyWrite(raw);
+
+    // Neither attempt reached the server — reconcile against the authoritative
+    // state so we NEVER delete a possibly-committed object on a lost response.
+    return _reconcile(path, enabled, expectedVersion);
+  }
+
+  /// Invoke the CAS RPC; returns the raw Map response, or null on a transport
+  /// failure / non-map response (the ambiguous case that triggers reconciliation).
+  Future<Map<dynamic, dynamic>?> _tryInvokeSave(
+    String requestId,
+    String? path,
+    bool enabled,
+    int expectedVersion,
+  ) async {
     try {
-      raw = await _t.invoke('set_restaurant_receipt_logo', <String, dynamic>{
-        'p_client_request_id': _requestId([
-          path ?? '',
-          enabled.toString(),
-          expectedVersion.toString(),
-        ]),
-        'p_organization_id': organizationId,
-        'p_restaurant_id': restaurantId,
-        'p_logo_path': path,
-        'p_enabled': enabled,
-        'p_expected_version': expectedVersion,
-      });
+      final raw = await _t
+          .invoke('set_restaurant_receipt_logo', <String, dynamic>{
+            'p_client_request_id': requestId,
+            'p_organization_id': organizationId,
+            'p_restaurant_id': restaurantId,
+            'p_logo_path': path,
+            'p_enabled': enabled,
+            'p_expected_version': expectedVersion,
+          });
+      return raw is Map ? raw : null;
     } catch (_) {
-      return const RestaurantLogoWriteResult(
-        RestaurantLogoWriteStatus.unavailable,
-      );
+      return null;
     }
-    if (raw is! Map) {
-      return const RestaurantLogoWriteResult(
-        RestaurantLogoWriteStatus.unavailable,
-      );
-    }
+  }
+
+  RestaurantLogoWriteResult _classifyWrite(Map<dynamic, dynamic> raw) {
     if (raw['ok'] == true) {
       return RestaurantLogoWriteResult(
         RestaurantLogoWriteStatus.ok,
@@ -168,10 +200,48 @@ class SupabaseRestaurantLogoRepository implements RestaurantLogoRepository {
           RestaurantLogoWriteStatus.invalid,
         );
       default:
+        // A RESPONDED-but-unrecognised error means no commit happened.
         return const RestaurantLogoWriteResult(
           RestaurantLogoWriteStatus.unavailable,
         );
     }
+  }
+
+  /// Read the authoritative state and decide whether the (lost-response) write
+  /// committed. Never deletes anything — it only classifies for the caller.
+  Future<RestaurantLogoWriteResult> _reconcile(
+    String? path,
+    bool enabled,
+    int expectedVersion,
+  ) async {
+    final current = await read();
+    if (current == null) {
+      // Can't read authority => truly uncertain: delete NOTHING.
+      return const RestaurantLogoWriteResult(
+        RestaurantLogoWriteStatus.uncertain,
+      );
+    }
+    if (current.version == expectedVersion) {
+      // The authoritative version never advanced => our write did NOT commit.
+      return RestaurantLogoWriteResult(
+        RestaurantLogoWriteStatus.notCommitted,
+        settings: current,
+      );
+    }
+    if (current.version == expectedVersion + 1 &&
+        current.path == path &&
+        current.enabled == enabled) {
+      // The version advanced exactly once TO our intended state => WE committed.
+      return RestaurantLogoWriteResult(
+        RestaurantLogoWriteStatus.ok,
+        settings: current,
+      );
+    }
+    // The version advanced but not to our intended state => someone else won.
+    return RestaurantLogoWriteResult(
+      RestaurantLogoWriteStatus.conflict,
+      settings: current,
+    );
   }
 
   RestaurantLogoSettings _settingsFrom(

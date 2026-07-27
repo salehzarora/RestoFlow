@@ -4890,4 +4890,8 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get brandingReadOnlyNote => 'לוגו הקבלה מנוהל ברמת המסעדה.';
+
+  @override
+  String get brandingErrorUncertain =>
+      'לא הצלחנו לאמת את השינוי. רעננו ובדקו לפני ניסיון נוסף.';
 }

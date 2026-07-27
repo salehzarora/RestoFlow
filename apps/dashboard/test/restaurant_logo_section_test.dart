@@ -220,6 +220,74 @@ void main() {
     );
   });
 
+  testWidgets(
+    'UNCERTAIN outcome deletes NOTHING (orphan safer than authoritative)',
+    (tester) async {
+      final repo = _FakeRepo(
+        withLogo,
+        const RestaurantLogoWriteResult(RestaurantLogoWriteStatus.uncertain),
+      );
+      final storage = _FakeStorage();
+      await pump(tester, repo: repo, storage: storage);
+      await tester.tap(find.byKey(const Key('branding-pick')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('branding-save')));
+      await tester.pumpAndSettle();
+      // Neither the new upload NOR the old object is deleted.
+      expect(storage.removed, isEmpty);
+      expect(
+        find.text(
+          'We could not confirm the change. Refresh and check before trying again.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('NOT-COMMITTED outcome deletes only the new orphan', (
+    tester,
+  ) async {
+    final repo = _FakeRepo(
+      withLogo,
+      const RestaurantLogoWriteResult(
+        RestaurantLogoWriteStatus.notCommitted,
+        settings: withLogo, // authoritative is still the OLD one
+      ),
+    );
+    final storage = _FakeStorage();
+    await pump(tester, repo: repo, storage: storage);
+    await tester.tap(find.byKey(const Key('branding-pick')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('branding-save')));
+    await tester.pumpAndSettle();
+    // The just-uploaded orphan is removed; the old object is KEPT.
+    expect(
+      storage.removed,
+      contains('org1/rest1/logo/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png'),
+    );
+    expect(storage.removed, isNot(contains('org1/rest1/logo/old.png')));
+  });
+
+  testWidgets('remove with an UNCERTAIN outcome keeps the old object', (
+    tester,
+  ) async {
+    final repo = _FakeRepo(
+      withLogo,
+      const RestaurantLogoWriteResult(RestaurantLogoWriteStatus.uncertain),
+    );
+    final storage = _FakeStorage();
+    await pump(tester, repo: repo, storage: storage);
+    await tester.tap(find.byKey(const Key('branding-remove')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('branding-remove-confirm-action')));
+    await tester.pumpAndSettle();
+    expect(
+      storage.removed,
+      isEmpty,
+      reason: 'never delete on an ambiguous remove',
+    );
+  });
+
   testWidgets('old-object cleanup failure keeps the new setting (warning)', (
     tester,
   ) async {

@@ -3367,5 +3367,7 @@
   "brandingPickerUnsupported": "Uploading is only available in the web dashboard.",
   "@brandingPickerUnsupported": {"description": "Shown when the file picker is not available on this platform."},
   "brandingReadOnlyNote": "Your receipt logo is managed at the restaurant level.",
-  "@brandingReadOnlyNote": {"description": "Shown to a covering non-manager (branch-only manager / cashier / accountant) who can view but not manage branding."}
+  "@brandingReadOnlyNote": {"description": "Shown to a covering non-manager (branch-only manager / cashier / accountant) who can view but not manage branding."},
+  "brandingErrorUncertain": "We could not confirm the change. Refresh and check before trying again.",
+  "@brandingErrorUncertain": {"description": "Shown when a branding write outcome is uncertain (no RPC response and no readback) — nothing was deleted."}
 }

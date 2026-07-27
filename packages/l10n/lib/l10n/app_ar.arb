@@ -1519,5 +1519,6 @@
   "brandingUnavailable": "إدارة الشعار غير متاحة هنا.",
   "brandingDemoNote": "اتصل بمساحة عمل مباشرة لإدارة شعار الإيصال.",
   "brandingPickerUnsupported": "الرفع متاح فقط في لوحة التحكم على الويب.",
-  "brandingReadOnlyNote": "تتم إدارة شعار الإيصال على مستوى المطعم."
+  "brandingReadOnlyNote": "تتم إدارة شعار الإيصال على مستوى المطعم.",
+  "brandingErrorUncertain": "تعذّر تأكيد التغيير. حدّث الصفحة وتحقّق قبل المحاولة مجدداً."
 }

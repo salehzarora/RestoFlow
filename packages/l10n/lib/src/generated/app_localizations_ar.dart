@@ -4927,4 +4927,8 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get brandingReadOnlyNote => 'تتم إدارة شعار الإيصال على مستوى المطعم.';
+
+  @override
+  String get brandingErrorUncertain =>
+      'تعذّر تأكيد التغيير. حدّث الصفحة وتحقّق قبل المحاولة مجدداً.';
 }

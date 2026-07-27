@@ -4969,4 +4969,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get brandingReadOnlyNote =>
       'Your receipt logo is managed at the restaurant level.';
+
+  @override
+  String get brandingErrorUncertain =>
+      'We could not confirm the change. Refresh and check before trying again.';
 }
