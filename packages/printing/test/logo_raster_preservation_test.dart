@@ -3,100 +3,167 @@ import 'dart:typed_data';
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:test/test.dart';
 
-/// PRINT-BRANDING-LOGO-001 — the leading logo raster must SURVIVE text
-/// rasterization: on ar/he receipts (Arabic is the default locale) and on every
-/// fixed-media label, not only on continuous80 + English.
+/// PRINT-BRANDING-LOGO-001 (correction §1-3 / §18) — the receipt logo must
+/// SURVIVE text rasterization (ar/he — Arabic is the default locale) AND, on a
+/// FIXED label, be COMPOSED into the SAME first physical page as the receipt
+/// title/text — never a dedicated logo-only label.
 
-const int _logoHeight = 8;
+/// A logo raster for [profile]'s exact width whose TOP row is all-black (0xFF)
+/// and the rest white, so it is identifiable inside a composed page image.
+PrintRasterImageLine _logo(MediaProfile profile, {int height = 40}) {
+  final widthBytes = profile.widthBytes;
+  final data = Uint8List(widthBytes * height);
+  for (var b = 0; b < widthBytes; b++) {
+    data[b] = 0xFF; // top row = solid black (the logo marker)
+  }
+  return PrintRasterImageLine(
+    data: data,
+    widthBytes: widthBytes,
+    heightDots: height,
+  );
+}
 
-PrintRasterImageLine _logo() => PrintRasterImageLine(
-  data: Uint8List(48 * _logoHeight),
-  widthBytes: 48,
-  heightDots: _logoHeight,
-);
-
-PrintDocument _docWith({required bool arabic}) => PrintDocument([
-  _logo(),
-  const PrintFeedLine(1),
+PrintDocument _doc(
+  MediaProfile profile, {
+  required bool arabic,
+  int bodyLines = 2,
+  bool withLogo = true,
+}) => PrintDocument([
+  if (withLogo) _logo(profile),
+  if (withLogo) const PrintFeedLine(1),
   PrintTextLine(
     arabic ? 'مطعم' : 'Restaurant',
     style: PrintLineStyle.headingLarge,
   ),
-  PrintTextLine(arabic ? 'طلب 12' : 'Order 12'),
+  for (var i = 0; i < bodyLines; i++)
+    PrintTextLine(arabic ? 'سطر $i' : 'Line $i'),
   const PrintFeedLine(3),
   const PrintCutLine(),
 ]);
 
-bool _hasLogo(PrintDocument doc) => doc.lines
-    .whereType<PrintRasterImageLine>()
-    .any((l) => l.heightDots == _logoHeight);
+List<PrintRasterImageLine> _rasters(PrintDocument d) =>
+    d.lines.whereType<PrintRasterImageLine>().toList();
+int _count<T>(PrintDocument d) => d.lines.whereType<T>().length;
+
+/// Whether [img]'s TOP row is the all-black logo marker.
+bool _startsWithLogo(PrintRasterImageLine img) {
+  final widthBytes = img.widthBytes;
+  for (var b = 0; b < widthBytes; b++) {
+    if (img.data[b] != 0xFF) return false;
+  }
+  return true;
+}
 
 void main() {
   final rasterizer = FakeReceiptRasterizer();
 
-  test(
-    'continuous80 + English (LTR) keeps the logo (text stays text)',
-    () async {
+  group('continuous80 (single receipt job)', () {
+    test('English (LTR) keeps the logo inline, one cut', () async {
       final out = await rasterizeForMediaProfile(
-        _docWith(arabic: false),
+        _doc(MediaProfile.continuous80, arabic: false),
         rasterizer: rasterizer,
         profile: MediaProfile.continuous80,
       );
-      expect(_hasLogo(out), isTrue);
-    },
-  );
+      // The logo is a real raster line; the text stays text; exactly one cut.
+      expect(_rasters(out).any(_startsWithLogo), isTrue);
+      expect(_count<PrintCutLine>(out), 1);
+    });
 
-  test(
-    'continuous80 + Arabic (RTL, rasterized) STILL keeps the logo',
-    () async {
+    test('Arabic (RTL, rasterized) STILL keeps the logo, one cut', () async {
       final out = await rasterizeForMediaProfile(
-        _docWith(arabic: true),
+        _doc(MediaProfile.continuous80, arabic: true),
         rasterizer: rasterizer,
         profile: MediaProfile.continuous80,
       );
-      // The receipt body rasterized to an image AND the logo raster survived.
-      expect(_hasLogo(out), isTrue);
-      expect(
-        out.lines.whereType<PrintRasterImageLine>().length,
-        greaterThan(1),
+      expect(_rasters(out).any(_startsWithLogo), isTrue);
+      expect(_count<PrintCutLine>(out), 1, reason: 'one continuous receipt');
+    });
+  });
+
+  for (final profile in [MediaProfile.label50x50, MediaProfile.label80x80]) {
+    group('fixed media ${profile.idKey}', () {
+      for (final arabic in [false, true]) {
+        final locale = arabic ? 'Arabic' : 'English';
+        test(
+          'short receipt: logo COMPOSED into the ONE first page ($locale)',
+          () async {
+            final out = await rasterizeForMediaProfile(
+              _doc(profile, arabic: arabic, bodyLines: 2),
+              rasterizer: rasterizer,
+              profile: profile,
+            );
+            final rasters = _rasters(out);
+            // Exactly ONE page image (no dedicated logo label).
+            expect(rasters.length, 1, reason: 'one physical page');
+            final page = rasters.single;
+            // Logo at the TOP, then real text below (taller than the logo alone).
+            expect(_startsWithLogo(page), isTrue);
+            expect(
+              page.heightDots,
+              greaterThan(40),
+              reason: 'logo + gap + text stacked, not the 40-dot logo alone',
+            );
+            expect(
+              page.data.any((b) => b == 0x55),
+              isTrue,
+              reason: 'the receipt text (fake fill 0x55) shares the page',
+            );
+            // Exactly one feed + one cut (one physical boundary), never two.
+            expect(_count<PrintFeedLine>(out), 1);
+            expect(_count<PrintCutLine>(out), 1);
+          },
+        );
+      }
+
+      test('no dedicated logo-only page (no image is the bare logo)', () async {
+        final out = await rasterizeForMediaProfile(
+          _doc(profile, arabic: true, bodyLines: 2),
+          rasterizer: rasterizer,
+          profile: profile,
+        );
+        // No emitted raster is exactly the 40-dot logo (which would be a logo
+        // label); every logo-bearing image is a composed, taller page.
+        expect(_rasters(out).any((r) => r.heightDots == 40), isFalse);
+      });
+
+      test('long receipt: paginates; logo ONLY on page one', () async {
+        final out = await rasterizeForMediaProfile(
+          _doc(profile, arabic: false, bodyLines: 60),
+          rasterizer: rasterizer,
+          profile: profile,
+          pageLabel: (p, t) => 'Page $p/$t',
+          continuationHeader: (p, t) => 'cont.',
+        );
+        final rasters = _rasters(out);
+        expect(rasters.length, greaterThan(1), reason: 'genuinely multi-page');
+        // The logo marker appears on EXACTLY one page (the first).
+        expect(rasters.where(_startsWithLogo).length, 1);
+        expect(_startsWithLogo(rasters.first), isTrue);
+        // One feed + one cut PER page (never an extra logo boundary).
+        expect(_count<PrintCutLine>(out), rasters.length);
+        expect(_count<PrintFeedLine>(out), rasters.length);
+      });
+    });
+  }
+
+  test(
+    'a no-logo fixed-media receipt is unaffected (no logo marker)',
+    () async {
+      final out = await rasterizeForMediaProfile(
+        _doc(MediaProfile.label50x50, arabic: false, withLogo: false),
+        rasterizer: rasterizer,
+        profile: MediaProfile.label50x50,
       );
+      expect(_rasters(out).any(_startsWithLogo), isFalse);
     },
   );
 
-  test('label50x50 (fixed) emits the logo as a leading label', () async {
+  test('a no-logo continuous English receipt stays the text path', () async {
     final out = await rasterizeForMediaProfile(
-      _docWith(arabic: true),
-      rasterizer: rasterizer,
-      profile: MediaProfile.label50x50,
-    );
-    expect(_hasLogo(out), isTrue);
-    // The logo is the FIRST line (its own leading label, before the receipt).
-    expect(out.lines.first, isA<PrintRasterImageLine>());
-  });
-
-  test('label80x80 (fixed) emits the logo as a leading label', () async {
-    final out = await rasterizeForMediaProfile(
-      _docWith(arabic: false),
-      rasterizer: rasterizer,
-      profile: MediaProfile.label80x80,
-    );
-    expect(_hasLogo(out), isTrue);
-    expect(out.lines.first, isA<PrintRasterImageLine>());
-  });
-
-  test('a no-logo doc is unaffected (no spurious raster line)', () async {
-    final noLogo = PrintDocument([
-      const PrintTextLine('Restaurant', style: PrintLineStyle.headingLarge),
-      const PrintTextLine('Order 12'),
-      const PrintFeedLine(3),
-      const PrintCutLine(),
-    ]);
-    final out = await rasterizeForMediaProfile(
-      noLogo,
+      _doc(MediaProfile.continuous80, arabic: false, withLogo: false),
       rasterizer: rasterizer,
       profile: MediaProfile.continuous80,
     );
-    // English continuous stays the text path — no raster image at all.
-    expect(out.lines.whereType<PrintRasterImageLine>(), isEmpty);
+    expect(_rasters(out), isEmpty);
   });
 }
