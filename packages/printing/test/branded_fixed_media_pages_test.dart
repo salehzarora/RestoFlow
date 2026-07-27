@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:restoflow_printing/restoflow_printing.dart';
@@ -214,6 +215,115 @@ void main() {
         });
       }
     }
+
+    // ---- §18b: a TALL logo must never land ALONE on page one ---------------
+    // A logo whose block fits `pageBudget` but not the planner's effective
+    // per-page budget (pageBudget - reserved-for-page-number) would, under a
+    // naive guard, be flushed alone onto page one with the title bumped to page
+    // two — a near-dedicated logo page. The fix: it must be OMITTED (text-only)
+    // instead. This exercises the exact isolation window on label50x50.
+    PrintDocument brandedTall(int logoHeightDots, int lineCount) {
+      const profile = MediaProfile.label50x50;
+      final logo = PrintRasterImageLine(
+        data: Uint8List(profile.widthBytes * logoHeightDots)
+          ..fillRange(0, profile.widthBytes * logoHeightDots, _logoFill),
+        widthBytes: profile.widthBytes,
+        heightDots: logoHeightDots,
+      );
+      return PrintDocument(<PrintLine>[
+        logo,
+        for (var i = 0; i < lineCount; i++)
+          PrintTextLine(
+            i == 0 ? 'HEADER' : 'item $i',
+            // Distinct blocks (item), so the planner can split logo from title.
+            style: i == 0 ? PrintLineStyle.headingLarge : PrintLineStyle.item,
+          ),
+        const PrintFeedLine(2),
+        const PrintCutLine(),
+      ], localeTag: 'en');
+    }
+
+    Future<PrintDocument> layoutTall(PrintDocument doc) =>
+        rasterizeForMediaProfile(
+          doc,
+          rasterizer: FakeReceiptRasterizer(dotsPerLine: 70),
+          profile: MediaProfile.label50x50,
+          pageLabel: (p, t) => 'PAGE $p/$t',
+          continuationHeader: (p, t) => 'CONT $p',
+        );
+
+    test(
+      'a tall logo that cannot share page one is OMITTED, never isolated',
+      () async {
+        const profile = MediaProfile.label50x50;
+        const tallLogo = 144; // == §14 max height for a 384-dot label.
+        expect(
+          tallLogo,
+          lessThanOrEqualTo(
+            ReceiptLogoBounds.forProfile(profile).maxHeightDots,
+          ),
+          reason: 'the fixture logo stays within the §14 bounds',
+        );
+        // Document the regime: a NAIVE guard (logo + title <= pageBudget) WOULD
+        // have composed this logo — so omission here is the fix, not a skip.
+        final tail = bottomSafeTailRows(profile);
+        final gap = math.max(6, tail ~/ 2);
+        final pageBudget = profile.printableHeightDots - tail;
+        const titleRows = 70; // the fake's dotsPerLine.
+        expect(
+          tallLogo + gap + titleRows,
+          lessThanOrEqualTo(pageBudget),
+          reason: 'the naive pageBudget guard would have (wrongly) composed it',
+        );
+
+        final out = await layoutTall(brandedTall(tallLogo, 6));
+        final pages = _count<PrintCutLine>(out);
+        final images = _images(out);
+        expect(
+          pages,
+          greaterThanOrEqualTo(2),
+          reason: 'the receipt is multi-page',
+        );
+        expect(
+          images.length,
+          pages,
+          reason: 'one image per page, no extra label',
+        );
+        // The logo is fully OMITTED: no page begins with the 0xFF logo band, so
+        // it never prints alone and never gets its own label/page.
+        for (var p = 0; p < images.length; p++) {
+          expect(
+            _rowAll(images[p], 0, _logoFill),
+            isFalse,
+            reason: 'no logo band on page ${p + 1} (omitted, text-only)',
+          );
+        }
+      },
+    );
+
+    test(
+      'a small logo on the SAME multi-page receipt still composes on page one',
+      () async {
+        final out = await layoutTall(brandedTall(24, 6));
+        final images = _images(out);
+        expect(_count<PrintCutLine>(out), greaterThanOrEqualTo(2));
+        // Composed: page one starts with the logo band and carries text below it.
+        expect(
+          _rowAll(images.first, 0, _logoFill),
+          isTrue,
+          reason: 'logo on page one',
+        );
+        expect(
+          images.first.heightDots,
+          greaterThan(24),
+          reason: 'text (title) shares page one below the small logo',
+        );
+        // And the logo is only on page one.
+        for (var p = 1; p < images.length; p++) {
+          expect(_rowAll(images[p], 0, _logoFill), isFalse);
+        }
+      },
+    );
 
     test(
       'a continuous roll keeps the logo above the receipt with ONE cut',

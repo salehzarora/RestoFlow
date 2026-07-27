@@ -286,28 +286,46 @@ Future<PrintDocument> rasterizeForMediaProfile(
   // logo raster is then stacked ON TOP of page one's text raster into one image.
   final logoLine = _firstRasterImage(leadingPreambleLines(textDoc));
   final gapDots = logoLine != null ? _fixedLogoGapDots(profile) : 0;
-  final titleRows = rows.isEmpty ? 0 : rows.first;
-  // Guard — unreachable under the §14 logo bounds (which cap the logo well below
-  // the label height): if the logo + at least the title cannot share page one,
-  // OMIT the logo (text-only). Never crop it and never give it its own label.
-  final composeLogo =
-      logoLine != null &&
-      (logoLine.heightDots + gapDots + titleRows) <= pageBudget;
-  final logoBlock = composeLogo ? logoLine.heightDots + gapDots : 0;
-  final offset = composeLogo ? 1 : 0;
 
-  final planRows = <int>[if (composeLogo) logoBlock, ...rows];
-  final planBlocks = <int>{
-    if (composeLogo) 0,
-    for (final b in blockStarts) b + offset,
-  };
+  // Tentatively compose the logo (a synthetic leading block, index 0) ahead of
+  // the title block (index 1). The logo may only STAY if the planner actually
+  // places the logo AND the title together on page one. Testing this against the
+  // planner's OWN effective budget — not a looser guard — is essential: on a
+  // multi-page ticket the planner packs each page against `pageBudget - reserved`
+  // (it holds back rows for the per-page number/continuation line), so a tall
+  // logo that fits `pageBudget` alone can still shove the title onto page two,
+  // leaving the logo on a near-dedicated page. When that happens we OMIT the logo
+  // (text-only) and re-plan without it — never crop it, never give it its own
+  // label or page. A no-logo document skips all of this and plans identically to
+  // the pre-branding output (byte-for-byte).
+  var composeLogo = logoLine != null && rows.isNotEmpty;
+  var offset = composeLogo ? 1 : 0;
 
-  final pages = planPrintPages(
-    lineHeights: planRows,
+  List<PrintPagePlan> planTextOnly() => planPrintPages(
+    lineHeights: rows,
     maxPageRows: pageBudget,
-    blockStartAt: planBlocks,
+    blockStartAt: blockStarts,
     reservedRowsPerPage: reserved,
   );
+
+  List<PrintPagePlan> pages;
+  if (composeLogo) {
+    pages = planPrintPages(
+      lineHeights: <int>[logoLine.heightDots + gapDots, ...rows],
+      maxPageRows: pageBudget,
+      blockStartAt: <int>{0, for (final b in blockStarts) b + 1},
+      reservedRowsPerPage: reserved,
+    );
+    final firstPage = pages.first.lineIndexes;
+    if (!(firstPage.contains(0) && firstPage.contains(1))) {
+      // The logo landed alone (or the title got bumped) — omit and re-plan.
+      composeLogo = false;
+      offset = 0;
+      pages = planTextOnly();
+    }
+  } else {
+    pages = planTextOnly();
+  }
   final total = pages.length;
 
   final out = <PrintLine>[];
