@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import 'bluetooth_printer.dart';
+import 'native_print_target.dart';
 import 'printer_config.dart';
 
 /// The "Test print" seam for a local network printer (ANDROID-002).
@@ -29,11 +30,19 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
   const DefaultNetworkPrinterTester({
     this.adapter = const pp.EscPosPrintAdapter(),
     this.profile = pp.PrinterProfile.escPos80mm,
+    this.rasterizer,
     this.timeout = const Duration(seconds: 6),
   });
 
   final pp.EscPosPrintAdapter adapter;
+
+  /// ESC/POS capabilities/codepage for the adapter — the raster WIDTH comes from
+  /// the config's media profile, never from here.
   final pp.PrinterProfile profile;
+
+  /// PRINT-LAYOUT-001A: the raster renderer, so the Test Print renders at the
+  /// SELECTED media profile through the SAME pipeline as production.
+  final pp.ReceiptRasterizer? rasterizer;
   final Duration timeout;
 
   @override
@@ -48,7 +57,20 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
           printerName: config.name,
           deviceLabel: deviceLabel,
         );
-    final bytes = adapter.encode(doc, profile);
+    // PRINT-LAYOUT-001A: render at the config's media profile (exact width +
+    // fixed-media pagination) — never a hardcoded 80mm/576. Continuous80 with an
+    // ASCII doc stays byte-identical (rasterizeForMediaProfile is a no-op there).
+    var rendered = doc;
+    try {
+      rendered = await pp.rasterizeForMediaProfile(
+        doc,
+        rasterizer: rasterizer,
+        profile: config.mediaProfile,
+      );
+    } catch (_) {
+      rendered = doc;
+    }
+    final bytes = adapter.encode(rendered, profile);
     final transport = pp.NetworkTcpPrintTransport(
       host: config.host,
       port: config.port,
@@ -64,7 +86,9 @@ class DefaultNetworkPrinterTester implements NetworkPrinterTester {
 
 /// The active tester. Tests override with a fake to capture the attempt.
 final networkPrinterTesterProvider = Provider<NetworkPrinterTester>(
-  (ref) => const DefaultNetworkPrinterTester(),
+  (ref) => DefaultNetworkPrinterTester(
+    rasterizer: ref.watch(nativePrintRasterizerProvider),
+  ),
 );
 
 /// The "Test print" seam for a Bluetooth printer (ANDROID-003) - mirrors the
@@ -87,11 +111,16 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
     this.connector, {
     this.adapter = const pp.EscPosPrintAdapter(),
     this.profile = pp.PrinterProfile.escPos80mm,
+    this.rasterizer,
   });
 
   final BluetoothPrinterConnector connector;
   final pp.EscPosPrintAdapter adapter;
   final pp.PrinterProfile profile;
+
+  /// PRINT-LAYOUT-001A: the raster renderer, so Test Print renders at the
+  /// selected media profile (exact width + fixed-media pagination).
+  final pp.ReceiptRasterizer? rasterizer;
 
   @override
   Future<pp.PrintResult> testPrint(
@@ -105,7 +134,17 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
           printerName: config.name,
           deviceLabel: deviceLabel,
         );
-    final bytes = adapter.encode(doc, profile);
+    var rendered = doc;
+    try {
+      rendered = await pp.rasterizeForMediaProfile(
+        doc,
+        rasterizer: rasterizer,
+        profile: config.mediaProfile,
+      );
+    } catch (_) {
+      rendered = doc;
+    }
+    final bytes = adapter.encode(rendered, profile);
     final transport = BluetoothClassicPrintTransport(
       connector: connector,
       address: config.address,
@@ -125,5 +164,6 @@ class DefaultBluetoothPrinterTester implements BluetoothPrinterTester {
 final bluetoothPrinterTesterProvider = Provider<BluetoothPrinterTester>(
   (ref) => DefaultBluetoothPrinterTester(
     ref.watch(bluetoothPrinterConnectorProvider),
+    rasterizer: ref.watch(nativePrintRasterizerProvider),
   ),
 );

@@ -11,6 +11,7 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_printing/restoflow_printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'src/data/draft_recovery_store.dart';
 import 'src/data/durable_outbox_store.dart';
 import 'src/data/ready_notifications_store.dart';
 import 'src/data/recent_orders_store.dart';
@@ -27,6 +28,7 @@ import 'src/state/pos_device_context.dart';
 import 'src/state/pos_printer_assignments.dart';
 import 'src/state/pos_session.dart';
 import 'src/state/pos_shift_close_policy.dart';
+import 'src/state/draft_recovery_controller.dart';
 import 'src/state/ready_notifications_controller.dart';
 import 'src/state/recent_orders_controller.dart';
 import 'src/widgets/pos_sync_lifecycle.dart';
@@ -89,6 +91,13 @@ Widget _posApp(
       // paid/unpaid state survive a refresh / restart (per-device key).
       posRecentOrdersStoreProvider.overrideWithValue(
         SharedPrefsRecentOrdersStore(prefs),
+      ),
+      // MENU-ORDER-001 (Codex #8/#9): a permanently-rejected order's recovery —
+      // its draft with the Dashboard menu ranks, order type, table, customer name
+      // — persists too, so Back to cart survives a refresh / restart and the
+      // corrected resubmit still prints in menu order.
+      posDraftRecoveryStoreProvider.overrideWithValue(
+        SharedPrefsDraftRecoveryStore(prefs),
       ),
       // POS-OPERATIONS-SYNC-001: the incremental pull cursor is durable and
       // SCOPE-PARTITIONED (org/restaurant/branch/device). Replaying one branch's

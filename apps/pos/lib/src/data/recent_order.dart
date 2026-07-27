@@ -511,6 +511,14 @@ Map<String, Object?> _lineToJson(SubmittedLineView l) => <String, Object?>{
   'currency_code': l.currencyCode,
   'modifiers': l.modifiers,
   if (l.note != null) 'note': l.note,
+  // MENU-ORDER-001: persist the menu-order snapshots (ADDITIVE — only when set)
+  // so the CLIENT-fallback reprint keeps Dashboard order across a relaunch. Older
+  // records simply lack the keys and load as 0 (keep their stored order).
+  if (l.categoryDisplayOrder != 0)
+    'category_display_order_snapshot': l.categoryDisplayOrder,
+  if (l.itemDisplayOrder != 0)
+    'item_display_order_snapshot': l.itemDisplayOrder,
+  if (l.linePosition != 0) 'line_position': l.linePosition,
 };
 
 SubmittedLineView _lineFromJson(Map<String, Object?> j) {
@@ -529,6 +537,11 @@ SubmittedLineView _lineFromJson(Map<String, Object?> j) {
         ? [for (final m in modsRaw) '$m']
         : const <String>[],
     note: _strOrNull(j['note']),
+    // MENU-ORDER-001: tolerant read of the persisted menu-order snapshots (older
+    // records lack them -> 0 -> keep stored order).
+    categoryDisplayOrder: _int(j['category_display_order_snapshot']),
+    itemDisplayOrder: _int(j['item_display_order_snapshot']),
+    linePosition: _int(j['line_position']),
   );
 }
 

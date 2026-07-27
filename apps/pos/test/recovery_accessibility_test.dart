@@ -129,7 +129,8 @@ Future<void> _pump(
 
 void main() {
   testWidgets(
-    'empty cart: restore restores directly, retires the shell + recovery',
+    'empty cart: restore restores directly and RETAINS the durable recovery + '
+    'shell (MENU-ORDER-001: Back to cart is NOT terminal)',
     (tester) async {
       final c = _demo();
       final r = _seedRejected(c, 'eA', customerName: 'Alice');
@@ -140,8 +141,16 @@ void main() {
       final cart = c.read(cartControllerProvider);
       expect(cart.lines.single.menuItemId, 'burger-A'); // draft A restored
       expect(c.read(orderSetupControllerProvider).customerName, 'Alice');
-      expect(c.read(posDraftRecoveryProvider).containsKey('eA'), isFalse);
-      expect(_hasShell(c, 'eA'), isFalse);
+      // The durable recovery + its rejected shell are KEPT so a crash before the
+      // corrected re-Send can recover the same order again; cleared only on the
+      // corrected order's acceptance or an explicit discard.
+      expect(c.read(posDraftRecoveryProvider).containsKey('eA'), isTrue);
+      expect(_hasShell(c, 'eA'), isTrue);
+      // The current cart is marked as the correction-in-progress of THIS recovery.
+      expect(
+        c.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
+        'eA',
+      );
     },
   );
 
@@ -168,25 +177,32 @@ void main() {
     expect(_hasShell(c, 'eA'), isFalse);
   });
 
-  testWidgets('Replace replaces the cart with the rejected draft exactly once', (
-    tester,
-  ) async {
-    final c = _demo();
-    final r = _seedRejected(c, 'eA', customerName: 'Alice');
-    c.read(cartControllerProvider.notifier).addItem(_fries); // cart B
-    await _pump(tester, c, r);
-    await tester.tap(find.byKey(const Key('do-restore')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('recovery-replace-cart')));
-    await tester.pumpAndSettle();
-    final cart = c.read(cartControllerProvider);
-    // Cart replaced with A (burger), exactly one line; customer name restored.
-    expect(cart.lines.length, 1);
-    expect(cart.lines.single.menuItemId, 'burger-A');
-    expect(c.read(orderSetupControllerProvider).customerName, 'Alice');
-    expect(c.read(posDraftRecoveryProvider).containsKey('eA'), isFalse);
-    expect(_hasShell(c, 'eA'), isFalse);
-  });
+  testWidgets(
+    'Replace replaces the cart with the rejected draft exactly once, RETAINING '
+    'the durable recovery + shell until acceptance',
+    (tester) async {
+      final c = _demo();
+      final r = _seedRejected(c, 'eA', customerName: 'Alice');
+      c.read(cartControllerProvider.notifier).addItem(_fries); // cart B
+      await _pump(tester, c, r);
+      await tester.tap(find.byKey(const Key('do-restore')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('recovery-replace-cart')));
+      await tester.pumpAndSettle();
+      final cart = c.read(cartControllerProvider);
+      // Cart replaced with A (burger), exactly one line; customer name restored.
+      expect(cart.lines.length, 1);
+      expect(cart.lines.single.menuItemId, 'burger-A');
+      expect(c.read(orderSetupControllerProvider).customerName, 'Alice');
+      // MENU-ORDER-001: Back to cart is not terminal — the recovery + shell survive.
+      expect(c.read(posDraftRecoveryProvider).containsKey('eA'), isTrue);
+      expect(_hasShell(c, 'eA'), isTrue);
+      expect(
+        c.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
+        'eA',
+      );
+    },
+  );
 
   testWidgets('Cancel changes nothing (cart, shell, recovery all remain)', (
     tester,
@@ -235,15 +251,15 @@ void main() {
   });
 
   test(
-    'a PIN/scope mismatch makes the recovery unavailable (not restorable)',
+    'a worker/scope mismatch makes the recovery unavailable (not restorable)',
     () {
       final c = _demo();
       _seedRejected(c, 'eA');
       final n = c.read(posDraftRecoveryProvider.notifier);
-      // A different PIN session cannot recover it.
+      // A DIFFERENT worker (employeeProfileId) cannot recover it (Codex #1).
       const otherBinding = PosRecoveryBinding(
         scopeKey: 'demo-org.demo-restaurant.demo-branch.demo-device',
-        pinSessionId: 'someone-else',
+        employeeProfileId: 'someone-else',
       );
       expect(n.recoverable('eA', otherBinding), isNull);
       // The rightful (current) context still can.

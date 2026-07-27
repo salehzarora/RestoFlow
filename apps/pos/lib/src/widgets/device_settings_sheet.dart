@@ -10,6 +10,8 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
 import '../print/print_bridge.dart';
+import '../print/pos_kitchen_ticket_printer.dart'
+    show posHasKitchenNativePrinterProvider;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_network_printer_config.dart';
@@ -268,6 +270,16 @@ class _AutoPrintSection extends ConsumerWidget {
       stored: stored,
       hasEnabledPrinter: hasEnabledPrinter,
     );
+    // KITCHEN-PRINT-DUAL-001: the INDEPENDENT kitchen-ticket auto-print choice,
+    // gated on a locally-configured KITCHEN printer (default OFF).
+    final hasKitchenPrinter = ref.watch(posHasKitchenNativePrinterProvider);
+    final storedKitchen = ref
+        .watch(posAutoPrintKitchenTicketProvider)
+        .valueOrNull;
+    final effectiveKitchen = posAutoPrintKitchenTicketEnabled(
+      stored: storedKitchen,
+      hasKitchenPrinter: hasKitchenPrinter,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -283,11 +295,28 @@ class _AutoPrintSection extends ConsumerWidget {
           title: Text(l10n.posAutoPrintReceiptToggle),
           subtitle: hasEnabledPrinter
               ? null
-              : Text(l10n.autoPrintNoPrinterNote),
+              : Text(l10n.autoPrintReceiptNoPrinterNote),
           value: effective,
           onChanged: hasEnabledPrinter
               ? (value) => ref
                     .read(posAutoPrintReceiptProvider.notifier)
+                    .setEnabled(value)
+              : null,
+        ),
+        SwitchListTile(
+          key: const Key('auto-print-kitchen-ticket-toggle'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.posAutoPrintKitchenTicketToggle),
+          // KITCHEN-PRINT-DUAL-001C: with a kitchen printer configured, explain the
+          // TWO workflows (on = print here + close directly, off = normal KDS);
+          // without a printer, the existing "needs a printer" note.
+          subtitle: hasKitchenPrinter
+              ? Text(l10n.posAutoPrintKitchenTicketToggleExplanation)
+              : Text(l10n.autoPrintKitchenNoPrinterNote),
+          value: effectiveKitchen,
+          onChanged: hasKitchenPrinter
+              ? (value) => ref
+                    .read(posAutoPrintKitchenTicketProvider.notifier)
                     .setEnabled(value)
               : null,
         ),

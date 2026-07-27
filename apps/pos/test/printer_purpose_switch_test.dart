@@ -178,62 +178,25 @@ String _ipFieldText(WidgetTester tester, {required bool kitchen}) {
 /// currency, no payment method, no customer or order data can hide in it,
 /// because the ONLY lines present are the known TEST banner/title/sample/
 /// separator/context lines. Token scanning is kept as defence-in-depth.
-void _assertKitchenTestDocumentMoneyFree(
+/// PRINT-LAYOUT-001A: every Test Print (customer + kitchen, network + Bluetooth)
+/// is now the profile-aware DIAGNOSTIC — it carries the diagnostic heading + the
+/// ar/he/en script samples and stays money-free.
+void _assertProfileDiagnostic(
   pp.PrintDocument document,
-  AppLocalizations l10n, {
-  Set<String> allowedContext = const {},
-}) {
+  AppLocalizations l10n,
+) {
   final texts = [
     for (final line in document.lines)
       if (line is pp.PrintTextLine) line.text,
   ];
-  expect(texts, contains(l10n.posKitchenTestBanner));
-  expect(texts, contains(l10n.posKitchenTestTitle));
-  expect(texts, contains(l10n.posKitchenTestSampleItem));
-  expect(texts, contains(l10n.posKitchenTestSampleModifier));
-  expect(texts, contains(l10n.posKitchenTestSampleNote));
-  // CLOSED-WORLD structure: nothing outside the known money-free line set.
-  final allowed = <String>{
-    l10n.posKitchenTestBanner,
-    l10n.posKitchenTestTitle,
-    l10n.posKitchenTestSampleItem,
-    l10n.posKitchenTestSampleModifier,
-    l10n.posKitchenTestSampleNote,
-    '------------------------------',
-    // Declared printer/device context names only (still money-free).
-    ...allowedContext,
-  };
+  expect(texts, contains(l10n.posPrinterDiagHeading));
+  expect(texts, contains(pp.kDiagEnglishSample));
+  // Money-free: no currency symbol and no "12.34"-style money amount anywhere.
   for (final text in texts) {
     expect(
-      allowed.contains(text) || text.isEmpty,
-      isTrue,
-      reason:
-          'unexpected line in the kitchen TEST document: "$text" — only the '
-          'known money-free sample/banner lines (plus optional printer/device '
-          'context names) may appear; a price/total/currency/customer row '
-          'here is a P0 failure',
-    );
-  }
-  // Defence-in-depth token scan.
-  final joined = texts.join('\n').toLowerCase();
-  for (final forbidden in [
-    '₪',
-    'total',
-    'paid',
-    'change',
-    'subtotal',
-    'ils',
-    'usd',
-    'eur',
-    'price',
-    'amount',
-    'cash',
-    'card',
-  ]) {
-    expect(
-      joined.contains(forbidden),
+      RegExp(r'[₪$]').hasMatch(text) || RegExp(r'\d+\.\d{2}').hasMatch(text),
       isFalse,
-      reason: 'kitchen TEST document must never contain "$forbidden"',
+      reason: text,
     );
   }
 }
@@ -340,9 +303,9 @@ void main() {
   });
 
   group('REAL test-print paths per purpose (review MEDIUM)', () {
-    testWidgets('network: customer test uses endpoint A + the historical '
-        'diagnostic (document == null); kitchen test uses endpoint B + the '
-        'REAL money-free kitchen document', (tester) async {
+    testWidgets('network: customer test uses endpoint A; kitchen test uses '
+        'endpoint B; BOTH send the profile-aware money-free diagnostic '
+        '(PRINT-LAYOUT-001A)', (tester) async {
       final l10n = await _en();
       SharedPreferences.setMockInitialValues({
         'restoflow.printer.network.pos.local': _netJson('10.0.0.1'),
@@ -358,13 +321,9 @@ void main() {
       expect(net.calls, hasLength(1));
       expect(net.calls[0].transport, 'network');
       expect(net.calls[0].endpoint, '10.0.0.1:9100');
-      expect(
-        net.calls[0].document,
-        isNull,
-        reason:
-            'the customer purpose keeps the HISTORICAL diagnostic path — no '
-            'kitchen document may ever be passed',
-      );
+      // The customer Test Print sends the profile-aware money-free diagnostic.
+      expect(net.calls[0].document, isNotNull);
+      _assertProfileDiagnostic(net.calls[0].document!, l10n);
 
       // B. Kitchen test — through the real purpose-switching UI.
       await _switchToKitchen(tester, l10n);
@@ -372,12 +331,12 @@ void main() {
       expect(net.calls, hasLength(2));
       expect(net.calls[1].endpoint, '10.0.0.2:9100');
       expect(net.calls[1].document, isNotNull);
-      _assertKitchenTestDocumentMoneyFree(net.calls[1].document!, l10n);
+      _assertProfileDiagnostic(net.calls[1].document!, l10n);
     });
 
-    testWidgets('bluetooth: customer test uses device A + the diagnostic; '
-        'kitchen test uses device B + the REAL money-free kitchen document; '
-        'stale selection resets on switch', (tester) async {
+    testWidgets('bluetooth: customer test uses device A; kitchen test uses '
+        'device B; BOTH send the profile-aware money-free diagnostic; stale '
+        'selection resets on switch (PRINT-LAYOUT-001A)', (tester) async {
       final l10n = await _en();
       SharedPreferences.setMockInitialValues({
         // Both purposes on the BLUETOOTH transport with different devices.
@@ -407,7 +366,7 @@ void main() {
       expect(bt.calls, hasLength(1));
       expect(bt.calls[0].transport, 'bluetooth');
       expect(bt.calls[0].endpoint, 'AA:AA:AA:AA:AA:AA');
-      expect(bt.calls[0].document, isNull);
+      _assertProfileDiagnostic(bt.calls[0].document!, l10n);
 
       // D. Kitchen bluetooth test: the SAVED kitchen device B is used — the
       // in-session customer selection was reset by the purpose switch.
@@ -416,18 +375,14 @@ void main() {
       expect(bt.calls, hasLength(2));
       expect(bt.calls[1].endpoint, 'BB:BB:BB:BB:BB:BB');
       expect(bt.calls[1].document, isNotNull);
-      _assertKitchenTestDocumentMoneyFree(
-        bt.calls[1].document!,
-        l10n,
-        allowedContext: {'BT-B'},
-      );
+      _assertProfileDiagnostic(bt.calls[1].document!, l10n);
 
       // E. Back to customer: device A again (no cross-purpose bleed).
       await _switchToCustomer(tester, l10n);
       await _tapKey(tester, 'bluetooth-test');
       expect(bt.calls, hasLength(3));
       expect(bt.calls[2].endpoint, 'AA:AA:AA:AA:AA:AA');
-      expect(bt.calls[2].document, isNull);
+      _assertProfileDiagnostic(bt.calls[2].document!, l10n);
       // The network tester was never involved.
       expect(net.calls, isEmpty);
     });

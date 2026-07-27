@@ -16,8 +16,16 @@ enum PrintLineStyle {
   /// Body text — the default.
   normal,
 
-  /// A large, centered heading (the restaurant name / order number hero).
+  /// A large, centered heading — the HERO line (the restaurant-name brand on a
+  /// receipt, the order-number reference on a kitchen ticket).
   headingLarge,
+
+  /// PRINT-LAYOUT-001B: a centered SECONDARY heading, one tier below
+  /// [headingLarge] — the non-hero identifier (the order number on a receipt,
+  /// the restaurant-name brand on a kitchen ticket, a "Receipt" label). Larger
+  /// than body/meta so the two identifiers are clearly ranked, but never the
+  /// hero.
+  subheading,
 
   /// A centered line (service details, thank-you footer).
   centered,
@@ -36,6 +44,28 @@ enum PrintLineStyle {
 
   /// A horizontal separator rule.
   separator,
+
+  /// PRINT-LAYOUT-001B: a small BLANK vertical gap (no ink) — used between item
+  /// blocks so spacing BETWEEN items reads larger than spacing WITHIN one item.
+  /// Its height is a profile-aware fraction of the base size; it expects no ink,
+  /// so the zero-ink recovery + ink-bounds scans correctly ignore it.
+  spacer,
+
+  /// PRINT-LAYOUT-001C: a KITCHEN-TICKET item name + quantity — deliberately
+  /// LARGER + bolder than the shared receipt [item] so a cook reads it across
+  /// the pass, while staying below the order-reference hero ([headingLarge]).
+  /// Kitchen-only; the receipt keeps [item] so its layout is untouched.
+  kitchenItem,
+
+  /// PRINT-LAYOUT-001C: a KITCHEN-TICKET modifier / preparation / removal line —
+  /// larger than the shared receipt [sub], but still below [kitchenItem] so the
+  /// item name stays the stronger element. Kitchen-only.
+  kitchenModifier,
+
+  /// PRINT-LAYOUT-001C: a KITCHEN-TICKET item / order note — as large as a
+  /// [kitchenModifier] but bold, so a special instruction can't be missed or
+  /// mistaken for a modifier. Kitchen-only.
+  kitchenNote,
 }
 
 /// Optional text-direction metadata carried on a line (RF-070).

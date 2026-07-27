@@ -46,6 +46,32 @@ class SelectedModifier {
   /// snapshot for a single unit, `name ×N` beyond (matches the KDS format).
   String get displayName =>
       quantity > 1 ? '$optionName ×$quantity' : optionName;
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization so a captured draft
+  /// survives an app restart (persisted with the recovery record). Money stays
+  /// integer minor (D-007); the kitchen count rides through KitchenMeat's json.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'option_id': optionId,
+    'group_name': groupName,
+    'option_name': optionName,
+    'price_delta_minor': priceDeltaMinor,
+    'quantity': quantity,
+    if (kitchenMeat != null) 'kitchen_meat': kitchenMeat!.toJson(),
+  };
+
+  /// Tolerant decode — a missing/absent field defaults safely so an older or
+  /// partial record never crashes the till on start.
+  static SelectedModifier fromJson(Map<String, Object?> json) {
+    int intOf(Object? v) => v is int ? v : int.tryParse('${v ?? ''}') ?? 0;
+    return SelectedModifier(
+      optionId: (json['option_id'] ?? '').toString(),
+      groupName: (json['group_name'] ?? '').toString(),
+      optionName: (json['option_name'] ?? '').toString(),
+      priceDeltaMinor: intOf(json['price_delta_minor']),
+      quantity: json['quantity'] == null ? 1 : intOf(json['quantity']),
+      kitchenMeat: KitchenMeat.tryFromJson(json['kitchen_meat']),
+    );
+  }
 }
 
 /// Immutable view of a single cart line for the POS UI.
@@ -64,6 +90,8 @@ class CartLineView {
     required this.currencyCode,
     this.modifiers = const <SelectedModifier>[],
     this.note,
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
   });
 
   final String lineId;
@@ -74,6 +102,13 @@ class CartLineView {
   final int lineTotalMinor;
   final String currencyCode;
   final List<SelectedModifier> modifiers;
+
+  /// MENU-ORDER-001: the item's Dashboard print-order ranks (category rank,
+  /// item-within-category rank), captured from the menu at add time. Used to
+  /// order items into Dashboard-configured order on the POS-direct kitchen
+  /// ticket. 0 = unknown (falls back to cart order). Non-money.
+  final int categoryDisplayOrder;
+  final int itemDisplayOrder;
 
   /// Optional per-item kitchen note the cashier typed ("بدون بصل") — shown
   /// under the cart line and sent as the payload item's `notes` (non-money).
@@ -138,6 +173,7 @@ class CartViewState {
     SubmittedOrderView? submittedOrder,
     Map<String, List<SelectedModifier>> lineModifiers = const {},
     Map<String, String> lineNotes = const {},
+    Map<String, (int, int)> lineDisplayOrders = const {},
     bool lockedByAddition = false,
   }) {
     var modifiersTotal = 0;
@@ -146,6 +182,7 @@ class CartViewState {
           final mods = lineModifiers[line.lineId] ?? const <SelectedModifier>[];
           final modSum = mods.fold<int>(0, (sum, m) => sum + m.totalDeltaMinor);
           modifiersTotal += modSum;
+          final order = lineDisplayOrders[line.lineId];
           return CartLineView(
             lineId: line.lineId,
             menuItemId: line.menuItemId,
@@ -156,6 +193,8 @@ class CartViewState {
             currencyCode: line.currencyCodeSnapshot,
             modifiers: mods,
             note: lineNotes[line.lineId],
+            categoryDisplayOrder: order?.$1 ?? 0,
+            itemDisplayOrder: order?.$2 ?? 0,
           );
         })
         .toList(growable: false);
@@ -210,6 +249,25 @@ class CartDraftSnapshot {
   final List<CartDraftLine> lines;
 
   bool get isEmpty => lines.isEmpty;
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization so a captured draft
+  /// (with its Dashboard menu ranks) survives an app restart.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'currency_code': currencyCode,
+    'lines': [for (final l in lines) l.toJson()],
+  };
+
+  static CartDraftSnapshot fromJson(Map<String, Object?> json) {
+    final rawLines = json['lines'];
+    return CartDraftSnapshot(
+      currencyCode: (json['currency_code'] ?? 'ILS').toString(),
+      lines: <CartDraftLine>[
+        if (rawLines is List)
+          for (final l in rawLines)
+            if (l is Map) CartDraftLine.fromJson(l.cast<String, Object?>()),
+      ],
+    );
+  }
 }
 
 class CartDraftLine {
@@ -218,16 +276,70 @@ class CartDraftLine {
     required this.name,
     required this.basePriceMinor,
     required this.quantity,
+    this.lineId,
     this.modifiers = const <SelectedModifier>[],
     this.note,
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
   });
 
   final String menuItemId;
   final String name;
   final int basePriceMinor;
   final int quantity;
+
+  /// MENU-ORDER-001 (Codex #2/#3): the line's STABLE cart line id, persisted so a
+  /// restored draft keeps its ORIGINAL line identity (edits/removals target the
+  /// right line; no duplicates). Null on a legacy record -> a fresh id is minted.
+  final String? lineId;
+
   final List<SelectedModifier> modifiers;
   final String? note;
+
+  /// MENU-ORDER-001 (Codex): the line's Dashboard print ranks, captured onto the
+  /// snapshot so they survive a submit -> reject -> restore round-trip (submit
+  /// clears the live _lineDisplayOrders). 0 = unknown (falls back to cart order).
+  final int categoryDisplayOrder;
+  final int itemDisplayOrder;
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization — carries the stable
+  /// lineId, ranks, modifiers, and note through a restart so a recovered order
+  /// keeps its line identity and still prints in menu order. Money is integer
+  /// minor (D-007).
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (lineId != null) 'line_id': lineId,
+    'menu_item_id': menuItemId,
+    'name': name,
+    'base_price_minor': basePriceMinor,
+    'quantity': quantity,
+    if (modifiers.isNotEmpty)
+      'modifiers': [for (final m in modifiers) m.toJson()],
+    if (note != null) 'note': note,
+    if (categoryDisplayOrder != 0)
+      'category_display_order': categoryDisplayOrder,
+    if (itemDisplayOrder != 0) 'item_display_order': itemDisplayOrder,
+  };
+
+  static CartDraftLine fromJson(Map<String, Object?> json) {
+    int intOf(Object? v) => v is int ? v : int.tryParse('${v ?? ''}') ?? 0;
+    final rawMods = json['modifiers'];
+    final rawNote = json['note'];
+    return CartDraftLine(
+      lineId: json['line_id']?.toString(),
+      menuItemId: (json['menu_item_id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      basePriceMinor: intOf(json['base_price_minor']),
+      quantity: json['quantity'] == null ? 1 : intOf(json['quantity']),
+      modifiers: <SelectedModifier>[
+        if (rawMods is List)
+          for (final m in rawMods)
+            if (m is Map) SelectedModifier.fromJson(m.cast<String, Object?>()),
+      ],
+      note: rawNote == null ? null : rawNote.toString(),
+      categoryDisplayOrder: intOf(json['category_display_order']),
+      itemDisplayOrder: intOf(json['item_display_order']),
+    );
+  }
 }
 
 class CartController extends Notifier<CartViewState> {
@@ -253,6 +365,12 @@ class CartController extends Notifier<CartViewState> {
   /// the modifiers; sent as the payload item's `notes`.
   final Map<String, String> _lineNotes = {};
 
+  /// MENU-ORDER-001: the item's Dashboard print-order ranks per line id
+  /// (categoryDisplayOrder, itemDisplayOrder), captured from the DemoMenuItem at
+  /// add time and carried onto CartLineView + SubmittedLineView so every POS
+  /// print surface orders items into Dashboard-configured order. Non-money.
+  final Map<String, (int, int)> _lineDisplayOrders = {};
+
   /// The ACTIVE menu currency (real backend currency in real mode; the demo
   /// constant otherwise). Read at cart (re)creation so price snapshots and the
   /// cart currency always agree with the menu being sold from (D-007/D-008).
@@ -273,6 +391,7 @@ class CartController extends Notifier<CartViewState> {
     _submittedOrder = null;
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lineDisplayOrders.clear();
     _lockOwner = null;
     return CartViewState.fromCart(_cart);
   }
@@ -348,14 +467,19 @@ class CartController extends Notifier<CartViewState> {
         !_lineNotes.containsKey(existing.lineId)) {
       _cart.changeQuantity(existing.lineId, existing.quantity + 1);
     } else {
+      final lineId = 'line-${_lineSeq++}';
       _cart.addLine(
         CartLine.snapshot(
-          lineId: 'line-${_lineSeq++}',
+          lineId: lineId,
           menuItemId: item.id,
           itemNameSnapshot: item.name,
           basePriceMinorSnapshot: item.priceMinor,
           currencyCodeSnapshot: _cart.currencyCode,
         ),
+      );
+      _lineDisplayOrders[lineId] = (
+        item.categoryDisplayOrder,
+        item.itemDisplayOrder,
       );
     }
     _emit();
@@ -391,6 +515,10 @@ class CartController extends Notifier<CartViewState> {
     );
     _lineModifiers[lineId] = List.unmodifiable(modifiers);
     if (hasNote) _lineNotes[lineId] = trimmedNote;
+    _lineDisplayOrders[lineId] = (
+      item.categoryDisplayOrder,
+      item.itemDisplayOrder,
+    );
     _emit();
     return CartMutationResult.applied;
   }
@@ -467,6 +595,9 @@ class CartController extends Notifier<CartViewState> {
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
+    // Abandoning the cart ends any in-progress correction: a later unrelated
+    // submit must not resolve the previously-restored recovery.
+    ref.read(posActiveCorrectionSourceProvider.notifier).clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -480,12 +611,19 @@ class CartController extends Notifier<CartViewState> {
     lines: <CartDraftLine>[
       for (final line in _cart.lines)
         CartDraftLine(
+          // MENU-ORDER-001 (Codex #2/#3): carry the STABLE line id so a restored
+          // draft keeps its original line identity.
+          lineId: line.lineId,
           menuItemId: line.menuItemId,
           name: line.itemNameSnapshot,
           basePriceMinor: line.basePriceMinorSnapshot,
           quantity: line.quantity,
           modifiers: _lineModifiers[line.lineId] ?? const <SelectedModifier>[],
           note: _lineNotes[line.lineId],
+          // MENU-ORDER-001 (Codex): carry the line's Dashboard menu ranks onto the
+          // draft so a restored (item_unavailable) cart still prints in menu order.
+          categoryDisplayOrder: _lineDisplayOrders[line.lineId]?.$1 ?? 0,
+          itemDisplayOrder: _lineDisplayOrders[line.lineId]?.$2 ?? 0,
         ),
     ],
   );
@@ -505,8 +643,18 @@ class CartController extends Notifier<CartViewState> {
     );
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lineDisplayOrders.clear();
     for (final l in draft.lines) {
-      final lineId = 'line-${_lineSeq++}';
+      // MENU-ORDER-001 (Codex #2/#3): reuse the persisted STABLE line id so
+      // edits/removals target the original line and a re-restore never
+      // duplicates; a legacy record with no id mints a fresh one. Keep _lineSeq
+      // AHEAD of any restored `line-N` so a later add can never collide with it.
+      final lineId = l.lineId ?? 'line-${_lineSeq++}';
+      final seqMatch = RegExp(r'^line-(\d+)$').firstMatch(lineId);
+      if (seqMatch != null) {
+        final n = int.tryParse(seqMatch.group(1)!) ?? -1;
+        if (n >= _lineSeq) _lineSeq = n + 1;
+      }
       _cart.addLine(
         CartLine.snapshot(
           lineId: lineId,
@@ -522,6 +670,9 @@ class CartController extends Notifier<CartViewState> {
       }
       final note = l.note;
       if (note != null && note.isNotEmpty) _lineNotes[lineId] = note;
+      // MENU-ORDER-001 (Codex): restore the Dashboard menu ranks so the corrected
+      // resubmit prints in the same menu order the original attempt would have.
+      _lineDisplayOrders[lineId] = (l.categoryDisplayOrder, l.itemDisplayOrder);
     }
     _submittedOrder = null;
     _emit();
@@ -555,13 +706,19 @@ class CartController extends Notifier<CartViewState> {
     // Line totals mirror the RF-052 server formula (each modifier delta
     // counted × its own quantity, once per line).
     var modifiersTotal = 0;
+    var linePosition = 0;
     final lines = <SubmittedLineView>[];
     for (final item in order.items) {
+      linePosition++;
       // LocalOrderItem.orderItemId carries the source cart line id.
       final mods =
           _lineModifiers[item.orderItemId] ?? const <SelectedModifier>[];
       final modSum = mods.fold<int>(0, (sum, m) => sum + m.totalDeltaMinor);
       modifiersTotal += modSum;
+      // MENU-ORDER-001: carry the item's Dashboard ranks + its 1-based cart
+      // position so every POS surface (receipt, kitchen ticket) orders items
+      // into the SAME Dashboard-configured sequence the KDS + server reprint use.
+      final dispOrder = _lineDisplayOrders[item.orderItemId];
       lines.add(
         SubmittedLineView(
           name: item.itemNameSnapshot,
@@ -572,6 +729,9 @@ class CartController extends Notifier<CartViewState> {
           // confirmation/receipt/print paths all show it unchanged.
           modifiers: [for (final m in mods) m.displayName],
           note: _lineNotes[item.orderItemId],
+          categoryDisplayOrder: dispOrder?.$1 ?? 0,
+          itemDisplayOrder: dispOrder?.$2 ?? 0,
+          linePosition: linePosition,
         ),
       );
     }
@@ -593,6 +753,7 @@ class CartController extends Notifier<CartViewState> {
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lineDisplayOrders.clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -618,8 +779,10 @@ class CartController extends Notifier<CartViewState> {
     int taxRateBp = 0,
   }) {
     var subtotal = 0;
+    var linePosition = 0;
     final lines = <SubmittedLineView>[];
     for (final l in draft.lines) {
+      linePosition++;
       final modSum = l.modifiers.fold<int>(
         0,
         (sum, m) => sum + m.totalDeltaMinor,
@@ -634,6 +797,12 @@ class CartController extends Notifier<CartViewState> {
           currencyCode: draft.currencyCode,
           modifiers: [for (final m in l.modifiers) m.displayName],
           note: l.note,
+          // MENU-ORDER-001 (Codex): the draft now carries the line's Dashboard menu
+          // ranks, so a recovered row prints in the SAME menu order it would have in
+          // its own session; line_position is the stable in-line tiebreak.
+          categoryDisplayOrder: l.categoryDisplayOrder,
+          itemDisplayOrder: l.itemDisplayOrder,
+          linePosition: linePosition,
         ),
       );
     }
@@ -672,6 +841,9 @@ class CartController extends Notifier<CartViewState> {
     _cart = _freshCart();
     _lineModifiers.clear();
     _lineNotes.clear();
+    _lineDisplayOrders.clear();
+    // A fresh order ends any in-progress correction (see [clear]).
+    ref.read(posActiveCorrectionSourceProvider.notifier).clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -695,6 +867,7 @@ class CartController extends Notifier<CartViewState> {
     submittedOrder: _submittedOrder,
     lineModifiers: _lineModifiers,
     lineNotes: _lineNotes,
+    lineDisplayOrders: _lineDisplayOrders,
     lockedByAddition: _locked,
   );
 }
@@ -703,3 +876,81 @@ class CartController extends Notifier<CartViewState> {
 final cartControllerProvider = NotifierProvider<CartController, CartViewState>(
   CartController.new,
 );
+
+/// MENU-ORDER-001 (Codex, correction-ownership): the OWNER-BOUND active correction
+/// source — the durable recovery the operator has RESTORED (Back to cart) into the
+/// current cart and is now correcting. It is never a bare id: it carries the STABLE
+/// ownership of the recovery it points at (the scope + worker), so a corrected submit
+/// can revalidate that the CURRENT signed-in worker + POS scope still own it before it
+/// links/clears anything. A stale source left by a departed worker (different
+/// employeeProfileId) or a re-pair (different scopeKey) is therefore inert — it can
+/// never attach to a later, unrelated order.
+///
+/// The ownership fields mirror `PosRecoveryBinding` (scopeKey + employeeProfileId) but
+/// are stored as bare strings here — this file is a low-level leaf, and importing
+/// `draft_recovery_controller` (which imports this file) would create a cycle. The
+/// ephemeral pinSessionId is deliberately NOT part of ownership (D-006): a new one is
+/// minted per login, so the SAME worker across a restart + re-login still owns it.
+class ActiveCorrectionSource {
+  const ActiveCorrectionSource({
+    required this.sourceOutboxEntryId,
+    required this.scopeKey,
+    required this.employeeProfileId,
+  });
+
+  /// The outbox entry id (map key) of the source recovery being corrected.
+  final String sourceOutboxEntryId;
+
+  /// STABLE ownership of the source recovery (org/restaurant/branch/device scope).
+  final String? scopeKey;
+
+  /// STABLE authenticated worker id of the source recovery (D-006).
+  final String? employeeProfileId;
+
+  /// Whether the given CURRENT scope + worker exactly own this source — the only
+  /// context allowed to link/resolve it. A different worker or scope can never.
+  bool ownedBy({
+    required String? scopeKey,
+    required String? employeeProfileId,
+  }) =>
+      this.scopeKey == scopeKey && this.employeeProfileId == employeeProfileId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ActiveCorrectionSource &&
+      other.sourceOutboxEntryId == sourceOutboxEntryId &&
+      other.scopeKey == scopeKey &&
+      other.employeeProfileId == employeeProfileId;
+
+  @override
+  int get hashCode =>
+      Object.hash(sourceOutboxEntryId, scopeKey, employeeProfileId);
+
+  @override
+  String toString() =>
+      'ActiveCorrectionSource($sourceOutboxEntryId, scope:$scopeKey, '
+      'worker:$employeeProfileId)';
+}
+
+/// The current OWNER-BOUND active correction source, or null when the cart is not
+/// correcting a restored recovery. Set by [PosRecoveryCoordinator.restore] (only when
+/// the current worker+scope own the recovery); consumed by `submitOrderFromCart` to
+/// durably LINK the corrected resubmit back to its source recovery BEFORE dispatch (so
+/// authoritative acceptance clears exactly that source, never an orphan). Cleared when
+/// the cart is cleared / a new order is started / the worker signs out / the accepted
+/// source is reconciled — so an UNRELATED later submit never re-links a stale source.
+/// In-memory only — re-established on each restore, so a crash simply re-derives it; NO
+/// pin/token/secret. Lives here (not draft_recovery_controller) to avoid an import cycle.
+class PosActiveCorrectionSource extends Notifier<ActiveCorrectionSource?> {
+  @override
+  ActiveCorrectionSource? build() => null;
+
+  void set(ActiveCorrectionSource? source) => state = source;
+
+  void clear() => state = null;
+}
+
+final posActiveCorrectionSourceProvider =
+    NotifierProvider<PosActiveCorrectionSource, ActiveCorrectionSource?>(
+      PosActiveCorrectionSource.new,
+    );

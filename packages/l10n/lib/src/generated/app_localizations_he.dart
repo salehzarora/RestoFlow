@@ -983,6 +983,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posReceiptTitle => 'קבלה';
 
   @override
+  String get printRestaurantNameFallback => 'מסעדה';
+
+  @override
   String get posReceiptNumberLabel => 'מס׳ קבלה';
 
   @override
@@ -1119,6 +1122,57 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get autoPrintNoPrinterNote => 'מושבת — לא הוקצתה מדפסת.';
+
+  @override
+  String get autoPrintReceiptNoPrinterNote => 'מושבת — לא הוקצתה מדפסת קבלה.';
+
+  @override
+  String get autoPrintKitchenNoPrinterNote =>
+      'הדפסה אוטומטית של כרטיס מטבח דורשת מדפסת מטבח מוגדרת.';
+
+  @override
+  String get posAutoPrintKitchenTicketToggle => 'הדפסה אוטומטית של כרטיס מטבח';
+
+  @override
+  String get posAutoPrintKitchenTicketToggleExplanation =>
+      'כשמופעל, כרטיס מטבח מודפס אוטומטית ממכשיר הקופה הזה לאחר הזמנה מוצלחת. ההזמנה עדיין נשלחת למסך המטבח כרגיל.';
+
+  @override
+  String get posFinishAllKitchenOrders => 'סיום כל הזמנות המטבח';
+
+  @override
+  String get posFinishAllConfirmAction => 'סיים הכול';
+
+  @override
+  String get posFinishAllConfirmBody =>
+      'כל הזמנות המטבח הפעילות יסתיימו ויוסרו ממסך המטבח. הזמנות שלא שולמו יישארו זמינות לתשלום בהיסטוריית ההזמנות.';
+
+  @override
+  String get posFinishAllNoActiveOrders => 'אין הזמנות מטבח פעילות';
+
+  @override
+  String posFinishAllResult(int count) {
+    return 'הסתיימו $count הזמנות מטבח';
+  }
+
+  @override
+  String posFinishAllResultWithFailures(int finished, int failed) {
+    return 'הסתיימו $finished הזמנות מטבח, $failed לא הסתיימו (עדיין מוצגות לניסיון חוזר)';
+  }
+
+  @override
+  String get posPrintKitchenTicketAction => 'הדפסה למטבח';
+
+  @override
+  String get posKitchenTicketPrintedSnack => 'כרטיס המטבח נשלח למדפסת';
+
+  @override
+  String get posKitchenTicketPrintFailedSnack =>
+      'לא ניתן היה להדפיס את כרטיס המטבח';
+
+  @override
+  String get posKitchenPrinterNotConfiguredSnack =>
+      'לא הוגדרה מדפסת מטבח. הגדר אחת בהגדרות המכשיר.';
 
   @override
   String get printStatusNotConfigured => 'לא הוגדרה מדפסת';
@@ -3633,6 +3687,42 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posNetworkPrinterSaveAction => 'שמירת מדפסת';
 
   @override
+  String get posPrinterMediaSizeLabel => 'גודל מדיית הדפסה';
+
+  @override
+  String get posPrinterMediaSizeContinuous => 'גליל 80 מ״מ (ברירת מחדל)';
+
+  @override
+  String get posPrinterMediaSize50 => 'תווית 50 × 50 מ״מ';
+
+  @override
+  String get posPrinterMediaSize80 => 'תווית 80 × 80 מ״מ';
+
+  @override
+  String get posPrinterDiagHeading => 'אבחון מדפסת';
+
+  @override
+  String posPrinterDiagWidthDots(int width) {
+    return 'רוחב: $width נקודות';
+  }
+
+  @override
+  String posPrinterDiagHeightDots(int height) {
+    return 'גובה מדיה: $height נקודות';
+  }
+
+  @override
+  String get posPrinterDiagTopSafe => 'אזור בטוח עליון';
+
+  @override
+  String get posPrinterDiagBottomSafe => 'אזור בטוח תחתון — לא נחתך';
+
+  @override
+  String posPrinterDiagPage(int page, int total) {
+    return 'עמוד $page מתוך $total';
+  }
+
+  @override
   String get posNetworkPrinterTestAction => 'הדפסת בדיקה';
 
   @override
@@ -4666,11 +4756,11 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posPrinterPurposeKitchen => 'כרטיסי מטבח';
 
   @override
-  String get posKitchenPrinterPreparationTitle => 'הכנה בלבד';
+  String get posKitchenPrinterPreparationTitle => 'הדפסה אוטומטית למטבח';
 
   @override
   String get posKitchenPrinterPreparationBody =>
-      'כרטיסי מטבח עדיין אינם מודפסים אוטומטית. אפשר להכין ולבדוק את מדפסת המטבח כעת; הפעלת מטבח במדפסת בלבד עדיין אינה זמינה.';
+      'הדפסה אוטומטית של כרטיס מטבח נשלטת על ידי ההגדרה «הדפסה אוטומטית של כרטיס מטבח» ודורשת מדפסת מטבח מוגדרת. אפשר גם להדפיס כרטיס מטבח ידנית מתוך הזמנה שנוצרה.';
 
   @override
   String get posKitchenPrinterUseCustomerAction =>

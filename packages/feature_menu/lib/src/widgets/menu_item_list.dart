@@ -15,6 +15,7 @@ import 'menu_components.dart';
 import 'menu_entity_forms.dart';
 import 'menu_item_thumbnail.dart';
 import 'menu_panel_header.dart';
+import 'menu_reorder.dart';
 
 /// The items detail panel for the selected category (RF-111 + menu/media
 /// sprint Part F — a product-catalog read): rows carry a real image thumbnail
@@ -55,6 +56,9 @@ class MenuItemList extends ConsumerWidget {
         .read(menuWriteControllerProvider)
         .setItemAvailability(
           menuItemId: item.id,
+          // The item's sibling owner is this category — refuse the flip while
+          // this category's items are mid-reorder.
+          menuCategoryId: categoryId,
           availability: availability,
           reason: reason,
         );
@@ -80,7 +84,13 @@ class MenuItemList extends ConsumerWidget {
     if (!await showMenuDeleteConfirm(context)) return;
     final outcome = await ref
         .read(menuWriteControllerProvider)
-        .softDelete(entity: MenuEntityType.item, id: item.id);
+        .softDelete(
+          entity: MenuEntityType.item,
+          id: item.id,
+          // Items' sibling owner is their category — the same scope this list's
+          // reorder guards, so the delete is refused mid-reorder.
+          parentId: categoryId,
+        );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -91,6 +101,72 @@ class MenuItemList extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// MENU-ORDER-001 (Codex): the exact sibling scope this list reorders — the
+  /// items of THIS category. Distinct per category, so reordering one category's
+  /// items never blocks another's.
+  MenuReorderScope get _reorderScope => MenuReorderScope(
+    organizationId: scope.organizationId,
+    restaurantId: scope.restaurantId,
+    branchId: scope.branchId,
+    entity: MenuEntityType.item,
+    parentId: categoryId, // the items' sibling owner is their category
+  );
+
+  void _reorder(
+    BuildContext context,
+    WidgetRef ref,
+    List<MenuItem> items,
+    int oldIndex,
+    int newIndex,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final i in items) i.id],
+      oldIndex,
+      newIndex,
+    );
+    // MENU-ORDER-001 (Codex #4): controller-owned lifecycle on the provider Ref
+    // — no WidgetRef-after-await, no latch leak on disposal (see category list).
+    ref
+        .read(menuWriteControllerProvider)
+        .reorderScoped(scope: _reorderScope, orderedIds: ids)
+        .then((outcome) {
+          if (outcome != null && !outcome.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+          }
+        });
+  }
+
+  Widget _tile(
+    BuildContext context,
+    WidgetRef ref,
+    MenuItem item, {
+    int? reorderIndex,
+  }) {
+    return _ItemTile(
+      item: item,
+      // Live (non-deleted) modifier groups from the snapshot the screen
+      // already holds — no extra read.
+      modifierGroupCount: snapshot.modifiersForItem(item.id).length,
+      // Availability is PER-BRANCH: with no branch in scope there is no single
+      // truthful state, so the control is withheld (an honest hint replaces it).
+      branchScoped: scope.branchId != null,
+      onTap: () => onOpenEditor(MenuEditorTarget(item: item)),
+      onEdit: () => onOpenEditor(MenuEditorTarget(item: item)),
+      onDelete: () => _delete(context, ref, item),
+      onSetAvailability: (availability, reason) => _setAvailability(
+        context,
+        ref,
+        item,
+        availability: availability,
+        reason: reason,
+      ),
+      reorderIndex: reorderIndex,
     );
   }
 
@@ -106,6 +182,10 @@ class MenuItemList extends ConsumerWidget {
               (needle.isEmpty || i.name.toLowerCase().contains(needle)),
         )
         .toList();
+
+    // MENU-ORDER-001: drag-reorder only when the COMPLETE set of the category's
+    // items is shown (no active search/filter) — reorder rewrites the whole set.
+    final canReorder = needle.isEmpty && items.length == all.length;
 
     final Widget body;
     if (all.isEmpty) {
@@ -126,36 +206,34 @@ class MenuItemList extends ConsumerWidget {
         title: l10n.menuNoResults,
         body: l10n.menuNoResultsBody,
       );
+    } else if (canReorder) {
+      body = ReorderableListView.builder(
+        padding: const EdgeInsets.all(RestoflowSpacing.sm),
+        buildDefaultDragHandles: false,
+        itemCount: items.length,
+        // onReorder is the stable callback (see menu_category_list.dart);
+        // onReorderItem is too new to depend on across the toolchain.
+        // ignore: deprecated_member_use
+        onReorder: (oldIndex, newIndex) =>
+            _reorder(context, ref, items, oldIndex, newIndex),
+        itemBuilder: (context, index) => Padding(
+          key: ValueKey(items[index].id),
+          padding: const EdgeInsets.only(bottom: RestoflowSpacing.xs),
+          child: _tile(context, ref, items[index], reorderIndex: index),
+        ),
+      );
     } else {
       body = ListView.separated(
         padding: const EdgeInsets.all(RestoflowSpacing.sm),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(height: RestoflowSpacing.xs),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return _ItemTile(
-            item: item,
-            // Live (non-deleted) modifier groups from the snapshot the screen
-            // already holds — no extra read.
-            modifierGroupCount: snapshot.modifiersForItem(item.id).length,
-            // Availability is PER-BRANCH: with no branch in scope there is no
-            // single truthful state, so the control is withheld (an honest
-            // hint replaces it in the menu).
-            branchScoped: scope.branchId != null,
-            onTap: () => onOpenEditor(MenuEditorTarget(item: item)),
-            onEdit: () => onOpenEditor(MenuEditorTarget(item: item)),
-            onDelete: () => _delete(context, ref, item),
-            onSetAvailability: (availability, reason) => _setAvailability(
-              context,
-              ref,
-              item,
-              availability: availability,
-              reason: reason,
-            ),
-          );
-        },
+        itemBuilder: (context, index) => _tile(context, ref, items[index]),
       );
     }
+
+    // MENU-ORDER-001 (Codex #5/#7): disable THIS category's item controls while
+    // its reorder persists (no second drag, no stale edit before reconcile).
+    final reordering = ref.watch(menuReorderInFlightProvider(_reorderScope));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -163,11 +241,20 @@ class MenuItemList extends ConsumerWidget {
         MenuPanelHeader(
           title: l10n.menuItemsHeading,
           actionLabel: l10n.menuAddItem,
-          onAction: () =>
-              onOpenEditor(MenuEditorTarget(categoryId: categoryId)),
+          // MENU-ORDER-001 (Codex #5): the ADD control lives in the header, OUTSIDE
+          // the list IgnorePointer — disable it too while THIS category's item
+          // reorder persists (a null onAction hides the button; zero write calls).
+          onAction: reordering
+              ? null
+              : () => onOpenEditor(MenuEditorTarget(categoryId: categoryId)),
         ),
         const Divider(height: 1),
-        Expanded(child: body),
+        Expanded(
+          child: IgnorePointer(
+            ignoring: reordering,
+            child: Opacity(opacity: reordering ? 0.6 : 1.0, child: body),
+          ),
+        ),
       ],
     );
   }
@@ -200,6 +287,7 @@ class _ItemTile extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onSetAvailability,
+    this.reorderIndex,
   });
 
   final MenuItem item;
@@ -213,6 +301,10 @@ class _ItemTile extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final void Function(String availability, String? reason) onSetAvailability;
+
+  /// MENU-ORDER-001: when non-null this tile is inside a reorderable list and
+  /// shows a leading drag handle bound to this index.
+  final int? reorderIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +321,17 @@ class _ItemTile extends StatelessWidget {
           padding: const EdgeInsets.all(RestoflowSpacing.sm),
           child: Row(
             children: [
+              if (reorderIndex != null) ...[
+                ReorderableDragStartListener(
+                  index: reorderIndex!,
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: RestoflowIconSizes.md,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+              ],
               // Real thumbnail when this surface has image storage wired and
               // the item carries an image; the familiar placeholder otherwise.
               MenuItemThumbnail(item: item),

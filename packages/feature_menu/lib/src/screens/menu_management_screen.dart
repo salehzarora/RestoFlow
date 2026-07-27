@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../models/menu_entity_type.dart';
 import '../models/menu_scope.dart';
 import '../models/menu_snapshot.dart';
 import '../state/menu_providers.dart';
@@ -83,6 +84,20 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
             onClose: _closeEditor,
           );
         }
+        // MENU-ORDER-001 (Codex): pin the AUTO-selected first category into
+        // explicit state on first load, so a later category reorder cannot drift
+        // the items panel. Once pinned, _resolveSelected keys on the id (stable
+        // across a reorder+reload — only display_order changes, not ids).
+        if (_selectedCategoryId == null) {
+          final resolved = _resolveSelected(snapshot);
+          if (resolved != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _selectedCategoryId == null) {
+                setState(() => _selectedCategoryId = resolved);
+              }
+            });
+          }
+        }
         return _surface(context, l10n, snapshot, scope);
       },
     );
@@ -94,6 +109,20 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
     MenuSnapshot snapshot,
     MenuScope scope,
   ) {
+    // MENU-ORDER-001 (Codex #5): the "Add category" control lives in the toolbar
+    // (outside MenuCategoryList's IgnorePointer) — disable it while the CATEGORY
+    // sibling reorder persists, so a new category cannot race the 1..N rewrite.
+    final categoryReordering = ref.watch(
+      menuReorderInFlightProvider(
+        MenuReorderScope(
+          organizationId: scope.organizationId,
+          restaurantId: scope.restaurantId,
+          branchId: scope.branchId,
+          entity: MenuEntityType.category,
+          parentId: scope.restaurantId,
+        ),
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -119,7 +148,7 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
                 filter: _filter,
                 onFilterChanged: (value) => setState(() => _filter = value),
                 trailing: FilledButton.icon(
-                  onPressed: _addCategory,
+                  onPressed: categoryReordering ? null : _addCategory,
                   icon: const Icon(Icons.add),
                   label: Text(l10n.menuAddCategory),
                 ),

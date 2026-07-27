@@ -37,6 +37,9 @@ export 'src/codec/print_document_codec.dart';
 // (ASCII/English-only, money-free) for the printer-setup Test print button.
 export 'src/diagnostics/escpos_kitchen_test_document.dart';
 export 'src/diagnostics/escpos_test_document.dart';
+// PRINT-LAYOUT-001A: the profile-aware thermal diagnostic (heading, width/height
+// dots, edge ruler + safe-area markers, ar/he/en samples, bottom no-clip line).
+export 'src/diagnostics/media_profile_diagnostic.dart';
 // RF-074: cash-drawer kick trigger — a narrow input contract + a dispatcher
 // that enqueues a one-shot, no-retry `cashDrawer` job (consumes RF-070's
 // PrintDrawerKickLine + RF-071 spool + the RF-58 job type/reprint guard).
@@ -44,7 +47,23 @@ export 'src/drawer/cash_drawer_kick_dispatcher.dart';
 export 'src/drawer/cash_drawer_kick_input.dart';
 export 'src/escpos/escpos_command_builder.dart';
 export 'src/escpos/escpos_print_adapter.dart';
+// PRINT-LAYOUT-001: the typed print MEDIA profile (50×50 / 80×80 fixed labels +
+// the backward-compatible 80mm continuous default) that carries printable
+// width/height in dots, safe margins, font scale, line spacing, and feed — the
+// single value threaded per printer endpoint to replace the hardcoded 576/48/3.
+export 'src/media_profile.dart';
 export 'src/print_adapter.dart';
+// PRINT-LAYOUT-001: the shared per-line raster metrics (one source for the
+// renderer font size + the pagination height estimate), the pure fixed-media
+// page-break planner (no clipping), and the 1bpp raster ink-bounds helper used
+// to assert content stays inside safe margins.
+export 'src/print_line_metrics.dart';
+// PRINT-LAYOUT-001B: the centralized, profile-aware per-role typography tokens
+// (size multiplier + concrete weight + alignment) the raster renderer and the
+// pagination estimate both read — the single source that keeps them in lockstep.
+export 'src/print_typography.dart';
+export 'src/print_pagination.dart';
+export 'src/raster_bounds.dart';
 export 'src/print_document.dart';
 export 'src/print_result.dart';
 export 'src/printer.dart';

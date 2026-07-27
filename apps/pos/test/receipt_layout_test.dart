@@ -77,7 +77,45 @@ void main() {
     });
 
     test(
-      'shows the customer-facing order number as a big title heading',
+      'PRINT-LAYOUT-001B: restaurant name is the brand hero (title) and the '
+      'order number is the prominent secondary identifier (subtitle) below it',
+      () async {
+        final l10n = await _l10n('en');
+        final doc = buildReceiptDocument(
+          l10n,
+          _order(),
+          _payment(),
+          isDemo: false,
+          restaurantName: 'Falafel House',
+        );
+        // The brand HERO is the restaurant name (title).
+        final brand = doc.lines.firstWhere(
+          (l) => l.kind == PrintLineKind.title,
+        );
+        expect(brand.left, 'Falafel House');
+        // The order number is a SECONDARY heading (subtitle), no longer a title.
+        expect(
+          doc.lines.any(
+            (l) =>
+                l.kind == PrintLineKind.subtitle &&
+                (l.left ?? '') == l10n.posReceiptOrderHeading('#ABC123'),
+          ),
+          isTrue,
+        );
+        expect(
+          doc.lines.any(
+            (l) =>
+                l.kind == PrintLineKind.title &&
+                (l.left ?? '') == l10n.posReceiptOrderHeading('#ABC123'),
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'PRINT-LAYOUT-001B: falls back to the localized generic brand word when '
+      'no real restaurant name is available (never a hardcoded placeholder)',
       () async {
         final l10n = await _l10n('en');
         final doc = buildReceiptDocument(
@@ -86,14 +124,10 @@ void main() {
           _payment(),
           isDemo: false,
         );
-        expect(
-          doc.lines.any(
-            (l) =>
-                l.kind == PrintLineKind.title &&
-                (l.left ?? '') == l10n.posReceiptOrderHeading('#ABC123'),
-          ),
-          isTrue,
+        final brand = doc.lines.firstWhere(
+          (l) => l.kind == PrintLineKind.title,
         );
+        expect(brand.left, l10n.printRestaurantNameFallback);
       },
     );
 

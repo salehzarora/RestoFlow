@@ -16,11 +16,15 @@ typedef MenuWriteOutcome = Result<MenuWriteResult, MenuWriteFailure>;
 ///  * [RpcMenuWriter] — calls the `public.menu_*` RPCs over the transport seam;
 ///  * the in-memory store — a local demo/test double.
 abstract class MenuWriter {
+  /// MENU-ORDER-001 (Codex #6): [displayOrder] is NULLABLE — a normal edit passes
+  /// null so it never sends a (possibly stale, pre-reorder) order value. On create
+  /// null defaults to 0 server-side; on update the PART 5 guard trigger preserves
+  /// the live drag-set order regardless (drag reorder is the sole writer).
   Future<MenuWriteOutcome> upsertCategory({
     required MenuScope scope,
     String? id,
     required String name,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   });
 
@@ -42,7 +46,7 @@ abstract class MenuWriter {
     required int basePriceMinor,
     required String currencyCode,
     String? defaultStationId,
-    int displayOrder = 0,
+    int? displayOrder, // Codex #6: null on edit (guard trigger preserves order)
     bool isActive = true,
     String? imagePath,
     String? itemType,
@@ -53,13 +57,17 @@ abstract class MenuWriter {
     Map<String, dynamic> attributes = const {},
   });
 
+  // Sizes/variants keep NUMERIC ordering (out of the drag-order phase); their
+  // display_order is still hand-set here, so it is passed through as given. The
+  // param is nullable only for signature consistency with the drag-reordered
+  // entities; the form always supplies a value.
   Future<MenuWriteOutcome> upsertSize({
     required MenuScope scope,
     String? id,
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   });
 
@@ -69,7 +77,7 @@ abstract class MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   });
 
@@ -86,7 +94,7 @@ abstract class MenuWriter {
     int minSelect = 0,
     int? maxSelect,
     bool isRequired = false,
-    int displayOrder = 0,
+    int? displayOrder, // Codex #6: null on edit (guard trigger preserves order)
     bool isActive = true,
     bool allowQuantity = false,
     int? maxQuantity,
@@ -98,7 +106,7 @@ abstract class MenuWriter {
     required String modifierId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder, // Codex #6: null on edit (guard trigger preserves order)
     bool isActive = true,
     // KITCHEN-MEAT-001: the option's meat contribution ({quantity, unit}) or
     // null (clears it / no meat). Rides the p_kitchen_meat RPC arg.
@@ -109,6 +117,22 @@ abstract class MenuWriter {
     required String organizationId,
     required MenuEntityType entity,
     required String id,
+  });
+
+  /// MENU-ORDER-001: drag-and-drop reorder. Atomically rewrites `display_order`
+  /// to 1..N in [orderedIds] order for a COMPLETE sibling set (all categories of
+  /// a restaurant, all items of a category, all groups of an item, or all
+  /// options of a group). [entity] must be [MenuEntityType.category],
+  /// [MenuEntityType.item], [MenuEntityType.modifier], or
+  /// [MenuEntityType.modifierOption]. The server resolves the rows' scope and
+  /// enforces the same manager+ authorization as the other menu writes; scope is
+  /// never client-supplied.
+  Future<MenuWriteOutcome> reorder({
+    required String organizationId,
+    required String restaurantId,
+    required String? branchId,
+    required MenuEntityType entity,
+    required List<String> orderedIds,
   });
 
   /// RESTAURANT-OPERATIONS-V1-001: sets the item's PER-BRANCH availability

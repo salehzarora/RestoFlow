@@ -45,8 +45,8 @@ void main() {
 
     expect(html, contains('#3F7A2C'));
     expect(html, contains('T2'));
-    expect(html, contains('برجر كلاسيك'));
-    expect(html, contains('1×'));
+    // PRINT-LAYOUT-001B: the item line LEADS with the quantity.
+    expect(html, contains('1 × برجر كلاسيك'));
     expect(html, contains('جبنة إضافية ×2')); // modifier quantity
     expect(html, contains('بدون بصل')); // item note
     expect(html, contains('rush order')); // order-level note

@@ -22,3 +22,19 @@ final posPrinterAssignmentsProvider =
       if (reader == null) return null;
       return reader.load();
     });
+
+/// PRINT-LAYOUT-001B: the paired station's own RESTAURANT NAME for printed
+/// headers, or null when unknown (demo / unconfigured / still loading / load
+/// failed) — the print builders then use a localized fallback, never a
+/// hardcoded placeholder. Offline-safe: reads the already-loaded assignments
+/// snapshot (the same one the settings sheet shows); it never triggers a fetch.
+final posRestaurantNameProvider = Provider<String?>((ref) {
+  final snapshot = switch (ref
+      .watch(posPrinterAssignmentsProvider)
+      .valueOrNull) {
+    Success(:final value) => value,
+    _ => null,
+  };
+  final name = snapshot?.restaurantName?.trim();
+  return (name == null || name.isEmpty) ? null : name;
+});

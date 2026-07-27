@@ -32,7 +32,7 @@ class _FailingOptionStore extends InMemoryMenuStore {
     required String modifierId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     Map<String, dynamic>? kitchenMeat,
   }) async {

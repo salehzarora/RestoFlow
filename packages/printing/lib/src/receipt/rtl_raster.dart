@@ -1,4 +1,10 @@
+import 'dart:math' as math;
+
+import '../media_profile.dart';
 import '../print_document.dart';
+import '../print_line_metrics.dart';
+import '../print_pagination.dart';
+import '../print_typography.dart';
 import 'receipt_rasterizer.dart';
 
 /// PRINT-RTL-001: turn an already-laid-out ESC/POS TEXT [PrintDocument] into a
@@ -15,6 +21,36 @@ import 'receipt_rasterizer.dart';
 
 /// The default 80mm printable raster width in dots (multiple of 8). 58mm = 384.
 const int kNativeRasterWidthDots = 576;
+
+/// A money row on a receipt — a plain key/value line ([PrintLineStyle.normal])
+/// or the emphasised [PrintLineStyle.total]. Used only to keep an unbroken run
+/// of money rows (the totals block) together across a fixed-label page break.
+bool _isMoneyRow(PrintLineStyle style) =>
+    style == PrintLineStyle.normal || style == PrintLineStyle.total;
+
+/// PRINT-LAYOUT-001C: one blank, ink-free text line appended BELOW the last
+/// visible content so the final footer/item never sits against the physical
+/// cutter. It is rendered into the SAME raster image (before the feed + cut), so
+/// the printed page carries ~one line of blank paper as a bottom-safe tail. It
+/// is [PrintLineStyle.normal] height (a full text line, not the smaller spacer)
+/// and carries no text, so it expects no ink and never triggers zero-ink recovery.
+const PrintTextLine _bottomSafeTailLine = PrintTextLine(
+  '',
+  style: PrintLineStyle.normal,
+);
+
+/// The rendered ROW height (dots) of the bottom-safe tail for [profile] — one
+/// normal text line at the profile's font scale + line spacing. Fixed-label
+/// pagination reserves this so a page (content + tail) never exceeds the media
+/// height; content that would encroach moves to the next page instead of clipping.
+int bottomSafeTailRows(MediaProfile profile) {
+  final typography = PrintTypography.forProfile(profile);
+  final size =
+      typography.baseFontSize *
+      typography.sizeMultiplier(PrintLineStyle.normal) *
+      profile.fontScale;
+  return math.max(1, (size * profile.lineSpacing).ceil());
+}
 
 /// True when [doc] carries any non-ASCII text (Arabic/Hebrew letters, ₪, ×, …)
 /// that ESC/POS TEXT mode cannot reliably print — the signal to switch to
@@ -67,11 +103,20 @@ Future<PrintDocument> rasterizeTextDocument(
   final textLines = textDoc.lines.whereType<PrintTextLine>().toList(
     growable: false,
   );
-  final lines = textLines.map((l) => l.text).toList(growable: false);
   // PRINT-RASTER-STYLE-001: carry each line's semantic style so the rasterizer
   // can render large/centered headings, an emphasised total, indented sub-lines,
   // etc. Lines with no style stay [PrintLineStyle.normal] (prior behavior).
-  final styles = textLines.map((l) => l.style).toList(growable: false);
+  // PRINT-LAYOUT-001C: append the bottom-safe tail (one blank line) BELOW the
+  // content so the last visible line clears the physical cutter — it becomes
+  // blank raster rows in this single image, before the feed + cut.
+  final lines = <String>[
+    for (final l in textLines) l.text,
+    _bottomSafeTailLine.text,
+  ];
+  final styles = <PrintLineStyle>[
+    for (final l in textLines) l.style,
+    _bottomSafeTailLine.style,
+  ];
   final image = await rasterizer.rasterize(
     ReceiptRasterRequest(
       lines: lines,
@@ -105,4 +150,166 @@ Future<PrintDocument> maybeRasterizeForRtl(
     widthDots: widthDots,
     feedLines: feedLines,
   );
+}
+
+/// A localized string for a fixed-media page (PRINT-LAYOUT-001A). [page] is
+/// 1-based; [total] is the page count. Supplied by the app layer (which owns
+/// l10n) so this pure package prints "Page 2 of 3" / "#A17 (cont.)" without an
+/// ARB dependency.
+typedef PageLineLabel = String Function(int page, int total);
+
+/// PRINT-LAYOUT-001A: render [textDoc] for a specific [profile], honoring its
+/// exact printable width, safe margins, font scale, line spacing, feed, and —
+/// for a FIXED medium — fixed-height PAGINATION so nothing runs off the label.
+///
+///  * `continuous80` (the default roll): behaves exactly like [maybeRasterizeForRtl]
+///    — ASCII-only English stays the crisp text path; non-ASCII rasterizes to ONE
+///    image at 576 dots, feed 3. Byte-identical to the pre-profile output.
+///  * `label50x50` / `label80x80` (fixed labels): ALWAYS rasterize (so the label
+///    width + pagination apply uniformly, never a narrow bitmap on a wide canvas
+///    or an unpaginated overflow), split into pages that each fit
+///    `profile.printableHeightDots`, and emit one image + feed + cut PER PAGE at
+///    the profile's exact width. A multi-page run adds a localized page number
+///    ([pageLabel]) to every page and a compact [continuationHeader] to pages
+///    2+, so a kitchen ticket stays identifiable across labels.
+///
+/// With no [rasterizer] the fixed-media path cannot render at the right width, so
+/// it returns [textDoc] unchanged (a degraded fallback that never crashes; the
+/// native bridges always inject a rasterizer).
+Future<PrintDocument> rasterizeForMediaProfile(
+  PrintDocument textDoc, {
+  required ReceiptRasterizer? rasterizer,
+  required MediaProfile profile,
+  PageLineLabel? pageLabel,
+  PageLineLabel? continuationHeader,
+}) async {
+  if (!profile.paginates) {
+    // Continuous roll: identical to the existing content-triggered raster path.
+    return maybeRasterizeForRtl(
+      textDoc,
+      rasterizer: rasterizer,
+      widthDots: profile.widthDots,
+      feedLines: profile.feedLines,
+    );
+  }
+  // Fixed label: without a rasterizer we cannot honor the width — degrade safely.
+  if (rasterizer == null) return textDoc;
+
+  // PRINT-LAYOUT-001B: the profile-aware type hierarchy (compact on the small
+  // 50×50 label, standard elsewhere). Threaded into BOTH the height measurement
+  // and every page render so the planned page heights match what is painted.
+  final typography = PrintTypography.forProfile(profile);
+  final textLines = textDoc.lines.whereType<PrintTextLine>().toList(
+    growable: false,
+  );
+  final lines = textLines.map((l) => l.text).toList(growable: false);
+  final styles = textLines.map((l) => l.style).toList(growable: false);
+  final direction = baseDirectionForLines(lines);
+
+  // Plan on the REAL rendered heights when the rasterizer can measure them
+  // (dart:ui metrics) — an estimate could under-count and overflow the label.
+  // Fall back to the conservative estimate only for a non-measuring rasterizer.
+  final List<int> rows;
+  if (rasterizer is RasterLineMeasurer) {
+    rows = await (rasterizer as RasterLineMeasurer).measureLineRows(
+      ReceiptRasterRequest(
+        lines: lines,
+        styles: styles,
+        widthDots: profile.widthDots,
+        direction: direction,
+        localeTag: textDoc.localeTag ?? '',
+        fontScale: profile.fontScale,
+        lineSpacing: profile.lineSpacing,
+        safeLeftDots: profile.safeLeftDots,
+        safeRightDots: profile.safeRightDots,
+        typography: typography,
+      ),
+    );
+  } else {
+    rows = estimateReceiptLineRows(
+      styles,
+      fontScale: profile.fontScale,
+      lineSpacing: profile.lineSpacing,
+      typography: typography,
+    );
+  }
+  // A block (kept whole when it fits a page) starts at every line that is not a
+  // sub/note continuation of the item above it — AND not a money row that
+  // continues an unbroken run of money rows, so the totals block (subtotal …
+  // total … change) stays together on one page instead of splitting at a page
+  // boundary (PRINT-LAYOUT-001B).
+  final blockStarts = <int>{
+    for (var i = 0; i < styles.length; i++)
+      if (styles[i] != PrintLineStyle.sub &&
+          styles[i] != PrintLineStyle.note &&
+          !(_isMoneyRow(styles[i]) && i > 0 && _isMoneyRow(styles[i - 1])))
+        i,
+  };
+  // Reserve room for the per-page continuation header + page number: at most two
+  // added lines, each no taller than the tallest content line — so a rendered
+  // page (content + those two) never exceeds printableHeightDots.
+  final maxRow = rows.isEmpty ? 1 : rows.reduce(math.max);
+  final reserved = (pageLabel == null && continuationHeader == null)
+      ? 0
+      : 2 * maxRow;
+
+  // PRINT-LAYOUT-001C: reserve one blank text line at the BOTTOM of every page
+  // (the bottom-safe tail) so the last visible line clears the cutter. Because
+  // the tail is subtracted from the page budget, content that would reach the
+  // bottom moves to the next page instead of being clipped.
+  final tailRows = bottomSafeTailRows(profile);
+  final pageBudget = math.max(1, profile.printableHeightDots - tailRows);
+
+  final pages = planPrintPages(
+    lineHeights: rows,
+    maxPageRows: pageBudget,
+    blockStartAt: blockStarts,
+    reservedRowsPerPage: reserved,
+  );
+  final total = pages.length;
+
+  final out = <PrintLine>[];
+  for (var p = 0; p < total; p++) {
+    final pageLines = <String>[];
+    final pageStyles = <PrintLineStyle>[];
+    // Compact continuation header on pages 2+ so the order stays identifiable.
+    if (p > 0 && continuationHeader != null) {
+      pageLines.add(continuationHeader(p + 1, total));
+      pageStyles.add(PrintLineStyle.centered);
+    }
+    for (final i in pages[p].lineIndexes) {
+      pageLines.add(lines[i]);
+      pageStyles.add(styles[i]);
+    }
+    // Page number on every page of a multi-page run.
+    if (total > 1 && pageLabel != null) {
+      pageLines.add(pageLabel(p + 1, total));
+      pageStyles.add(PrintLineStyle.centered);
+    }
+    // PRINT-LAYOUT-001C: the bottom-safe tail closes every page BELOW its
+    // content + page number (its height was reserved from the page budget), so
+    // the final line never touches the cut.
+    pageLines.add(_bottomSafeTailLine.text);
+    pageStyles.add(_bottomSafeTailLine.style);
+
+    final image = await rasterizer.rasterize(
+      ReceiptRasterRequest(
+        lines: pageLines,
+        styles: pageStyles,
+        widthDots: profile.widthDots,
+        direction: direction,
+        localeTag: textDoc.localeTag ?? '',
+        fontScale: profile.fontScale,
+        lineSpacing: profile.lineSpacing,
+        safeLeftDots: profile.safeLeftDots,
+        safeRightDots: profile.safeRightDots,
+        typography: typography,
+      ),
+    );
+    out
+      ..add(image.toPrintLine())
+      ..add(PrintFeedLine(profile.feedLines))
+      ..add(const PrintCutLine());
+  }
+  return PrintDocument(out, localeTag: textDoc.localeTag);
 }

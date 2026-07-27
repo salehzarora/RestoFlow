@@ -20,6 +20,7 @@ class MenuRpcNames {
   static const upsertModifierOption = 'menu_upsert_modifier_option';
   static const softDelete = 'menu_soft_delete';
   static const setItemAvailability = 'menu_set_item_availability';
+  static const reorder = 'menu_reorder';
 }
 
 /// Calls the RF-109 `public.menu_*` RPCs over the neutral [SyncRpcTransport].
@@ -124,7 +125,7 @@ class RpcMenuWriter implements MenuWriter {
     required MenuScope scope,
     String? id,
     required String name,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) {
     return _invoke(MenuRpcNames.upsertCategory, {
@@ -148,7 +149,7 @@ class RpcMenuWriter implements MenuWriter {
     required int basePriceMinor,
     required String currencyCode,
     String? defaultStationId,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     String? imagePath,
     String? itemType,
@@ -191,7 +192,7 @@ class RpcMenuWriter implements MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) {
     return _invoke(MenuRpcNames.upsertSize, {
@@ -214,7 +215,7 @@ class RpcMenuWriter implements MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) {
     return _invoke(MenuRpcNames.upsertVariant, {
@@ -240,7 +241,7 @@ class RpcMenuWriter implements MenuWriter {
     int minSelect = 0,
     int? maxSelect,
     bool isRequired = false,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     bool allowQuantity = false,
     int? maxQuantity,
@@ -272,7 +273,7 @@ class RpcMenuWriter implements MenuWriter {
     required String modifierId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     Map<String, dynamic>? kitchenMeat,
   }) {
@@ -305,5 +306,57 @@ class RpcMenuWriter implements MenuWriter {
       'p_entity': entity.wire,
       'p_id': id,
     }, entity);
+  }
+
+  @override
+  Future<MenuWriteOutcome> reorder({
+    required String organizationId,
+    required String restaurantId,
+    required String? branchId,
+    required MenuEntityType entity,
+    required List<String> orderedIds,
+  }) async {
+    // Bespoke result handling: the reorder envelope is
+    // `{ok:true, entity, count, action:'reordered'}` — no `id`, and 'reordered'
+    // is not a MenuWriteAction, so the generic parser cannot read it. Success
+    // only needs to trigger the non-optimistic reload, so a minimal
+    // updated-result is synthesized.
+    //
+    // MENU-ORDER-001 (Codex): the RPC authorizes the PASSED (org, restaurant,
+    // branch) scope via app.menu_guard BEFORE inspecting any id — the SAME
+    // contract as menu_upsert_*. The scope is the caller's MenuScope, identical
+    // to what list_menu read the shown list with.
+    try {
+      final raw = await _transport.invoke(MenuRpcNames.reorder, {
+        'p_organization_id': organizationId,
+        'p_restaurant_id': restaurantId,
+        'p_branch_id': branchId,
+        'p_entity': entity.wire,
+        'p_ids': orderedIds,
+      });
+      if (raw is! Map) return const Failure(MenuInvalidResponseFailure());
+      final body = Map<String, dynamic>.from(raw);
+      if (body['ok'] == true) {
+        return Success(
+          MenuWriteResult(
+            entity: entity,
+            id: orderedIds.isEmpty ? '' : orderedIds.first,
+            action: MenuWriteAction.updated,
+          ),
+        );
+      }
+      if (body['error'] == 'permission_denied') {
+        return Failure(MenuPermissionDenied(entity));
+      }
+      return const Failure(MenuInvalidResponseFailure());
+    } on SyncTransportException catch (e) {
+      if (e.code == '42501') {
+        return Failure(MenuValidationRejected(e.message ?? ''));
+      }
+      if (e.kind == SyncTransportErrorKind.transient) {
+        return Failure(MenuTransientFailure(e.message));
+      }
+      return Failure(MenuServerFailure(e.message));
+    }
   }
 }

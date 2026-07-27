@@ -30,7 +30,7 @@ class _ThrowingWriter extends InMemoryMenuStore {
     required MenuScope scope,
     String? id,
     required String name,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) async {
     throw StateError('secret-internal-detail: writer exploded');

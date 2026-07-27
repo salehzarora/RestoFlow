@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show PrintBridgeConnectivity, PrinterBridgeStatus;
+import 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show kitchenTicketToEscPosDocument;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../state/kds_kitchen_print_controller.dart';
@@ -10,91 +12,18 @@ import 'print_document.dart' as app;
 ///
 /// The KDS builds an HTML-oriented [app.PrintDocument] for preview; to reach a
 /// real printer through a LOCAL bridge it is converted to the render-neutral
-/// ESC/POS [pp.PrintDocument], encoded, and submitted. The kitchen payload is
-/// MONEY-FREE by construction (T-003) — this glue only carries text through and
-/// never invents any money.
+/// ESC/POS [pp.PrintDocument], encoded, and submitted. KITCHEN-PRINT-DUAL-001B
+/// moved the converter into `restoflow_feature_kitchen` so the POS direct
+/// kitchen print uses the SAME layout; it is re-exported here so existing KDS
+/// imports (`kds_native_printer`, tests) keep resolving it unchanged. The
+/// kitchen payload is MONEY-FREE by construction (T-003) — this glue only
+/// carries text through and never invents any money.
 
-/// Converts the app kitchen-ticket document into a render-neutral ESC/POS
-/// document. [columns] matches the printer profile (48 for 80mm).
-pp.PrintDocument kitchenTicketToEscPosDocument(
-  app.PrintDocument doc, {
-  int columns = 48,
-}) {
-  final lines = <pp.PrintLine>[];
-  for (final line in doc.lines) {
-    // PRINT-RASTER-STYLE-001: tag each ESC/POS line with its raster style. The
-    // ESC/POS text + loopback paths ignore it. MONEY-FREE: there is NO `total`
-    // style on the kitchen ticket (a money row never exists here — T-003).
-    switch (line.kind) {
-      case app.PrintLineKind.title:
-        lines.add(
-          pp.PrintTextLine(
-            line.left ?? '',
-            alignment: pp.PrintAlignment.center,
-            emphasis: pp.TextEmphasis.bold,
-            style: pp.PrintLineStyle.headingLarge,
-          ),
-        );
-      case app.PrintLineKind.center:
-        lines.add(
-          pp.PrintTextLine(
-            line.left ?? '',
-            alignment: pp.PrintAlignment.center,
-            style: pp.PrintLineStyle.centered,
-          ),
-        );
-      case app.PrintLineKind.keyValue:
-        lines.add(
-          pp.PrintTextLine(
-            _twoColumn(line.left, line.right, columns),
-            emphasis: line.emphasised
-                ? pp.TextEmphasis.bold
-                : pp.TextEmphasis.normal,
-            style: pp.PrintLineStyle.normal,
-          ),
-        );
-      case app.PrintLineKind.item:
-        lines.add(
-          pp.PrintTextLine(
-            _twoColumn(line.left, line.right, columns),
-            emphasis: line.emphasised
-                ? pp.TextEmphasis.bold
-                : pp.TextEmphasis.normal,
-            style: pp.PrintLineStyle.item,
-          ),
-        );
-      case app.PrintLineKind.sub:
-        lines.add(
-          pp.PrintTextLine(
-            '  ${line.left ?? ''}',
-            style: pp.PrintLineStyle.sub,
-          ),
-        );
-      case app.PrintLineKind.note:
-        lines.add(
-          pp.PrintTextLine(
-            line.left ?? '',
-            alignment: pp.PrintAlignment.center,
-            style: pp.PrintLineStyle.note,
-          ),
-        );
-      case app.PrintLineKind.rule:
-        lines.add(
-          pp.PrintTextLine('-' * columns, style: pp.PrintLineStyle.separator),
-        );
-    }
-  }
-  lines.add(const pp.PrintFeedLine(3));
-  lines.add(const pp.PrintCutLine());
-  return pp.PrintDocument(lines);
-}
-
-String _twoColumn(String? left, String? right, int columns) {
-  final l = left ?? '';
-  final r = right ?? '';
-  final pad = columns - l.length - r.length;
-  return pad < 1 ? '$l $r' : '$l${' ' * pad}$r';
-}
+// KITCHEN-PRINT-DUAL-001B: `kitchenTicketToEscPosDocument` now lives in the
+// shared kitchen-print library; re-export it from its historical home so
+// callers that import it from this file are unaffected.
+export 'package:restoflow_feature_kitchen/kitchen_print.dart'
+    show kitchenTicketToEscPosDocument;
 
 /// The KDS kitchen print-bridge seam. Null by default (dormant) so demo mode and
 /// existing tests are unaffected.

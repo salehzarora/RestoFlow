@@ -139,6 +139,18 @@ List<KitchenPrepComponent> aggregateKitchenPrep(
   ];
 }
 
+/// The whole-order COUNT resource label for an item-base prep [component]: its
+/// [KitchenPrepComponent.name], plus the [KitchenPrepComponent.unit] when the
+/// owner set one (e.g. "خبز" / "Fish pcs"). This is the key the whole-order
+/// kitchen counts group by, so an item-base count and a modifier-option count
+/// that share a label merge into ONE total. Single source of truth for BOTH the
+/// KDS mapper (`sync_pull` rows) and the POS direct kitchen print (cart lines),
+/// so the two can never label the same resource differently. Money-free.
+String kitchenPrepCountLabel(KitchenPrepComponent component) {
+  final unit = component.unit.trim();
+  return unit.isEmpty ? component.name : '${component.name} $unit';
+}
+
 /// Formats a prep [quantity] for display: a whole number drops its `.0`
 /// (`6`, not `6.0`); a genuine fraction keeps up to 2 dp with trailing zeros
 /// trimmed. A count, never a money amount.

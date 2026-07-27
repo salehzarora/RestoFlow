@@ -202,4 +202,43 @@ void main() {
     expect(result.dir, TextDirection.rtl);
     expect(find.text(result.l10n.menuCategoriesHeading), findsOneWidget);
   });
+
+  testWidgets(
+    'MENU-ORDER-001: the unfiltered category + item lists render drag handles '
+    '(reorderable)',
+    (tester) async {
+      final store = buildDemoMenuStore();
+      await pumpMenu(tester, readSource: store, writer: store);
+      // The demo has several categories and several items in the auto-selected
+      // category, so both master + detail lists render as ReorderableListViews
+      // with leading drag handles.
+      expect(find.byIcon(Icons.drag_indicator), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'MENU-ORDER-001: dragging the first category down persists a new order',
+    (tester) async {
+      final store = buildDemoMenuStore();
+      await pumpMenu(tester, readSource: store, writer: store);
+      Future<List<String>> categoryOrder() async => (await store.load(
+        demoMenuScope,
+      )).visibleCategories().map((c) => c.id).toList();
+
+      final before = await categoryOrder();
+      expect(before.length, greaterThanOrEqualTo(3));
+
+      // The first drag handle in the tree belongs to the first category
+      // (the master panel is built before the detail panel).
+      await tester.drag(
+        find.byIcon(Icons.drag_indicator).first,
+        const Offset(0, 160),
+      );
+      await tester.pumpAndSettle();
+
+      final after = await categoryOrder();
+      expect(after, isNot(equals(before)), reason: 'the drag reordered');
+      expect(after.toSet(), before.toSet(), reason: 'no category lost');
+    },
+  );
 }

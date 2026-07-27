@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -26,6 +27,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
+
+/// PRINT-LAYOUT-001A: a network tester that captures the config it was asked to
+/// test (so a test can assert the selected media profile reached Test Print).
+class _CapturingNetTester implements NetworkPrinterTester {
+  NetworkPrinterConfig? lastConfig;
+  @override
+  Future<pp.PrintResult> testPrint(
+    NetworkPrinterConfig config, {
+    String? deviceLabel,
+    pp.PrintDocument? document,
+  }) async {
+    lastConfig = config;
+    return const pp.PrintResult.success();
+  }
+}
 
 /// A fake transport that records the sent bytes and returns a canned result.
 class _FakeTransport implements pp.PrintTransport {
@@ -229,6 +245,73 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const Key('network-printer-section')), findsNothing);
+    });
+
+    testWidgets('PRINT-LAYOUT-001A: the KDS media-size selector persists '
+        'label50x50 and the UNSAVED selection reaches Test Print', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues(const {});
+      final l10n = await _en();
+      final netTester = _CapturingNetTester();
+      tester.view.physicalSize = const Size(1000, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            bluetoothPrinterConnectorProvider.overrideWithValue(
+              _FakeBtConnector(),
+            ),
+            networkPrinterTesterProvider.overrideWithValue(netTester),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: NativePrinterSettingsSection(
+                  strings: kdsNativePrinterStrings(l10n),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The media-size selector is present, defaulting to the continuous roll.
+      expect(
+        find.byKey(const Key('network-printer-media-size')),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        find.byKey(const Key('network-printer-ip-field')),
+        '10.0.0.7',
+      );
+      // Pick the 50×50 label, then Test Print WITHOUT saving first.
+      await tester.tap(find.byKey(const Key('network-printer-media-size')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.posPrinterMediaSize50).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('network-printer-test')));
+      await tester.pumpAndSettle();
+
+      // The unsaved selected profile reached the Test Print.
+      expect(
+        netTester.lastConfig?.mediaProfile.id,
+        pp.MediaProfileId.label50x50,
+      );
+      // And it persisted with the config (Test also saves).
+      final prefs = await SharedPreferences.getInstance();
+      final key = prefs.getKeys().firstWhere(
+        (k) => k.startsWith('restoflow.printer.network.'),
+      );
+      final decoded = jsonDecode(prefs.getString(key)!) as Map<String, dynamic>;
+      expect(decoded['mediaProfile'], 'label50x50');
+      expect(decoded['host'], '10.0.0.7');
     });
 
     // PRINT-BLUETOOTH-RECOVERY-001: a failed KDS Bluetooth test print reports

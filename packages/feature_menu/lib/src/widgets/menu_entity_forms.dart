@@ -225,9 +225,8 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
   late final TextEditingController _name = TextEditingController(
     text: widget.existing?.name ?? '',
   );
-  late final TextEditingController _order = TextEditingController(
-    text: (widget.existing?.displayOrder ?? 0).toString(),
-  );
+  // MENU-ORDER-001 (Codex #6): display_order is owned by drag reorder — a normal
+  // edit sends NO order (null); the DB guard trigger preserves the live order.
   late bool _active = widget.existing?.isActive ?? true;
   MenuFieldError? _nameError;
   MenuWriteFailure? _writeError;
@@ -236,7 +235,6 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
   @override
   void dispose() {
     _name.dispose();
-    _order.dispose();
     super.dispose();
   }
 
@@ -252,7 +250,8 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
     final outcome = await widget.controller.upsertCategory(
       id: widget.existing?.id,
       name: _name.text.trim(),
-      displayOrder: int.tryParse(_order.text.trim()) ?? 0,
+      displayOrder:
+          null, // Codex #6: edit sends no order; guard trigger preserves it
       isActive: _active,
     );
     if (!mounted) return;
@@ -286,11 +285,6 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
                 ? null
                 : l10n.menuFieldErrorText(_nameError!),
           ),
-        ),
-        TextField(
-          controller: _order,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: l10n.menuDisplayOrderLabel),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -444,7 +438,9 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
         modifierId: widget.parentId,
         name: name,
         priceDeltaMinor: deltaMinor!,
-        displayOrder: order,
+        // MENU-ORDER-001 (Codex #6): options are drag-reordered — a normal edit
+        // sends NO order (null); the DB guard trigger preserves the live order.
+        displayOrder: null,
         isActive: _active,
         kitchenMeat: kitchenMeat,
       ),
@@ -494,11 +490,15 @@ class _PricedChildFormDialogState extends State<_PricedChildFormDialog> {
                 : l10n.menuFieldErrorText(_deltaError!),
           ),
         ),
-        TextField(
-          controller: _order,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: l10n.menuDisplayOrderLabel),
-        ),
+        // MENU-ORDER-001 (Codex): modifier OPTIONS are drag-reordered, so their
+        // numeric field is removed (it competed with drag). Sizes/variants are not
+        // drag-reorderable in this ticket, so they keep the numeric field.
+        if (widget.kind != PricedChildKind.option)
+          TextField(
+            controller: _order,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(labelText: l10n.menuDisplayOrderLabel),
+          ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.menuActiveLabel),
@@ -596,9 +596,8 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
   late final TextEditingController _max = TextEditingController(
     text: widget.initialMaxSelect?.toString() ?? '',
   );
-  late final TextEditingController _order = TextEditingController(
-    text: widget.initialDisplayOrder.toString(),
-  );
+  // MENU-ORDER-001 (Codex #6): modifier groups are drag-reordered — a normal edit
+  // sends NO order (null); the DB guard trigger preserves the live order.
   // Pre-fill a friendly cap of 5 for a new group (or when no cap is stored) —
   // the owner clears the field for "no cap" (blank => null).
   late final TextEditingController _maxQuantity = TextEditingController(
@@ -620,7 +619,6 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
     _name.dispose();
     _min.dispose();
     _max.dispose();
-    _order.dispose();
     _maxQuantity.dispose();
     super.dispose();
   }
@@ -687,7 +685,8 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
       minSelect: minSelect!,
       maxSelect: maxSelect,
       isRequired: _required,
-      displayOrder: int.tryParse(_order.text.trim()) ?? 0,
+      displayOrder:
+          null, // Codex #6: edit sends no order; guard trigger preserves it
       isActive: _active,
       allowQuantity: allowQuantity,
       maxQuantity: allowQuantity ? maxQuantity : null,
@@ -804,11 +803,6 @@ class _ModifierFormDialogState extends State<_ModifierFormDialog> {
           title: Text(l10n.menuActiveLabel),
           value: _active,
           onChanged: (value) => setState(() => _active = value),
-        ),
-        TextField(
-          controller: _order,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: l10n.menuDisplayOrderLabel),
         ),
       ],
     );

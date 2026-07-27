@@ -6,11 +6,27 @@
 /// web-safe function (no `dart:html`) so it is unit-testable and can be rendered
 /// into an isolated browser window. No money is invented here — values are
 /// passed in already formatted.
-enum PrintLineKind { title, center, keyValue, item, sub, rule, note }
+enum PrintLineKind {
+  title,
+  subtitle,
+  center,
+  keyValue,
+  item,
+  sub,
+  rule,
+  note,
+  spacer,
+}
 
 class PrintLine {
   PrintLine.title(this.left)
     : kind = PrintLineKind.title,
+      right = null,
+      emphasised = false;
+  // PRINT-LAYOUT-001B: a secondary heading — the non-hero identifier one tier
+  // below the title (e.g. the order number under the restaurant-name brand).
+  PrintLine.subtitle(this.left)
+    : kind = PrintLineKind.subtitle,
       right = null,
       emphasised = false;
   PrintLine.center(this.left)
@@ -31,6 +47,12 @@ class PrintLine {
       emphasised = false;
   PrintLine.rule()
     : kind = PrintLineKind.rule,
+      left = null,
+      right = null,
+      emphasised = false;
+  // PRINT-LAYOUT-001B: a small blank vertical gap between item blocks (no text).
+  PrintLine.spacer()
+    : kind = PrintLineKind.spacer,
       left = null,
       right = null,
       emphasised = false;
@@ -65,15 +87,18 @@ const String _css = '''
 html, body { margin: 0; padding: 0; color: #111;
   font-family: ui-monospace, 'Courier New', monospace; }
 .paper { max-width: 300px; margin: 0 auto; padding: 8px; }
-.t { text-align: center; font-weight: 800; font-size: 15px; margin-bottom: 4px; }
-.c { text-align: center; font-weight: 700; margin: 2px 0; }
+.t { text-align: center; font-weight: 800; font-size: 19px; margin-bottom: 2px; }
+.st { text-align: center; font-weight: 700; font-size: 14px; margin: 1px 0 3px; }
+.c { text-align: center; font-weight: 600; margin: 2px 0; }
 .kv, .it { display: flex; justify-content: space-between; gap: 8px;
   margin: 2px 0; font-size: 13px; }
-.kv .b { font-weight: 800; }
+.kv .b { font-weight: 800; font-size: 16px; }
+.it { font-size: 15px; font-weight: 700; margin: 3px 0 1px; }
 .it .q { font-size: 18px; font-weight: 900; }
 .s { font-size: 12px; color: #444; margin: 0 0 2px 14px; }
 .n { text-align: center; font-size: 11px; color: #555; margin: 2px 0; }
 .r { border-top: 1px dashed #999; margin: 6px 0; }
+.sp { height: 6px; }
 ''';
 
 /// Renders [doc] into a self-contained, print-friendly HTML page. The page
@@ -85,6 +110,8 @@ String documentToHtml(PrintDocument doc) {
     switch (line.kind) {
       case PrintLineKind.title:
         body.writeln('<div class="t">${_escape(line.left)}</div>');
+      case PrintLineKind.subtitle:
+        body.writeln('<div class="st">${_escape(line.left)}</div>');
       case PrintLineKind.center:
         body.writeln('<div class="c">${_escape(line.left)}</div>');
       case PrintLineKind.keyValue:
@@ -105,6 +132,8 @@ String documentToHtml(PrintDocument doc) {
         body.writeln('<div class="n">${_escape(line.left)}</div>');
       case PrintLineKind.rule:
         body.writeln('<div class="r"></div>');
+      case PrintLineKind.spacer:
+        body.writeln('<div class="sp"></div>');
     }
   }
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'

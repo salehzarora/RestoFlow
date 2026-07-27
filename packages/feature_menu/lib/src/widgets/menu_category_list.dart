@@ -11,6 +11,7 @@ import 'menu_badges.dart';
 import 'menu_components.dart';
 import 'menu_entity_forms.dart';
 import 'menu_panel_header.dart';
+import 'menu_reorder.dart';
 
 /// The categories master panel (RF-111): a polished, search/filter-aware list of
 /// categories. Add / edit / soft-delete and select-to-drive-the-items-panel.
@@ -58,7 +59,13 @@ class MenuCategoryList extends ConsumerWidget {
     if (!await showMenuDeleteConfirm(context)) return;
     final outcome = await ref
         .read(menuWriteControllerProvider)
-        .softDelete(entity: MenuEntityType.category, id: category.id);
+        .softDelete(
+          entity: MenuEntityType.category,
+          id: category.id,
+          // Categories' sibling owner is the restaurant — the same scope this
+          // list's reorder guards, so the delete is refused mid-reorder.
+          parentId: ref.read(menuScopeProvider).restaurantId,
+        );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -70,6 +77,50 @@ class MenuCategoryList extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// MENU-ORDER-001 (Codex): the exact sibling scope this list reorders — the
+  /// restaurant's category set. Keyed so it never blocks another list.
+  MenuReorderScope _scope(WidgetRef ref) {
+    final s = ref.read(menuScopeProvider);
+    return MenuReorderScope(
+      organizationId: s.organizationId,
+      restaurantId: s.restaurantId,
+      branchId: s.branchId,
+      entity: MenuEntityType.category,
+      parentId: s.restaurantId, // categories' sibling owner is the restaurant
+    );
+  }
+
+  void _reorder(
+    BuildContext context,
+    WidgetRef ref,
+    List<MenuCategory> categories,
+    int oldIndex,
+    int newIndex,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final c in categories) c.id],
+      oldIndex,
+      newIndex,
+    );
+    // MENU-ORDER-001 (Codex #4): the CONTROLLER owns the whole lifecycle (latch,
+    // RPC, authoritative reconcile #7, rollback, release) on the provider Ref,
+    // which outlives this widget — so disposing the surface mid-flight can
+    // neither leak the per-scope latch nor throw a WidgetRef-after-await error.
+    // We touch no ref/context after the await; the error is surfaced only if the
+    // widget is still mounted.
+    ref
+        .read(menuWriteControllerProvider)
+        .reorderScoped(scope: _scope(ref), orderedIds: ids)
+        .then((outcome) {
+          if (outcome != null && !outcome.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+          }
+        });
   }
 
   @override
@@ -84,6 +135,16 @@ class MenuCategoryList extends ConsumerWidget {
               (needle.isEmpty || c.name.toLowerCase().contains(needle)),
         )
         .toList();
+
+    // MENU-ORDER-001: drag-reorder is offered ONLY when the COMPLETE sibling set
+    // is on screen (no active search/filter) — the reorder RPC rewrites the
+    // whole set to 1..N, so a partial/filtered list must not be draggable.
+    final canReorder = needle.isEmpty && categories.length == all.length;
+
+    // MENU-ORDER-001 (Codex #5/#7): while THIS list's reorder is persisting,
+    // disable every control in it (drag + edit/delete) so no second drag and no
+    // stale edit can land before the authoritative refresh reconciles.
+    final reordering = ref.watch(menuReorderInFlightProvider(_scope(ref)));
 
     final Widget body;
     if (all.isEmpty) {
@@ -102,6 +163,33 @@ class MenuCategoryList extends ConsumerWidget {
         icon: Icons.search_off,
         title: l10n.menuNoResults,
         body: l10n.menuNoResultsBody,
+      );
+    } else if (canReorder) {
+      body = ReorderableListView.builder(
+        padding: const EdgeInsets.all(RestoflowSpacing.sm),
+        buildDefaultDragHandles: false,
+        itemCount: categories.length,
+        // onReorder is the stable, well-defined callback; onReorderItem is too
+        // new to depend on across the toolchain.
+        // ignore: deprecated_member_use
+        onReorder: (oldIndex, newIndex) =>
+            _reorder(context, ref, categories, oldIndex, newIndex),
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          return Padding(
+            key: ValueKey(category.id),
+            padding: const EdgeInsets.only(bottom: RestoflowSpacing.xs),
+            child: _CategoryTile(
+              category: category,
+              itemCount: snapshot.itemsForCategory(category.id).length,
+              selected: category.id == selectedCategoryId,
+              onTap: () => onSelect(category.id),
+              onEdit: () => _edit(context, category),
+              onDelete: () => _delete(context, ref, category),
+              reorderIndex: index,
+            ),
+          );
+        },
       );
     } else {
       body = ListView.separated(
@@ -127,7 +215,13 @@ class MenuCategoryList extends ConsumerWidget {
       children: [
         MenuPanelHeader(title: l10n.menuCategoriesHeading),
         const Divider(height: 1),
-        Expanded(child: body),
+        // In-scope controls are inert + dimmed while the reorder persists.
+        Expanded(
+          child: IgnorePointer(
+            ignoring: reordering,
+            child: Opacity(opacity: reordering ? 0.6 : 1.0, child: body),
+          ),
+        ),
       ],
     );
   }
@@ -141,6 +235,7 @@ class _CategoryTile extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    this.reorderIndex,
   });
 
   final MenuCategory category;
@@ -149,6 +244,10 @@ class _CategoryTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+
+  /// MENU-ORDER-001: when non-null this tile is inside a reorderable list and
+  /// shows a leading drag handle bound to this index.
+  final int? reorderIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +270,17 @@ class _CategoryTile extends StatelessWidget {
           padding: const EdgeInsets.all(RestoflowSpacing.sm),
           child: Row(
             children: [
+              if (reorderIndex != null) ...[
+                ReorderableDragStartListener(
+                  index: reorderIndex!,
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: RestoflowIconSizes.md,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+              ],
               Container(
                 width: 36,
                 height: 36,

@@ -178,6 +178,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     String? tableLabel,
     int taxTotalMinor = 0,
     String? customerName,
+    Map<String, List<KitchenPrepComponent>>? prepByItemId,
+    Future<bool> Function(
+      String orderId,
+      String localOperationId,
+      String entryId,
+    )?
+    beforeDispatch,
   }) {
     final existing = _inFlightSubmit;
     if (existing != null) return existing;
@@ -190,6 +197,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       tableLabel: tableLabel,
       taxTotalMinor: taxTotalMinor,
       customerName: customerName,
+      prepByItemId: prepByItemId,
+      beforeDispatch: beforeDispatch,
     );
     _inFlightSubmit = future;
     // Release the lock once the submit settles (success OR failure) so the next
@@ -211,6 +220,13 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     String? tableLabel,
     int taxTotalMinor = 0,
     String? customerName,
+    Map<String, List<KitchenPrepComponent>>? prepByItemId,
+    Future<bool> Function(
+      String orderId,
+      String localOperationId,
+      String entryId,
+    )?
+    beforeDispatch,
   }) async {
     if (lines.isEmpty) {
       throw const OrderSubmissionException('cannot submit an empty cart');
@@ -267,12 +283,24 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // menuItemId from the live menu the POS is selling from. Non-money; empty
     // for unconfigured items. Snapshotted into the payload so the outbox
     // preserves it and the KDS can aggregate a prep summary offline.
-    final menuData = ref.read(posMenuProvider).valueOrNull;
-    final prepByItemId = <String, List<KitchenPrepComponent>>{
-      if (menuData != null)
-        for (final item in menuData.items)
-          if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
-    };
+    //
+    // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): when the caller captured this
+    // map BEFORE the first await (CartPanel does, and reuses the SAME map for the
+    // POS kitchen ticket), use it verbatim so the authoritative payload and the
+    // printed ticket consume ONE immutable snapshot — a menu/prep edit while the
+    // submit is in flight can never make them disagree. Only fall back to reading
+    // the live menu here when no snapshot was supplied (other callers / tests).
+    final resolvedPrepByItemId =
+        prepByItemId ??
+        () {
+          final menuData = ref.read(posMenuProvider).valueOrNull;
+          return <String, List<KitchenPrepComponent>>{
+            if (menuData != null)
+              for (final item in menuData.items)
+                if (item.prepComponents.isNotEmpty)
+                  item.id: item.prepComponents,
+          };
+        }();
 
     final items = lines
         .map(
@@ -287,7 +315,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
             lineTotalMinor: l.lineTotalMinor,
             notes: l.note,
             prepComponents:
-                prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
+                resolvedPrepByItemId[l.menuItemId] ??
+                const <KitchenPrepComponent>[],
             modifiers: [
               for (final m in l.modifiers)
                 OrderSubmissionModifier(
@@ -351,6 +380,23 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       clientCreatedAt: createdAt,
     );
 
+    // MENU-ORDER-001 (Codex correction-ownership §4): pre-dispatch association hook. A
+    // CORRECTION submit uses this to durably LINK the source recovery to THIS submit's
+    // EXACT ids — the very [orderId] / [localOperationId] / [entryId] built above, never
+    // a second id minted in a deeper layer — BEFORE the order is enqueued or pushed. It
+    // runs inside the single-flight [submit] latch, so a concurrent second corrected
+    // submit joins this future instead of re-linking. A false/throw result ABORTS the
+    // submit before ANY durable enqueue or network push, so the correction association is
+    // never left in-memory-only and no order is ever sent while its link failed to
+    // persist (the caller surfaces the honest failure and keeps the cart for a retry).
+    if (beforeDispatch != null) {
+      final linked = await beforeDispatch(orderId, localOperationId, entryId);
+      if (!linked) {
+        throw const OrderSubmissionException(
+          'correction link could not be persisted; order not sent',
+        );
+      }
+    }
     final stored = await _repo.enqueue(entry);
     state = await _repo.recentEntries();
     if (!isDemo) {

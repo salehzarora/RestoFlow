@@ -248,6 +248,9 @@ class OrderSubmissionPayload {
     'customer_name': customerName,
     'client_created_at': clientCreatedAt.toIso8601String(),
     'order_items': items.map((i) => i.toJson()).toList(growable: false),
+    // KITCHEN-PRINT-DUAL-001D: the POS never emits dispatch_mode — every order
+    // uses the normal KDS workflow (the server defaults a missing dispatch_mode to
+    // 'kds'; the 001C direct_print column stays dormant for new POS orders).
   };
 }
 

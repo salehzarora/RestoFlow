@@ -29,7 +29,7 @@ class MenuManagementRepository implements MenuWriter {
     required MenuScope scope,
     String? id,
     required String name,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _writer.upsertCategory(
     scope: scope,
@@ -49,7 +49,7 @@ class MenuManagementRepository implements MenuWriter {
     required int basePriceMinor,
     required String currencyCode,
     String? defaultStationId,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     String? imagePath,
     String? itemType,
@@ -98,7 +98,7 @@ class MenuManagementRepository implements MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _writer.upsertSize(
     scope: scope,
@@ -117,7 +117,7 @@ class MenuManagementRepository implements MenuWriter {
     required String menuItemId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
   }) => _writer.upsertVariant(
     scope: scope,
@@ -139,7 +139,7 @@ class MenuManagementRepository implements MenuWriter {
     int minSelect = 0,
     int? maxSelect,
     bool isRequired = false,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     bool allowQuantity = false,
     int? maxQuantity,
@@ -165,7 +165,7 @@ class MenuManagementRepository implements MenuWriter {
     required String modifierId,
     required String name,
     int priceDeltaMinor = 0,
-    int displayOrder = 0,
+    int? displayOrder,
     bool isActive = true,
     Map<String, dynamic>? kitchenMeat,
   }) => _writer.upsertModifierOption(
@@ -188,6 +188,21 @@ class MenuManagementRepository implements MenuWriter {
     organizationId: organizationId,
     entity: entity,
     id: id,
+  );
+
+  @override
+  Future<MenuWriteOutcome> reorder({
+    required String organizationId,
+    required String restaurantId,
+    required String? branchId,
+    required MenuEntityType entity,
+    required List<String> orderedIds,
+  }) => _writer.reorder(
+    organizationId: organizationId,
+    restaurantId: restaurantId,
+    branchId: branchId,
+    entity: entity,
+    orderedIds: orderedIds,
   );
 }
 

@@ -101,6 +101,27 @@ final activeNativeTransportFactoryProvider =
       return null;
     });
 
+/// PRINT-LAYOUT-001A: the media profile of THIS device's ACTIVE native printer
+/// assignment (the config for the selected transport), or the backward-compatible
+/// `continuous80` default when nothing is configured / native printing is off.
+/// The KDS kitchen bridge reads this to render + paginate at the label's real
+/// width instead of a hardcoded 80mm.
+final activeNativeMediaProfileProvider = Provider<pp.MediaProfile>((ref) {
+  if (!ref.watch(nativePrintingAvailableProvider)) {
+    return pp.MediaProfile.continuous80;
+  }
+  final selected =
+      ref.watch(selectedPrinterTransportProvider).valueOrNull ??
+      PrinterTransportKind.network;
+  final profile = switch (selected) {
+    PrinterTransportKind.bluetooth =>
+      ref.watch(bluetoothPrinterConfigProvider).valueOrNull?.mediaProfile,
+    PrinterTransportKind.network =>
+      ref.watch(networkPrinterConfigProvider).valueOrNull?.mediaProfile,
+  };
+  return profile ?? pp.MediaProfile.continuous80;
+});
+
 /// Whether THIS device has a native printer configured for the selected
 /// transport (ANDROID-004). Drives the "has a local printer" gate. Always false
 /// on web (the print-bridge path is unchanged there).

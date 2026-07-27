@@ -64,7 +64,7 @@ class PosRecoveryCoordinator {
         case _RestoreChoice.keepCurrent:
           // Keep current: retire the selected shell + clear ITS recovery ONLY. The
           // current cart and setup are left EXACTLY as they are — no reset, no void.
-          _retire(recovery);
+          await _retire(recovery);
           return PosRecoveryOutcome.keptCurrent;
         case _RestoreChoice.replace:
           break; // fall through to the single restore below
@@ -84,13 +84,41 @@ class PosRecoveryCoordinator {
     final table = recovery.table;
     if (table != null) setup.assignTable(table);
     setup.setCustomerName(recovery.customerName);
-    _retire(recovery);
+    // MENU-ORDER-001 (correction-window durability): Back to cart is NOT a terminal
+    // event. The durable recovery AND its Recent-Orders rejected shell are KEPT so a
+    // crash/refresh before the corrected re-Send can recover the SAME order again. The
+    // record is cleared ONLY when the corrected order is authoritatively accepted (via
+    // its correctionOutboxEntryId link) or the operator explicitly discards it. Mark the
+    // current cart as the correction-in-progress of THIS recovery so the resubmit links
+    // back to it (submitOrderFromCart links the source on the corrected send).
+    //
+    // OWNER-BOUND (Codex correction-ownership §2): set the source ONLY when the CURRENT
+    // signed-in worker + POS scope still own the recovery, and carry that ownership on
+    // the source so a corrected submit can revalidate it. This never widens access — the
+    // recovery reached here through the binding-checked `recoverable()` read — but it
+    // guarantees a departed worker / re-pair can never leave a source that a later,
+    // unrelated order silently re-links.
+    final current = ref.read(posRecoveryBindingProvider);
+    if (recovery.binding.matches(current)) {
+      ref
+          .read(posActiveCorrectionSourceProvider.notifier)
+          .set(
+            ActiveCorrectionSource(
+              sourceOutboxEntryId: recovery.outboxEntryId,
+              scopeKey: recovery.binding.scopeKey,
+              employeeProfileId: recovery.binding.employeeProfileId,
+            ),
+          );
+    }
     return PosRecoveryOutcome.restored;
   }
 
-  /// Discard [recovery]: retire its shell + clear ITS recovery ONLY. No server void, no
-  /// cancellation audit, the current cart untouched, other recoveries untouched.
-  void discard(PosDraftRecovery recovery) => _retire(recovery);
+  /// Discard [recovery]: retire its shell + clear ITS recovery ONLY, after revalidating
+  /// the current worker + scope own it. No server void, no cancellation audit, the
+  /// current cart untouched, other recoveries untouched. Returns whether the record was
+  /// actually removed (false when not authorized or the durable write failed — §11.D:
+  /// the record then remains and its owner can still recover it).
+  Future<bool> discard(PosDraftRecovery recovery) => _retire(recovery);
 
   /// Finding 1A + Finding 2: dismiss a rejected shell that is a TRUE ORPHAN — no recovery
   /// record exists for it under ANY binding (e.g. after a restart, when the in-memory
@@ -115,13 +143,18 @@ class PosRecoveryCoordinator {
     return true;
   }
 
-  void _retire(PosDraftRecovery recovery) {
-    // Retire the neverCreated shell by the EXACT submit/outbox identity, then clear the
-    // exact matching recovery. Both key on recovery.outboxEntryId.
-    ref
-        .read(posRecentOrdersControllerProvider.notifier)
-        .retireLocalRejectedByOutboxEntry(recovery.outboxEntryId);
-    ref.read(posDraftRecoveryProvider.notifier).clear(recovery.outboxEntryId);
+  /// OWNER-CHECKED terminal removal (Codex correction-ownership §10): route the discard /
+  /// Keep-current retirement through [PosDraftRecoveryController.discardOwned], which
+  /// revalidates that the CURRENT worker + scope own the record before touching it and
+  /// persists the removal copy-on-write (retiring the shell + dropping any active source).
+  /// Returns false when the record is not owned by the current context or the durable
+  /// write failed — the record then remains (§11.D). The binding is read here, never
+  /// trusted from an upstream UI check.
+  Future<bool> _retire(PosDraftRecovery recovery) {
+    final binding = ref.read(posRecoveryBindingProvider);
+    return ref
+        .read(posDraftRecoveryProvider.notifier)
+        .discardOwned(recovery.outboxEntryId, binding);
   }
 
   /// The explicit three-way choice shown when restoring would overwrite a non-empty

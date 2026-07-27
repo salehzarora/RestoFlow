@@ -13,15 +13,22 @@ import '../data/order_center_view.dart';
 import '../data/order_detail_repository.dart';
 import '../data/order_identity.dart';
 import '../data/order_reconciler.dart' show unpaidOrderCount;
+import '../data/kitchen_finish_repository.dart' show kActiveKitchenStatuses;
 import '../data/order_snapshot.dart';
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/payment.dart' show CashPayment;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
+import '../print/pos_kitchen_ticket_printer.dart'
+    show posHasKitchenNativePrinterProvider;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart' show cartControllerProvider;
 import '../state/discount_controller.dart';
+import '../state/kitchen_finish_controller.dart';
+import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
+import '../state/pos_auto_print_prefs.dart'
+    show posAutoPrintKitchenTicketEnabled, posAutoPrintKitchenTicketProvider;
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import '../state/draft_recovery_controller.dart';
 import '../state/order_sync_controller.dart';
@@ -412,6 +419,8 @@ class _Header extends ConsumerWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           ),
+        // KITCHEN-PRINT-DUAL-001D: the bulk kitchen-finish action (self-gated).
+        _FinishAllKitchenButton(l10n: l10n),
         IconButton(
           key: const Key('orders-refresh-button'),
           tooltip: l10n.posOrdersRefresh,
@@ -423,6 +432,135 @@ class _Header extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+/// KITCHEN-PRINT-DUAL-001D: the "Finish all kitchen orders" header action. VISIBLE
+/// only when automatic kitchen-ticket printing is enabled on THIS device AND the
+/// current session's role is already authorized to change order kitchen statuses
+/// (advisory — the server re-checks every push); hidden in demo mode. Pressing it
+/// captures the current branch's ACTIVE kitchen orders (submitted/accepted/
+/// preparing/ready), confirms once, then advances each to `served` via the
+/// existing `order.status` op — never cancel/void/delete, never a payment. Paid
+/// orders auto-complete through the existing rule; unpaid stay served + payable.
+class _FinishAllKitchenButton extends ConsumerWidget {
+  const _FinishAllKitchenButton({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Real-mode + toggle-enabled + authorized-role gate. Loading/errored inputs
+    // resolve to NOT enabled (button hidden) — fail closed.
+    if (ref.watch(runtimeConfigProvider).isDemoMode) {
+      return const SizedBox.shrink();
+    }
+    final autoPrintOn = posAutoPrintKitchenTicketEnabled(
+      stored: ref.watch(posAutoPrintKitchenTicketProvider).valueOrNull,
+      hasKitchenPrinter: ref.watch(posHasKitchenNativePrinterProvider),
+    );
+    final authorized =
+        ref
+            .watch(staffCapabilitiesProvider)
+            .valueOrNull
+            ?.canFinishKitchenOrders ??
+        false;
+    if (!autoPrintOn || !authorized) return const SizedBox.shrink();
+
+    final running = ref.watch(kitchenFinishControllerProvider).running;
+    return IconButton(
+      key: const Key('finish-all-kitchen-orders-button'),
+      tooltip: l10n.posFinishAllKitchenOrders,
+      icon: running
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.done_all),
+      // A second press while running is blocked here AND in the controller.
+      onPressed: running ? null : () => _run(context, ref),
+    );
+  }
+
+  Future<void> _run(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    // App-scoped handles captured up front — valid for the whole batch even if
+    // the sheet is dismissed mid-run (Riverpod forbids a widget-ref read after
+    // dispose; the root container + the sync notifier outlive the sheet).
+    final sync = ref.read(posOrderSyncControllerProvider.notifier);
+    final container = ProviderScope.containerOf(context, listen: false);
+
+    // (1) CONFIRM FIRST — before reading the order window. A list captured now
+    //     could be stale by the time the operator confirms, so we derive the
+    //     eligible set only AFTER confirmation (step 2).
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.posFinishAllKitchenOrders),
+        content: Text(l10n.posFinishAllConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              MaterialLocalizations.of(dialogContext).cancelButtonLabel,
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.posFinishAllConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    // (2) Under the controller's running guard: refresh the authoritative window,
+    //     then derive the FRESH eligible list (active kitchen statuses only). If
+    //     nothing is eligible any more, the batch sends nothing (zero/zero).
+    List<KitchenFinishTarget> deriveActive() => [
+      for (final o in container.read(posRecentOrdersControllerProvider))
+        if (o.orderId != null &&
+            !o.isTerminal &&
+            o.serverStatus != null &&
+            kActiveKitchenStatuses.contains(o.serverStatus))
+          (orderId: o.orderId!, fromStatus: o.serverStatus!),
+    ];
+
+    final summary = await ref
+        .read(kitchenFinishControllerProvider.notifier)
+        .run(
+          resolveTargets: () async {
+            await sync.refreshWindow();
+            return deriveActive();
+          },
+          // Re-read one order's authoritative status for a result that carries
+          // none (a rare serialization conflict); null when it is gone.
+          refreshStatus: (orderId) async {
+            await sync.refreshWindow();
+            for (final o in container.read(posRecentOrdersControllerProvider)) {
+              if (o.orderId == orderId) return o.serverStatus;
+            }
+            return null;
+          },
+        );
+    if (summary == null) return; // a batch was already running.
+
+    // (3) A final authoritative refresh, then an honest result message. An empty
+    //     post-confirmation set reports the same "no active orders" outcome.
+    await sync.refreshWindow();
+    final String message;
+    if (summary.total == 0) {
+      message = l10n.posFinishAllNoActiveOrders;
+    } else if (summary.failed == 0) {
+      message = l10n.posFinishAllResult(summary.finished);
+    } else {
+      message = l10n.posFinishAllResultWithFailures(
+        summary.finished,
+        summary.failed,
+      );
+    }
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -1216,6 +1354,7 @@ class _ActionRow extends ConsumerWidget {
       source.$1,
       source.$2,
       isDemo: isDemo,
+      restaurantName: ref.read(posRestaurantNameProvider),
     );
     await ref
         .read(receiptPrintControllerProvider.notifier)

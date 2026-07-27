@@ -34,6 +34,13 @@ dependencies:
     path: ../../packages/auth_identity
   restoflow_feature_auth:
     path: ../../packages/feature_auth
+  # KITCHEN-PRINT-DUAL-001B: the SHARED kitchen-ticket document model + layout
+  # builder (KdsTicketView -> PrintDocument -> ESC/POS). The POS direct kitchen
+  # print builds the SAME KdsTicketView and renders it through the SAME builder
+  # the KDS uses, so a ticket printed straight from the POS carries the same
+  # operational detail. Web-safe (domain + printing only; no drift).
+  restoflow_feature_kitchen:
+    path: ../../packages/feature_kitchen
   # RF-129: the shared public-schema RPC transport (SyncRpcTransport) + SyncSession
   # the real outbox uses to POST order.submit ops to public.sync_push (RF-126).
   restoflow_data_remote:

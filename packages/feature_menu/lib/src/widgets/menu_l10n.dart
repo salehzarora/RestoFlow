@@ -27,6 +27,10 @@ extension MenuL10n on AppLocalizations {
     MenuTransientFailure() => menuWriteProblem,
     MenuServerFailure() => menuWriteProblem,
     MenuInvalidResponseFailure() => menuWriteProblem,
+    // A same-scope reorder is in flight: the write was refused locally (zero
+    // repo/RPC calls). Reuse the existing generic message — the sibling controls
+    // are already disabled, so this is only ever the fallback for a bypass path.
+    MenuReorderInProgress() => menuWriteProblem,
   };
 
   /// The localized DISPLAY label for a fixed-vocabulary tag wire string

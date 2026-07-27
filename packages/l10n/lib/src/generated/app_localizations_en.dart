@@ -997,6 +997,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posReceiptTitle => 'Receipt';
 
   @override
+  String get printRestaurantNameFallback => 'Restaurant';
+
+  @override
   String get posReceiptNumberLabel => 'Receipt no.';
 
   @override
@@ -1135,6 +1138,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoPrintNoPrinterNote => 'Disabled — no printer assigned.';
+
+  @override
+  String get autoPrintReceiptNoPrinterNote =>
+      'Disabled — no receipt printer assigned.';
+
+  @override
+  String get autoPrintKitchenNoPrinterNote =>
+      'Automatic kitchen-ticket printing needs a configured kitchen printer.';
+
+  @override
+  String get posAutoPrintKitchenTicketToggle =>
+      'Automatically print kitchen ticket';
+
+  @override
+  String get posAutoPrintKitchenTicketToggleExplanation =>
+      'When on, a kitchen ticket prints automatically from this cashier device after a successful order. The order is still sent to the kitchen display as usual.';
+
+  @override
+  String get posFinishAllKitchenOrders => 'Finish all kitchen orders';
+
+  @override
+  String get posFinishAllConfirmAction => 'Finish all';
+
+  @override
+  String get posFinishAllConfirmBody =>
+      'All active kitchen orders will be finished and removed from the kitchen display. Unpaid orders remain available for payment in Order History.';
+
+  @override
+  String get posFinishAllNoActiveOrders => 'No active kitchen orders';
+
+  @override
+  String posFinishAllResult(int count) {
+    return 'Finished $count kitchen orders';
+  }
+
+  @override
+  String posFinishAllResultWithFailures(int finished, int failed) {
+    return 'Finished $finished kitchen orders, $failed couldn\'t finish (still shown to retry)';
+  }
+
+  @override
+  String get posPrintKitchenTicketAction => 'Print kitchen ticket';
+
+  @override
+  String get posKitchenTicketPrintedSnack =>
+      'Kitchen ticket sent to the printer';
+
+  @override
+  String get posKitchenTicketPrintFailedSnack =>
+      'Could not print the kitchen ticket';
+
+  @override
+  String get posKitchenPrinterNotConfiguredSnack =>
+      'No kitchen printer is configured. Set one in device settings.';
 
   @override
   String get printStatusNotConfigured => 'No printer configured';
@@ -3686,6 +3743,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posNetworkPrinterSaveAction => 'Save printer';
 
   @override
+  String get posPrinterMediaSizeLabel => 'Print media size';
+
+  @override
+  String get posPrinterMediaSizeContinuous => '80 mm roll (default)';
+
+  @override
+  String get posPrinterMediaSize50 => '50 × 50 mm label';
+
+  @override
+  String get posPrinterMediaSize80 => '80 × 80 mm label';
+
+  @override
+  String get posPrinterDiagHeading => 'PRINTER DIAGNOSTIC';
+
+  @override
+  String posPrinterDiagWidthDots(int width) {
+    return 'Width: $width dots';
+  }
+
+  @override
+  String posPrinterDiagHeightDots(int height) {
+    return 'Media height: $height dots';
+  }
+
+  @override
+  String get posPrinterDiagTopSafe => 'TOP SAFE AREA';
+
+  @override
+  String get posPrinterDiagBottomSafe => 'BOTTOM SAFE AREA — not clipped';
+
+  @override
+  String posPrinterDiagPage(int page, int total) {
+    return 'Page $page of $total';
+  }
+
+  @override
   String get posNetworkPrinterTestAction => 'Test print';
 
   @override
@@ -4738,11 +4831,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posPrinterPurposeKitchen => 'Kitchen tickets';
 
   @override
-  String get posKitchenPrinterPreparationTitle => 'Preparation only';
+  String get posKitchenPrinterPreparationTitle => 'Automatic kitchen printing';
 
   @override
   String get posKitchenPrinterPreparationBody =>
-      'Kitchen tickets are not printed automatically yet. You can prepare and test the kitchen printer now; printer-only kitchen activation is not yet available.';
+      'Automatic kitchen-ticket printing is controlled by the “Automatically print kitchen ticket” setting and requires a configured kitchen printer. You can also print a kitchen ticket manually from a created order.';
 
   @override
   String get posKitchenPrinterUseCustomerAction =>

@@ -16,6 +16,13 @@ import '../format/money_format.dart';
 import '../state/cart_controller.dart' show cartControllerProvider;
 import '../format/payment_method_label.dart';
 import '../print/native_print_bridges.dart';
+import '../print/pos_kitchen_ticket_printer.dart'
+    show
+        PosKitchenPrintOutcome,
+        isOrderEligibleForKitchenPrint,
+        kdsTicketViewFromSubmittedOrder,
+        kitchenTicketPrintLabelsFromL10n,
+        printKitchenTicketForOrder;
 import '../state/discount_controller.dart' show staffCapabilitiesProvider;
 import '../state/draft_recovery_controller.dart';
 import '../state/outbox_controller.dart';
@@ -205,8 +212,13 @@ class OrderConfirmation extends ConsumerWidget {
             // centre's reprint (built from the reconciled row) printed 30.00 for the
             // very same order. The LINES are untouched: they are the order-time
             // price snapshot (D-008) and are never recomputed.
-            buildDocument: () =>
-                buildReceiptDocument(l10n, displayOrder, paid, isDemo: isDemo),
+            buildDocument: () => buildReceiptDocument(
+              l10n,
+              displayOrder,
+              paid,
+              isDemo: isDemo,
+              restaurantName: assignments?.restaurantName,
+            ),
             submitToBridge: bridge == null ? null : bridge.submit,
           );
     });
@@ -335,8 +347,23 @@ class OrderConfirmation extends ConsumerWidget {
                       : null,
                 ),
                 const SizedBox(height: RestoflowSpacing.md),
+                // KITCHEN-PRINT-DUAL-001: the manual "Print kitchen ticket"
+                // reprint — shown ONLY for an order eligible to cook (the SHARED
+                // rule: a real accepted server id, not demo, not permanently
+                // rejected). It prints a money-free kitchen ticket to the
+                // INDEPENDENT kitchen printer; it never prints a receipt, changes
+                // order/payment status, or touches KDS.
+                if (isOrderEligibleForKitchenPrint(
+                  orderId: order.orderId,
+                  isDemoMode: isDemo,
+                  rejectionCode: entry?.lastErrorCode,
+                )) ...[
+                  _KitchenTicketPrintButton(order: order),
+                  const SizedBox(height: RestoflowSpacing.md),
+                ],
                 if (payment == null) ...[
-                  for (final line in order.lines) _ConfirmationLine(line: line),
+                  for (final line in order.printOrderedLines)
+                    _ConfirmationLine(line: line),
                   const Divider(),
                   // RF-117: subtotal always; discount/tax lines when present; the
                   // grand total (what the customer pays) is the loud figure once
@@ -758,8 +785,13 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
           orderKey: order.identity.key,
           hasEnabledPrinter:
               (assignments?.hasEnabledPrinter ?? false) || nativeConfigured,
-          buildDocument: () =>
-              buildReceiptDocument(l10n, order, payment, isDemo: isDemo),
+          buildDocument: () => buildReceiptDocument(
+            l10n,
+            order,
+            payment,
+            isDemo: isDemo,
+            restaurantName: assignments?.restaurantName,
+          ),
           submitToBridge: bridge == null ? null : bridge.submit,
         );
   }
@@ -1152,4 +1184,78 @@ PosRecentOrder? _authoritativeRow(List<PosRecentOrder> rows, String? orderId) {
     if (r.orderId == orderId) return r;
   }
   return null;
+}
+
+/// KITCHEN-PRINT-DUAL-001: the manual "Print kitchen ticket" button for an
+/// already-created order. An intentional (re)print — one money-free ticket per
+/// deliberate press — to the INDEPENDENT kitchen printer. It shows a loading
+/// state and an honest result; it never prints a cashier receipt, changes the
+/// order/payment status, or touches KDS state.
+class _KitchenTicketPrintButton extends ConsumerStatefulWidget {
+  const _KitchenTicketPrintButton({required this.order});
+
+  final SubmittedOrderView order;
+
+  @override
+  ConsumerState<_KitchenTicketPrintButton> createState() =>
+      _KitchenTicketPrintButtonState();
+}
+
+class _KitchenTicketPrintButtonState
+    extends ConsumerState<_KitchenTicketPrintButton> {
+  bool _printing = false;
+
+  Future<void> _print() async {
+    if (_printing) return;
+    setState(() => _printing = true);
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+    PosKitchenPrintOutcome outcome;
+    try {
+      outcome = await printKitchenTicketForOrder(
+        container: container,
+        ticket: kdsTicketViewFromSubmittedOrder(widget.order),
+        labels: kitchenTicketPrintLabelsFromL10n(l10n),
+      );
+    } catch (_) {
+      outcome = PosKitchenPrintOutcome.failed;
+    }
+    if (!mounted) return;
+    setState(() => _printing = false);
+    messenger.showSnackBar(SnackBar(content: Text(_messageFor(l10n, outcome))));
+  }
+
+  String _messageFor(AppLocalizations l10n, PosKitchenPrintOutcome outcome) =>
+      switch (outcome) {
+        PosKitchenPrintOutcome.printed => l10n.posKitchenTicketPrintedSnack,
+        PosKitchenPrintOutcome.noPrinterConfigured ||
+        PosKitchenPrintOutcome.unavailable =>
+          l10n.posKitchenPrinterNotConfiguredSnack,
+        // ineligibleOrder is defensive here (the button is hidden for such
+        // orders); surface it as a plain failure rather than a false success.
+        PosKitchenPrintOutcome.failed ||
+        PosKitchenPrintOutcome.ineligibleOrder =>
+          l10n.posKitchenTicketPrintFailedSnack,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        key: const Key('print-kitchen-ticket-button'),
+        onPressed: _printing ? null : _print,
+        icon: _printing
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.restaurant_outlined),
+        label: Text(l10n.posPrintKitchenTicketAction),
+      ),
+    );
+  }
 }

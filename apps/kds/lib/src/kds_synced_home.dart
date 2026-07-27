@@ -184,8 +184,11 @@ class KdsSyncedHome extends ConsumerWidget {
                         .read(kdsKitchenPrintControllerProvider.notifier)
                         .prepareOnAcknowledge(
                           ticket,
-                          buildDocument: () =>
-                              buildKdsTicketDocument(l10n, ticket),
+                          buildDocument: () => buildKdsTicketDocument(
+                            l10n,
+                            ticket,
+                            restaurantName: ref.read(kdsRestaurantNameProvider),
+                          ),
                           submitToBridge: bridge == null ? null : bridge.submit,
                           nativePrinterConfigured: ref.read(
                             hasNativePrinterProvider,
@@ -263,7 +266,11 @@ class KdsSyncedHome extends ConsumerWidget {
           ticket,
           hasEnabledPrinter:
               (assignments?.hasEnabledPrinter ?? false) || hasNativePrinter,
-          buildDocument: () => buildKdsTicketDocument(l10n, ticket),
+          buildDocument: () => buildKdsTicketDocument(
+            l10n,
+            ticket,
+            restaurantName: ref.read(kdsRestaurantNameProvider),
+          ),
           submitToBridge: bridge == null ? null : bridge.submit,
         );
   }

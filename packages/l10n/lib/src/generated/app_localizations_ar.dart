@@ -991,6 +991,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posReceiptTitle => 'إيصال';
 
   @override
+  String get printRestaurantNameFallback => 'مطعم';
+
+  @override
   String get posReceiptNumberLabel => 'رقم الإيصال';
 
   @override
@@ -1129,6 +1132,58 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get autoPrintNoPrinterNote => 'معطّل — لا توجد طابعة معيّنة.';
+
+  @override
+  String get autoPrintReceiptNoPrinterNote =>
+      'معطّل — لا توجد طابعة إيصال معيّنة.';
+
+  @override
+  String get autoPrintKitchenNoPrinterNote =>
+      'تتطلب الطباعة التلقائية لتذكرة المطبخ طابعة مطبخ مُعدّة.';
+
+  @override
+  String get posAutoPrintKitchenTicketToggle => 'طباعة تذكرة المطبخ تلقائيًا';
+
+  @override
+  String get posAutoPrintKitchenTicketToggleExplanation =>
+      'عند تفعيل هذا الخيار، تُطبع تذكرة المطبخ تلقائيًا من جهاز الكاشير بعد نجاح الطلب. يبقى الطلب مرسلًا إلى شاشة المطبخ كالمعتاد.';
+
+  @override
+  String get posFinishAllKitchenOrders => 'إنهاء كل طلبات المطبخ';
+
+  @override
+  String get posFinishAllConfirmAction => 'إنهاء الكل';
+
+  @override
+  String get posFinishAllConfirmBody =>
+      'سيتم إنهاء جميع طلبات المطبخ النشطة وإزالتها من شاشة المطبخ. الطلبات غير المدفوعة ستبقى متاحة للدفع في سجل الطلبات.';
+
+  @override
+  String get posFinishAllNoActiveOrders => 'لا توجد طلبات مطبخ نشطة';
+
+  @override
+  String posFinishAllResult(int count) {
+    return 'تم إنهاء $count من طلبات المطبخ';
+  }
+
+  @override
+  String posFinishAllResultWithFailures(int finished, int failed) {
+    return 'تم إنهاء $finished من طلبات المطبخ، وتعذّر إنهاء $failed (تبقى معروضة لإعادة المحاولة)';
+  }
+
+  @override
+  String get posPrintKitchenTicketAction => 'طباعة للمطبخ';
+
+  @override
+  String get posKitchenTicketPrintedSnack =>
+      'تم إرسال تذكرة المطبخ إلى الطابعة';
+
+  @override
+  String get posKitchenTicketPrintFailedSnack => 'تعذّرت طباعة تذكرة المطبخ';
+
+  @override
+  String get posKitchenPrinterNotConfiguredSnack =>
+      'لا توجد طابعة مطبخ مُعدّة. عيّن واحدة من إعدادات الجهاز.';
 
   @override
   String get printStatusNotConfigured => 'لا توجد طابعة مُعدّة';
@@ -3660,6 +3715,42 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posNetworkPrinterSaveAction => 'حفظ الطابعة';
 
   @override
+  String get posPrinterMediaSizeLabel => 'حجم وسائط الطباعة';
+
+  @override
+  String get posPrinterMediaSizeContinuous => 'لفة 80 مم (افتراضي)';
+
+  @override
+  String get posPrinterMediaSize50 => 'ملصق 50 × 50 مم';
+
+  @override
+  String get posPrinterMediaSize80 => 'ملصق 80 × 80 مم';
+
+  @override
+  String get posPrinterDiagHeading => 'تشخيص الطابعة';
+
+  @override
+  String posPrinterDiagWidthDots(int width) {
+    return 'العرض: $width نقطة';
+  }
+
+  @override
+  String posPrinterDiagHeightDots(int height) {
+    return 'ارتفاع الوسائط: $height نقطة';
+  }
+
+  @override
+  String get posPrinterDiagTopSafe => 'المنطقة الآمنة العلوية';
+
+  @override
+  String get posPrinterDiagBottomSafe => 'المنطقة الآمنة السفلية — غير مقصوصة';
+
+  @override
+  String posPrinterDiagPage(int page, int total) {
+    return 'صفحة $page من $total';
+  }
+
+  @override
   String get posNetworkPrinterTestAction => 'طباعة اختبار';
 
   @override
@@ -4702,11 +4793,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posPrinterPurposeKitchen => 'تذاكر المطبخ';
 
   @override
-  String get posKitchenPrinterPreparationTitle => 'تجهيز فقط';
+  String get posKitchenPrinterPreparationTitle => 'الطباعة التلقائية للمطبخ';
 
   @override
   String get posKitchenPrinterPreparationBody =>
-      'لا تُطبع تذاكر المطبخ تلقائيًا بعد. يمكنك تجهيز طابعة المطبخ واختبارها الآن، وتفعيل مطبخ الطابعة فقط غير متاح بعد.';
+      'تُتحكَّم الطباعة التلقائية لتذكرة المطبخ عبر إعداد «طباعة تذكرة المطبخ تلقائيًا» وتتطلب طابعة مطبخ مُعدّة. ويمكنك أيضًا طباعة تذكرة المطبخ يدويًا من طلب مُنشأ.';
 
   @override
   String get posKitchenPrinterUseCustomerAction =>

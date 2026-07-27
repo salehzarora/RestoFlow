@@ -36,6 +36,15 @@ pp.PrintDocument receiptToEscPosDocument(
             style: pp.PrintLineStyle.headingLarge,
           ),
         );
+      case app.PrintLineKind.subtitle:
+        lines.add(
+          pp.PrintTextLine(
+            line.left ?? '',
+            alignment: pp.PrintAlignment.center,
+            emphasis: pp.TextEmphasis.bold,
+            style: pp.PrintLineStyle.subheading,
+          ),
+        );
       case app.PrintLineKind.center:
         lines.add(
           pp.PrintTextLine(
@@ -86,6 +95,9 @@ pp.PrintDocument receiptToEscPosDocument(
         lines.add(
           pp.PrintTextLine('-' * columns, style: pp.PrintLineStyle.separator),
         );
+      case app.PrintLineKind.spacer:
+        // A blank, ink-free vertical gap between item blocks.
+        lines.add(const pp.PrintTextLine('', style: pp.PrintLineStyle.spacer));
     }
   }
   lines.add(const pp.PrintFeedLine(3));

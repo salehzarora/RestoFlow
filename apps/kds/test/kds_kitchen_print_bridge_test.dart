@@ -194,11 +194,16 @@ void main() {
         .whereType<pp.PrintTextLine>()
         .map((l) => l.style)
         .toList();
-    // The order-number hero is a large heading.
-    expect(styles.first, pp.PrintLineStyle.headingLarge);
-    // Item + indented sub-lines are present…
-    expect(styles.contains(pp.PrintLineStyle.item), isTrue);
-    expect(styles.contains(pp.PrintLineStyle.sub), isTrue);
+    // PRINT-LAYOUT-001B: the brand line (secondary heading) leads, above the
+    // large order-number hero heading.
+    expect(styles.first, pp.PrintLineStyle.subheading);
+    expect(styles.contains(pp.PrintLineStyle.headingLarge), isTrue);
+    // PRINT-LAYOUT-001C: the kitchen uses its DEDICATED larger item + modifier
+    // roles (never the smaller shared receipt item/sub).
+    expect(styles.contains(pp.PrintLineStyle.kitchenItem), isTrue);
+    expect(styles.contains(pp.PrintLineStyle.kitchenModifier), isTrue);
+    expect(styles.contains(pp.PrintLineStyle.item), isFalse);
+    expect(styles.contains(pp.PrintLineStyle.sub), isFalse);
     // …but NO money total style ever appears on the kitchen ticket.
     expect(styles.contains(pp.PrintLineStyle.total), isFalse);
   });

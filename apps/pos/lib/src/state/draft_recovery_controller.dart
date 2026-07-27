@@ -1,12 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 
 import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/demo_tables.dart';
+import '../data/draft_recovery_store.dart';
 import '../data/recent_order.dart' show PosRecentOrder;
 import 'cart_controller.dart';
 import 'outbox_controller.dart';
-import 'pos_session.dart' show posSyncSessionProvider;
+import 'pos_session.dart' show posSignedInEmployeeProfileIdProvider;
 import 'pos_sync_scope_provider.dart';
 import 'recent_orders_controller.dart';
 
@@ -17,30 +20,81 @@ import 'recent_orders_controller.dart';
 /// customer name, or its notes.
 ///
 /// [scopeKey] is the full operational scope (organization + restaurant + branch +
-/// device); [pinSessionId] is the human PIN session — a new employee login mints a new
-/// PIN session against the current device session, so it distinguishes the operator
-/// (and the device-session/pairing) even on the same device. Both are null in demo /
-/// unpaired mode, where there is a single implicit operator — a demo recovery therefore
-/// matches only another demo context, never a real paired one.
+/// device) — all durably persisted, so it is IDENTICAL before and after a restart.
+/// [employeeProfileId] (Codex #1) is the STABLE authenticated worker id (the server
+/// device-staff roster id), which is the SAME for a worker across every PIN login —
+/// so the SAME worker can reclaim their recovery after an app restart + re-login,
+/// while a different worker (different employeeProfileId) or a different till/branch
+/// (different scopeKey) cannot. The ephemeral pinSessionId is deliberately NOT part
+/// of the durable ownership (a new one is minted per login, which is exactly why the
+/// prior binding was unreclaimable after restart). Both are null in demo / unpaired
+/// mode — a demo recovery matches only another demo context, never a real paired one.
 class PosRecoveryBinding {
-  const PosRecoveryBinding({this.scopeKey, this.pinSessionId});
+  const PosRecoveryBinding({this.scopeKey, this.employeeProfileId});
 
   final String? scopeKey;
-  final String? pinSessionId;
+  final String? employeeProfileId;
 
-  /// EXACT match on every component — a recovery is never restored across a scope or
-  /// PIN-session boundary.
+  /// EXACT match on both stable components — a recovery is never restored across a
+  /// scope (org/restaurant/branch/device) or worker boundary.
   bool matches(PosRecoveryBinding other) =>
-      other.scopeKey == scopeKey && other.pinSessionId == pinSessionId;
+      other.scopeKey == scopeKey &&
+      other.employeeProfileId == employeeProfileId;
 
   @override
   bool operator ==(Object other) =>
       other is PosRecoveryBinding &&
       other.scopeKey == scopeKey &&
-      other.pinSessionId == pinSessionId;
+      other.employeeProfileId == employeeProfileId;
 
   @override
-  int get hashCode => Object.hash(scopeKey, pinSessionId);
+  int get hashCode => Object.hash(scopeKey, employeeProfileId);
+
+  /// MENU-ORDER-001 (Codex #1/#8/#9): durable serialization so the recovery's
+  /// STABLE ownership survives a restart — gated to its scope + worker id (a
+  /// different operator never sees it). No PIN / hash / token / JWT is persisted.
+  Map<String, Object?> toJson() => <String, Object?>{
+    if (scopeKey != null) 'scope_key': scopeKey,
+    if (employeeProfileId != null) 'employee_profile_id': employeeProfileId,
+  };
+
+  /// Decode only the STABLE fields. A legacy record that carried the ephemeral
+  /// `pin_session_id` decodes with a null worker id (it is NOT re-attributed) — it
+  /// simply becomes unavailable and is cleaned by existing retention (Codex #2).
+  static PosRecoveryBinding fromJson(Map<String, Object?> json) =>
+      PosRecoveryBinding(
+        scopeKey: json['scope_key']?.toString(),
+        employeeProfileId: json['employee_profile_id']?.toString(),
+      );
+}
+
+/// MENU-ORDER-001 (Codex correction-result settlement §2) — the IMMUTABLE settlement
+/// context of a corrected submission, captured from the OWNER-VALIDATED active correction
+/// source BEFORE the submitting worker or POS scope can change. It travels with the
+/// asynchronous submit RESULT so the outcome is settled onto the SINGLE source recovery by
+/// its ORIGINAL owner + the EXACT submitted operation — never re-derived from the
+/// (possibly handed-over) current session, never authorized by a replacement worker. It is
+/// absent for an ordinary (non-correction) submit, which is exactly what distinguishes a
+/// corrected e1->e2 settlement (settle onto e1, never a standalone capture) from an
+/// ordinary independent e2 retention.
+class CorrectionSettlementContext {
+  const CorrectionSettlementContext({
+    required this.sourceOutboxEntryId,
+    required this.submittedOutboxEntryId,
+    required this.originalBinding,
+  });
+
+  /// The source recovery being corrected (its outbox-entry map key).
+  final String sourceOutboxEntryId;
+
+  /// The corrected submission's outbox entry id — the EXACT op the source was durably
+  /// linked to before dispatch (`correctionOutboxEntryId`).
+  final String submittedOutboxEntryId;
+
+  /// The STABLE original owner (scopeKey + employeeProfileId) that owned the source at
+  /// submission time — the authority for settling this async result, safe because the
+  /// link was durably committed under it before dispatch.
+  final PosRecoveryBinding originalBinding;
 }
 
 /// PILOT-OPERATIONS-CORRECTIONS-001 — a recoverable snapshot of ONE submit attempt,
@@ -62,6 +116,7 @@ class PosDraftRecovery {
     required this.binding,
     this.table,
     this.customerName,
+    this.correctionOutboxEntryId,
   });
 
   final CartDraftSnapshot draft;
@@ -76,14 +131,77 @@ class PosDraftRecovery {
 
   final DemoTable? table;
   final String? customerName;
+
+  /// MENU-ORDER-001 (Codex, correction-window durability): the outbox entry id of the
+  /// CORRECTED resubmit this recovery is now the source of — set when the operator
+  /// restores this rejected draft (Back to cart) and re-Sends it. It durably LINKS the
+  /// source recovery to the corrected order so the recovery is cleared when that
+  /// corrected order is authoritatively ACCEPTED — even across a crash between
+  /// acceptance and local cleanup (the authoritative snapshot/outbox-applied signal
+  /// keys on THIS corrected id, and the reconcile clears the source recovery through
+  /// it). Null until a corrected resubmit; Back to cart alone never clears the record.
+  final String? correctionOutboxEntryId;
+
+  /// MENU-ORDER-001 (Codex #8/#9): durable serialization so a permanently-
+  /// rejected order's recovery — its draft (products, quantities, modifiers,
+  /// notes, AND the Dashboard menu ranks), order type, table and customer name —
+  /// survives an app restart. Restored under its [binding], so a different
+  /// operator can never see it.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'draft': draft.toJson(),
+    'order_type': orderType.name,
+    'outbox_entry_id': outboxEntryId,
+    'binding': binding.toJson(),
+    if (table != null) 'table': table!.toJson(),
+    if (customerName != null) 'customer_name': customerName,
+    if (correctionOutboxEntryId != null)
+      'correction_outbox_entry_id': correctionOutboxEntryId,
+  };
+
+  static PosDraftRecovery fromJson(Map<String, Object?> json) {
+    final rawTable = json['table'];
+    final orderTypeName = (json['order_type'] ?? OrderType.takeaway.name)
+        .toString();
+    return PosDraftRecovery(
+      draft: CartDraftSnapshot.fromJson(
+        (json['draft'] as Map?)?.cast<String, Object?>() ??
+            const <String, Object?>{},
+      ),
+      orderType: OrderType.values.firstWhere(
+        (t) => t.name == orderTypeName,
+        orElse: () => OrderType.takeaway,
+      ),
+      outboxEntryId: (json['outbox_entry_id'] ?? '').toString(),
+      binding: PosRecoveryBinding.fromJson(
+        (json['binding'] as Map?)?.cast<String, Object?>() ??
+            const <String, Object?>{},
+      ),
+      table: rawTable is Map
+          ? DemoTable.fromJson(rawTable.cast<String, Object?>())
+          : null,
+      customerName: json['customer_name']?.toString(),
+      // Backward-compatible: a record written before the correction-window fix has
+      // no link (null) and decodes as a plain, fully-recoverable rejected draft.
+      correctionOutboxEntryId: json['correction_outbox_entry_id']?.toString(),
+    );
+  }
 }
 
 /// The recovery store: a map of outbox-entry-id -> [PosDraftRecovery]. Multi-slot and
 /// scope-bound — see [PosDraftRecovery].
 class PosDraftRecoveryController
     extends Notifier<Map<String, PosDraftRecovery>> {
+  // MENU-ORDER-001 (Codex #8/#9): the durable store (default in-memory; real app
+  // overrides with a SharedPrefs store). NOT `late final` — build() re-runs on
+  // the same instance.
+  PosDraftRecoveryStore _store = InMemoryDraftRecoveryStore();
+  bool _disposed = false;
+
   @override
   Map<String, PosDraftRecovery> build() {
+    _store = ref.watch(posDraftRecoveryStoreProvider);
+    _disposed = false;
+    ref.onDispose(() => _disposed = true);
     // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 3): CONTROLLER-SEAM cleanup of accepted
     // recoveries. Watching the outbox here — not a widget listener — means an order that
     // becomes APPLIED clears its recovery even if its confirmation was never opened, is
@@ -91,7 +209,7 @@ class PosDraftRecoveryController
     // (a recovery stored while pending, later applied); the "applied before capture"
     // order is handled in [capture] below.
     ref.listen(outboxControllerProvider, (previous, next) {
-      _clearApplied(next);
+      unawaited(_clearApplied(next));
     });
     // Finding 4: an AUTHORITATIVE server snapshot for a device-owned order proves the
     // order exists (was accepted) — clear its recovery even when the local outbox entry
@@ -99,9 +217,54 @@ class PosDraftRecoveryController
     // listener, so no widget is required and the two acceptance signals (outbox-applied
     // AND server-snapshot) are both honoured.
     ref.listen(posRecentOrdersControllerProvider, (previous, next) {
-      _clearAcceptedBySnapshot(next);
+      unawaited(_clearAcceptedBySnapshot(next));
     });
+    // MENU-ORDER-001 (Codex #8/#9): rehydrate any persisted recoveries so a
+    // permanently-rejected order (item_unavailable) survives a restart — Back to
+    // cart restores the exact draft, IN Dashboard menu order.
+    _load();
     return const <String, PosDraftRecovery>{};
+  }
+
+  /// MENU-ORDER-001 (Codex #8/#9): load the durable recoveries UNDER the current
+  /// in-session state (in-session wins), so a restart rehydrates the map while a
+  /// recovery captured this session is never clobbered. Never throws.
+  Future<void> _load() async {
+    Map<String, PosDraftRecovery> loaded;
+    try {
+      loaded = await _store.load();
+    } catch (_) {
+      return;
+    }
+    if (_disposed || loaded.isEmpty) return;
+    state = <String, PosDraftRecovery>{...loaded, ...state};
+  }
+
+  /// MENU-ORDER-001 (Codex #8/#9): persist the current map (fire-and-forget; a
+  /// durability wobble must never break the till). Used ONLY by [capture] — a NEW
+  /// submit's recovery, whose loss simply means the operator re-keys that one order.
+  /// The correction LIFECYCLE (link / supersede / accepted cleanup / discard) instead
+  /// uses the AWAITED [_persistMap] so it never claims success on a failed write.
+  void _persist() {
+    if (_disposed) return;
+    unawaited(_store.persist(state).catchError((Object _) {}));
+  }
+
+  /// MENU-ORDER-001 (Codex correction-ownership §5): AWAITED copy-on-write persist —
+  /// write [next] to the durable store and report whether it SUCCEEDED. The caller
+  /// publishes [next] as in-memory state ONLY on a true result, so persistence is never
+  /// "clear old then persist replacement": we persist the COMPLETE replacement first,
+  /// then replace in-memory. A false result (write threw, or the controller was
+  /// disposed) means the previous durable + in-memory state is intact — nothing is lost
+  /// and the operation may be retried / reconciled later. Never throws.
+  Future<bool> _persistMap(Map<String, PosDraftRecovery> next) async {
+    if (_disposed) return false;
+    try {
+      await _store.persist(next);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Capture the draft of a just-started submit under its own key. NEVER overwrites a
@@ -120,6 +283,7 @@ class PosDraftRecoveryController
       ...state,
       recovery.outboxEntryId: recovery,
     };
+    _persist();
   }
 
   /// Clear ONLY the record for [outboxEntryId] (after its restore, discard, or an
@@ -130,6 +294,7 @@ class PosDraftRecoveryController
       for (final e in state.entries)
         if (e.key != outboxEntryId) e.key: e.value,
     };
+    _persist();
   }
 
   /// Clear only if a record is held for [outboxEntryId] (used when that entry is
@@ -158,54 +323,264 @@ class PosDraftRecoveryController
   bool hasRecoveryFor(String? outboxEntryId) =>
       outboxEntryId != null && state.containsKey(outboxEntryId);
 
+  /// MENU-ORDER-001 (Codex correction-ownership §3.C/§3.F/§4/§5/§10): the SINGLE
+  /// pre-dispatch transition of a corrected resubmit. BEFORE the corrected order is
+  /// enqueued/pushed, atomically supersede the source recovery [sourceOutboxEntryId]:
+  ///   * its draft becomes [correctedDraft] (the exact cart being sent now), so a
+  ///     re-restore after a rejection yields the CORRECTED cart, never the stale one;
+  ///   * its [correctionOutboxEntryId] becomes [correctedOutboxEntryId] — the durable
+  ///     link that lets authoritative acceptance clear this source even across a crash
+  ///     between the server accepting and the client receiving the response.
+  /// The record key (its logical identity) and ownership binding NEVER change, so the
+  /// same worker keeps exactly one logical recovery across repeated corrections.
+  ///
+  /// Returns whether the association was DURABLY persisted. It returns false — WITHOUT
+  /// mutating in-memory state — when:
+  ///   * the source is already gone (nothing to link);
+  ///   * [binding] (the CURRENT signed-in worker + scope) does NOT own the source
+  ///     (§10 — never trust an upstream check; a different worker/scope is refused);
+  ///   * the corrected id equals the source id (a resubmit always mints a fresh op);
+  ///   * the durable write failed (§5 — never claim success; keep the prior state).
+  /// The caller MUST abort the network dispatch on a false result (§4) so no order is
+  /// ever sent while the correction association exists only in memory.
+  Future<bool> linkCorrectedSubmit({
+    required String sourceOutboxEntryId,
+    required String correctedOutboxEntryId,
+    required PosRecoveryBinding binding,
+    required CartDraftSnapshot correctedDraft,
+    required OrderType orderType,
+    DemoTable? table,
+    String? customerName,
+  }) async {
+    final source = state[sourceOutboxEntryId];
+    if (source == null) return false;
+    if (sourceOutboxEntryId == correctedOutboxEntryId) return false;
+    if (!source.binding.matches(binding))
+      return false; // §10 owner/scope revalidation
+    final updated = PosDraftRecovery(
+      draft: correctedDraft,
+      orderType: orderType,
+      outboxEntryId: sourceOutboxEntryId, // logical identity is stable
+      binding: source.binding, // ownership never changes
+      table: table,
+      customerName: customerName,
+      correctionOutboxEntryId: correctedOutboxEntryId,
+    );
+    final next = <String, PosDraftRecovery>{
+      ...state,
+      sourceOutboxEntryId: updated,
+    };
+    final ok = await _persistMap(
+      next,
+    ); // §5 persist the replacement BEFORE publishing
+    if (!ok) return false;
+    state = next;
+    return true;
+  }
+
+  /// MENU-ORDER-001 (Codex correction-ownership §5/§10/§11.D): OWNER-CHECKED, awaited,
+  /// atomic terminal removal of the recovery for [outboxEntryId] — the explicit user
+  /// discard / Keep-current path. Verifies the CURRENT [binding] owns the record before
+  /// touching it (a different worker/scope is refused without revealing the draft), then
+  /// persists the removal copy-on-write (persist THEN publish) and retires its rejected
+  /// shell + drops any matching active-correction source. Returns whether the record was
+  /// actually removed: false on a not-authorized record OR a failed durable write (§11.D
+  /// — the record then REMAINS; the UI must not claim a permanent deletion). Idempotent —
+  /// an already-absent record is a success (its shell is still retired).
+  Future<bool> discardOwned(
+    String outboxEntryId,
+    PosRecoveryBinding binding,
+  ) async {
+    final r = state[outboxEntryId];
+    if (r == null) {
+      _retireShell(
+        outboxEntryId,
+      ); // orphan shell cleanup; nothing durable to remove
+      _clearActiveSourceIfMatches(outboxEntryId);
+      return true;
+    }
+    if (!r.binding.matches(binding))
+      return false; // §10 not authorized — keep it intact
+    final next = <String, PosDraftRecovery>{
+      for (final e in state.entries)
+        if (e.key != outboxEntryId) e.key: e.value,
+    };
+    final ok = await _persistMap(next); // §5/§11.D persist BEFORE publish
+    if (!ok) return false; // write failed — record remains recoverable
+    state = next;
+    _retireShell(outboxEntryId);
+    _clearActiveSourceIfMatches(outboxEntryId);
+    return true;
+  }
+
+  /// §2: an accepted / discarded source recovery must also drop the in-memory active
+  /// correction source that pointed at it, so a later UNRELATED submit never re-links a
+  /// dead source. Reads + clears only when the active source targets [outboxEntryId].
+  void _clearActiveSourceIfMatches(String outboxEntryId) {
+    final active = ref.read(posActiveCorrectionSourceProvider);
+    if (active != null && active.sourceOutboxEntryId == outboxEntryId) {
+      ref.read(posActiveCorrectionSourceProvider.notifier).clear();
+    }
+  }
+
+  /// MENU-ORDER-001 (Codex correction-result settlement §3/§6): settle a CORRECTED
+  /// submission's result onto its SINGLE source recovery, by the ORIGINAL validated
+  /// submission binding [originalBinding] — NEVER as a standalone new recovery, and NEVER
+  /// trusting the current (possibly handed-over) worker. This is the ONE result-time entry
+  /// point for a corrected submit's outcome, used identically whether the submitting
+  /// session is still current OR has departed (sign-out / worker or scope handover /
+  /// container disposal) while the corrected order was in flight.
+  ///
+  /// It is safe to act on this asynchronous result by the CAPTURED original binding
+  /// precisely because the source->corrected association was durably committed BEFORE
+  /// dispatch (the pre-dispatch [linkCorrectedSubmit] hook): the source recovery
+  /// [sourceOutboxEntryId] was superseded IN PLACE under this exact owner with the
+  /// corrected draft + `correctionOutboxEntryId = submittedOutboxEntryId`, and awaited to
+  /// disk, before any network dispatch. So the retained (item_unavailable / retryable /
+  /// network / timeout) outcome needs NO further recovery-map mutation here — the single
+  /// logical recovery already holds the corrected draft under its original owner — and the
+  /// accepted outcome is cleared by the controller-seam acceptance listeners through the
+  /// same link. This method therefore only VERIFIES and settles the SHELL:
+  ///   * confirms the stored source still exists, is owned by [originalBinding], and is
+  ///     linked to EXACTLY [submittedOutboxEntryId] (a mismatch means the source was
+  ///     already resolved/accepted or never owned this op — no action);
+  ///   * when the corrected op was PERMANENTLY REJECTED, retires any DUPLICATE rejected
+  ///     shell keyed by [submittedOutboxEntryId] so one logical order keeps one shell (the
+  ///     source recovery's own shell surfaces it).
+  ///
+  /// Performs NO capture, exposes no draft to the current worker, mutates nothing when the
+  /// binding/link does not match, and is safe with NO worker signed in. Returns whether the
+  /// source recovery is the verified single record for this result — the caller uses this
+  /// only to assert/log; for a correction it must NEVER create a standalone recovery
+  /// regardless (that would duplicate the one logical order).
+  Future<bool> settleCorrectedResult({
+    required PosRecoveryBinding originalBinding,
+    required String sourceOutboxEntryId,
+    required String submittedOutboxEntryId,
+    required bool submittedWasPermanentlyRejected,
+  }) async {
+    final source = state[sourceOutboxEntryId];
+    final settledOnSource =
+        source != null &&
+        source.binding.matches(originalBinding) &&
+        source.correctionOutboxEntryId == submittedOutboxEntryId;
+    if (submittedWasPermanentlyRejected) {
+      // Retire only the DUPLICATE shell for the corrected op (never the source's own).
+      _retireShell(submittedOutboxEntryId);
+    }
+    return settledOnSource;
+  }
+
+  /// Retire the rejected shell for [outboxEntryId], deferred to a microtask so it is
+  /// safe to call from WITHIN the recent-orders listener (never mutate a provider during
+  /// its own notification). Swallows a disposed-container race.
+  void _retireShell(String outboxEntryId) {
+    Future<void>.microtask(() {
+      if (_disposed) return;
+      try {
+        ref
+            .read(posRecentOrdersControllerProvider.notifier)
+            .retireLocalRejectedByOutboxEntry(outboxEntryId);
+      } catch (_) {}
+    });
+  }
+
   /// Finding 3: clear the recovery of every APPLIED submit. Idempotent — a duplicate
   /// applied delivery finds nothing to clear. NEVER touches a pending, retryable-failed,
-  /// or permanently-rejected (item_unavailable) entry, whose recovery must be retained.
-  void _clearApplied(List<OutboxEntry> entries) {
+  /// or permanently-rejected (item_unavailable) entry whose recovery must be retained —
+  /// UNLESS that recovery is the SOURCE of a corrected resubmit that just applied (its
+  /// correctionOutboxEntryId link, so the accepted correction clears its source).
+  Future<void> _clearApplied(List<OutboxEntry> entries) async {
     final applied = <String>{
       for (final e in entries)
         if (e.syncState == OutboxSyncState.applied) e.id,
     };
     if (applied.isEmpty) return;
-    final next = <String, PosDraftRecovery>{
-      for (final e in state.entries)
-        if (!applied.contains(e.key)) e.key: e.value,
-    };
-    if (next.length != state.length) state = next;
+    await _clearForAccepted(applied);
   }
 
   /// Finding 4: clear the recovery of every order the SERVER has authoritatively
   /// snapshotted (the order exists → it was accepted), keyed by the EXACT outbox entry
   /// the submit view carries. A permanently-rejected shell has NO snapshot (the order
-  /// was never created), so its recovery is never cleared here. Idempotent — a duplicate
-  /// snapshot finds nothing to clear — and it touches only the matching entries.
-  void _clearAcceptedBySnapshot(List<PosRecentOrder> orders) {
+  /// was never created), so its OWN recovery is never cleared here — but a source
+  /// recovery WHOSE corrected resubmit was accepted IS cleared through its link (the
+  /// accepted-then-crash reconcile). Idempotent; touches only matching entries.
+  Future<void> _clearAcceptedBySnapshot(List<PosRecentOrder> orders) async {
     final accepted = <String>{
       for (final o in orders)
         if (o.snapshot != null && o.order?.outboxEntryId != null)
           o.order!.outboxEntryId!,
     };
     if (accepted.isEmpty) return;
-    final next = <String, PosDraftRecovery>{
-      for (final e in state.entries)
-        if (!accepted.contains(e.key)) e.key: e.value,
-    };
-    if (next.length != state.length) state = next;
+    await _clearForAccepted(accepted);
+  }
+
+  /// Shared acceptance cleanup: clear every recovery whose OWN key OR whose
+  /// correctionOutboxEntryId LINK is in [acceptedEntryIds] (its corrected order was
+  /// authoritatively accepted), retire each cleared recovery's rejected shell, and drop
+  /// a matching active-correction source. Idempotent — nothing matched leaves the map
+  /// untouched.
+  ///
+  /// §5/§11.C: the cleared map is persisted BEFORE it is published in memory. If the
+  /// durable write FAILS, nothing is published — the recovery REMAINS (in memory and
+  /// durable), so the NEXT authoritative acceptance signal (this session's, or the next
+  /// startup's reconcile of the same applied entry / server snapshot) retries the
+  /// cleanup idempotently until it succeeds. Cleanup is therefore never lost, and a
+  /// half-applied clear can never resurrect on restart.
+  Future<void> _clearForAccepted(Set<String> acceptedEntryIds) async {
+    final removed = <String>[];
+    final next = <String, PosDraftRecovery>{};
+    for (final e in state.entries) {
+      final rec = e.value;
+      final correctionId = rec.correctionOutboxEntryId;
+      final isAccepted =
+          acceptedEntryIds.contains(e.key) ||
+          (correctionId != null && acceptedEntryIds.contains(correctionId));
+      if (isAccepted) {
+        removed.add(e.key);
+      } else {
+        next[e.key] = rec;
+      }
+    }
+    if (removed.isEmpty) return;
+    final ok = await _persistMap(
+      next,
+    ); // persist THEN publish (retry on failure)
+    if (!ok || _disposed) return;
+    state = next;
+    for (final key in removed) {
+      _retireShell(key);
+      _clearActiveSourceIfMatches(key);
+    }
   }
 }
+
+/// MENU-ORDER-001 (Codex #8/#9): the draft-recovery persistence seam. Default:
+/// in-memory (demo mode / tests — session only). The real app overrides this in
+/// `main.dart` with a [SharedPrefsDraftRecoveryStore] so a rejected order's
+/// recovery (and its Dashboard menu ranks) survives a refresh / restart. Kept a
+/// singleton so the in-memory data survives controller rebuilds within a session.
+final posDraftRecoveryStoreProvider = Provider<PosDraftRecoveryStore>(
+  (ref) => InMemoryDraftRecoveryStore(),
+);
 
 final posDraftRecoveryProvider =
     NotifierProvider<PosDraftRecoveryController, Map<String, PosDraftRecovery>>(
       PosDraftRecoveryController.new,
     );
 
-/// The CURRENT operational binding — the scope + PIN session a recovery may be
-/// captured against and restored in. Watched by the confirmation and the recent-orders
-/// surface so that a PIN switch or branch/device re-pair immediately makes a prior
-/// employee's recovery inaccessible (its binding no longer matches). Null components in
-/// demo / unpaired mode.
+/// The CURRENT operational binding — the STABLE scope (org/restaurant/branch/device)
+/// + STABLE worker id (employeeProfileId) a recovery may be captured against and
+/// restored in. Watched by the confirmation and the recent-orders surface so that a
+/// DIFFERENT worker signing in, or a branch/device re-pair, immediately makes a prior
+/// employee's recovery inaccessible (its binding no longer matches) — while the SAME
+/// worker re-signing-in (even with a fresh pinSessionId, e.g. after a restart) still
+/// matches and can reclaim it. Null components in demo / unpaired mode.
 final posRecoveryBindingProvider = Provider<PosRecoveryBinding>((ref) {
   final scopeKey = ref.watch(posSyncScopeProvider)?.key;
-  final pinSessionId = ref.watch(posSyncSessionProvider)?.pinSessionId;
-  return PosRecoveryBinding(scopeKey: scopeKey, pinSessionId: pinSessionId);
+  final employeeProfileId = ref.watch(posSignedInEmployeeProfileIdProvider);
+  return PosRecoveryBinding(
+    scopeKey: scopeKey,
+    employeeProfileId: employeeProfileId,
+  );
 });

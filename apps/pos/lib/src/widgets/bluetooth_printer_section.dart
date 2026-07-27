@@ -6,10 +6,12 @@ import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../print/bluetooth_printer.dart';
 import '../print/bluetooth_printer_tester.dart';
-import '../print/kitchen_test_document.dart';
+import '../print/native_print_bridges.dart'
+    show posPrinterDestinationSendGateProvider;
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_printer_purpose.dart';
+import 'media_profile_selector.dart';
 
 enum _BtStatus { idle, testing, success, failure }
 
@@ -40,6 +42,11 @@ class _BluetoothPrinterSectionState
   _BtStatus _status = _BtStatus.idle;
   String? _selectedAddress;
   String? _selectedName;
+
+  /// PRINT-LAYOUT-001A: the selected media profile for THIS slot (prefilled from
+  /// the saved config once; defaults to the continuous-80 roll).
+  pp.MediaProfileId _selectedProfile = pp.MediaProfileId.continuous80;
+  bool _profilePrefilled = false;
 
   /// PRINT-BLUETOOTH-RECOVERY-001: the last test failure's category (drives a
   /// specific message: permission / bluetooth-off / not-paired / connect /
@@ -93,6 +100,8 @@ class _BluetoothPrinterSectionState
         _selectedName = null;
         _failCategory = null;
         _failDetail = null;
+        _selectedProfile = pp.MediaProfileId.continuous80;
+        _profilePrefilled = false;
       });
     }
   }
@@ -118,6 +127,7 @@ class _BluetoothPrinterSectionState
           PosBluetoothPrinterConfig(
             address: selection.address,
             name: selection.name,
+            mediaProfileId: _selectedProfile.name,
           ),
         );
     if (!mounted) return;
@@ -152,28 +162,31 @@ class _BluetoothPrinterSectionState
       _failDetail = null;
     });
     final deviceLabel = ref.read(posDeviceContextProvider)?.displayName;
-    // KITCHEN-MODE-001B: the kitchen slot tests with the MONEY-FREE localized
-    // kitchen TEST document (shared raster path); the customer slot keeps the
-    // classic diagnostic. Result = bytes accepted by the transport only.
-    final document = widget.purpose == PosPrinterPurpose.kitchenTicket
-        ? await buildPosKitchenTestDocument(
-            ref,
-            l10n,
-            printerName: selection.name,
-            deviceLabel: deviceLabel,
-          )
-        : null;
+    // PRINT-LAYOUT-001A: the Test Print is the profile-aware DIAGNOSTIC (money-
+    // free), rendered by the tester at the SELECTED (unsaved) media profile.
+    final document = posMediaProfileDiagnosticDocument(
+      l10n,
+      pp.MediaProfile.fromId(_selectedProfile.name),
+    );
     if (!mounted) return;
-    final result = await ref
-        .read(bluetoothPrinterTesterProvider)
-        .testPrint(
-          PosBluetoothPrinterConfig(
-            address: selection.address,
-            name: selection.name,
-          ),
-          deviceLabel: deviceLabel,
-          document: document,
-        );
+    // KITCHEN-PRINT-DUAL-001 (F4): serialize the test send through the SHARED
+    // per-destination gate + canonical key, so a Test print never interleaves
+    // with another Test or an automatic kitchen send to the same physical
+    // printer (FIFO). Only the physical send is wrapped.
+    final gate = ref.read(posPrinterDestinationSendGateProvider);
+    final tester = ref.read(bluetoothPrinterTesterProvider);
+    final result = await gate.withDestination(
+      pp.PrinterDestinationSendGate.bluetoothKey(selection.address),
+      () => tester.testPrint(
+        PosBluetoothPrinterConfig(
+          address: selection.address,
+          name: selection.name,
+          mediaProfileId: _selectedProfile.name,
+        ),
+        deviceLabel: deviceLabel,
+        document: document,
+      ),
+    );
     if (!mounted) return;
     setState(() {
       _status = result.ok ? _BtStatus.success : _BtStatus.failure;
@@ -191,6 +204,11 @@ class _BluetoothPrinterSectionState
     final saved = ref
         .watch(posBluetoothPrinterConfigFamily(widget.purpose))
         .valueOrNull;
+    // PRINT-LAYOUT-001A: prefill the media profile from the saved config once.
+    if (!_profilePrefilled && saved != null) {
+      _profilePrefilled = true;
+      _selectedProfile = saved.mediaProfile.id;
+    }
     // The effective selection: an in-session pick, else the saved printer.
     final selectedAddress = _selectedAddress ?? saved?.address;
     final canAct = selectedAddress != null && _status != _BtStatus.testing;
@@ -239,6 +257,12 @@ class _BluetoothPrinterSectionState
             _selectedName = device.name.isEmpty ? null : device.name;
             _status = _BtStatus.idle;
           }),
+        ),
+        MediaProfileSelector(
+          fieldKey: _k('bluetooth-printer-media-size'),
+          value: _selectedProfile,
+          enabled: _status != _BtStatus.testing,
+          onChanged: (id) => setState(() => _selectedProfile = id),
         ),
         const SizedBox(height: RestoflowSpacing.sm),
         Row(

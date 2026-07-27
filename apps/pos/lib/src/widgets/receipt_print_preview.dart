@@ -12,6 +12,7 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/print_document.dart';
 import '../print/print_service.dart';
+import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../state/submitted_order_view.dart';
 
 /// A browser-style RECEIPT print preview (RF-118): a narrow "paper" receipt over
@@ -46,6 +47,15 @@ class ReceiptPrintPreview extends ConsumerWidget {
     // Mode-honest: the demo restaurant name / demo + provisional notes belong
     // to demo mode only — a REAL receipt shows the true server receipt number.
     final isDemo = ref.watch(runtimeConfigProvider).isDemoMode;
+    // PRINT-LAYOUT-001B: the on-screen brand mirrors the printed hero — the demo
+    // name in demo mode, else the real device restaurant name, else a localized
+    // generic word (never a hardcoded placeholder).
+    final realName = ref.watch(posRestaurantNameProvider)?.trim();
+    final brandName = isDemo
+        ? l10n.receiptDemoRestaurantName
+        : (realName != null && realName.isNotEmpty
+              ? realName
+              : l10n.printRestaurantNameFallback);
     final typeLabel = dineIn
         ? l10n.posOrderTypeDineIn
         : l10n.posOrderTypeTakeaway;
@@ -82,9 +92,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                           // joining under the ar default locale (D-014).
                           Center(
                             child: Text(
-                              isDemo
-                                  ? l10n.receiptDemoRestaurantName
-                                  : l10n.posReceiptTitle,
+                              brandName,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
@@ -131,7 +139,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                             text: _formatReceiptTimestamp(payment.paidAt),
                           ),
                           const _Rule(),
-                          for (final line in order.lines) ...[
+                          for (final line in order.printOrderedLines) ...[
                             _ItemLine(
                               label: '${line.quantity}× ${line.name}',
                               value: MoneyFormatter.formatMinor(
@@ -260,7 +268,13 @@ class ReceiptPrintPreview extends ConsumerWidget {
               onPrint: () => ref
                   .read(printServiceProvider)
                   .printDocument(
-                    buildReceiptDocument(l10n, order, payment, isDemo: isDemo),
+                    buildReceiptDocument(
+                      l10n,
+                      order,
+                      payment,
+                      isDemo: isDemo,
+                      restaurantName: ref.read(posRestaurantNameProvider),
+                    ),
                   ),
             ),
           ],
@@ -277,26 +291,40 @@ PrintDocument buildReceiptDocument(
   SubmittedOrderView order,
   CashPayment payment, {
   bool isDemo = true,
+  String? restaurantName,
 }) {
   final currency = payment.currencyCode;
   final dineIn = order.orderType == OrderType.dineIn;
+  // PRINT-LAYOUT-001B: the brand HERO is the restaurant name — the demo name in
+  // demo mode, else the real name threaded from the paired-device context (DATA,
+  // offline-safe). When it is absent (an unconfigured device) a localized
+  // generic brand word stands in, never a hardcoded placeholder.
+  final realName = isDemo
+      ? l10n.receiptDemoRestaurantName
+      : restaurantName?.trim();
+  final brandName = (realName != null && realName.isNotEmpty)
+      ? realName
+      : l10n.printRestaurantNameFallback;
+  // MENU-ORDER-001: items in the canonical menu-configured print order (the
+  // shared getter), so the cashier receipt matches the POS kitchen ticket + KDS.
+  final items = order.printOrderedLines;
   // Built into a local (not an inline `title:` literal) so the RF-020
   // no-hardcoded-strings guard isn't tripped by this l10n-interpolated value.
   final docTitle = '${l10n.receiptPreviewTitle} ${order.orderNumber}';
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
-      // Header — restaurant brand + a PAID chip.
-      PrintLine.title(
-        isDemo ? l10n.receiptDemoRestaurantName : l10n.posReceiptTitle,
-      ),
+      // Header — restaurant-name brand HERO, a secondary "Receipt" label, then
+      // a PAID chip.
+      PrintLine.title(brandName),
+      PrintLine.center(l10n.posReceiptTitle),
       PrintLine.center(l10n.posPaidChip),
       PrintLine.rule(),
-      // Hero — the big, customer-facing ORDER NUMBER. PRINT-LAYOUT-001: the
-      // INTERNAL receipt number (payment.receiptNumber) is intentionally NOT
-      // printed on the customer receipt; it stays in the data for reporting/
-      // support and is unchanged.
-      PrintLine.title(l10n.posReceiptOrderHeading(order.orderNumber)),
+      // The customer-facing ORDER NUMBER — a prominent secondary identifier
+      // below the brand (not the hero). PRINT-LAYOUT-001: the INTERNAL receipt
+      // number (payment.receiptNumber) is intentionally NOT printed on the
+      // customer receipt; it stays in the data for reporting/support, unchanged.
+      PrintLine.subtitle(l10n.posReceiptOrderHeading(order.orderNumber)),
       PrintLine.rule(),
       // Service details grouped + centered: type, table, customer, date/time.
       PrintLine.center(
@@ -309,17 +337,22 @@ PrintDocument buildReceiptDocument(
         PrintLine.center('${l10n.customerNameReceiptLabel}: $customer'),
       PrintLine.center(_formatReceiptTimestamp(payment.paidAt)),
       PrintLine.rule(),
-      // Items — quantity + name, line total on the right; modifiers and the note
-      // are indented underneath so they scan clearly and never get lost.
-      for (final line in order.lines) ...[
+      // Items — quantity + name at the larger item size, line total on the
+      // right; modifiers and the note indented underneath. A blank spacer before
+      // each item after the first so items don't run together.
+      for (var i = 0; i < items.length; i++) ...[
+        if (i > 0) PrintLine.spacer(),
         PrintLine.item(
-          '${line.quantity} × ${line.name}',
-          MoneyFormatter.formatMinor(line.lineTotalMinor, line.currencyCode),
+          '${items[i].quantity} × ${items[i].name}',
+          MoneyFormatter.formatMinor(
+            items[i].lineTotalMinor,
+            items[i].currencyCode,
+          ),
         ),
         // Modifier snapshots arrive pre-formatted ('name ×N' for quantities).
-        for (final modifier in line.modifiers) PrintLine.sub('+ $modifier'),
-        if (line.note != null)
-          PrintLine.sub('${l10n.posItemNoteLabel}: ${line.note}'),
+        for (final modifier in items[i].modifiers) PrintLine.sub('+ $modifier'),
+        if (items[i].note != null)
+          PrintLine.sub('${l10n.posItemNoteLabel}: ${items[i].note}'),
       ],
       PrintLine.rule(),
       // Totals — money/tax formatting is UNCHANGED (MoneyFormatter); the TOTAL

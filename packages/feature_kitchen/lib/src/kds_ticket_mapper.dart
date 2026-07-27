@@ -93,6 +93,13 @@ class KdsTicketMapper {
     final pendingAckOrders = <String>{};
     for (final o in orders) {
       if (o['deleted_at'] != null) continue;
+      // KITCHEN-PRINT-DUAL-001C: a direct_print order is dispatched to the kitchen
+      // via the POS printer (no KDS device). It is authoritatively routed OUT of
+      // the KDS active workflow (server-side it rests at `served`); exclude it from
+      // the active board REGARDLESS of status, so it never shows as an actionable
+      // ticket, never accumulates an open local ticket, and never contributes to
+      // the active/kitchen counts. Absent/'kds' = the normal workflow.
+      if (o['dispatch_mode'] == 'direct_print') continue;
       final id = o['id'];
       final status = o['status'];
       if (id is! String || status is! String) continue;
@@ -153,7 +160,13 @@ class KdsTicketMapper {
     // A modifier row carries an integer `quantity` (>=1, default 1); when it is
     // above 1 the display string gets a '×N' suffix (name first, U+00D7 — the
     // same convention as the KDS item line). Never money.
-    final modsByItem = <String, List<String>>{};
+    // MENU-ORDER-001: collect each item's modifier lines WITH their menu-
+    // configured print-order keys, snapshotted at submit (modifier GROUP display
+    // order + OPTION display order) + the line_position tie-breaker, so the KDS
+    // prints them in the SAME order as the cashier receipt. The wire delivers
+    // modifiers `ORDER BY (updated_at, id)` — random within an item for a fresh
+    // order — so the snapshot keys (not wire order) drive the sequence.
+    final modLinesByItem = <String, List<_ModLine>>{};
     // KITCHEN-MEAT-001: each order item's meat contributions from its selected
     // options, PRE-MULTIPLIED by the modifier units (× the item quantity is
     // applied per item below). Money-free; only options carrying meat_snapshot
@@ -166,8 +179,19 @@ class KdsTicketMapper {
       if (itemId is! String || option is! String) continue;
       final qtyRaw = m['quantity'];
       final qty = qtyRaw is int ? qtyRaw : int.tryParse('$qtyRaw') ?? 1;
-      (modsByItem[itemId] ??= <String>[]).add(
-        qty > 1 ? '$option ×$qty' : option,
+      // Tolerant int-or-0 plucks — an order/server predating the columns yields
+      // 0 (legacy sentinel), so those modifiers keep their wire (input) order.
+      (modLinesByItem[itemId] ??= <_ModLine>[]).add(
+        _ModLine(
+          groupDisplayOrder: menuPrintOrderInt(
+            m['modifier_group_display_order_snapshot'],
+          ),
+          optionDisplayOrder: menuPrintOrderInt(
+            m['modifier_option_display_order_snapshot'],
+          ),
+          linePosition: menuPrintOrderInt(m['line_position']),
+          text: qty > 1 ? '$option ×$qty' : option,
+        ),
       );
       final meat = KitchenMeat.tryFromJson(m['meat_snapshot']);
       if (meat != null && qty > 0) {
@@ -175,6 +199,18 @@ class KdsTicketMapper {
           KitchenMeat(quantity: meat.quantity * qty, unit: meat.unit),
         );
       }
+    }
+    // MENU-ORDER-001: order each item's modifiers by the shared canonical key
+    // (group -> option -> line_position -> input index), so the KDS prints them
+    // in the SAME Dashboard order as the cashier receipt. Legacy 0 keys fall back
+    // to input (wire) order — a partially-migrated order never scrambles.
+    final modsByItem = <String, List<String>>{};
+    for (final entry in modLinesByItem.entries) {
+      final lines = sortByMenuPrintOrder(
+        entry.value,
+        (l) => [l.groupDisplayOrder, l.optionDisplayOrder, l.linePosition],
+      );
+      modsByItem[entry.key] = [for (final l in lines) l.text];
     }
 
     // Group active items into (order, station) tickets.
@@ -187,7 +223,7 @@ class KdsTicketMapper {
     // top-of-ticket summary is the total that unit needs), but NEVER across
     // work units: a Round-2 ticket must not display the original order's
     // counts as if they were new work. Money-free; owner config only.
-    final countContribsByWorkUnit = <String, List<KitchenCountContribution>>{};
+    final countItemsByWorkUnit = <String, List<KitchenCountItemInput>>{};
     for (final it in orderItems) {
       if (it['deleted_at'] != null) continue;
       final itemId = it['id'];
@@ -235,6 +271,18 @@ class KdsTicketMapper {
       // {name,quantity,unit}) plucked from the order_items snapshot. Tolerant
       // parse — a missing/bad value yields an empty list (no prep row).
       final prepComponents = parseKitchenPrepComponents(it['prep_snapshot']);
+      // MENU-ORDER-001: the item's menu-configured print-order keys — the
+      // category rank + within-category rank snapshotted at submit (order_items
+      // .category_display_order_snapshot / .item_display_order_snapshot) + the
+      // 001D line_position tie-breaker. Tolerant int-or-0 plucks (an order/server
+      // predating the columns yields 0 -> keep wire order). Non-money.
+      final categoryDisplayOrder = menuPrintOrderInt(
+        it['category_display_order_snapshot'],
+      );
+      final itemDisplayOrder = menuPrintOrderInt(
+        it['item_display_order_snapshot'],
+      );
+      final linePosition = menuPrintOrderInt(it['line_position']);
 
       // PSC-001C: a round item builds a SEPARATE per-round ticket keyed by
       // (order, station, round); the round's OWN status drives the column.
@@ -266,53 +314,56 @@ class KdsTicketMapper {
           modifiers: modsByItem[itemId] ?? const <String>[],
           note: note,
           prepComponents: prepComponents,
+          categoryDisplayOrder: categoryDisplayOrder,
+          itemDisplayOrder: itemDisplayOrder,
+          linePosition: linePosition,
         ),
       );
       // KDS-ALERTS-AND-KITCHEN-COUNTS-002: accumulate this item's counted-resource
-      // contributions for its OWN WORK UNIT (PSC-001C Finding 3: keyed by
+      // contribution for its OWN WORK UNIT (PSC-001C Finding 3: keyed by
       // order + round, so a round ticket never inherits the original order's
-      // counts) — factor = the ordered item quantity.
+      // counts). KITCHEN-PRINT-DUAL-001B: build the SHARED neutral
+      // [KitchenCountItemInput] — the per-OPTION meat counts (meatByItem, already
+      // × modifier units) and the per-ITEM prep counts — and let the SHARED
+      // [aggregateOrderKitchenCounts] apply factor = the ordered item quantity,
+      // exactly as the POS direct kitchen print does. No second aggregation.
       // PSC-001D: a cancellation card needs no cook-prep totals (nothing is
       // being prepared any more), so pending-ack orders contribute none.
       if (!pendingAck && quantity > 0) {
-        final contribs =
-            countContribsByWorkUnit['$orderId|${roundId ?? ''}'] ??=
-                <KitchenCountContribution>[];
-        // Per-OPTION counts (already × modifier units): label = the resource the
-        // owner typed as the option's count unit (e.g. "قطع لحم").
-        final itemMeat = meatByItem[itemId];
-        if (itemMeat != null) {
-          for (final meat in itemMeat) {
-            contribs.add(
-              KitchenCountContribution(
-                quantity: meat.quantity,
-                label: meat.unit,
-                factor: quantity,
+        (countItemsByWorkUnit['$orderId|${roundId ?? ''}'] ??=
+                <KitchenCountItemInput>[])
+            .add(
+              KitchenCountItemInput(
+                quantity: quantity,
+                meats: meatByItem[itemId] ?? const <KitchenMeat>[],
+                prepComponents: prepComponents,
               ),
             );
-          }
-        }
-        // Per-ITEM base counts (buns, wraps, trays, …): label = the prep
-        // component's resource name (+ unit when the owner set one).
-        for (final prep in prepComponents) {
-          contribs.add(
-            KitchenCountContribution(
-              quantity: prep.quantity,
-              label: _countLabel(prep),
-              factor: quantity,
-            ),
-          );
-        }
       }
     }
 
     // KDS-ALERTS-AND-KITCHEN-COUNTS-002 + PSC-001C Finding 3: the count totals
     // per WORK UNIT (grouped by resource label), attached below to every
-    // STATION ticket of that unit — and only that unit.
+    // STATION ticket of that unit — and only that unit. The SHARED aggregator is
+    // the single source of truth for both the KDS and the POS direct print.
     final kitchenCountsByWorkUnit = <String, List<KitchenCount>>{
-      for (final entry in countContribsByWorkUnit.entries)
-        entry.key: aggregateKitchenCounts(entry.value),
+      for (final entry in countItemsByWorkUnit.entries)
+        entry.key: aggregateOrderKitchenCounts(entry.value),
     };
+
+    // MENU-ORDER-001: order each ticket's items by the shared canonical print
+    // order — category display order -> item display order -> line_position ->
+    // input index — so the KDS ticket + reprint print in the SAME Dashboard-
+    // configured order as the cashier receipt, regardless of the (updated_at, id)
+    // wire order the rows arrived in. Stable: whole items move, so each item's
+    // modifiers/prep/note stay attached; legacy 0 snapshots fall back to
+    // line_position + wire order (a partially-migrated order never scrambles).
+    for (final b in grouped.values) {
+      b.items = sortByMenuPrintOrder(
+        b.items,
+        (it) => [it.categoryDisplayOrder, it.itemDisplayOrder, it.linePosition],
+      );
+    }
 
     final tickets =
         grouped.values
@@ -368,15 +419,6 @@ class KdsTicketMapper {
     return null;
   }
 
-  /// The resource label for an item-base prep component: its [name], plus the
-  /// [unit] when the owner set one (e.g. "خبز" / "Fish pcs"). This is the key the
-  /// whole-order counts group by, so item-base counts and modifier-option counts
-  /// with the same label merge into one total.
-  static String _countLabel(KitchenPrepComponent component) {
-    final unit = component.unit.trim();
-    return unit.isEmpty ? component.name : '${component.name} $unit';
-  }
-
   /// Minimal order-status -> kitchen-ticket-status projection.
   static KitchenTicketStatus _ticketStatusFor(String orderStatus) {
     return switch (orderStatus) {
@@ -409,7 +451,8 @@ class _TicketBuilder {
   /// PSC-001C: set when this ticket is an additional service round.
   final String? roundId;
   final _RoundInfo? round;
-  final List<KdsItemView> items = [];
+  // Reassigned once, after collection, by the shared menu-print-order sort.
+  List<KdsItemView> items = [];
 }
 
 /// PSC-001C: the explicit money-free pluck of one ACTIVE service round.
@@ -455,4 +498,22 @@ class _OrderInfo {
   /// PSC-001C: TRUE for a SERVED parent admitted only so its still-active
   /// rounds can render — its original (already bumped) items never re-appear.
   final bool roundContextOnly;
+}
+
+/// MENU-ORDER-001: one modifier line with its menu-configured print-order keys
+/// (group display order, option display order) + the line_position tie-breaker,
+/// used to sort an item's modifiers into cashier-receipt (Dashboard) order
+/// before they are flattened to display strings. Money-free.
+class _ModLine {
+  _ModLine({
+    required this.groupDisplayOrder,
+    required this.optionDisplayOrder,
+    required this.linePosition,
+    required this.text,
+  });
+
+  final int groupDisplayOrder;
+  final int optionDisplayOrder;
+  final int linePosition;
+  final String text;
 }

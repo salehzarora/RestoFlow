@@ -13,6 +13,9 @@ class KdsItemView {
     this.modifiers = const <String>[],
     this.note,
     this.prepComponents = const <KitchenPrepComponent>[],
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
+    this.linePosition = 0,
   });
 
   /// Display name snapshot (data — rendered as-is, not a localized string).
@@ -33,6 +36,26 @@ class KdsItemView {
   /// mapper rolls them up × [quantity] into the ticket's whole-order
   /// [KdsTicketView.kitchenCounts]. Empty when the item has no configured count.
   final List<KitchenPrepComponent> prepComponents;
+
+  /// MENU-ORDER-001: the item's CATEGORY rank (order_items
+  /// .category_display_order_snapshot) — the PRIMARY key of the menu-configured
+  /// print order. `0` = a legacy / POS-direct item (falls back to line_position
+  /// + input order). Non-money.
+  final int categoryDisplayOrder;
+
+  /// MENU-ORDER-001: the item's rank WITHIN its category (order_items
+  /// .item_display_order_snapshot) — the SECONDARY print-order key. `0` = legacy.
+  final int itemDisplayOrder;
+
+  /// PRINT-LAYOUT-001D: the per-order line ordinal (1-based) from
+  /// `order_items.line_position` — the submit-array insertion index. Used as the
+  /// TIE-BREAKER of the menu-configured print order (after category + item
+  /// display order). `0` is the legacy sentinel (a pre-feature row, or a
+  /// POS-direct item) which then falls back to input order. The KDS mapper
+  /// orders a ticket's items with the shared `sortByMenuPrintOrder`
+  /// (category -> item -> line_position -> input index), so the KDS ticket +
+  /// reprint print in the same Dashboard-configured order as the cashier receipt.
+  final int linePosition;
 }
 
 /// A KDS-local, mutable view model for one kitchen ticket.

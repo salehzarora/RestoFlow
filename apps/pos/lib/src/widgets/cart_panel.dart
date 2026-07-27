@@ -1,8 +1,12 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
@@ -12,6 +16,11 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../format/tax_math.dart';
 import '../pos_palette.dart';
+import '../print/pos_kitchen_ticket_printer.dart'
+    show
+        kdsTicketViewFromCartLines,
+        kitchenTicketPrintLabelsFromL10n,
+        runAutoKitchenTicketPrintOnSubmit;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
 import '../state/draft_recovery_controller.dart';
@@ -124,6 +133,9 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       // Finding 4: while APPLIED-AWAITING-REFRESH the send button stays off —
       // the operation must never be dispatched again; the banner offers the
       // refresh retry instead.
+      // KITCHEN-PRINT-DUAL-001D: Send is NEVER gated on the kitchen printer or the
+      // auto-print toggle — every order always uses the normal KDS workflow. The
+      // toggle drives only the additive post-submit kitchen print (best-effort).
       final canSend =
           !cart.isEmpty &&
           (addition.active || setup.isReadyToSubmit) &&
@@ -400,6 +412,10 @@ Future<void> submitOrderFromCart({
   // Captured BEFORE the await: the widget's ref dies with the tree (an unpair
   // unmounts the POS), but the container and the notifiers it owns do not.
   final container = ProviderScope.containerOf(context, listen: false);
+  // KITCHEN-PRINT-DUAL-001D: every order ALWAYS uses the normal KDS workflow — no
+  // dispatch_mode decision, no printer gate. The auto-print toggle drives only the
+  // additive post-submit kitchen print (resolved AFTER submit inside
+  // runAutoKitchenTicketPrintOnSubmit); it never blocks or reroutes the order.
   // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1A): the COMPLETE submit-attempt identity,
   // captured BEFORE the first await. The FULL operational binding — org/restaurant/branch/
   // device scope AND the PIN session — not the scope alone, plus the exact draft, order
@@ -410,9 +426,60 @@ Future<void> submitOrderFromCart({
   final bindingBefore = container.read(posRecoveryBindingProvider);
   final scopeKeyBefore = container.read(posSyncScopeProvider)?.key;
   final draftBefore = cartController.captureDraft();
+  // MENU-ORDER-001 (Codex correction-ownership): if this cart was RESTORED from a durable
+  // recovery (Back to cart), the active correction source names it — but this is treated
+  // as a correction ONLY when that source is OWNED by the CURRENT signed-in worker + POS
+  // scope AND its recovery is still live. A stale source (a departed worker, a re-pair, or
+  // an already-resolved recovery) is inert: this submit is then an ordinary, unlinked
+  // order — it can never re-link someone else's, or a dead, recovery. Captured before the
+  // await (the widget ref dies with the tree; the container + notifiers outlive it).
+  final activeSourceBefore = container.read(posActiveCorrectionSourceProvider);
+  final correctionSource =
+      (activeSourceBefore != null &&
+          activeSourceBefore.ownedBy(
+            scopeKey: bindingBefore.scopeKey,
+            employeeProfileId: bindingBefore.employeeProfileId,
+          ) &&
+          container
+              .read(posDraftRecoveryProvider.notifier)
+              .hasRecoveryFor(activeSourceBefore.sourceOutboxEntryId))
+      ? activeSourceBefore
+      : null;
   final orderTypeBefore = setup.orderType;
   final tableBefore = setup.assignedTable;
   final customerNameBefore = setup.customerName;
+  // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): capture the ORDER-TIME (D-008)
+  // prep snapshot ONCE, HERE — BEFORE the first await — from the SAME live menu
+  // the outbox payload is built from. This exact immutable map feeds BOTH the
+  // authoritative submission payload (passed into outbox.submit below) AND the
+  // post-submit POS kitchen ticket, so a menu/prep edit while the submit is in
+  // flight can never make the printed ticket disagree with what the KDS receives.
+  // Money-free; empty for unconfigured items.
+  final kitchenPrepByItemId = <String, List<KitchenPrepComponent>>{
+    if (container.read(posMenuProvider).valueOrNull case final menu?)
+      for (final item in menu.items)
+        if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
+  };
+  // MENU-ORDER-001 (Codex correction-ownership §4/§5): for a CORRECTION submit, the
+  // pre-dispatch link callback. It runs INSIDE outbox.submit — after the submit's exact
+  // ids are minted, BEFORE the order is enqueued/pushed — and durably supersedes the
+  // source recovery with THIS submit's entry id + the corrected cart (awaited, atomic,
+  // owner-revalidated). A false result (not owned, or the durable write failed) makes
+  // outbox.submit throw before any dispatch, so no order is sent while the association is
+  // in-memory-only. Null for an ordinary (non-correction) submit.
+  final beforeDispatch = correctionSource == null
+      ? null
+      : (String orderId, String localOperationId, String entryId) => container
+            .read(posDraftRecoveryProvider.notifier)
+            .linkCorrectedSubmit(
+              sourceOutboxEntryId: correctionSource.sourceOutboxEntryId,
+              correctedOutboxEntryId: entryId,
+              binding: bindingBefore,
+              correctedDraft: draftBefore,
+              orderType: orderTypeBefore,
+              table: tableBefore,
+              customerName: customerNameBefore,
+            );
   try {
     final result = await outbox.submit(
       lines: cart.lines,
@@ -424,7 +491,29 @@ Future<void> submitOrderFromCart({
       taxTotalMinor: taxTotalMinor,
       // ORDER-CUSTOMER-001: the optional customer name (null when not entered).
       customerName: customerNameBefore,
+      // The ONE immutable prep snapshot (captured above, pre-await) — the same
+      // map the POS kitchen ticket reuses below.
+      prepByItemId: kitchenPrepByItemId,
+      // §4 pre-dispatch correction link (null for a normal submit).
+      beforeDispatch: beforeDispatch,
     );
+    // MENU-ORDER-001 (Codex correction-result settlement §2): the IMMUTABLE settlement
+    // context for a CORRECTED submit, built from the OWNER-VALIDATED pre-await source +
+    // the ORIGINAL submit's exact entry id (result.entry.id is the id THIS submit created,
+    // never the current session's). It is the single authority for settling this result
+    // onto the one source recovery — whether the submitting session is still current or
+    // has departed — so neither result path ever captures a standalone corrected recovery.
+    // Null for an ordinary (non-correction) submit, which keeps the two cases distinct.
+    final settlement = correctionSource == null
+        ? null
+        : CorrectionSettlementContext(
+            sourceOutboxEntryId: correctionSource.sourceOutboxEntryId,
+            submittedOutboxEntryId: result.entry.id,
+            originalBinding: PosRecoveryBinding(
+              scopeKey: correctionSource.scopeKey,
+              employeeProfileId: correctionSource.employeeProfileId,
+            ),
+          );
     // Finding 1B — THE FULL-IDENTITY MUTATION BOUNDARY. Everything below this line mutates
     // state the CURRENT session would see — the cart's submitted-order view, the
     // confirmation screen, the order-setup reset, the recent-orders row, the recovery
@@ -448,6 +537,10 @@ Future<void> submitOrderFromCart({
         customerName: customerNameBefore,
         taxTotalMinor: taxTotalMinor,
         taxRateBp: taxRateBp,
+        // MENU-ORDER-001 (§3): when this was a CORRECTION, the departed-session path must
+        // settle onto the SINGLE source recovery (already superseded + linked before
+        // dispatch), NEVER capture a standalone recovery keyed by the corrected entry.
+        settlement: settlement,
       );
       return; // Finding 1C: never a generic current-cart clear after a session switch.
     }
@@ -456,20 +549,28 @@ Future<void> submitOrderFromCart({
     // await, keyed to THIS submit's outbox entry) bound to THE SUBMITTING session's exact
     // binding. If the server permanently rejects it (item_unavailable), the confirmation
     // offers "Back to cart" to restore this exact draft; an accepted order clears it.
-    container
-        .read(posDraftRecoveryProvider.notifier)
-        .capture(
-          PosDraftRecovery(
-            draft: draftBefore,
-            orderType: orderTypeBefore,
-            table: tableBefore,
-            customerName: customerNameBefore,
-            outboxEntryId: result.entry.id,
-            // A2: bind to THIS exact context (scope + PIN session) so a later employee /
-            // branch / device can never see or restore this draft.
-            binding: bindingBefore,
-          ),
-        );
+    //
+    // MENU-ORDER-001 (Codex correction-ownership §3.F/§8.D): SKIP this for a CORRECTION
+    // resubmit. The pre-dispatch link already superseded the SINGLE source recovery with
+    // this corrected cart + this entry id — capturing a second recovery here would leave
+    // two records for one logical order. The source recovery IS the corrected order's
+    // record; it is cleared only on that order's authoritative acceptance.
+    if (correctionSource == null) {
+      container
+          .read(posDraftRecoveryProvider.notifier)
+          .capture(
+            PosDraftRecovery(
+              draft: draftBefore,
+              orderType: orderTypeBefore,
+              table: tableBefore,
+              customerName: customerNameBefore,
+              outboxEntryId: result.entry.id,
+              // A2: bind to THIS exact context (scope + PIN session) so a later employee /
+              // branch / device can never see or restore this draft.
+              binding: bindingBefore,
+            ),
+          );
+    }
 
     cartController.submitOrder(
       orderType: orderTypeBefore,
@@ -503,6 +604,80 @@ Future<void> submitOrderFromCart({
         recent.markLocallyRejected(submitted.identity);
       }
     }
+    // MENU-ORDER-001 (Codex correction-ownership §6): if this submit was the corrected
+    // resubmit of a RESTORED recovery, the pre-dispatch link already superseded the SINGLE
+    // source recovery (draft = this corrected cart, correctionOutboxEntryId = this entry) —
+    // BEFORE the order was sent. NOTHING is cleared here: cleanup happens ONLY when the
+    // corrected order is authoritatively ACCEPTED, via the controller-seam acceptance
+    // listener matching the link (so an accept-then-crash still reconciles on the next
+    // startup). A rejected / retryable / network / timeout result NEVER clears the source.
+    if (settlement != null &&
+        settlement.sourceOutboxEntryId != result.entry.id) {
+      // SETTLE onto the SINGLE source recovery through the one owner-bound settlement API
+      // (same path the departed-session branch uses). The pre-dispatch link already
+      // superseded the source (corrected draft + link to this entry); this only retires a
+      // DUPLICATE rejected shell for the corrected entry so one logical order keeps one
+      // shell — never a standalone capture, never cleared on a non-accepted result.
+      final correctedEntry = container
+          .read(outboxControllerProvider.notifier)
+          .entryById(result.entry.id);
+      unawaited(
+        container
+            .read(posDraftRecoveryProvider.notifier)
+            .settleCorrectedResult(
+              originalBinding: settlement.originalBinding,
+              sourceOutboxEntryId: settlement.sourceOutboxEntryId,
+              submittedOutboxEntryId: settlement.submittedOutboxEntryId,
+              submittedWasPermanentlyRejected:
+                  correctedEntry != null &&
+                  correctedEntry.isPermanentBusinessRejection,
+            ),
+      );
+      // This correction attempt is done — the cart was submitted (emptied) above. Drop the
+      // in-memory active source so no unrelated later submit re-links the (retained) source
+      // recovery; a further "Back to cart" re-establishes it. The DURABLE source recovery
+      // is untouched (retained unless/until its corrected order is accepted or discarded).
+      container.read(posActiveCorrectionSourceProvider.notifier).clear();
+    }
+    // KITCHEN-PRINT-DUAL-001: optionally print the money-free KITCHEN ticket for
+    // the just-created order. Best-effort + fully decoupled — it prints to the
+    // INDEPENDENT kitchen printer, never touches the cashier receipt, and a
+    // kitchen-print failure can NEVER turn this successful submit into a
+    // failure. Inert unless the per-device "auto-print kitchen ticket" setting
+    // is on; the in-memory guard makes a double-tap/rebuild print at most once.
+    final kitchenPrintEntry = container
+        .read(outboxControllerProvider.notifier)
+        .entryById(result.entry.id);
+    // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): the POS kitchen ticket is built
+    // from the SAME immutable pre-await snapshot the authoritative payload used —
+    // the cart lines captured before the await (immutable; carry the modifier
+    // names/quantities + SelectedModifier.kitchenMeat + item notes) and the ONE
+    // [kitchenPrepByItemId] map. NOTHING here re-reads a menu/prep/modifier
+    // provider after the await, so the printed ticket cannot diverge from what the
+    // KDS receives.
+    unawaited(
+      runAutoKitchenTicketPrintOnSubmit(
+        container: container,
+        orderId: result.entry.targetId,
+        // Shared eligibility: a permanently-rejected or demo order never cooks.
+        isDemoMode: container.read(runtimeConfigProvider).isDemoMode,
+        rejectionCode: kitchenPrintEntry?.lastErrorCode,
+        // KITCHEN-PRINT-DUAL-001D: purely ADDITIVE — `enabled` omitted so the print
+        // resolves the persisted auto-print toggle itself AFTER submit (it may
+        // await). ON prints one detailed ticket; OFF prints nothing; a failure or a
+        // missing printer is best-effort and NEVER alters the already-submitted KDS
+        // order. Manual "Print kitchen ticket" on the confirmation stays available.
+        ticket: kdsTicketViewFromCartLines(
+          orderCode: result.orderNumber,
+          orderType: orderTypeBefore,
+          lines: cart.lines,
+          prepByItemId: kitchenPrepByItemId,
+          tableLabel: tableBefore?.label,
+          customerName: customerNameBefore,
+        ),
+        labels: kitchenTicketPrintLabelsFromL10n(l10n),
+      ),
+    );
     setupController.reset();
   } on OrderSubmissionException {
     // A failure that belongs to a session we have LEFT is not this session's failure;
@@ -542,7 +717,64 @@ void _retainDepartedSessionResult({
   required String? customerName,
   required int taxTotalMinor,
   required int taxRateBp,
+  CorrectionSettlementContext? settlement,
 }) {
+  final entry = container
+      .read(outboxControllerProvider.notifier)
+      .entryById(result.entry.id);
+  final permanentlyRejected =
+      entry != null && entry.isPermanentBusinessRejection;
+
+  // MENU-ORDER-001 (Codex correction-result settlement §3): a CORRECTED submission that
+  // settles after the submitting worker/scope departed must NEVER be captured as a second
+  // standalone recovery keyed by the corrected entry — that is the confirmed defect
+  // (e1 linked to e2 PLUS an independent e2). Its SINGLE source recovery (e1) was already
+  // superseded in place (corrected draft + link to this exact entry) under its ORIGINAL
+  // owner, and awaited to disk, BEFORE dispatch. So settle by that original context:
+  // verify the link + retire only a duplicate shell; capture NOTHING here.
+  if (settlement != null) {
+    // Same scope + NOT permanently rejected -> record the (accepted/pending) row so the
+    // original scope re-discovers its order; a permanent rejection records NO competing
+    // shell (the source recovery's own shell surfaces the one logical order). A scope
+    // change records nothing (a different branch's list). An accepted order additionally
+    // clears the source recovery through its link via the controller-seam listeners.
+    if (container.read(posSyncScopeProvider)?.key == scopeKeyBefore &&
+        !permanentlyRejected) {
+      container
+          .read(posRecentOrdersControllerProvider.notifier)
+          .recordSubmitted(
+            cartController.viewFromDraft(
+              draft: draft,
+              orderType: orderType,
+              tableLabel: table?.label,
+              customerName: customerName,
+              orderNumber: result.orderNumber,
+              outboxEntryId: result.entry.id,
+              localOperationId: result.entry.localOperationId,
+              orderId: result.entry.targetId,
+              taxTotalMinor: taxTotalMinor,
+              taxRateBp: taxRateBp,
+            ),
+          );
+    }
+    unawaited(
+      container
+          .read(posDraftRecoveryProvider.notifier)
+          .settleCorrectedResult(
+            originalBinding: settlement.originalBinding,
+            sourceOutboxEntryId: settlement.sourceOutboxEntryId,
+            submittedOutboxEntryId: settlement.submittedOutboxEntryId,
+            submittedWasPermanentlyRejected: permanentlyRejected,
+          ),
+    );
+    return;
+  }
+
+  // ORDINARY new order (no source recovery): retain ONE standalone recovery under the
+  // ORIGINAL session's binding, so the draft is inaccessible to the current operator
+  // (binding mismatch) yet recoverable when its owner returns. `capture` no-ops when the
+  // order already applied (accepted -> nothing to recover); an accepted order's recovery
+  // is additionally cleared by the controller-seam acceptance listeners.
   container
       .read(posDraftRecoveryProvider.notifier)
       .capture(
@@ -575,10 +807,7 @@ void _retainDepartedSessionResult({
     taxRateBp: taxRateBp,
   );
   recent.recordSubmitted(view);
-  final entry = container
-      .read(outboxControllerProvider.notifier)
-      .entryById(result.entry.id);
-  if (entry != null && entry.isPermanentBusinessRejection) {
+  if (permanentlyRejected) {
     recent.markLocallyRejected(view.identity);
   }
 }

@@ -1942,6 +1942,12 @@ abstract class AppLocalizations {
   /// **'Receipt'**
   String get posReceiptTitle;
 
+  /// PRINT-LAYOUT-001B: the generic, localized brand word printed as the restaurant-name header on a receipt or kitchen ticket when the paired device has no configured restaurant name (never a hardcoded placeholder).
+  ///
+  /// In en, this message translates to:
+  /// **'Restaurant'**
+  String get printRestaurantNameFallback;
+
   /// POS receipt label preceding the receipt number/reference.
   ///
   /// In en, this message translates to:
@@ -2199,6 +2205,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Disabled — no printer assigned.'**
   String get autoPrintNoPrinterNote;
+
+  /// Scoped note under the RECEIPT auto-print toggle when no receipt printer is assigned (KITCHEN-PRINT-DUAL-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled — no receipt printer assigned.'**
+  String get autoPrintReceiptNoPrinterNote;
+
+  /// Scoped note under the KITCHEN auto-print toggle: the toggle controls automatic kitchen-ticket printing and requires a configured kitchen printer (KITCHEN-PRINT-DUAL-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic kitchen-ticket printing needs a configured kitchen printer.'**
+  String get autoPrintKitchenNoPrinterNote;
+
+  /// POS device-settings toggle: print a money-free kitchen ticket automatically after a successful order creation (KITCHEN-PRINT-DUAL-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically print kitchen ticket'**
+  String get posAutoPrintKitchenTicketToggle;
+
+  /// POS device-settings subtitle under the auto-print kitchen toggle when a kitchen printer is configured: ON auto-prints a money-free kitchen ticket from this cashier; the order always goes to the KDS as usual — no bypass (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'When on, a kitchen ticket prints automatically from this cashier device after a successful order. The order is still sent to the kitchen display as usual.'**
+  String get posAutoPrintKitchenTicketToggleExplanation;
+
+  /// POS Order History header action + confirmation title: advance every active kitchen order to served, clearing the kitchen display (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'Finish all kitchen orders'**
+  String get posFinishAllKitchenOrders;
+
+  /// Confirm button of the bulk finish-all-kitchen-orders dialog (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'Finish all'**
+  String get posFinishAllConfirmAction;
+
+  /// Body of the bulk finish-all-kitchen-orders confirmation dialog (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'All active kitchen orders will be finished and removed from the kitchen display. Unpaid orders remain available for payment in Order History.'**
+  String get posFinishAllConfirmBody;
+
+  /// POS snackbar shown when the bulk finish action is pressed but there are no active kitchen orders to finish (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'No active kitchen orders'**
+  String get posFinishAllNoActiveOrders;
+
+  /// POS snackbar summary after a successful bulk kitchen finish (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'Finished {count} kitchen orders'**
+  String posFinishAllResult(int count);
+
+  /// POS snackbar summary after a partial bulk kitchen finish; the failed orders remain visible and retryable (KITCHEN-PRINT-DUAL-001D).
+  ///
+  /// In en, this message translates to:
+  /// **'Finished {finished} kitchen orders, {failed} couldn\'t finish (still shown to retry)'**
+  String posFinishAllResultWithFailures(int finished, int failed);
+
+  /// POS action button on a created order: manually print a money-free kitchen ticket to the kitchen printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Print kitchen ticket'**
+  String get posPrintKitchenTicketAction;
+
+  /// POS confirmation snackbar: the kitchen ticket bytes were delivered to the kitchen printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen ticket sent to the printer'**
+  String get posKitchenTicketPrintedSnack;
+
+  /// POS error snackbar: the kitchen printer was configured but the send failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not print the kitchen ticket'**
+  String get posKitchenTicketPrintFailedSnack;
+
+  /// POS message when a manual kitchen print is requested but no kitchen printer is assigned for this device.
+  ///
+  /// In en, this message translates to:
+  /// **'No kitchen printer is configured. Set one in device settings.'**
+  String get posKitchenPrinterNotConfiguredSnack;
 
   /// Print-job status: nothing was prepared because no printer is assigned.
   ///
@@ -6898,6 +6988,66 @@ abstract class AppLocalizations {
   /// **'Save printer'**
   String get posNetworkPrinterSaveAction;
 
+  /// PRINT-LAYOUT-001A: label for the printer media-profile selector (continuous roll vs a fixed 50x50 / 80x80 label).
+  ///
+  /// In en, this message translates to:
+  /// **'Print media size'**
+  String get posPrinterMediaSizeLabel;
+
+  /// PRINT-LAYOUT-001A: media-profile option for a continuous 80mm receipt roll (the backward-compatible default).
+  ///
+  /// In en, this message translates to:
+  /// **'80 mm roll (default)'**
+  String get posPrinterMediaSizeContinuous;
+
+  /// PRINT-LAYOUT-001A: media-profile option for a fixed 50 by 50 millimetre thermal label.
+  ///
+  /// In en, this message translates to:
+  /// **'50 × 50 mm label'**
+  String get posPrinterMediaSize50;
+
+  /// PRINT-LAYOUT-001A: media-profile option for a fixed 80 by 80 millimetre thermal label.
+  ///
+  /// In en, this message translates to:
+  /// **'80 × 80 mm label'**
+  String get posPrinterMediaSize80;
+
+  /// PRINT-LAYOUT-001A: heading printed at the top of the profile-aware test/diagnostic page.
+  ///
+  /// In en, this message translates to:
+  /// **'PRINTER DIAGNOSTIC'**
+  String get posPrinterDiagHeading;
+
+  /// PRINT-LAYOUT-001A: diagnostic line showing the printable raster width in dots.
+  ///
+  /// In en, this message translates to:
+  /// **'Width: {width} dots'**
+  String posPrinterDiagWidthDots(int width);
+
+  /// PRINT-LAYOUT-001A: diagnostic line showing the fixed media height in dots.
+  ///
+  /// In en, this message translates to:
+  /// **'Media height: {height} dots'**
+  String posPrinterDiagHeightDots(int height);
+
+  /// PRINT-LAYOUT-001A: diagnostic top safe-area marker line.
+  ///
+  /// In en, this message translates to:
+  /// **'TOP SAFE AREA'**
+  String get posPrinterDiagTopSafe;
+
+  /// PRINT-LAYOUT-001A: diagnostic bottom safe-area marker; the final visible line proving no clipping.
+  ///
+  /// In en, this message translates to:
+  /// **'BOTTOM SAFE AREA — not clipped'**
+  String get posPrinterDiagBottomSafe;
+
+  /// PRINT-LAYOUT-001A: page-number line for a multi-page fixed-media print.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} of {total}'**
+  String posPrinterDiagPage(int page, int total);
+
   /// POS action that sends a test print to the configured network printer.
   ///
   /// In en, this message translates to:
@@ -8782,16 +8932,16 @@ abstract class AppLocalizations {
   /// **'Kitchen tickets'**
   String get posPrinterPurposeKitchen;
 
-  /// Title of the POS kitchen-slot preparation notice.
+  /// Title of the POS kitchen-printer settings notice (KITCHEN-PRINT-DUAL-001).
   ///
   /// In en, this message translates to:
-  /// **'Preparation only'**
+  /// **'Automatic kitchen printing'**
   String get posKitchenPrinterPreparationTitle;
 
-  /// Body of the POS kitchen-slot preparation notice — honest dormancy statement.
+  /// Body of the POS kitchen-printer settings notice — the toggle controls automatic kitchen-ticket printing, a kitchen printer is required, and manual printing stays available.
   ///
   /// In en, this message translates to:
-  /// **'Kitchen tickets are not printed automatically yet. You can prepare and test the kitchen printer now; printer-only kitchen activation is not yet available.'**
+  /// **'Automatic kitchen-ticket printing is controlled by the “Automatically print kitchen ticket” setting and requires a configured kitchen printer. You can also print a kitchen ticket manually from a created order.'**
   String get posKitchenPrinterPreparationBody;
 
   /// Button: copy the customer slot's endpoint into the kitchen slot (explicit one-time copy).

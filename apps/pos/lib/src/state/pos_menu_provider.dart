@@ -252,6 +252,9 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   final categories = <DemoCategory>[];
   var paletteIndex = 0;
   final names = <String, String>{};
+  // MENU-ORDER-001: category id -> its Dashboard display order, so each item can
+  // carry its category rank (the PRIMARY print-order key) onto the cart line.
+  final catDisplayOrder = <String, int>{};
   for (final row in (raw['categories'] as List?) ?? const []) {
     if (row is! Map) continue;
     final id = (row['id'] ?? '').toString();
@@ -260,6 +263,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         _kCategoryPalette[paletteIndex % _kCategoryPalette.length];
     paletteIndex++;
     names[id] = name;
+    catDisplayOrder[id] = menuPrintOrderInt(row['display_order']);
     categories.add(DemoCategory(id: id, name: name, icon: icon, color: color));
   }
 
@@ -295,6 +299,11 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         priceMinor: price,
         categoryId: categoryId,
         categoryName: names[categoryId] ?? '',
+        // MENU-ORDER-001: the item's Dashboard print-order ranks (category rank
+        // denormalized from its category; item rank from this row) so the cart
+        // line, and hence every POS print surface, can order by menu config.
+        categoryDisplayOrder: catDisplayOrder[categoryId] ?? 0,
+        itemDisplayOrder: menuPrintOrderInt(row['display_order']),
         imagePath: imagePath is String && imagePath.isNotEmpty
             ? imagePath
             : null,
@@ -402,10 +411,26 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     );
   }
 
+  // MENU-ORDER-001 (Codex #12): present categories AND items in the owner's
+  // DASHBOARD order for browsing — categories by their display_order, items by
+  // the COMPOSITE (category rank -> item rank -> stable input index). The RPC
+  // does not guarantee row order, so without this the "All" view (and per-
+  // category views) could interleave categories (a rank-1 item in category B
+  // ahead of a rank-2 item in category A). Uses the SAME canonical sort the print
+  // surfaces use, so browse order and print order agree.
+  final orderedCategories = sortByMenuPrintOrder(
+    categories,
+    (c) => [catDisplayOrder[c.id] ?? 0],
+  );
+  final orderedItems = sortByMenuPrintOrder(
+    items,
+    (i) => [i.categoryDisplayOrder, i.itemDisplayOrder],
+  );
+
   final currency = (raw['currency_code'] ?? '').toString();
   return PosMenuData(
-    categories: categories,
-    items: items,
+    categories: orderedCategories,
+    items: orderedItems,
     currencyCode: currency.length == 3 ? currency : kDemoCurrencyCode,
     modifierGroups: groups,
   );

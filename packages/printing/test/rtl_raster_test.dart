@@ -84,11 +84,14 @@ void main() {
       expect(doc.lines.whereType<PrintRasterImageLine>().length, 1);
       expect(doc.lines.whereType<PrintFeedLine>().length, 1);
       expect(doc.lines.whereType<PrintCutLine>().length, 1);
-      // The Arabic strings were handed to the rasterizer verbatim.
+      // The Arabic strings were handed to the rasterizer verbatim, then a blank
+      // bottom-safe tail line (PRINT-LAYOUT-001C) closes the image below the
+      // content so the final line clears the cut.
       expect(fake.requests.single.lines, [
         'إيصال',
         'العميل: محمد',
         'المجموع ₪10.00',
+        '', // bottom-safe tail
       ]);
       expect(fake.requests.single.widthDots, 576); // 80mm default
       expect(fake.requests.single.direction, ReceiptTextDirection.rtl);
@@ -100,9 +103,10 @@ void main() {
         _textDoc(['إيصال', 'محمد']),
         rasterizer: fake,
       );
-      // Every line is normal — the pre-PRINT-RASTER-STYLE-001 uniform behavior.
+      // Every line is normal — the pre-PRINT-RASTER-STYLE-001 uniform behavior;
+      // the appended bottom-safe tail (001C) is also a blank normal line.
       expect(fake.requests.single.styles, everyElement(PrintLineStyle.normal));
-      expect(fake.requests.single.styles.length, 2); // parallel to lines
+      expect(fake.requests.single.styles.length, 3); // 2 content + tail
     });
 
     test(
@@ -129,6 +133,7 @@ void main() {
           PrintLineStyle.sub,
           PrintLineStyle.note,
           PrintLineStyle.total,
+          PrintLineStyle.normal, // 001C bottom-safe tail
         ]);
       },
     );

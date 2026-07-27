@@ -64,3 +64,65 @@ bool posAutoPrintReceiptEnabled({
   required bool? stored,
   required bool hasEnabledPrinter,
 }) => hasEnabledPrinter && (stored ?? true);
+
+/// KITCHEN-PRINT-DUAL-001: per-DEVICE "automatically print a KITCHEN ticket
+/// after a successful order creation?" — the independent twin of
+/// [posAutoPrintReceiptProvider]. Same local `shared_preferences` mechanism,
+/// keyed by the paired device id, stores a plain bool. Unlike the receipt
+/// default (ON), this DEFAULTS OFF: normal POS behaviour is unchanged until a
+/// cashier deliberately enables it.
+const String kPosAutoPrintKitchenTicketKeyPrefix =
+    'restoflow.autoprint.pos.kitchenTicket.';
+
+final posAutoPrintKitchenTicketProvider =
+    AsyncNotifierProvider<PosAutoPrintKitchenTicketController, bool?>(
+      PosAutoPrintKitchenTicketController.new,
+    );
+
+class PosAutoPrintKitchenTicketController extends AsyncNotifier<bool?> {
+  String? get _key {
+    final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
+    return deviceId == null || deviceId.isEmpty
+        ? null
+        : '$kPosAutoPrintKitchenTicketKeyPrefix$deviceId';
+  }
+
+  @override
+  Future<bool?> build() async {
+    ref.watch(posDeviceContextProvider);
+    final key = _key;
+    if (key == null) return null;
+    // KITCHEN-PRINT-DUAL-001C: a genuine prefs READ FAILURE must SURFACE as
+    // AsyncError, NOT silently degrade to null (OFF). CartPanel gates Send on this
+    // setting being RESOLVED, so a swallowed read error would let a cold-start
+    // order submit into the normal KDS workflow when the operator may expect a
+    // direct kitchen print. A MISSING key is NOT an error — getBool returns null
+    // (the cashier never chose), which resolves to the OFF default downstream.
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(key);
+  }
+
+  /// Persists the cashier's choice (state first, storage best-effort). Setting the
+  /// state to AsyncData FIRST also clears any prior read-error state — so toggling
+  /// the option through Device Settings is the operator's escape hatch if a read
+  /// ever failed and blocked Send.
+  Future<void> setEnabled(bool value) async {
+    final key = _key;
+    if (key == null) return;
+    state = AsyncData(value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
+    } catch (_) {
+      // Best-effort persistence: the in-session choice still applies.
+    }
+  }
+}
+
+/// The EFFECTIVE auto-kitchen-print decision: a KITCHEN printer must be
+/// configured (no printer = OFF and not toggleable), and the DEFAULT is OFF
+/// (the cashier must opt in) — `stored ?? false`, never `?? true`.
+bool posAutoPrintKitchenTicketEnabled({
+  required bool? stored,
+  required bool hasKitchenPrinter,
+}) => hasKitchenPrinter && (stored ?? false);

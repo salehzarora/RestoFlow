@@ -3,8 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart'
+    show MediaProfileId, PrinterDestinationSendGate;
 
-import '../print/kitchen_test_document.dart';
+import 'media_profile_selector.dart';
+
+import '../print/native_print_bridges.dart'
+    show posPrinterDestinationSendGateProvider;
 import '../print/network_printer_tester.dart';
 import '../state/pos_device_context.dart';
 import '../state/pos_network_printer_config.dart';
@@ -49,6 +54,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
   bool _prefilled = false;
   _TestStatus _status = _TestStatus.idle;
 
+  /// PRINT-LAYOUT-001A: the selected media profile for THIS purpose slot.
+  /// Prefilled from the saved config; defaults to the continuous-80 roll.
+  MediaProfileId _selectedProfile = MediaProfileId.continuous80;
+
   /// Purpose-suffixed widget keys: the customer slot keeps the LEGACY key
   /// names (existing tests unchanged); the kitchen slot gets its own so both
   /// sections can coexist in one tree.
@@ -82,6 +91,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
         _ipController.clear();
         _portController.text = '9100';
         _nameController.clear();
+        _selectedProfile = MediaProfileId.continuous80;
       });
     }
   }
@@ -111,6 +121,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
       host: host,
       port: port,
       name: name.isEmpty ? null : name,
+      mediaProfileId: _selectedProfile.name,
     );
   }
 
@@ -141,22 +152,30 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
       _lastHostPort = '${config.host}:${config.port}';
     });
     final deviceLabel = ref.read(posDeviceContextProvider)?.displayName;
-    // KITCHEN-MODE-001B: the kitchen slot tests with the MONEY-FREE localized
-    // kitchen TEST document (shared raster path); the customer slot keeps the
-    // classic diagnostic. Result = bytes accepted by the transport, never a
-    // paper-print claim; local/device-only, never reported to the Dashboard.
-    final document = widget.purpose == PosPrinterPurpose.kitchenTicket
-        ? await buildPosKitchenTestDocument(
-            ref,
-            l10n,
-            printerName: config.name,
-            deviceLabel: deviceLabel,
-          )
-        : null;
+    // PRINT-LAYOUT-001A: the Test Print is the profile-aware DIAGNOSTIC (money-
+    // free), rendered by the tester at the SELECTED (unsaved) media profile — so
+    // a 50×50 test prints at 384 dots and shows its own width + safe-area
+    // markers + ar/he/en samples + a bottom no-clip line. Result = bytes accepted
+    // by the transport, never a paper-print claim; local/device-only.
+    final document = posMediaProfileDiagnosticDocument(
+      l10n,
+      config.mediaProfile,
+    );
     if (!mounted) return;
-    final result = await ref
-        .read(networkPrinterTesterProvider)
-        .testPrint(config, deviceLabel: deviceLabel, document: document);
+    // KITCHEN-PRINT-DUAL-001 (F4): serialize the test send through the SHARED
+    // per-destination gate + canonical key, so a Test print never interleaves
+    // with another Test or an automatic kitchen send to the same physical
+    // printer (FIFO). Only the physical send is wrapped.
+    final gate = ref.read(posPrinterDestinationSendGateProvider);
+    final tester = ref.read(networkPrinterTesterProvider);
+    final result = await gate.withDestination(
+      PrinterDestinationSendGate.networkKey(config.host, config.port),
+      () => tester.testPrint(
+        config,
+        deviceLabel: deviceLabel,
+        document: document,
+      ),
+    );
     if (!mounted) return;
     setState(
       () => _status = result.ok ? _TestStatus.success : _TestStatus.failure,
@@ -177,6 +196,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
         _ipController.text = saved.host;
         _portController.text = '${saved.port}';
         _nameController.text = saved.name ?? '';
+        _selectedProfile = saved.mediaProfile.id;
       }
     }
 
@@ -248,6 +268,12 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
               ),
             ),
           ],
+        ),
+        MediaProfileSelector(
+          fieldKey: _k('network-printer-media-size'),
+          value: _selectedProfile,
+          enabled: !busy,
+          onChanged: (id) => setState(() => _selectedProfile = id),
         ),
         if (_fieldError != null) ...[
           const SizedBox(height: RestoflowSpacing.sm),

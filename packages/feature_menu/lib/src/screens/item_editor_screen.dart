@@ -21,6 +21,7 @@ import '../widgets/menu_entity_forms.dart';
 import '../widgets/menu_image_panel.dart';
 import '../widgets/menu_item_thumbnail.dart';
 import '../widgets/menu_l10n.dart';
+import '../widgets/menu_reorder.dart';
 import '../widgets/modifier_template_picker.dart';
 
 /// What the item editor is editing: an existing [item], or a new item in
@@ -77,9 +78,9 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
   late final TextEditingController _currency = TextEditingController(
     text: _item?.currencyCode ?? widget.scope.currencyCode,
   );
-  late final TextEditingController _order = TextEditingController(
-    text: (_item?.displayOrder ?? 0).toString(),
-  );
+  // MENU-ORDER-001 (Codex #6): items are drag-reordered in the items panel — a
+  // normal edit sends NO display_order (null); the DB guard trigger preserves the
+  // live order, so nothing is hand-tracked here.
   late final TextEditingController _prepMinutes = TextEditingController(
     text: _item?.prepMinutes?.toString() ?? '',
   );
@@ -131,7 +132,6 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
     _description.dispose();
     _price.dispose();
     _currency.dispose();
-    _order.dispose();
     _prepMinutes.dispose();
     _kitchenNote.dispose();
     _sku.dispose();
@@ -299,7 +299,8 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
               : _description.text.trim(),
           basePriceMinor: priceMinor!,
           currencyCode: currencyText,
-          displayOrder: int.tryParse(_order.text.trim()) ?? 0,
+          displayOrder:
+              null, // Codex #6: edit sends no order; guard trigger preserves it
           isActive: _active,
           // Full-state upsert: null p_image_path CLEARS the image server-side,
           // so a details save must carry the item's current image through.
@@ -406,6 +407,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                                 deltaMinor: s.priceDeltaMinor,
                                 isActive: s.isActive,
                                 branchId: s.branchId,
+                                displayOrder: s.displayOrder,
                               ),
                             )
                             .toList(),
@@ -427,6 +429,7 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
                                 deltaMinor: v.priceDeltaMinor,
                                 isActive: v.isActive,
                                 branchId: v.branchId,
+                                displayOrder: v.displayOrder,
                               ),
                             )
                             .toList(),
@@ -562,28 +565,14 @@ class _ItemEditorViewState extends ConsumerState<ItemEditorView> {
             ],
           ),
           const SizedBox(height: RestoflowSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _order,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: l10n.menuDisplayOrderLabel,
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: RestoflowSpacing.md),
-              Expanded(
-                child: SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l10n.menuActiveLabel),
-                  value: _active,
-                  onChanged: (value) => setState(() => _active = value),
-                ),
-              ),
-            ],
+          // MENU-ORDER-001 (Codex #6): the item's display_order is owned by drag
+          // reorder — the numeric field is gone and a normal edit sends NO order
+          // (null); the DB guard trigger preserves the live order.
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.menuActiveLabel),
+            value: _active,
+            onChanged: (value) => setState(() => _active = value),
           ),
         ],
       ),
@@ -997,6 +986,7 @@ class _PricedChildVm {
     required this.deltaMinor,
     required this.isActive,
     required this.branchId,
+    this.displayOrder = 0,
     this.kitchenMeatEnabled = false,
     this.kitchenMeatQuantity,
     this.kitchenMeatUnit = '',
@@ -1007,6 +997,11 @@ class _PricedChildVm {
   final int deltaMinor;
   final bool isActive;
   final String? branchId;
+
+  /// MENU-ORDER-001 (Codex): the row's current display_order, carried so an edit
+  /// PRESERVES it (options are drag-reordered, not hand-numbered; sizes/variants
+  /// keep their numeric field but must still open showing the current value).
+  final int displayOrder;
 
   /// KITCHEN-MEAT-001: the option's current meat metadata (options only;
   /// size/variant rows leave these at their defaults).
@@ -1051,7 +1046,14 @@ class _PricedChildSection extends ConsumerWidget {
     if (!await showMenuDeleteConfirm(context)) return;
     final outcome = await ref
         .read(menuWriteControllerProvider)
-        .softDelete(entity: _entityForKind(kind), id: id);
+        .softDelete(
+          entity: _entityForKind(kind),
+          id: id,
+          // A priced child's sibling owner is [parentId] (the item for a
+          // size/variant, the modifier group for an option) — refuse the delete
+          // while THAT list is mid-reorder.
+          parentId: parentId,
+        );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1065,20 +1067,105 @@ class _PricedChildSection extends ConsumerWidget {
     );
   }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final addButton = TextButton.icon(
-      onPressed: () => showPricedChildFormDialog(
+  /// MENU-ORDER-001 (Codex): the exact sibling scope this section reorders — the
+  /// options of THIS modifier group ([parentId] is the modifier id). Distinct per
+  /// modifier, so reordering one group's options never blocks another's.
+  MenuReorderScope _reorderScope(WidgetRef ref) {
+    final s = ref.read(menuScopeProvider);
+    return MenuReorderScope(
+      organizationId: s.organizationId,
+      restaurantId: s.restaurantId,
+      branchId: s.branchId,
+      entity: _entityForKind(kind),
+      parentId: parentId,
+    );
+  }
+
+  void _reorder(
+    BuildContext context,
+    WidgetRef ref,
+    int oldIndex,
+    int newIndex,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final r in rows) r.id],
+      oldIndex,
+      newIndex,
+    );
+    // MENU-ORDER-001 (Codex #4): controller-owned lifecycle on the provider Ref
+    // — no WidgetRef-after-await, no latch leak on disposal.
+    ref
+        .read(menuWriteControllerProvider)
+        .reorderScoped(scope: _reorderScope(ref), orderedIds: ids)
+        .then((outcome) {
+          if (outcome != null && !outcome.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+          }
+        });
+  }
+
+  _PricedChildRow _row(
+    BuildContext context,
+    WidgetRef ref,
+    int i, {
+    int? reorderIndex,
+  }) {
+    return _PricedChildRow(
+      row: rows[i],
+      currencyCode: currencyCode,
+      onEdit: () => showPricedChildFormDialog(
         context,
         kind: kind,
         parentId: parentId,
         currencyCode: currencyCode,
+        id: rows[i].id,
+        initialName: rows[i].name,
+        initialDeltaMinor: rows[i].deltaMinor,
+        // MENU-ORDER-001 (Codex): open showing the CURRENT display_order so a
+        // details-save preserves it (options hide the field; size/variant keep it).
+        initialDisplayOrder: rows[i].displayOrder,
+        initialActive: rows[i].isActive,
+        // KITCHEN-MEAT-001: carry the option's current meat metadata.
+        initialKitchenMeatEnabled: rows[i].kitchenMeatEnabled,
+        initialKitchenMeatQuantity: rows[i].kitchenMeatQuantity,
+        initialKitchenMeatUnit: rows[i].kitchenMeatUnit,
       ),
+      onDelete: () => _delete(context, ref, rows[i].id),
+      reorderIndex: reorderIndex,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    // MENU-ORDER-001: modifier OPTIONS are drag-reorderable. Sizes/variants keep
+    // their number-field ordering (out of this ticket's scope). Nested inside the
+    // scrolling editor -> shrinkWrap + non-scrolling physics.
+    final reorderable = kind == PricedChildKind.option && rows.length > 1;
+    // MENU-ORDER-001 (Codex #5/#7): disable this option list while ITS reorder
+    // persists (options only; size/variant never reorder here).
+    final reordering =
+        reorderable &&
+        ref.watch(menuReorderInFlightProvider(_reorderScope(ref)));
+    // Codex #5: the ADD control is outside the list IgnorePointer — disable it too
+    // while the reorder persists (null onPressed => the button reads as disabled;
+    // zero write calls).
+    final addButton = TextButton.icon(
+      onPressed: reordering
+          ? null
+          : () => showPricedChildFormDialog(
+              context,
+              kind: kind,
+              parentId: parentId,
+              currencyCode: currencyCode,
+            ),
       icon: const Icon(Icons.add, size: RestoflowIconSizes.sm),
       label: Text(addLabel),
     );
-    final content = rows.isEmpty
+    final body = rows.isEmpty
         ? Padding(
             padding: EdgeInsets.all(
               embedded ? RestoflowSpacing.sm : RestoflowSpacing.lg,
@@ -1090,32 +1177,32 @@ class _PricedChildSection extends ConsumerWidget {
               ),
             ),
           )
+        : reorderable
+        ? ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: rows.length,
+            // ignore: deprecated_member_use
+            onReorder: (oldIndex, newIndex) =>
+                _reorder(context, ref, oldIndex, newIndex),
+            itemBuilder: (context, i) => KeyedSubtree(
+              key: ValueKey(rows[i].id),
+              child: _row(context, ref, i, reorderIndex: i),
+            ),
+          )
         : Column(
             children: [
               for (var i = 0; i < rows.length; i++) ...[
                 if (i > 0) const Divider(height: 1),
-                _PricedChildRow(
-                  row: rows[i],
-                  currencyCode: currencyCode,
-                  onEdit: () => showPricedChildFormDialog(
-                    context,
-                    kind: kind,
-                    parentId: parentId,
-                    currencyCode: currencyCode,
-                    id: rows[i].id,
-                    initialName: rows[i].name,
-                    initialDeltaMinor: rows[i].deltaMinor,
-                    initialActive: rows[i].isActive,
-                    // KITCHEN-MEAT-001: carry the option's current meat metadata.
-                    initialKitchenMeatEnabled: rows[i].kitchenMeatEnabled,
-                    initialKitchenMeatQuantity: rows[i].kitchenMeatQuantity,
-                    initialKitchenMeatUnit: rows[i].kitchenMeatUnit,
-                  ),
-                  onDelete: () => _delete(context, ref, rows[i].id),
-                ),
+                _row(context, ref, i),
               ],
             ],
           );
+    final content = IgnorePointer(
+      ignoring: reordering,
+      child: Opacity(opacity: reordering ? 0.6 : 1.0, child: body),
+    );
     if (embedded) {
       // Chrome-free variant for nesting inside a modifier tile: a light
       // header row + the option rows, no extra card/border/divider layers.
@@ -1161,12 +1248,17 @@ class _PricedChildRow extends StatelessWidget {
     required this.currencyCode,
     required this.onEdit,
     required this.onDelete,
+    this.reorderIndex,
   });
 
   final _PricedChildVm row;
   final String currencyCode;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+
+  /// MENU-ORDER-001: when non-null this row is inside a reorderable option list
+  /// and shows a leading drag handle bound to this index.
+  final int? reorderIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -1181,6 +1273,17 @@ class _PricedChildRow extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (reorderIndex != null) ...[
+            ReorderableDragStartListener(
+              index: reorderIndex!,
+              child: Icon(
+                Icons.drag_indicator,
+                size: RestoflowIconSizes.sm,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: RestoflowSpacing.sm),
+          ],
           Expanded(
             child: Row(
               children: [
@@ -1243,7 +1346,13 @@ class _ModifiersSection extends ConsumerWidget {
     if (!await showMenuDeleteConfirm(context)) return;
     final outcome = await ref
         .read(menuWriteControllerProvider)
-        .softDelete(entity: MenuEntityType.modifier, id: id);
+        .softDelete(
+          entity: MenuEntityType.modifier,
+          id: id,
+          // Modifier groups' sibling owner is their item — refuse the delete
+          // while this item's modifier-group list is mid-reorder.
+          parentId: item.id,
+        );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1257,10 +1366,66 @@ class _ModifiersSection extends ConsumerWidget {
     );
   }
 
+  /// MENU-ORDER-001 (Codex): the exact sibling scope this section reorders — the
+  /// modifier groups of THIS item. Distinct per item.
+  MenuReorderScope _reorderScope(WidgetRef ref) {
+    final s = ref.read(menuScopeProvider);
+    return MenuReorderScope(
+      organizationId: s.organizationId,
+      restaurantId: s.restaurantId,
+      branchId: s.branchId,
+      entity: MenuEntityType.modifier,
+      parentId: item.id, // the groups' sibling owner is their item
+    );
+  }
+
+  void _reorderModifiers(
+    BuildContext context,
+    WidgetRef ref,
+    int oldIndex,
+    int newIndex,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final ids = menuReorderedIds(
+      [for (final m in modifiers) m.id],
+      oldIndex,
+      newIndex,
+    );
+    // MENU-ORDER-001 (Codex #4): controller-owned lifecycle on the provider Ref
+    // — no WidgetRef-after-await, no latch leak on disposal.
+    ref
+        .read(menuWriteControllerProvider)
+        .reorderScoped(scope: _reorderScope(ref), orderedIds: ids)
+        .then((outcome) {
+          if (outcome != null && !outcome.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(l10n.menuWriteProblem)));
+          }
+        });
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // MENU-ORDER-001 (Codex #5/#7): disable this item's modifier-group controls
+    // while ITS reorder persists.
+    final reordering =
+        modifiers.length > 1 &&
+        ref.watch(menuReorderInFlightProvider(_reorderScope(ref)));
+    Widget cardFor(int index, {int? reorderIndex}) {
+      final modifier = modifiers[index];
+      return _ModifierCard(
+        modifier: modifier,
+        item: item,
+        currencyCode: currencyCode,
+        options: snapshot.optionsForModifier(modifier.id),
+        onDelete: () => _deleteModifier(context, ref, modifier.id),
+        reorderIndex: reorderIndex,
+      );
+    }
+
     return MenuSectionCard(
       title: l10n.menuModifiersHeading,
       icon: Icons.layers_outlined,
@@ -1271,17 +1436,22 @@ class _ModifiersSection extends ConsumerWidget {
           // Copy-on-attach templates: applying one creates ONE ordinary
           // modifier group + options via the same write path as the manual
           // form below (D-031 stays per-item; nothing is auto-applied).
+          // Codex #5: the ADD controls sit in the header (outside the list
+          // IgnorePointer) — disable both while THIS item's group reorder persists.
           TextButton.icon(
             key: const ValueKey('menu-template-add'),
-            onPressed: () =>
-                showModifierTemplatePicker(context, menuItemId: item.id),
+            onPressed: reordering
+                ? null
+                : () =>
+                      showModifierTemplatePicker(context, menuItemId: item.id),
             icon: const Icon(Icons.library_add_outlined, size: 18),
             label: Text(l10n.menuTemplateAddAction),
           ),
           const SizedBox(width: RestoflowSpacing.xs),
           TextButton.icon(
-            onPressed: () =>
-                showModifierFormDialog(context, menuItemId: item.id),
+            onPressed: reordering
+                ? null
+                : () => showModifierFormDialog(context, menuItemId: item.id),
             icon: const Icon(Icons.add, size: 18),
             label: Text(l10n.menuAddModifier),
           ),
@@ -1299,23 +1469,50 @@ class _ModifiersSection extends ConsumerWidget {
             )
           : Padding(
               padding: const EdgeInsets.all(RestoflowSpacing.md),
-              child: Column(
-                children: [
-                  for (final modifier in modifiers)
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: RestoflowSpacing.md,
-                      ),
-                      child: _ModifierCard(
-                        modifier: modifier,
-                        item: item,
-                        currencyCode: currencyCode,
-                        options: snapshot.optionsForModifier(modifier.id),
-                        onDelete: () =>
-                            _deleteModifier(context, ref, modifier.id),
-                      ),
-                    ),
-                ],
+              // MENU-ORDER-001: modifier GROUPS are drag-reorderable. Nested in
+              // the scrolling editor -> shrinkWrap + non-scrolling physics.
+              // Codex #5/#7: inert + dimmed while this item's group reorder persists.
+              child: IgnorePointer(
+                ignoring: reordering,
+                child: Opacity(
+                  opacity: reordering ? 0.6 : 1.0,
+                  child: modifiers.length > 1
+                      ? ReorderableListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          buildDefaultDragHandles: false,
+                          itemCount: modifiers.length,
+                          // ignore: deprecated_member_use
+                          onReorder: (oldIndex, newIndex) => _reorderModifiers(
+                            context,
+                            ref,
+                            oldIndex,
+                            newIndex,
+                          ),
+                          itemBuilder: (context, index) => Padding(
+                            key: ValueKey(modifiers[index].id),
+                            padding: const EdgeInsets.only(
+                              bottom: RestoflowSpacing.md,
+                            ),
+                            child: cardFor(index, reorderIndex: index),
+                          ),
+                        )
+                      : Column(
+                          children: [
+                            for (
+                              var index = 0;
+                              index < modifiers.length;
+                              index++
+                            )
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: RestoflowSpacing.md,
+                                ),
+                                child: cardFor(index),
+                              ),
+                          ],
+                        ),
+                ),
               ),
             ),
     );
@@ -1329,6 +1526,7 @@ class _ModifierCard extends StatelessWidget {
     required this.currencyCode,
     required this.options,
     required this.onDelete,
+    this.reorderIndex,
   });
 
   final Modifier modifier;
@@ -1336,6 +1534,10 @@ class _ModifierCard extends StatelessWidget {
   final String currencyCode;
   final List<ModifierOption> options;
   final VoidCallback onDelete;
+
+  /// MENU-ORDER-001: when non-null this card is inside a reorderable group list
+  /// and shows a leading drag handle bound to this index.
+  final int? reorderIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -1355,6 +1557,17 @@ class _ModifierCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (reorderIndex != null) ...[
+                ReorderableDragStartListener(
+                  index: reorderIndex!,
+                  child: Icon(
+                    Icons.drag_indicator,
+                    size: RestoflowIconSizes.md,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: RestoflowSpacing.sm),
+              ],
               Icon(
                 Icons.layers_outlined,
                 size: RestoflowIconSizes.md,
@@ -1420,6 +1633,7 @@ class _ModifierCard extends StatelessWidget {
                     deltaMinor: o.priceDeltaMinor,
                     isActive: o.isActive,
                     branchId: o.branchId,
+                    displayOrder: o.displayOrder,
                     // KITCHEN-MEAT-001: pre-fill the option's meat metadata so the
                     // edit dialog shows the current values.
                     kitchenMeatEnabled: o.hasKitchenMeat,

@@ -933,11 +933,19 @@ void main() {
         container.read(cartControllerProvider).lines.single.menuItemId,
         'm-draft',
       );
+      // MENU-ORDER-001 (correction-window durability): Back to cart is NOT terminal —
+      // the recovery is RETAINED after a successful restore (cleared only on the
+      // corrected order's acceptance or an explicit discard), and the cart is marked as
+      // correcting it.
       expect(
         container
             .read(posDraftRecoveryProvider.notifier)
             .hasRecoveryFor('entry-R'),
-        isFalse, // resolved through the normal flow
+        isTrue,
+      );
+      expect(
+        container.read(posActiveCorrectionSourceProvider)?.sourceOutboxEntryId,
+        'entry-R',
       );
     });
   });

@@ -106,6 +106,13 @@ void main() {
   testWidgets('real mode: the sheet shows the paired KDS info and stays '
       'money-free with no owner data', (tester) async {
     final l10n = await _en();
+    // A tall viewport so the scrolling sheet builds the device-info rows below
+    // the (native) printer settings section (which now carries a media-size
+    // selector) — matching the sibling tests here.
+    tester.view.physicalSize = const Size(1000, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
