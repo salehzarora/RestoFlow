@@ -1,0 +1,10 @@
+{
+  "_note": "PRINT-BRANDING-LOGO-001 §17 no-logo byte-level baseline. Captured by running test/logo_free_baseline_bytes_test.dart verbatim in a detached git worktree at the review-base commit below, then asserting the same digests on the branch. No secrets. Each value is the SHA-256 of the final ESC/POS adapter bytes (== the TCP/Bluetooth payload) plus the page structure. Regenerate: git worktree add --detach <tmp> <_baseline_commit>; copy this test file in; flutter pub get; flutter test <file>; copy the CAPTURE lines here.",
+  "_baseline_commit": "8868780962a3a5468d8f5c37535bae807ad36191",
+  "en_continuous80": {"sha256":"a609f661f6deabc66a5045ea09c676313fef5b88e43ec7585f3e4cd9c5184098","byteLength":528,"pages":1,"feeds":1,"rasterImages":0,"textLines":15},
+  "en_label50x50": {"sha256":"07d79f7a8c2affa3564e66673dbdca2151ff346d043a58cecc811cd5e7cc3657","byteLength":23073,"pages":2,"feeds":2,"rasterImages":2,"textLines":0},
+  "en_label80x80": {"sha256":"d1f06b273b0697bb5f0f908dd7128836c9e21c1acee47bb2cbdd0f6209bfd259","byteLength":27667,"pages":1,"feeds":1,"rasterImages":1,"textLines":0},
+  "ar_continuous80": {"sha256":"41ef0a5d007c0ce0703f12af864e8b52ae400cb79777e521e835a5d15c4861e0","byteLength":27667,"pages":1,"feeds":1,"rasterImages":1,"textLines":0},
+  "ar_label50x50": {"sha256":"07d79f7a8c2affa3564e66673dbdca2151ff346d043a58cecc811cd5e7cc3657","byteLength":23073,"pages":2,"feeds":2,"rasterImages":2,"textLines":0},
+  "ar_label80x80": {"sha256":"d1f06b273b0697bb5f0f908dd7128836c9e21c1acee47bb2cbdd0f6209bfd259","byteLength":27667,"pages":1,"feeds":1,"rasterImages":1,"textLines":0}
+}
