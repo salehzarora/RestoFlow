@@ -1,0 +1,522 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:restoflow_design_system/restoflow_design_system.dart';
+import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
+    show AdminSectionCard;
+import 'package:restoflow_feature_menu/restoflow_feature_menu.dart'
+    show PickedMenuImage, pickMenuImageFile, menuImagePickerSupported;
+import 'package:restoflow_l10n/restoflow_l10n.dart';
+import 'package:restoflow_printing/restoflow_printing.dart'
+    show LogoValidationError;
+
+import 'restaurant_logo_path.dart';
+import 'restaurant_logo_repository.dart';
+import 'restaurant_logo_storage.dart';
+
+/// PRINT-BRANDING-LOGO-001 (§10/§11) — the Dashboard receipt-branding card:
+/// preview the current logo, pick + validate + preview a new one locally, Save
+/// (upload-then-pointer with a versioned CAS), Replace, Remove (confirmed), and
+/// an enable/disable switch. Every mutation is duplicate-click-guarded, honest
+/// about failures, and never rolls back a committed pointer for a best-effort
+/// cleanup miss.
+class RestaurantLogoSection extends StatefulWidget {
+  const RestaurantLogoSection({
+    required this.repository,
+    required this.storage,
+    required this.organizationId,
+    required this.restaurantId,
+    required this.canEdit,
+    this.isDemo = false,
+    this.idGenerator,
+    this.picker,
+    this.pickerSupported,
+    this.decodeValidator,
+    super.key,
+  });
+
+  final RestaurantLogoRepository? repository;
+  final RestaurantLogoStorage? storage;
+  final String organizationId;
+  final String restaurantId;
+
+  /// Whether the current role (org_owner/restaurant_owner/manager) may manage
+  /// branding. The server is the authority; this only shapes the UI.
+  final bool canEdit;
+  final bool isDemo;
+
+  final LogoImageIdGenerator? idGenerator;
+  final Future<PickedMenuImage?> Function()? picker;
+  final bool? pickerSupported;
+
+  /// Validate picked bytes (byte + decoded checks); null == accepted.
+  final Future<LogoValidationError?> Function(Uint8List bytes)? decodeValidator;
+
+  @override
+  State<RestaurantLogoSection> createState() => _RestaurantLogoSectionState();
+}
+
+class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
+  late final LogoImageIdGenerator _ids =
+      widget.idGenerator ?? RandomLogoImageIdGenerator();
+
+  RestaurantLogoSettings? _settings;
+  Uri? _currentUrl;
+  PickedMenuImage? _picked;
+
+  bool _loading = false;
+  bool _busy = false;
+  bool _readFailed = false;
+
+  /// The localized status/error to show under the controls (null == none).
+  String? _message;
+  bool _messageIsError = false;
+
+  bool get _wired => widget.repository != null && widget.storage != null;
+  bool get _pickerSupported =>
+      widget.pickerSupported ?? menuImagePickerSupported;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_wired) _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _readFailed = false;
+    });
+    final settings = await widget.repository!.read();
+    if (!mounted) return;
+    if (settings == null) {
+      setState(() {
+        _loading = false;
+        _readFailed = true;
+      });
+      return;
+    }
+    Uri? url;
+    if (settings.hasLogo) {
+      try {
+        url = await widget.storage!.createSignedUrl(settings.path!);
+      } catch (_) {
+        url = null; // fail-soft: no preview, controls still work
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _settings = settings;
+      _currentUrl = url;
+      _loading = false;
+    });
+  }
+
+  Future<PickedMenuImage?> _pick() =>
+      (widget.picker ?? pickMenuImageFile).call();
+
+  Future<LogoValidationError?> _validate(Uint8List bytes) async {
+    final custom = widget.decodeValidator;
+    if (custom != null) return custom(bytes);
+    try {
+      await const FlutterLogoDecoder().decode(bytes);
+      return null;
+    } on LogoDecodeException catch (e) {
+      return e.error;
+    } catch (_) {
+      return LogoValidationError.decodeFailed;
+    }
+  }
+
+  Future<void> _onPick() async {
+    if (_busy) return;
+    final l10n = AppLocalizations.of(context);
+    final picked = await _pick();
+    if (picked == null || !mounted) return;
+    if (!isAllowedRestaurantLogoMime(picked.mimeType)) {
+      _setMessage(l10n.brandingErrorInvalidType, isError: true);
+      return;
+    }
+    if (!isWithinRestaurantLogoSizeLimit(picked.bytes.length)) {
+      _setMessage(l10n.brandingErrorTooLarge, isError: true);
+      return;
+    }
+    final error = await _validate(picked.bytes);
+    if (!mounted) return;
+    if (error != null) {
+      _setMessage(_messageForValidation(error, l10n), isError: true);
+      return;
+    }
+    setState(() {
+      _picked = picked;
+      _message = null;
+    });
+  }
+
+  Future<void> _onSave() async {
+    if (_busy || _picked == null) return;
+    final l10n = AppLocalizations.of(context);
+    final picked = _picked!;
+    final settings = _settings;
+    if (settings == null) return;
+    setState(() => _busy = true);
+
+    final objectKey = buildRestaurantLogoObjectKey(
+      organizationId: widget.organizationId,
+      restaurantId: widget.restaurantId,
+      imageId: _ids.newImageId(),
+      extension: extensionForLogoMime(picked.mimeType),
+    );
+
+    // 1. Upload the new immutable object FIRST.
+    try {
+      await widget.storage!.upload(
+        objectKey: objectKey,
+        bytes: picked.bytes,
+        mimeType: picked.mimeType,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _setMessage(l10n.brandingErrorUploadFailed, isError: true);
+      return; // the authoritative old setting is untouched
+    }
+
+    // 2. Commit the pointer via CAS.
+    final result = await widget.repository!.save(
+      path: objectKey,
+      enabled: true,
+      expectedVersion: settings.version,
+    );
+    if (!mounted) return;
+
+    if (result.status == RestaurantLogoWriteStatus.ok) {
+      final previousPath = settings.path;
+      await _applyAuthoritative(result.settings);
+      // 3. Best-effort delete the PREVIOUS object AFTER the new pointer commits.
+      var cleanupFailed = false;
+      if (previousPath != null && previousPath != objectKey) {
+        cleanupFailed = !await _bestEffortRemove(previousPath);
+      }
+      setState(() {
+        _picked = null;
+        _busy = false;
+      });
+      _setMessage(
+        cleanupFailed ? l10n.brandingCleanupWarning : l10n.brandingSaved,
+        isError: false,
+      );
+      return;
+    }
+
+    // Failure/conflict: best-effort delete the orphan we just uploaded, then
+    // refresh to the authoritative state (never leave the pointer half-set).
+    await _bestEffortRemove(objectKey);
+    await _handleWriteFailure(result, l10n);
+  }
+
+  Future<void> _onRemove() async {
+    if (_busy) return;
+    final l10n = AppLocalizations.of(context);
+    final settings = _settings;
+    if (settings == null || !settings.hasLogo) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        key: const Key('branding-remove-confirm'),
+        title: Text(l10n.brandingRemoveConfirmTitle),
+        content: Text(l10n.brandingRemoveConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(false),
+            child: Text(l10n.adminCancel),
+          ),
+          FilledButton(
+            key: const Key('branding-remove-confirm-action'),
+            onPressed: () => Navigator.of(dctx).pop(true),
+            child: Text(l10n.brandingRemoveAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    final previousPath = settings.path;
+    final result = await widget.repository!.save(
+      path: null,
+      enabled: false,
+      expectedVersion: settings.version,
+    );
+    if (!mounted) return;
+    if (result.status == RestaurantLogoWriteStatus.ok) {
+      await _applyAuthoritative(result.settings);
+      if (previousPath != null) await _bestEffortRemove(previousPath);
+      setState(() {
+        _picked = null;
+        _busy = false;
+      });
+      _setMessage(l10n.brandingRemoved, isError: false);
+      return;
+    }
+    await _handleWriteFailure(result, l10n);
+  }
+
+  Future<void> _onToggle(bool value) async {
+    if (_busy) return;
+    final l10n = AppLocalizations.of(context);
+    final settings = _settings;
+    if (settings == null || !settings.hasLogo) return;
+    setState(() => _busy = true);
+    final result = await widget.repository!.save(
+      path: settings.path,
+      enabled: value,
+      expectedVersion: settings.version,
+    );
+    if (!mounted) return;
+    if (result.status == RestaurantLogoWriteStatus.ok) {
+      await _applyAuthoritative(result.settings);
+      setState(() => _busy = false);
+      return;
+    }
+    await _handleWriteFailure(result, l10n);
+  }
+
+  Future<void> _handleWriteFailure(
+    RestaurantLogoWriteResult result,
+    AppLocalizations l10n,
+  ) async {
+    // Refresh to the authoritative state where the server returned it.
+    if (result.settings != null) {
+      await _applyAuthoritative(result.settings);
+    }
+    if (!mounted) return;
+    setState(() {
+      _picked = null;
+      _busy = false;
+    });
+    _setMessage(switch (result.status) {
+      RestaurantLogoWriteStatus.conflict => l10n.brandingErrorConflict,
+      RestaurantLogoWriteStatus.denied => l10n.brandingErrorDenied,
+      RestaurantLogoWriteStatus.invalid => l10n.brandingErrorInvalidType,
+      RestaurantLogoWriteStatus.storageFailure =>
+        l10n.brandingErrorUploadFailed,
+      _ => l10n.brandingErrorSaveFailed,
+    }, isError: true);
+  }
+
+  Future<void> _applyAuthoritative(RestaurantLogoSettings? settings) async {
+    if (settings == null) return;
+    Uri? url;
+    if (settings.hasLogo) {
+      try {
+        url = await widget.storage!.createSignedUrl(settings.path!);
+      } catch (_) {
+        url = null;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _settings = settings;
+      _currentUrl = url;
+    });
+  }
+
+  Future<bool> _bestEffortRemove(String path) async {
+    try {
+      await widget.storage!.remove(path);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _setMessage(String message, {required bool isError}) {
+    setState(() {
+      _message = message;
+      _messageIsError = isError;
+    });
+  }
+
+  String _messageForValidation(LogoValidationError e, AppLocalizations l10n) {
+    return switch (e) {
+      LogoValidationError.emptyFile ||
+      LogoValidationError.unsupportedFormat => l10n.brandingErrorInvalidType,
+      LogoValidationError.tooLarge => l10n.brandingErrorTooLarge,
+      LogoValidationError.decodeFailed => l10n.brandingErrorCorrupt,
+      LogoValidationError.dimensionTooLarge ||
+      LogoValidationError.tooManyPixels => l10n.brandingErrorDimensions,
+      LogoValidationError.tooSmall => l10n.brandingErrorTooSmall,
+      LogoValidationError.extremeAspectRatio => l10n.brandingErrorAspect,
+      LogoValidationError.transparentImage => l10n.brandingErrorTransparent,
+      LogoValidationError.blankImage => l10n.brandingErrorBlank,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return AdminSectionCard(
+      title: l10n.brandingSectionTitle,
+      icon: Icons.image_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.brandingSectionSubtitle, style: theme.textTheme.bodySmall),
+          const SizedBox(height: RestoflowSpacing.md),
+          if (!_wired)
+            Text(
+              widget.isDemo ? l10n.brandingDemoNote : l10n.brandingUnavailable,
+              key: const Key('branding-unavailable'),
+              style: theme.textTheme.bodyMedium,
+            )
+          else if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(RestoflowSpacing.md),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_readFailed)
+            Text(
+              l10n.brandingErrorSaveFailed,
+              style: theme.textTheme.bodyMedium,
+            )
+          else
+            ..._editor(l10n, theme),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _editor(AppLocalizations l10n, ThemeData theme) {
+    final settings = _settings;
+    final picked = _picked;
+    return [
+      // Preview: the locally-picked image (before save), else the current logo.
+      _preview(l10n, theme, picked, settings),
+      const SizedBox(height: RestoflowSpacing.md),
+      if (widget.canEdit) ...[
+        Wrap(
+          spacing: RestoflowSpacing.sm,
+          runSpacing: RestoflowSpacing.sm,
+          children: [
+            FilledButton.tonalIcon(
+              key: const Key('branding-pick'),
+              onPressed: (_busy || !_pickerSupported) ? null : _onPick,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: Text(
+                (settings?.hasLogo ?? false)
+                    ? l10n.brandingReplaceAction
+                    : l10n.brandingUploadAction,
+              ),
+            ),
+            if (picked != null)
+              FilledButton.icon(
+                key: const Key('branding-save'),
+                onPressed: _busy ? null : _onSave,
+                icon: const Icon(Icons.cloud_upload_outlined),
+                label: Text(l10n.brandingSaveAction),
+              ),
+            if ((settings?.hasLogo ?? false) && picked == null)
+              TextButton.icon(
+                key: const Key('branding-remove'),
+                onPressed: _busy ? null : _onRemove,
+                icon: const Icon(Icons.delete_outline),
+                label: Text(l10n.brandingRemoveAction),
+              ),
+          ],
+        ),
+        if (!_pickerSupported)
+          Padding(
+            padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+            child: Text(
+              l10n.brandingPickerUnsupported,
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        if ((settings?.hasLogo ?? false) && picked == null)
+          SwitchListTile(
+            key: const Key('branding-enable'),
+            contentPadding: EdgeInsets.zero,
+            value: settings!.enabled,
+            onChanged: _busy ? null : _onToggle,
+            title: Text(l10n.brandingEnableToggle),
+          ),
+      ],
+      Padding(
+        padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
+        child: Text(
+          l10n.brandingFormatsHint,
+          style: theme.textTheme.labelSmall,
+        ),
+      ),
+      if (_busy)
+        const Padding(
+          padding: EdgeInsets.only(top: RestoflowSpacing.sm),
+          child: LinearProgressIndicator(),
+        ),
+      if (_message != null)
+        Padding(
+          padding: const EdgeInsets.only(top: RestoflowSpacing.sm),
+          child: Text(
+            _message!,
+            key: const Key('branding-message'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: _messageIsError
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
+            ),
+          ),
+        ),
+    ];
+  }
+
+  Widget _preview(
+    AppLocalizations l10n,
+    ThemeData theme,
+    PickedMenuImage? picked,
+    RestaurantLogoSettings? settings,
+  ) {
+    Widget frame(Widget child, String label) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: theme.textTheme.labelMedium),
+        const SizedBox(height: RestoflowSpacing.xs),
+        Container(
+          constraints: const BoxConstraints(maxWidth: 200, maxHeight: 120),
+          padding: const EdgeInsets.all(RestoflowSpacing.sm),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(RestoflowRadii.sm),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: child,
+        ),
+      ],
+    );
+    if (picked != null) {
+      return frame(
+        Image.memory(
+          picked.bytes,
+          key: const Key('branding-preview-picked'),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        ),
+        l10n.brandingPreviewLabel,
+      );
+    }
+    final url = _currentUrl;
+    if ((settings?.hasLogo ?? false) && url != null) {
+      return frame(
+        Image.network(
+          url.toString(),
+          key: const Key('branding-preview-current'),
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => Text(l10n.brandingNoLogo),
+        ),
+        l10n.brandingCurrentLabel,
+      );
+    }
+    return Text(l10n.brandingNoLogo, style: theme.textTheme.bodyMedium);
+  }
+}

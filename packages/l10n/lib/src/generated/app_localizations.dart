@@ -8991,6 +8991,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Note: sample note'**
   String get posKitchenTestSampleNote;
+
+  /// Title of the receipt-branding settings card.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt logo'**
+  String get brandingSectionTitle;
+
+  /// Subtitle explaining the receipt-logo feature.
+  ///
+  /// In en, this message translates to:
+  /// **'Print your logo at the top of customer receipts.'**
+  String get brandingSectionSubtitle;
+
+  /// Button to pick a logo image.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose logo'**
+  String get brandingUploadAction;
+
+  /// Button to replace the current logo.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get brandingReplaceAction;
+
+  /// Button to remove the logo.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get brandingRemoveAction;
+
+  /// Button to upload and save the picked logo.
+  ///
+  /// In en, this message translates to:
+  /// **'Save logo'**
+  String get brandingSaveAction;
+
+  /// Switch to enable or disable printing the logo.
+  ///
+  /// In en, this message translates to:
+  /// **'Print logo on customer receipts'**
+  String get brandingEnableToggle;
+
+  /// Label above the currently-saved logo preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Current logo'**
+  String get brandingCurrentLabel;
+
+  /// Label above the locally-picked logo preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview (not saved yet)'**
+  String get brandingPreviewLabel;
+
+  /// Shown when no logo is configured.
+  ///
+  /// In en, this message translates to:
+  /// **'No logo set'**
+  String get brandingNoLogo;
+
+  /// Accepted formats and size hint.
+  ///
+  /// In en, this message translates to:
+  /// **'PNG, JPEG or WebP, up to 2 MB.'**
+  String get brandingFormatsHint;
+
+  /// Success message after saving the logo.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo saved.'**
+  String get brandingSaved;
+
+  /// Success message after removing the logo.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo removed.'**
+  String get brandingRemoved;
+
+  /// Non-blocking warning when the old object cleanup failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo saved. The previous image could not be removed.'**
+  String get brandingCleanupWarning;
+
+  /// Error for an unsupported image type.
+  ///
+  /// In en, this message translates to:
+  /// **'That file type is not supported. Use PNG, JPEG or WebP.'**
+  String get brandingErrorInvalidType;
+
+  /// Error for an oversized image file.
+  ///
+  /// In en, this message translates to:
+  /// **'That image is larger than 2 MB.'**
+  String get brandingErrorTooLarge;
+
+  /// Error for a too-small image.
+  ///
+  /// In en, this message translates to:
+  /// **'That image is too small.'**
+  String get brandingErrorTooSmall;
+
+  /// Error for excessive pixel dimensions.
+  ///
+  /// In en, this message translates to:
+  /// **'That image is too large (max 4096 by 4096).'**
+  String get brandingErrorDimensions;
+
+  /// Error for an effectively all-white image.
+  ///
+  /// In en, this message translates to:
+  /// **'That image looks blank.'**
+  String get brandingErrorBlank;
+
+  /// Error for a fully-transparent image.
+  ///
+  /// In en, this message translates to:
+  /// **'That image is fully transparent.'**
+  String get brandingErrorTransparent;
+
+  /// Error for an extreme aspect ratio.
+  ///
+  /// In en, this message translates to:
+  /// **'That image is too wide or too tall.'**
+  String get brandingErrorAspect;
+
+  /// Error for a corrupt or undecodable image.
+  ///
+  /// In en, this message translates to:
+  /// **'That image could not be read.'**
+  String get brandingErrorCorrupt;
+
+  /// Error when the storage upload failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed. Nothing was changed.'**
+  String get brandingErrorUploadFailed;
+
+  /// Error when the settings write failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save. Nothing was changed.'**
+  String get brandingErrorSaveFailed;
+
+  /// Error when the caller lacks the branding role.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to change branding.'**
+  String get brandingErrorDenied;
+
+  /// Error on an optimistic-concurrency conflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Branding was changed by someone else. Showing the latest.'**
+  String get brandingErrorConflict;
+
+  /// Title of the remove-logo confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove logo?'**
+  String get brandingRemoveConfirmTitle;
+
+  /// Body of the remove-logo confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer receipts will stop showing your logo.'**
+  String get brandingRemoveConfirmBody;
+
+  /// Shown when the branding repository cannot be built.
+  ///
+  /// In en, this message translates to:
+  /// **'Logo management is unavailable here.'**
+  String get brandingUnavailable;
+
+  /// Honest demo-mode note with no fake persistence.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect a live workspace to manage your receipt logo.'**
+  String get brandingDemoNote;
+
+  /// Shown when the file picker is not available on this platform.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading is only available in the web dashboard.'**
+  String get brandingPickerUnsupported;
 }
 
 class _AppLocalizationsDelegate

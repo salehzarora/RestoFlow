@@ -11,6 +11,9 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'admin/branch_shift_close_policy_repository.dart';
 import 'admin/real_admin_views.dart';
 import 'admin/supabase_settings_repository.dart';
+import 'branding/receipt_logo_url_resolver.dart';
+import 'branding/restaurant_logo_repository.dart';
+import 'branding/restaurant_logo_storage.dart';
 import 'dashboard_home_screen.dart';
 import 'devices/device_pairing_panel.dart';
 import 'activity/activity_log_screen.dart';
@@ -79,6 +82,7 @@ class DashboardShell extends StatefulWidget {
     this.menuReadSource,
     this.menuWriter,
     this.menuImageStorage,
+    this.brandingLogoStorage,
     this.printersRepository,
     this.staffRepository,
     this.tablesRepository,
@@ -116,6 +120,10 @@ class DashboardShell extends StatefulWidget {
   /// gets a labelled in-memory fake; a real surface without it shows the image
   /// panel's honest "not connected" state.
   final MenuImageStorage? menuImageStorage;
+
+  /// PRINT-BRANDING-LOGO-001: the restaurant-logo blob store (real mode only;
+  /// null in demo -> the branding card shows an honest note).
+  final RestaurantLogoStorage? brandingLogoStorage;
 
   /// The REAL printers repository (null => labelled demo store).
   final PrintersRepository? printersRepository;
@@ -238,6 +246,26 @@ class _DashboardShellState extends State<DashboardShell> {
     );
   }
 
+  /// PRINT-BRANDING-LOGO-001: the receipt-branding read/write seam, built once.
+  /// Null unless there is an authenticated transport AND a concrete restaurant
+  /// in scope (branch is not required — branding is restaurant-level) -> the
+  /// branding card then shows an honest "unavailable" note.
+  late final RestaurantLogoRepository? _brandingRepo = _buildBrandingRepo();
+
+  RestaurantLogoRepository? _buildBrandingRepo() {
+    final transport = widget.reportsTransport;
+    final membership = widget.membership;
+    final restaurantId = membership?.restaurantId;
+    if (transport == null || membership == null || restaurantId == null) {
+      return null;
+    }
+    return SupabaseRestaurantLogoRepository(
+      transport: transport,
+      organizationId: membership.organizationId,
+      restaurantId: restaurantId,
+    );
+  }
+
   /// Printers/Staff/Tables: real repository when injected, else the labelled
   /// demo store.
   late final PrintersRepository _printersRepo =
@@ -303,6 +331,8 @@ class _DashboardShellState extends State<DashboardShell> {
                   currencyCode: widget.currencyCode,
                   policyRepository: _shiftClosePolicyRepo,
                   settingsRepository: _settingsRepo,
+                  brandingRepository: _brandingRepo,
+                  brandingStorage: widget.brandingLogoStorage,
                 ),
       },
     );
@@ -456,9 +486,35 @@ class _DashboardShellState extends State<DashboardShell> {
         dashboardAuthTransportProvider.overrideWithValue(
           widget.reportsTransport,
         ),
+        // PRINT-BRANDING-LOGO-001: the current-logo URL resolver for the order
+        // reprint preview (null -> text-only).
+        receiptLogoUrlResolverProvider.overrideWithValue(
+          _receiptLogoUrlResolver(),
+        ),
       ],
       child: const OrdersScreen(),
     );
+  }
+
+  /// Builds a transient current-logo signed-URL resolver from the branding
+  /// repository + storage, or null when either is unavailable (text-only). The
+  /// signed URL is minted per preview and never persisted.
+  ReceiptLogoUrlResolver? _receiptLogoUrlResolver() {
+    final repo = _brandingRepo;
+    final storage = widget.brandingLogoStorage;
+    if (repo == null || storage == null) return null;
+    return () async {
+      final settings = await repo.read();
+      if (settings == null || !settings.enabled || !settings.hasLogo) {
+        return null;
+      }
+      try {
+        final url = await storage.createSignedUrl(settings.path!);
+        return url.toString();
+      } catch (_) {
+        return null;
+      }
+    };
   }
 
   /// The Activity-log tab (AUDIT-LOG-DASHBOARD-001). Reads the read-only

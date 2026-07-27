@@ -4787,4 +4787,104 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posKitchenTestSampleNote => 'הערה: הערת דוגמה';
+
+  @override
+  String get brandingSectionTitle => 'לוגו בקבלה';
+
+  @override
+  String get brandingSectionSubtitle =>
+      'הדפיסו את הלוגו שלכם בראש קבלות הלקוח.';
+
+  @override
+  String get brandingUploadAction => 'בחירת לוגו';
+
+  @override
+  String get brandingReplaceAction => 'החלפה';
+
+  @override
+  String get brandingRemoveAction => 'הסרה';
+
+  @override
+  String get brandingSaveAction => 'שמירת לוגו';
+
+  @override
+  String get brandingEnableToggle => 'הדפסת לוגו בקבלות הלקוח';
+
+  @override
+  String get brandingCurrentLabel => 'הלוגו הנוכחי';
+
+  @override
+  String get brandingPreviewLabel => 'תצוגה מקדימה (טרם נשמר)';
+
+  @override
+  String get brandingNoLogo => 'לא הוגדר לוגו';
+
+  @override
+  String get brandingFormatsHint => 'PNG, JPEG או WebP, עד 2 MB.';
+
+  @override
+  String get brandingSaved => 'הלוגו נשמר.';
+
+  @override
+  String get brandingRemoved => 'הלוגו הוסר.';
+
+  @override
+  String get brandingCleanupWarning =>
+      'הלוגו נשמר. לא ניתן היה להסיר את התמונה הקודמת.';
+
+  @override
+  String get brandingErrorInvalidType =>
+      'סוג הקובץ אינו נתמך. השתמשו ב-PNG, JPEG או WebP.';
+
+  @override
+  String get brandingErrorTooLarge => 'התמונה גדולה מ-2 MB.';
+
+  @override
+  String get brandingErrorTooSmall => 'התמונה קטנה מדי.';
+
+  @override
+  String get brandingErrorDimensions =>
+      'מידות התמונה גדולות מדי (עד 4096 על 4096).';
+
+  @override
+  String get brandingErrorBlank => 'התמונה נראית ריקה.';
+
+  @override
+  String get brandingErrorTransparent => 'התמונה שקופה לחלוטין.';
+
+  @override
+  String get brandingErrorAspect => 'התמונה רחבה או גבוהה מדי.';
+
+  @override
+  String get brandingErrorCorrupt => 'לא ניתן היה לקרוא את התמונה.';
+
+  @override
+  String get brandingErrorUploadFailed => 'ההעלאה נכשלה. דבר לא שונה.';
+
+  @override
+  String get brandingErrorSaveFailed => 'השמירה נכשלה. דבר לא שונה.';
+
+  @override
+  String get brandingErrorDenied => 'אין לך הרשאה לשנות את המיתוג.';
+
+  @override
+  String get brandingErrorConflict =>
+      'המיתוג שונה על ידי מישהו אחר. מוצג המצב העדכני.';
+
+  @override
+  String get brandingRemoveConfirmTitle => 'להסיר את הלוגו?';
+
+  @override
+  String get brandingRemoveConfirmBody =>
+      'קבלות הלקוח יפסיקו להציג את הלוגו שלכם.';
+
+  @override
+  String get brandingUnavailable => 'ניהול הלוגו אינו זמין כאן.';
+
+  @override
+  String get brandingDemoNote =>
+      'התחברו לסביבת עבודה חיה כדי לנהל את לוגו הקבלה.';
+
+  @override
+  String get brandingPickerUnsupported => 'העלאה זמינה רק בלוח הבקרה בדפדפן.';
 }

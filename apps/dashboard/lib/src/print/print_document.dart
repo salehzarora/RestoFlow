@@ -10,31 +10,55 @@
 /// web-safe function (no `dart:html`) so it is unit-testable. No money is
 /// invented here — values are passed in already formatted (and the kitchen
 /// ticket carries no money at all).
-enum PrintLineKind { title, center, keyValue, item, sub, rule, note }
+enum PrintLineKind {
+  title,
+  center,
+  keyValue,
+  item,
+  sub,
+  rule,
+  note,
+  headerImage,
+}
 
 class PrintLine {
   PrintLine.title(this.left)
     : kind = PrintLineKind.title,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      imageUrl = null;
   PrintLine.center(this.left)
     : kind = PrintLineKind.center,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      imageUrl = null;
   PrintLine.kv(this.left, this.right, {this.emphasised = false})
-    : kind = PrintLineKind.keyValue;
+    : kind = PrintLineKind.keyValue,
+      imageUrl = null;
   PrintLine.item(this.left, this.right, {this.emphasised = false})
-    : kind = PrintLineKind.item;
+    : kind = PrintLineKind.item,
+      imageUrl = null;
   PrintLine.sub(this.left)
     : kind = PrintLineKind.sub,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      imageUrl = null;
   PrintLine.note(this.left)
     : kind = PrintLineKind.note,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      imageUrl = null;
   PrintLine.rule()
     : kind = PrintLineKind.rule,
+      left = null,
+      right = null,
+      emphasised = false,
+      imageUrl = null;
+  // PRINT-BRANDING-LOGO-001: a centered customer-receipt logo (browser <img>
+  // from a transient signed URL — never persisted). Customer-receipt only; the
+  // kitchen-ticket builder never emits it.
+  PrintLine.headerImage(this.imageUrl)
+    : kind = PrintLineKind.headerImage,
       left = null,
       right = null,
       emphasised = false;
@@ -43,6 +67,9 @@ class PrintLine {
   final String? left;
   final String? right;
   final bool emphasised;
+
+  /// PRINT-BRANDING-LOGO-001: the logo image URL for a [headerImage] line.
+  final String? imageUrl;
 }
 
 class PrintDocument {
@@ -78,6 +105,9 @@ html, body { margin: 0; padding: 0; color: #111;
 .s { font-size: 12px; color: #444; margin: 0 0 2px 14px; }
 .n { text-align: center; font-size: 11px; color: #555; margin: 2px 0; }
 .r { border-top: 1px dashed #999; margin: 6px 0; }
+.logo { text-align: center; margin: 2px 0 6px; }
+.logo img { display: inline-block; max-width: 60%; max-height: 120px;
+  height: auto; width: auto; }
 ''';
 
 /// Renders [doc] into a self-contained, print-friendly HTML page. The page
@@ -109,6 +139,13 @@ String documentToHtml(PrintDocument doc) {
         body.writeln('<div class="n">${_escape(line.left)}</div>');
       case PrintLineKind.rule:
         body.writeln('<div class="r"></div>');
+      case PrintLineKind.headerImage:
+        final url = line.imageUrl;
+        if (url != null && url.isNotEmpty) {
+          body.writeln(
+            '<div class="logo"><img alt="" src="${_escape(url)}" /></div>',
+          );
+        }
     }
   }
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'

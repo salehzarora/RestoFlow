@@ -5,6 +5,9 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminPageHeader, AdminSectionCard, AdminStateView, adminRoleLabel;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../branding/restaurant_logo_repository.dart';
+import '../branding/restaurant_logo_section.dart';
+import '../branding/restaurant_logo_storage.dart';
 import 'branch_shift_close_policy_repository.dart';
 import 'supabase_settings_repository.dart';
 import 'timezone_catalog.dart';
@@ -54,11 +57,19 @@ class RealSettingsView extends StatefulWidget {
     this.currencyCode,
     this.policyRepository,
     this.settingsRepository,
+    this.brandingRepository,
+    this.brandingStorage,
     super.key,
   });
 
   final MembershipContext membership;
   final String? currencyCode;
+
+  /// PRINT-BRANDING-LOGO-001: the receipt-branding read/write seam + blob store.
+  /// Null when there is no authenticated transport or no concrete restaurant in
+  /// scope — the branding section then shows an honest "unavailable" note.
+  final RestaurantLogoRepository? brandingRepository;
+  final RestaurantLogoStorage? brandingStorage;
 
   /// RF-113: the per-branch shift-close policy read/write seam. Null when there
   /// is no authenticated transport or no concrete branch in scope — the toggle
@@ -106,6 +117,14 @@ class _RealSettingsViewState extends State<RealSettingsView> {
   bool get _canEdit =>
       widget.membership.role == MembershipRole.orgOwner ||
       widget.membership.role == MembershipRole.restaurantOwner;
+
+  /// PRINT-BRANDING-LOGO-001 (§2): branding may be managed by org_owner,
+  /// restaurant_owner OR manager (the server is the authority; this only shapes
+  /// the UI). Intentionally WIDER than [_canEdit] (which excludes manager).
+  bool get _canManageBranding =>
+      widget.membership.role == MembershipRole.orgOwner ||
+      widget.membership.role == MembershipRole.restaurantOwner ||
+      widget.membership.role == MembershipRole.manager;
 
   /// The owner-only editable section is shown only with a settings seam AND a
   /// concrete branch in scope — exactly like the RF-113 toggle. Otherwise the
@@ -319,6 +338,19 @@ class _RealSettingsViewState extends State<RealSettingsView> {
             title: l10n.dashboardSettingsEditableTitle,
             icon: Icons.edit_outlined,
             child: _editableFields(context, l10n),
+          ),
+        ],
+        // PRINT-BRANDING-LOGO-001: the receipt-branding card (owner/manager),
+        // shown whenever a concrete restaurant is in scope. When the repo/storage
+        // could not be built it renders an honest "unavailable" note.
+        if (_hasRestaurant && membership.restaurantId != null) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          RestaurantLogoSection(
+            repository: widget.brandingRepository,
+            storage: widget.brandingStorage,
+            organizationId: membership.organizationId,
+            restaurantId: membership.restaurantId!,
+            canEdit: _canManageBranding,
           ),
         ],
         if (widget.policyRepository != null) ...[
