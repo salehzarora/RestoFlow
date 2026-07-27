@@ -84,6 +84,22 @@ class _FakeTransport implements pp.PrintTransport {
   Future<void> dispose() async {}
 }
 
+/// An adapter that THROWS when the document contains a raster image (a logo),
+/// but encodes a text-only document normally — used to exercise the safe
+/// PRE-transport encoding fallback (§4A).
+class _RasterHostileAdapter implements pp.PrintAdapter {
+  const _RasterHostileAdapter();
+  static const _real = pp.EscPosPrintAdapter();
+
+  @override
+  Uint8List encode(pp.PrintDocument document, pp.PrinterProfile profile) {
+    if (document.lines.any((l) => l is pp.PrintRasterImageLine)) {
+      throw StateError('raster encoding failed');
+    }
+    return _real.encode(document, profile);
+  }
+}
+
 void main() {
   late AppLocalizations l10n;
   setUpAll(() async {
@@ -178,41 +194,19 @@ void main() {
     });
   });
 
-  group('NativeTransportPrintBridge §20 logo-failure fallback', () {
-    test(
-      'a logo job that fails retries EXACTLY once as text-only (2 sends)',
-      () async {
-        final transport = _FakeTransport(<pp.PrintResult>[
-          const pp.PrintResult.failure(pp.PrinterErrorCategory.unknown),
-          const pp.PrintResult.success(),
-        ]);
-        final bridge = NativeTransportPrintBridge(
-          transportFactory: () => transport,
-          mediaProfile: pp.MediaProfile.continuous80,
-        );
-        final doc = buildReceiptDocument(
-          l10n,
-          _order(),
-          _payment(),
-          branding: _asset(pp.MediaProfile.continuous80),
-        );
-        final result = await bridge.submit(doc);
-        expect(transport.sent.length, 2, reason: 'one logo + one text-only');
-        expect(result.ok, isTrue, reason: 'the text-only retry succeeded');
-        // The retry payload is strictly smaller (the raster bytes are gone).
-        expect(transport.sent[1].length, lessThan(transport.sent[0].length));
-      },
+  group('NativeTransportPrintBridge §4 safe transport contract', () {
+    NativeTransportPrintBridge bridge(
+      _FakeTransport t, {
+      pp.PrintAdapter adapter = const pp.EscPosPrintAdapter(),
+    }) => NativeTransportPrintBridge(
+      transportFactory: () => t,
+      adapter: adapter,
+      mediaProfile: pp.MediaProfile.continuous80,
     );
 
-    test('a logo job that succeeds sends only once', () async {
-      final transport = _FakeTransport(<pp.PrintResult>[
-        const pp.PrintResult.success(),
-      ]);
-      final bridge = NativeTransportPrintBridge(
-        transportFactory: () => transport,
-        mediaProfile: pp.MediaProfile.continuous80,
-      );
-      final result = await bridge.submit(
+    test('a logo job that succeeds sends exactly once', () async {
+      final t = _FakeTransport([const pp.PrintResult.success()]);
+      final result = await bridge(t).submit(
         buildReceiptDocument(
           l10n,
           _order(),
@@ -220,24 +214,78 @@ void main() {
           branding: _asset(pp.MediaProfile.continuous80),
         ),
       );
-      expect(transport.sent.length, 1);
+      expect(t.sent.length, 1);
       expect(result.ok, isTrue);
     });
 
-    test('a NO-logo job that fails does NOT retry (1 send)', () async {
-      final transport = _FakeTransport(<pp.PrintResult>[
-        const pp.PrintResult.failure(pp.PrinterErrorCategory.unknown),
+    test('TCP failure BEFORE send begins => ONE send, no resend', () async {
+      final t = _FakeTransport([
+        const pp.PrintResult.failure(pp.PrinterErrorCategory.unreachable),
       ]);
-      final bridge = NativeTransportPrintBridge(
-        transportFactory: () => transport,
-        mediaProfile: pp.MediaProfile.continuous80,
+      final result = await bridge(t).submit(
+        buildReceiptDocument(
+          l10n,
+          _order(),
+          _payment(),
+          branding: _asset(pp.MediaProfile.continuous80),
+        ),
       );
-      final result = await bridge.submit(
-        buildReceiptDocument(l10n, _order(), _payment()),
-      );
-      expect(transport.sent.length, 1);
+      expect(t.sent.length, 1, reason: 'never auto-resend a logo job');
       expect(result.ok, isFalse);
     });
+
+    test(
+      'transport failure AFTER send begins => ONE send, no text-only resend',
+      () async {
+        final t = _FakeTransport([
+          const pp.PrintResult.failureAfterSend(
+            pp.PrinterErrorCategory.writeFailed,
+            bytesSent: 128,
+          ),
+        ]);
+        final result = await bridge(t).submit(
+          buildReceiptDocument(
+            l10n,
+            _order(),
+            _payment(),
+            branding: _asset(pp.MediaProfile.continuous80),
+          ),
+        );
+        expect(t.sent.length, 1, reason: 'partial print => never auto-resend');
+        expect(result.ok, isFalse);
+      },
+    );
+
+    test('a NO-logo job that fails does NOT retry (1 send)', () async {
+      final t = _FakeTransport([
+        const pp.PrintResult.failure(pp.PrinterErrorCategory.unknown),
+      ]);
+      final result = await bridge(
+        t,
+      ).submit(buildReceiptDocument(l10n, _order(), _payment()));
+      expect(t.sent.length, 1);
+      expect(result.ok, isFalse);
+    });
+
+    test(
+      'PRE-transport encoding failure of the logo => text-only ONE send (§4A)',
+      () async {
+        final t = _FakeTransport([const pp.PrintResult.success()]);
+        // The hostile adapter throws on the logo-bearing document; the bridge
+        // must re-encode text-only BEFORE sending, then send exactly once.
+        final result = await bridge(t, adapter: const _RasterHostileAdapter())
+            .submit(
+              buildReceiptDocument(
+                l10n,
+                _order(),
+                _payment(),
+                branding: _asset(pp.MediaProfile.continuous80),
+              ),
+            );
+        expect(t.sent.length, 1, reason: 'text-only fallback is pre-transport');
+        expect(result.ok, isTrue);
+      },
+    );
   });
 
   group('kitchen exclusion (§22) — the logo line kind is receipt-only', () {

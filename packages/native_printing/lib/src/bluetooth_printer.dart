@@ -382,7 +382,21 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
       BluetoothJobCode.ok ||
       BluetoothJobCode.unknown => pp.PrinterErrorCategory.unknown,
     };
-    return pp.PrintResult.failure(category, job.detail);
+    // PRINT-BRANDING-LOGO-001 (§5): a mid-write failure (writeFailed) — or any
+    // failure after some bytes were written — means the send BEGAN and the
+    // physical outcome is unknown (a partial print may exist). Report it as
+    // failureAfterSend (retain the byte count) so the receipt layer never
+    // auto-resends. A pre-write failure (connect/bond/permission/adapter) sent
+    // nothing.
+    final sendStarted =
+        job.code == BluetoothJobCode.writeFailed || job.bytesSent > 0;
+    return sendStarted
+        ? pp.PrintResult.failureAfterSend(
+            category,
+            message: job.detail,
+            bytesSent: job.bytesSent,
+          )
+        : pp.PrintResult.failure(category, job.detail);
   }
 }
 

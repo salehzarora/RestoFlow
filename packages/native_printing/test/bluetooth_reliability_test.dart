@@ -198,6 +198,32 @@ void main() {
         expect(result.category, entry.value, reason: '${entry.key}');
       }
     });
+
+    test('a mid-write failure reports sendStarted + bytesSent (§5); a connect '
+        'failure sent nothing', () async {
+      // writeFailed with a byte count => the send BEGAN (partial print risk).
+      final writeApi = _FakeApi(
+        jobs: [
+          const BluetoothJobResult(
+            code: BluetoothJobCode.writeFailed,
+            bytesSent: 128,
+          ),
+        ],
+      );
+      final wr = await _connector(
+        writeApi,
+      ).send(address: 'AA', bytes: _bytes());
+      expect(wr.sendStarted, isTrue);
+      expect(wr.bytesSent, 128);
+      // A pre-write connect failure sent nothing.
+      final connectApi = _FakeApi(
+        jobs: [const BluetoothJobResult(code: BluetoothJobCode.connectFailed)],
+      );
+      final cr = await _connector(
+        connectApi,
+      ).send(address: 'AA', bytes: _bytes());
+      expect(cr.sendStarted, isFalse);
+    });
   });
 
   group('wire fidelity', () {

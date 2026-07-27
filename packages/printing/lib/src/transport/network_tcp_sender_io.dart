@@ -21,10 +21,19 @@ Future<PrintResult> sendEscPosOverTcp({
   required Duration timeout,
 }) async {
   Socket? socket;
+  // PRINT-BRANDING-LOGO-001 (§5): once socket.add runs, bytes have been handed to
+  // the OS send buffer — a later flush/close failure is NOT distinguishable from a
+  // partial physical print, so the failure is reported as failureAfterSend and the
+  // caller must not auto-resend. A pre-add (connect) failure sent nothing.
+  var sendStarted = false;
+  PrintResult fail(PrinterErrorCategory category, String message) => sendStarted
+      ? PrintResult.failureAfterSend(category, message: message)
+      : PrintResult.failure(category, message);
   try {
     socket = await Socket.connect(host, port, timeout: timeout);
     // Don't wait on inbound status bytes; RAW printing is write-only.
     socket.add(bytes);
+    sendStarted = true;
     // flush() completing = the bytes were handed to the OS -> best-effort
     // delivered. Bound it so a printer that accepts the TCP connection but
     // never drains can't hang the UI.
@@ -38,17 +47,17 @@ Future<PrintResult> sendEscPosOverTcp({
     }
     return const PrintResult.success();
   } on SocketException catch (e) {
-    return PrintResult.failure(
+    return fail(
       PrinterErrorCategory.unreachable,
       'socket: ${e.osError?.message ?? e.message}',
     );
   } on TimeoutException {
-    return PrintResult.failure(
+    return fail(
       PrinterErrorCategory.unreachable,
       'timed out after ${timeout.inMilliseconds}ms',
     );
   } catch (e) {
-    return PrintResult.failure(PrinterErrorCategory.unknown, e.toString());
+    return fail(PrinterErrorCategory.unknown, e.toString());
   } finally {
     socket?.destroy();
   }
