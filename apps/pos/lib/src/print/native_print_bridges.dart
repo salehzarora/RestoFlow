@@ -70,6 +70,30 @@ class NativeTransportPrintBridge implements PosPrintBridge {
 
   @override
   Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) async {
+    final result = await _submitOnce(document);
+    // PRINT-BRANDING-LOGO-001 (§20): a customer-receipt job that INCLUDED a logo
+    // raster and FAILED at the transport is retried EXACTLY ONCE as a text-only
+    // job — a logo must never prevent the text receipt. No loop; the order and
+    // payment are untouched (the caller owns those); the normal manual retry
+    // stays available. A no-logo receipt (or a receipt whose logo was already
+    // omitted) is byte-identical to before and never triggers this path.
+    final hadLogoRaster = document.lines.any(
+      (l) => l.kind == app.PrintLineKind.headerImage && l.logo?.raster != null,
+    );
+    if (hadLogoRaster && !result.ok) {
+      final textOnly = app.PrintDocument(
+        title: document.title,
+        lines: <app.PrintLine>[
+          for (final l in document.lines)
+            if (l.kind != app.PrintLineKind.headerImage) l,
+        ],
+      );
+      return _submitOnce(textOnly);
+    }
+    return result;
+  }
+
+  Future<pp.BridgeSubmitResult> _submitOnce(app.PrintDocument document) async {
     // PRINT-LAYOUT-001A: text columns + raster width + margins + pagination all
     // come from the selected media profile — never a hardcoded 80mm/576/48.
     final escpos = receiptToEscPosDocument(

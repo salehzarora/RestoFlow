@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'receipt_logo_asset.dart';
+
 /// A small, platform-agnostic model of a printable document (RF-118 fix).
 ///
 /// Both the on-screen preview and the isolated browser print are built from a
@@ -6,6 +10,12 @@
 /// web-safe function (no `dart:html`) so it is unit-testable and can be rendered
 /// into an isolated browser window. No money is invented here — values are
 /// passed in already formatted.
+///
+/// PRINT-BRANDING-LOGO-001: [PrintLineKind.headerImage] is a CUSTOMER-RECEIPT-ONLY
+/// line carrying a resolved [ReceiptLogoAsset]. It exists on this receipt model
+/// only — the kitchen ticket is a DIFFERENT `PrintDocument` type in
+/// `feature_kitchen`, so a logo can never be constructed for or rendered by any
+/// kitchen path (a compile-time type boundary, not a runtime flag).
 enum PrintLineKind {
   title,
   subtitle,
@@ -16,11 +26,21 @@ enum PrintLineKind {
   rule,
   note,
   spacer,
+  headerImage,
 }
 
 class PrintLine {
   PrintLine.title(this.left)
     : kind = PrintLineKind.title,
+      right = null,
+      emphasised = false,
+      logo = null;
+  // PRINT-BRANDING-LOGO-001: a centered customer-receipt logo above the brand
+  // title. Carries the resolved asset; renderers pick the source bytes (HTML/
+  // preview) or the pre-rasterized bitmap (ESC/POS).
+  PrintLine.headerImage(this.logo)
+    : kind = PrintLineKind.headerImage,
+      left = null,
       right = null,
       emphasised = false;
   // PRINT-LAYOUT-001B: a secondary heading — the non-hero identifier one tier
@@ -28,39 +48,51 @@ class PrintLine {
   PrintLine.subtitle(this.left)
     : kind = PrintLineKind.subtitle,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      logo = null;
   PrintLine.center(this.left)
     : kind = PrintLineKind.center,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      logo = null;
   PrintLine.kv(this.left, this.right, {this.emphasised = false})
-    : kind = PrintLineKind.keyValue;
+    : kind = PrintLineKind.keyValue,
+      logo = null;
   PrintLine.item(this.left, this.right, {this.emphasised = false})
-    : kind = PrintLineKind.item;
+    : kind = PrintLineKind.item,
+      logo = null;
   PrintLine.sub(this.left)
     : kind = PrintLineKind.sub,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      logo = null;
   PrintLine.note(this.left)
     : kind = PrintLineKind.note,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      logo = null;
   PrintLine.rule()
     : kind = PrintLineKind.rule,
       left = null,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      logo = null;
   // PRINT-LAYOUT-001B: a small blank vertical gap between item blocks (no text).
   PrintLine.spacer()
     : kind = PrintLineKind.spacer,
       left = null,
       right = null,
-      emphasised = false;
+      emphasised = false,
+      logo = null;
 
   final PrintLineKind kind;
   final String? left;
   final String? right;
   final bool emphasised;
+
+  /// PRINT-BRANDING-LOGO-001: the resolved logo asset for a [headerImage] line
+  /// (null for every other kind).
+  final ReceiptLogoAsset? logo;
 }
 
 class PrintDocument {
@@ -99,6 +131,9 @@ html, body { margin: 0; padding: 0; color: #111;
 .n { text-align: center; font-size: 11px; color: #555; margin: 2px 0; }
 .r { border-top: 1px dashed #999; margin: 6px 0; }
 .sp { height: 6px; }
+.logo { text-align: center; margin: 2px 0 6px; }
+.logo img { display: inline-block; max-width: 60%; max-height: 120px;
+  height: auto; width: auto; image-rendering: auto; }
 ''';
 
 /// Renders [doc] into a self-contained, print-friendly HTML page. The page
@@ -134,6 +169,15 @@ String documentToHtml(PrintDocument doc) {
         body.writeln('<div class="r"></div>');
       case PrintLineKind.spacer:
         body.writeln('<div class="sp"></div>');
+      case PrintLineKind.headerImage:
+        final asset = line.logo;
+        if (asset != null) {
+          final b64 = base64Encode(asset.sourceBytes);
+          body.writeln(
+            '<div class="logo"><img alt="" '
+            'src="data:${asset.sourceMime};base64,$b64" /></div>',
+          );
+        }
     }
   }
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'

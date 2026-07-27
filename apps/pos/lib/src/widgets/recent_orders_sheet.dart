@@ -27,6 +27,7 @@ import '../state/cart_controller.dart' show cartControllerProvider;
 import '../state/discount_controller.dart';
 import '../state/kitchen_finish_controller.dart';
 import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
+import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
 import '../state/pos_auto_print_prefs.dart'
     show posAutoPrintKitchenTicketEnabled, posAutoPrintKitchenTicketProvider;
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
@@ -1355,6 +1356,9 @@ class _ActionRow extends ConsumerWidget {
       source.$2,
       isDemo: isDemo,
       restaurantName: ref.read(posRestaurantNameProvider),
+      // PRINT-BRANDING-LOGO-001: old-order reprints use the CURRENT logo (no
+      // order-time snapshot); null -> text-only.
+      branding: ref.read(posReceiptLogoAssetProvider),
     );
     await ref
         .read(receiptPrintControllerProvider.notifier)

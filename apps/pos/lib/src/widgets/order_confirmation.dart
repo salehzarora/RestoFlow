@@ -30,6 +30,7 @@ import '../state/payment_controller.dart';
 import '../state/recent_orders_controller.dart';
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_printer_assignments.dart';
+import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
 import '../state/receipt_print_controller.dart';
 import '../state/submitted_order_view.dart';
 import 'cash_payment_sheet.dart';
@@ -218,6 +219,9 @@ class OrderConfirmation extends ConsumerWidget {
               paid,
               isDemo: isDemo,
               restaurantName: assignments?.restaurantName,
+              // PRINT-BRANDING-LOGO-001: the current resolved logo (null when
+              // disabled / not yet warm / any failure -> text-only receipt).
+              branding: ref.read(posReceiptLogoAssetProvider),
             ),
             submitToBridge: bridge == null ? null : bridge.submit,
           );
@@ -791,6 +795,8 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
             payment,
             isDemo: isDemo,
             restaurantName: assignments?.restaurantName,
+            // PRINT-BRANDING-LOGO-001: current logo (null -> text-only).
+            branding: ref.read(posReceiptLogoAssetProvider),
           ),
           submitToBridge: bridge == null ? null : bridge.submit,
         );

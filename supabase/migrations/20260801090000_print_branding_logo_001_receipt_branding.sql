@@ -739,7 +739,12 @@ begin
       'branch_id',       v_branch,
       'branch_name',     v_bname,
       'restaurant_name', v_rname,
-      -- PRINT-BRANDING-LOGO-001 additive keys (device's OWN restaurant; default-safe).
+      -- PRINT-BRANDING-LOGO-001 additive keys (device's OWN proven scope +
+      -- current branding pointer; all default-safe for a legacy restaurant).
+      -- organization_id + restaurant_id give the POS a stable tenant identity
+      -- for the offline raster-cache key (never a client-asserted value).
+      'organization_id',      v_org,
+      'restaurant_id',        v_rest,
       'receipt_logo_path',    v_logo_path,
       'receipt_logo_enabled', coalesce(v_logo_on, false),
       'receipt_logo_version', coalesce(v_logo_ver, 0)

@@ -12,7 +12,9 @@ import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
 import '../print/print_document.dart';
 import '../print/print_service.dart';
+import '../print/receipt_logo_asset.dart';
 import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
+import '../state/pos_receipt_logo.dart' show posReceiptLogoAssetProvider;
 import '../state/submitted_order_view.dart';
 
 /// A browser-style RECEIPT print preview (RF-118): a narrow "paper" receipt over
@@ -56,6 +58,10 @@ class ReceiptPrintPreview extends ConsumerWidget {
         : (realName != null && realName.isNotEmpty
               ? realName
               : l10n.printRestaurantNameFallback);
+    // PRINT-BRANDING-LOGO-001: the resolved logo asset (null => text-only). A
+    // decode failure in the on-screen preview falls back to nothing (never a
+    // crash) via the Image errorBuilder below.
+    final logoAsset = ref.watch(posReceiptLogoAssetProvider);
     final typeLabel = dineIn
         ? l10n.posOrderTypeDineIn
         : l10n.posOrderTypeTakeaway;
@@ -88,6 +94,26 @@ class ReceiptPrintPreview extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // PRINT-BRANDING-LOGO-001: the centered logo above the
+                          // brand. A decode failure renders nothing (text-only).
+                          if (logoAsset != null) ...[
+                            Center(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 96,
+                                ),
+                                child: Image.memory(
+                                  logoAsset.sourceBytes,
+                                  key: const Key('receipt-preview-logo'),
+                                  fit: BoxFit.contain,
+                                  gaplessPlayback: true,
+                                  errorBuilder: (_, _, _) =>
+                                      const SizedBox.shrink(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: RestoflowSpacing.sm),
+                          ],
                           // No letterSpacing: tracking breaks Arabic glyph
                           // joining under the ar default locale (D-014).
                           Center(
@@ -274,6 +300,7 @@ class ReceiptPrintPreview extends ConsumerWidget {
                       payment,
                       isDemo: isDemo,
                       restaurantName: ref.read(posRestaurantNameProvider),
+                      branding: ref.read(posReceiptLogoAssetProvider),
                     ),
                   ),
             ),
@@ -292,6 +319,7 @@ PrintDocument buildReceiptDocument(
   CashPayment payment, {
   bool isDemo = true,
   String? restaurantName,
+  ReceiptLogoAsset? branding,
 }) {
   final currency = payment.currencyCode;
   final dineIn = order.orderType == OrderType.dineIn;
@@ -314,6 +342,11 @@ PrintDocument buildReceiptDocument(
   return PrintDocument(
     title: docTitle,
     lines: <PrintLine>[
+      // PRINT-BRANDING-LOGO-001: the centered restaurant logo ABOVE the brand
+      // title — inserted ONLY when a resolved asset is supplied. When absent,
+      // the line list below is byte-for-byte identical to the pre-branding
+      // receipt (no placeholder, no spacing change).
+      if (branding != null) PrintLine.headerImage(branding),
       // Header — restaurant-name brand HERO, a secondary "Receipt" label, then
       // a PAID chip.
       PrintLine.title(brandName),

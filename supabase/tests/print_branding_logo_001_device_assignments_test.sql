@@ -9,7 +9,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(15);
+select plan(17);
 
 insert into organizations (id, name, slug, default_currency) values
   ('d4000000-0000-0000-0000-0000000000a0', 'Org A', 'pbldpa-a', 'USD');
@@ -56,8 +56,12 @@ select is((select r -> 'device' ->> 'device_type' from _res where label='pos_a1'
   'the prior device_type key is preserved');
 select is(
   (select array_agg(k order by k)::text from _res, jsonb_object_keys(r -> 'device') k where label='pos_a1'),
-  '{branch_id,branch_name,device_id,device_type,label,receipt_logo_enabled,receipt_logo_path,receipt_logo_version,restaurant_name}',
-  'the device block carries the six prior keys PLUS the three additive branding keys');
+  '{branch_id,branch_name,device_id,device_type,label,organization_id,receipt_logo_enabled,receipt_logo_path,receipt_logo_version,restaurant_id,restaurant_name}',
+  'the device block carries the six prior keys PLUS the additive scope + branding keys');
+select is((select r -> 'device' ->> 'restaurant_id' from _res where label='pos_a1'),
+  'd4000000-0000-0000-0000-0000000000a1', 'the device block carries restaurant_id (cache-key identity)');
+select is((select r -> 'device' ->> 'organization_id' from _res where label='pos_a1'),
+  'd4000000-0000-0000-0000-0000000000a0', 'the device block carries organization_id (cache-key identity)');
 select ok(
   (select (r ? 'printers') and (r ? 'routes') and (r ? 'stations') and (r ? 'server_ts')
       and (r ->> 'entity') = 'device_printer_assignments' from _res where label='pos_a1'),

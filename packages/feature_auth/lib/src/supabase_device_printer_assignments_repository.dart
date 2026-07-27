@@ -70,6 +70,12 @@ class SupabaseDevicePrinterAssignmentsRepository
       return text.isEmpty ? null : text;
     }
 
+    int optInt(Object? value) {
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
     return Success(
       DevicePrinterAssignments(
         fetchedAt: _now(),
@@ -77,6 +83,13 @@ class SupabaseDevicePrinterAssignmentsRepository
         deviceType: optString(deviceMap['device_type']),
         branchName: optString(deviceMap['branch_name']),
         restaurantName: optString(deviceMap['restaurant_name']),
+        // PRINT-BRANDING-LOGO-001 (additive keys; default-safe for an older
+        // server): tenant scope + the current receipt-logo pointer.
+        organizationId: optString(deviceMap['organization_id']),
+        restaurantId: optString(deviceMap['restaurant_id']),
+        receiptLogoPath: optString(deviceMap['receipt_logo_path']),
+        receiptLogoEnabled: deviceMap['receipt_logo_enabled'] == true,
+        receiptLogoVersion: optInt(deviceMap['receipt_logo_version']),
         printers: [
           for (final row in (raw['printers'] as List?) ?? const [])
             if (row is Map)
