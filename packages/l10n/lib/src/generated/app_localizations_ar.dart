@@ -4924,4 +4924,7 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get brandingPickerUnsupported =>
       'الرفع متاح فقط في لوحة التحكم على الويب.';
+
+  @override
+  String get brandingReadOnlyNote => 'تتم إدارة شعار الإيصال على مستوى المطعم.';
 }

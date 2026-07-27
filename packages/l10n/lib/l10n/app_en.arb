@@ -3365,5 +3365,7 @@
   "brandingDemoNote": "Connect a live workspace to manage your receipt logo.",
   "@brandingDemoNote": {"description": "Honest demo-mode note with no fake persistence."},
   "brandingPickerUnsupported": "Uploading is only available in the web dashboard.",
-  "@brandingPickerUnsupported": {"description": "Shown when the file picker is not available on this platform."}
+  "@brandingPickerUnsupported": {"description": "Shown when the file picker is not available on this platform."},
+  "brandingReadOnlyNote": "Your receipt logo is managed at the restaurant level.",
+  "@brandingReadOnlyNote": {"description": "Shown to a covering non-manager (branch-only manager / cashier / accountant) who can view but not manage branding."}
 }

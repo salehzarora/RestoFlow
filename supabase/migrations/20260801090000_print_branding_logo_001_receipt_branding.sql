@@ -502,19 +502,25 @@ revoke all on function public.set_restaurant_receipt_logo(uuid, uuid, uuid, text
 grant execute on function public.set_restaurant_receipt_logo(uuid, uuid, uuid, text, boolean, integer) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- E2. app.get_restaurant_receipt_logo — Dashboard READ (any active member
---     covering the restaurant; no membership / cross-tenant => not_found, no
---     leak). Returns the current pointer + enabled + version so the Dashboard
---     can render and send expected_version on the next CAS write.
+-- E2. app.get_restaurant_receipt_logo — Dashboard READ of restaurant branding.
+--     READ is any active membership covering the restaurant (branch members
+--     INCLUDED — they print it), mirroring can_read_restaurant_logo, so the same
+--     rule holds for the Storage read, the read RPC and the reprint resolver.
+--     The result also carries `can_manage` — the BACKEND capability signal the
+--     Dashboard keys editability on (never the literal role name): true only for
+--     a restaurant-level manager+ (org_owner/restaurant_owner/restaurant-scoped
+--     manager); a branch-only manager, cashier and accountant read but cannot
+--     manage. No covering membership / cross-tenant => not_found (no leak).
 -- ---------------------------------------------------------------------------
 create or replace function app.get_restaurant_receipt_logo(
   p_organization_id uuid, p_restaurant_id uuid)
   returns jsonb language plpgsql stable security definer set search_path = ''
 as $$
 declare
-  v_actor uuid := app.current_app_user_id();
-  v_rank  integer;
-  v_r     record;
+  v_actor      uuid := app.current_app_user_id();
+  v_can_read   boolean;
+  v_can_manage boolean;
+  v_r          record;
 begin
   if v_actor is null then
     raise exception 'get_restaurant_receipt_logo: authentication required' using errcode = '42501';
@@ -522,10 +528,23 @@ begin
   if p_organization_id is null or p_restaurant_id is null then
     return jsonb_build_object('ok', false, 'error', 'not_found', 'entity', 'restaurant');
   end if;
-  v_rank := app.actor_rank_in_scope(p_organization_id, p_restaurant_id, null);
-  if v_rank = 0 then
+  -- READ coverage: identical to can_read_restaurant_logo (branch members read;
+  -- kitchen_staff excluded from the money-bearing surface).
+  select exists (
+    select 1 from public.memberships m
+    where m.app_user_id     = v_actor
+      and m.organization_id = p_organization_id
+      and m.status          = 'active'
+      and m.deleted_at is null
+      and m.role = any (array['org_owner', 'restaurant_owner', 'manager', 'cashier', 'accountant'])
+      and (m.restaurant_id is null or m.restaurant_id = p_restaurant_id)
+  ) into v_can_read;
+  if not v_can_read then
     return jsonb_build_object('ok', false, 'error', 'not_found', 'entity', 'restaurant');
   end if;
+  -- MANAGE capability: restaurant-level rank >= manager (identical to the CAS
+  -- write gate + can_write_restaurant_logo). Branch-only members => false.
+  v_can_manage := app.actor_rank_in_scope(p_organization_id, p_restaurant_id, null) >= 2;
   select r.receipt_logo_path, r.receipt_logo_enabled, r.receipt_logo_version into v_r
     from public.restaurants r
     where r.id = p_restaurant_id and r.organization_id = p_organization_id and r.deleted_at is null;
@@ -534,12 +553,12 @@ begin
   end if;
   return jsonb_build_object('ok', true, 'entity', 'restaurant', 'restaurant_id', p_restaurant_id,
     'receipt_logo_path', v_r.receipt_logo_path, 'receipt_logo_enabled', v_r.receipt_logo_enabled,
-    'receipt_logo_version', v_r.receipt_logo_version);
+    'receipt_logo_version', v_r.receipt_logo_version, 'can_manage', v_can_manage);
 end;
 $$;
 
 comment on function app.get_restaurant_receipt_logo(uuid, uuid) is
-  'PRINT-BRANDING-LOGO-001: Dashboard READ of restaurant receipt branding. Any active membership covering the restaurant (rank>0); no membership / cross-tenant => not_found (no scope leak). Returns receipt_logo_path/enabled/version.';
+  'PRINT-BRANDING-LOGO-001: Dashboard READ of restaurant receipt branding. READ = any active covering membership (branch members included; kitchen excluded), same as can_read_restaurant_logo. Returns receipt_logo_path/enabled/version PLUS can_manage (actor_rank_in_scope >= manager at restaurant level — the backend editability signal the Dashboard keys on; branch-only manager/cashier/accountant => false). No covering membership / cross-tenant => not_found (no leak).';
 
 create or replace function public.get_restaurant_receipt_logo(p_organization_id uuid, p_restaurant_id uuid)
   returns jsonb language sql security invoker set search_path = ''

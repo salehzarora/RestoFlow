@@ -26,7 +26,6 @@ class RestaurantLogoSection extends StatefulWidget {
     required this.storage,
     required this.organizationId,
     required this.restaurantId,
-    required this.canEdit,
     this.isDemo = false,
     this.idGenerator,
     this.picker,
@@ -39,10 +38,6 @@ class RestaurantLogoSection extends StatefulWidget {
   final RestaurantLogoStorage? storage;
   final String organizationId;
   final String restaurantId;
-
-  /// Whether the current role (org_owner/restaurant_owner/manager) may manage
-  /// branding. The server is the authority; this only shapes the UI.
-  final bool canEdit;
   final bool isDemo;
 
   final LogoImageIdGenerator? idGenerator;
@@ -63,6 +58,13 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
   RestaurantLogoSettings? _settings;
   Uri? _currentUrl;
   PickedMenuImage? _picked;
+
+  /// PRINT-BRANDING-LOGO-001 (§10/§11): the BACKEND management capability, read
+  /// ONCE from the read RPC (never the role name). Editable controls appear only
+  /// when true; a covering non-manager (branch-only manager / cashier /
+  /// accountant) sees a read-only preview. It is NOT overwritten by write results
+  /// (which never carry the capability).
+  bool _canManage = false;
 
   bool _loading = false;
   bool _busy = false;
@@ -107,6 +109,7 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
     if (!mounted) return;
     setState(() {
       _settings = settings;
+      _canManage = settings.canManage; // backend capability, read once
       _currentUrl = url;
       _loading = false;
     });
@@ -394,7 +397,15 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
       // Preview: the locally-picked image (before save), else the current logo.
       _preview(l10n, theme, picked, settings),
       const SizedBox(height: RestoflowSpacing.md),
-      if (widget.canEdit) ...[
+      // §10/§11: a covering NON-manager (branch-only manager / cashier /
+      // accountant) sees the current logo READ-ONLY — no management controls.
+      if (!_canManage)
+        Text(
+          l10n.brandingReadOnlyNote,
+          key: const Key('branding-readonly'),
+          style: theme.textTheme.bodySmall,
+        ),
+      if (_canManage) ...[
         Wrap(
           spacing: RestoflowSpacing.sm,
           runSpacing: RestoflowSpacing.sm,
@@ -442,13 +453,14 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
             title: Text(l10n.brandingEnableToggle),
           ),
       ],
-      Padding(
-        padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
-        child: Text(
-          l10n.brandingFormatsHint,
-          style: theme.textTheme.labelSmall,
+      if (_canManage)
+        Padding(
+          padding: const EdgeInsets.only(top: RestoflowSpacing.xs),
+          child: Text(
+            l10n.brandingFormatsHint,
+            style: theme.textTheme.labelSmall,
+          ),
         ),
-      ),
       if (_busy)
         const Padding(
           padding: EdgeInsets.only(top: RestoflowSpacing.sm),

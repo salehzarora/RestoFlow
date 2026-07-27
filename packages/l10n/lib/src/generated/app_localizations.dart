@@ -9177,6 +9177,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Uploading is only available in the web dashboard.'**
   String get brandingPickerUnsupported;
+
+  /// Shown to a covering non-manager (branch-only manager / cashier / accountant) who can view but not manage branding.
+  ///
+  /// In en, this message translates to:
+  /// **'Your receipt logo is managed at the restaurant level.'**
+  String get brandingReadOnlyNote;
 }
 
 class _AppLocalizationsDelegate

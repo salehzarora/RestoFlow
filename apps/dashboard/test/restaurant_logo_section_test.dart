@@ -74,7 +74,6 @@ void main() {
     WidgetTester tester, {
     required RestaurantLogoRepository? repo,
     required RestaurantLogoStorage? storage,
-    bool canEdit = true,
     LogoImageIdGenerator? ids,
   }) async {
     await tester.pumpWidget(
@@ -89,7 +88,6 @@ void main() {
               storage: storage,
               organizationId: 'org1',
               restaurantId: 'rest1',
-              canEdit: canEdit,
               idGenerator:
                   ids ??
                   const FixedLogoImageIdGenerator(
@@ -106,11 +104,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  const noLogo = RestaurantLogoSettings(path: null, enabled: false, version: 0);
+  // canManage true => editable (the backend capability drives the UI).
   const withLogo = RestaurantLogoSettings(
     path: 'org1/rest1/logo/old.png',
     enabled: true,
     version: 1,
+    canManage: true,
   );
 
   testWidgets('null repo => honest unavailable note', (tester) async {
@@ -119,18 +118,30 @@ void main() {
     expect(find.byKey(const Key('branding-pick')), findsNothing);
   });
 
-  testWidgets('unauthorized role hides the edit actions', (tester) async {
-    await pump(
-      tester,
-      repo: _FakeRepo(
-        noLogo,
-        const RestaurantLogoWriteResult(RestaurantLogoWriteStatus.ok),
-      ),
-      storage: _FakeStorage(),
-      canEdit: false,
-    );
-    expect(find.byKey(const Key('branding-pick')), findsNothing);
-  });
+  testWidgets(
+    'a covering non-manager (can_manage=false) is READ-ONLY — no controls',
+    (tester) async {
+      await pump(
+        tester,
+        repo: _FakeRepo(
+          const RestaurantLogoSettings(
+            path: 'org1/rest1/logo/old.png',
+            enabled: true,
+            version: 1,
+            canManage: false, // backend says: read but cannot manage
+          ),
+          const RestaurantLogoWriteResult(RestaurantLogoWriteStatus.ok),
+        ),
+        storage: _FakeStorage(),
+      );
+      // No management controls; an honest read-only note; the preview shows.
+      expect(find.byKey(const Key('branding-pick')), findsNothing);
+      expect(find.byKey(const Key('branding-save')), findsNothing);
+      expect(find.byKey(const Key('branding-remove')), findsNothing);
+      expect(find.byKey(const Key('branding-enable')), findsNothing);
+      expect(find.byKey(const Key('branding-readonly')), findsOneWidget);
+    },
+  );
 
   testWidgets('pick + preview + save uploads then commits + cleans old', (
     tester,

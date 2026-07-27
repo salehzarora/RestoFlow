@@ -9,6 +9,7 @@ class RestaurantLogoSettings {
     required this.path,
     required this.enabled,
     required this.version,
+    this.canManage = false,
   });
 
   /// The object key of the current logo (null = none).
@@ -19,6 +20,13 @@ class RestaurantLogoSettings {
 
   /// The monotonic branding version (>=0) — sent as expected_version on save.
   final int version;
+
+  /// PRINT-BRANDING-LOGO-001 (§10): the BACKEND capability signal — whether the
+  /// current actor may MANAGE branding (org_owner/restaurant_owner/restaurant-
+  /// level manager). The Dashboard keys editability on this, never the literal
+  /// role name; a branch-only manager / cashier / accountant reads but cannot
+  /// manage. Populated by the read RPC; false for a write result.
+  final bool canManage;
 
   bool get hasLogo => path != null && path!.isNotEmpty;
 }
@@ -105,7 +113,8 @@ class SupabaseRestaurantLogoRepository implements RestaurantLogoRepository {
       return null;
     }
     if (raw is! Map || raw['ok'] != true) return null;
-    return _settingsFrom(raw);
+    // can_manage is a READ-only capability signal (the write RPC never returns it).
+    return _settingsFrom(raw, canManage: raw['can_manage'] == true);
   }
 
   @override
@@ -165,7 +174,10 @@ class SupabaseRestaurantLogoRepository implements RestaurantLogoRepository {
     }
   }
 
-  RestaurantLogoSettings _settingsFrom(Map<dynamic, dynamic> raw) {
+  RestaurantLogoSettings _settingsFrom(
+    Map<dynamic, dynamic> raw, {
+    bool canManage = false,
+  }) {
     final path = raw['receipt_logo_path'];
     return RestaurantLogoSettings(
       path: (path == null || '$path'.isEmpty) ? null : '$path',
@@ -173,6 +185,7 @@ class SupabaseRestaurantLogoRepository implements RestaurantLogoRepository {
       version: raw['receipt_logo_version'] is int
           ? raw['receipt_logo_version'] as int
           : int.tryParse('${raw['receipt_logo_version']}') ?? 0,
+      canManage: canManage,
     );
   }
 

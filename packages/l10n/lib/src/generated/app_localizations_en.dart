@@ -4965,4 +4965,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get brandingPickerUnsupported =>
       'Uploading is only available in the web dashboard.';
+
+  @override
+  String get brandingReadOnlyNote =>
+      'Your receipt logo is managed at the restaurant level.';
 }

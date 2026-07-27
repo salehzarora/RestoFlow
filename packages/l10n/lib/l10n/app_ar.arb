@@ -1518,5 +1518,6 @@
   "brandingRemoveConfirmBody": "لن تعرض إيصالات العملاء شعارك بعد الآن.",
   "brandingUnavailable": "إدارة الشعار غير متاحة هنا.",
   "brandingDemoNote": "اتصل بمساحة عمل مباشرة لإدارة شعار الإيصال.",
-  "brandingPickerUnsupported": "الرفع متاح فقط في لوحة التحكم على الويب."
+  "brandingPickerUnsupported": "الرفع متاح فقط في لوحة التحكم على الويب.",
+  "brandingReadOnlyNote": "تتم إدارة شعار الإيصال على مستوى المطعم."
 }

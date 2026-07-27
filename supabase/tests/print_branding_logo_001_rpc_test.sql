@@ -11,7 +11,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(39);
+select plan(45);
 
 insert into auth.users (id, email) values
   ('c3000000-0000-0000-0000-0000000a0001', 'pbl-rpc-owner@ex.test'),
@@ -21,7 +21,8 @@ insert into auth.users (id, email) values
   ('c3000000-0000-0000-0000-0000000a0005', 'pbl-rpc-kitchen@ex.test'),
   ('c3000000-0000-0000-0000-0000000a0006', 'pbl-rpc-acct@ex.test'),
   ('c3000000-0000-0000-0000-0000000a0007', 'pbl-rpc-ownerb@ex.test'),
-  ('c3000000-0000-0000-0000-0000000a0008', 'pbl-rpc-nobody@ex.test');
+  ('c3000000-0000-0000-0000-0000000a0008', 'pbl-rpc-nobody@ex.test'),
+  ('c3000000-0000-0000-0000-0000000a0009', 'pbl-rpc-branchmgr@ex.test');
 insert into organizations (id, name, slug, default_currency) values
   ('c3000000-0000-0000-0000-0000000000a0', 'Org A', 'pblrpc-a', 'USD'),
   ('c3000000-0000-0000-0000-0000000000b0', 'Org B', 'pblrpc-b', 'EUR');
@@ -31,6 +32,8 @@ insert into restaurants (id, organization_id, name) values
   ('c3000000-0000-0000-0000-0000000000a3', 'c3000000-0000-0000-0000-0000000000a0', 'Rest A3'),
   ('c3000000-0000-0000-0000-0000000000a4', 'c3000000-0000-0000-0000-0000000000a0', 'Rest A4'),
   ('c3000000-0000-0000-0000-0000000000b1', 'c3000000-0000-0000-0000-0000000000b0', 'Rest B1');
+insert into branches (id, organization_id, restaurant_id, name) values
+  ('c3000000-0000-0000-0000-0000000a1b00', 'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1', 'Branch A1b');
 insert into app_users (id, email, auth_user_id) values
   ('c3000000-0000-0000-0000-00000000ee01', 'pbl-rpc-owner@ex.test',     'c3000000-0000-0000-0000-0000000a0001'),
   ('c3000000-0000-0000-0000-00000000ee02', 'pbl-rpc-restowner@ex.test', 'c3000000-0000-0000-0000-0000000a0002'),
@@ -39,15 +42,17 @@ insert into app_users (id, email, auth_user_id) values
   ('c3000000-0000-0000-0000-00000000ee05', 'pbl-rpc-kitchen@ex.test',   'c3000000-0000-0000-0000-0000000a0005'),
   ('c3000000-0000-0000-0000-00000000ee06', 'pbl-rpc-acct@ex.test',      'c3000000-0000-0000-0000-0000000a0006'),
   ('c3000000-0000-0000-0000-00000000ee07', 'pbl-rpc-ownerb@ex.test',    'c3000000-0000-0000-0000-0000000a0007'),
-  ('c3000000-0000-0000-0000-00000000ee08', 'pbl-rpc-nobody@ex.test',    'c3000000-0000-0000-0000-0000000a0008');
+  ('c3000000-0000-0000-0000-00000000ee08', 'pbl-rpc-nobody@ex.test',    'c3000000-0000-0000-0000-0000000a0008'),
+  ('c3000000-0000-0000-0000-00000000ee09', 'pbl-rpc-branchmgr@ex.test', 'c3000000-0000-0000-0000-0000000a0009');
 insert into memberships (app_user_id, organization_id, restaurant_id, branch_id, role) values
-  ('c3000000-0000-0000-0000-00000000ee01', 'c3000000-0000-0000-0000-0000000000a0', null,                                   null, 'org_owner'),
-  ('c3000000-0000-0000-0000-00000000ee02', 'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1', null, 'restaurant_owner'),
-  ('c3000000-0000-0000-0000-00000000ee03', 'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a2', null, 'manager'),
-  ('c3000000-0000-0000-0000-00000000ee04', 'c3000000-0000-0000-0000-0000000000a0', null,                                   null, 'cashier'),
-  ('c3000000-0000-0000-0000-00000000ee05', 'c3000000-0000-0000-0000-0000000000a0', null,                                   null, 'kitchen_staff'),
-  ('c3000000-0000-0000-0000-00000000ee06', 'c3000000-0000-0000-0000-0000000000a0', null,                                   null, 'accountant'),
-  ('c3000000-0000-0000-0000-00000000ee07', 'c3000000-0000-0000-0000-0000000000b0', null,                                   null, 'org_owner');
+  ('c3000000-0000-0000-0000-00000000ee01', 'c3000000-0000-0000-0000-0000000000a0', null,                                   null,                                   'org_owner'),
+  ('c3000000-0000-0000-0000-00000000ee02', 'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1', null,                                   'restaurant_owner'),
+  ('c3000000-0000-0000-0000-00000000ee03', 'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a2', null,                                   'manager'),
+  ('c3000000-0000-0000-0000-00000000ee04', 'c3000000-0000-0000-0000-0000000000a0', null,                                   null,                                   'cashier'),
+  ('c3000000-0000-0000-0000-00000000ee05', 'c3000000-0000-0000-0000-0000000000a0', null,                                   null,                                   'kitchen_staff'),
+  ('c3000000-0000-0000-0000-00000000ee06', 'c3000000-0000-0000-0000-0000000000a0', null,                                   null,                                   'accountant'),
+  ('c3000000-0000-0000-0000-00000000ee07', 'c3000000-0000-0000-0000-0000000000b0', null,                                   null,                                   'org_owner'),
+  ('c3000000-0000-0000-0000-00000000ee09', 'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1', 'c3000000-0000-0000-0000-0000000a1b00', 'manager');
 
 create temp table _res (label text primary key, r jsonb);
 grant select, insert on _res to authenticated;
@@ -168,11 +173,34 @@ insert into _res values ('enabled_null', public.set_restaurant_receipt_logo(
   null, true, 0));
 select is((select r ->> 'reason' from _res where label='enabled_null'), 'enabled_requires_path', 'enabling with a NULL path is rejected as invalid');
 
--- ===== read RPC =============================================================
+-- ===== read RPC (+ can_manage backend capability, §10) ======================
+set local request.jwt.claims = '{"sub":"c3000000-0000-0000-0000-0000000a0001","aal":"aal2"}';
 insert into _res values ('get_a1', public.get_restaurant_receipt_logo(
   'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1'));
 select is((select (r ->> 'receipt_logo_version')::int from _res where label='get_a1'), 3, 'the read RPC returns A1''s final version (3)');
 select is((select (r -> 'receipt_logo_path') from _res where label='get_a1'), 'null'::jsonb, 'the read RPC returns A1''s NULL path (removed)');
+select is((select r ->> 'can_manage' from _res where label='get_a1'), 'true', 'org_owner read reports can_manage=true');
+-- restaurant_owner: can manage.
+set local request.jwt.claims = '{"sub":"c3000000-0000-0000-0000-0000000a0002","aal":"aal2"}';
+insert into _res values ('get_ro', public.get_restaurant_receipt_logo(
+  'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1'));
+select is((select r ->> 'can_manage' from _res where label='get_ro'), 'true', 'restaurant_owner read reports can_manage=true');
+-- branch-only manager: CAN read (branch members read) but can_manage=false.
+set local request.jwt.claims = '{"sub":"c3000000-0000-0000-0000-0000000a0009","aal":"aal2"}';
+insert into _res values ('get_bmgr', public.get_restaurant_receipt_logo(
+  'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1'));
+select is((select r ->> 'ok' from _res where label='get_bmgr'), 'true', 'a branch-only manager CAN read the branding');
+select is((select r ->> 'can_manage' from _res where label='get_bmgr'), 'false', 'a branch-only manager reports can_manage=false (UI must be read-only)');
+-- cashier: reads, cannot manage.
+set local request.jwt.claims = '{"sub":"c3000000-0000-0000-0000-0000000a0004","aal":"aal2"}';
+insert into _res values ('get_cash', public.get_restaurant_receipt_logo(
+  'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1'));
+select is((select r ->> 'can_manage' from _res where label='get_cash'), 'false', 'cashier reports can_manage=false');
+-- kitchen_staff: excluded from the read entirely.
+set local request.jwt.claims = '{"sub":"c3000000-0000-0000-0000-0000000a0005","aal":"aal2"}';
+insert into _res values ('get_kitchen', public.get_restaurant_receipt_logo(
+  'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1'));
+select is((select r ->> 'error' from _res where label='get_kitchen'), 'not_found', 'kitchen_staff read returns not_found (excluded)');
 set local request.jwt.claims = '{"sub":"c3000000-0000-0000-0000-0000000a0008","aal":"aal2"}';
 insert into _res values ('get_nobody', public.get_restaurant_receipt_logo(
   'c3000000-0000-0000-0000-0000000000a0', 'c3000000-0000-0000-0000-0000000000a1'));
