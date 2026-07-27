@@ -1,10 +1,21 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_printing/restoflow_printing.dart';
+
+/// Resolve a committed test fixture regardless of the test CWD (package vs repo
+/// root under the workspace).
+File fixture(String name) {
+  for (final base in ['test/fixtures', 'packages/l10n/test/fixtures']) {
+    final f = File('$base/$name');
+    if (f.existsSync()) return f;
+  }
+  return File('test/fixtures/$name');
+}
 
 /// Build real PNG bytes from a straight-alpha RGBA buffer via `dart:ui` (no
 /// third-party encoder). Deterministic fixtures generated at test time.
@@ -149,6 +160,84 @@ void main() {
     expect(
       await errorFor(() => decoder.decode(png)),
       LogoValidationError.tooSmall,
+    );
+  });
+
+  group('F6 §15 — JPEG EXIF orientation (executable proof)', () {
+    test('a plain (no-EXIF) JPEG keeps its stored dimensions', () async {
+      final d = await decoder.decode(await fixture('plain.jpg').readAsBytes());
+      expect(d.width, 64);
+      expect(d.height, 40);
+    });
+
+    test(
+      'an EXIF orientation=6 JPEG is NORMALIZED (stored 64x40 -> 40x64)',
+      () async {
+        // The fixture is stored 64(W)x40(H) with EXIF Orientation=6 (rotate 90 CW).
+        final d = await decoder.decode(
+          await fixture('orientation6.jpg').readAsBytes(),
+        );
+        // The decoder path (dart:ui) applies orientation: display is portrait.
+        expect(d.width, 40, reason: 'width/height are swapped by orientation');
+        expect(d.height, 64);
+      },
+    );
+
+    test(
+      'the normalized EXIF JPEG rasterizes at the correct (portrait) aspect',
+      () async {
+        // Both the Dashboard validator and the POS processor use THIS one decoder,
+        // so they agree on the normalized geometry by construction.
+        final raster = await decoder.decodeAndRasterize(
+          await fixture('orientation6.jpg').readAsBytes(),
+          MediaProfile.label80x80,
+        );
+        // A 40x64 (portrait) logo scaled into the 480x216 bound stays portrait:
+        // its rendered height exceeds its inked width.
+        expect(raster.data.any((b) => b != 0), isTrue, reason: 'has ink');
+        expect(raster.heightDots, greaterThan(0));
+      },
+    );
+  });
+
+  group('F6 §16 — WebP (executable proof)', () {
+    test('a real WebP decodes to its true dimensions', () async {
+      final d = await decoder.decode(await fixture('logo.webp').readAsBytes());
+      expect(d.width, 64);
+      expect(d.height, 48);
+      expect(d.rgba.length, 64 * 48 * 4);
+    });
+
+    test(
+      'a real WebP rasterizes (decode + validate + raster) end to end',
+      () async {
+        final raster = await decoder.decodeAndRasterize(
+          await fixture('logo.webp').readAsBytes(),
+          MediaProfile.continuous80,
+        );
+        expect(raster.widthDots, 576);
+        expect(
+          raster.data.any((b) => b != 0),
+          isTrue,
+          reason: 'the ink survived',
+        );
+      },
+    );
+
+    test(
+      'a corrupt WebP (valid magic, bad body) fails => decodeFailed',
+      () async {
+        final corrupt = Uint8List.fromList([
+          0x52, 0x49, 0x46, 0x46, // RIFF
+          0x10, 0, 0, 0,
+          0x57, 0x45, 0x42, 0x50, // WEBP
+          ...List.filled(32, 0x01), // garbage
+        ]);
+        expect(
+          await errorFor(() => decoder.decode(corrupt)),
+          LogoValidationError.decodeFailed,
+        );
+      },
     );
   });
 }

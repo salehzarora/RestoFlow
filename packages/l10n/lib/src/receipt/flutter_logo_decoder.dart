@@ -16,8 +16,11 @@ import 'package:restoflow_printing/restoflow_printing.dart';
 /// It uses only the Flutter SDK — no third-party image dependency. Decoded
 /// pixel/memory limits are enforced from the encoded header ([ui.ImageDescriptor])
 /// BEFORE the full frame is allocated, so an oversized image is rejected without
-/// materializing its pixels. Orientation follows the platform codec (logos are
-/// overwhelmingly PNG, which carries no EXIF rotation).
+/// materializing its pixels. EXIF orientation IS normalized by the dart:ui codec
+/// (`ImageDescriptor.encoded` + `instantiateCodec` return the display-oriented
+/// frame — verified in flutter_logo_decoder_test with a real orientation=6 JPEG),
+/// and both the Dashboard validator and the POS processor use THIS one decoder,
+/// so they agree on the normalized geometry.
 class LogoDecodeException implements Exception {
   const LogoDecodeException(this.error);
 
