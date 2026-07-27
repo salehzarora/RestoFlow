@@ -497,6 +497,23 @@ Future<void> submitOrderFromCart({
       // §4 pre-dispatch correction link (null for a normal submit).
       beforeDispatch: beforeDispatch,
     );
+    // MENU-ORDER-001 (Codex correction-result settlement §2): the IMMUTABLE settlement
+    // context for a CORRECTED submit, built from the OWNER-VALIDATED pre-await source +
+    // the ORIGINAL submit's exact entry id (result.entry.id is the id THIS submit created,
+    // never the current session's). It is the single authority for settling this result
+    // onto the one source recovery — whether the submitting session is still current or
+    // has departed — so neither result path ever captures a standalone corrected recovery.
+    // Null for an ordinary (non-correction) submit, which keeps the two cases distinct.
+    final settlement = correctionSource == null
+        ? null
+        : CorrectionSettlementContext(
+            sourceOutboxEntryId: correctionSource.sourceOutboxEntryId,
+            submittedOutboxEntryId: result.entry.id,
+            originalBinding: PosRecoveryBinding(
+              scopeKey: correctionSource.scopeKey,
+              employeeProfileId: correctionSource.employeeProfileId,
+            ),
+          );
     // Finding 1B — THE FULL-IDENTITY MUTATION BOUNDARY. Everything below this line mutates
     // state the CURRENT session would see — the cart's submitted-order view, the
     // confirmation screen, the order-setup reset, the recent-orders row, the recovery
@@ -520,6 +537,10 @@ Future<void> submitOrderFromCart({
         customerName: customerNameBefore,
         taxTotalMinor: taxTotalMinor,
         taxRateBp: taxRateBp,
+        // MENU-ORDER-001 (§3): when this was a CORRECTION, the departed-session path must
+        // settle onto the SINGLE source recovery (already superseded + linked before
+        // dispatch), NEVER capture a standalone recovery keyed by the corrected entry.
+        settlement: settlement,
       );
       return; // Finding 1C: never a generic current-cart clear after a session switch.
     }
@@ -590,19 +611,28 @@ Future<void> submitOrderFromCart({
     // corrected order is authoritatively ACCEPTED, via the controller-seam acceptance
     // listener matching the link (so an accept-then-crash still reconciles on the next
     // startup). A rejected / retryable / network / timeout result NEVER clears the source.
-    if (correctionSource != null &&
-        correctionSource.sourceOutboxEntryId != result.entry.id) {
-      // If this corrected entry was itself PERMANENTLY rejected (another item_unavailable),
-      // retire ITS duplicate rejected shell so the single logical order stays surfaced by
-      // the source recovery's own shell — "Back to cart" then restores the corrected cart.
+    if (settlement != null &&
+        settlement.sourceOutboxEntryId != result.entry.id) {
+      // SETTLE onto the SINGLE source recovery through the one owner-bound settlement API
+      // (same path the departed-session branch uses). The pre-dispatch link already
+      // superseded the source (corrected draft + link to this entry); this only retires a
+      // DUPLICATE rejected shell for the corrected entry so one logical order keeps one
+      // shell — never a standalone capture, never cleared on a non-accepted result.
       final correctedEntry = container
           .read(outboxControllerProvider.notifier)
           .entryById(result.entry.id);
-      if (correctedEntry != null && correctedEntry.isPermanentBusinessRejection) {
+      unawaited(
         container
-            .read(posRecentOrdersControllerProvider.notifier)
-            .retireLocalRejectedByOutboxEntry(result.entry.id);
-      }
+            .read(posDraftRecoveryProvider.notifier)
+            .settleCorrectedResult(
+              originalBinding: settlement.originalBinding,
+              sourceOutboxEntryId: settlement.sourceOutboxEntryId,
+              submittedOutboxEntryId: settlement.submittedOutboxEntryId,
+              submittedWasPermanentlyRejected:
+                  correctedEntry != null &&
+                  correctedEntry.isPermanentBusinessRejection,
+            ),
+      );
       // This correction attempt is done — the cart was submitted (emptied) above. Drop the
       // in-memory active source so no unrelated later submit re-links the (retained) source
       // recovery; a further "Back to cart" re-establishes it. The DURABLE source recovery
@@ -687,7 +717,63 @@ void _retainDepartedSessionResult({
   required String? customerName,
   required int taxTotalMinor,
   required int taxRateBp,
+  CorrectionSettlementContext? settlement,
 }) {
+  final entry = container
+      .read(outboxControllerProvider.notifier)
+      .entryById(result.entry.id);
+  final permanentlyRejected = entry != null && entry.isPermanentBusinessRejection;
+
+  // MENU-ORDER-001 (Codex correction-result settlement §3): a CORRECTED submission that
+  // settles after the submitting worker/scope departed must NEVER be captured as a second
+  // standalone recovery keyed by the corrected entry — that is the confirmed defect
+  // (e1 linked to e2 PLUS an independent e2). Its SINGLE source recovery (e1) was already
+  // superseded in place (corrected draft + link to this exact entry) under its ORIGINAL
+  // owner, and awaited to disk, BEFORE dispatch. So settle by that original context:
+  // verify the link + retire only a duplicate shell; capture NOTHING here.
+  if (settlement != null) {
+    // Same scope + NOT permanently rejected -> record the (accepted/pending) row so the
+    // original scope re-discovers its order; a permanent rejection records NO competing
+    // shell (the source recovery's own shell surfaces the one logical order). A scope
+    // change records nothing (a different branch's list). An accepted order additionally
+    // clears the source recovery through its link via the controller-seam listeners.
+    if (container.read(posSyncScopeProvider)?.key == scopeKeyBefore &&
+        !permanentlyRejected) {
+      container
+          .read(posRecentOrdersControllerProvider.notifier)
+          .recordSubmitted(
+            cartController.viewFromDraft(
+              draft: draft,
+              orderType: orderType,
+              tableLabel: table?.label,
+              customerName: customerName,
+              orderNumber: result.orderNumber,
+              outboxEntryId: result.entry.id,
+              localOperationId: result.entry.localOperationId,
+              orderId: result.entry.targetId,
+              taxTotalMinor: taxTotalMinor,
+              taxRateBp: taxRateBp,
+            ),
+          );
+    }
+    unawaited(
+      container
+          .read(posDraftRecoveryProvider.notifier)
+          .settleCorrectedResult(
+            originalBinding: settlement.originalBinding,
+            sourceOutboxEntryId: settlement.sourceOutboxEntryId,
+            submittedOutboxEntryId: settlement.submittedOutboxEntryId,
+            submittedWasPermanentlyRejected: permanentlyRejected,
+          ),
+    );
+    return;
+  }
+
+  // ORDINARY new order (no source recovery): retain ONE standalone recovery under the
+  // ORIGINAL session's binding, so the draft is inaccessible to the current operator
+  // (binding mismatch) yet recoverable when its owner returns. `capture` no-ops when the
+  // order already applied (accepted -> nothing to recover); an accepted order's recovery
+  // is additionally cleared by the controller-seam acceptance listeners.
   container
       .read(posDraftRecoveryProvider.notifier)
       .capture(
@@ -720,10 +806,7 @@ void _retainDepartedSessionResult({
     taxRateBp: taxRateBp,
   );
   recent.recordSubmitted(view);
-  final entry = container
-      .read(outboxControllerProvider.notifier)
-      .entryById(result.entry.id);
-  if (entry != null && entry.isPermanentBusinessRejection) {
+  if (permanentlyRejected) {
     recent.markLocallyRejected(view.identity);
   }
 }

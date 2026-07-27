@@ -68,6 +68,35 @@ class PosRecoveryBinding {
       );
 }
 
+/// MENU-ORDER-001 (Codex correction-result settlement §2) — the IMMUTABLE settlement
+/// context of a corrected submission, captured from the OWNER-VALIDATED active correction
+/// source BEFORE the submitting worker or POS scope can change. It travels with the
+/// asynchronous submit RESULT so the outcome is settled onto the SINGLE source recovery by
+/// its ORIGINAL owner + the EXACT submitted operation — never re-derived from the
+/// (possibly handed-over) current session, never authorized by a replacement worker. It is
+/// absent for an ordinary (non-correction) submit, which is exactly what distinguishes a
+/// corrected e1->e2 settlement (settle onto e1, never a standalone capture) from an
+/// ordinary independent e2 retention.
+class CorrectionSettlementContext {
+  const CorrectionSettlementContext({
+    required this.sourceOutboxEntryId,
+    required this.submittedOutboxEntryId,
+    required this.originalBinding,
+  });
+
+  /// The source recovery being corrected (its outbox-entry map key).
+  final String sourceOutboxEntryId;
+
+  /// The corrected submission's outbox entry id — the EXACT op the source was durably
+  /// linked to before dispatch (`correctionOutboxEntryId`).
+  final String submittedOutboxEntryId;
+
+  /// The STABLE original owner (scopeKey + employeeProfileId) that owned the source at
+  /// submission time — the authority for settling this async result, safe because the
+  /// link was durably committed under it before dispatch.
+  final PosRecoveryBinding originalBinding;
+}
+
 /// PILOT-OPERATIONS-CORRECTIONS-001 — a recoverable snapshot of ONE submit attempt,
 /// kept until the server authoritatively ACCEPTS the order or the cashier deliberately
 /// discards it. It exists so a permanently-rejected NEW order (item_unavailable) is not
@@ -386,6 +415,54 @@ class PosDraftRecoveryController
     if (active != null && active.sourceOutboxEntryId == outboxEntryId) {
       ref.read(posActiveCorrectionSourceProvider.notifier).clear();
     }
+  }
+
+  /// MENU-ORDER-001 (Codex correction-result settlement §3/§6): settle a CORRECTED
+  /// submission's result onto its SINGLE source recovery, by the ORIGINAL validated
+  /// submission binding [originalBinding] — NEVER as a standalone new recovery, and NEVER
+  /// trusting the current (possibly handed-over) worker. This is the ONE result-time entry
+  /// point for a corrected submit's outcome, used identically whether the submitting
+  /// session is still current OR has departed (sign-out / worker or scope handover /
+  /// container disposal) while the corrected order was in flight.
+  ///
+  /// It is safe to act on this asynchronous result by the CAPTURED original binding
+  /// precisely because the source->corrected association was durably committed BEFORE
+  /// dispatch (the pre-dispatch [linkCorrectedSubmit] hook): the source recovery
+  /// [sourceOutboxEntryId] was superseded IN PLACE under this exact owner with the
+  /// corrected draft + `correctionOutboxEntryId = submittedOutboxEntryId`, and awaited to
+  /// disk, before any network dispatch. So the retained (item_unavailable / retryable /
+  /// network / timeout) outcome needs NO further recovery-map mutation here — the single
+  /// logical recovery already holds the corrected draft under its original owner — and the
+  /// accepted outcome is cleared by the controller-seam acceptance listeners through the
+  /// same link. This method therefore only VERIFIES and settles the SHELL:
+  ///   * confirms the stored source still exists, is owned by [originalBinding], and is
+  ///     linked to EXACTLY [submittedOutboxEntryId] (a mismatch means the source was
+  ///     already resolved/accepted or never owned this op — no action);
+  ///   * when the corrected op was PERMANENTLY REJECTED, retires any DUPLICATE rejected
+  ///     shell keyed by [submittedOutboxEntryId] so one logical order keeps one shell (the
+  ///     source recovery's own shell surfaces it).
+  ///
+  /// Performs NO capture, exposes no draft to the current worker, mutates nothing when the
+  /// binding/link does not match, and is safe with NO worker signed in. Returns whether the
+  /// source recovery is the verified single record for this result — the caller uses this
+  /// only to assert/log; for a correction it must NEVER create a standalone recovery
+  /// regardless (that would duplicate the one logical order).
+  Future<bool> settleCorrectedResult({
+    required PosRecoveryBinding originalBinding,
+    required String sourceOutboxEntryId,
+    required String submittedOutboxEntryId,
+    required bool submittedWasPermanentlyRejected,
+  }) async {
+    final source = state[sourceOutboxEntryId];
+    final settledOnSource =
+        source != null &&
+        source.binding.matches(originalBinding) &&
+        source.correctionOutboxEntryId == submittedOutboxEntryId;
+    if (submittedWasPermanentlyRejected) {
+      // Retire only the DUPLICATE shell for the corrected op (never the source's own).
+      _retireShell(submittedOutboxEntryId);
+    }
+    return settledOnSource;
   }
 
   /// Retire the rejected shell for [outboxEntryId], deferred to a microtask so it is
