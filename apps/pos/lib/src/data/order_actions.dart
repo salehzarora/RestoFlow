@@ -30,6 +30,7 @@ class PosOrderActions {
     required this.canOpenReceipt,
     required this.pendingKind,
     this.canAddItems = false,
+    this.canComplete = false,
   });
 
   final bool canPay;
@@ -57,6 +58,14 @@ class PosOrderActions {
   /// (order_not_dine_in / order_not_eligible / order_already_settled).
   final bool canAddItems;
 
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the explicit printer-only
+  /// COMPLETE safety net may be offered — a served, fully-settled order on a
+  /// VERIFIED printer_only branch, not terminal, no transition in flight, the
+  /// actor authorized. Decided ONLY by the central [posOrderCloseEligibility]
+  /// policy (passed in as `completeEligible`); the server re-enforces the
+  /// served->completed transition + settlement.
+  final bool canComplete;
+
   /// The local operation this device has in flight for the order, if any. It is
   /// reported SEPARATELY from the lifecycle status, because "my payment is syncing"
   /// is a fact about this till, not about the order.
@@ -71,7 +80,8 @@ class PosOrderActions {
       !canVoid &&
       !canMoveTable &&
       !canOpenReceipt &&
-      !canAddItems;
+      !canAddItems &&
+      !canComplete;
 }
 
 /// The local mutation this device currently has queued/in flight for an order.
@@ -87,6 +97,11 @@ PosOrderActions resolveOrderActions(
   PosRecentOrder order, {
   PosStaffCapabilities? capabilities,
   PosPendingKind? pending,
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): whether the central
+  // posOrderCloseEligibility policy returned `allowed` for this order (computed by
+  // the caller from the VERIFIED kitchen mode + settlement + status + authorization
+  // + in-flight). Gated below by the same terminal/draft guards as every action.
+  bool completeEligible = false,
 }) {
   // A LOCAL DRAFT has no server order. Nothing can be done to it here; it is not a
   // server order at all and must never be presented as one.
@@ -228,5 +243,9 @@ PosOrderActions resolveOrderActions(
         order.canReprintReceipt || (chargedPerServer && order.orderId != null),
     pendingKind: pending,
     canAddItems: canAddItems,
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the printer-only Complete safety
+    // net — the central policy's `allowed`, re-guarded by terminal here (a terminal
+    // order accepts no mutation, whichever device closed it).
+    canComplete: completeEligible && !terminal,
   );
 }

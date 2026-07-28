@@ -112,6 +112,18 @@ abstract class KitchenFinishRepository {
     required String batchRunId,
     required Future<String?> Function(String orderId) refreshStatus,
   });
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the explicit printer-only
+  /// COMPLETE safety net — advance a SERVED, fully-settled order to `completed`
+  /// with ONE `order.status` op (the SAME transport + idempotency contract as
+  /// [advanceToServed]). IDEMPOTENT: a server-already-completed order returns
+  /// `finished` (never an error, never a double-complete); it never records a
+  /// payment, never resubmits, never prints. [localOperationId] is the stable
+  /// idempotency key for THIS completion attempt.
+  Future<KitchenFinishResult> completeServedOrder({
+    required String orderId,
+    required String localOperationId,
+  });
 }
 
 /// A hard upper bound on per-order attempts: the 4 canonical transitions plus a
@@ -143,6 +155,12 @@ class DemoKitchenFinishRepository implements KitchenFinishRepository {
     }
     return KitchenFinishResult(orderId, KitchenFinishStatus.finished);
   }
+
+  @override
+  Future<KitchenFinishResult> completeServedOrder({
+    required String orderId,
+    required String localOperationId,
+  }) async => KitchenFinishResult(orderId, KitchenFinishStatus.finished);
 }
 
 /// REAL finisher. Sends `order.status` ops to `public.sync_push` (dispatched to
@@ -309,6 +327,79 @@ class RealKitchenFinishRepository implements KitchenFinishRepository {
       KitchenFinishStatus.failed,
       error: lastError ?? 'unresolved',
     );
+  }
+
+  @override
+  Future<KitchenFinishResult> completeServedOrder({
+    required String orderId,
+    required String localOperationId,
+  }) async {
+    final transport = _transport;
+    final session = _session;
+    if (transport == null || session == null || orderId.trim().isEmpty) {
+      return KitchenFinishResult(
+        orderId,
+        KitchenFinishStatus.failed,
+        error: 'unavailable',
+      );
+    }
+    // ONE forward step served -> completed. The server re-authorizes + re-derives
+    // the transition from the LOCKED order row (settlement enforced by the
+    // served+paid rule), so the client sends ONLY {order_id, new_status}. The
+    // payload is IDENTICAL across retries of this id -> the server replays rather
+    // than double-completing. Never a payment, never a resubmit, never a print.
+    final op = <String, dynamic>{
+      'local_operation_id': localOperationId,
+      'operation_type': 'order.status',
+      'target_entity': 'order',
+      'target_id': orderId,
+      'client_created_at': DateTime.now().toIso8601String(),
+      'payload': <String, dynamic>{
+        'order_id': orderId,
+        'new_status': 'completed',
+      },
+    };
+    final Object? raw;
+    try {
+      raw = await transport.invoke('sync_push', <String, dynamic>{
+        'p_pin_session_id': session.pinSessionId,
+        'p_device_id': session.deviceId,
+        'p_operations': <dynamic>[op],
+      });
+    } on SyncTransportException catch (e) {
+      // Ambiguous — the op MAY have applied; the order/table stay consistent (a
+      // replay of the same id is a no-op) and the caller can retry.
+      return KitchenFinishResult(
+        orderId,
+        KitchenFinishStatus.failed,
+        error: e.code ?? e.kind.name,
+      );
+    }
+    final outcome = _opOutcome(raw, localOperationId);
+    switch (outcome.kind) {
+      case _OpKind.applied:
+        return KitchenFinishResult(orderId, KitchenFinishStatus.finished);
+      case _OpKind.staleStatus:
+        // invalid_transition: the order already moved. If it is ALREADY completed
+        // (this or another till closed it), report finished IDEMPOTENTLY; any
+        // other state is an honest failure (never a silent success).
+        return outcome.currentStatus == 'completed'
+            ? KitchenFinishResult(orderId, KitchenFinishStatus.finished)
+            : KitchenFinishResult(
+                orderId,
+                KitchenFinishStatus.failed,
+                error: outcome.error ?? 'invalid_transition',
+              );
+      case _OpKind.denied:
+      case _OpKind.conflict:
+      case _OpKind.rejected:
+      case _OpKind.malformed:
+        return KitchenFinishResult(
+          orderId,
+          KitchenFinishStatus.failed,
+          error: outcome.error ?? outcome.rawStatus ?? 'failed',
+        );
+    }
   }
 
   _OpOutcome _opOutcome(Object? raw, String localOp) {
