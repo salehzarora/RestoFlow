@@ -145,10 +145,15 @@ class NativeTransportPrintBridge implements PosPrintBridge {
         return const pp.BridgeSubmitResult.sentToPrinter(mode: 'native');
       }
       // A transport failure — whether or not the send began — is returned as-is
-      // (no auto-resend). A post-send failure could be a partial physical print.
+      // (no auto-resend). PRINT-BRANDING-LOGO-001 (§7): preserve the transport's
+      // physical dispatch stage + known byte count so the receipt controller can
+      // distinguish a safe PRE-dispatch failure from a partial/unknown AFTER-
+      // dispatch print (manual retry only). Unknown bytesSent stays null, not 0.
       return pp.BridgeSubmitResult.failed(
         result.category ?? pp.PrinterErrorCategory.unknown,
         result.message,
+        result.physicalOutcome,
+        result.bytesSent,
       );
     } finally {
       await transport.dispose();

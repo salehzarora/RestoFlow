@@ -69,6 +69,8 @@ class BridgeSubmitResult {
     this.category,
     this.message,
     this.mode,
+    this.physicalOutcome = PrintPhysicalOutcome.notStarted,
+    this.bytesSent,
   });
 
   /// The bridge received the job but did not reach hardware (e.g. sink mode).
@@ -77,13 +79,31 @@ class BridgeSubmitResult {
 
   /// The bridge confirmed the bytes were written to the printer transport.
   const BridgeSubmitResult.sentToPrinter({String? mode})
-    : this._(BridgeSubmitOutcome.sentToPrinter, mode: mode);
+    : this._(
+        BridgeSubmitOutcome.sentToPrinter,
+        mode: mode,
+        physicalOutcome: PrintPhysicalOutcome.completed,
+      );
 
   /// The submit failed with a mappable [category] + optional diagnostic.
+  ///
+  /// PRINT-BRANDING-LOGO-001 (§7): the transport's dispatch stage is preserved so
+  /// the receipt controller can tell a PRE-dispatch failure (safe to offer a
+  /// clean automatic path) from a partial/unknown AFTER-dispatch failure (manual
+  /// retry only). [bytesSent] is carried when known (null == unknown, never 0).
   const BridgeSubmitResult.failed(
     PrinterErrorCategory category, [
     String? message,
-  ]) : this._(BridgeSubmitOutcome.failed, category: category, message: message);
+    PrintPhysicalOutcome physicalOutcome =
+        PrintPhysicalOutcome.failedBeforeDispatch,
+    int? bytesSent,
+  ]) : this._(
+         BridgeSubmitOutcome.failed,
+         category: category,
+         message: message,
+         physicalOutcome: physicalOutcome,
+         bytesSent: bytesSent,
+       );
 
   final BridgeSubmitOutcome outcome;
 
@@ -96,12 +116,26 @@ class BridgeSubmitResult {
   /// The bridge's reported delivery mode (`'tcp'` / `'sink'`), if any.
   final String? mode;
 
+  /// PRINT-BRANDING-LOGO-001 (§7): the transport's physical dispatch stage,
+  /// preserved end to end. Drives whether an automatic resend is EVER safe.
+  final PrintPhysicalOutcome physicalOutcome;
+
+  /// Bytes the transport is known to have written before failing (null ==
+  /// unknown, never a misleading 0). Diagnostics only.
+  final int? bytesSent;
+
   /// Whether the bridge accepted the job (received or sent) rather than failed.
   bool get ok => outcome != BridgeSubmitOutcome.failed;
 
+  /// Whether a failure occurred AFTER the payload began reaching the printer —
+  /// the receipt layer must NOT auto-resend (a partial print may exist).
+  bool get isPartialOrUnknownAfterDispatch =>
+      physicalOutcome == PrintPhysicalOutcome.partialOrUnknownAfterDispatch;
+
   @override
   String toString() => outcome == BridgeSubmitOutcome.failed
-      ? 'BridgeSubmitResult.failed($category, $message)'
+      ? 'BridgeSubmitResult.failed($category, ${physicalOutcome.name}, '
+            'bytesSent: $bytesSent, $message)'
       : 'BridgeSubmitResult.${outcome.name}(mode: $mode)';
 }
 
