@@ -111,6 +111,9 @@ class _GatedOutbox implements OutboxRepository {
   @override
   Future<OutboxEntry> retry(String entryId) async =>
       enqueued.firstWhere((e) => e.id == entryId);
+
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(String orderId) async => null;
 }
 
 class _FakeAuthTransport implements SyncRpcTransport {

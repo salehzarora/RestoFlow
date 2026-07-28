@@ -70,6 +70,26 @@ void main() {
   KitchenModeVerifiedKds kds() =>
       KitchenModeVerifiedKds(verifiedAt: at, revision: 4);
 
+  // Finding 1: distinct scopes (branch A, branch B, a different device in A).
+  const scopeA = PosKitchenModeScopeKey(
+    organizationId: 'org',
+    restaurantId: 'rest',
+    branchId: 'branch-A',
+    deviceId: 'dev-1',
+  );
+  const scopeB = PosKitchenModeScopeKey(
+    organizationId: 'org',
+    restaurantId: 'rest',
+    branchId: 'branch-B',
+    deviceId: 'dev-1',
+  );
+  const scopeADeviceB = PosKitchenModeScopeKey(
+    organizationId: 'org',
+    restaurantId: 'rest',
+    branchId: 'branch-A',
+    deviceId: 'dev-2',
+  );
+
   group('resolvePosSubmissionDecision', () {
     test('resolved printer_only -> ready + direct_print', () {
       final d = resolvePosSubmissionDecision(
@@ -130,55 +150,51 @@ void main() {
       );
     });
 
+    PosKitchenModeReadiness stateOf(ProviderContainer c) =>
+        c.read(posKitchenModeReadinessProvider);
+
     test(
       'publish maps trusted modes to Resolved; non-trusted to Unavailable',
       () {
         final c = make(demo: false);
         addTearDown(c.dispose);
         final n = c.read(posKitchenModeReadinessProvider.notifier);
-        n.publish(printerOnly());
-        expect(
-          c.read(posKitchenModeReadinessProvider),
-          isA<KitchenModeReadinessResolved>(),
-        );
+        n.bindScope(scopeA).publish(printerOnly());
+        expect(stateOf(c), isA<KitchenModeReadinessResolved>());
         n.reset();
-        n.publish(const KitchenModeRevisionUnavailable());
-        expect(
-          c.read(posKitchenModeReadinessProvider),
-          isA<KitchenModeReadinessUnavailable>(),
-        );
+        n.bindScope(scopeA).publish(const KitchenModeRevisionUnavailable());
+        expect(stateOf(c), isA<KitchenModeReadinessUnavailable>());
         n.reset();
-        n.publish(const KitchenModeInvalidSession());
-        expect(
-          c.read(posKitchenModeReadinessProvider),
-          isA<KitchenModeReadinessUnavailable>(),
-        );
+        n.bindScope(scopeA).publish(const KitchenModeInvalidSession());
+        expect(stateOf(c), isA<KitchenModeReadinessUnavailable>());
       },
     );
 
     test('a non-trusted result never DOWNGRADES an already resolved mode', () {
       final c = make(demo: false);
       addTearDown(c.dispose);
-      final n = c.read(posKitchenModeReadinessProvider.notifier);
-      n.publish(printerOnly());
-      n.publish(const KitchenModeTransientFailure()); // a blip
-      final r = c.read(posKitchenModeReadinessProvider);
+      final b = c
+          .read(posKitchenModeReadinessProvider.notifier)
+          .bindScope(scopeA);
+      b.publish(printerOnly());
+      b.publish(const KitchenModeTransientFailure()); // a blip
+      final r = stateOf(c);
       expect(r, isA<KitchenModeReadinessResolved>());
       expect(
         (r as KitchenModeReadinessResolved).mode,
         isA<KitchenModePrinterOnlyWithRevision>(),
       );
+      expect(r.scope, scopeA);
     });
 
     test('markUnavailable only acts while Loading', () {
       final c = make(demo: false);
       addTearDown(c.dispose);
-      final n = c.read(posKitchenModeReadinessProvider.notifier);
-      n.markUnavailable();
-      expect(
-        c.read(posKitchenModeReadinessProvider),
-        isA<KitchenModeReadinessUnavailable>(),
-      );
+      c
+          .read(posKitchenModeReadinessProvider.notifier)
+          .bindScope(scopeA)
+          .markUnavailable();
+      expect(stateOf(c), isA<KitchenModeReadinessUnavailable>());
     });
 
     test('requestResolution reopens to Loading and calls the bound resolver; '
@@ -187,31 +203,196 @@ void main() {
       addTearDown(c.dispose);
       final n = c.read(posKitchenModeReadinessProvider.notifier);
       // Nothing bound yet: a retry must be a safe no-op (never clears the block).
-      n.markUnavailable();
+      n.bindScope(scopeA).markUnavailable();
       n.requestResolution();
-      expect(
-        c.read(posKitchenModeReadinessProvider),
-        isA<KitchenModeReadinessUnavailable>(),
-      );
+      expect(stateOf(c), isA<KitchenModeReadinessUnavailable>());
       // The native composition binds the heartbeat's re-verify entrypoint; a
       // retry then reopens the gate to Loading and asks for a fresh check.
       var calls = 0;
-      n.bindResolver(() => calls++);
+      final b = n.bindScope(scopeA)..bindResolver(() => calls++);
+      b.markUnavailable();
       n.requestResolution();
       expect(calls, 1);
-      expect(
-        c.read(posKitchenModeReadinessProvider),
-        isA<KitchenModeReadinessLoading>(),
-      );
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
       // Unbinding (scope change / dispose) restores the no-op behavior.
-      n.bindResolver(null);
-      n.markUnavailable();
+      b.unbind();
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
       n.requestResolution();
       expect(calls, 1);
-      expect(
-        c.read(posKitchenModeReadinessProvider),
-        isA<KitchenModeReadinessUnavailable>(),
-      );
+    });
+  });
+
+  // Finding 1: no delayed cache/fetch/heartbeat/retry result from an old
+  // restaurant/branch/device scope may publish into the current readiness.
+  group('scope-bound readiness (Finding 1)', () {
+    ProviderContainer real() => ProviderContainer(
+      overrides: [
+        runtimeConfigProvider.overrideWithValue(
+          RuntimeConfig.test(isDemoMode: false),
+        ),
+      ],
+    );
+    PosKitchenModeReadiness stateOf(ProviderContainer c) =>
+        c.read(posKitchenModeReadinessProvider);
+
+    test('delayed printer_only fetch for A completes after switching to B -> B '
+        'stays Loading; NO direct_print leak', () {
+      final c = real();
+      addTearDown(c.dispose);
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      final a = n.bindScope(scopeA); // heartbeat A
+      a.unbind(); // scope change: A's heartbeat disposed
+      n.bindScope(scopeB); // heartbeat B installs, fresh Loading for B
+      a.publish(printerOnly()); // A's delayed fetch lands LATE
+      final s = stateOf(c);
+      expect(s, isA<KitchenModeReadinessLoading>());
+      expect(s.scope, scopeB);
+    });
+
+    test('delayed KDS fetch for A completes after switching to printer_only '
+        'branch B -> no stale KDS leak', () {
+      final c = real();
+      addTearDown(c.dispose);
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      final a = n.bindScope(scopeA);
+      a.unbind();
+      final b = n.bindScope(scopeB);
+      a.publish(kds()); // A's delayed KDS result
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
+      // B then verifies printer_only for ITSELF -> direct_print, never the stale KDS.
+      b.publish(printerOnly());
+      final s = stateOf(c) as KitchenModeReadinessResolved;
+      expect(s.mode, isA<KitchenModePrinterOnlyWithRevision>());
+      expect(s.scope, scopeB);
+    });
+
+    test('a delayed cache seed after a scope change is ignored', () {
+      final c = real();
+      addTearDown(c.dispose);
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      final a = n.bindScope(scopeA);
+      final b = n.bindScope(
+        scopeB,
+      ); // same as a scope switch (no unbind needed)
+      a.publish(kds()); // stale cache seed for A
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
+      b.publish(kds());
+      expect((stateOf(c) as KitchenModeReadinessResolved).scope, scopeB);
+    });
+
+    test('a heartbeat result after disposal (unbind) is ignored', () {
+      final c = real();
+      addTearDown(c.dispose);
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      final a = n.bindScope(scopeA);
+      a.unbind(); // heartbeat A disposed, no new bind yet
+      expect(a.isCurrent, isFalse);
+      a.publish(printerOnly());
+      a.markUnavailable();
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
+    });
+
+    test('an OLD retry resolver cannot publish into a NEW scope', () {
+      final c = real();
+      addTearDown(c.dispose);
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      var aCalls = 0;
+      final a = n.bindScope(scopeA)..bindResolver(() => aCalls++);
+      final b = n.bindScope(scopeB); // scope switch drops A's resolver
+      n.requestResolution(); // B has no resolver yet -> no-op, A's is gone
+      expect(aCalls, 0);
+      // A's stale resolver, if somehow invoked, cannot resolve B either.
+      a.publish(printerOnly());
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
+      var bCalls = 0;
+      b.bindResolver(() => bCalls++);
+      n.requestResolution();
+      expect(bCalls, 1);
+    });
+
+    test(
+      'a device change inside the same restaurant invalidates readiness',
+      () {
+        final c = real();
+        addTearDown(c.dispose);
+        final n = c.read(posKitchenModeReadinessProvider.notifier);
+        n.bindScope(scopeA).publish(printerOnly());
+        expect(stateOf(c), isA<KitchenModeReadinessResolved>());
+        n.bindScope(scopeADeviceB); // same branch, different device
+        final s = stateOf(c);
+        expect(s, isA<KitchenModeReadinessLoading>());
+        expect(s.scope, scopeADeviceB);
+      },
+    );
+
+    test('a branch change invalidates readiness', () {
+      final c = real();
+      addTearDown(c.dispose);
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      n.bindScope(scopeA).publish(kds());
+      expect(stateOf(c), isA<KitchenModeReadinessResolved>());
+      n.bindScope(scopeB);
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
+    });
+
+    test('a valid cached mode works ONLY for its exact scope', () {
+      final c = real();
+      addTearDown(c.dispose);
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      final a = n.bindScope(scopeA);
+      // Rebinding to B before A's cache lands: A's cache is dropped.
+      final b = n.bindScope(scopeB);
+      a.publish(printerOnly());
+      expect(stateOf(c), isA<KitchenModeReadinessLoading>());
+      // The same cached mode, published for B's OWN binding, resolves B.
+      b.publish(printerOnly());
+      expect((stateOf(c) as KitchenModeReadinessResolved).scope, scopeB);
+    });
+
+    test(
+      'a transient failure preserves a verified mode ONLY for the same scope',
+      () {
+        final c = real();
+        addTearDown(c.dispose);
+        final n = c.read(posKitchenModeReadinessProvider.notifier);
+        final a = n.bindScope(scopeA)..publish(kds());
+        a.publish(const KitchenModeTransientFailure()); // same-scope blip
+        expect(stateOf(c), isA<KitchenModeReadinessResolved>());
+        // A scope change does NOT keep A's verified mode alive for B.
+        n.bindScope(scopeB);
+        expect(stateOf(c), isA<KitchenModeReadinessLoading>());
+      },
+    );
+
+    test('repeated bind/unbind never leaks a resolver across scopes', () {
+      final c = real();
+      addTearDown(c.dispose);
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      var latest = 0;
+      for (var i = 0; i < 5; i++) {
+        final b = n.bindScope(i.isEven ? scopeA : scopeB)
+          ..bindResolver(() => latest = i);
+        b.unbind();
+      }
+      // Every binding was unbound: no stale resolver survives.
+      n.requestResolution();
+      expect(latest, 0);
+      // Only the freshly-bound resolver fires.
+      final live = n.bindScope(scopeA)..bindResolver(() => latest = 99);
+      n.requestResolution();
+      expect(latest, 99);
+      live.unbind();
+    });
+
+    test('a disposed controller accepts no publish (binding not current)', () {
+      final c = real();
+      final n = c.read(posKitchenModeReadinessProvider.notifier);
+      final a = n.bindScope(scopeA);
+      c.dispose(); // whole controller torn down
+      expect(a.isCurrent, isFalse);
+      // No throw, no state mutation attempted on the disposed controller.
+      a.publish(printerOnly());
+      a.markUnavailable();
     });
   });
 
@@ -361,7 +542,10 @@ void main() {
         final l10n = await AppLocalizations.delegate.load(const Locale('en'));
         final repo = DemoOutboxStore(delay: (_) async {});
         final c = await pump(tester, repo);
-        c.read(posKitchenModeReadinessProvider.notifier).publish(printerOnly());
+        c
+            .read(posKitchenModeReadinessProvider.notifier)
+            .bindScope(null)
+            .publish(printerOnly());
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('send-kitchen-mode-hint')), findsNothing);
         await tester.tap(find.text(l10n.posSendOrder));
@@ -378,7 +562,10 @@ void main() {
         final l10n = await AppLocalizations.delegate.load(const Locale('en'));
         final repo = DemoOutboxStore(delay: (_) async {});
         final c = await pump(tester, repo);
-        c.read(posKitchenModeReadinessProvider.notifier).publish(kds());
+        c
+            .read(posKitchenModeReadinessProvider.notifier)
+            .bindScope(null)
+            .publish(kds());
         await tester.pumpAndSettle();
         await tester.tap(find.text(l10n.posSendOrder));
         await tester.pumpAndSettle();

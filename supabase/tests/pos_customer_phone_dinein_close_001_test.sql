@@ -27,7 +27,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(41);
+select plan(46);
 
 -- ===== fixture ==============================================================
 -- Org A: Rest A1 with Branch K (kds) + Branch P (printer_only, flipped below).
@@ -190,6 +190,29 @@ create temp table _cp_replay as select pg_temp.cp_submit(
   'cp-loc', '00000000-0000-0000-0000-00cf00000d01', 500, 'takeaway', null, 'kds', '999-999-9999') as res;
 select is((select customer_phone from orders where id = '00000000-0000-0000-0000-00cf00000d01'),
   '054-1234567', '27 a replay never overwrites the stored phone');
+
+-- POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 4): customer_phone is DATA ONLY —
+-- EXCLUDED from the order.submit idempotency fingerprint. Re-sending the SAME
+-- (device, local_operation_id) op with only a DIFFERENT phone is an idempotent
+-- REPLAY (returns the stored applied result), NEVER a conflict. Before the fix the
+-- differing phone changed the fingerprint and this same-op re-send conflicted.
+select is((select res #>> '{results,0,status}' from _cp_replay),
+  'applied', '27a a phone-only re-send REPLAYS applied (never conflict)');
+select is((select res #>> '{results,0,idempotency_replay}' from _cp_replay),
+  'true', '27b the phone-only re-send is flagged idempotency_replay');
+select is((select count(*)::int from orders where id = '00000000-0000-0000-0000-00cf00000d01'),
+  1, '27c a phone-only re-send creates NO second order');
+-- An identity-bearing change (different subtotal) on the SAME op id STILL conflicts.
+select is((select pg_temp.cp_submit(
+    '00000000-0000-0000-0000-00cf00c50a01', '00000000-0000-0000-0000-00cf00d0aa01',
+    'cp-loc', '00000000-0000-0000-0000-00cf00000d01', 600, 'takeaway', null, 'kds', '054-1234567')
+    #>> '{results,0,status}'), 'conflict', '27d a changed order field on the same op STILL conflicts');
+-- An OLD phone-less op replays cleanly too (backward compatible, unchanged shape).
+create temp table _cp_replay_old as select pg_temp.cp_submit(
+  '00000000-0000-0000-0000-00cf00c50a01', '00000000-0000-0000-0000-00cf00d0aa01',
+  'cp-omit', '00000000-0000-0000-0000-00cf00000d04', 500, 'takeaway', null, 'kds', null) as res;
+select is((select res #>> '{results,0,idempotency_replay}' from _cp_replay_old),
+  'true', '27e an old phone-less op replays idempotently (backward compatible)');
 
 -- ===== 4. authorized reads return customer_phone ============================
 select is((select app.pos_order_detail('00000000-0000-0000-0000-00cf00c50a01',

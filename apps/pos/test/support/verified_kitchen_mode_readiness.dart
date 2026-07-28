@@ -11,12 +11,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/data/kitchen_mode_readiness.dart';
+import 'package:restoflow_pos/src/state/pos_device_context.dart';
 
 final class _VerifiedKdsReadiness extends PosKitchenModeReadinessController {
   @override
-  PosKitchenModeReadiness build() => KitchenModeReadinessResolved(
-    KitchenModeVerifiedKds(verifiedAt: DateTime.utc(2026, 1, 1)),
-  );
+  PosKitchenModeReadiness build() {
+    // Finding 1: resolve to verified-KDS FOR THE ACTIVE DEVICE SCOPE so the
+    // submit-time scope check (Finding 1E) matches. When the flow test switches
+    // scope, this rebuilds and re-resolves for the new scope (these tests are not
+    // themselves exercising the cross-scope race — the real controller covers it).
+    final scope = PosKitchenModeScopeKey.fromContext(
+      ref.watch(posDeviceContextProvider),
+    );
+    return KitchenModeReadinessResolved(
+      KitchenModeVerifiedKds(verifiedAt: DateTime.utc(2026, 1, 1)),
+      scope,
+    );
+  }
 }
 
 /// A `ProviderScope` override that resolves the POS kitchen-mode readiness to

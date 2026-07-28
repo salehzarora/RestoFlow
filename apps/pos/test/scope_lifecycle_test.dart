@@ -10,6 +10,7 @@ import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
+import 'package:restoflow_pos/src/data/kitchen_mode_readiness.dart';
 import 'package:restoflow_pos/src/data/order_snapshot.dart';
 import 'package:restoflow_pos/src/data/order_snapshot_repository.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
@@ -78,6 +79,7 @@ void main() {
     OutboxRepository? outbox,
     PosRecentOrdersStore? store,
     VoidRepository? voids,
+    bool realReadiness = false,
   }) {
     final c = ProviderContainer(
       overrides: [
@@ -96,8 +98,10 @@ void main() {
         if (voids != null) voidRepositoryProvider.overrideWithValue(voids),
         // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): KDS-branch flow —
         // simulate the startup-verified mode so the readiness gate does not
-        // block the submits whose scope-mutation boundary is under test.
-        verifiedKdsReadinessOverride(),
+        // block the submits whose scope-mutation boundary is under test. The
+        // Finding-1E test drives the REAL readiness controller instead so it can
+        // bind one scope and then move the device scope out from under it.
+        if (!realReadiness) verifiedKdsReadinessOverride(),
       ],
     );
     addTearDown(c.dispose);
@@ -543,6 +547,240 @@ void main() {
   });
 
   // ===========================================================================
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 1E): the authoritative submit
+  // gate re-checks the verified-mode SCOPE against the LIVE device scope at the
+  // exact moment the payload is constructed — not just the Send button. A scope
+  // change between the tap and here must dispatch NOTHING with the old mode.
+  group('Finding 1E — submit-time kitchen-mode scope verification', () {
+    Future<(WidgetRef, BuildContext)> pumpBare(
+      WidgetTester tester,
+      ProviderContainer c,
+    ) async {
+      late WidgetRef ref;
+      late BuildContext context;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Consumer(
+              builder: (ctx, r, _) {
+                ref = r;
+                context = ctx;
+                return const Scaffold(body: SizedBox());
+              },
+            ),
+          ),
+        ),
+      );
+      return (ref, context);
+    }
+
+    void verifyScope(ProviderContainer c, DeviceContext ctx) => c
+        .read(posKitchenModeReadinessProvider.notifier)
+        .bindScope(PosKitchenModeScopeKey.fromContext(ctx))
+        .publish(KitchenModeVerifiedKds(verifiedAt: t0));
+
+    testWidgets(
+      'a scope switch between the Send tap and payload construction creates '
+      'ZERO outbox operations',
+      (tester) async {
+        final outbox = _GatedOutbox()..gate.complete();
+        final c = harness(
+          outbox: outbox,
+          store: InMemoryRecentOrdersStore(),
+          realReadiness: true,
+        );
+        c.read(posDeviceContextProvider.notifier).set(ctxA);
+        await settle();
+        await signIn(c, ctxA);
+        verifyScope(c, ctxA); // the heartbeat verified the mode for scope A
+
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+        final (ref, context) = await pumpBare(tester, c);
+        c
+            .read(cartControllerProvider.notifier)
+            .addItem(
+              const DemoMenuItem(
+                id: 'item-1',
+                name: 'Burger',
+                priceMinor: 4000,
+                categoryId: 'cat',
+                categoryName: 'Mains',
+              ),
+            );
+
+        // THE SWITCH: the device scope moves to branch B after the tap; the
+        // readiness still reads verified-for-A (no heartbeat rebinds it here).
+        c.read(posDeviceContextProvider.notifier).set(ctxB);
+        await settle();
+
+        await submitOrderFromCart(
+          ref: ref,
+          context: context,
+          cart: c.read(cartControllerProvider),
+          setup: c.read(orderSetupControllerProvider),
+          cartController: c.read(cartControllerProvider.notifier),
+          setupController: c.read(orderSetupControllerProvider.notifier),
+          l10n: l10n,
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          outbox.enqueued,
+          isEmpty,
+          reason: 'the stale A-scope mode is never dispatched under B',
+        );
+        expect(c.read(outboxControllerProvider), isEmpty);
+      },
+    );
+
+    testWidgets('a submit in the SAME verified scope enqueues exactly one op', (
+      tester,
+    ) async {
+      final outbox = _GatedOutbox()..gate.complete();
+      final c = harness(
+        outbox: outbox,
+        store: InMemoryRecentOrdersStore(),
+        realReadiness: true,
+      );
+      c.read(posDeviceContextProvider.notifier).set(ctxA);
+      await settle();
+      await signIn(c, ctxA);
+      verifyScope(c, ctxA);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final (ref, context) = await pumpBare(tester, c);
+      c
+          .read(cartControllerProvider.notifier)
+          .addItem(
+            const DemoMenuItem(
+              id: 'item-1',
+              name: 'Burger',
+              priceMinor: 4000,
+              categoryId: 'cat',
+              categoryName: 'Mains',
+            ),
+          );
+
+      // No scope switch: the verified scope still matches -> the order is sent.
+      await submitOrderFromCart(
+        ref: ref,
+        context: context,
+        cart: c.read(cartControllerProvider),
+        setup: c.read(orderSetupControllerProvider),
+        cartController: c.read(cartControllerProvider.notifier),
+        setupController: c.read(orderSetupControllerProvider.notifier),
+        l10n: l10n,
+      );
+      await tester.pumpAndSettle();
+
+      expect(outbox.enqueued, hasLength(1));
+    });
+  });
+
+  // ===========================================================================
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 3): the normal departed-session
+  // / PIN-handover path retained the phone in recovery but DROPPED it when
+  // building the retained recent-order row. It must carry through so a returning
+  // worker's recent-order detail + receipt/kitchen reprints keep the phone.
+  group('Finding 3 — PIN handover preserves the customer phone', () {
+    testWidgets(
+      'worker A submits name + phone; a PIN handover retains the recent order '
+      'WITH the phone (same scope) and A keeps its recovery',
+      (tester) async {
+        final outbox = _GatedOutbox();
+        final c = harness(outbox: outbox, store: InMemoryRecentOrdersStore());
+        c.read(posDeviceContextProvider.notifier).set(ctxA);
+        await settle();
+        await signIn(c, ctxA); // employee A
+        final bindingA = c.read(posRecoveryBindingProvider);
+
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+        late WidgetRef ref;
+        late BuildContext context;
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: c,
+            child: MaterialApp(
+              localizationsDelegates: restoflowLocalizationsDelegates,
+              supportedLocales: kSupportedLocales,
+              home: Consumer(
+                builder: (ctx, r, _) {
+                  ref = r;
+                  context = ctx;
+                  return const Scaffold(body: SizedBox());
+                },
+              ),
+            ),
+          ),
+        );
+
+        c
+            .read(cartControllerProvider.notifier)
+            .addItem(
+              const DemoMenuItem(
+                id: 'item-1',
+                name: 'Burger',
+                priceMinor: 4000,
+                categoryId: 'cat',
+                categoryName: 'Mains',
+              ),
+            );
+        c.read(orderSetupControllerProvider.notifier).setCustomerName('Layla');
+        c
+            .read(orderSetupControllerProvider.notifier)
+            .setCustomerPhone('050-7654321');
+        final phone = c.read(orderSetupControllerProvider).customerPhone;
+        expect(phone, isNotNull);
+
+        final pending = submitOrderFromCart(
+          ref: ref,
+          context: context,
+          cart: c.read(cartControllerProvider),
+          setup: c.read(orderSetupControllerProvider),
+          cartController: c.read(cartControllerProvider.notifier),
+          setupController: c.read(orderSetupControllerProvider.notifier),
+          l10n: l10n,
+        );
+        await tester.pump();
+
+        // THE HANDOVER: a DIFFERENT worker signs in on the SAME till while A's
+        // submit is still in flight (same scope, different binding).
+        c.read(posSessionControllerProvider.notifier).endSession();
+        await settle();
+        await signIn(c, ctxA, employeeProfileId: 'emp-2');
+        final bindingB = c.read(posRecoveryBindingProvider);
+        expect(bindingB == bindingA, isFalse);
+
+        outbox.gate.complete();
+        await pending;
+        await tester.pumpAndSettle();
+
+        // Finding 3: the retained recent-order row keeps BOTH name and phone —
+        // exactly one row, so reprints (which read this row) carry the phone.
+        final entryId = outbox.enqueued.single.id;
+        final rows = c
+            .read(posRecentOrdersControllerProvider)
+            .where((o) => o.order?.outboxEntryId == entryId)
+            .toList();
+        expect(rows, hasLength(1), reason: 'no duplicate recent-order row');
+        expect(rows.single.order?.customerName, 'Layla');
+        expect(rows.single.order?.customerPhone, phone);
+
+        // A's recovery is retained under A's UNCHANGED binding (also with the
+        // phone), and B cannot see it — recovery identity is not disturbed.
+        final recovery = c.read(posDraftRecoveryProvider.notifier);
+        expect(recovery.recoverable(entryId, bindingB), isNull);
+        final recA = recovery.recoverable(entryId, bindingA);
+        expect(recA, isNotNull);
+        expect(recA!.customerPhone, phone);
+      },
+    );
+  });
+
+  // ===========================================================================
   group('BLOCKER 4 — the owed durable write survives A -> B -> A', () {
     test(
       "A's failed write is preserved across the round trip and re-attempted — "
@@ -951,6 +1189,9 @@ class _GatedOutbox implements OutboxRepository {
   @override
   Future<OutboxEntry> retry(String entryId) async =>
       enqueued.firstWhere((e) => e.id == entryId);
+
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(String orderId) async => null;
 }
 
 /// A void repository gated on a Completer; optionally refusing with [error].
