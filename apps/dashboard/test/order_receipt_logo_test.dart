@@ -63,4 +63,98 @@ void main() {
         .toList();
     expect(strippedKinds, plain.lines.map((l) => l.kind).toList());
   });
+
+  group('§9/§10 browser failed-image fallback', () {
+    const url = 'https://example.test/org/rest/logo/abc.webp?token=x';
+
+    test('a valid logo emits EXACTLY one wrapper + one <img>', () {
+      final html = documentToHtml(
+        buildOrderReceiptPreview(l10n, _order(), logoUrl: url),
+      );
+      expect('class="logo"'.allMatches(html).length, 1);
+      expect('<img'.allMatches(html).length, 1);
+      expect(html, contains('src="https://example.test'));
+    });
+
+    test('the <img> carries a fixed onerror that removes the WHOLE .logo '
+        'wrapper (image + its reserved spacing), not just the image', () {
+      final html = documentToHtml(
+        buildOrderReceiptPreview(l10n, _order(), logoUrl: url),
+      );
+      // Removes this.parentNode (the .logo div that carries the margin), so no
+      // broken-image icon AND no blank gap survive.
+      expect(html, contains('onerror="'));
+      expect(html, contains('this.parentNode'));
+      expect(html, contains('removeChild'));
+    });
+
+    test(
+      'the print script sweeps a failed image (naturalWidth===0) and removes '
+      'its wrapper BEFORE window.print()',
+      () {
+        final html = documentToHtml(
+          buildOrderReceiptPreview(l10n, _order(), logoUrl: url),
+        );
+        final sweepAt = html.indexOf('naturalWidth===0');
+        final printAt = html.indexOf('window.print()');
+        expect(sweepAt, greaterThanOrEqualTo(0));
+        expect(
+          printAt,
+          greaterThan(sweepAt),
+          reason: 'sweep runs before print',
+        );
+        expect(html, contains('querySelectorAll(".logo")'));
+      },
+    );
+
+    test('the logo wrapper precedes the title, so removing it makes the title '
+        'the first visible header', () {
+      final doc = buildOrderReceiptPreview(l10n, _order(), logoUrl: url);
+      final html = documentToHtml(doc);
+      final logoAt = html.indexOf('class="logo"');
+      final titleAt = html.indexOf('class="t"');
+      expect(logoAt, greaterThanOrEqualTo(0));
+      expect(titleAt, greaterThan(logoAt));
+      // The title is present regardless of the logo.
+      expect(doc.lines.any((l) => l.kind == PrintLineKind.title), isTrue);
+    });
+
+    test(
+      'a disabled / unresolved logo (null url) emits NO wrapper, NO gap',
+      () {
+        final html = documentToHtml(buildOrderReceiptPreview(l10n, _order()));
+        expect(html.contains('class="logo"'), isFalse);
+        expect(html.contains('<img'), isFalse);
+      },
+    );
+
+    test('an empty url string is treated as no logo (text-only)', () {
+      final html = documentToHtml(
+        buildOrderReceiptPreview(l10n, _order(), logoUrl: ''),
+      );
+      expect(html.contains('<img'), isFalse);
+    });
+
+    test('a hostile url is HTML-escaped in the src (no injection)', () {
+      const hostile = 'https://x.test/a"><script>alert(1)</script>?t=1';
+      final html = documentToHtml(
+        buildOrderReceiptPreview(l10n, _order(), logoUrl: hostile),
+      );
+      expect(html.contains('<script>alert(1)</script>'), isFalse);
+      expect(html, contains('&quot;'));
+      expect(html, contains('&lt;script&gt;'));
+    });
+
+    test(
+      'the kitchen ticket preview NEVER emits a logo (money-free, brand-free)',
+      () {
+        final doc = buildOrderKitchenTicketPreview(l10n, _order());
+        expect(
+          doc.lines.any((l) => l.kind == PrintLineKind.headerImage),
+          isFalse,
+        );
+        expect(documentToHtml(doc).contains('<img'), isFalse);
+      },
+    );
+  });
 }

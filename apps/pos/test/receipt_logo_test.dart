@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
@@ -160,6 +162,90 @@ void main() {
       );
       expect(html.contains('<img'), isFalse);
     });
+
+    // §9/§10 — browser failed-image fallback on the POS web data-URI path.
+    test('the data-URI <img> carries a fixed onerror removing the WHOLE .logo '
+        'wrapper (image + spacing), and the print script sweeps a failed image '
+        'before window.print()', () {
+      final html = app.documentToHtml(
+        buildReceiptDocument(
+          l10n,
+          _order(),
+          _payment(),
+          branding: _asset(pp.MediaProfile.continuous80),
+        ),
+      );
+      expect('class="logo"'.allMatches(html).length, 1);
+      expect('<img'.allMatches(html).length, 1);
+      expect(html, contains('onerror="'));
+      expect(html, contains('this.parentNode'));
+      expect(html, contains('removeChild'));
+      final sweepAt = html.indexOf('naturalWidth===0');
+      final printAt = html.indexOf('window.print()');
+      expect(sweepAt, greaterThanOrEqualTo(0));
+      expect(printAt, greaterThan(sweepAt));
+      // Logo precedes the title, so removing it makes the title the first header.
+      expect(html.indexOf('class="logo"'), lessThan(html.indexOf('class="t"')));
+    });
+  });
+
+  // §11 — WebP web-render proof on the POS data-URI path, using the REAL
+  // deterministic WebP fixture (not a magic-byte-only fake).
+  group('§11 WebP web receipt (POS data URI)', () {
+    File webpFixture() {
+      for (final base in [
+        'packages/l10n/test/fixtures',
+        '../../packages/l10n/test/fixtures',
+      ]) {
+        final f = File('$base/logo.webp');
+        if (f.existsSync()) return f;
+      }
+      return File('packages/l10n/test/fixtures/logo.webp');
+    }
+
+    test('a real WebP decodes, sniffs image/webp, and renders as ONE '
+        'data:image/webp <img>', () async {
+      final bytes = await webpFixture().readAsBytes();
+      // Real decode (dart:ui) — proves it is a genuine WebP, not just magic bytes.
+      expect(pp.LogoImageValidator().sniffMime(bytes), 'image/webp');
+      final decoded = await const FlutterLogoDecoder().decode(bytes);
+      expect(decoded.width, greaterThan(0));
+      expect(decoded.height, greaterThan(0));
+
+      final asset = ReceiptLogoAsset(
+        sourceBytes: bytes,
+        sourceMime: 'image/webp',
+      );
+      final html = app.documentToHtml(
+        buildReceiptDocument(l10n, _order(), _payment(), branding: asset),
+      );
+      expect('<img'.allMatches(html).length, 1);
+      expect(
+        html,
+        contains('src="data:image/webp;base64,${base64Encode(bytes)}"'),
+      );
+    });
+
+    test('a corrupt WebP fails to decode -> the controller yields no asset -> '
+        'no image and no gap', () async {
+      final corrupt = Uint8List.fromList([
+        0x52, 0x49, 0x46, 0x46, // RIFF
+        0x10, 0, 0, 0,
+        0x57, 0x45, 0x42, 0x50, // WEBP
+        ...List.filled(32, 0x01), // garbage body
+      ]);
+      // The shared decoder rejects it (so the POS controller publishes no asset).
+      await expectLater(
+        const FlutterLogoDecoder().decode(corrupt),
+        throwsA(isA<LogoDecodeException>()),
+      );
+      // A receipt with no branding asset renders text-only: no wrapper, no gap.
+      final html = app.documentToHtml(
+        buildReceiptDocument(l10n, _order(), _payment()),
+      );
+      expect(html.contains('class="logo"'), isFalse);
+      expect(html.contains('<img'), isFalse);
+    });
   });
 
   group('receiptToEscPosDocument', () {
@@ -284,6 +370,93 @@ void main() {
             );
         expect(t.sent.length, 1, reason: 'text-only fallback is pre-transport');
         expect(result.ok, isTrue);
+      },
+    );
+  });
+
+  group('§7 BridgeSubmitResult preserves the transport dispatch stage', () {
+    NativeTransportPrintBridge bridge(_FakeTransport t) =>
+        NativeTransportPrintBridge(
+          transportFactory: () => t,
+          mediaProfile: pp.MediaProfile.continuous80,
+        );
+
+    Future<pp.BridgeSubmitResult> submit(pp.PrintResult r) => bridge(
+      _FakeTransport([r]),
+    ).submit(buildReceiptDocument(l10n, _order(), _payment()));
+
+    test('success => sentToPrinter, completed', () async {
+      final res = await submit(const pp.PrintResult.success());
+      expect(res.ok, isTrue);
+      expect(res.physicalOutcome, pp.PrintPhysicalOutcome.completed);
+    });
+
+    test(
+      'pre-dispatch failure => failedBeforeDispatch, bytesSent null',
+      () async {
+        final res = await submit(
+          const pp.PrintResult.failure(
+            pp.PrinterErrorCategory.unreachable,
+            'x',
+          ),
+        );
+        expect(res.ok, isFalse);
+        expect(
+          res.physicalOutcome,
+          pp.PrintPhysicalOutcome.failedBeforeDispatch,
+        );
+        expect(res.isPartialOrUnknownAfterDispatch, isFalse);
+        expect(res.bytesSent, isNull);
+      },
+    );
+
+    test('TCP unknown after send => partial/unknown, bytesSent null', () async {
+      // The TCP sender cannot count bytes, so a post-add failure carries no count.
+      final res = await submit(
+        const pp.PrintResult.failureAfterSend(
+          pp.PrinterErrorCategory.unreachable,
+          message: 'flush failed',
+        ),
+      );
+      expect(
+        res.physicalOutcome,
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+      );
+      expect(res.isPartialOrUnknownAfterDispatch, isTrue);
+      expect(res.bytesSent, isNull, reason: 'unknown count stays null, not 0');
+    });
+
+    test(
+      'Bluetooth partial bytes => partial/unknown, bytesSent preserved',
+      () async {
+        final res = await submit(
+          const pp.PrintResult.failureAfterSend(
+            pp.PrinterErrorCategory.writeFailed,
+            bytesSent: 320,
+          ),
+        );
+        expect(
+          res.physicalOutcome,
+          pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+        );
+        expect(res.bytesSent, 320);
+      },
+    );
+
+    test(
+      'Bluetooth timeout after dispatch => partial/unknown, bytesSent null',
+      () async {
+        final res = await submit(
+          const pp.PrintResult.failureAfterSend(
+            pp.PrinterErrorCategory.unreachable,
+            message: 'no response (dispatched; outcome unknown)',
+          ),
+        );
+        expect(
+          res.physicalOutcome,
+          pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+        );
+        expect(res.bytesSent, isNull);
       },
     );
   });

@@ -373,4 +373,159 @@ void main() {
       },
     );
   });
+
+  // ---- §12: exhaustive fixed-media SHARING-THRESHOLD boundaries -------------
+  // The share/omit boundary is derived at RUNTIME from the profile geometry +
+  // the fake line height, so these stay correct if typography changes. For a
+  // multi-page ticket the planner packs page one against `pageBudget - 2*rowH`
+  // (it reserves two rows for the page-number/continuation line), so the logo +
+  // title share page one iff `logoHeight + gap + rowH <= pageBudget - 2*rowH`.
+  group('§12 sharing-threshold boundaries (en/ar/he)', () {
+    int gapFor(MediaProfile p) => math.max(6, bottomSafeTailRows(p) ~/ 2);
+    int budgetFor(MediaProfile p) =>
+        p.printableHeightDots - bottomSafeTailRows(p);
+    // The tallest logo that still SHARES page one with the title, given row [d].
+    int thresholdHeight(MediaProfile p, int d) =>
+        budgetFor(p) - 3 * d - gapFor(p);
+
+    PrintRasterImageLine logo(MediaProfile p, int h) => PrintRasterImageLine(
+      data: Uint8List(p.widthBytes * h)
+        ..fillRange(0, p.widthBytes * h, _logoFill),
+      widthBytes: p.widthBytes,
+      heightDots: h,
+    );
+
+    PrintDocument tallDoc(
+      MediaProfile p,
+      String loc,
+      String title,
+      int logoH,
+      int lines,
+    ) => PrintDocument(<PrintLine>[
+      logo(p, logoH),
+      PrintTextLine(title, style: PrintLineStyle.headingLarge),
+      for (var i = 1; i < lines; i++)
+        PrintTextLine('$loc row $i', style: PrintLineStyle.item),
+      const PrintFeedLine(2),
+      const PrintCutLine(),
+    ], localeTag: loc);
+
+    Future<PrintDocument> layoutD(MediaProfile p, int d, PrintDocument doc) =>
+        rasterizeForMediaProfile(
+          doc,
+          rasterizer: FakeReceiptRasterizer(dotsPerLine: d),
+          profile: p,
+          pageLabel: (a, b) => 'P$a/$b',
+          continuationHeader: (a, b) => 'C$a',
+        );
+
+    bool logoOnPageOne(PrintDocument out) {
+      final im = _images(out);
+      return im.isNotEmpty && _rowAll(im.first, 0, _logoFill);
+    }
+
+    bool anyLogoBand(PrintDocument out) =>
+        _images(out).any((i) => _rowAll(i, 0, _logoFill));
+
+    void assertShared(PrintDocument out, MediaProfile p, int logoH) {
+      final images = _images(out);
+      final pages = _count<PrintCutLine>(out);
+      expect(logoOnPageOne(out), isTrue, reason: 'logo shares page one');
+      expect(images.length, pages, reason: 'one image/feed/cut per page');
+      expect(_count<PrintFeedLine>(out), pages);
+      // Uncropped: the whole logo is intact, and the row after it is not logo ink.
+      for (var r = 0; r < logoH; r++) {
+        expect(_rowAll(images.first, r, _logoFill), isTrue);
+      }
+      expect(_rowAll(images.first, logoH, _logoFill), isFalse);
+      // The title shares page one below the logo (never a logo-only page).
+      expect(images.first.heightDots, greaterThan(logoH + gapFor(p)));
+      // The logo appears ONLY on page one.
+      for (var i = 1; i < images.length; i++) {
+        expect(_rowAll(images[i], 0, _logoFill), isFalse);
+      }
+    }
+
+    void assertOmitted(PrintDocument out) {
+      final pages = _count<PrintCutLine>(out);
+      expect(anyLogoBand(out), isFalse, reason: 'logo omitted, never alone');
+      expect(_images(out).length, pages, reason: 'one image/feed/cut per page');
+      expect(_count<PrintFeedLine>(out), pages);
+    }
+
+    final configs = [
+      (profile: MediaProfile.label50x50, thD: 80, thN: 6, maxD: 40, maxN: 10),
+      (profile: MediaProfile.label80x80, thD: 120, thN: 6, maxD: 60, maxN: 10),
+    ];
+    const titles = {
+      'en': 'CORNER BISTRO',
+      'ar': 'مطعم الزاوية',
+      'he': 'מסעדת הפינה',
+    };
+
+    for (final cfg in configs) {
+      final p = cfg.profile;
+      final name = p.id.name;
+      final threshold = thresholdHeight(p, cfg.thD);
+      final maxH = ReceiptLogoBounds.forProfile(p).maxHeightDots;
+
+      test(
+        '$name: the boundary fixture is valid (in §14 bounds, multi-page)',
+        () {
+          expect(threshold, greaterThan(32));
+          expect(
+            threshold + 1,
+            lessThanOrEqualTo(maxH),
+            reason: 'the above-threshold logo stays within the §14 max height',
+          );
+          expect(
+            cfg.thN * cfg.thD,
+            greaterThan(budgetFor(p)),
+            reason: 'multipage',
+          );
+        },
+      );
+
+      for (final loc in titles.entries) {
+        test('$name/${loc.key}: one row BELOW threshold shares', () async {
+          final out = await layoutD(
+            p,
+            cfg.thD,
+            tallDoc(p, loc.key, loc.value, threshold - 1, cfg.thN),
+          );
+          assertShared(out, p, threshold - 1);
+        });
+
+        test('$name/${loc.key}: EXACTLY at threshold shares', () async {
+          final out = await layoutD(
+            p,
+            cfg.thD,
+            tallDoc(p, loc.key, loc.value, threshold, cfg.thN),
+          );
+          assertShared(out, p, threshold);
+        });
+
+        test('$name/${loc.key}: one row ABOVE threshold is OMITTED', () async {
+          final out = await layoutD(
+            p,
+            cfg.thD,
+            tallDoc(p, loc.key, loc.value, threshold + 1, cfg.thN),
+          );
+          assertOmitted(out);
+        });
+
+        test(
+          '$name/${loc.key}: the MAXIMUM §14 logo ($maxH) shares, uncropped',
+          () async {
+            final out = await layoutD(
+              p,
+              cfg.maxD,
+              tallDoc(p, loc.key, loc.value, maxH, cfg.maxN),
+            );
+            assertShared(out, p, maxH);
+          },
+        );
+      }
+    }
+  });
 }
