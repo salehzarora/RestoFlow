@@ -37,8 +37,8 @@ class _GatedEnqueueStore implements OutboxRepository {
   Future<OutboxEntry> retry(String entryId) => _inner.retry(entryId);
 
   @override
-  Future<String?> findOrderSubmitCustomerPhone(String orderId) =>
-      _inner.findOrderSubmitCustomerPhone(orderId);
+  Future<String?> findOrderSubmitCustomerPhone(OrderSubmitPhoneLookupKey key) =>
+      _inner.findOrderSubmitCustomerPhone(key);
 }
 
 CartLineView _line(String id, String name, int qty, int unit) => CartLineView(

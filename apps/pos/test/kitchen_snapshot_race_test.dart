@@ -113,7 +113,9 @@ class _GatedOutbox implements OutboxRepository {
       enqueued.firstWhere((e) => e.id == entryId);
 
   @override
-  Future<String?> findOrderSubmitCustomerPhone(String orderId) async => null;
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async => null;
 }
 
 class _FakeAuthTransport implements SyncRpcTransport {

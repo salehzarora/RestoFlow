@@ -69,8 +69,8 @@ class _BusinessRejectStore implements OutboxRepository {
   Future<OutboxEntry> retry(String entryId) => inner.retry(entryId);
 
   @override
-  Future<String?> findOrderSubmitCustomerPhone(String orderId) =>
-      inner.findOrderSubmitCustomerPhone(orderId);
+  Future<String?> findOrderSubmitCustomerPhone(OrderSubmitPhoneLookupKey key) =>
+      inner.findOrderSubmitCustomerPhone(key);
 }
 
 /// A REAL paired-device + staff-PIN session for the real-mode surface.

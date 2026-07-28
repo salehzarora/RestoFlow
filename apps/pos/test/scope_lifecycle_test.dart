@@ -1191,7 +1191,9 @@ class _GatedOutbox implements OutboxRepository {
       enqueued.firstWhere((e) => e.id == entryId);
 
   @override
-  Future<String?> findOrderSubmitCustomerPhone(String orderId) async => null;
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async => null;
 }
 
 /// A void repository gated on a Completer; optionally refusing with [error].

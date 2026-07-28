@@ -11,13 +11,20 @@ import 'package:restoflow_pos/src/data/outbox_repository.dart';
 
 OutboxEntry _entry({
   required String orderId,
+  String org = 'org-A',
+  String rest = 'rest-A',
+  String branch = 'branch-A',
+  String device = 'dev-X',
   String operationType = 'order.submit',
+  String localOp = 'op-1',
+  String? targetId, // defaults to orderId
+  String? payloadOrderId, // defaults to orderId
   String? phone,
   Object? phoneRaw = _unset,
   bool malformed = false,
 }) {
   final body = <String, Object?>{
-    'order_id': orderId,
+    'order_id': payloadOrderId ?? orderId,
     'order_items': <Object?>[],
     if (!identical(phoneRaw, _unset))
       'customer_phone': phoneRaw
@@ -25,12 +32,12 @@ OutboxEntry _entry({
       'customer_phone': phone,
   };
   return OutboxEntry(
-    id: 'outbox-$orderId-$operationType',
-    deviceId: 'dev-1',
-    localOperationId: 'op-$orderId',
+    id: 'outbox-$orderId-$operationType-$localOp',
+    deviceId: device,
+    localOperationId: localOp,
     operationType: operationType,
     targetEntity: 'order',
-    targetId: orderId,
+    targetId: targetId ?? orderId,
     payloadJson: malformed ? '{not json' : jsonEncode(body),
     summary: const OrderSummary(
       orderNumber: 'DEMO-1',
@@ -42,100 +49,232 @@ OutboxEntry _entry({
     ),
     syncState: OutboxSyncState.pending,
     clientCreatedAt: DateTime.utc(2026, 7, 28),
+    organizationId: org,
+    restaurantId: rest,
+    branchId: branch,
   );
 }
+
+OrderSubmitPhoneLookupKey _key({
+  required String orderId,
+  String org = 'org-A',
+  String rest = 'rest-A',
+  String branch = 'branch-A',
+  String device = 'dev-X',
+  String? localOp,
+}) => OrderSubmitPhoneLookupKey(
+  organizationId: org,
+  restaurantId: rest,
+  branchId: branch,
+  deviceId: device,
+  orderId: orderId,
+  localOperationId: localOp,
+);
 
 const _unset = Object();
 
 void main() {
-  group('customerPhoneFromOrderSubmitEntries', () {
-    test('an order.submit op carrying the phone returns it', () {
+  // Codex HIGH: the durable lookup must be FULLY SCOPED (org/restaurant/branch/
+  // device + order identity) AND validate the recovered phone through the shared
+  // normalizer, so a cross-scope or malformed durable value can never seed the
+  // encrypted spool / printed ticket.
+  group('customerPhoneFromOrderSubmitEntries — scope', () {
+    test('an exact-scope order.submit op returns the NORMALIZED phone', () {
       expect(
         customerPhoneFromOrderSubmitEntries([
-          _entry(orderId: 'order-1', phone: '050-7654321'),
-        ], 'order-1'),
-        '050-7654321',
+          _entry(orderId: 'O', phone: '  054-1234567  '),
+        ], _key(orderId: 'O')),
+        '054-1234567',
       );
     });
 
-    test('a NON-order.submit op for the same order id is ignored', () {
+    test('a DIFFERENT organization (same device+order) is ignored', () {
+      expect(
+        customerPhoneFromOrderSubmitEntries([
+          _entry(orderId: 'O', org: 'org-B', phone: '050-2222222'),
+        ], _key(orderId: 'O', org: 'org-A')),
+        isNull,
+      );
+    });
+
+    test('a DIFFERENT restaurant is ignored', () {
+      expect(
+        customerPhoneFromOrderSubmitEntries([
+          _entry(orderId: 'O', rest: 'rest-B', phone: '050-2222222'),
+        ], _key(orderId: 'O', rest: 'rest-A')),
+        isNull,
+      );
+    });
+
+    test('a DIFFERENT branch is ignored', () {
+      expect(
+        customerPhoneFromOrderSubmitEntries([
+          _entry(orderId: 'O', branch: 'branch-B', phone: '050-2222222'),
+        ], _key(orderId: 'O', branch: 'branch-A')),
+        isNull,
+      );
+    });
+
+    test('a DIFFERENT device is ignored', () {
+      expect(
+        customerPhoneFromOrderSubmitEntries([
+          _entry(orderId: 'O', device: 'dev-Y', phone: '050-2222222'),
+        ], _key(orderId: 'O', device: 'dev-X')),
+        isNull,
+      );
+    });
+
+    test('CONFLICTING scopes: same device + order id, different org — each '
+        'scope reads ONLY its own phone (never the other)', () {
+      final entries = [
+        _entry(
+          orderId: 'O',
+          org: 'org-A',
+          device: 'dev-X',
+          phone: '054-1111111',
+        ),
+        _entry(
+          orderId: 'O',
+          org: 'org-B',
+          device: 'dev-X',
+          phone: '050-2222222',
+        ),
+      ];
+      expect(
+        customerPhoneFromOrderSubmitEntries(
+          entries,
+          _key(orderId: 'O', org: 'org-A'),
+        ),
+        '054-1111111',
+      );
+      expect(
+        customerPhoneFromOrderSubmitEntries(
+          entries,
+          _key(orderId: 'O', org: 'org-B'),
+        ),
+        '050-2222222',
+      );
+    });
+
+    test('a wrong operation type is ignored', () {
       expect(
         customerPhoneFromOrderSubmitEntries([
           _entry(
-            orderId: 'order-1',
+            orderId: 'O',
             operationType: 'order.status',
-            phone: '050-7654321',
+            phone: '050-2222222',
           ),
-        ], 'order-1'),
+        ], _key(orderId: 'O')),
         isNull,
       );
     });
 
-    test('a DIFFERENT order id is ignored (never a cross-order match)', () {
+    test('a targetId mismatch is ignored', () {
       expect(
         customerPhoneFromOrderSubmitEntries([
-          _entry(orderId: 'order-2', phone: '050-7654321'),
-        ], 'order-1'),
+          _entry(orderId: 'O', targetId: 'OTHER', phone: '050-2222222'),
+        ], _key(orderId: 'O')),
         isNull,
       );
     });
 
-    test('a malformed payload body is skipped safely (no throw)', () {
+    test('a payload order_id mismatch is ignored', () {
       expect(
         customerPhoneFromOrderSubmitEntries([
-          _entry(orderId: 'order-1', malformed: true),
-          _entry(orderId: 'order-1', phone: '050-7654321'),
-        ], 'order-1'),
-        '050-7654321',
-      );
-    });
-
-    test('a blank / non-string phone on the matched op yields null', () {
-      expect(
-        customerPhoneFromOrderSubmitEntries([
-          _entry(orderId: 'order-1', phoneRaw: '   '),
-        ], 'order-1'),
-        isNull,
-      );
-      expect(
-        customerPhoneFromOrderSubmitEntries([
-          _entry(orderId: 'order-1', phoneRaw: 12345),
-        ], 'order-1'),
+          _entry(orderId: 'O', payloadOrderId: 'OTHER', phone: '050-2222222'),
+        ], _key(orderId: 'O')),
         isNull,
       );
     });
 
-    test('an op with no phone key yields null', () {
+    test('AMBIGUITY (two exact matches for the same key) resolves to null', () {
+      final entries = [
+        _entry(orderId: 'O', localOp: 'op-1', phone: '054-1111111'),
+        _entry(orderId: 'O', localOp: 'op-2', phone: '050-2222222'),
+      ];
       expect(
-        customerPhoneFromOrderSubmitEntries([
-          _entry(orderId: 'order-1'),
-        ], 'order-1'),
+        customerPhoneFromOrderSubmitEntries(entries, _key(orderId: 'O')),
         isNull,
       );
     });
 
-    test('the matching order.submit op is chosen among many', () {
+    test('a local_operation_id on the key narrows to the exact op', () {
+      final entries = [
+        _entry(orderId: 'O', localOp: 'op-1', phone: '054-1111111'),
+        _entry(orderId: 'O', localOp: 'op-2', phone: '050-2222222'),
+      ];
+      expect(
+        customerPhoneFromOrderSubmitEntries(
+          entries,
+          _key(orderId: 'O', localOp: 'op-2'),
+        ),
+        '050-2222222',
+      );
+    });
+
+    test('a malformed body is skipped safely (no throw)', () {
       expect(
         customerPhoneFromOrderSubmitEntries([
-          _entry(orderId: 'order-0', phone: '050-0000000'),
-          _entry(orderId: 'order-1', phone: '054-1234567'),
-          _entry(orderId: 'order-2', phone: '050-2222222'),
-        ], 'order-1'),
+          _entry(orderId: 'O', localOp: 'op-1', malformed: true),
+          _entry(orderId: 'O', localOp: 'op-2', phone: '054-1234567'),
+        ], _key(orderId: 'O')),
         '054-1234567',
       );
     });
   });
 
-  group('DemoOutboxStore.findOrderSubmitCustomerPhone', () {
-    test('reads the phone from the enqueued durable order.submit op', () async {
-      final store = DemoOutboxStore(delay: (_) async {});
-      await store.enqueue(_entry(orderId: 'order-1', phone: '050-7654321'));
-      expect(
-        await store.findOrderSubmitCustomerPhone('order-1'),
-        '050-7654321',
-      );
-      expect(await store.findOrderSubmitCustomerPhone('order-9'), isNull);
+  // Codex HIGH: every recovered phone flows through the ONE shared validator, so a
+  // malformed durable value NEVER enters the encrypted spool / printed ticket.
+  group('customerPhoneFromOrderSubmitEntries — validation', () {
+    String? lookup(Object? phoneRaw) => customerPhoneFromOrderSubmitEntries([
+      _entry(orderId: 'O', phoneRaw: phoneRaw),
+    ], _key(orderId: 'O'));
+
+    test('letters (050-ABC-1234) -> null', () {
+      expect(lookup('050-ABC-1234'), isNull);
     });
+    test('a newline -> null', () {
+      expect(lookup('054\n12345'), isNull);
+    });
+    test('fewer than 5 digits -> null', () {
+      expect(lookup('12 34'), isNull);
+    });
+    test('over 32 chars -> null', () {
+      expect(lookup('+${'9' * 40}'), isNull);
+    });
+    test('blank / whitespace -> null', () => expect(lookup('   '), isNull));
+    test('a non-string phone -> null', () => expect(lookup(12345), isNull));
+    test('no phone key -> null', () {
+      expect(
+        customerPhoneFromOrderSubmitEntries([
+          _entry(orderId: 'O'),
+        ], _key(orderId: 'O')),
+        isNull,
+      );
+    });
+    test('a valid international phone is preserved (trimmed)', () {
+      expect(lookup('  +972 54 987 6543  '), '+972 54 987 6543');
+    });
+  });
+
+  group('DemoOutboxStore.findOrderSubmitCustomerPhone', () {
+    test(
+      'reads the phone for the EXACT scope; a wrong-branch key -> null',
+      () async {
+        final store = DemoOutboxStore(delay: (_) async {});
+        await store.enqueue(_entry(orderId: 'O', phone: '054-1234567'));
+        expect(
+          await store.findOrderSubmitCustomerPhone(_key(orderId: 'O')),
+          '054-1234567',
+        );
+        expect(
+          await store.findOrderSubmitCustomerPhone(
+            _key(orderId: 'O', branch: 'branch-B'),
+          ),
+          isNull,
+        );
+      },
+    );
   });
 
   // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 4): customer_phone is DATA ONLY —

@@ -88,7 +88,9 @@ class _RecordingOutbox implements OutboxRepository {
       enqueued.firstWhere((e) => e.id == id);
 
   @override
-  Future<String?> findOrderSubmitCustomerPhone(String orderId) async => null;
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async => null;
 }
 
 class _FakeAuthTransport implements SyncRpcTransport {

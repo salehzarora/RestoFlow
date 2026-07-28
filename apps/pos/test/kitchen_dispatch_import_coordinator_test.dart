@@ -13,6 +13,11 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_destination_resolver.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+import 'package:restoflow_pos/src/data/order_submission.dart'
+    show OrderSummary, OutboxEntry, OutboxSyncState;
+import 'package:restoflow_pos/src/data/outbox_repository.dart'
+    show OrderSubmitPhoneLookupKey, customerPhoneFromOrderSubmitEntries;
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_import_coordinator.dart';
 import 'package:restoflow_pos/src/spool/kitchen_ticket_renderer.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
@@ -189,7 +194,7 @@ void main() {
 
   KitchenDispatchImportCoordinator coordinator({
     KitchenDestinationResolution destination = _resolved,
-    Future<String?> Function(String orderId)? resolvePhone,
+    Future<String?> Function(OrderSubmitPhoneLookupKey key)? resolvePhone,
   }) => KitchenDispatchImportCoordinator(
     store: store,
     cipher: cipher,
@@ -538,8 +543,8 @@ void main() {
     test('the FIRST import stores a phone resolved by orderId', () async {
       transport.enqueue({'ok': true});
       final summary = await coordinator(
-        resolvePhone: (orderId) async =>
-            orderId == 'order-1' ? '050-7654321' : null,
+        resolvePhone: (key) async =>
+            key.orderId == 'order-1' ? '050-7654321' : null,
       ).importDispatches([_dispatch(dispatchId: 'd-1')]);
       expect(summary.imported, 1);
       expect(await storedPhone('d-1'), '050-7654321');
@@ -623,8 +628,8 @@ void main() {
         transport.enqueue({'ok': true});
         // recent-orders is empty at import time; the durable source supplies it.
         await coordinator(
-          resolvePhone: (orderId) async =>
-              orderId == 'order-1' ? '050-7654321' : null,
+          resolvePhone: (key) async =>
+              key.orderId == 'order-1' ? '050-7654321' : null,
         ).importDispatches([_dispatch(dispatchId: 'd-1')]);
         expect(await storedPhone('d-1'), '050-7654321');
 
@@ -646,6 +651,83 @@ void main() {
             .where((l) => l.text.contains('050-7654321'))
             .length;
         expect(phoneLines, 1);
+      },
+    );
+
+    OutboxEntry outboxEntry({
+      required String phone,
+      String branch = 'branch-1',
+    }) => OutboxEntry(
+      id: 'ob-1',
+      deviceId: 'dev-1',
+      localOperationId: 'op-1',
+      operationType: 'order.submit',
+      targetEntity: 'order',
+      targetId: 'order-1',
+      payloadJson: json.encode(<String, Object?>{
+        'order_id': 'order-1',
+        'customer_phone': phone,
+      }),
+      summary: const OrderSummary(
+        orderNumber: 'X',
+        orderType: OrderType.dineIn,
+        tableLabel: null,
+        itemCount: 1,
+        subtotalMinor: 0,
+        currencyCode: 'ILS',
+      ),
+      syncState: OutboxSyncState.pending,
+      clientCreatedAt: DateTime.utc(2026, 7, 20),
+      organizationId: 'org-1',
+      restaurantId: 'rest-1',
+      branchId: branch,
+    );
+
+    test(
+      'an INVALID durable phone (letters) never enters the encrypted spool or '
+      'the replay ticket (Codex HIGH)',
+      () async {
+        transport.enqueue({'ok': true});
+        final entries = [outboxEntry(phone: '050-ABC-1234')];
+        await coordinator(
+          resolvePhone: (key) async =>
+              customerPhoneFromOrderSubmitEntries(entries, key),
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(await storedPhone('d-1'), isNull);
+        final row = (await store.findByDispatchId('d-1'))!;
+        final payload = KitchenSpoolLocalPayload.fromBytes(
+          await cipher.decrypt(
+            envelope: row.encryptedPayloadBlob,
+            aad: aad('d-1'),
+            key: key,
+          ),
+        );
+        final texts = const KitchenTicketRenderer()
+            .buildDocument(
+              payload.dispatch,
+              customerPhoneOverride: payload.customerPhone,
+            )
+            .lines
+            .whereType<pp.PrintTextLine>()
+            .map((l) => l.text)
+            .join('\n');
+        expect(texts.contains('ABC'), isFalse);
+      },
+    );
+
+    test(
+      'a CROSS-SCOPE durable entry (different branch) never supplies the phone '
+      '(Codex HIGH)',
+      () async {
+        transport.enqueue({'ok': true});
+        final entries = [
+          outboxEntry(phone: '054-1234567', branch: 'branch-OTHER'),
+        ];
+        await coordinator(
+          resolvePhone: (key) async =>
+              customerPhoneFromOrderSubmitEntries(entries, key),
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(await storedPhone('d-1'), isNull);
       },
     );
   });
