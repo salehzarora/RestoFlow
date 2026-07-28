@@ -82,6 +82,7 @@ final class KitchenDispatchImportCoordinator {
     required SupabaseKitchenDispatchAckRepository ackRepository,
     required String Function() localJobIdGenerator,
     DateTime Function()? now,
+    Future<String?> Function(String orderId)? resolveCustomerPhone,
   }) : _store = store,
        _cipher = cipher,
        _key = key,
@@ -89,7 +90,8 @@ final class KitchenDispatchImportCoordinator {
        _destination = destination,
        _ackRepository = ackRepository,
        _newLocalJobId = localJobIdGenerator,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _resolveCustomerPhone = resolveCustomerPhone;
 
   static const Duration _ackBackoffBase = Duration(seconds: 2);
   static const Duration _ackBackoffCap = Duration(minutes: 5);
@@ -102,6 +104,12 @@ final class KitchenDispatchImportCoordinator {
   final SupabaseKitchenDispatchAckRepository _ackRepository;
   final String Function() _newLocalJobId;
   final DateTime Function() _now;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): resolves the ORDER's phone
+  /// LOCALLY (never from the redacted server payload) so it can be stored in the
+  /// encrypted local payload and printed on a crash-recovery replay. Optional +
+  /// best-effort: a miss/failure/absence yields null (name-only, unchanged).
+  final Future<String?> Function(String orderId)? _resolveCustomerPhone;
 
   Future<KitchenImportSummary> importDispatches(
     List<PulledKitchenDispatch> dispatches,
@@ -151,6 +159,20 @@ final class KitchenDispatchImportCoordinator {
           continue;
         }
 
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): resolve the ORDER's phone
+        // from the LOCAL order (never the redacted server payload) so it is stored
+        // in the encrypted local payload and printed on a crash-recovery replay.
+        // Best-effort: any miss/failure keeps the phone null (name-only, unchanged).
+        String? resolvedCustomerPhone;
+        final resolver = _resolveCustomerPhone;
+        if (resolver != null) {
+          try {
+            resolvedCustomerPhone = await resolver(dispatch.orderId);
+          } on Object {
+            resolvedCustomerPhone = null;
+          }
+        }
+
         // 5–7: destination pinning or the encrypted blocked variant.
         final resolution = _destination;
         final bool isBlocked = resolution is BlockedKitchenDestination;
@@ -166,6 +188,7 @@ final class KitchenDispatchImportCoordinator {
           },
           documentVersion: 1,
           rasterVersion: 1,
+          customerPhone: resolvedCustomerPhone,
         );
 
         // 8–9: encrypt bound to the canonical AAD.

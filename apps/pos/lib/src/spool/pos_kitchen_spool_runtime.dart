@@ -154,6 +154,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     PosSecureKitchenModeCache? modeCache,
     SecureKeyStore? keyStore,
     DateTime Function()? now,
+    Future<String?> Function(String orderId)? resolveCustomerPhone,
   }) : _platform = platform,
        _deviceContext = deviceContext,
        _secretStore = secretStore,
@@ -171,7 +172,8 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
        _maxWorkerJobsPerRun = maxWorkerJobsPerRun,
        _modeCache = modeCache,
        _keyStore = keyStore,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _resolveCustomerPhone = resolveCustomerPhone;
 
   final PosKitchenSpoolPlatform _platform;
   final DeviceContext? Function() _deviceContext;
@@ -195,6 +197,10 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
   final PosSecureKitchenModeCache? _modeCache;
   final SecureKeyStore? _keyStore;
   final DateTime Function() _now;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): resolves the order's phone
+  /// locally at import so it is preserved in the encrypted spool for crash replay.
+  final Future<String?> Function(String orderId)? _resolveCustomerPhone;
 
   KitchenSpoolDatabase? _db;
   bool _running = false;
@@ -444,6 +450,7 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
         ackRepository: ackRepository,
         localJobIdGenerator: newLocalJobId,
         now: _now,
+        resolveCustomerPhone: _resolveCustomerPhone,
       ),
     ).drain();
 

@@ -127,8 +127,15 @@ final class KitchenTicketRenderer {
   final int rasterWidthDots;
 
   /// Builds the render-neutral money-free ticket document.
-  pp.PrintDocument buildDocument(KitchenDispatchDocument dispatch) {
+  pp.PrintDocument buildDocument(
+    KitchenDispatchDocument dispatch, {
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): the OPTIONAL phone from the
+    // encrypted local payload (a crash-recovery replay), overriding the document's
+    // (always-null, never-serialized) transient field. Null => nothing printed.
+    String? customerPhoneOverride,
+  }) {
     final isVoid = dispatch.kind == KitchenSpoolDispatchType.voidNotice;
+    final customerPhone = customerPhoneOverride ?? dispatch.customerPhone;
     final lines = <pp.PrintLine>[
       pp.PrintTextLine(
         labels.kitchenMarker,
@@ -171,9 +178,9 @@ final class KitchenTicketRenderer {
       // name, matching the name's centered style. Only present on a locally-built
       // direct-print document (the persisted spool doc never carries it — see
       // KitchenDispatchDocument); null => nothing printed.
-      if (dispatch.customerPhone != null)
+      if (customerPhone != null)
         pp.PrintTextLine(
-          dispatch.customerPhone!,
+          customerPhone,
           alignment: pp.PrintAlignment.center,
           style: pp.PrintLineStyle.centered,
         ),
@@ -241,8 +248,14 @@ final class KitchenTicketRenderer {
   /// Renders the ticket to 80mm ESC/POS bytes through the shared RTL raster
   /// seam. A rasterizer failure falls back to the text document — a ticket
   /// with '?' glyphs still beats no kitchen ticket.
-  Future<Uint8List> renderToBytes(KitchenDispatchDocument dispatch) async {
-    final document = buildDocument(dispatch);
+  Future<Uint8List> renderToBytes(
+    KitchenDispatchDocument dispatch, {
+    String? customerPhoneOverride,
+  }) async {
+    final document = buildDocument(
+      dispatch,
+      customerPhoneOverride: customerPhoneOverride,
+    );
     pp.PrintDocument out = document;
     final raster = rasterizer;
     if (raster != null) {

@@ -394,7 +394,14 @@ final class KitchenPrintWorker {
     // 9–10: money-free render + 80mm ESC/POS encode, outside the gate.
     final Uint8List bytes;
     try {
-      bytes = await _renderer.renderToBytes(dispatch);
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): render the OPTIONAL phone from
+      // the decrypted local payload (a crash-recovery replay keeps the phone that
+      // the server-derived `dispatch` deliberately never carried). Null on legacy
+      // rows -> byte-identical to before.
+      bytes = await _renderer.renderToBytes(
+        dispatch,
+        customerPhoneOverride: payload.customerPhone,
+      );
     } on Object {
       return const _PrepFailure('kitchen_render_failed');
     }
