@@ -12,12 +12,18 @@
 --   2. A defensive CHECK: when non-null, 1..32 chars of digits/space/+-() only
 --      (no letters, control chars, newlines or tabs) AND at least 5 digits.
 --   3. app.is_valid_customer_phone(text) — the ONE server-side phone predicate.
---   4. app.sync_push — byte-faithful re-emit of the 20260729090000 body; the
---      order.submit arm gains an UP-FRONT optional-phone validation (invalid
---      non-empty -> typed invalid_payload, NO order created) and a customer_phone
---      stamp parallel to the customer_name stamp (idempotent via customer_phone
---      is null). Every other operation, the direct_print dispatch, the kitchen
---      payload rebuild and the ledger machinery are unchanged.
+--   4. app.sync_push — re-emit of the 20260729090000 body; the order.submit arm
+--      gains an UP-FRONT optional-phone validation (invalid non-empty -> typed
+--      invalid_payload, NO order created) and a customer_phone stamp parallel to
+--      the customer_name stamp (idempotent via customer_phone is null). Finding 4
+--      (Codex): customer_phone is DATA ONLY — it is EXCLUDED from the order.submit
+--      idempotency fingerprint (payload minus customer_phone), so re-sending the
+--      same (device, local_operation_id) op with only a different phone is an
+--      idempotent replay (the FIRST stored phone is kept), never a conflict.
+--      Removing an absent key is a no-op, so a phone-less op keeps its EXACT prior
+--      fingerprint (existing orders replay unchanged); every other field, every
+--      other operation type, the direct_print dispatch, the kitchen payload
+--      rebuild and the ledger machinery are unchanged.
 --   5. app.owner_order_detail / app.owner_active_orders / app.owner_order_history
 --      / app.pos_order_detail — byte-faithful re-emits with 'customer_phone'
 --      added to their authorized result shapes (never to search, never to the
@@ -248,7 +254,14 @@ begin
       if v_op_type in ('order.void_ack', 'order.items_add', 'order.round_status') then
         v_fingerprint := md5(v_op_type || '|' || v_payload::text || '|' || v_target_id::text);
       else
-        v_fingerprint := md5(v_op_type || '|' || v_payload::text);
+        -- POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 4): customer_phone is DATA
+        -- ONLY on an order.submit — carried in the payload for persistence but
+        -- EXCLUDED from the operation identity, so re-sending the same op with only
+        -- a different phone is an idempotent replay, not a conflict. Removing an
+        -- absent key is a no-op, so a phone-less op keeps its EXACT prior
+        -- fingerprint (backward compatible); every other field and every other
+        -- operation type is unchanged.
+        v_fingerprint := md5(v_op_type || '|' || (case when v_op_type = 'order.submit' then v_payload - 'customer_phone' else v_payload end)::text);
       end if;
 
       -- dedup/replay (PSC-001C correction, Finding 1 — ATOMIC CLAIM): the
@@ -399,7 +412,11 @@ begin
     if v_op_type in ('order.void_ack', 'order.items_add', 'order.round_status') then
       v_fingerprint := md5(v_op_type || '|' || v_payload::text || '|' || v_target_id::text);
     else
-      v_fingerprint := md5(v_op_type || '|' || v_payload::text);
+      -- POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 4): order.submit identity
+      -- EXCLUDES customer_phone (data-only) — same canonical rule as the
+      -- rejection path above, so both paths fingerprint an op identically. A
+      -- phone-less op is byte-identical; all other fields/op-types unchanged.
+      v_fingerprint := md5(v_op_type || '|' || (case when v_op_type = 'order.submit' then v_payload - 'customer_phone' else v_payload end)::text);
     end if;
 
     -- (b2) ATOMIC LEDGER CLAIM (PSC-001C correction, Finding 1). The pre-fix
