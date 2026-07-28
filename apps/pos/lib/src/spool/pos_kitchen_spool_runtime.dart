@@ -18,6 +18,7 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
 import 'package:restoflow_printing/restoflow_printing.dart'
     show PrinterDestinationSendGate;
 
+import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
 import 'flutter_secure_kitchen_spool_key_store.dart';
 import 'kitchen_destination_resolver.dart';
 import 'kitchen_dispatch_drain_coordinator.dart';
@@ -154,7 +155,8 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
     PosSecureKitchenModeCache? modeCache,
     SecureKeyStore? keyStore,
     DateTime Function()? now,
-    Future<String?> Function(String orderId)? resolveCustomerPhone,
+    Future<String?> Function(OrderSubmitPhoneLookupKey key)?
+    resolveCustomerPhone,
   }) : _platform = platform,
        _deviceContext = deviceContext,
        _secretStore = secretStore,
@@ -200,7 +202,8 @@ final class PosKitchenSpoolRuntime implements PosKitchenSpoolLifecycleHooks {
 
   /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): resolves the order's phone
   /// locally at import so it is preserved in the encrypted spool for crash replay.
-  final Future<String?> Function(String orderId)? _resolveCustomerPhone;
+  final Future<String?> Function(OrderSubmitPhoneLookupKey key)?
+  _resolveCustomerPhone;
 
   KitchenSpoolDatabase? _db;
   bool _running = false;

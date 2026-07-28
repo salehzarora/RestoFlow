@@ -4,6 +4,7 @@ import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
 import 'kitchen_destination_resolver.dart';
 
 /// KITCHEN-MODE-001C2B — the durable import transaction (steps 3–14 of the
@@ -82,7 +83,8 @@ final class KitchenDispatchImportCoordinator {
     required SupabaseKitchenDispatchAckRepository ackRepository,
     required String Function() localJobIdGenerator,
     DateTime Function()? now,
-    Future<String?> Function(String orderId)? resolveCustomerPhone,
+    Future<String?> Function(OrderSubmitPhoneLookupKey key)?
+    resolveCustomerPhone,
   }) : _store = store,
        _cipher = cipher,
        _key = key,
@@ -105,11 +107,26 @@ final class KitchenDispatchImportCoordinator {
   final String Function() _newLocalJobId;
   final DateTime Function() _now;
 
-  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): resolves the ORDER's phone
-  /// LOCALLY (never from the redacted server payload) so it can be stored in the
-  /// encrypted local payload and printed on a crash-recovery replay. Optional +
-  /// best-effort: a miss/failure/absence yields null (name-only, unchanged).
-  final Future<String?> Function(String orderId)? _resolveCustomerPhone;
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C, Codex HIGH): resolves the ORDER's
+  /// phone LOCALLY (never from the redacted server payload) so it can be stored in
+  /// the encrypted local payload and printed on a crash-recovery replay. Called
+  /// with a FULLY-SCOPED [OrderSubmitPhoneLookupKey] built from THIS run's import
+  /// scope + the dispatch order id, so the durable lookup cannot cross scopes.
+  /// Optional + best-effort: a miss/failure/absence yields null (name-only).
+  final Future<String?> Function(OrderSubmitPhoneLookupKey key)?
+  _resolveCustomerPhone;
+
+  /// The fully-scoped durable-phone lookup identity for [dispatch] in THIS run's
+  /// import scope (organization/restaurant/branch/device from [_scope]). The
+  /// pulled dispatch carries no local_operation_id, so it is left null.
+  OrderSubmitPhoneLookupKey _phoneLookupKey(PulledKitchenDispatch dispatch) =>
+      OrderSubmitPhoneLookupKey(
+        organizationId: _scope.organizationId,
+        restaurantId: _scope.restaurantId,
+        branchId: _scope.branchId,
+        deviceId: _scope.deviceId,
+        orderId: dispatch.orderId,
+      );
 
   /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): enrich a previously
   /// phone-less imported row when the phone is now resolvable. Decrypt-check the
@@ -127,7 +144,7 @@ final class KitchenDispatchImportCoordinator {
     if (resolver == null) return;
     String? resolved;
     try {
-      resolved = await resolver(dispatch.orderId);
+      resolved = await resolver(_phoneLookupKey(dispatch));
     } on Object {
       return;
     }
@@ -232,7 +249,7 @@ final class KitchenDispatchImportCoordinator {
         final resolver = _resolveCustomerPhone;
         if (resolver != null) {
           try {
-            resolvedCustomerPhone = await resolver(dispatch.orderId);
+            resolvedCustomerPhone = await resolver(_phoneLookupKey(dispatch));
           } on Object {
             resolvedCustomerPhone = null;
           }

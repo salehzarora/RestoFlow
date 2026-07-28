@@ -30,6 +30,7 @@ import 'package:restoflow_printing/restoflow_printing.dart'
         KitchenTransportOutcomeKind,
         sendKitchenBytesOverTcp;
 
+import '../data/customer_phone.dart' show normalizeCustomerPhone;
 import '../data/ids.dart' show clientIdGeneratorProvider;
 import '../data/kitchen_mode_readiness.dart'
     show PosKitchenModeScopeKey, posKitchenModeReadinessProvider;
@@ -176,21 +177,26 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
           ),
     sendGate: ref.watch(posPrinterDestinationSendGateProvider),
     modeCache: PosSecureKitchenModeCache(platform: platform),
-    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): resolve the order's phone
-    // from LOCAL authoritative sources (never the redacted server payload) so it is
-    // stored in the encrypted spool for a crash-recovery reprint. Lookup order:
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2, Codex HIGH): resolve the
+    // order's phone from LOCAL authoritative sources (never the redacted server
+    // payload). The FULLY-SCOPED [key] is built by the import coordinator from THIS
+    // run's org/restaurant/branch/device import scope + the dispatch order id, so
+    // neither source can cross scopes. Lookup order:
     //   1. the DURABLE `order.submit` outbox op — persisted BEFORE the network push,
-    //      so it is present even when the dispatch is imported before the order
-    //      reaches recent-orders (the exact race Codex flagged);
-    //   2. recent/server-backed order data as a fallback.
-    // Best-effort: any miss/failure yields null (name-only, unchanged).
-    resolveCustomerPhone: (orderId) async {
+    //      matched on the full scope + order identity and validated through the ONE
+    //      shared normalizer (a malformed durable value yields null);
+    //   2. recent/server-backed order data for the SAME order id — the recent-orders
+    //      controller is itself scope-derived, and the value is re-validated here.
+    // Best-effort: any miss/failure/invalid value yields null (name-only).
+    resolveCustomerPhone: (key) async {
       final fromOutbox = await ref
           .read(outboxRepositoryProvider)
-          .findOrderSubmitCustomerPhone(orderId);
+          .findOrderSubmitCustomerPhone(key);
       if (fromOutbox != null && fromOutbox.isNotEmpty) return fromOutbox;
       for (final o in ref.read(posRecentOrdersControllerProvider)) {
-        if (o.orderId == orderId) return o.order?.customerPhone;
+        if (o.orderId == key.orderId) {
+          return normalizeCustomerPhone(o.order?.customerPhone);
+        }
       }
       return null;
     },

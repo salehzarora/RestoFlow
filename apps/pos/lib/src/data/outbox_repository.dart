@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
+import 'customer_phone.dart';
 import 'durable_outbox_store.dart';
 import 'order_submission.dart';
 
@@ -40,28 +41,73 @@ abstract class OutboxRepository {
   Future<OutboxEntry> retry(String entryId);
 
   /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): the customer phone from the
-  /// DURABLE `order.submit` operation for [orderId] — persisted BEFORE the network
-  /// push, so it is available for the encrypted kitchen spool even when the server
-  /// dispatch is imported before the order reaches the recent-orders list.
+  /// DURABLE `order.submit` operation identified by [key] — persisted BEFORE the
+  /// network push, so it is available for the encrypted kitchen spool even when
+  /// the server dispatch is imported before the order reaches recent-orders.
   ///
-  /// Reads the phone straight from the durable op payload (never a live recompute,
-  /// never the redacted server dispatch). Returns null when this device's queue
-  /// holds no matching `order.submit` op, or that op carried no (valid) phone. The
-  /// queue is already scoped to THIS device, so an unrelated device/tenant op can
-  /// never match.
-  Future<String?> findOrderSubmitCustomerPhone(String orderId);
+  /// FULLY SCOPED (Codex HIGH): a match requires the op's organization, restaurant,
+  /// branch, AND device to equal the caller's live scope, the op type to be
+  /// `order.submit`, and the order identity (`targetId` + payload `order_id`, plus
+  /// `local_operation_id` when the key carries it) to match — never a loose
+  /// single-field or cross-restaurant/branch/device match, never a "first order id"
+  /// guess. The recovered phone is passed through the ONE shared
+  /// [normalizeCustomerPhone] validator, so a malformed durable value (e.g. one
+  /// containing letters) can never enter the encrypted spool or a printed ticket.
+  /// Returns the normalized phone for exactly one authoritative match, else null
+  /// (ambiguity resolves to null safely; never a throw, never a logged phone).
+  Future<String?> findOrderSubmitCustomerPhone(OrderSubmitPhoneLookupKey key);
 }
 
-/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): read the customer phone from a
-/// durable `order.submit` outbox entry for [orderId]. Shared, side-effect-free,
-/// and defensive: a non-`order.submit` op, a mismatched order id, an undecodable
-/// body, or a malformed/blank phone all yield null (never a throw, never a leak).
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2, Codex HIGH): the fully-scoped,
+/// authoritative identity of the durable `order.submit` op whose phone may seed
+/// the encrypted kitchen spool. The scope fields come from the LIVE imported
+/// dispatch/job context (never mutable global state); [localOperationId] is set
+/// only when the contract carries it (the pulled dispatch does not).
+class OrderSubmitPhoneLookupKey {
+  const OrderSubmitPhoneLookupKey({
+    required this.organizationId,
+    required this.restaurantId,
+    required this.branchId,
+    required this.deviceId,
+    required this.orderId,
+    this.localOperationId,
+  });
+
+  final String organizationId;
+  final String restaurantId;
+  final String branchId;
+  final String deviceId;
+  final String orderId;
+  final String? localOperationId;
+}
+
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2, Codex HIGH): read the customer
+/// phone from the durable `order.submit` outbox entry that EXACTLY matches [key].
+/// Shared, side-effect-free, and defensive. Matching is all-of:
+///   * `operation_type == 'order.submit'`
+///   * organization / restaurant / branch / device all equal the key's scope
+///   * `targetId == key.orderId` AND payload `order_id == key.orderId`
+///   * `local_operation_id == key.localOperationId` when the key carries one
+/// The matched op's phone is passed through [normalizeCustomerPhone] (the ONE
+/// shared validator), so a blank / non-string / letters / control / short / long
+/// value yields null. More than one exact match (ambiguity) resolves to null.
 String? customerPhoneFromOrderSubmitEntries(
   Iterable<OutboxEntry> entries,
-  String orderId,
+  OrderSubmitPhoneLookupKey key,
 ) {
+  String? found;
+  var matches = 0;
   for (final e in entries) {
     if (e.operationType != 'order.submit') continue;
+    if (e.organizationId != key.organizationId) continue;
+    if (e.restaurantId != key.restaurantId) continue;
+    if (e.branchId != key.branchId) continue;
+    if (e.deviceId != key.deviceId) continue;
+    if (e.targetId != key.orderId) continue;
+    if (key.localOperationId != null &&
+        e.localOperationId != key.localOperationId) {
+      continue;
+    }
     Map<String, dynamic> body;
     try {
       final decoded = jsonDecode(e.payloadJson);
@@ -70,11 +116,16 @@ String? customerPhoneFromOrderSubmitEntries(
     } on FormatException {
       continue;
     }
-    if (body['order_id'] != orderId) continue;
-    final phone = body['customer_phone'];
-    return (phone is String && phone.trim().isNotEmpty) ? phone : null;
+    // The payload's OWN order identity must also match (defence beyond targetId).
+    if (body['order_id'] != key.orderId) continue;
+    // VALIDATE through the shared normalizer — an invalid durable phone is null,
+    // never a raw value that could reach the encrypted spool / printed ticket.
+    final raw = body['customer_phone'];
+    matches++;
+    found = normalizeCustomerPhone(raw is String ? raw : null);
   }
-  return null;
+  // Exactly one authoritative match may supply a phone; ambiguity -> null.
+  return matches == 1 ? found : null;
 }
 
 /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 4): the CANONICAL identity payload
@@ -196,8 +247,9 @@ class DemoOutboxStore implements OutboxRepository {
   }
 
   @override
-  Future<String?> findOrderSubmitCustomerPhone(String orderId) async =>
-      customerPhoneFromOrderSubmitEntries(_entries, orderId);
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async => customerPhoneFromOrderSubmitEntries(_entries, key);
 
   int _indexOf(String entryId) {
     for (var i = 0; i < _entries.length; i++) {
@@ -372,14 +424,17 @@ class RealOutboxRepository implements OutboxRepository {
   }
 
   @override
-  Future<String?> findOrderSubmitCustomerPhone(String orderId) async {
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async {
     // Best-effort READ (never the fail-closed submit guard): a not-yet-signed-in
     // repo simply has no durable op to read, so return null rather than throw.
     if (!_ready) return null;
     await _ensureLoaded();
-    // The queue is already loaded per THIS session's device (scope key), so a
-    // match cannot belong to another device/tenant.
-    return customerPhoneFromOrderSubmitEntries(_entries!, orderId);
+    // The queue is loaded per THIS session's device; the shared matcher
+    // additionally enforces the FULL org/restaurant/branch/device + order identity
+    // scope, so a re-paired-device / cross-tenant / cross-branch op cannot match.
+    return customerPhoneFromOrderSubmitEntries(_entries!, key);
   }
 
   int _indexOf(String entryId) {
