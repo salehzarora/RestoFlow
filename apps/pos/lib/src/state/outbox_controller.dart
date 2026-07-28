@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../data/customer_phone.dart';
 import '../data/durable_outbox_store.dart';
 import '../data/ids.dart';
 import '../data/order_identity.dart';
@@ -178,6 +179,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     String? tableLabel,
     int taxTotalMinor = 0,
     String? customerName,
+    String? customerPhone,
+    OrderDispatchMode dispatchMode = OrderDispatchMode.kds,
     Map<String, List<KitchenPrepComponent>>? prepByItemId,
     Future<bool> Function(
       String orderId,
@@ -197,6 +200,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       tableLabel: tableLabel,
       taxTotalMinor: taxTotalMinor,
       customerName: customerName,
+      customerPhone: customerPhone,
+      dispatchMode: dispatchMode,
       prepByItemId: prepByItemId,
       beforeDispatch: beforeDispatch,
     );
@@ -220,6 +225,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     String? tableLabel,
     int taxTotalMinor = 0,
     String? customerName,
+    String? customerPhone,
+    OrderDispatchMode dispatchMode = OrderDispatchMode.kds,
     Map<String, List<KitchenPrepComponent>>? prepByItemId,
     Future<bool> Function(
       String orderId,
@@ -239,6 +246,11 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
     // choke point (covers demo + real). Trim + empty->null + 80-char cap; never
     // gates submit. The server re-normalizes identically.
     final normalizedCustomerName = normalizeCustomerName(customerName);
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: normalize the OPTIONAL phone at the
+    // same choke point — trim + empty->null; an invalid value becomes null here
+    // (the Send button already blocks a non-empty malformed phone, and the server
+    // re-validates). Never gates submit.
+    final normalizedCustomerPhone = normalizeCustomerPhone(customerPhone);
 
     _seq++;
     final n = _seq.toString().padLeft(4, '0');
@@ -354,6 +366,8 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
       items: items,
       clientCreatedAt: createdAt,
       customerName: normalizedCustomerName,
+      customerPhone: normalizedCustomerPhone,
+      dispatchMode: dispatchMode,
     );
 
     final entry = OutboxEntry(
@@ -375,6 +389,7 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
         subtotalMinor: subtotalMinor,
         currencyCode: currencyCode,
         customerName: normalizedCustomerName,
+        customerPhone: normalizedCustomerPhone,
       ),
       syncState: OutboxSyncState.pending,
       clientCreatedAt: createdAt,

@@ -112,6 +112,7 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     required Future<KitchenReadinessResult> Function(KitchenReadinessReport)
     sendReport,
     required Future<void> Function() invalidateModeCache,
+    void Function(KitchenModeResult)? onMode,
     String appBuild = kPosKitchenReadinessAppBuild,
     Duration interval = kKitchenReadinessHeartbeatInterval,
     Duration callTimeout = kKitchenReadinessCallTimeout,
@@ -123,6 +124,7 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
        _probeSpool = probeSpool,
        _sendReport = sendReport,
        _invalidateModeCache = invalidateModeCache,
+       _onMode = onMode,
        _appBuild = appBuild,
        _interval = interval,
        _callTimeout = callTimeout,
@@ -132,6 +134,11 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
 
   final DeviceContext? Function() _deviceContext;
   final Future<KitchenModeResult> Function() _fetchMode;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publishes each freshly-fetched kitchen
+  /// mode so the submission path can resolve the dispatch mode (direct_print for a
+  /// verified printer_only branch). Optional; null in tests that don't observe it.
+  final void Function(KitchenModeResult)? _onMode;
   final Future<KitchenReadinessPrinterEvidence> Function() _printerEvidence;
   final Future<KitchenSpoolReadinessProbeResult> Function({
     required String deviceId,
@@ -247,6 +254,10 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
         detail: 'mode_fetch_failed',
       );
     }
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publish the freshly-verified mode so a
+    // submission resolves direct_print for a printer_only branch. Every non-trusted
+    // result (transient/server/invalid/unavailable) resolves to KDS (fail-closed).
+    _onMode?.call(mode);
     final int revision;
     switch (mode) {
       case KitchenModePrinterOnlyWithRevision(revision: final r):

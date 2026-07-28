@@ -126,6 +126,7 @@ final class KitchenDispatchDocument {
     required this.orderType,
     this.tableLabel,
     this.customerDisplayName,
+    this.customerPhone,
     this.orderNote,
     this.createdAt,
     this.items = const [],
@@ -143,6 +144,14 @@ final class KitchenDispatchDocument {
   final String orderType;
   final String? tableLabel;
   final String? customerDisplayName;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone, a TYPED
+  /// field of THIS encrypted, backup-excluded spool document — so a crash-recovery
+  /// reprint of a doc that carries a phone still prints it. It is NOT part of the
+  /// untyped server payload that `rejectHostileKitchenKeys` guards (that generic
+  /// redaction is unchanged and still forbids untyped phone/PII keys); legacy rows
+  /// simply decode this as null. Money-free display text.
+  final String? customerPhone;
   final String? orderNote;
   final String? createdAt;
   final List<KitchenDispatchItem> items;
@@ -161,6 +170,14 @@ final class KitchenDispatchDocument {
     if (tableLabel != null) 'table_label': tableLabel,
     if (customerDisplayName != null)
       'customer_display_name': customerDisplayName,
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: customerPhone is DELIBERATELY NOT
+    // serialized here — it is a TRANSIENT render-time field for the locally-built
+    // direct-print document only. Persisting it would (a) place a phone token in a
+    // spool blob whose decrypt re-runs rejectHostileKitchenKeys (which forbids
+    // phone keys) and (b) require weakening that generic redaction. So a
+    // server-imported spool doc never carries it; a crash-recovery reprint of such
+    // a doc degrades to name-only (privacy-preserving), while the direct-print +
+    // POS/KDS reprints render it from the live order/cart.
     if (orderNote != null) 'order_note': orderNote,
     if (createdAt != null) 'created_at': createdAt,
     if (items.isNotEmpty) 'items': [for (final i in items) i.toJson()],

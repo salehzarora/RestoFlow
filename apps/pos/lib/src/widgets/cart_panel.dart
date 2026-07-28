@@ -11,6 +11,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
 import '../data/demo_tables.dart';
+import '../data/order_dispatch.dart';
 import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
@@ -139,6 +140,10 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       final canSend =
           !cart.isEmpty &&
           (addition.active || setup.isReadyToSubmit) &&
+          // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: a NON-EMPTY malformed phone blocks
+          // Send (the field shows the localized inline error); an empty or valid
+          // phone never does. Defence-in-depth is re-checked in _handleSend.
+          !setup.hasBlockingCustomerPhone &&
           !_submitting &&
           !addition.sending &&
           !addition.awaitingRefresh;
@@ -448,6 +453,16 @@ Future<void> submitOrderFromCart({
   final orderTypeBefore = setup.orderType;
   final tableBefore = setup.assignedTable;
   final customerNameBefore = setup.customerName;
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone (normalized; null when
+  // not entered / invalid). Captured pre-await like the name.
+  final customerPhoneBefore = setup.customerPhone;
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the dispatch mode is resolved ONCE from
+  // the VERIFIED kitchen workflow mode — direct_print for a trusted printer_only
+  // branch (so the dine-in order rests at served and closes on settlement), KDS
+  // otherwise (fail-closed). The same resolution drives close-eligibility.
+  final dispatchModeBefore = resolveOrderDispatchMode(
+    container.read(posVerifiedKitchenModeProvider),
+  );
   // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): capture the ORDER-TIME (D-008)
   // prep snapshot ONCE, HERE — BEFORE the first await — from the SAME live menu
   // the outbox payload is built from. This exact immutable map feeds BOTH the
@@ -479,6 +494,7 @@ Future<void> submitOrderFromCart({
               orderType: orderTypeBefore,
               table: tableBefore,
               customerName: customerNameBefore,
+              customerPhone: customerPhoneBefore,
             );
   try {
     final result = await outbox.submit(
@@ -491,6 +507,10 @@ Future<void> submitOrderFromCart({
       taxTotalMinor: taxTotalMinor,
       // ORDER-CUSTOMER-001: the optional customer name (null when not entered).
       customerName: customerNameBefore,
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the optional customer phone + the
+      // resolved dispatch mode (direct_print for a verified printer_only branch).
+      customerPhone: customerPhoneBefore,
+      dispatchMode: dispatchModeBefore,
       // The ONE immutable prep snapshot (captured above, pre-await) — the same
       // map the POS kitchen ticket reuses below.
       prepByItemId: kitchenPrepByItemId,
@@ -535,6 +555,7 @@ Future<void> submitOrderFromCart({
         orderType: orderTypeBefore,
         table: tableBefore,
         customerName: customerNameBefore,
+        customerPhone: customerPhoneBefore,
         taxTotalMinor: taxTotalMinor,
         taxRateBp: taxRateBp,
         // MENU-ORDER-001 (§3): when this was a CORRECTION, the departed-session path must
@@ -564,6 +585,7 @@ Future<void> submitOrderFromCart({
               orderType: orderTypeBefore,
               table: tableBefore,
               customerName: customerNameBefore,
+              customerPhone: customerPhoneBefore,
               outboxEntryId: result.entry.id,
               // A2: bind to THIS exact context (scope + PIN session) so a later employee /
               // branch / device can never see or restore this draft.
@@ -576,6 +598,7 @@ Future<void> submitOrderFromCart({
       orderType: orderTypeBefore,
       tableLabel: tableBefore?.label,
       customerName: customerNameBefore,
+      customerPhone: customerPhoneBefore,
       orderNumber: result.orderNumber,
       outboxEntryId: result.entry.id,
       localOperationId: result.entry.localOperationId,
@@ -674,6 +697,7 @@ Future<void> submitOrderFromCart({
           prepByItemId: kitchenPrepByItemId,
           tableLabel: tableBefore?.label,
           customerName: customerNameBefore,
+          customerPhone: customerPhoneBefore,
         ),
         labels: kitchenTicketPrintLabelsFromL10n(l10n),
       ),
@@ -715,6 +739,7 @@ void _retainDepartedSessionResult({
   required OrderType orderType,
   required DemoTable? table,
   required String? customerName,
+  required String? customerPhone,
   required int taxTotalMinor,
   required int taxRateBp,
   CorrectionSettlementContext? settlement,
@@ -748,6 +773,7 @@ void _retainDepartedSessionResult({
               orderType: orderType,
               tableLabel: table?.label,
               customerName: customerName,
+              customerPhone: customerPhone,
               orderNumber: result.orderNumber,
               outboxEntryId: result.entry.id,
               localOperationId: result.entry.localOperationId,
@@ -783,6 +809,7 @@ void _retainDepartedSessionResult({
           orderType: orderType,
           table: table,
           customerName: customerName,
+          customerPhone: customerPhone,
           outboxEntryId: result.entry.id,
           binding:
               bindingBefore, // the ORIGINAL session's binding, never the current one

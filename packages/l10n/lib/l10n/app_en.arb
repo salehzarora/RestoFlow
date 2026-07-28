@@ -601,6 +601,58 @@
   "@customerNameKitchenLabel": {
     "description": "ORDER-CUSTOMER-001: label preceding the optional customer name on the KDS kitchen ticket / order card."
   },
+  "customerPhoneLabel": "Customer phone",
+  "@customerPhoneLabel": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: label for the OPTIONAL customer-phone field in the POS order/cart setup."
+  },
+  "customerPhonePlaceholder": "Optional",
+  "@customerPhonePlaceholder": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: placeholder/hint for the optional POS customer-phone field (never blocks sending an order)."
+  },
+  "customerPhoneReceiptLabel": "Phone",
+  "@customerPhoneReceiptLabel": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: label preceding the optional customer phone on the cashier receipt header."
+  },
+  "customerPhoneKitchenLabel": "Phone",
+  "@customerPhoneKitchenLabel": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: label preceding the optional customer phone on the kitchen ticket / order card."
+  },
+  "customerPhoneErrorChars": "Use only digits, spaces and + - ( )",
+  "@customerPhoneErrorChars": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: inline error when the phone contains unsupported characters."
+  },
+  "customerPhoneErrorDigits": "Enter at least 5 digits",
+  "@customerPhoneErrorDigits": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: inline error when the phone has fewer than 5 digits."
+  },
+  "customerPhoneErrorInvalid": "Enter a valid phone number",
+  "@customerPhoneErrorInvalid": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: generic inline error for an invalid phone (e.g. too long)."
+  },
+  "posCompleteOrder": "Complete order",
+  "@posCompleteOrder": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: cashier action that completes a served, fully-settled printer-only order (the dine-in close safety net)."
+  },
+  "posCompleteOrderSuccess": "Order completed",
+  "@posCompleteOrderSuccess": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: confirmation shown after the order is completed."
+  },
+  "posCompleteOrderFailure": "Couldn't complete the order",
+  "@posCompleteOrderFailure": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: shown when completing the order failed."
+  },
+  "posClosePaymentRequired": "Take payment to complete",
+  "@posClosePaymentRequired": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: reason the order cannot be completed yet — settlement is required."
+  },
+  "posCloseKdsRequired": "The kitchen display completes this order",
+  "@posCloseKdsRequired": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: reason shown for a KDS-mode order (completion is driven by the KDS, not the POS)."
+  },
+  "posCloseWorkflowUnavailable": "Kitchen mode unavailable",
+  "@posCloseWorkflowUnavailable": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: shown when the branch kitchen mode is not verified, so the close action is unavailable (fail-closed)."
+  },
   "posAssignTable": "Assign table",
   "@posAssignTable": {
     "description": "POS action that opens the table picker to assign a table to a dine-in order."

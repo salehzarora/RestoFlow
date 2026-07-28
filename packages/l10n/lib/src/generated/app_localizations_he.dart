@@ -835,6 +835,46 @@ class AppLocalizationsHe extends AppLocalizations {
   String get customerNameKitchenLabel => 'לקוח';
 
   @override
+  String get customerPhoneLabel => 'טלפון הלקוח';
+
+  @override
+  String get customerPhonePlaceholder => 'אופציונלי';
+
+  @override
+  String get customerPhoneReceiptLabel => 'טלפון';
+
+  @override
+  String get customerPhoneKitchenLabel => 'טלפון';
+
+  @override
+  String get customerPhoneErrorChars =>
+      'יש להשתמש רק בספרות, רווחים ו- + - ( )';
+
+  @override
+  String get customerPhoneErrorDigits => 'יש להזין לפחות 5 ספרות';
+
+  @override
+  String get customerPhoneErrorInvalid => 'יש להזין מספר טלפון תקין';
+
+  @override
+  String get posCompleteOrder => 'סיום הזמנה';
+
+  @override
+  String get posCompleteOrderSuccess => 'ההזמנה הושלמה';
+
+  @override
+  String get posCompleteOrderFailure => 'לא ניתן היה לסיים את ההזמנה';
+
+  @override
+  String get posClosePaymentRequired => 'יש לגבות תשלום כדי לסיים';
+
+  @override
+  String get posCloseKdsRequired => 'מסך המטבח מסיים הזמנה זו';
+
+  @override
+  String get posCloseWorkflowUnavailable => 'מצב המטבח אינו זמין';
+
+  @override
   String get posAssignTable => 'שיוך שולחן';
 
   @override

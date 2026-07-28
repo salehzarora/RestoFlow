@@ -30,6 +30,7 @@ import 'package:restoflow_printing/restoflow_printing.dart'
         sendKitchenBytesOverTcp;
 
 import '../data/ids.dart' show clientIdGeneratorProvider;
+import '../data/order_dispatch.dart' show posVerifiedKitchenModeProvider;
 import '../print/native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 import '../state/pos_bluetooth_printer_config.dart'
@@ -229,6 +230,11 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
   final heartbeat = KitchenReadinessHeartbeat(
     deviceContext: () => ref.read(posDeviceContextProvider),
     fetchMode: modeRepository.fetchMode,
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publish the verified mode so a
+    // printer_only branch's submits emit direct_print and its dine-in orders
+    // close. Fail-closed: any non-trusted mode resolves to KDS at submit time.
+    onMode: (mode) =>
+        ref.read(posVerifiedKitchenModeProvider.notifier).state = mode,
     printerEvidence: () async {
       final assignments = await SupabaseDevicePrinterAssignmentsRepository(
         transport: transport,

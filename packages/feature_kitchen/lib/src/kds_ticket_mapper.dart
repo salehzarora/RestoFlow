@@ -128,6 +128,10 @@ class KdsTicketMapper {
       // trimmed + empty->null). Present on the kitchen wire row because
       // app.redact_money only strips *_minor/receipt keys, not this display text.
       final customerName = o['customer_name'];
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone (money-free scalar
+      // pluck, trimmed + empty->null). Present on the kitchen wire row because
+      // app.redact_money only strips *_minor/receipt keys, not this display text.
+      final customerPhone = o['customer_phone'];
       // PSC-001D: the cancellation card's honest void time + source state —
       // money-free scalar plucks, present only on a pending-ack void.
       final voidedAtRaw = o['voided_at'];
@@ -139,6 +143,10 @@ class KdsTicketMapper {
         notes: notes is String && notes.isNotEmpty ? notes : null,
         customerName: customerName is String && customerName.trim().isNotEmpty
             ? customerName.trim()
+            : null,
+        customerPhone:
+            customerPhone is String && customerPhone.trim().isNotEmpty
+            ? customerPhone.trim()
             : null,
         // DESIGN-001 display-only pluck: when the order was submitted, for the
         // elapsed/urgency pill. `created_at` is the stable server insert time
@@ -379,6 +387,7 @@ class KdsTicketMapper {
                 orderType: b.info.orderType,
                 tableLabel: b.info.tableLabel,
                 customerName: b.info.customerName,
+                customerPhone: b.info.customerPhone,
                 notes: b.info.notes,
                 // PSC-001C: a round ticket's honest FIFO/elapsed anchor is the
                 // ROUND's own submission time, not the parent order's.
@@ -478,6 +487,7 @@ class _OrderInfo {
     required this.tableLabel,
     required this.notes,
     required this.customerName,
+    required this.customerPhone,
     required this.submittedAt,
     this.voidedAt,
     this.voidedFromStatus,
@@ -489,6 +499,7 @@ class _OrderInfo {
   final String? tableLabel;
   final String? notes;
   final String? customerName;
+  final String? customerPhone;
   final DateTime? submittedAt;
 
   /// PSC-001D: set ONLY for a pending-acknowledgement void (the red card).

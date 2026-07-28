@@ -116,6 +116,7 @@ class PosDraftRecovery {
     required this.binding,
     this.table,
     this.customerName,
+    this.customerPhone,
     this.correctionOutboxEntryId,
   });
 
@@ -131,6 +132,11 @@ class PosDraftRecovery {
 
   final DemoTable? table;
   final String? customerName;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone captured with
+  /// this draft, so a restored (Back to cart) rejected order re-populates the phone
+  /// exactly like the name. Data-only — never part of the recovery identity/binding.
+  final String? customerPhone;
 
   /// MENU-ORDER-001 (Codex, correction-window durability): the outbox entry id of the
   /// CORRECTED resubmit this recovery is now the source of — set when the operator
@@ -154,6 +160,7 @@ class PosDraftRecovery {
     'binding': binding.toJson(),
     if (table != null) 'table': table!.toJson(),
     if (customerName != null) 'customer_name': customerName,
+    if (customerPhone != null) 'customer_phone': customerPhone,
     if (correctionOutboxEntryId != null)
       'correction_outbox_entry_id': correctionOutboxEntryId,
   };
@@ -180,6 +187,7 @@ class PosDraftRecovery {
           ? DemoTable.fromJson(rawTable.cast<String, Object?>())
           : null,
       customerName: json['customer_name']?.toString(),
+      customerPhone: json['customer_phone']?.toString(),
       // Backward-compatible: a record written before the correction-window fix has
       // no link (null) and decodes as a plain, fully-recoverable rejected draft.
       correctionOutboxEntryId: json['correction_outbox_entry_id']?.toString(),
@@ -351,6 +359,7 @@ class PosDraftRecoveryController
     required OrderType orderType,
     DemoTable? table,
     String? customerName,
+    String? customerPhone,
   }) async {
     final source = state[sourceOutboxEntryId];
     if (source == null) return false;
@@ -364,6 +373,7 @@ class PosDraftRecoveryController
       binding: source.binding, // ownership never changes
       table: table,
       customerName: customerName,
+      customerPhone: customerPhone,
       correctionOutboxEntryId: correctedOutboxEntryId,
     );
     final next = <String, PosDraftRecovery>{

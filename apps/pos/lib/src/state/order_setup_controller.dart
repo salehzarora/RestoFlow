@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../data/customer_phone.dart';
 import '../data/demo_tables.dart';
 import '../data/order_submission.dart' show normalizeCustomerName;
 import 'pos_session.dart';
@@ -17,6 +18,7 @@ class OrderSetupState {
     required this.orderType,
     this.assignedTable,
     this.customerName,
+    this.customerPhoneInput = '',
   });
 
   final OrderType orderType;
@@ -26,6 +28,25 @@ class OrderSetupState {
   /// (already trimmed + empty->null). Never gates submit — it is purely
   /// additive metadata that flows to the receipt + the kitchen ticket.
   final String? customerName;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone as the
+  /// cashier is typing it (raw text, so the field can echo it + show an inline
+  /// error). Empty means "no phone". Derived values below expose the stored
+  /// [customerPhone] and the [customerPhoneError] for the UI. Never gates submit
+  /// unless a NON-EMPTY value is malformed (see [hasBlockingCustomerPhone]).
+  final String customerPhoneInput;
+
+  /// The validated phone to submit/persist: the trimmed display form when the
+  /// input is a valid phone, else null (empty OR invalid).
+  String? get customerPhone => normalizeCustomerPhone(customerPhoneInput);
+
+  /// The validation error for the current input, or null when it is valid/empty.
+  CustomerPhoneError? get customerPhoneError =>
+      validateCustomerPhone(customerPhoneInput).error;
+
+  /// True when the input is a NON-EMPTY malformed phone — the ONLY case that
+  /// blocks submit (an empty or valid phone never does).
+  bool get hasBlockingCustomerPhone => customerPhoneError != null;
 
   /// Dine-in orders must carry a table before they can be submitted (RF-035).
   bool get requiresTable => orderType == OrderType.dineIn;
@@ -54,10 +75,11 @@ class OrderSetupController extends Notifier<OrderSetupState> {
   void setOrderType(OrderType orderType) {
     if (orderType == state.orderType) return;
     // Takeaway must not carry a table; dine-in starts unassigned. The optional
-    // customer name is order-level, so it SURVIVES an order-type switch.
+    // customer name + phone are order-level, so they SURVIVE an order-type switch.
     state = OrderSetupState(
       orderType: orderType,
       customerName: state.customerName,
+      customerPhoneInput: state.customerPhoneInput,
     );
   }
 
@@ -70,6 +92,7 @@ class OrderSetupController extends Notifier<OrderSetupState> {
       orderType: OrderType.dineIn,
       assignedTable: table,
       customerName: state.customerName,
+      customerPhoneInput: state.customerPhoneInput,
     );
   }
 
@@ -78,6 +101,7 @@ class OrderSetupController extends Notifier<OrderSetupState> {
     state = OrderSetupState(
       orderType: state.orderType,
       customerName: state.customerName,
+      customerPhoneInput: state.customerPhoneInput,
     );
   }
 
@@ -90,11 +114,27 @@ class OrderSetupController extends Notifier<OrderSetupState> {
       orderType: state.orderType,
       assignedTable: state.assignedTable,
       customerName: normalized,
+      customerPhoneInput: state.customerPhoneInput,
     );
   }
 
-  /// Resets to the default (takeaway, no table, no customer name) — used after
-  /// submit / new order. build() yields customerName == null, so it auto-clears.
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: sets the OPTIONAL customer phone from
+  /// the raw field input. Stores the raw text so the field can echo it + show an
+  /// inline error; the stored/sent value is derived (trim + empty->null +
+  /// validated). Never affects order type / table.
+  void setCustomerPhone(String value) {
+    if (value == state.customerPhoneInput) return;
+    state = OrderSetupState(
+      orderType: state.orderType,
+      assignedTable: state.assignedTable,
+      customerName: state.customerName,
+      customerPhoneInput: value,
+    );
+  }
+
+  /// Resets to the default (takeaway, no table, no customer name/phone) — used
+  /// after submit / new order. build() yields empty customerPhoneInput, so the
+  /// field auto-clears.
   void reset() => state = build();
 }
 

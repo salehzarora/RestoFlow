@@ -1660,6 +1660,84 @@ abstract class AppLocalizations {
   /// **'Customer'**
   String get customerNameKitchenLabel;
 
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: label for the OPTIONAL customer-phone field in the POS order/cart setup.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer phone'**
+  String get customerPhoneLabel;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: placeholder/hint for the optional POS customer-phone field (never blocks sending an order).
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get customerPhonePlaceholder;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: label preceding the optional customer phone on the cashier receipt header.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get customerPhoneReceiptLabel;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: label preceding the optional customer phone on the kitchen ticket / order card.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get customerPhoneKitchenLabel;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: inline error when the phone contains unsupported characters.
+  ///
+  /// In en, this message translates to:
+  /// **'Use only digits, spaces and + - ( )'**
+  String get customerPhoneErrorChars;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: inline error when the phone has fewer than 5 digits.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter at least 5 digits'**
+  String get customerPhoneErrorDigits;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: generic inline error for an invalid phone (e.g. too long).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid phone number'**
+  String get customerPhoneErrorInvalid;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: cashier action that completes a served, fully-settled printer-only order (the dine-in close safety net).
+  ///
+  /// In en, this message translates to:
+  /// **'Complete order'**
+  String get posCompleteOrder;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: confirmation shown after the order is completed.
+  ///
+  /// In en, this message translates to:
+  /// **'Order completed'**
+  String get posCompleteOrderSuccess;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: shown when completing the order failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t complete the order'**
+  String get posCompleteOrderFailure;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: reason the order cannot be completed yet — settlement is required.
+  ///
+  /// In en, this message translates to:
+  /// **'Take payment to complete'**
+  String get posClosePaymentRequired;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: reason shown for a KDS-mode order (completion is driven by the KDS, not the POS).
+  ///
+  /// In en, this message translates to:
+  /// **'The kitchen display completes this order'**
+  String get posCloseKdsRequired;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: shown when the branch kitchen mode is not verified, so the close action is unavailable (fail-closed).
+  ///
+  /// In en, this message translates to:
+  /// **'Kitchen mode unavailable'**
+  String get posCloseWorkflowUnavailable;
+
   /// POS action that opens the table picker to assign a table to a dine-in order.
   ///
   /// In en, this message translates to:

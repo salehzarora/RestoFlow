@@ -368,6 +368,12 @@ PrintDocument buildReceiptDocument(
       // ORDER-CUSTOMER-001: the OPTIONAL customer name, clear near the top.
       if (order.customerName case final customer?)
         PrintLine.center('${l10n.customerNameReceiptLabel}: $customer'),
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone, directly BELOW the
+      // name. Absent => nothing printed (byte-identical receipt). Money-free header
+      // text; the whole document is rasterized for ar/he downstream so the digits +
+      // leading `+` render correctly.
+      if (order.customerPhone case final phone?)
+        PrintLine.center('${l10n.customerPhoneReceiptLabel}: $phone'),
       PrintLine.center(_formatReceiptTimestamp(payment.paidAt)),
       PrintLine.rule(),
       // Items — quantity + name at the larger item size, line total on the

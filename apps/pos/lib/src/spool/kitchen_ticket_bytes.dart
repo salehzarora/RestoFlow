@@ -44,6 +44,7 @@ Future<Uint8List> renderKitchenTicketBytes({
     orderType: input.orderType,
     tableLabel: input.tableLabel,
     customerDisplayName: input.customerName,
+    customerPhone: input.customerPhone,
     orderNote: input.orderNote,
     createdAt: input.createdAtIso,
     items: [

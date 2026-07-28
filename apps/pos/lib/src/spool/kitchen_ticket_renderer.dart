@@ -167,6 +167,16 @@ final class KitchenTicketRenderer {
           alignment: pp.PrintAlignment.center,
           style: pp.PrintLineStyle.centered,
         ),
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone directly below the
+      // name, matching the name's centered style. Only present on a locally-built
+      // direct-print document (the persisted spool doc never carries it — see
+      // KitchenDispatchDocument); null => nothing printed.
+      if (dispatch.customerPhone != null)
+        pp.PrintTextLine(
+          dispatch.customerPhone!,
+          alignment: pp.PrintAlignment.center,
+          style: pp.PrintLineStyle.centered,
+        ),
       if (dispatch.roundNumber != null)
         pp.PrintTextLine(
           '${labels.roundLabel} ${dispatch.roundNumber}',

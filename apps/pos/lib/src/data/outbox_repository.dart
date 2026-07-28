@@ -323,11 +323,22 @@ class RealOutboxRepository implements OutboxRepository {
       // `customer_name: null` key would change the fingerprint of existing
       // null-customer orders and break their idempotent replay across an upgrade.
       if (body['customer_name'] != null) 'customer_name': body['customer_name'],
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: forward the OPTIONAL customer phone
+      // ONLY when present — same fingerprint-preserving conditional as
+      // customer_name, so a phone-less op keeps the EXACT pre-feature wire shape.
+      if (body['customer_phone'] != null)
+        'customer_phone': body['customer_phone'],
       'order_items': body['order_items'],
       'subtotal_minor': body['subtotal_minor'],
       'discount_total_minor': body['discount_total_minor'],
       'tax_total_minor': body['tax_total_minor'],
       'grand_total_minor': body['grand_total_minor'],
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: forward dispatch_mode ONLY for a
+      // direct_print order (a VERIFIED printer_only branch). A kds order omits the
+      // key entirely, keeping the exact pre-feature op shape + idempotency
+      // fingerprint (the server defaults a missing dispatch_mode to 'kds').
+      if (body['dispatch_mode'] == 'direct_print')
+        'dispatch_mode': body['dispatch_mode'],
     };
     return <String, dynamic>{
       'local_operation_id': entry.localOperationId,

@@ -84,6 +84,10 @@ class PosRecoveryCoordinator {
     final table = recovery.table;
     if (table != null) setup.assignTable(table);
     setup.setCustomerName(recovery.customerName);
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: restore the OPTIONAL phone into the
+    // field too (empty when the draft carried none). The field's controller mirrors
+    // it via the setup-state listener.
+    setup.setCustomerPhone(recovery.customerPhone ?? '');
     // MENU-ORDER-001 (correction-window durability): Back to cart is NOT a terminal
     // event. The durable recovery AND its Recent-Orders rejected shell are KEPT so a
     // crash/refresh before the corrected re-Send can recover the SAME order again. The

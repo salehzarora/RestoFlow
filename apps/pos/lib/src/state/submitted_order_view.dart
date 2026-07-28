@@ -23,6 +23,7 @@ class SubmittedOrderView {
     this.taxRateBp = 0,
     this.tableLabel,
     this.customerName,
+    this.customerPhone,
     this.outboxEntryId,
     this.localOperationId,
     this.orderId,
@@ -88,6 +89,7 @@ class SubmittedOrderView {
     taxRateBp: taxRateBp,
     tableLabel: tableLabel ?? this.tableLabel,
     customerName: customerName,
+    customerPhone: customerPhone,
     outboxEntryId: outboxEntryId,
     localOperationId: localOperationId,
     orderId: orderId,
@@ -100,6 +102,11 @@ class SubmittedOrderView {
   /// time (already trimmed + empty->null). Shown on the confirmation + printed
   /// receipt; null when the cashier entered none. Non-money.
   final String? customerName;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone captured at
+  /// order time (already trimmed/validated + empty->null). Shown on the
+  /// confirmation + printed on the receipt and kitchen ticket. Non-money.
+  final String? customerPhone;
 
   /// The client-generated order id (a UUID in real mode) this order was
   /// submitted with — `OutboxEntry.targetId` (RF-129). A real `payment.create`

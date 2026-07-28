@@ -77,6 +77,18 @@ class CustomerReceiptPrintBuilder {
         lines.add(PrintTextLine(text));
       }
     }
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone, directly
+    // BELOW the name. Absent => nothing added (existing receipts byte-identical).
+    // Word-wrapped to the paper width; header text only — no money/tax touched.
+    final customerPhone = input.customerPhone;
+    if (customerPhone != null && customerPhone.isNotEmpty) {
+      for (final text in _wrapWords(
+        '${labels.customerPhone}: $customerPhone',
+        width,
+      )) {
+        lines.add(PrintTextLine(text));
+      }
+    }
     lines
       ..add(PrintTextLine(labels.serviceType(input.serviceType)))
       ..add(PrintTextLine(input.issuedAt.toIso8601String()))
@@ -188,6 +200,14 @@ class CustomerReceiptPrintBuilder {
     final customerName = input.customerName;
     if (customerName != null && customerName.isNotEmpty) {
       out.add('${labels.customer}: $customerName');
+    }
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone goes into the ar/he
+    // rasterized source too (never as `?` text), directly below the name. Absent
+    // => nothing added (byte-identical). The digits + leading `+` render correctly
+    // because the whole line is drawn as a bitmap in the receipt's own direction.
+    final customerPhone = input.customerPhone;
+    if (customerPhone != null && customerPhone.isNotEmpty) {
+      out.add('${labels.customerPhone}: $customerPhone');
     }
     out
       ..add(labels.serviceType(input.serviceType))
