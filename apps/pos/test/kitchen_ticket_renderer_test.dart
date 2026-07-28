@@ -204,6 +204,41 @@ void main() {
     final b = await renderer.renderToBytes(_initialDoc());
     expect(a, b);
   });
+
+  group('POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): crash-replay phone', () {
+    test('customerPhoneOverride prints the phone below the name', () {
+      final texts = _texts(
+        renderer.buildDocument(
+          _initialDoc(),
+          customerPhoneOverride: '050-7654321',
+        ),
+      );
+      expect(texts, contains('Layla'));
+      expect(texts, contains('050-7654321'));
+    });
+
+    test(
+      'no override + null document phone -> no phone line (byte-identical)',
+      () {
+        final texts = _texts(renderer.buildDocument(_initialDoc()));
+        expect(texts.any((t) => t.contains('7654321')), isFalse);
+      },
+    );
+
+    test('the crash-replay phone line stays money-free', () {
+      final texts = _texts(
+        renderer.buildDocument(
+          _initialDoc(),
+          customerPhoneOverride: '050-7654321',
+        ),
+      );
+      for (final t in texts) {
+        for (final money in ['₪', 'total:', 'price', 'amount']) {
+          expect(t.toLowerCase().contains(money.toLowerCase()), isFalse);
+        }
+      }
+    });
+  });
 }
 
 class _ExplodingRasterizer implements pp.ReceiptRasterizer {

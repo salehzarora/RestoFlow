@@ -33,6 +33,8 @@ import 'package:restoflow_pos/src/widgets/cart_panel.dart'
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/verified_kitchen_mode_readiness.dart';
+
 /// KITCHEN-PRINT-DUAL-001B (snapshot-race fix) — the POS kitchen ticket and the
 /// authoritative submitted order must consume the SAME immutable kitchen-relevant
 /// snapshot, captured BEFORE the first await. A menu/preparation edit while the
@@ -109,6 +111,11 @@ class _GatedOutbox implements OutboxRepository {
   @override
   Future<OutboxEntry> retry(String entryId) async =>
       enqueued.firstWhere((e) => e.id == entryId);
+
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async => null;
 }
 
 class _FakeAuthTransport implements SyncRpcTransport {
@@ -155,6 +162,11 @@ ProviderContainer _harness(
       posNativePrintingAvailableProvider.overrideWithValue(true),
       posHasKitchenNativePrinterProvider.overrideWithValue(true),
       posAutoPrintKitchenTicketProvider.overrideWith(_StubAutoKitchen.new),
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): submitOrderFromCart is
+      // gated on the verified kitchen mode; this KDS-branch snapshot-race test
+      // drives submit directly, so simulate the startup-verified mode (else the
+      // gated submit no-ops and the in-flight future never resolves).
+      verifiedKdsReadinessOverride(),
       ...extra,
     ],
   );

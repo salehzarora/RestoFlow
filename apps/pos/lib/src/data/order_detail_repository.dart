@@ -35,6 +35,7 @@ class PosOrderDetail {
     required this.rounds,
     this.tableLabel,
     this.customerName,
+    this.customerPhone,
     this.receiptNumber,
     this.payment,
   });
@@ -51,6 +52,7 @@ class PosOrderDetail {
   final int grandTotalMinor;
   final String? tableLabel;
   final String? customerName;
+  final String? customerPhone;
   final String? receiptNumber;
   final List<PosOrderDetailItem> items;
   final List<PosOrderDetailRound> rounds;
@@ -135,6 +137,9 @@ class PosOrderDetail {
           : null,
       customerName: order['customer_name'] is String
           ? order['customer_name'] as String
+          : null,
+      customerPhone: order['customer_phone'] is String
+          ? order['customer_phone'] as String
           : null,
       receiptNumber: order['receipt_number'] is String
           ? order['receipt_number'] as String
@@ -499,6 +504,7 @@ SubmittedOrderView submittedOrderViewFromDetail(PosOrderDetail d) {
     taxTotalMinor: d.taxTotalMinor,
     tableLabel: d.tableLabel,
     customerName: d.customerName,
+    customerPhone: d.customerPhone,
     orderId: d.orderId,
     lines: [
       for (final i in sortedItems)

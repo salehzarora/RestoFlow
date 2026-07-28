@@ -72,6 +72,8 @@ PrintDocument buildOrderReceiptPreview(
       PrintLine.kv(l10n.posTableLabel, detail.tableLabel!),
     if (detail.customerName != null && detail.customerName!.isNotEmpty)
       PrintLine.kv(l10n.ordersCustomerLabel, detail.customerName!),
+    if (detail.customerPhone != null && detail.customerPhone!.isNotEmpty)
+      PrintLine.kv(l10n.customerPhoneReceiptLabel, detail.customerPhone!),
     // POS-ORDERS-AND-PAYMENT-001: the customer receipt omits the cashier/staff
     // name (owner/internal only) — staffName is NOT printed here.
     PrintLine.rule(),
@@ -170,6 +172,8 @@ PrintDocument buildOrderKitchenTicketPreview(
       PrintLine.kv(l10n.posTableLabel, detail.tableLabel!),
     if (detail.customerName != null && detail.customerName!.isNotEmpty)
       PrintLine.kv(l10n.ordersCustomerLabel, detail.customerName!),
+    if (detail.customerPhone != null && detail.customerPhone!.isNotEmpty)
+      PrintLine.kv(l10n.customerPhoneReceiptLabel, detail.customerPhone!),
   ];
 
   // The whole-order kitchen count total (KITCHEN-COUNT-001), money-free.

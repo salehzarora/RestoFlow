@@ -4,6 +4,7 @@ import 'package:restoflow_core/restoflow_core.dart';
 import 'package:restoflow_data_local/restoflow_data_local.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
+import '../data/outbox_repository.dart' show OrderSubmitPhoneLookupKey;
 import 'kitchen_destination_resolver.dart';
 
 /// KITCHEN-MODE-001C2B — the durable import transaction (steps 3–14 of the
@@ -82,6 +83,8 @@ final class KitchenDispatchImportCoordinator {
     required SupabaseKitchenDispatchAckRepository ackRepository,
     required String Function() localJobIdGenerator,
     DateTime Function()? now,
+    Future<String?> Function(OrderSubmitPhoneLookupKey key)?
+    resolveCustomerPhone,
   }) : _store = store,
        _cipher = cipher,
        _key = key,
@@ -89,7 +92,8 @@ final class KitchenDispatchImportCoordinator {
        _destination = destination,
        _ackRepository = ackRepository,
        _newLocalJobId = localJobIdGenerator,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _resolveCustomerPhone = resolveCustomerPhone;
 
   static const Duration _ackBackoffBase = Duration(seconds: 2);
   static const Duration _ackBackoffCap = Duration(minutes: 5);
@@ -102,6 +106,86 @@ final class KitchenDispatchImportCoordinator {
   final SupabaseKitchenDispatchAckRepository _ackRepository;
   final String Function() _newLocalJobId;
   final DateTime Function() _now;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C, Codex HIGH): resolves the ORDER's
+  /// phone LOCALLY (never from the redacted server payload) so it can be stored in
+  /// the encrypted local payload and printed on a crash-recovery replay. Called
+  /// with a FULLY-SCOPED [OrderSubmitPhoneLookupKey] built from THIS run's import
+  /// scope + the dispatch order id, so the durable lookup cannot cross scopes.
+  /// Optional + best-effort: a miss/failure/absence yields null (name-only).
+  final Future<String?> Function(OrderSubmitPhoneLookupKey key)?
+  _resolveCustomerPhone;
+
+  /// The fully-scoped durable-phone lookup identity for [dispatch] in THIS run's
+  /// import scope (organization/restaurant/branch/device from [_scope]). The
+  /// pulled dispatch carries no local_operation_id, so it is left null.
+  OrderSubmitPhoneLookupKey _phoneLookupKey(PulledKitchenDispatch dispatch) =>
+      OrderSubmitPhoneLookupKey(
+        organizationId: _scope.organizationId,
+        restaurantId: _scope.restaurantId,
+        branchId: _scope.branchId,
+        deviceId: _scope.deviceId,
+        orderId: dispatch.orderId,
+      );
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): enrich a previously
+  /// phone-less imported row when the phone is now resolvable. Decrypt-check the
+  /// existing ciphertext (so an existing non-null phone is never overwritten, and
+  /// a cross-scope row — whose AAD will not match — is left untouched), then
+  /// re-encrypt with the SAME AAD and replace ONLY the encrypted blob. Fully
+  /// best-effort and idempotent: any resolve/decode/crypto miss leaves the row
+  /// byte-identical, and re-running with the same phone is a no-op write.
+  Future<void> _maybeEnrichPhone(
+    KitchenSpoolJobRow row,
+    PulledKitchenDispatch dispatch,
+    DateTime now,
+  ) async {
+    final resolver = _resolveCustomerPhone;
+    if (resolver == null) return;
+    String? resolved;
+    try {
+      resolved = await resolver(_phoneLookupKey(dispatch));
+    } on Object {
+      return;
+    }
+    if (resolved == null || resolved.isEmpty) return;
+
+    final aad = KitchenSpoolAad(
+      dispatchId: row.dispatchId,
+      organizationId: _scope.organizationId,
+      restaurantId: _scope.restaurantId,
+      branchId: _scope.branchId,
+      deviceId: _scope.deviceId,
+      encryptionVersion: row.encryptionVersion,
+    );
+    KitchenSpoolLocalPayload payload;
+    try {
+      final bytes = await _cipher.decrypt(
+        envelope: row.encryptedPayloadBlob,
+        aad: aad,
+        key: _key,
+      );
+      payload = KitchenSpoolLocalPayload.fromBytes(bytes);
+    } on Object {
+      return; // undecryptable (e.g. a different scope) -> never touched
+    }
+    if (payload.customerPhone != null) return; // never overwrite a phone
+
+    final enriched = KitchenSpoolLocalPayload(
+      dispatch: payload.dispatch,
+      destination: payload.destination,
+      paperWidth: payload.paperWidth,
+      documentVersion: payload.documentVersion,
+      rasterVersion: payload.rasterVersion,
+      customerPhone: resolved,
+    );
+    final Uint8List envelope = await _cipher.encrypt(
+      plaintext: enriched.toBytes(),
+      aad: aad,
+      key: _key,
+    );
+    await _store.updateEncryptedPayload(row.localJobId, envelope, now);
+  }
 
   Future<KitchenImportSummary> importDispatches(
     List<PulledKitchenDispatch> dispatches,
@@ -129,6 +213,12 @@ final class KitchenDispatchImportCoordinator {
       if (existing != null) {
         duplicates++;
         row = existing;
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): a re-drive may now be
+        // able to resolve a phone the FIRST import lacked (it raced ahead of both
+        // the durable op and the recent-order registration). Enrich ONLY the
+        // encrypted customerPhone — never a duplicate, a status/attempt/
+        // destination change, or an overwrite of an existing non-null phone.
+        await _maybeEnrichPhone(existing, dispatch, now);
       } else {
         // 3–4: closed decode + defence in depth. A hostile/malformed payload
         // rejects THIS dispatch only (typed) — it is never persisted.
@@ -151,6 +241,20 @@ final class KitchenDispatchImportCoordinator {
           continue;
         }
 
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): resolve the ORDER's phone
+        // from the LOCAL order (never the redacted server payload) so it is stored
+        // in the encrypted local payload and printed on a crash-recovery replay.
+        // Best-effort: any miss/failure keeps the phone null (name-only, unchanged).
+        String? resolvedCustomerPhone;
+        final resolver = _resolveCustomerPhone;
+        if (resolver != null) {
+          try {
+            resolvedCustomerPhone = await resolver(_phoneLookupKey(dispatch));
+          } on Object {
+            resolvedCustomerPhone = null;
+          }
+        }
+
         // 5–7: destination pinning or the encrypted blocked variant.
         final resolution = _destination;
         final bool isBlocked = resolution is BlockedKitchenDestination;
@@ -166,6 +270,7 @@ final class KitchenDispatchImportCoordinator {
           },
           documentVersion: 1,
           rasterVersion: 1,
+          customerPhone: resolvedCustomerPhone,
         );
 
         // 8–9: encrypt bound to the canonical AAD.

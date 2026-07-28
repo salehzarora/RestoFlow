@@ -62,6 +62,7 @@ class ReceiptLabelBundle {
     required this.receiptNumber,
     required this.order,
     required this.customer,
+    required this.customerPhone,
     required this.dineIn,
     required this.takeaway,
     required this.subtotal,
@@ -76,6 +77,10 @@ class ReceiptLabelBundle {
 
   /// ORDER-CUSTOMER-001: label for the optional customer-name header row.
   final String customer;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: label for the optional customer-phone
+  /// header row (printed directly below the name when a phone is present).
+  final String customerPhone;
   final String dineIn;
   final String takeaway;
   final String subtotal;
@@ -93,6 +98,7 @@ class ReceiptLabelBundle {
     receiptNumber: 'Receipt',
     order: 'Order',
     customer: 'Customer',
+    customerPhone: 'Phone',
     dineIn: 'Dine-in',
     takeaway: 'Takeaway',
     subtotal: 'Subtotal',
@@ -106,6 +112,7 @@ class ReceiptLabelBundle {
     receiptNumber: 'إيصال',
     order: 'طلب',
     customer: 'الزبون',
+    customerPhone: 'رقم الهاتف',
     dineIn: 'تناول في المطعم',
     takeaway: 'سفري',
     subtotal: 'المجموع الفرعي',
@@ -119,6 +126,7 @@ class ReceiptLabelBundle {
     receiptNumber: 'קבלה',
     order: 'הזמנה',
     customer: 'לקוח',
+    customerPhone: 'טלפון',
     dineIn: 'ישיבה במקום',
     takeaway: 'לקחת',
     subtotal: 'סכום ביניים',
@@ -254,6 +262,7 @@ class ReceiptInput {
     this.exponentOverride,
     this.labels,
     this.customerName,
+    this.customerPhone,
   }) : items = List.unmodifiable(items),
        merchantLines = List.unmodifiable(merchantLines),
        discounts = List.unmodifiable(discounts),
@@ -275,6 +284,12 @@ class ReceiptInput {
   /// null it prints nothing (existing receipts are byte-identical). Does not
   /// affect any money/tax formatting.
   final String? customerName;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone (non-money).
+  /// When non-null/non-empty the builder prints a "Phone: <value>" header row
+  /// directly below the customer name; when null it prints nothing (existing
+  /// receipts stay byte-identical). Does not affect any money/tax formatting.
+  final String? customerPhone;
 
   final ReceiptServiceType serviceType;
   final String currencyCode;

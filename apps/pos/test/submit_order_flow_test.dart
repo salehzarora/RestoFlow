@@ -37,6 +37,10 @@ class _GatedOutboxStore implements OutboxRepository {
 
   @override
   Future<OutboxEntry> retry(String entryId) => _inner.retry(entryId);
+
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(OrderSubmitPhoneLookupKey key) =>
+      _inner.findOrderSubmitCustomerPhone(key);
 }
 
 Future<AppLocalizations> _en() =>

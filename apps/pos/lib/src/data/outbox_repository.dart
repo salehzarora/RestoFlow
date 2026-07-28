@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 
+import 'customer_phone.dart';
 import 'durable_outbox_store.dart';
 import 'order_submission.dart';
 
@@ -38,6 +39,130 @@ abstract class OutboxRepository {
 
   /// Re-queues a failed entry back to `pending` so it can be pushed again.
   Future<OutboxEntry> retry(String entryId);
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): the customer phone from the
+  /// DURABLE `order.submit` operation identified by [key] — persisted BEFORE the
+  /// network push, so it is available for the encrypted kitchen spool even when
+  /// the server dispatch is imported before the order reaches recent-orders.
+  ///
+  /// FULLY SCOPED (Codex HIGH): a match requires the op's organization, restaurant,
+  /// branch, AND device to equal the caller's live scope, the op type to be
+  /// `order.submit`, and the order identity (`targetId` + payload `order_id`, plus
+  /// `local_operation_id` when the key carries it) to match — never a loose
+  /// single-field or cross-restaurant/branch/device match, never a "first order id"
+  /// guess. The recovered phone is passed through the ONE shared
+  /// [normalizeCustomerPhone] validator, so a malformed durable value (e.g. one
+  /// containing letters) can never enter the encrypted spool or a printed ticket.
+  /// Returns the normalized phone for exactly one authoritative match, else null
+  /// (ambiguity resolves to null safely; never a throw, never a logged phone).
+  Future<String?> findOrderSubmitCustomerPhone(OrderSubmitPhoneLookupKey key);
+}
+
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2, Codex HIGH): the fully-scoped,
+/// authoritative identity of the durable `order.submit` op whose phone may seed
+/// the encrypted kitchen spool. The scope fields come from the LIVE imported
+/// dispatch/job context (never mutable global state); [localOperationId] is set
+/// only when the contract carries it (the pulled dispatch does not).
+class OrderSubmitPhoneLookupKey {
+  const OrderSubmitPhoneLookupKey({
+    required this.organizationId,
+    required this.restaurantId,
+    required this.branchId,
+    required this.deviceId,
+    required this.orderId,
+    this.localOperationId,
+  });
+
+  final String organizationId;
+  final String restaurantId;
+  final String branchId;
+  final String deviceId;
+  final String orderId;
+  final String? localOperationId;
+}
+
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2, Codex HIGH): read the customer
+/// phone from the durable `order.submit` outbox entry that EXACTLY matches [key].
+/// Shared, side-effect-free, and defensive. Matching is all-of:
+///   * `operation_type == 'order.submit'`
+///   * organization / restaurant / branch / device all equal the key's scope
+///   * `targetId == key.orderId` AND payload `order_id == key.orderId`
+///   * `local_operation_id == key.localOperationId` when the key carries one
+/// The matched op's phone is passed through [normalizeCustomerPhone] (the ONE
+/// shared validator), so a blank / non-string / letters / control / short / long
+/// value yields null. More than one exact match (ambiguity) resolves to null.
+String? customerPhoneFromOrderSubmitEntries(
+  Iterable<OutboxEntry> entries,
+  OrderSubmitPhoneLookupKey key,
+) {
+  String? found;
+  var matches = 0;
+  for (final e in entries) {
+    if (e.operationType != 'order.submit') continue;
+    if (e.organizationId != key.organizationId) continue;
+    if (e.restaurantId != key.restaurantId) continue;
+    if (e.branchId != key.branchId) continue;
+    if (e.deviceId != key.deviceId) continue;
+    if (e.targetId != key.orderId) continue;
+    if (key.localOperationId != null &&
+        e.localOperationId != key.localOperationId) {
+      continue;
+    }
+    Map<String, dynamic> body;
+    try {
+      final decoded = jsonDecode(e.payloadJson);
+      if (decoded is! Map<String, dynamic>) continue;
+      body = decoded;
+    } on FormatException {
+      continue;
+    }
+    // The payload's OWN order identity must also match (defence beyond targetId).
+    if (body['order_id'] != key.orderId) continue;
+    // VALIDATE through the shared normalizer — an invalid durable phone is null,
+    // never a raw value that could reach the encrypted spool / printed ticket.
+    final raw = body['customer_phone'];
+    matches++;
+    found = normalizeCustomerPhone(raw is String ? raw : null);
+  }
+  // Exactly one authoritative match may supply a phone; ambiguity -> null.
+  return matches == 1 ? found : null;
+}
+
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 4): the CANONICAL identity payload
+/// for an operation — the subset the server hashes into the idempotency
+/// fingerprint. `customer_phone` is DATA ONLY on an `order.submit`: it rides the
+/// transport payload for persistence but is EXCLUDED from the operation IDENTITY,
+/// so re-sending the same `(device, local_operation_id)` op with only a different
+/// phone is an idempotent replay (the first stored phone is kept), never a
+/// conflict. Every other field, and every other operation type, is unchanged.
+/// Mirrors `app.sync_push`'s `v_payload - 'customer_phone'` rule; this is the ONE
+/// place the client expresses it (no inline key removal scattered elsewhere).
+Map<String, dynamic> canonicalOperationIdentityPayload(
+  String operationType,
+  Map<String, dynamic> payload,
+) {
+  if (operationType != 'order.submit') return payload;
+  if (!payload.containsKey('customer_phone')) return payload;
+  return <String, dynamic>{
+    for (final entry in payload.entries)
+      if (entry.key != 'customer_phone') entry.key: entry.value,
+  };
+}
+
+/// A stable identity KEY for local duplicate detection — the client mirror of the
+/// server fingerprint's INPUT. (It is NOT claimed to be byte-identical to the
+/// server md5; the server remains authoritative.) Two `order.submit` ops that
+/// differ ONLY in `customer_phone` produce the SAME key; a change to any other
+/// field, or any non-`order.submit` op, produces a different key. The transport
+/// payload (which still carries the phone) is unaffected.
+String operationIdentityKey(
+  String operationType,
+  Map<String, dynamic> payload,
+) {
+  final identity = canonicalOperationIdentityPayload(operationType, payload);
+  final sortedKeys = identity.keys.toList()..sort();
+  return '$operationType|'
+      '${jsonEncode(<String, dynamic>{for (final k in sortedKeys) k: identity[k]})}';
 }
 
 /// In-memory, clearly-labelled DEMO outbox (RF-115). Holds enqueued order
@@ -120,6 +245,11 @@ class DemoOutboxStore implements OutboxRepository {
     _entries[idx] = updated;
     return updated;
   }
+
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async => customerPhoneFromOrderSubmitEntries(_entries, key);
 
   int _indexOf(String entryId) {
     for (var i = 0; i < _entries.length; i++) {
@@ -293,6 +423,20 @@ class RealOutboxRepository implements OutboxRepository {
     return updated;
   }
 
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async {
+    // Best-effort READ (never the fail-closed submit guard): a not-yet-signed-in
+    // repo simply has no durable op to read, so return null rather than throw.
+    if (!_ready) return null;
+    await _ensureLoaded();
+    // The queue is loaded per THIS session's device; the shared matcher
+    // additionally enforces the FULL org/restaurant/branch/device + order identity
+    // scope, so a re-paired-device / cross-tenant / cross-branch op cannot match.
+    return customerPhoneFromOrderSubmitEntries(_entries!, key);
+  }
+
   int _indexOf(String entryId) {
     final entries = _entries!;
     for (var i = 0; i < entries.length; i++) {
@@ -323,11 +467,27 @@ class RealOutboxRepository implements OutboxRepository {
       // `customer_name: null` key would change the fingerprint of existing
       // null-customer orders and break their idempotent replay across an upgrade.
       if (body['customer_name'] != null) 'customer_name': body['customer_name'],
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: forward the OPTIONAL customer phone
+      // ONLY when present, keeping a phone-less op's EXACT pre-feature wire shape.
+      // Finding 4: the phone is DATA ONLY — the server EXCLUDES customer_phone
+      // from the order.submit idempotency fingerprint (see
+      // canonicalOperationIdentityPayload), so re-sending the same op with only a
+      // different phone replays idempotently (the first stored phone is kept)
+      // rather than conflicting. The client's own dedupe is the D-022
+      // (device, local_operation_id) identity — already phone-independent.
+      if (body['customer_phone'] != null)
+        'customer_phone': body['customer_phone'],
       'order_items': body['order_items'],
       'subtotal_minor': body['subtotal_minor'],
       'discount_total_minor': body['discount_total_minor'],
       'tax_total_minor': body['tax_total_minor'],
       'grand_total_minor': body['grand_total_minor'],
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: forward dispatch_mode ONLY for a
+      // direct_print order (a VERIFIED printer_only branch). A kds order omits the
+      // key entirely, keeping the exact pre-feature op shape + idempotency
+      // fingerprint (the server defaults a missing dispatch_mode to 'kds').
+      if (body['dispatch_mode'] == 'direct_print')
+        'dispatch_mode': body['dispatch_mode'],
     };
     return <String, dynamic>{
       'local_operation_id': entry.localOperationId,

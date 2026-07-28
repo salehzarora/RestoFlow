@@ -170,6 +170,22 @@ class OrderSubmissionItem {
   };
 }
 
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: how this order is dispatched to the
+/// kitchen. [kds] (the default) is the normal KDS active workflow. [directPrint]
+/// is used ONLY when the branch is a VERIFIED printer_only branch (no KDS device):
+/// the server routes the order OUT of the KDS board and rests it at `served` so it
+/// can complete on the UNCHANGED settlement rule and free its table. The wire
+/// value is only emitted for [directPrint] — a [kds] order keeps the exact
+/// pre-feature op shape (the server defaults a missing dispatch_mode to 'kds').
+enum OrderDispatchMode {
+  kds('kds'),
+  directPrint('direct_print');
+
+  const OrderDispatchMode(this.wire);
+
+  final String wire;
+}
+
 /// The structured order-submission payload (RF-115). Its JSON shape mirrors the
 /// real `app.submit_order` RPC request (RF-052 / API_CONTRACT §4.1) so the same
 /// body can later be POSTed by the real push engine. All money is integer minor
@@ -195,6 +211,8 @@ class OrderSubmissionPayload {
     required this.clientCreatedAt,
     this.notes,
     this.customerName,
+    this.customerPhone,
+    this.dispatchMode = OrderDispatchMode.kds,
   });
 
   final String orderId;
@@ -225,6 +243,17 @@ class OrderSubmissionPayload {
   /// (trim/empty->null/<=80). Reaches the receipt + the kitchen ticket.
   final String? customerName;
 
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone (non-money
+  /// display string; see [normalizeCustomerPhone]). Trimmed + empty->null +
+  /// validated upstream; the server re-validates. Reaches the receipt + the
+  /// kitchen ticket. Never an identifier / idempotency key / log value.
+  final String? customerPhone;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the kitchen dispatch mode (default
+  /// [OrderDispatchMode.kds]). Set to [OrderDispatchMode.directPrint] ONLY for a
+  /// VERIFIED printer_only branch so the order closes without a KDS device.
+  final OrderDispatchMode dispatchMode;
+
   String get orderTypeWire =>
       orderType == OrderType.dineIn ? 'dine_in' : 'takeaway';
 
@@ -246,11 +275,20 @@ class OrderSubmissionPayload {
     'grand_total_minor': grandTotalMinor,
     'notes': notes,
     'customer_name': customerName,
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone travels in the
+    // durable body; the transport (_buildOrderSubmitOp) forwards it to the server
+    // ONLY when present, so a phone-less op keeps the exact pre-feature fingerprint.
+    'customer_phone': customerPhone,
     'client_created_at': clientCreatedAt.toIso8601String(),
     'order_items': items.map((i) => i.toJson()).toList(growable: false),
-    // KITCHEN-PRINT-DUAL-001D: the POS never emits dispatch_mode — every order
-    // uses the normal KDS workflow (the server defaults a missing dispatch_mode to
-    // 'kds'; the 001C direct_print column stays dormant for new POS orders).
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: emit dispatch_mode ONLY for a
+    // direct_print order (a VERIFIED printer_only branch). A kds order keeps the
+    // EXACT pre-feature durable body + transport op shape — no dispatch_mode key at
+    // all (the server + the transport both default a missing value to 'kds'). This
+    // is what makes a printer_only dine-in order rest at served and close on
+    // settlement, while every existing kds order is byte-unchanged.
+    if (dispatchMode == OrderDispatchMode.directPrint)
+      'dispatch_mode': dispatchMode.wire,
   };
 }
 
@@ -265,6 +303,7 @@ class OrderSummary {
     required this.subtotalMinor,
     required this.currencyCode,
     this.customerName,
+    this.customerPhone,
   });
 
   /// Local/provisional demo number (e.g. `DEMO-0001`) — NOT a server receipt
@@ -280,6 +319,10 @@ class OrderSummary {
   /// confirmation/receipt can show it without decoding the raw payload.
   final String? customerName;
 
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone (non-money),
+  /// so the confirmation/receipt can show it without decoding the raw payload.
+  final String? customerPhone;
+
   /// RF-114 durable-outbox persistence (integer minor money only, D-007).
   Map<String, Object?> toJson() => <String, Object?>{
     'order_number': orderNumber,
@@ -289,6 +332,7 @@ class OrderSummary {
     'subtotal_minor': subtotalMinor,
     'currency_code': currencyCode,
     'customer_name': customerName,
+    'customer_phone': customerPhone,
   };
 
   factory OrderSummary.fromJson(Map<String, Object?> json) => OrderSummary(
@@ -301,6 +345,7 @@ class OrderSummary {
     subtotalMinor: (json['subtotal_minor'] as num?)?.toInt() ?? 0,
     currencyCode: json['currency_code'] as String? ?? 'ILS',
     customerName: json['customer_name'] as String?,
+    customerPhone: json['customer_phone'] as String?,
   );
 }
 

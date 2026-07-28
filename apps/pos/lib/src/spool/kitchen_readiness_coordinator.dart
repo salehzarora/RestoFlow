@@ -112,6 +112,8 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     required Future<KitchenReadinessResult> Function(KitchenReadinessReport)
     sendReport,
     required Future<void> Function() invalidateModeCache,
+    void Function(KitchenModeResult)? onMode,
+    void Function()? onModeUnavailable,
     String appBuild = kPosKitchenReadinessAppBuild,
     Duration interval = kKitchenReadinessHeartbeatInterval,
     Duration callTimeout = kKitchenReadinessCallTimeout,
@@ -123,6 +125,8 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
        _probeSpool = probeSpool,
        _sendReport = sendReport,
        _invalidateModeCache = invalidateModeCache,
+       _onMode = onMode,
+       _onModeUnavailable = onModeUnavailable,
        _appBuild = appBuild,
        _interval = interval,
        _callTimeout = callTimeout,
@@ -132,6 +136,16 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
 
   final DeviceContext? Function() _deviceContext;
   final Future<KitchenModeResult> Function() _fetchMode;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publishes each freshly-fetched kitchen
+  /// mode so the submission path can resolve the dispatch mode (direct_print for a
+  /// verified printer_only branch). Optional; null in tests that don't observe it.
+  final void Function(KitchenModeResult)? _onMode;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: fired when the mode fetch fails
+  /// definitively (throw/timeout) so the submission readiness can block with a
+  /// retryable "unavailable" reason instead of guessing KDS. Optional.
+  final void Function()? _onModeUnavailable;
   final Future<KitchenReadinessPrinterEvidence> Function() _printerEvidence;
   final Future<KitchenSpoolReadinessProbeResult> Function({
     required String deviceId,
@@ -241,12 +255,24 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     try {
       mode = await _fetchMode().timeout(_callTimeout);
     } on Object {
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: a definitive fetch failure (network
+      // throw / timeout) with no trusted cache must BLOCK submission with a
+      // retryable reason — never leave the readiness silently guessing KDS.
+      // Finding 1 (disposal safety): a heartbeat disposed during the fetch (scope
+      // change) must NOT publish — the new scope owns readiness now.
+      if (!_disposed) _onModeUnavailable?.call();
       return KitchenReadinessRunReport(
         trigger: trigger,
         outcome: KitchenReadinessRunOutcome.skippedModeUnavailable,
         detail: 'mode_fetch_failed',
       );
     }
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publish the freshly-fetched mode. A
+    // TRUSTED mode (printer_only+revision / verified kds) resolves submission; any
+    // other result blocks it (never a guessed KDS) — the readiness controller maps
+    // the result and only downgrades while still loading. Finding 1: skip the
+    // publish when disposed mid-fetch so an old scope's result never crosses over.
+    if (!_disposed) _onMode?.call(mode);
     final int revision;
     switch (mode) {
       case KitchenModePrinterOnlyWithRevision(revision: final r):

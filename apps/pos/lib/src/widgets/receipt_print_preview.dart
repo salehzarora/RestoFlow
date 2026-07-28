@@ -161,6 +161,18 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               text:
                                   '${l10n.customerNameReceiptLabel}: $customer',
                             ),
+                          // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 5): the
+                          // optional phone, directly BELOW the name and BEFORE the
+                          // time — the SAME order the printed receipt uses. Absent
+                          // => no line and no empty label/gap. The trimmed display
+                          // form is shown verbatim; `_Centered` (no letterSpacing,
+                          // locale-directional Text) renders the +/digits/spaces/
+                          // hyphens/parens correctly under ar/he RTL, exactly like
+                          // the customer-name line above.
+                          if (order.customerPhone case final phone?)
+                            _Centered(
+                              text: '${l10n.customerPhoneReceiptLabel}: $phone',
+                            ),
                           _Centered(
                             text: _formatReceiptTimestamp(payment.paidAt),
                           ),
@@ -368,6 +380,12 @@ PrintDocument buildReceiptDocument(
       // ORDER-CUSTOMER-001: the OPTIONAL customer name, clear near the top.
       if (order.customerName case final customer?)
         PrintLine.center('${l10n.customerNameReceiptLabel}: $customer'),
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone, directly BELOW the
+      // name. Absent => nothing printed (byte-identical receipt). Money-free header
+      // text; the whole document is rasterized for ar/he downstream so the digits +
+      // leading `+` render correctly.
+      if (order.customerPhone case final phone?)
+        PrintLine.center('${l10n.customerPhoneReceiptLabel}: $phone'),
       PrintLine.center(_formatReceiptTimestamp(payment.paidAt)),
       PrintLine.rule(),
       // Items — quantity + name at the larger item size, line total on the

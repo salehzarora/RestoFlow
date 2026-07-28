@@ -8,8 +8,11 @@ import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/kitchen_mode_readiness.dart'
+    show posVerifiedKitchenModeProvider;
 import '../data/order_actions.dart';
 import '../data/order_center_view.dart';
+import '../data/order_close_policy.dart';
 import '../data/order_detail_repository.dart';
 import '../data/order_identity.dart';
 import '../data/order_reconciler.dart' show unpaidOrderCount;
@@ -20,6 +23,7 @@ import '../data/payment.dart' show CashPayment;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
 import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
+import '../state/pos_order_complete_controller.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
     show posHasKitchenNativePrinterProvider;
 import '../state/addition_controller.dart';
@@ -197,6 +201,11 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
     // refuses correctly either way.
     final caps = ref.watch(staffCapabilitiesProvider).value;
     final entries = ref.watch(outboxControllerProvider);
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the inputs for the printer-only
+    // Complete safety net — the VERIFIED kitchen mode (null unless verified
+    // printer_only/kds) + the set of orders with a completion in flight.
+    final verifiedMode = ref.watch(posVerifiedKitchenModeProvider);
+    final completingIds = ref.watch(posOrderCompleteControllerProvider);
 
     // The local queue, joined by ORDER IDENTITY. It reports what THIS DEVICE is doing —
     // never what the ORDER is doing. Conflating the two is what made a queued
@@ -325,6 +334,20 @@ class _RecentOrdersSheetState extends ConsumerState<RecentOrdersSheet> {
                           o,
                           capabilities: caps,
                           pending: pendingByIdentity[o.identity.key],
+                          // Gap B: the central close-eligibility policy decides the
+                          // printer-only Complete safety net (server re-enforces).
+                          completeEligible:
+                              posOrderCloseEligibility(
+                                status: o.status ?? '',
+                                settled: o.settlement != PosSettlement.unpaid,
+                                verifiedMode: verifiedMode,
+                                actorAuthorized:
+                                    caps?.canFinishKitchenOrders ?? false,
+                                transitionInFlight:
+                                    pendingByIdentity[o.identity.key] != null ||
+                                    completingIds.contains(o.orderId),
+                              ) ==
+                              PosOrderCloseEligibility.allowed,
                         ),
                         outboxState: _outboxStateFor(entries, o.identity),
                       );
@@ -1133,6 +1156,38 @@ class _ActionRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final children = <Widget>[];
+
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap B): the printer-only Complete safety
+    // net — shown ONLY when the central policy allowed it (served + fully settled +
+    // verified printer_only + authorized + not terminal + none in flight). One tap
+    // sends exactly one order.status(completed) op; a second is suppressed while it
+    // runs. On success the order leaves the board + its table frees (derived
+    // occupancy); no payment, no resubmit, no reprint. The server re-enforces.
+    if (actions.canComplete) {
+      final completing = ref
+          .watch(posOrderCompleteControllerProvider)
+          .contains(order.orderId);
+      children.add(
+        _ActionButton(
+          child: FilledButton.icon(
+            key: Key('recent-complete-${order.orderNumber}'),
+            onPressed: completing
+                ? null
+                : () => ref
+                      .read(posOrderCompleteControllerProvider.notifier)
+                      .complete(order.orderId ?? ''),
+            icon: completing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check_circle_outline, size: 18),
+            label: Text(l10n.posCompleteOrder),
+          ),
+        ),
+      );
+    }
 
     if (actions.canPay) {
       children.add(

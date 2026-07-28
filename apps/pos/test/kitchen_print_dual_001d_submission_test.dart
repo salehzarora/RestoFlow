@@ -26,6 +26,8 @@ import 'package:restoflow_pos/src/widgets/cart_panel.dart'
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/verified_kitchen_mode_readiness.dart';
+
 /// KITCHEN-PRINT-DUAL-001D — every real order ALWAYS uses the normal KDS workflow.
 /// The "Automatically print kitchen ticket" toggle no longer selects a workflow:
 ///   A. OFF     -> normal submit, NO dispatch_mode, zero automatic prints.
@@ -84,6 +86,11 @@ class _RecordingOutbox implements OutboxRepository {
   @override
   Future<OutboxEntry> retry(String id) async =>
       enqueued.firstWhere((e) => e.id == id);
+
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(
+    OrderSubmitPhoneLookupKey key,
+  ) async => null;
 }
 
 class _FakeAuthTransport implements SyncRpcTransport {
@@ -143,6 +150,10 @@ Future<({_RecordingOutbox outbox, _CapturingTransport print})> _submit(
         () => _StubAutoKitchen(toggleOn),
       ),
       kitchenPrintTransportOverrideProvider.overrideWithValue((_) => capture),
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): the branch mode is the
+      // normal KDS workflow (the auto-print toggle is orthogonal) — simulate
+      // the verified mode so Send is enabled and no dispatch_mode is emitted.
+      verifiedKdsReadinessOverride(),
     ],
   );
   addTearDown(c.dispose);

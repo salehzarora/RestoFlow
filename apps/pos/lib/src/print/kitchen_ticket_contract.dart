@@ -34,6 +34,7 @@ final class KitchenTicketInput {
     required this.orderType,
     this.tableLabel,
     this.customerName,
+    this.customerPhone,
     this.orderNote,
     this.lines = const [],
     this.createdAtIso,
@@ -46,6 +47,10 @@ final class KitchenTicketInput {
   final String orderType;
   final String? tableLabel;
   final String? customerName;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone (money-free
+  /// display text). Rendered directly below the name on the kitchen ticket.
+  final String? customerPhone;
   final String? orderNote;
   final List<KitchenTicketLineInput> lines;
   final String? createdAtIso;

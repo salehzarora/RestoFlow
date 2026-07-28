@@ -13,8 +13,15 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/spool/flutter_secure_kitchen_spool_key_store.dart';
 import 'package:restoflow_pos/src/spool/kitchen_destination_resolver.dart';
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
+import 'package:restoflow_pos/src/data/order_submission.dart'
+    show OrderSummary, OutboxEntry, OutboxSyncState;
+import 'package:restoflow_pos/src/data/outbox_repository.dart'
+    show OrderSubmitPhoneLookupKey, customerPhoneFromOrderSubmitEntries;
 import 'package:restoflow_pos/src/spool/kitchen_dispatch_import_coordinator.dart';
+import 'package:restoflow_pos/src/spool/kitchen_ticket_renderer.dart';
 import 'package:restoflow_pos/src/spool/pos_kitchen_spool_platform.dart';
+import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 /// KITCHEN-MODE-001C2B — the durable import transaction against a REAL
 /// dedicated spool database (temp file), the REAL AES-256-GCM cipher, and a
@@ -187,6 +194,7 @@ void main() {
 
   KitchenDispatchImportCoordinator coordinator({
     KitchenDestinationResolution destination = _resolved,
+    Future<String?> Function(OrderSubmitPhoneLookupKey key)? resolvePhone,
   }) => KitchenDispatchImportCoordinator(
     store: store,
     cipher: cipher,
@@ -196,6 +204,7 @@ void main() {
     ackRepository: ackRepo,
     localJobIdGenerator: () => 'job-${++idCounter}',
     now: () => now,
+    resolveCustomerPhone: resolvePhone,
   );
 
   KitchenSpoolAad aad(String dispatchId) => KitchenSpoolAad(
@@ -206,6 +215,20 @@ void main() {
     deviceId: 'dev-1',
     encryptionVersion: cipher.encryptionVersion,
   );
+
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): the customer phone stored in
+  // the ENCRYPTED spool row for [dispatchId] (null when the row carries none).
+  Future<String?> storedPhone(String dispatchId) async {
+    final row = (await store.findByDispatchId(dispatchId))!;
+    final plaintext = await cipher.decrypt(
+      envelope: row.encryptedPayloadBlob,
+      aad: aad(dispatchId),
+      key: key,
+    );
+    return KitchenSpoolLocalPayload.fromJson(
+      json.decode(utf8.decode(plaintext)) as Map<String, Object?>,
+    ).customerPhone;
+  }
 
   test('happy path: durable encrypted import, then imported ack', () async {
     transport.enqueue({'ok': true});
@@ -510,5 +533,202 @@ void main() {
     expect(summary.imported, 1);
     expect(await store.findByDispatchId('d-good'), isNotNull);
     expect(await store.findByDispatchId('d-bad'), isNull);
+  });
+
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): the phone stored in the
+  // encrypted spool comes from a LOCAL authoritative source resolved by orderId
+  // (the durable order.submit op or recent-orders), so a crash-recovery replay
+  // keeps it — even when the dispatch is imported before recent-orders exists.
+  group('Finding 2 — durable phone resolution + enrichment', () {
+    test('the FIRST import stores a phone resolved by orderId', () async {
+      transport.enqueue({'ok': true});
+      final summary = await coordinator(
+        resolvePhone: (key) async =>
+            key.orderId == 'order-1' ? '050-7654321' : null,
+      ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+      expect(summary.imported, 1);
+      expect(await storedPhone('d-1'), '050-7654321');
+    });
+
+    test(
+      'a re-drive ENRICHES a previously phone-less row (no duplicate, status + '
+      'attempts + identity unchanged)',
+      () async {
+        transport.enqueue({'ok': true});
+        await coordinator(
+          resolvePhone: (_) async => null,
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        final before = (await store.findByDispatchId('d-1'))!;
+        expect(await storedPhone('d-1'), isNull);
+
+        final summary = await coordinator(
+          resolvePhone: (_) async => '050-7654321',
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(summary.duplicates, 1);
+        expect(summary.imported, 0);
+        expect(await storedPhone('d-1'), '050-7654321');
+
+        final after = (await store.findByDispatchId('d-1'))!;
+        expect(after.localJobId, before.localJobId, reason: 'no duplicate row');
+        expect(after.status, before.status);
+        expect(after.serverAckAttemptCount, before.serverAckAttemptCount);
+        expect(after.dispatchId, before.dispatchId);
+        expect(after.destinationFingerprint, before.destinationFingerprint);
+      },
+    );
+
+    test('an existing NON-NULL phone is NEVER overwritten', () async {
+      transport.enqueue({'ok': true});
+      await coordinator(
+        resolvePhone: (_) async => '054-1111111',
+      ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+      expect(await storedPhone('d-1'), '054-1111111');
+      await coordinator(
+        resolvePhone: (_) async => '099-9999999',
+      ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+      expect(await storedPhone('d-1'), '054-1111111');
+    });
+
+    test(
+      'a re-drive with NO resolvable phone leaves the blob byte-identical',
+      () async {
+        transport.enqueue({'ok': true});
+        await coordinator(
+          resolvePhone: (_) async => null,
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        final before = (await store.findByDispatchId(
+          'd-1',
+        ))!.encryptedPayloadBlob;
+        await coordinator(
+          resolvePhone: (_) async => null,
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        final after = (await store.findByDispatchId(
+          'd-1',
+        ))!.encryptedPayloadBlob;
+        expect(after, before);
+      },
+    );
+
+    test(
+      'a resolver that THROWS never blocks the import (row imported, no phone)',
+      () async {
+        transport.enqueue({'ok': true});
+        final summary = await coordinator(
+          resolvePhone: (_) async => throw StateError('boom'),
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(summary.imported, 1);
+        expect(await storedPhone('d-1'), isNull);
+      },
+    );
+
+    test(
+      'THE RACE: dispatch imported before recent-orders -> the encrypted spool '
+      'carries the phone and the replay ticket shows it exactly once',
+      () async {
+        transport.enqueue({'ok': true});
+        // recent-orders is empty at import time; the durable source supplies it.
+        await coordinator(
+          resolvePhone: (key) async =>
+              key.orderId == 'order-1' ? '050-7654321' : null,
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(await storedPhone('d-1'), '050-7654321');
+
+        // Restart/replay: render the money-free ticket from the DECRYPTED payload.
+        final row = (await store.findByDispatchId('d-1'))!;
+        final payload = KitchenSpoolLocalPayload.fromBytes(
+          await cipher.decrypt(
+            envelope: row.encryptedPayloadBlob,
+            aad: aad('d-1'),
+            key: key,
+          ),
+        );
+        final doc = const KitchenTicketRenderer().buildDocument(
+          payload.dispatch,
+          customerPhoneOverride: payload.customerPhone,
+        );
+        final phoneLines = doc.lines
+            .whereType<pp.PrintTextLine>()
+            .where((l) => l.text.contains('050-7654321'))
+            .length;
+        expect(phoneLines, 1);
+      },
+    );
+
+    OutboxEntry outboxEntry({
+      required String phone,
+      String branch = 'branch-1',
+    }) => OutboxEntry(
+      id: 'ob-1',
+      deviceId: 'dev-1',
+      localOperationId: 'op-1',
+      operationType: 'order.submit',
+      targetEntity: 'order',
+      targetId: 'order-1',
+      payloadJson: json.encode(<String, Object?>{
+        'order_id': 'order-1',
+        'customer_phone': phone,
+      }),
+      summary: const OrderSummary(
+        orderNumber: 'X',
+        orderType: OrderType.dineIn,
+        tableLabel: null,
+        itemCount: 1,
+        subtotalMinor: 0,
+        currencyCode: 'ILS',
+      ),
+      syncState: OutboxSyncState.pending,
+      clientCreatedAt: DateTime.utc(2026, 7, 20),
+      organizationId: 'org-1',
+      restaurantId: 'rest-1',
+      branchId: branch,
+    );
+
+    test(
+      'an INVALID durable phone (letters) never enters the encrypted spool or '
+      'the replay ticket (Codex HIGH)',
+      () async {
+        transport.enqueue({'ok': true});
+        final entries = [outboxEntry(phone: '050-ABC-1234')];
+        await coordinator(
+          resolvePhone: (key) async =>
+              customerPhoneFromOrderSubmitEntries(entries, key),
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(await storedPhone('d-1'), isNull);
+        final row = (await store.findByDispatchId('d-1'))!;
+        final payload = KitchenSpoolLocalPayload.fromBytes(
+          await cipher.decrypt(
+            envelope: row.encryptedPayloadBlob,
+            aad: aad('d-1'),
+            key: key,
+          ),
+        );
+        final texts = const KitchenTicketRenderer()
+            .buildDocument(
+              payload.dispatch,
+              customerPhoneOverride: payload.customerPhone,
+            )
+            .lines
+            .whereType<pp.PrintTextLine>()
+            .map((l) => l.text)
+            .join('\n');
+        expect(texts.contains('ABC'), isFalse);
+      },
+    );
+
+    test(
+      'a CROSS-SCOPE durable entry (different branch) never supplies the phone '
+      '(Codex HIGH)',
+      () async {
+        transport.enqueue({'ok': true});
+        final entries = [
+          outboxEntry(phone: '054-1234567', branch: 'branch-OTHER'),
+        ];
+        await coordinator(
+          resolvePhone: (key) async =>
+              customerPhoneFromOrderSubmitEntries(entries, key),
+        ).importDispatches([_dispatch(dispatchId: 'd-1')]);
+        expect(await storedPhone('d-1'), isNull);
+      },
+    );
   });
 }

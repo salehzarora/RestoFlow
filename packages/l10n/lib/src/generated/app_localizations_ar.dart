@@ -841,6 +841,52 @@ class AppLocalizationsAr extends AppLocalizations {
   String get customerNameKitchenLabel => 'الزبون';
 
   @override
+  String get customerPhoneLabel => 'هاتف الزبون';
+
+  @override
+  String get customerPhonePlaceholder => 'اختياري';
+
+  @override
+  String get customerPhoneReceiptLabel => 'رقم الهاتف';
+
+  @override
+  String get customerPhoneKitchenLabel => 'رقم الهاتف';
+
+  @override
+  String get customerPhoneErrorChars =>
+      'استخدم الأرقام والمسافات و + - ( ) فقط';
+
+  @override
+  String get customerPhoneErrorDigits => 'أدخل 5 أرقام على الأقل';
+
+  @override
+  String get customerPhoneErrorInvalid => 'أدخل رقم هاتف صالحًا';
+
+  @override
+  String get posCompleteOrder => 'إنهاء الطلب';
+
+  @override
+  String get posCompleteOrderSuccess => 'تم إنهاء الطلب';
+
+  @override
+  String get posCompleteOrderFailure => 'تعذّر إنهاء الطلب';
+
+  @override
+  String get posClosePaymentRequired => 'استلم الدفع لإنهاء الطلب';
+
+  @override
+  String get posCloseKdsRequired => 'شاشة المطبخ تُنهي هذا الطلب';
+
+  @override
+  String get posCloseWorkflowUnavailable => 'وضع المطبخ غير متاح';
+
+  @override
+  String get posKitchenModeLoading => 'جارٍ التحقق من إعداد المطبخ…';
+
+  @override
+  String get posKitchenModeRetry => 'إعادة المحاولة';
+
+  @override
   String get posAssignTable => 'تعيين طاولة';
 
   @override

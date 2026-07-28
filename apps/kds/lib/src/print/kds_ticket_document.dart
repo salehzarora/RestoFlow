@@ -38,6 +38,7 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
   takeaway: l10n.posOrderTypeTakeaway,
   tableLabel: l10n.posTableLabel,
   customerLabel: l10n.customerNameKitchenLabel,
+  customerPhoneLabel: l10n.customerPhoneKitchenLabel,
   stationLabel: l10n.kdsStationLabel,
   noteLabel: l10n.kdsNoteLabel,
   kitchenTotal: l10n.kdsMeatTotalLabel,

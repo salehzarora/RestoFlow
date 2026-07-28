@@ -4,6 +4,7 @@ import 'package:restoflow_design_system/restoflow_design_system.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../data/customer_phone.dart';
 import '../data/order_submission.dart' show kCustomerNameMaxLength;
 import '../pos_palette.dart';
 import '../state/order_setup_controller.dart';
@@ -83,6 +84,12 @@ class OrderSetupSection extends ConsumerWidget {
           // ORDER-CUSTOMER-001: an OPTIONAL customer name for this order. Shown
           // for both order types; never gates submit.
           _CustomerNameField(setup: setup, controller: controller),
+          // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: an OPTIONAL customer phone,
+          // directly below the name. Never gates submit unless a non-empty value
+          // is malformed (then an inline error + a blocked send). The field's own
+          // dense decoration provides the gap, so no extra spacer is added (which
+          // would overflow a tight short-viewport cart).
+          _CustomerPhoneField(setup: setup, controller: controller),
         ],
       ),
     );
@@ -138,6 +145,85 @@ class _CustomerNameFieldState extends ConsumerState<_CustomerNameField> {
         prefixIcon: const Icon(Icons.person_outline),
         labelText: l10n.customerNameLabel,
         hintText: l10n.customerNamePlaceholder,
+        border: const OutlineInputBorder(),
+      ),
+    );
+  }
+}
+
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer-phone input. A
+/// stateful field owning a [TextEditingController] so its text is cleared when the
+/// order-setup state resets after a submit / new order, and FILLED when a draft is
+/// restored from recovery into an empty field (without disturbing active typing).
+/// Shows a localized inline error for a non-empty malformed value; a valid or empty
+/// phone never blocks submit.
+class _CustomerPhoneField extends ConsumerStatefulWidget {
+  const _CustomerPhoneField({required this.setup, required this.controller});
+
+  final OrderSetupState setup;
+  final OrderSetupController controller;
+
+  @override
+  ConsumerState<_CustomerPhoneField> createState() =>
+      _CustomerPhoneFieldState();
+}
+
+class _CustomerPhoneFieldState extends ConsumerState<_CustomerPhoneField> {
+  late final TextEditingController _text = TextEditingController(
+    text: widget.setup.customerPhoneInput,
+  );
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  String? _errorFor(CustomerPhoneError? error, AppLocalizations l10n) {
+    switch (error) {
+      case CustomerPhoneError.unsupportedCharacters:
+        return l10n.customerPhoneErrorChars;
+      case CustomerPhoneError.tooFewDigits:
+        return l10n.customerPhoneErrorDigits;
+      case CustomerPhoneError.tooLong:
+        return l10n.customerPhoneErrorInvalid;
+      case null:
+        return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // Sync the controller to the setup state on RESET (input -> '') and on a
+    // recovery RESTORE (input -> a value while the field is empty), never while
+    // the cashier is actively typing (both non-empty => leave the field alone, so
+    // a stale async restore can never overwrite a newer in-progress draft).
+    ref.listen(orderSetupControllerProvider, (previous, next) {
+      final want = next.customerPhoneInput;
+      if (want.isEmpty && _text.text.isNotEmpty) {
+        _text.clear();
+      } else if (want.isNotEmpty && _text.text.isEmpty) {
+        _text.text = want;
+      }
+    });
+    return TextField(
+      key: const Key('customer-phone-field'),
+      controller: _text,
+      keyboardType: TextInputType.phone,
+      // The 32-char cap is enforced here AND server-side; digits/space/+-() only
+      // are validated on read (normalizeCustomerPhone) — no input formatter that
+      // could fight an RTL keyboard or a legitimate paste.
+      maxLength: kCustomerPhoneMaxLength,
+      textInputAction: TextInputAction.done,
+      onChanged: widget.controller.setCustomerPhone,
+      decoration: InputDecoration(
+        isDense: true,
+        counterText: '',
+        prefixIcon: const Icon(Icons.phone_outlined),
+        labelText: l10n.customerPhoneLabel,
+        hintText: l10n.customerPhonePlaceholder,
+        errorText: _errorFor(widget.setup.customerPhoneError, l10n),
         border: const OutlineInputBorder(),
       ),
     );

@@ -31,6 +31,12 @@ class _FakeRepo implements KitchenFinishRepository {
         ? KitchenFinishResult(orderId, KitchenFinishStatus.failed, error: 'x')
         : KitchenFinishResult(orderId, KitchenFinishStatus.finished);
   }
+
+  @override
+  Future<KitchenFinishResult> completeServedOrder({
+    required String orderId,
+    required String localOperationId,
+  }) async => KitchenFinishResult(orderId, KitchenFinishStatus.finished);
 }
 
 /// Deterministic batch ids: batch-1, batch-2, ...

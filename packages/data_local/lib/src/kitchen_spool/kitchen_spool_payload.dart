@@ -44,6 +44,7 @@ final class KitchenSpoolLocalPayload {
     this.paperWidth,
     required this.documentVersion,
     required this.rasterVersion,
+    this.customerPhone,
   });
 
   static const int version = 1;
@@ -57,6 +58,17 @@ final class KitchenSpoolLocalPayload {
   final int documentVersion;
   final int rasterVersion;
 
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): the OPTIONAL customer phone, a
+  /// DEDICATED typed field of THIS encrypted local payload — a SIBLING of
+  /// [dispatch], deliberately OUTSIDE the server-derived `dispatch` subtree that
+  /// [rejectHostileKitchenKeys] guards, so the generic phone/PII redaction is
+  /// UNCHANGED. Encrypted with the rest of the payload (AES-GCM, AAD-bound to the
+  /// order/tenant/device) and purged with the row. A crash-recovery replay reads
+  /// it so the printed ticket keeps the phone; legacy rows decode it as null
+  /// (byte-identical when absent). Sourced ONLY from the local order at import —
+  /// never from the redacted server payload. Not logged (no toString).
+  final String? customerPhone;
+
   Map<String, Object?> toJson() => {
     'v': version,
     'purpose': kKitchenSpoolPurpose,
@@ -65,6 +77,7 @@ final class KitchenSpoolLocalPayload {
     if (paperWidth != null) 'paper_width': paperWidth,
     'document_version': documentVersion,
     'raster_version': rasterVersion,
+    if (customerPhone != null) 'customer_phone': customerPhone,
   };
 
   /// Canonical plaintext bytes for the cipher.
@@ -110,6 +123,9 @@ final class KitchenSpoolLocalPayload {
       paperWidth: r.optionalString('paper_width', allowed: {'58mm', '80mm'}),
       documentVersion: r.requirePositiveInt('document_version'),
       rasterVersion: r.requirePositiveInt('raster_version'),
+      // Consumed here so the strict reader accepts it; absent on legacy rows
+      // (decodes null). NOT part of the redaction-checked `dispatch` subtree.
+      customerPhone: r.optionalString('customer_phone'),
     );
     r.finish();
     return payload;
@@ -126,6 +142,7 @@ final class KitchenDispatchDocument {
     required this.orderType,
     this.tableLabel,
     this.customerDisplayName,
+    this.customerPhone,
     this.orderNote,
     this.createdAt,
     this.items = const [],
@@ -143,6 +160,14 @@ final class KitchenDispatchDocument {
   final String orderType;
   final String? tableLabel;
   final String? customerDisplayName;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone, a TYPED
+  /// field of THIS encrypted, backup-excluded spool document — so a crash-recovery
+  /// reprint of a doc that carries a phone still prints it. It is NOT part of the
+  /// untyped server payload that `rejectHostileKitchenKeys` guards (that generic
+  /// redaction is unchanged and still forbids untyped phone/PII keys); legacy rows
+  /// simply decode this as null. Money-free display text.
+  final String? customerPhone;
   final String? orderNote;
   final String? createdAt;
   final List<KitchenDispatchItem> items;
@@ -161,6 +186,14 @@ final class KitchenDispatchDocument {
     if (tableLabel != null) 'table_label': tableLabel,
     if (customerDisplayName != null)
       'customer_display_name': customerDisplayName,
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: customerPhone is DELIBERATELY NOT
+    // serialized here — it is a TRANSIENT render-time field for the locally-built
+    // direct-print document only. Persisting it would (a) place a phone token in a
+    // spool blob whose decrypt re-runs rejectHostileKitchenKeys (which forbids
+    // phone keys) and (b) require weakening that generic redaction. So a
+    // server-imported spool doc never carries it; a crash-recovery reprint of such
+    // a doc degrades to name-only (privacy-preserving), while the direct-print +
+    // POS/KDS reprints render it from the live order/cart.
     if (orderNote != null) 'order_note': orderNote,
     if (createdAt != null) 'created_at': createdAt,
     if (items.isNotEmpty) 'items': [for (final i in items) i.toJson()],

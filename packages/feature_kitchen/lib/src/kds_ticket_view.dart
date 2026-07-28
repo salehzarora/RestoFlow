@@ -76,6 +76,7 @@ class KdsTicketView {
     this.orderType,
     this.tableLabel,
     this.customerName,
+    this.customerPhone,
     this.notes,
     this.submittedAt,
     this.kitchenCounts = const <KitchenCount>[],
@@ -110,6 +111,11 @@ class KdsTicketView {
   /// plucked from the pulled order row. Non-money display text (SECURITY T-003);
   /// null when the order carried none.
   final String? customerName;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL customer phone
+  /// (orders.customer_phone) plucked from the pulled order row / built from the
+  /// cart. Non-money display text (T-003); null when the order carried none.
+  final String? customerPhone;
 
   /// The order-level kitchen note (orders.notes), if any.
   final String? notes;

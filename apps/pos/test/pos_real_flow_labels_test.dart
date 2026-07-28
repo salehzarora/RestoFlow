@@ -11,6 +11,8 @@ import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 
+import 'support/verified_kitchen_mode_readiness.dart';
+
 /// Demo-readiness sprint (Part B): after a REAL paired-device + staff-PIN
 /// session, the POS order flow is REAL — no demo shift label, no demo order
 /// notice, no "Sync now (demo)", no DEMO-nnnn number; submit pushes
@@ -78,6 +80,10 @@ Future<_ScriptedTransport> _pumpReal(
             currencyCode: 'ILS',
           ),
         ),
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): this REAL flow renders
+        // PosMenuScreen without PosSyncLifecycle, so the readiness heartbeat
+        // never runs — simulate the verified KDS branch so Send is enabled.
+        verifiedKdsReadinessOverride(),
       ],
       child: MaterialApp(
         locale: const Locale('en'),

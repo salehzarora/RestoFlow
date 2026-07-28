@@ -233,6 +233,7 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   takeaway: 'Takeaway',
   tableLabel: 'Table',
   customerLabel: 'Customer',
+  customerPhoneLabel: 'Phone',
   stationLabel: 'Station',
   noteLabel: 'Note',
   kitchenTotal: (count, unit) => 'Kitchen total: $count $unit',

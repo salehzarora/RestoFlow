@@ -29,6 +29,7 @@ class KitchenTicketPrintLabels {
     required this.takeaway,
     required this.tableLabel,
     required this.customerLabel,
+    required this.customerPhoneLabel,
     required this.stationLabel,
     required this.noteLabel,
     required this.kitchenTotal,
@@ -52,6 +53,10 @@ class KitchenTicketPrintLabels {
 
   /// `customerNameKitchenLabel` — prefixes the customer name.
   final String customerLabel;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: `customerPhoneKitchenLabel` — prefixes
+  /// the optional customer phone (printed directly below the name).
+  final String customerPhoneLabel;
 
   /// `kdsStationLabel` — prefixes the station id.
   final String stationLabel;
@@ -119,6 +124,11 @@ PrintDocument buildKdsTicketPrintDocument({
         PrintLine.center('${labels.tableLabel} $table'),
       if (ticket.customerName case final customer?)
         PrintLine.center('${labels.customerLabel}: $customer'),
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone, directly BELOW the
+      // name. Absent => nothing printed (byte-identical ticket). Money-free header
+      // text (T-003 holds); rasterized for ar/he downstream so `+`/digits render.
+      if (ticket.customerPhone case final phone?)
+        PrintLine.center('${labels.customerPhoneLabel}: $phone'),
       if (showStation)
         PrintLine.center('${labels.stationLabel}: ${ticket.stationId}'),
       PrintLine.rule(),

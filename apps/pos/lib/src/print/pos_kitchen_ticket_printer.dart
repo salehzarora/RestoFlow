@@ -437,6 +437,7 @@ KdsTicketView kdsTicketViewFromCartLines({
       const <String, List<KitchenPrepComponent>>{},
   String? tableLabel,
   String? customerName,
+  String? customerPhone,
   String? orderNote,
 }) {
   // MENU-ORDER-001: order items by the shared canonical print order (category ->
@@ -498,6 +499,7 @@ KdsTicketView kdsTicketViewFromCartLines({
     orderType: _orderTypeWire(orderType),
     tableLabel: tableLabel,
     customerName: customerName,
+    customerPhone: customerPhone,
     notes: orderNote,
     kitchenCounts: aggregateOrderKitchenCounts(countInputs),
   );
@@ -530,6 +532,7 @@ KdsTicketView kdsTicketViewFromSubmittedOrder(SubmittedOrderView order) {
     orderType: _orderTypeWire(order.orderType),
     tableLabel: order.tableLabel,
     customerName: order.customerName,
+    customerPhone: order.customerPhone,
   );
 }
 

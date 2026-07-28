@@ -849,6 +849,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customerNameKitchenLabel => 'Customer';
 
   @override
+  String get customerPhoneLabel => 'Customer phone';
+
+  @override
+  String get customerPhonePlaceholder => 'Optional';
+
+  @override
+  String get customerPhoneReceiptLabel => 'Phone';
+
+  @override
+  String get customerPhoneKitchenLabel => 'Phone';
+
+  @override
+  String get customerPhoneErrorChars => 'Use only digits, spaces and + - ( )';
+
+  @override
+  String get customerPhoneErrorDigits => 'Enter at least 5 digits';
+
+  @override
+  String get customerPhoneErrorInvalid => 'Enter a valid phone number';
+
+  @override
+  String get posCompleteOrder => 'Complete order';
+
+  @override
+  String get posCompleteOrderSuccess => 'Order completed';
+
+  @override
+  String get posCompleteOrderFailure => 'Couldn\'t complete the order';
+
+  @override
+  String get posClosePaymentRequired => 'Take payment to complete';
+
+  @override
+  String get posCloseKdsRequired => 'The kitchen display completes this order';
+
+  @override
+  String get posCloseWorkflowUnavailable => 'Kitchen mode unavailable';
+
+  @override
+  String get posKitchenModeLoading => 'Checking kitchen setup…';
+
+  @override
+  String get posKitchenModeRetry => 'Retry';
+
+  @override
   String get posAssignTable => 'Assign table';
 
   @override

@@ -226,6 +226,7 @@ class DemoActiveOrdersRepository implements ActiveOrdersRepository {
       settlement: d.settlement,
       receiptNumber: d.receiptNumber,
       customerName: d.customerName,
+      customerPhone: d.customerPhone,
       tableLabel: d.tableLabel,
       staffName: d.staffName,
       paymentMethod: pay?.method,
