@@ -59,6 +59,12 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
   Uri? _currentUrl;
   PickedMenuImage? _picked;
 
+  /// Monotonic pick counter. Each [_onPick] captures its value; a NEWER pick
+  /// bumps it, so an older pick's (slow) decode result is discarded instead of
+  /// overwriting the newer selection — and rapid re-clicks never let a stale
+  /// decode win (PRINT-BRANDING-LOGO-001).
+  int _pickGeneration = 0;
+
   /// PRINT-BRANDING-LOGO-001 (§10/§11): the BACKEND management capability, read
   /// ONCE from the read RPC (never the role name). Editable controls appear only
   /// when true; a covering non-manager (branch-only manager / cashier /
@@ -133,9 +139,13 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
 
   Future<void> _onPick() async {
     if (_busy) return;
+    // Supersede any in-flight pick: a newer selection wins, and a stale (slower)
+    // decode that completes later is discarded instead of clobbering it.
+    final generation = ++_pickGeneration;
     final l10n = AppLocalizations.of(context);
     final picked = await _pick();
-    if (picked == null || !mounted) return;
+    if (generation != _pickGeneration || !mounted) return; // superseded
+    if (picked == null) return;
     if (!isAllowedRestaurantLogoMime(picked.mimeType)) {
       _setMessage(l10n.brandingErrorInvalidType, isError: true);
       return;
@@ -145,7 +155,7 @@ class _RestaurantLogoSectionState extends State<RestaurantLogoSection> {
       return;
     }
     final error = await _validate(picked.bytes);
-    if (!mounted) return;
+    if (generation != _pickGeneration || !mounted) return; // superseded
     if (error != null) {
       _setMessage(_messageForValidation(error, l10n), isError: true);
       return;
