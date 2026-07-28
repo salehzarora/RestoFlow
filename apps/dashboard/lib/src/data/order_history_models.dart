@@ -148,6 +148,7 @@ class OrderHistoryRow {
     required this.settlement,
     this.receiptNumber,
     this.customerName,
+    this.customerPhone,
     this.tableLabel,
     this.staffName,
     this.paymentMethod,
@@ -175,6 +176,7 @@ class OrderHistoryRow {
   final SettlementState settlement;
   final String? receiptNumber;
   final String? customerName;
+  final String? customerPhone;
   final String? tableLabel;
   final String? staffName;
   final String? paymentMethod;
@@ -307,6 +309,7 @@ class OrderDetail {
     required this.grandTotalMinor,
     this.createdAtLabel,
     this.customerName,
+    this.customerPhone,
     this.tableLabel,
     this.branchName,
     this.staffName,
@@ -327,6 +330,7 @@ class OrderDetail {
   final int grandTotalMinor;
   final String? createdAtLabel;
   final String? customerName;
+  final String? customerPhone;
   final String? tableLabel;
   final String? branchName;
   final String? staffName;

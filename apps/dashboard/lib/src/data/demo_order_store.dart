@@ -205,6 +205,7 @@ class DemoOrderStore {
     grandTotalMinor: d.grandTotalMinor,
     createdAtLabel: d.createdAtLabel,
     customerName: d.customerName,
+    customerPhone: d.customerPhone,
     tableLabel: d.tableLabel,
     branchName: d.branchName,
     staffName: d.staffName,

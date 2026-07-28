@@ -274,6 +274,8 @@ class _DetailContent extends StatelessWidget {
             detail.customerName ?? l10n.ordersUnavailable,
           ),
         ),
+        if (detail.customerPhone != null && detail.customerPhone!.isNotEmpty)
+          _kv(_Row(l10n.customerPhoneReceiptLabel, detail.customerPhone!)),
         if (detail.staffName != null && detail.staffName!.isNotEmpty)
           _kv(_Row(l10n.ordersStaffLabel, detail.staffName!)),
         if (detail.branchName != null && detail.branchName!.isNotEmpty)

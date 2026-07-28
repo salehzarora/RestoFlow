@@ -157,6 +157,7 @@ class RealActiveOrdersRepository implements ActiveOrdersRepository {
     settlement: SettlementState.fromWire(row['payment_status']),
     receiptNumber: _strOrNull(row['receipt_number']),
     customerName: _strOrNull(row['customer_name']),
+    customerPhone: _strOrNull(row['customer_phone']),
     tableLabel: _strOrNull(row['table_label']),
     staffName: _strOrNull(row['staff_name']),
     paymentMethod: _strOrNull(row['payment_method']),
