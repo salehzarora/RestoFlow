@@ -161,6 +161,18 @@ class ReceiptPrintPreview extends ConsumerWidget {
                               text:
                                   '${l10n.customerNameReceiptLabel}: $customer',
                             ),
+                          // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 5): the
+                          // optional phone, directly BELOW the name and BEFORE the
+                          // time — the SAME order the printed receipt uses. Absent
+                          // => no line and no empty label/gap. The trimmed display
+                          // form is shown verbatim; `_Centered` (no letterSpacing,
+                          // locale-directional Text) renders the +/digits/spaces/
+                          // hyphens/parens correctly under ar/he RTL, exactly like
+                          // the customer-name line above.
+                          if (order.customerPhone case final phone?)
+                            _Centered(
+                              text: '${l10n.customerPhoneReceiptLabel}: $phone',
+                            ),
                           _Centered(
                             text: _formatReceiptTimestamp(payment.paidAt),
                           ),
