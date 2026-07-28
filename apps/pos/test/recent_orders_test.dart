@@ -4,6 +4,8 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
+import 'package:restoflow_pos/src/state/order_sync_controller.dart'
+    show posSyncClockProvider;
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
@@ -276,6 +278,68 @@ void main() {
       await _settle();
       final state = container.read(posRecentOrdersControllerProvider);
       expect(state.map((o) => o.orderNumber).toList(), ['#NEW']);
+    },
+  );
+
+  // REGRESSION (durable-recovery date-drift): the "recent" window MUST key on the
+  // INJECTED posSyncClockProvider, never the wall clock. The draft-recovery
+  // reconcile listens to THIS windowed state to clear a settled order's recovery,
+  // so a wall-clock window silently dropped fixture-dated accepted orders once
+  // real time passed their date + 1 day — the exact cause of the
+  // durable_recovery_e2e failures at lines 824 / 1133 / 1658. These fixtures use
+  // a FIXED far-past date (2020) so they can never pass by accident on a lucky
+  // real run date.
+  test('the window keys on the INJECTED sync clock, not the wall clock', () async {
+    final store = InMemoryRecentOrdersStore();
+    final pinned = DateTime.utc(2020, 1, 1, 12); // always years in the past
+    await store.persist(kDemoSyncScope.key, [
+      PosRecentOrder(
+        order: _view('#PINNED'),
+        submittedAt: pinned,
+        payment: _payment('#PINNED'),
+      ),
+    ]);
+    final container = ProviderContainer(
+      overrides: [
+        posRecentOrdersStoreProvider.overrideWithValue(store),
+        posSyncClockProvider.overrideWithValue(() => pinned),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(posRecentOrdersControllerProvider);
+    await _settle();
+    // Cutoff = (pinned day) - 1 day; the pinned-dated order is INSIDE the window
+    // and survives, even though the real wall clock is years ahead. Under the old
+    // DateTime.now() window this order was always pruned (test would fail).
+    expect(
+      container
+          .read(posRecentOrdersControllerProvider)
+          .map((o) => o.orderNumber)
+          .toList(),
+      ['#PINNED'],
+    );
+  });
+
+  test(
+    'the DEFAULT clock still prunes a far-past order (production unchanged)',
+    () async {
+      final store = InMemoryRecentOrdersStore();
+      await store.persist(kDemoSyncScope.key, [
+        PosRecentOrder(
+          order: _view('#ANCIENT'),
+          submittedAt: DateTime.utc(2020, 1, 1, 12),
+          payment: _payment('#ANCIENT'),
+        ),
+      ]);
+      // No posSyncClockProvider override => the default DateTime.now (the real app),
+      // so a 2020 order is far outside the today/yesterday window and is pruned.
+      final container = ProviderContainer(
+        overrides: [posRecentOrdersStoreProvider.overrideWithValue(store)],
+      );
+      addTearDown(container.dispose);
+      container.read(posRecentOrdersControllerProvider);
+      await _settle();
+      expect(container.read(posRecentOrdersControllerProvider), isEmpty);
     },
   );
 }
