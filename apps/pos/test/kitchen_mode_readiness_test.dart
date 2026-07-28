@@ -2,6 +2,8 @@
 // READINESS: a NEW order must never be submitted with a GUESSED KDS dispatch
 // before the verified/cached mode has resolved (which, on a real printer_only
 // branch, would strand the order). Synthetic values only.
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +13,7 @@ import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/kitchen_mode_readiness.dart';
+import 'package:restoflow_pos/src/data/order_dispatch.dart';
 import 'package:restoflow_pos/src/data/order_submission.dart';
 import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/pos_menu_screen.dart';
@@ -572,6 +575,47 @@ void main() {
         final entries = c.read(outboxControllerProvider);
         expect(entries, hasLength(1));
         expect(entries.single.payloadJson.contains('dispatch_mode'), isFalse);
+      },
+    );
+
+    // KITCHEN-DISPATCH-ENFORCE-001 (bypass proof): the server now REJECTS a
+    // direct_print submit on a non-printer_only branch, so the client must be
+    // incapable of emitting a dispatch_mode that disagrees with the ONE
+    // resolver. This asserts PARITY through the real submit path — the emitted
+    // payload always equals resolveOrderDispatchMode(mode) for that mode, and
+    // the key is OMITTED (never forged) whenever the decision is kds.
+    testWidgets(
+      'the emitted dispatch_mode always EQUALS the resolved decision',
+      (tester) async {
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+        Future<Map<String, dynamic>> emitFor(KitchenModeResult mode) async {
+          final repo = DemoOutboxStore(delay: (_) async {});
+          final c = await pump(tester, repo);
+          c
+              .read(posKitchenModeReadinessProvider.notifier)
+              .bindScope(null)
+              .publish(mode);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text(l10n.posSendOrder));
+          await tester.pumpAndSettle();
+          final entries = c.read(outboxControllerProvider);
+          expect(entries, hasLength(1));
+          return jsonDecode(entries.single.payloadJson) as Map<String, dynamic>;
+        }
+
+        // VERIFIED printer_only -> the resolver says directPrint, and that is
+        // exactly what the wire carries.
+        final po = printerOnly();
+        expect(resolveOrderDispatchMode(po), OrderDispatchMode.directPrint);
+        expect((await emitFor(po))['dispatch_mode'], 'direct_print');
+
+        // VERIFIED kds -> the resolver fails closed to kds, and the key is
+        // omitted entirely (the deployed old-client contract the server
+        // accepts on every branch mode).
+        final k = kds();
+        expect(resolveOrderDispatchMode(k), OrderDispatchMode.kds);
+        expect((await emitFor(k)).containsKey('dispatch_mode'), isFalse);
       },
     );
 
