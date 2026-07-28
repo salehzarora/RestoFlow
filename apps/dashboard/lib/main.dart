@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/auth/dashboard_auth_flow.dart';
 import 'src/auth/dashboard_auth_repository.dart';
+import 'src/branding/restaurant_logo_storage.dart';
 import 'src/auth/onboarding_repository.dart';
 import 'src/auth/supabase_dashboard_auth.dart';
 import 'src/context/device_context.dart';
@@ -113,6 +114,12 @@ Future<void> main() async {
         menuReadSource: real.menuReadSource,
         menuWriter: real.menuWriter,
         menuImageStorage: real.menuImageStorage,
+        // PRINT-BRANDING-LOGO-001: the restaurant-logo blob store over the same
+        // authenticated anon-key client (D-011); the branding REPO is built in
+        // the shell from the transport + concrete restaurant scope.
+        brandingLogoStorage: SupabaseRestaurantLogoStorage(
+          Supabase.instance.client,
+        ),
         printersRepositoryFor: real.printersRepositoryFor,
         staffRepositoryFor: real.staffRepositoryFor,
         tablesRepositoryFor: real.tablesRepositoryFor,
@@ -142,6 +149,7 @@ class DashboardApp extends ConsumerWidget {
     this.menuReadSource,
     this.menuWriter,
     this.menuImageStorage,
+    this.brandingLogoStorage,
     this.printersRepositoryFor,
     this.staffRepositoryFor,
     this.tablesRepositoryFor,
@@ -188,6 +196,9 @@ class DashboardApp extends ConsumerWidget {
   /// authenticated client). Null in demo mode / tests => the image panel shows
   /// its honest demo/unavailable state.
   final MenuImageStorage? menuImageStorage;
+
+  /// PRINT-BRANDING-LOGO-001: the restaurant-logo blob store (real mode only).
+  final RestaurantLogoStorage? brandingLogoStorage;
 
   /// Builds the REAL printers repository (RF-150 backend) per admin scope.
   final PrintersRepository Function(AdminScope scope)? printersRepositoryFor;
@@ -269,6 +280,7 @@ class DashboardApp extends ConsumerWidget {
             menuReadSource: menuReadSource,
             menuWriter: menuWriter,
             menuImageStorage: menuImageStorage,
+            brandingLogoStorage: brandingLogoStorage,
             printersRepository: printersRepositoryFor?.call(scope),
             staffRepository: staffRepositoryFor?.call(scope),
             tablesRepository: tablesRepositoryFor?.call(scope),

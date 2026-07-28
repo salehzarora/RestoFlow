@@ -4825,4 +4825,110 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posKitchenTestSampleNote => 'ملاحظة: ملاحظة تجريبية';
+
+  @override
+  String get brandingSectionTitle => 'شعار الإيصال';
+
+  @override
+  String get brandingSectionSubtitle => 'اطبع شعارك في أعلى إيصالات العملاء.';
+
+  @override
+  String get brandingUploadAction => 'اختيار شعار';
+
+  @override
+  String get brandingReplaceAction => 'استبدال';
+
+  @override
+  String get brandingRemoveAction => 'إزالة';
+
+  @override
+  String get brandingSaveAction => 'حفظ الشعار';
+
+  @override
+  String get brandingEnableToggle => 'طباعة الشعار على إيصالات العملاء';
+
+  @override
+  String get brandingCurrentLabel => 'الشعار الحالي';
+
+  @override
+  String get brandingPreviewLabel => 'معاينة (لم يُحفظ بعد)';
+
+  @override
+  String get brandingNoLogo => 'لا يوجد شعار';
+
+  @override
+  String get brandingFormatsHint => 'PNG أو JPEG أو WebP، حتى 2 ميغابايت.';
+
+  @override
+  String get brandingSaved => 'تم حفظ الشعار.';
+
+  @override
+  String get brandingRemoved => 'تمت إزالة الشعار.';
+
+  @override
+  String get brandingCleanupWarning =>
+      'تم حفظ الشعار. تعذّر حذف الصورة السابقة.';
+
+  @override
+  String get brandingErrorInvalidType =>
+      'نوع الملف غير مدعوم. استخدم PNG أو JPEG أو WebP.';
+
+  @override
+  String get brandingErrorTooLarge => 'حجم الصورة أكبر من 2 ميغابايت.';
+
+  @override
+  String get brandingErrorTooSmall => 'الصورة صغيرة جداً.';
+
+  @override
+  String get brandingErrorDimensions =>
+      'أبعاد الصورة كبيرة جداً (بحد أقصى 4096 × 4096).';
+
+  @override
+  String get brandingErrorBlank => 'تبدو الصورة فارغة.';
+
+  @override
+  String get brandingErrorTransparent => 'الصورة شفافة بالكامل.';
+
+  @override
+  String get brandingErrorAspect => 'الصورة عريضة أو طويلة أكثر من اللازم.';
+
+  @override
+  String get brandingErrorCorrupt => 'تعذّرت قراءة الصورة.';
+
+  @override
+  String get brandingErrorUploadFailed => 'فشل الرفع. لم يتم تغيير أي شيء.';
+
+  @override
+  String get brandingErrorSaveFailed => 'تعذّر الحفظ. لم يتم تغيير أي شيء.';
+
+  @override
+  String get brandingErrorDenied => 'ليست لديك صلاحية تغيير العلامة التجارية.';
+
+  @override
+  String get brandingErrorConflict =>
+      'تم تغيير العلامة التجارية من قِبل شخص آخر. يتم عرض الأحدث.';
+
+  @override
+  String get brandingRemoveConfirmTitle => 'إزالة الشعار؟';
+
+  @override
+  String get brandingRemoveConfirmBody =>
+      'لن تعرض إيصالات العملاء شعارك بعد الآن.';
+
+  @override
+  String get brandingUnavailable => 'إدارة الشعار غير متاحة هنا.';
+
+  @override
+  String get brandingDemoNote => 'اتصل بمساحة عمل مباشرة لإدارة شعار الإيصال.';
+
+  @override
+  String get brandingPickerUnsupported =>
+      'الرفع متاح فقط في لوحة التحكم على الويب.';
+
+  @override
+  String get brandingReadOnlyNote => 'تتم إدارة شعار الإيصال على مستوى المطعم.';
+
+  @override
+  String get brandingErrorUncertain =>
+      'تعذّر تأكيد التغيير. حدّث الصفحة وتحقّق قبل المحاولة مجدداً.';
 }

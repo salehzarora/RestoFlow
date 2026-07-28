@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import '../media_profile.dart';
 import '../print_document.dart';
@@ -59,6 +60,21 @@ int bottomSafeTailRows(MediaProfile profile) {
 bool printDocumentNeedsRaster(PrintDocument doc) => doc.lines
     .whereType<PrintTextLine>()
     .any((l) => l.text.codeUnits.any((c) => c > 0x7f));
+
+/// PRINT-BRANDING-LOGO-001: the leading lines a caller placed BEFORE the first
+/// text line — a customer-receipt logo raster + its feed. Text rasterization
+/// keeps only [PrintTextLine]s, so without preserving this preamble the logo
+/// would vanish whenever a receipt rasterizes (ar/he — Arabic is the default
+/// locale — and every fixed-media label). Returns the leading non-text run only
+/// (the trailing feed/cut are re-emitted by the raster paths).
+List<PrintLine> leadingPreambleLines(PrintDocument doc) {
+  final preamble = <PrintLine>[];
+  for (final line in doc.lines) {
+    if (line is PrintTextLine) break;
+    preamble.add(line);
+  }
+  return preamble;
+}
 
 /// Whether [r] is an Arabic or Hebrew letter (used to pick the base direction).
 bool _isRtlLetter(int r) =>
@@ -127,6 +143,9 @@ Future<PrintDocument> rasterizeTextDocument(
     ),
   );
   return PrintDocument([
+    // PRINT-BRANDING-LOGO-001: keep the leading logo raster (+ its feed) above
+    // the rasterized text so it still prints on ar/he receipts.
+    ...leadingPreambleLines(textDoc),
     image.toPrintLine(),
     PrintFeedLine(feedLines),
     const PrintCutLine(),
@@ -260,24 +279,73 @@ Future<PrintDocument> rasterizeForMediaProfile(
   final tailRows = bottomSafeTailRows(profile);
   final pageBudget = math.max(1, profile.printableHeightDots - tailRows);
 
-  final pages = planPrintPages(
+  // PRINT-BRANDING-LOGO-001: the logo is COMPOSED into the SAME first physical
+  // page as the receipt title/text — never a dedicated logo label. Its height
+  // (image + a bounded gap) is reserved on page one via a synthetic leading
+  // block, so pagination flows the title + as much content as fits after it; the
+  // logo raster is then stacked ON TOP of page one's text raster into one image.
+  final logoLine = _firstRasterImage(leadingPreambleLines(textDoc));
+  final gapDots = logoLine != null ? _fixedLogoGapDots(profile) : 0;
+
+  // Tentatively compose the logo (a synthetic leading block, index 0) ahead of
+  // the title block (index 1). The logo may only STAY if the planner actually
+  // places the logo AND the title together on page one. Testing this against the
+  // planner's OWN effective budget — not a looser guard — is essential: on a
+  // multi-page ticket the planner packs each page against `pageBudget - reserved`
+  // (it holds back rows for the per-page number/continuation line), so a tall
+  // logo that fits `pageBudget` alone can still shove the title onto page two,
+  // leaving the logo on a near-dedicated page. When that happens we OMIT the logo
+  // (text-only) and re-plan without it — never crop it, never give it its own
+  // label or page. A no-logo document skips all of this and plans identically to
+  // the pre-branding output (byte-for-byte).
+  var composeLogo = logoLine != null && rows.isNotEmpty;
+  var offset = composeLogo ? 1 : 0;
+
+  List<PrintPagePlan> planTextOnly() => planPrintPages(
     lineHeights: rows,
     maxPageRows: pageBudget,
     blockStartAt: blockStarts,
     reservedRowsPerPage: reserved,
   );
+
+  List<PrintPagePlan> pages;
+  if (composeLogo) {
+    pages = planPrintPages(
+      lineHeights: <int>[logoLine.heightDots + gapDots, ...rows],
+      maxPageRows: pageBudget,
+      blockStartAt: <int>{0, for (final b in blockStarts) b + 1},
+      reservedRowsPerPage: reserved,
+    );
+    final firstPage = pages.first.lineIndexes;
+    if (!(firstPage.contains(0) && firstPage.contains(1))) {
+      // The logo landed alone (or the title got bumped) — omit and re-plan.
+      composeLogo = false;
+      offset = 0;
+      pages = planTextOnly();
+    }
+  } else {
+    pages = planTextOnly();
+  }
   final total = pages.length;
 
   final out = <PrintLine>[];
   for (var p = 0; p < total; p++) {
     final pageLines = <String>[];
     final pageStyles = <PrintLineStyle>[];
+    var pageCarriesLogo = false;
     // Compact continuation header on pages 2+ so the order stays identifiable.
     if (p > 0 && continuationHeader != null) {
       pageLines.add(continuationHeader(p + 1, total));
       pageStyles.add(PrintLineStyle.centered);
     }
-    for (final i in pages[p].lineIndexes) {
+    for (final planIndex in pages[p].lineIndexes) {
+      if (composeLogo && planIndex == 0) {
+        // The synthetic logo block reserves page-one height; the real logo
+        // raster is stacked in AFTER the text is rasterized (below).
+        pageCarriesLogo = true;
+        continue;
+      }
+      final i = planIndex - offset;
       pageLines.add(lines[i]);
       pageStyles.add(styles[i]);
     }
@@ -306,10 +374,51 @@ Future<PrintDocument> rasterizeForMediaProfile(
         typography: typography,
       ),
     );
+    // ONE image, ONE feed, ONE cut per physical page — the logo (page one only)
+    // is stacked into that single page image, never emitted as its own label.
+    final pageImage = pageCarriesLogo
+        ? _stackLogoOnPage(logoLine!, gapDots, image)
+        : image.toPrintLine();
     out
-      ..add(image.toPrintLine())
+      ..add(pageImage)
       ..add(PrintFeedLine(profile.feedLines))
       ..add(const PrintCutLine());
   }
   return PrintDocument(out, localeTag: textDoc.localeTag);
+}
+
+/// The first raster-image line in [lines] (a composed logo preamble), or null.
+PrintRasterImageLine? _firstRasterImage(List<PrintLine> lines) {
+  for (final line in lines) {
+    if (line is PrintRasterImageLine) return line;
+  }
+  return null;
+}
+
+/// A bounded blank gap (dots) between the logo and the title on a fixed label —
+/// about half a normal text line, so the logo reads as a header without a large
+/// void or an extra page.
+int _fixedLogoGapDots(MediaProfile profile) =>
+    math.max(6, bottomSafeTailRows(profile) ~/ 2);
+
+/// Stack the [logo] raster ON TOP of [page]'s text raster (with a [gapDots]
+/// blank white band between) into ONE 1bpp image, so the logo shares the first
+/// physical page with the receipt. Both are 1bpp at the same width; a width
+/// mismatch (defensive) drops the logo rather than emitting a corrupt image.
+PrintLine _stackLogoOnPage(
+  PrintRasterImageLine logo,
+  int gapDots,
+  ReceiptRasterImage page,
+) {
+  if (logo.widthBytes != page.widthBytes) return page.toPrintLine();
+  final gapLen = page.widthBytes * gapDots;
+  final data = Uint8List(logo.data.length + gapLen + page.data.length);
+  data.setRange(0, logo.data.length, logo.data);
+  // the gap band stays zero (white).
+  data.setRange(logo.data.length + gapLen, data.length, page.data);
+  return PrintRasterImageLine(
+    data: data,
+    widthBytes: page.widthBytes,
+    heightDots: logo.heightDots + gapDots + page.heightDots,
+  );
 }

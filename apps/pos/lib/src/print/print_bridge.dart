@@ -98,6 +98,18 @@ pp.PrintDocument receiptToEscPosDocument(
       case app.PrintLineKind.spacer:
         // A blank, ink-free vertical gap between item blocks.
         lines.add(const pp.PrintTextLine('', style: pp.PrintLineStyle.spacer));
+      case app.PrintLineKind.headerImage:
+        // PRINT-BRANDING-LOGO-001: emit the pre-rasterized, full-width, centered
+        // 1bpp logo as a single GS v 0 raster line (the adapter gates it on
+        // profile.capabilities.supportsRaster; an unsupported printer drops it),
+        // then ONE bounded blank feed. When no raster is resolved (web / cache
+        // miss / any failure), the line is OMITTED entirely — the receipt prints
+        // text-only with the brand title unchanged.
+        final raster = line.logo?.raster;
+        if (raster != null) {
+          lines.add(raster.toPrintLine());
+          lines.add(const pp.PrintFeedLine(1));
+        }
     }
   }
   lines.add(const pp.PrintFeedLine(3));

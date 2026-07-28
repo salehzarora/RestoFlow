@@ -47,13 +47,18 @@ bool _isCancelled(OrderDetail detail) =>
 /// Money is formatted (never recomputed) with the order's own currency.
 PrintDocument buildOrderReceiptPreview(
   AppLocalizations l10n,
-  OrderDetail detail,
-) {
+  OrderDetail detail, {
+  String? logoUrl,
+}) {
   String money(int minor) =>
       MoneyFormatter.formatMinor(minor, detail.currencyCode);
   final lines = <PrintLine>[
     if (_isCancelled(detail))
       PrintLine.title(l10n.ordersReprintCancelledBanner),
+    // PRINT-BRANDING-LOGO-001: the CURRENT restaurant logo above the header —
+    // only when a (transient, non-persisted) URL is supplied. Absent => the
+    // line list is byte-identical to the pre-branding preview.
+    if (logoUrl != null && logoUrl.isNotEmpty) PrintLine.headerImage(logoUrl),
     PrintLine.title(detail.branchName ?? l10n.dashboardAppTitle),
     PrintLine.center(detail.orderCode),
     if (detail.createdAtLabel != null && detail.createdAtLabel!.isNotEmpty)

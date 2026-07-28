@@ -85,6 +85,11 @@ class DevicePrinterAssignments {
     this.deviceType,
     this.branchName,
     this.restaurantName,
+    this.organizationId,
+    this.restaurantId,
+    this.receiptLogoPath,
+    this.receiptLogoEnabled = false,
+    this.receiptLogoVersion = 0,
     this.printers = const <AssignedPrinter>[],
     this.routes = const <PrinterRoute>[],
     this.stations = const <PrinterStation>[],
@@ -95,9 +100,32 @@ class DevicePrinterAssignments {
   final String? deviceType;
   final String? branchName;
   final String? restaurantName;
+
+  /// PRINT-BRANDING-LOGO-001 (additive; server-derived, never client-asserted):
+  /// the device's own proven tenant scope, used as part of the offline
+  /// receipt-logo raster-cache key. Null when an older server omits them.
+  final String? organizationId;
+  final String? restaurantId;
+
+  /// PRINT-BRANDING-LOGO-001 (additive): the CURRENT restaurant receipt-logo
+  /// pointer. [receiptLogoPath] is the private-bucket object key (null = none);
+  /// [receiptLogoEnabled] gates printing; [receiptLogoVersion] (>=0) drives
+  /// cache invalidation. Default-safe (null/false/0) for a legacy server.
+  final String? receiptLogoPath;
+  final bool receiptLogoEnabled;
+  final int receiptLogoVersion;
+
   final List<AssignedPrinter> printers;
   final List<PrinterRoute> routes;
   final List<PrinterStation> stations;
+
+  /// True when a logo is configured AND enabled AND we know the tenant scope
+  /// needed to fetch + cache it. The receipt prints the logo only in this case.
+  bool get hasReceiptLogo =>
+      receiptLogoEnabled &&
+      (receiptLogoPath != null && receiptLogoPath!.isNotEmpty) &&
+      organizationId != null &&
+      restaurantId != null;
 
   /// The names of the stations routed to [printer] (KDS routing display).
   List<String> stationNamesFor(AssignedPrinter printer) {

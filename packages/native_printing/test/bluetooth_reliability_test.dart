@@ -148,17 +148,45 @@ void main() {
       },
     );
 
-    test('first fails, retry succeeds -> success', () async {
-      final api = _FakeApi(
-        jobs: const [
-          BluetoothJobResult(code: BluetoothJobCode.writeFailed),
-          BluetoothJobResult(code: BluetoothJobCode.ok),
-        ],
-      );
-      final result = await _connector(api).send(address: 'AA', bytes: _bytes());
-      expect(api.printCalls, hasLength(2));
-      expect(result.ok, isTrue);
-    });
+    test(
+      'a pre-write (connect) failure then success -> retry succeeds',
+      () async {
+        final api = _FakeApi(
+          jobs: const [
+            BluetoothJobResult(code: BluetoothJobCode.connectFailed),
+            BluetoothJobResult(code: BluetoothJobCode.ok),
+          ],
+        );
+        final result = await _connector(
+          api,
+        ).send(address: 'AA', bytes: _bytes());
+        expect(api.printCalls, hasLength(2));
+        expect(result.ok, isTrue);
+      },
+    );
+
+    test(
+      'a MID-WRITE failure (writeFailed) is NOT retried — partial print risk '
+      '(§4)',
+      () async {
+        final api = _FakeApi(
+          jobs: const [
+            BluetoothJobResult(
+              code: BluetoothJobCode.writeFailed,
+              bytesSent: 64,
+            ),
+            BluetoothJobResult(code: BluetoothJobCode.ok),
+          ],
+        );
+        final result = await _connector(
+          api,
+        ).send(address: 'AA', bytes: _bytes());
+        expect(api.printCalls, hasLength(1), reason: 'no resend after a write');
+        expect(result.ok, isFalse);
+        expect(result.sendStarted, isTrue);
+        expect(result.bytesSent, 64);
+      },
+    );
 
     test('bluetoothOff / notBonded fail FAST — no pointless retry', () async {
       for (final (code, category) in [
@@ -197,6 +225,32 @@ void main() {
         expect(result.ok, isFalse, reason: '${entry.key}');
         expect(result.category, entry.value, reason: '${entry.key}');
       }
+    });
+
+    test('a mid-write failure reports sendStarted + bytesSent (§5); a connect '
+        'failure sent nothing', () async {
+      // writeFailed with a byte count => the send BEGAN (partial print risk).
+      final writeApi = _FakeApi(
+        jobs: [
+          const BluetoothJobResult(
+            code: BluetoothJobCode.writeFailed,
+            bytesSent: 128,
+          ),
+        ],
+      );
+      final wr = await _connector(
+        writeApi,
+      ).send(address: 'AA', bytes: _bytes());
+      expect(wr.sendStarted, isTrue);
+      expect(wr.bytesSent, 128);
+      // A pre-write connect failure sent nothing.
+      final connectApi = _FakeApi(
+        jobs: [const BluetoothJobResult(code: BluetoothJobCode.connectFailed)],
+      );
+      final cr = await _connector(
+        connectApi,
+      ).send(address: 'AA', bytes: _bytes());
+      expect(cr.sendStarted, isFalse);
     });
   });
 
@@ -247,7 +301,213 @@ void main() {
       expect(result.ok, isFalse);
       expect(result.category, pp.PrinterErrorCategory.unreachable);
       expect(result.message, contains('no response'));
+      // PRINT-BRANDING-LOGO-001 (§2/§3): the OUTER timeout fires AFTER the native
+      // print method was dispatched, so the physical outcome is unknown and it is
+      // NEVER auto-retried — exactly ONE dispatch (regression: the pre-fix code
+      // classified this as a retryable `timeout` and dispatched a SECOND print).
+      expect(
+        api.printCalls,
+        hasLength(1),
+        reason: 'no second dispatch on hang',
+      );
+      expect(result.sendStarted, isTrue);
+      expect(
+        result.physicalOutcome,
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+      );
+      expect(
+        result.bytesSent,
+        isNull,
+        reason: 'unknown count stays null, not 0',
+      );
     });
+  });
+
+  // PRINT-BRANDING-LOGO-001 (§2-§5): the dispatch-stage retry contract, asserted
+  // on the EXACT native print-call count. The distinguishing fixture pair:
+  //   * native `timeout` CODE = the connect watchdog fired -> zero bytes -> retry;
+  //   * `hang=true` = the outer Dart timeout -> dispatched, unknown -> NO retry.
+  group('dispatch-stage retry contract (call counts)', () {
+    // (A) A native CONNECT-watchdog timeout proves zero payload dispatch, so the
+    // retry policy may run — and the (successful) second attempt is not a
+    // duplicate PHYSICAL print because the first wrote nothing.
+    test('A: native connect-watchdog timeout is pre-dispatch -> retried once, '
+        'no physical duplication', () async {
+      final api = _FakeApi(
+        jobs: const [
+          BluetoothJobResult(
+            code: BluetoothJobCode.timeout,
+          ), // watchdog, 0 bytes
+          BluetoothJobResult(code: BluetoothJobCode.ok),
+        ],
+      );
+      final result = await _connector(api).send(address: 'AA', bytes: _bytes());
+      expect(
+        api.printCalls,
+        hasLength(2),
+        reason: 'connect watchdog may retry',
+      );
+      expect(result.ok, isTrue);
+      // The first attempt dispatched zero bytes (pre-dispatch) — no duplicate.
+      expect(api.printCalls.every((c) => c.bytes.isNotEmpty), isTrue);
+    });
+
+    // (B) The OUTER Dart timeout after method dispatch — never retried.
+    test('B: outer timeout after dispatch -> printCalls==1, partial/unknown, '
+        'dispatchStarted', () async {
+      final api = _FakeApi()..hang = true;
+      final result = await _connector(api, outerMargin: Duration.zero).send(
+        address: 'AA',
+        bytes: _bytes(),
+        timeout: const Duration(milliseconds: 20),
+      );
+      expect(api.printCalls, hasLength(1));
+      expect(result.ok, isFalse);
+      expect(
+        result.physicalOutcome,
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+      );
+      expect(result.sendStarted, isTrue);
+    });
+
+    // (C) A native result that reports partial bytes before failing — count is
+    // preserved, one dispatch, no retry.
+    test('C: native partial bytes -> printCalls==1, bytesSent preserved, '
+        'no retry', () async {
+      final api = _FakeApi(
+        jobs: const [
+          BluetoothJobResult(
+            code: BluetoothJobCode.writeFailed,
+            bytesSent: 320,
+          ),
+          BluetoothJobResult(code: BluetoothJobCode.ok), // must NOT be reached
+        ],
+      );
+      final result = await _connector(api).send(address: 'AA', bytes: _bytes());
+      expect(api.printCalls, hasLength(1));
+      expect(result.bytesSent, 320);
+      expect(result.sendStarted, isTrue);
+      expect(
+        result.physicalOutcome,
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+      );
+    });
+
+    // (D) A native writeFailed WITHOUT a count — after dispatch, non-retryable,
+    // and the unknown count is null (not a misleading 0).
+    test('D: native writeFailed, no count -> printCalls==1, non-retryable, '
+        'bytesSent null', () async {
+      final api = _FakeApi(
+        jobs: const [
+          BluetoothJobResult(code: BluetoothJobCode.writeFailed), // bytesSent 0
+          BluetoothJobResult(code: BluetoothJobCode.ok),
+        ],
+      );
+      final result = await _connector(api).send(address: 'AA', bytes: _bytes());
+      expect(api.printCalls, hasLength(1));
+      expect(result.category, pp.PrinterErrorCategory.writeFailed);
+      expect(result.bytesSent, isNull, reason: 'unknown count is null, not 0');
+      expect(
+        result.physicalOutcome,
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+      );
+    });
+
+    // (E) A full native write whose acknowledgement is ambiguous (`unknown`) —
+    // after dispatch, never auto-retried.
+    test(
+      'E: native unknown (lost acknowledgement) -> printCalls==1, no retry',
+      () async {
+        final api = _FakeApi(
+          jobs: const [
+            BluetoothJobResult(
+              code: BluetoothJobCode.unknown,
+              detail: 'ack lost',
+            ),
+            BluetoothJobResult(code: BluetoothJobCode.ok),
+          ],
+        );
+        final result = await _connector(
+          api,
+        ).send(address: 'AA', bytes: _bytes());
+        expect(api.printCalls, hasLength(1));
+        expect(
+          result.physicalOutcome,
+          pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+        );
+      },
+    );
+
+    // (F) A pre-invoke failure (permission) never dispatches; a connect failure
+    // dispatches nothing physical and may retry — assert no PHYSICAL duplication.
+    test('F: pre-dispatch failures -> permission never dispatches; connect may '
+        'retry with zero physical duplication', () async {
+      final perm = _FakeApi(granted: false, requestOutcome: false);
+      final pr = await _connector(perm).send(address: 'AA', bytes: _bytes());
+      expect(
+        perm.printCalls,
+        isEmpty,
+        reason: 'permission fails before dispatch',
+      );
+      expect(pr.sendStarted, isFalse);
+      expect(pr.physicalOutcome, pp.PrintPhysicalOutcome.failedBeforeDispatch);
+
+      final connect = _FakeApi(
+        jobs: const [
+          BluetoothJobResult(code: BluetoothJobCode.connectFailed),
+          BluetoothJobResult(code: BluetoothJobCode.connectFailed),
+        ],
+      );
+      final cr = await _connector(connect).send(address: 'AA', bytes: _bytes());
+      expect(
+        connect.printCalls,
+        hasLength(2),
+        reason: 'connect may retry once',
+      );
+      expect(cr.sendStarted, isFalse, reason: 'no bytes physically dispatched');
+    });
+
+    // (G) Success -> one dispatch, completed, no regression.
+    test('G: success -> printCalls==1, completed', () async {
+      final api = _FakeApi();
+      final result = await _connector(api).send(address: 'AA', bytes: _bytes());
+      expect(api.printCalls, hasLength(1));
+      expect(result.ok, isTrue);
+      expect(result.physicalOutcome, pp.PrintPhysicalOutcome.completed);
+    });
+
+    // (H) Manual retry: two EXPLICIT user actions => two dispatches total; a
+    // failure after dispatch adds no automatic dispatch of its own.
+    test(
+      'H: manual retry — total dispatches == explicit user actions only',
+      () async {
+        final api = _FakeApi(
+          jobs: const [
+            BluetoothJobResult(
+              code: BluetoothJobCode.writeFailed,
+              bytesSent: 16,
+            ),
+            BluetoothJobResult(code: BluetoothJobCode.ok),
+          ],
+        );
+        final connector = _connector(api);
+        final first = await connector.send(address: 'AA', bytes: _bytes());
+        expect(first.ok, isFalse);
+        expect(
+          api.printCalls,
+          hasLength(1),
+          reason: 'first action: one dispatch',
+        );
+        // The operator explicitly retries.
+        final second = await connector.send(address: 'AA', bytes: _bytes());
+        expect(second.ok, isTrue);
+        expect(
+          api.printCalls,
+          hasLength(2),
+          reason: 'exactly one per user action',
+        );
+      },
+    );
   });
 
   group('paired devices', () {

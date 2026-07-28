@@ -4863,4 +4863,114 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posKitchenTestSampleNote => 'Note: sample note';
+
+  @override
+  String get brandingSectionTitle => 'Receipt logo';
+
+  @override
+  String get brandingSectionSubtitle =>
+      'Print your logo at the top of customer receipts.';
+
+  @override
+  String get brandingUploadAction => 'Choose logo';
+
+  @override
+  String get brandingReplaceAction => 'Replace';
+
+  @override
+  String get brandingRemoveAction => 'Remove';
+
+  @override
+  String get brandingSaveAction => 'Save logo';
+
+  @override
+  String get brandingEnableToggle => 'Print logo on customer receipts';
+
+  @override
+  String get brandingCurrentLabel => 'Current logo';
+
+  @override
+  String get brandingPreviewLabel => 'Preview (not saved yet)';
+
+  @override
+  String get brandingNoLogo => 'No logo set';
+
+  @override
+  String get brandingFormatsHint => 'PNG, JPEG or WebP, up to 2 MB.';
+
+  @override
+  String get brandingSaved => 'Logo saved.';
+
+  @override
+  String get brandingRemoved => 'Logo removed.';
+
+  @override
+  String get brandingCleanupWarning =>
+      'Logo saved. The previous image could not be removed.';
+
+  @override
+  String get brandingErrorInvalidType =>
+      'That file type is not supported. Use PNG, JPEG or WebP.';
+
+  @override
+  String get brandingErrorTooLarge => 'That image is larger than 2 MB.';
+
+  @override
+  String get brandingErrorTooSmall => 'That image is too small.';
+
+  @override
+  String get brandingErrorDimensions =>
+      'That image is too large (max 4096 by 4096).';
+
+  @override
+  String get brandingErrorBlank => 'That image looks blank.';
+
+  @override
+  String get brandingErrorTransparent => 'That image is fully transparent.';
+
+  @override
+  String get brandingErrorAspect => 'That image is too wide or too tall.';
+
+  @override
+  String get brandingErrorCorrupt => 'That image could not be read.';
+
+  @override
+  String get brandingErrorUploadFailed => 'Upload failed. Nothing was changed.';
+
+  @override
+  String get brandingErrorSaveFailed => 'Could not save. Nothing was changed.';
+
+  @override
+  String get brandingErrorDenied =>
+      'You do not have permission to change branding.';
+
+  @override
+  String get brandingErrorConflict =>
+      'Branding was changed by someone else. Showing the latest.';
+
+  @override
+  String get brandingRemoveConfirmTitle => 'Remove logo?';
+
+  @override
+  String get brandingRemoveConfirmBody =>
+      'Customer receipts will stop showing your logo.';
+
+  @override
+  String get brandingUnavailable => 'Logo management is unavailable here.';
+
+  @override
+  String get brandingDemoNote =>
+      'Connect a live workspace to manage your receipt logo.';
+
+  @override
+  String get brandingPickerUnsupported =>
+      'Uploading is only available in the web dashboard.';
+
+  @override
+  String get brandingReadOnlyNote =>
+      'Your receipt logo is managed at the restaurant level.';
+
+  @override
+  String get brandingErrorUncertain =>
+      'We could not confirm the change. Refresh and check before trying again.';
 }

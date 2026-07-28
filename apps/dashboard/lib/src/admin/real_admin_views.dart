@@ -5,6 +5,9 @@ import 'package:restoflow_feature_admin/restoflow_feature_admin.dart'
     show AdminPageHeader, AdminSectionCard, AdminStateView, adminRoleLabel;
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 
+import '../branding/restaurant_logo_repository.dart';
+import '../branding/restaurant_logo_section.dart';
+import '../branding/restaurant_logo_storage.dart';
 import 'branch_shift_close_policy_repository.dart';
 import 'supabase_settings_repository.dart';
 import 'timezone_catalog.dart';
@@ -54,11 +57,19 @@ class RealSettingsView extends StatefulWidget {
     this.currencyCode,
     this.policyRepository,
     this.settingsRepository,
+    this.brandingRepository,
+    this.brandingStorage,
     super.key,
   });
 
   final MembershipContext membership;
   final String? currencyCode;
+
+  /// PRINT-BRANDING-LOGO-001: the receipt-branding read/write seam + blob store.
+  /// Null when there is no authenticated transport or no concrete restaurant in
+  /// scope — the branding section then shows an honest "unavailable" note.
+  final RestaurantLogoRepository? brandingRepository;
+  final RestaurantLogoStorage? brandingStorage;
 
   /// RF-113: the per-branch shift-close policy read/write seam. Null when there
   /// is no authenticated transport or no concrete branch in scope — the toggle
@@ -319,6 +330,20 @@ class _RealSettingsViewState extends State<RealSettingsView> {
             title: l10n.dashboardSettingsEditableTitle,
             icon: Icons.edit_outlined,
             child: _editableFields(context, l10n),
+          ),
+        ],
+        // PRINT-BRANDING-LOGO-001: the receipt-branding card, shown whenever a
+        // concrete restaurant is in scope. Editability is derived from the
+        // BACKEND capability (get_restaurant_receipt_logo.can_manage) inside the
+        // section — a covering non-manager sees a read-only preview — never the
+        // literal role name. An unbuilt repo/storage renders an honest note.
+        if (_hasRestaurant && membership.restaurantId != null) ...[
+          const SizedBox(height: RestoflowSpacing.md),
+          RestaurantLogoSection(
+            repository: widget.brandingRepository,
+            storage: widget.brandingStorage,
+            organizationId: membership.organizationId,
+            restaurantId: membership.restaurantId!,
           ),
         ],
         if (widget.policyRepository != null) ...[

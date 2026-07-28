@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:supabase/supabase.dart';
 
 import 'device_image_url_resolver.dart';
+import 'device_receipt_logo_reader.dart';
 import 'supabase_bootstrap_config.dart';
 
 /// Bootstraps the Supabase-backed RPC transport for the auth services
@@ -50,7 +53,11 @@ class SupabaseAuthBootstrap {
   /// device session bound to this anonymous principal at redeem time; KDS is
   /// excluded — T-014). Anon-key-only, money-free (D-011/T-003).
   Future<
-    ({SyncRpcTransport transport, DeviceImageUrlResolver imageUrlResolver})
+    ({
+      SyncRpcTransport transport,
+      DeviceImageUrlResolver imageUrlResolver,
+      DeviceReceiptLogoReader receiptLogoReader,
+    })
   >
   createAnonymousDeviceSession() async {
     final client = SupabaseClient(_config.url, _config.anonKey);
@@ -58,7 +65,54 @@ class SupabaseAuthBootstrap {
     return (
       transport: SupabaseSyncRpcTransport(client),
       imageUrlResolver: SupabaseDeviceImageUrlResolver(client),
+      // PRINT-BRANDING-LOGO-001: the device's read-only restaurant-logo
+      // downloader on the SAME anonymous session (server-gated by the
+      // restaurant_logos_device_select policy; KDS excluded).
+      receiptLogoReader: SupabaseDeviceReceiptLogoReader(client),
     );
+  }
+}
+
+/// The real [DeviceReceiptLogoReader] over the SAME anonymously-authenticated
+/// client as the device transport. Downloads from the private restaurant-logos
+/// bucket (its SELECT policy binds the ACTIVE POS device session to this
+/// principal); any failure is a null (the POS then prints text-only).
+class SupabaseDeviceReceiptLogoReader implements DeviceReceiptLogoReader {
+  SupabaseDeviceReceiptLogoReader(this._client);
+
+  static const String _bucketId = 'restaurant-logos';
+
+  final SupabaseClient _client;
+
+  @override
+  Future<ReceiptLogoBytes?> load(String objectPath) async {
+    if (objectPath.isEmpty) return null;
+    try {
+      final bytes = await _client.storage.from(_bucketId).download(objectPath);
+      if (bytes.isEmpty) return null;
+      return ReceiptLogoBytes(bytes: bytes, mime: _sniffMime(bytes));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Sniff the MIME from magic bytes (never a header/extension); defaults to PNG.
+  static String _sniffMime(Uint8List b) {
+    if (b.length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) {
+      return 'image/jpeg';
+    }
+    if (b.length >= 12 &&
+        b[0] == 0x52 &&
+        b[1] == 0x49 &&
+        b[2] == 0x46 &&
+        b[3] == 0x46 &&
+        b[8] == 0x57 &&
+        b[9] == 0x45 &&
+        b[10] == 0x42 &&
+        b[11] == 0x50) {
+      return 'image/webp';
+    }
+    return 'image/png';
   }
 }
 

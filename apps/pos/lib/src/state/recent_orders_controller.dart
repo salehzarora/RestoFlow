@@ -9,6 +9,7 @@ import '../data/payment.dart';
 import '../data/recent_order.dart';
 import '../data/recent_orders_store.dart';
 import '../data/sync_cursor_store.dart' show PosSyncScope;
+import 'order_sync_controller.dart' show posSyncClockProvider;
 import 'payment_controller.dart';
 import 'pos_sync_scope_provider.dart';
 import 'submitted_order_view.dart';
@@ -780,7 +781,17 @@ class PosRecentOrdersController extends Notifier<List<PosRecentOrder>> {
     }
     final list = byId.values.toList()
       ..sort((a, b) => b.sortAt.compareTo(a.sortAt));
-    final now = DateTime.now();
+    // The "recent" window MUST read the injected POS sync clock, never
+    // DateTime.now(): the draft-recovery reconcile listens to THIS windowed
+    // state to clear a settled order's recovery, and demo/tests pin the clock
+    // (posSyncClockProvider) to a fixed time. A raw DateTime.now() made the
+    // window drift with the wall clock, so a fixture-dated accepted order fell
+    // out of the window once real time passed its date + 1 day — silently
+    // starving the recovery reconcile (the same clock-injection contract already
+    // enforced across order_sync/ready-notifications/demo snapshots). The real
+    // app leaves posSyncClockProvider at its DateTime.now default, so production
+    // windowing is unchanged.
+    final now = ref.read(posSyncClockProvider)();
     final cutoff = DateTime(
       now.year,
       now.month,

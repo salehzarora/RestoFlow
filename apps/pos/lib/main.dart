@@ -26,6 +26,7 @@ import 'src/state/outbox_controller.dart';
 import 'src/state/pos_branch_tax.dart';
 import 'src/state/pos_device_context.dart';
 import 'src/state/pos_printer_assignments.dart';
+import 'src/state/pos_receipt_logo.dart' show posReceiptLogoReaderProvider;
 import 'src/state/pos_session.dart';
 import 'src/state/pos_shift_close_policy.dart';
 import 'src/state/draft_recovery_controller.dart';
@@ -145,6 +146,10 @@ Widget _posApp(
         posPrinterAssignmentsReaderProvider.overrideWithValue(
           seams.printerAssignments,
         ),
+      // PRINT-BRANDING-LOGO-001: the token-proven per-device restaurant-logo
+      // downloader (fail-soft — a missing reader keeps receipts text-only).
+      if (seams != null)
+        posReceiptLogoReaderProvider.overrideWithValue(seams.receiptLogo),
       // RF-113: the token-proven per-branch shift-close visibility policy
       // (owner-controlled from the Dashboard; default-true if unread).
       if (seams != null)
@@ -202,6 +207,7 @@ typedef _RealDeviceSeams = ({
   SyncRpcTransport transport,
   DeviceImageUrlResolver imageResolver,
   DevicePrinterAssignmentsReader printerAssignments,
+  DeviceReceiptLogoReader receiptLogo,
   DeviceShiftClosePolicyReader shiftClosePolicy,
   DeviceBranchTaxReader branchTax,
 });
@@ -260,6 +266,10 @@ _realDeviceAuth(SharedPreferences prefs) async {
           transport: transport,
           secretStore: store,
         ),
+        // PRINT-BRANDING-LOGO-001: the device's read-only restaurant-logo
+        // downloader on the SAME anonymous session (restaurant-logos bucket,
+        // server-gated device SELECT policy; KDS excluded).
+        receiptLogo: session.receiptLogoReader,
         // RF-113: same token-proven anonymous session reads the branch's
         // shift-close visibility policy.
         shiftClosePolicy: SupabaseDeviceShiftClosePolicyRepository(

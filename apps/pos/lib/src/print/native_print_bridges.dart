@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show kBluetoothPrintTimeout, nativePrintRasterizerProvider;
@@ -37,7 +39,7 @@ class NativeTransportPrintBridge implements PosPrintBridge {
 
   /// Builds a fresh transport per submit (a socket/BT connection is not reused).
   final pp.PrintTransport Function() transportFactory;
-  final pp.EscPosPrintAdapter adapter;
+  final pp.PrintAdapter adapter;
 
   /// ESC/POS capabilities + code page for the adapter (the raster WIDTH comes
   /// from [mediaProfile], not from here — the adapter never reads paper width).
@@ -70,6 +72,40 @@ class NativeTransportPrintBridge implements PosPrintBridge {
 
   @override
   Future<pp.BridgeSubmitResult> submit(app.PrintDocument document) async {
+    // PRINT-BRANDING-LOGO-001 (§4): the logo can only be omitted BEFORE the
+    // transport begins. If ENCODING the logo-bearing document fails (a raster
+    // encoding failure — case A), strip the logo and re-encode text-only; nothing
+    // has reached the device yet, so this is safe. There is NO retry AFTER a send
+    // begins: a transport failure is not distinguishable from a partial physical
+    // print (case B), so we return it and leave manual retry to the operator.
+    Uint8List bytes;
+    try {
+      bytes = await _encode(document);
+    } catch (_) {
+      try {
+        bytes = await _encode(_withoutLogo(document));
+      } catch (_) {
+        return pp.BridgeSubmitResult.failed(
+          pp.PrinterErrorCategory.unknown,
+          'encode_failed',
+        );
+      }
+    }
+    return _send(bytes);
+  }
+
+  /// Strip the customer-receipt logo (header image) — used only to re-encode
+  /// text-only BEFORE any transport send (case A). Never used as a resend.
+  app.PrintDocument _withoutLogo(app.PrintDocument document) =>
+      app.PrintDocument(
+        title: document.title,
+        lines: <app.PrintLine>[
+          for (final l in document.lines)
+            if (l.kind != app.PrintLineKind.headerImage) l,
+        ],
+      );
+
+  Future<Uint8List> _encode(app.PrintDocument document) async {
     // PRINT-LAYOUT-001A: text columns + raster width + margins + pagination all
     // come from the selected media profile — never a hardcoded 80mm/576/48.
     final escpos = receiptToEscPosDocument(
@@ -92,7 +128,10 @@ class NativeTransportPrintBridge implements PosPrintBridge {
     } catch (_) {
       doc = escpos;
     }
-    final bytes = adapter.encode(doc, profile);
+    return adapter.encode(doc, profile);
+  }
+
+  Future<pp.BridgeSubmitResult> _send(Uint8List bytes) async {
     final transport = transportFactory();
     try {
       // Only the PHYSICAL transport operation runs under the shared
@@ -105,9 +144,16 @@ class NativeTransportPrintBridge implements PosPrintBridge {
       if (result.ok) {
         return const pp.BridgeSubmitResult.sentToPrinter(mode: 'native');
       }
+      // A transport failure — whether or not the send began — is returned as-is
+      // (no auto-resend). PRINT-BRANDING-LOGO-001 (§7): preserve the transport's
+      // physical dispatch stage + known byte count so the receipt controller can
+      // distinguish a safe PRE-dispatch failure from a partial/unknown AFTER-
+      // dispatch print (manual retry only). Unknown bytesSent stays null, not 0.
       return pp.BridgeSubmitResult.failed(
         result.category ?? pp.PrinterErrorCategory.unknown,
         result.message,
+        result.physicalOutcome,
+        result.bytesSent,
       );
     } finally {
       await transport.dispose();

@@ -21,6 +21,7 @@ export 'src/device_image_url_resolver.dart';
 export 'src/device_pairing_repository.dart';
 // Device settings sprint: the safe per-device printer-assignments projection.
 export 'src/device_printer_assignments.dart';
+export 'src/device_receipt_logo_reader.dart';
 // RF-113: the per-branch POS shift-close (reconciliation) visibility policy seam.
 export 'src/device_shift_close_policy.dart';
 // RF-117: the token-proven per-branch tax setting seam (BranchTax + reader).

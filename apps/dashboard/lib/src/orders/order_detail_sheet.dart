@@ -16,6 +16,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/order_history_models.dart';
 import '../format/money_format.dart';
+import '../branding/receipt_logo_url_resolver.dart';
 import '../print/order_preview_builders.dart';
 import '../state/order_history_providers.dart';
 import 'order_complete_action.dart';
@@ -40,6 +41,9 @@ Future<void> showOrderDetailSheet(
   final container = ProviderScope.containerOf(context);
   Future<OrderDetail> loader() =>
       ref.read(orderHistoryRepositoryProvider).loadDetail(row.orderId);
+  // PRINT-BRANDING-LOGO-001: the transient current-logo URL resolver (null ->
+  // text-only reprint). Read once here where a WidgetRef exists.
+  final resolveLogoUrl = ref.read(receiptLogoUrlResolverProvider);
   return showDialog<void>(
     context: context,
     builder: (context) => UncontrolledProviderScope(
@@ -48,7 +52,11 @@ Future<void> showOrderDetailSheet(
         key: const Key('order-detail-sheet'),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560, maxHeight: 760),
-          child: _OrderDetailPanel(row: row, loader: loader),
+          child: _OrderDetailPanel(
+            row: row,
+            loader: loader,
+            resolveLogoUrl: resolveLogoUrl,
+          ),
         ),
       ),
     ),
@@ -56,10 +64,15 @@ Future<void> showOrderDetailSheet(
 }
 
 class _OrderDetailPanel extends StatefulWidget {
-  const _OrderDetailPanel({required this.row, required this.loader});
+  const _OrderDetailPanel({
+    required this.row,
+    required this.loader,
+    this.resolveLogoUrl,
+  });
 
   final OrderHistoryRow row;
   final Future<OrderDetail> Function() loader;
+  final ReceiptLogoUrlResolver? resolveLogoUrl;
 
   @override
   State<_OrderDetailPanel> createState() => _OrderDetailPanelState();
@@ -133,7 +146,11 @@ class _OrderDetailPanelState extends State<_OrderDetailPanel> {
                   ],
                 );
               }
-              return _DetailContent(detail: snap.data!, l10n: l10n);
+              return _DetailContent(
+                detail: snap.data!,
+                l10n: l10n,
+                resolveLogoUrl: widget.resolveLogoUrl,
+              );
             },
           ),
         ),
@@ -143,10 +160,15 @@ class _OrderDetailPanelState extends State<_OrderDetailPanel> {
 }
 
 class _DetailContent extends StatelessWidget {
-  const _DetailContent({required this.detail, required this.l10n});
+  const _DetailContent({
+    required this.detail,
+    required this.l10n,
+    this.resolveLogoUrl,
+  });
 
   final OrderDetail detail;
   final AppLocalizations l10n;
+  final ReceiptLogoUrlResolver? resolveLogoUrl;
 
   String _money(int minor) =>
       MoneyFormatter.formatMinor(minor, detail.currencyCode);
@@ -186,12 +208,23 @@ class _DetailContent extends StatelessWidget {
       children: [
         FilledButton.tonalIcon(
           key: const Key('order-receipt-preview-button'),
-          onPressed: () => showOrderPreviewDialog(
-            context,
-            doc: buildOrderReceiptPreview(l10n, detail),
-            hint: l10n.ordersReprintFromPosHint,
-            previewKey: const Key('order-receipt-preview'),
-          ),
+          onPressed: () async {
+            // PRINT-BRANDING-LOGO-001: resolve the CURRENT logo URL (transient,
+            // never persisted; null -> text-only) before building the preview.
+            String? logoUrl;
+            try {
+              logoUrl = await resolveLogoUrl?.call();
+            } catch (_) {
+              logoUrl = null;
+            }
+            if (!context.mounted) return;
+            await showOrderPreviewDialog(
+              context,
+              doc: buildOrderReceiptPreview(l10n, detail, logoUrl: logoUrl),
+              hint: l10n.ordersReprintFromPosHint,
+              previewKey: const Key('order-receipt-preview'),
+            );
+          },
           icon: const Icon(Icons.receipt_outlined),
           label: Text(l10n.receiptPreviewTitle),
         ),

@@ -218,6 +218,25 @@ class _PrintDocumentView extends StatelessWidget {
               child: DottedHairline(),
             ),
           );
+        case PrintLineKind.headerImage:
+          final url = line.imageUrl;
+          if (url != null && url.isNotEmpty) {
+            rows.add(
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 80),
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
       }
     }
     return Column(
