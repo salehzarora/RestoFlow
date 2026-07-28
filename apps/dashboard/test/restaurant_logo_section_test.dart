@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:restoflow_printing/restoflow_printing.dart'
+    show LogoValidationError;
 import 'package:restoflow_dashboard/src/branding/restaurant_logo_path.dart';
 import 'package:restoflow_dashboard/src/branding/restaurant_logo_repository.dart';
 import 'package:restoflow_dashboard/src/branding/restaurant_logo_section.dart';
@@ -36,6 +39,7 @@ class _FakeRepo implements RestaurantLogoRepository {
 
 class _FakeStorage implements RestaurantLogoStorage {
   final List<String> uploaded = [];
+  final List<Uint8List> uploadedBytes = [];
   final List<String> removed = [];
   bool uploadThrows = false;
   bool removeThrows = false;
@@ -48,6 +52,7 @@ class _FakeStorage implements RestaurantLogoStorage {
   }) async {
     if (uploadThrows) throw StateError('upload failed');
     uploaded.add(objectKey);
+    uploadedBytes.add(bytes);
   }
 
   @override
@@ -359,5 +364,201 @@ void main() {
     expect(repo.saveCalls, 1);
     expect(repo.saves.single['enabled'], false); // toggled off
     expect(repo.saves.single['version'], 1);
+  });
+
+  group('§7 pick → preview → save flow', () {
+    const noLogo = RestaurantLogoSettings(
+      path: null,
+      enabled: false,
+      version: 0,
+      canManage: true,
+    );
+    const okResult = RestaurantLogoWriteResult(
+      RestaurantLogoWriteStatus.ok,
+      settings: RestaurantLogoSettings(
+        path: 'org1/rest1/logo/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png',
+        enabled: true,
+        version: 1,
+        canManage: true,
+      ),
+    );
+
+    PickedMenuImage png(List<int> b) => PickedMenuImage(
+      bytes: Uint8List.fromList(b),
+      mimeType: 'image/png',
+      fileName: 'l.png',
+    );
+
+    Future<void> pumpFlow(
+      WidgetTester tester, {
+      required Future<PickedMenuImage?> Function() picker,
+      required Future<LogoValidationError?> Function(Uint8List) validator,
+      required _FakeStorage storage,
+      required _FakeRepo repo,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: RestaurantLogoSection(
+                repository: repo,
+                storage: storage,
+                organizationId: 'org1',
+                restaurantId: 'rest1',
+                idGenerator: const FixedLogoImageIdGenerator(
+                  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+                ),
+                picker: picker,
+                pickerSupported: true,
+                decodeValidator: validator,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('valid pick shows Save + preview; NO upload until Save', (
+      tester,
+    ) async {
+      final storage = _FakeStorage();
+      final repo = _FakeRepo(noLogo, okResult);
+      await pumpFlow(
+        tester,
+        picker: () async => png([1, 2, 3]),
+        validator: (_) async => null,
+        storage: storage,
+        repo: repo,
+      );
+      await tester.tap(find.byKey(const Key('branding-pick')));
+      await tester.pumpAndSettle();
+      // preview ready => Save shown, no error text, and NOTHING uploaded yet.
+      expect(find.byKey(const Key('branding-save')), findsOneWidget);
+      expect(find.byKey(const Key('branding-message')), findsNothing);
+      expect(storage.uploaded, isEmpty, reason: 'no upload before Save');
+      expect(repo.saveCalls, 0);
+      // Press Save => upload happens now, exactly once.
+      await tester.tap(find.byKey(const Key('branding-save')));
+      await tester.pumpAndSettle();
+      expect(storage.uploaded, hasLength(1));
+      expect(repo.saveCalls, 1);
+    });
+
+    testWidgets('corrupt bytes show an error and NO Save/preview', (
+      tester,
+    ) async {
+      final storage = _FakeStorage();
+      final repo = _FakeRepo(noLogo, okResult);
+      await pumpFlow(
+        tester,
+        picker: () async => png([9, 9, 9]),
+        validator: (_) async => LogoValidationError.decodeFailed,
+        storage: storage,
+        repo: repo,
+      );
+      await tester.tap(find.byKey(const Key('branding-pick')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('branding-save')), findsNothing);
+      expect(find.byKey(const Key('branding-message')), findsOneWidget);
+      expect(storage.uploaded, isEmpty);
+    });
+
+    testWidgets('a prior INVALID pick does not poison the next VALID pick', (
+      tester,
+    ) async {
+      final storage = _FakeStorage();
+      final repo = _FakeRepo(noLogo, okResult);
+      var bad = true;
+      await pumpFlow(
+        tester,
+        picker: () async => png(bad ? [9] : [1, 2, 3]),
+        validator: (_) async => bad ? LogoValidationError.decodeFailed : null,
+        storage: storage,
+        repo: repo,
+      );
+      await tester.tap(find.byKey(const Key('branding-pick')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('branding-save')), findsNothing); // rejected
+      bad = false;
+      await tester.tap(find.byKey(const Key('branding-pick')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('branding-save')),
+        findsOneWidget,
+      ); // recovers
+      expect(find.byKey(const Key('branding-message')), findsNothing);
+    });
+
+    testWidgets('selecting another image REPLACES the pending preview', (
+      tester,
+    ) async {
+      final storage = _FakeStorage();
+      final repo = _FakeRepo(noLogo, okResult);
+      var second = false;
+      await pumpFlow(
+        tester,
+        picker: () async => png(second ? [7, 7, 7, 7] : [1, 1]),
+        validator: (_) async => null,
+        storage: storage,
+        repo: repo,
+      );
+      await tester.tap(find.byKey(const Key('branding-pick')));
+      await tester.pumpAndSettle();
+      second = true;
+      await tester.tap(find.byKey(const Key('branding-pick')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('branding-save')));
+      await tester.pumpAndSettle();
+      // Only ONE upload, carrying the SECOND selection's bytes.
+      expect(storage.uploaded, hasLength(1));
+      expect(storage.uploadedBytes.single, orderedEquals([7, 7, 7, 7]));
+    });
+
+    testWidgets(
+      'a STALE decode completing late cannot overwrite a newer pick',
+      (tester) async {
+        final storage = _FakeStorage();
+        final repo = _FakeRepo(noLogo, okResult);
+        final gates = <Completer<LogoValidationError?>>[];
+        var call = 0;
+        final picks = [
+          png([10, 10]),
+          png([20, 20, 20, 20]),
+        ];
+        await pumpFlow(
+          tester,
+          picker: () async => picks[call < 2 ? call : 1],
+          validator: (_) {
+            final c = Completer<LogoValidationError?>();
+            gates.add(c);
+            call++;
+            return c.future;
+          },
+          storage: storage,
+          repo: repo,
+        );
+        // Fire pick #1 (older); its decode stays pending.
+        await tester.tap(find.byKey(const Key('branding-pick')));
+        await tester.pump();
+        // Fire pick #2 (newer) before #1's decode resolves.
+        await tester.tap(find.byKey(const Key('branding-pick')));
+        await tester.pump();
+        expect(gates, hasLength(2));
+        // Resolve the NEWER decode first, then the OLDER one.
+        gates[1].complete(null);
+        await tester.pumpAndSettle();
+        gates[0].complete(null); // stale — must be discarded
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('branding-save')));
+        await tester.pumpAndSettle();
+        // The NEWER selection won; the stale older decode did not overwrite it.
+        expect(storage.uploaded, hasLength(1));
+        expect(storage.uploadedBytes.single, orderedEquals([20, 20, 20, 20]));
+      },
+    );
   });
 }

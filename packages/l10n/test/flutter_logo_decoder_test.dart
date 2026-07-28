@@ -240,4 +240,143 @@ void main() {
       },
     );
   });
+
+  // WEB DECODE STRATEGY (regression for: `ui.ImageDescriptor.width` throws
+  // `UnsupportedError` on Flutter web, which was rejecting EVERY valid browser-
+  // selected image). `webStrategyOverride: true` forces the browser code path
+  // (`ui.instantiateImageCodec` + post-decode size checks) so it runs executably
+  // on the VM runner; the kIsWeb selection + real browser codec are proven
+  // separately by the Playwright real-browser diagnostic.
+  group('web decode strategy', () {
+    Future<DecodedLogoImage> web(Uint8List bytes) =>
+        decoder.decode(bytes, webStrategyOverride: true);
+    Future<LogoValidationError?> webError(Uint8List bytes) async {
+      try {
+        await web(bytes);
+        return null;
+      } on LogoDecodeException catch (e) {
+        return e.error;
+      }
+    }
+
+    test(
+      'a valid opaque PNG decodes on the WEB path (no ImageDescriptor)',
+      () async {
+        final png = await buildPng(
+          solidRgba(120, 90, r: 8, g: 8, b: 8),
+          120,
+          90,
+        );
+        final d = await web(png);
+        expect(d.width, 120);
+        expect(d.height, 90);
+        expect(d.rgba.length, 120 * 90 * 4);
+        expect(d.rgba[3], 255);
+      },
+    );
+
+    test('a real JPEG decodes on the WEB path', () async {
+      final d = await web(await fixture('plain.jpg').readAsBytes());
+      expect(d.width, 64);
+      expect(d.height, 40);
+    });
+
+    test('a real WebP decodes on the WEB path', () async {
+      final d = await web(await fixture('logo.webp').readAsBytes());
+      expect(d.width, 64);
+      expect(d.height, 48);
+    });
+
+    test(
+      'an EXIF orientation=6 JPEG is normalized on the WEB path (64x40->40x64)',
+      () async {
+        final d = await web(await fixture('orientation6.jpg').readAsBytes());
+        expect(d.width, 40);
+        expect(d.height, 64);
+      },
+    );
+
+    test('the WEB path rasterizes end to end', () async {
+      final raster = await const FlutterLogoDecoder().decodeAndRasterize(
+        await fixture('logo.webp').readAsBytes(),
+        MediaProfile.label80x80,
+      );
+      expect(raster.widthDots, 576);
+      expect(raster.data.any((b) => b != 0), isTrue);
+    });
+
+    test('a fully transparent PNG => transparentImage (WEB path)', () async {
+      final png = await buildPng(solidRgba(64, 64, a: 0), 64, 64);
+      expect(await webError(png), LogoValidationError.transparentImage);
+    });
+
+    test('an all-white PNG => blankImage (WEB path)', () async {
+      final png = await buildPng(
+        solidRgba(64, 64, r: 255, g: 255, b: 255),
+        64,
+        64,
+      );
+      expect(await webError(png), LogoValidationError.blankImage);
+    });
+
+    test(
+      'a corrupt PNG => decodeFailed (WEB path, no UnsupportedError leak)',
+      () async {
+        final corrupt = Uint8List.fromList([
+          0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG magic
+          ...List.filled(40, 0x01),
+        ]);
+        expect(await webError(corrupt), LogoValidationError.decodeFailed);
+      },
+    );
+
+    test('a corrupt WebP => decodeFailed (WEB path)', () async {
+      final corrupt = Uint8List.fromList([
+        0x52,
+        0x49,
+        0x46,
+        0x46,
+        0x10,
+        0,
+        0,
+        0,
+        0x57,
+        0x45,
+        0x42,
+        0x50,
+        ...List.filled(32, 0x01),
+      ]);
+      expect(await webError(corrupt), LogoValidationError.decodeFailed);
+    });
+
+    test(
+      'an oversized (>4096) image is rejected on the WEB post-decode guard',
+      () async {
+        final png = await buildPng(
+          solidRgba(4097, 8, r: 0, g: 0, b: 0),
+          4097,
+          8,
+        );
+        expect(await webError(png), LogoValidationError.dimensionTooLarge);
+      },
+    );
+
+    test('a too-small image is rejected on the WEB path', () async {
+      final png = await buildPng(solidRgba(16, 8, r: 0, g: 0, b: 0), 16, 8);
+      expect(await webError(png), LogoValidationError.tooSmall);
+    });
+
+    test(
+      'no valid fixture maps to a generic read failure (WEB path)',
+      () async {
+        for (final name in ['plain.jpg', 'logo.webp', 'orientation6.jpg']) {
+          expect(
+            await webError(await fixture(name).readAsBytes()),
+            isNull,
+            reason: '$name must not fail on the web path',
+          );
+        }
+      },
+    );
+  });
 }
