@@ -166,6 +166,18 @@ abstract interface class KitchenSpoolStore {
     required DateTime now,
   });
 
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): replace ONLY the encrypted
+  /// payload blob of an existing job — a targeted customer-phone enrichment when a
+  /// row was first imported before the phone became resolvable. It touches nothing
+  /// else: not the status, attempt counts, destination, fingerprint, pending ack,
+  /// print state, or the `(dispatchId)` dedupe identity. Returns true when a row
+  /// was updated. The caller is responsible for re-encrypting under the SAME AAD.
+  Future<bool> updateEncryptedPayload(
+    String localJobId,
+    Uint8List encryptedPayloadBlob,
+    DateTime now,
+  );
+
   /// KITCHEN-MODE-001C2B: records a TERMINAL server verdict
   /// (`not_claim_owner` / `conflict` / `not_found` / `ambiguous_print_hold`):
   /// stops acknowledgement retries, preserves the encrypted job and its
@@ -831,6 +843,27 @@ final class DriftKitchenSpoolStore implements KitchenSpoolStore {
                 updatedAt: Value(now),
               ),
             );
+    return updated > 0;
+  }
+
+  @override
+  Future<bool> updateEncryptedPayload(
+    String localJobId,
+    Uint8List encryptedPayloadBlob,
+    DateTime now,
+  ) async {
+    // Finding 2: a TARGETED blob replacement (phone enrichment). Only the
+    // ciphertext + updatedAt change; status, attempts, destination, ack state,
+    // and the dispatch dedupe identity are all left exactly as they were.
+    final updated =
+        await (_db.update(
+          _t,
+        )..where((t) => t.localJobId.equals(localJobId))).write(
+          KitchenSpoolJobsCompanion(
+            encryptedPayloadBlob: Value(encryptedPayloadBlob),
+            updatedAt: Value(now),
+          ),
+        );
     return updated > 0;
   }
 

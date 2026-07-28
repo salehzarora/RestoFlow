@@ -38,6 +38,80 @@ abstract class OutboxRepository {
 
   /// Re-queues a failed entry back to `pending` so it can be pushed again.
   Future<OutboxEntry> retry(String entryId);
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): the customer phone from the
+  /// DURABLE `order.submit` operation for [orderId] — persisted BEFORE the network
+  /// push, so it is available for the encrypted kitchen spool even when the server
+  /// dispatch is imported before the order reaches the recent-orders list.
+  ///
+  /// Reads the phone straight from the durable op payload (never a live recompute,
+  /// never the redacted server dispatch). Returns null when this device's queue
+  /// holds no matching `order.submit` op, or that op carried no (valid) phone. The
+  /// queue is already scoped to THIS device, so an unrelated device/tenant op can
+  /// never match.
+  Future<String?> findOrderSubmitCustomerPhone(String orderId);
+}
+
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): read the customer phone from a
+/// durable `order.submit` outbox entry for [orderId]. Shared, side-effect-free,
+/// and defensive: a non-`order.submit` op, a mismatched order id, an undecodable
+/// body, or a malformed/blank phone all yield null (never a throw, never a leak).
+String? customerPhoneFromOrderSubmitEntries(
+  Iterable<OutboxEntry> entries,
+  String orderId,
+) {
+  for (final e in entries) {
+    if (e.operationType != 'order.submit') continue;
+    Map<String, dynamic> body;
+    try {
+      final decoded = jsonDecode(e.payloadJson);
+      if (decoded is! Map<String, dynamic>) continue;
+      body = decoded;
+    } on FormatException {
+      continue;
+    }
+    if (body['order_id'] != orderId) continue;
+    final phone = body['customer_phone'];
+    return (phone is String && phone.trim().isNotEmpty) ? phone : null;
+  }
+  return null;
+}
+
+/// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 4): the CANONICAL identity payload
+/// for an operation — the subset the server hashes into the idempotency
+/// fingerprint. `customer_phone` is DATA ONLY on an `order.submit`: it rides the
+/// transport payload for persistence but is EXCLUDED from the operation IDENTITY,
+/// so re-sending the same `(device, local_operation_id)` op with only a different
+/// phone is an idempotent replay (the first stored phone is kept), never a
+/// conflict. Every other field, and every other operation type, is unchanged.
+/// Mirrors `app.sync_push`'s `v_payload - 'customer_phone'` rule; this is the ONE
+/// place the client expresses it (no inline key removal scattered elsewhere).
+Map<String, dynamic> canonicalOperationIdentityPayload(
+  String operationType,
+  Map<String, dynamic> payload,
+) {
+  if (operationType != 'order.submit') return payload;
+  if (!payload.containsKey('customer_phone')) return payload;
+  return <String, dynamic>{
+    for (final entry in payload.entries)
+      if (entry.key != 'customer_phone') entry.key: entry.value,
+  };
+}
+
+/// A stable identity KEY for local duplicate detection — the client mirror of the
+/// server fingerprint's INPUT. (It is NOT claimed to be byte-identical to the
+/// server md5; the server remains authoritative.) Two `order.submit` ops that
+/// differ ONLY in `customer_phone` produce the SAME key; a change to any other
+/// field, or any non-`order.submit` op, produces a different key. The transport
+/// payload (which still carries the phone) is unaffected.
+String operationIdentityKey(
+  String operationType,
+  Map<String, dynamic> payload,
+) {
+  final identity = canonicalOperationIdentityPayload(operationType, payload);
+  final sortedKeys = identity.keys.toList()..sort();
+  return '$operationType|'
+      '${jsonEncode(<String, dynamic>{for (final k in sortedKeys) k: identity[k]})}';
 }
 
 /// In-memory, clearly-labelled DEMO outbox (RF-115). Holds enqueued order
@@ -120,6 +194,10 @@ class DemoOutboxStore implements OutboxRepository {
     _entries[idx] = updated;
     return updated;
   }
+
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(String orderId) async =>
+      customerPhoneFromOrderSubmitEntries(_entries, orderId);
 
   int _indexOf(String entryId) {
     for (var i = 0; i < _entries.length; i++) {
@@ -293,6 +371,17 @@ class RealOutboxRepository implements OutboxRepository {
     return updated;
   }
 
+  @override
+  Future<String?> findOrderSubmitCustomerPhone(String orderId) async {
+    // Best-effort READ (never the fail-closed submit guard): a not-yet-signed-in
+    // repo simply has no durable op to read, so return null rather than throw.
+    if (!_ready) return null;
+    await _ensureLoaded();
+    // The queue is already loaded per THIS session's device (scope key), so a
+    // match cannot belong to another device/tenant.
+    return customerPhoneFromOrderSubmitEntries(_entries!, orderId);
+  }
+
   int _indexOf(String entryId) {
     final entries = _entries!;
     for (var i = 0; i < entries.length; i++) {
@@ -324,8 +413,13 @@ class RealOutboxRepository implements OutboxRepository {
       // null-customer orders and break their idempotent replay across an upgrade.
       if (body['customer_name'] != null) 'customer_name': body['customer_name'],
       // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: forward the OPTIONAL customer phone
-      // ONLY when present — same fingerprint-preserving conditional as
-      // customer_name, so a phone-less op keeps the EXACT pre-feature wire shape.
+      // ONLY when present, keeping a phone-less op's EXACT pre-feature wire shape.
+      // Finding 4: the phone is DATA ONLY — the server EXCLUDES customer_phone
+      // from the order.submit idempotency fingerprint (see
+      // canonicalOperationIdentityPayload), so re-sending the same op with only a
+      // different phone replays idempotently (the first stored phone is kept)
+      // rather than conflicting. The client's own dedupe is the D-022
+      // (device, local_operation_id) identity — already phone-independent.
       if (body['customer_phone'] != null)
         'customer_phone': body['customer_phone'],
       'order_items': body['order_items'],

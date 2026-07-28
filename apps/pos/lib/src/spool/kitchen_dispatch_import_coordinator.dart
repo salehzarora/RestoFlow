@@ -111,6 +111,65 @@ final class KitchenDispatchImportCoordinator {
   /// best-effort: a miss/failure/absence yields null (name-only, unchanged).
   final Future<String?> Function(String orderId)? _resolveCustomerPhone;
 
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): enrich a previously
+  /// phone-less imported row when the phone is now resolvable. Decrypt-check the
+  /// existing ciphertext (so an existing non-null phone is never overwritten, and
+  /// a cross-scope row — whose AAD will not match — is left untouched), then
+  /// re-encrypt with the SAME AAD and replace ONLY the encrypted blob. Fully
+  /// best-effort and idempotent: any resolve/decode/crypto miss leaves the row
+  /// byte-identical, and re-running with the same phone is a no-op write.
+  Future<void> _maybeEnrichPhone(
+    KitchenSpoolJobRow row,
+    PulledKitchenDispatch dispatch,
+    DateTime now,
+  ) async {
+    final resolver = _resolveCustomerPhone;
+    if (resolver == null) return;
+    String? resolved;
+    try {
+      resolved = await resolver(dispatch.orderId);
+    } on Object {
+      return;
+    }
+    if (resolved == null || resolved.isEmpty) return;
+
+    final aad = KitchenSpoolAad(
+      dispatchId: row.dispatchId,
+      organizationId: _scope.organizationId,
+      restaurantId: _scope.restaurantId,
+      branchId: _scope.branchId,
+      deviceId: _scope.deviceId,
+      encryptionVersion: row.encryptionVersion,
+    );
+    KitchenSpoolLocalPayload payload;
+    try {
+      final bytes = await _cipher.decrypt(
+        envelope: row.encryptedPayloadBlob,
+        aad: aad,
+        key: _key,
+      );
+      payload = KitchenSpoolLocalPayload.fromBytes(bytes);
+    } on Object {
+      return; // undecryptable (e.g. a different scope) -> never touched
+    }
+    if (payload.customerPhone != null) return; // never overwrite a phone
+
+    final enriched = KitchenSpoolLocalPayload(
+      dispatch: payload.dispatch,
+      destination: payload.destination,
+      paperWidth: payload.paperWidth,
+      documentVersion: payload.documentVersion,
+      rasterVersion: payload.rasterVersion,
+      customerPhone: resolved,
+    );
+    final Uint8List envelope = await _cipher.encrypt(
+      plaintext: enriched.toBytes(),
+      aad: aad,
+      key: _key,
+    );
+    await _store.updateEncryptedPayload(row.localJobId, envelope, now);
+  }
+
   Future<KitchenImportSummary> importDispatches(
     List<PulledKitchenDispatch> dispatches,
   ) async {
@@ -137,6 +196,12 @@ final class KitchenDispatchImportCoordinator {
       if (existing != null) {
         duplicates++;
         row = existing;
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): a re-drive may now be
+        // able to resolve a phone the FIRST import lacked (it raced ahead of both
+        // the durable op and the recent-order registration). Enrich ONLY the
+        // encrypted customerPhone — never a duplicate, a status/attempt/
+        // destination change, or an overwrite of an existing non-null phone.
+        await _maybeEnrichPhone(existing, dispatch, now);
       } else {
         // 3–4: closed decode + defence in depth. A hostile/malformed payload
         // rejects THIS dispatch only (typed) — it is never persisted.
