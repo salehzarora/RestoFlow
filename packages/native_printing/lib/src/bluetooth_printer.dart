@@ -315,33 +315,38 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     Duration timeout = kBluetoothPrintTimeout,
   }) async {
     if (!await ensurePermissions()) {
+      // Nothing was ever dispatched toward the printer.
       return const pp.PrintResult.failure(
         pp.PrinterErrorCategory.permissionDenied,
         'BLUETOOTH_CONNECT permission is not granted',
       );
     }
-    // First attempt; the native job is stateless (fresh socket per job), so on
-    // a RETRYABLE failure do exactly ONE clean retry. Permission / adapter-off
-    // / not-bonded can never succeed on a retry and fail fast instead.
+    // First attempt; the native job is stateless (fresh socket per job), so a
+    // failure that PROVES zero bytes reached the printer (a connect/watchdog
+    // failure) may be retried exactly ONCE. Permission / adapter-off / not-bonded
+    // can never succeed on a retry (fail fast). CRUCIALLY, once the native print
+    // method has been dispatched and the OUTCOME is unknown (an outer timeout, a
+    // mid-write failure, a lost acknowledgement), there is NO second dispatch —
+    // a partial physical print may already exist, so only the operator may retry.
     var attempt = await _job(address, bytes, timeout);
-    if (!attempt.ok && _retryable(attempt.code)) {
+    if (!attempt.job.ok && _retryable(attempt)) {
       attempt = await _job(address, bytes, timeout);
     }
     return _toPrintResult(attempt);
   }
 
-  // PRINT-BRANDING-LOGO-001 (§4/§5): only PRE-WRITE failures (the connect never
-  // succeeded, so no bytes reached the printer) are safe to auto-retry. A
-  // writeFailed is a MID-WRITE failure — bytes were already sent and a partial
-  // print may exist — so it is NOT retried (a retry would risk a duplicate).
-  // unknown is ambiguous about whether the send began, so it is not retried
-  // either.
-  static bool _retryable(BluetoothJobCode code) => switch (code) {
-    BluetoothJobCode.connectFailed || BluetoothJobCode.timeout => true,
-    _ => false,
-  };
+  // PRINT-BRANDING-LOGO-001 (§2/§3): retry ONLY a failure that is proven to have
+  // dispatched zero bytes to the printer ([failedBeforeDispatch]) AND whose code
+  // could succeed on a fresh socket (connect failure or the native CONNECT
+  // watchdog timeout). Everything after dispatch — writeFailed, unknown, a lost
+  // native response, an outer Dart timeout — is [partialOrUnknownAfterDispatch]
+  // and is NEVER auto-retried (a second physical print could duplicate a partial).
+  static bool _retryable(_BtAttempt a) =>
+      a.outcome == pp.PrintPhysicalOutcome.failedBeforeDispatch &&
+      (a.job.code == BluetoothJobCode.connectFailed ||
+          a.job.code == BluetoothJobCode.timeout);
 
-  Future<BluetoothJobResult> _job(
+  Future<_BtAttempt> _job(
     String address,
     Uint8List bytes,
     Duration timeout,
@@ -349,8 +354,13 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
     // Outer never-hang backstop: two native connect attempts (secure +
     // insecure) plus the whole chunked write + drain must fit comfortably.
     final outer = timeout * 2 + outerTimeoutMargin;
+    // DISPATCH BOUNDARY: `api.printBytes(...)` is invoked (its arguments
+    // evaluated, the native method called) BEFORE `.timeout` arms its timer, so
+    // there is no window in which the outer timer can fire before dispatch. Any
+    // TimeoutException here therefore ALWAYS means the payload was already
+    // dispatched and the physical outcome is UNKNOWN — never a pre-dispatch state.
     try {
-      return await api
+      final job = await api
           .printBytes(
             address: address,
             bytes: bytes,
@@ -360,19 +370,50 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
             drainDelay: drainDelay,
           )
           .timeout(outer);
+      return _BtAttempt(job, _nativeOutcome(job));
     } on TimeoutException {
-      return BluetoothJobResult(
-        code: BluetoothJobCode.timeout,
-        detail:
-            'no response from the native bluetooth job after '
-            '${outer.inMilliseconds}ms',
+      // The native job never answered. It WAS dispatched (see the boundary note),
+      // so the outcome is unknown — distinct from the native CONNECT-watchdog
+      // timeout code, and NOT retryable.
+      return _BtAttempt(
+        BluetoothJobResult(
+          code: BluetoothJobCode.timeout,
+          detail:
+              'no response from the native bluetooth job after '
+              '${outer.inMilliseconds}ms (dispatched; physical outcome unknown)',
+        ),
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
       );
     } catch (e) {
-      return BluetoothJobResult(code: BluetoothJobCode.unknown, detail: '$e');
+      // An exception AFTER invoking the native print method — also dispatched.
+      return _BtAttempt(
+        BluetoothJobResult(code: BluetoothJobCode.unknown, detail: '$e'),
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+      );
     }
   }
 
-  static pp.PrintResult _toPrintResult(BluetoothJobResult job) {
+  /// The physical dispatch stage of a DEFINITIVE native result. A connect-phase
+  /// failure proves zero bytes reached the printer; a write-phase failure (or any
+  /// positive byte count) means a partial print may exist.
+  static pp.PrintPhysicalOutcome _nativeOutcome(BluetoothJobResult job) {
+    if (job.ok) return pp.PrintPhysicalOutcome.completed;
+    if (job.bytesSent > 0) {
+      return pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch;
+    }
+    return switch (job.code) {
+      // Write phase entered / ambiguous => a partial print may exist.
+      BluetoothJobCode.writeFailed || BluetoothJobCode.unknown =>
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch,
+      // Connect / adapter / permission / bond / native connect-watchdog timeout:
+      // the write stream never opened, so the native side PROVES no bytes were
+      // dispatched to the printer.
+      _ => pp.PrintPhysicalOutcome.failedBeforeDispatch,
+    };
+  }
+
+  static pp.PrintResult _toPrintResult(_BtAttempt attempt) {
+    final job = attempt.job;
     if (job.ok) return const pp.PrintResult.success();
     final category = switch (job.code) {
       BluetoothJobCode.permission => pp.PrinterErrorCategory.permissionDenied,
@@ -385,22 +426,32 @@ class ChannelBluetoothConnector implements BluetoothPrinterConnector {
       BluetoothJobCode.ok ||
       BluetoothJobCode.unknown => pp.PrinterErrorCategory.unknown,
     };
-    // PRINT-BRANDING-LOGO-001 (§5): a mid-write failure (writeFailed) — or any
-    // failure after some bytes were written — means the send BEGAN and the
-    // physical outcome is unknown (a partial print may exist). Report it as
-    // failureAfterSend (retain the byte count) so the receipt layer never
-    // auto-resends. A pre-write failure (connect/bond/permission/adapter) sent
-    // nothing.
-    final sendStarted =
-        job.code == BluetoothJobCode.writeFailed || job.bytesSent > 0;
-    return sendStarted
-        ? pp.PrintResult.failureAfterSend(
-            category,
-            message: job.detail,
-            bytesSent: job.bytesSent,
-          )
-        : pp.PrintResult.failure(category, job.detail);
+    // PRINT-BRANDING-LOGO-001 (§4/§5): a failure after dispatch means the physical
+    // outcome is unknown (a partial print may exist) — report failureAfterSend so
+    // the receipt layer never auto-resends. Carry the byte count ONLY when it is a
+    // known positive value; an unknown count stays null (§7), never a misleading 0.
+    if (attempt.outcome ==
+        pp.PrintPhysicalOutcome.partialOrUnknownAfterDispatch) {
+      return pp.PrintResult.failureAfterSend(
+        category,
+        message: job.detail,
+        bytesSent: job.bytesSent > 0 ? job.bytesSent : null,
+      );
+    }
+    // A pre-dispatch failure (connect/bond/permission/adapter) sent nothing.
+    return pp.PrintResult.failure(category, job.detail);
   }
+}
+
+/// PRINT-BRANDING-LOGO-001 (§2/§4): one Bluetooth print attempt paired with its
+/// PHYSICAL dispatch stage — the fact the retry decision and the receipt layer
+/// need. `job` is the native (or synthesized) result; `outcome` says whether any
+/// byte could have reached the printer.
+class _BtAttempt {
+  const _BtAttempt(this.job, this.outcome);
+
+  final BluetoothJobResult job;
+  final pp.PrintPhysicalOutcome outcome;
 }
 
 /// A [pp.PrintTransport] that delivers ESC/POS bytes to a bonded Bluetooth
