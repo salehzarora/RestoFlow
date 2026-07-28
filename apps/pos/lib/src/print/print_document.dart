@@ -173,9 +173,15 @@ String documentToHtml(PrintDocument doc) {
         final asset = line.logo;
         if (asset != null) {
           final b64 = base64Encode(asset.sourceBytes);
+          // PRINT-BRANDING-LOGO-001 (§9): even a bounded data URI can fail to
+          // DECODE in the browser (corrupt/unsupported bytes). A fixed onerror
+          // removes the whole .logo wrapper (image + reserved spacing) so a
+          // broken-image icon / blank gap never prints; the title becomes the
+          // first visible header. Not generic script execution.
           body.writeln(
             '<div class="logo"><img alt="" '
-            'src="data:${asset.sourceMime};base64,$b64" /></div>',
+            'src="data:${asset.sourceMime};base64,$b64"$_logoOnError />'
+            '</div>',
           );
         }
     }
@@ -183,7 +189,25 @@ String documentToHtml(PrintDocument doc) {
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'
       '<title>${_escape(doc.title)}</title><style>$_css</style></head>'
       '<body><div class="paper">$body</div>'
-      '<script>window.onload=function(){window.focus();window.print();};'
-      'window.onafterprint=function(){window.close();};</script>'
+      '<script>$_logoSweepAndPrintJs</script>'
       '</body></html>';
 }
+
+/// PRINT-BRANDING-LOGO-001 (§9): a FIXED (no interpolation → no injection) image
+/// error handler that removes the entire `.logo` wrapper when the browser fails
+/// to load/decode the receipt logo, leaving text-only output with no blank gap.
+const String _logoOnError =
+    ' onerror="var w=this.parentNode;'
+    'if(w&&w.parentNode){w.parentNode.removeChild(w);}"';
+
+/// Before printing, sweep any `.logo` whose image failed to render
+/// (`naturalWidth===0`) and remove the wrapper, so a broken image + its spacing
+/// never reach the printed page.
+const String _logoSweepAndPrintJs =
+    'window.onload=function(){'
+    'var ls=document.querySelectorAll(".logo");'
+    'for(var i=0;i<ls.length;i++){var im=ls[i].querySelector("img");'
+    'if(!im||im.naturalWidth===0){'
+    'if(ls[i].parentNode){ls[i].parentNode.removeChild(ls[i]);}}}'
+    'window.focus();window.print();};'
+    'window.onafterprint=function(){window.close();};';
