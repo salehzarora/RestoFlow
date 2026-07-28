@@ -2,8 +2,6 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
-    show KitchenModeVerifiedKds, runtimeConfigProvider;
 
 import '../data/kitchen_mode_readiness.dart';
 import '../spool/pos_kitchen_spool_composition.dart';
@@ -67,12 +65,13 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
   /// device the readiness stays Loading (Send blocked) until the secure cache seed
   /// or the heartbeat publishes the VERIFIED mode.
   void _seedKitchenModeReadiness() {
-    final heartbeat = ref.read(posKitchenReadinessHeartbeatProvider);
-    final demo = ref.read(runtimeConfigProvider).isDemoMode;
-    if (demo || heartbeat == null) {
-      ref
-          .read(posKitchenModeReadinessProvider.notifier)
-          .publish(KitchenModeVerifiedKds(verifiedAt: DateTime.now()));
+    // Finding 1: when there is no printer_only machinery (web / unpaired /
+    // no-secure-spool — heartbeat null) there is no scope to verify, so resolve
+    // the normal KDS workflow through the scope-safe unscoped path. A native
+    // paired device (heartbeat non-null) is left to its scope-bound heartbeat +
+    // cache seed; demo is already resolved by the controller's build().
+    if (ref.read(posKitchenReadinessHeartbeatProvider) == null) {
+      ref.read(posKitchenModeReadinessProvider.notifier).resolveUnscopedKds();
     }
   }
 

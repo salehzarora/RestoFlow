@@ -32,13 +32,14 @@ import 'package:restoflow_printing/restoflow_printing.dart'
 
 import '../data/ids.dart' show clientIdGeneratorProvider;
 import '../data/kitchen_mode_readiness.dart'
-    show posKitchenModeReadinessProvider;
+    show PosKitchenModeScopeKey, posKitchenModeReadinessProvider;
 import 'kitchen_mode_cache_seed.dart' show readVerifiedCachedMode;
 import '../print/native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 import '../state/pos_bluetooth_printer_config.dart'
     show posKitchenBluetoothPrinterConfigProvider;
 import '../state/pos_device_context.dart' show posDeviceContextProvider;
+import '../state/outbox_controller.dart' show outboxRepositoryProvider;
 import '../state/recent_orders_controller.dart'
     show posRecentOrdersControllerProvider;
 import '../state/pos_network_printer_config.dart'
@@ -175,11 +176,19 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
           ),
     sendGate: ref.watch(posPrinterDestinationSendGateProvider),
     modeCache: PosSecureKitchenModeCache(platform: platform),
-    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): resolve the order's phone from
-    // THIS till's local recent-orders (the order it submitted, carrying the phone)
-    // so it is stored in the encrypted spool for a crash-recovery reprint — never
-    // from the redacted server payload. Best-effort: a miss yields null (name-only).
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 2): resolve the order's phone
+    // from LOCAL authoritative sources (never the redacted server payload) so it is
+    // stored in the encrypted spool for a crash-recovery reprint. Lookup order:
+    //   1. the DURABLE `order.submit` outbox op — persisted BEFORE the network push,
+    //      so it is present even when the dispatch is imported before the order
+    //      reaches recent-orders (the exact race Codex flagged);
+    //   2. recent/server-backed order data as a fallback.
+    // Best-effort: any miss/failure yields null (name-only, unchanged).
     resolveCustomerPhone: (orderId) async {
+      final fromOutbox = await ref
+          .read(outboxRepositoryProvider)
+          .findOrderSubmitCustomerPhone(orderId);
+      if (fromOutbox != null && fromOutbox.isNotEmpty) return fromOutbox;
       for (final o in ref.read(posRecentOrdersControllerProvider)) {
         if (o.orderId == orderId) return o.order?.customerPhone;
       }
@@ -242,6 +251,16 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
       FlutterSecureKitchenSpoolKeyStore(platform: platform),
     ),
   );
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 1): bind the readiness to THIS
+  // scope for a fresh generation. This heartbeat provider rebuilds (disposing the
+  // old one) whenever the device context changes, so a restaurant/branch/device
+  // switch bindsScope anew — invalidating the previous verified mode and bumping
+  // the generation so any delayed cache/fetch/heartbeat result from the old scope
+  // is dropped by the binding rather than publishing across scopes.
+  final ctxAtBind = ref.read(posDeviceContextProvider);
+  final binding = ref
+      .read(posKitchenModeReadinessProvider.notifier)
+      .bindScope(PosKitchenModeScopeKey.fromContext(ctxAtBind));
   final heartbeat = KitchenReadinessHeartbeat(
     deviceContext: () => ref.read(posDeviceContextProvider),
     fetchMode: modeRepository.fetchMode,
@@ -249,10 +268,9 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     // printer_only branch's submits emit direct_print and its dine-in orders
     // close. Fail-closed: a non-trusted result blocks submission (never guessed
     // KDS); a definitive fetch failure marks the readiness unavailable (retryable).
-    onMode: (mode) =>
-        ref.read(posKitchenModeReadinessProvider.notifier).publish(mode),
-    onModeUnavailable: () =>
-        ref.read(posKitchenModeReadinessProvider.notifier).markUnavailable(),
+    // Scope-bound: the binding drops a result that arrives after a scope change.
+    onMode: binding.publish,
+    onModeUnavailable: binding.markUnavailable,
     printerEvidence: () async {
       final assignments = await SupabaseDevicePrinterAssignmentsRepository(
         transport: transport,
@@ -293,23 +311,24 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
   // to the cart's retry affordance WITHOUT the UI importing this spool boundary
   // (the runtime source-boundary proof forbids any spool reference outside
   // `lib/src/spool`). Single-flight inside the coordinator absorbs bursts.
-  ref
-      .read(posKitchenModeReadinessProvider.notifier)
-      .bindResolver(() => heartbeat.requestImmediate('user_retry'));
+  // Scope-bound (Finding 1): a retry re-verifies THIS scope only.
+  binding.bindResolver(() => heartbeat.requestImmediate('user_retry'));
   // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): OFFLINE readiness seed. A fresh
   // trusted secure-cached mode resolves submission IMMEDIATELY (before the network
   // heartbeat), so a returning cashier's printer_only branch emits direct_print
   // even offline. Fire-and-forget: a miss/failure leaves the readiness Loading and
   // the heartbeat resolves it. Never a downgrade — publish only maps a TRUSTED
-  // cached mode to Resolved.
+  // cached mode to Resolved. Read against the scope captured AT BIND; the binding
+  // drops the result if the scope changed while the cache read was in flight
+  // (Finding 1: a stale cross-scope cache seed can never apply).
   unawaited(() async {
     final cached = await readVerifiedCachedMode(
       cache: modeCache,
       secretStore: secretStore,
-      context: ref.read(posDeviceContextProvider),
+      context: ctxAtBind,
     );
     if (cached != null) {
-      ref.read(posKitchenModeReadinessProvider.notifier).publish(cached);
+      binding.publish(cached);
     }
   }());
   // Immediate evidence-change triggers (fire-and-forget; single-flight
@@ -327,9 +346,11 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     if (previous != next) heartbeat.requestImmediate('spool_state_changed');
   });
   ref.onDispose(() {
-    // Drop the retry binding before the heartbeat is gone (a rebuild on scope
-    // change installs the new scope's heartbeat).
-    ref.read(posKitchenModeReadinessProvider.notifier).bindResolver(null);
+    // Finding 1 (disposal safety): release this binding BEFORE the heartbeat is
+    // gone. Unbinding bumps the readiness generation, so any of this scope's
+    // in-flight cache/fetch/heartbeat results can no longer publish — even before
+    // the next scope's heartbeat installs its own binding.
+    binding.unbind();
     heartbeat.dispose();
   });
   return heartbeat;

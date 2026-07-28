@@ -28,6 +28,7 @@ import '../state/draft_recovery_controller.dart';
 import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
 import '../state/pos_branch_tax.dart';
+import '../state/pos_device_context.dart';
 import '../state/pos_menu_provider.dart';
 import '../state/recent_orders_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
@@ -492,6 +493,23 @@ Future<void> submitOrderFromCart({
     container.read(posKitchenModeReadinessProvider),
   );
   if (!submissionDecision.canSubmit) return;
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 1E): the mode was verified for a
+  // SPECIFIC restaurant/branch/device scope. If that scope changed between the
+  // Send tap and this exact moment of payload construction (a re-pair / branch
+  // switch), the verified mode no longer applies — REFUSE (create zero outbox
+  // operations) rather than dispatch an old-scope mode (a guessed KDS on a
+  // printer_only branch, or direct_print on a KDS branch). Read the live scope
+  // from the SAME authoritative source the readiness binds to; demo has no
+  // backend scope to verify against. The Send button already re-gates on the
+  // readiness (which resets to Loading on a scope change), so this is the
+  // deterministic belt-and-suspenders at the construction point.
+  if (!container.read(runtimeConfigProvider).isDemoMode &&
+      submissionDecision.scope !=
+          PosKitchenModeScopeKey.fromContext(
+            container.read(posDeviceContextProvider),
+          )) {
+    return;
+  }
   final dispatchModeBefore = submissionDecision.dispatchMode;
   // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): capture the ORDER-TIME (D-008)
   // prep snapshot ONCE, HERE — BEFORE the first await — from the SAME live menu
@@ -856,6 +874,12 @@ void _retainDepartedSessionResult({
     orderType: orderType,
     tableLabel: table?.label,
     customerName: customerName,
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Finding 3): the ORDINARY departed-
+    // session/PIN-handover path retained the phone in the recovery (above) but
+    // dropped it here when building the recent-order row, so a returning worker's
+    // recent-order detail + receipt/kitchen reprints lost the phone. Carry the
+    // SAME authoritative captured phone through, exactly like the settlement path.
+    customerPhone: customerPhone,
     orderNumber: result.orderNumber,
     outboxEntryId: result.entry.id,
     localOperationId: result.entry.localOperationId,

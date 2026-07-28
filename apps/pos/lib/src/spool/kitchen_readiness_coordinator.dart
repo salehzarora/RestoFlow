@@ -258,7 +258,9 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
       // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: a definitive fetch failure (network
       // throw / timeout) with no trusted cache must BLOCK submission with a
       // retryable reason — never leave the readiness silently guessing KDS.
-      _onModeUnavailable?.call();
+      // Finding 1 (disposal safety): a heartbeat disposed during the fetch (scope
+      // change) must NOT publish — the new scope owns readiness now.
+      if (!_disposed) _onModeUnavailable?.call();
       return KitchenReadinessRunReport(
         trigger: trigger,
         outcome: KitchenReadinessRunOutcome.skippedModeUnavailable,
@@ -268,8 +270,9 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publish the freshly-fetched mode. A
     // TRUSTED mode (printer_only+revision / verified kds) resolves submission; any
     // other result blocks it (never a guessed KDS) — the readiness controller maps
-    // the result and only downgrades while still loading.
-    _onMode?.call(mode);
+    // the result and only downgrades while still loading. Finding 1: skip the
+    // publish when disposed mid-fetch so an old scope's result never crosses over.
+    if (!_disposed) _onMode?.call(mode);
     final int revision;
     switch (mode) {
       case KitchenModePrinterOnlyWithRevision(revision: final r):
