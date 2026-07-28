@@ -11,7 +11,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/demo_menu.dart';
 import '../data/demo_tables.dart';
-import '../data/order_dispatch.dart';
+import '../data/kitchen_mode_readiness.dart';
 import '../data/outbox_repository.dart';
 import '../format/money_format.dart';
 import '../format/payment_method_label.dart';
@@ -131,15 +131,22 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       // an EXISTING order. The parent already owns its type/table, so the
       // order-setup gate does not apply; the banner below names the target.
       final addition = ref.watch(additionControllerProvider);
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): the ONE shared submission
+      // decision — Send-eligibility and the emitted dispatch_mode both derive from
+      // it, so they can never disagree. A NEW order may only be sent once the
+      // verified kitchen workflow mode has RESOLVED; while it is loading/unavailable
+      // Send is blocked (never a guessed KDS that would strand a printer_only
+      // dine-in order). Additions ride the parent order's already-decided mode.
+      final submissionDecision = resolvePosSubmissionDecision(
+        ref.watch(posKitchenModeReadinessProvider),
+      );
       // Finding 4: while APPLIED-AWAITING-REFRESH the send button stays off —
       // the operation must never be dispatched again; the banner offers the
       // refresh retry instead.
-      // KITCHEN-PRINT-DUAL-001D: Send is NEVER gated on the kitchen printer or the
-      // auto-print toggle — every order always uses the normal KDS workflow. The
-      // toggle drives only the additive post-submit kitchen print (best-effort).
       final canSend =
           !cart.isEmpty &&
           (addition.active || setup.isReadyToSubmit) &&
+          (addition.active || submissionDecision.canSubmit) &&
           // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: a NON-EMPTY malformed phone blocks
           // Send (the field shows the localized inline error); an empty or valid
           // phone never does. Defence-in-depth is re-checked in _handleSend.
@@ -259,6 +266,24 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                   !addition.active,
               sendLabelOverride: addition.active
                   ? l10n.posSubmitAddition
+                  : null,
+              // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): the workflow-mode
+              // loading/unavailable reason (new orders only); a retry appears for
+              // the retryable unavailable case.
+              kitchenModeHint:
+                  (!addition.active && !submissionDecision.canSubmit)
+                  ? (submissionDecision.blockReason ==
+                            PosSubmissionBlockReason.kitchenModeUnavailable
+                        ? l10n.posCloseWorkflowUnavailable
+                        : l10n.posKitchenModeLoading)
+                  : null,
+              onRetryKitchenMode:
+                  (!addition.active &&
+                      submissionDecision.blockReason ==
+                          PosSubmissionBlockReason.kitchenModeUnavailable)
+                  ? () => ref
+                        .read(posKitchenModeReadinessProvider.notifier)
+                        .requestResolution()
                   : null,
               // POS-SUBMIT-GUARD-001: the spinner + disabled state while a submit
               // is in flight.
@@ -456,13 +481,18 @@ Future<void> submitOrderFromCart({
   // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the OPTIONAL phone (normalized; null when
   // not entered / invalid). Captured pre-await like the name.
   final customerPhoneBefore = setup.customerPhone;
-  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: the dispatch mode is resolved ONCE from
-  // the VERIFIED kitchen workflow mode — direct_print for a trusted printer_only
-  // branch (so the dine-in order rests at served and closes on settlement), KDS
-  // otherwise (fail-closed). The same resolution drives close-eligibility.
-  final dispatchModeBefore = resolveOrderDispatchMode(
-    container.read(posVerifiedKitchenModeProvider),
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): the dispatch mode comes from the
+  // ONE shared submission decision (the SAME one the Send button gated on), so the
+  // UI and the emitted payload can never disagree. Defence in depth: if the
+  // verified mode became unresolved between the tap and here, REFUSE — never guess
+  // KDS (which would strand a printer_only dine-in order). direct_print is emitted
+  // only for a trusted printer_only branch; that same resolution drives
+  // close-eligibility.
+  final submissionDecision = resolvePosSubmissionDecision(
+    container.read(posKitchenModeReadinessProvider),
   );
+  if (!submissionDecision.canSubmit) return;
+  final dispatchModeBefore = submissionDecision.dispatchMode;
   // KITCHEN-PRINT-DUAL-001B (snapshot-race fix): capture the ORDER-TIME (D-008)
   // prep snapshot ONCE, HERE — BEFORE the first await — from the SAME live menu
   // the outbox payload is built from. This exact immutable map feeds BOTH the
@@ -1476,7 +1506,16 @@ class _CartFooter extends StatelessWidget {
     this.showNeedsTableHint = false,
     this.submitting = false,
     this.sendLabelOverride,
+    this.kitchenModeHint,
+    this.onRetryKitchenMode,
   });
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): a localized reason shown while
+  /// the kitchen workflow mode is not yet verified (Send is blocked). Null once
+  /// resolved. [onRetryKitchenMode] is non-null only for the retryable
+  /// (unavailable) case.
+  final String? kitchenModeHint;
+  final VoidCallback? onRetryKitchenMode;
 
   /// PSC-001C: addition mode relabels the send button ("Submit addition") —
   /// the same handler routes to `order.items_add` instead of a new order.
@@ -1566,6 +1605,37 @@ class _CartFooter extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: RestoflowSpacing.xs),
+            ],
+            if (kitchenModeHint case final hint?) ...[
+              Row(
+                key: const Key('send-kitchen-mode-hint'),
+                children: [
+                  Icon(
+                    Icons.sync,
+                    size: RestoflowIconSizes.sm,
+                    color: RestoflowTone.warning.styleOf(theme).accent,
+                  ),
+                  const SizedBox(width: RestoflowSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      hint,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: RestoflowTone.warning.styleOf(theme).accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (onRetryKitchenMode != null)
+                    TextButton(
+                      key: const Key('kitchen-mode-retry'),
+                      onPressed: onRetryKitchenMode,
+                      child: Text(l10n.posKitchenModeRetry),
+                    ),
                 ],
               ),
               const SizedBox(height: RestoflowSpacing.xs),

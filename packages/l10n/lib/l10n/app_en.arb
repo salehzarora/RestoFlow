@@ -653,6 +653,14 @@
   "@posCloseWorkflowUnavailable": {
     "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: shown when the branch kitchen mode is not verified, so the close action is unavailable (fail-closed)."
   },
+  "posKitchenModeLoading": "Checking kitchen setup…",
+  "@posKitchenModeLoading": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: shown near Send while the verified kitchen workflow mode is still resolving (Send is temporarily blocked)."
+  },
+  "posKitchenModeRetry": "Retry",
+  "@posKitchenModeRetry": {
+    "description": "POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: retry action when the kitchen workflow mode could not be verified (fail-closed)."
+  },
   "posAssignTable": "Assign table",
   "@posAssignTable": {
     "description": "POS action that opens the table picker to assign a table to a dine-in order."

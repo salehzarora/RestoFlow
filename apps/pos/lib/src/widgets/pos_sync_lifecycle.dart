@@ -2,7 +2,10 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show KitchenModeVerifiedKds, runtimeConfigProvider;
 
+import '../data/kitchen_mode_readiness.dart';
 import '../spool/pos_kitchen_spool_composition.dart';
 import '../state/order_sync_controller.dart';
 import '../state/pos_menu_provider.dart';
@@ -52,7 +55,25 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
       // spool-layer timer — it files kitchen readiness reports and can never
       // reach the worker/drain/transport). Null on web/demo/unpaired.
       ref.read(posKitchenReadinessHeartbeatProvider)?.onStartup();
+      _seedKitchenModeReadiness();
     });
+  }
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): resolve the kitchen-mode
+  /// readiness so a submit is never guessed as KDS before verification. On
+  /// web/demo/unpaired the printer_only machinery does not exist (heartbeat null),
+  /// so the workflow is the NORMAL kds — resolve it immediately (Send never
+  /// blocks; byte-identical to the pre-feature behavior). On a real paired NATIVE
+  /// device the readiness stays Loading (Send blocked) until the secure cache seed
+  /// or the heartbeat publishes the VERIFIED mode.
+  void _seedKitchenModeReadiness() {
+    final heartbeat = ref.read(posKitchenReadinessHeartbeatProvider);
+    final demo = ref.read(runtimeConfigProvider).isDemoMode;
+    if (demo || heartbeat == null) {
+      ref
+          .read(posKitchenModeReadinessProvider.notifier)
+          .publish(KitchenModeVerifiedKds(verifiedAt: DateTime.now()));
+    }
   }
 
   @override
@@ -87,6 +108,9 @@ class _PosSyncLifecycleState extends ConsumerState<PosSyncLifecycle>
     unawaited(ref.read(posKitchenSpoolRuntimeProvider)?.onResume());
     // KITCHEN-MODE-001C3A: re-arm the readiness heartbeat + report now.
     ref.read(posKitchenReadinessHeartbeatProvider)?.onResume();
+    // Re-resolve the kitchen-mode readiness on resume (web/demo re-confirm kds
+    // idempotently; a native device re-verifies through the heartbeat above).
+    _seedKitchenModeReadiness();
     // PILOT-OPERATIONS-CORRECTIONS-001: also refresh the MENU (and therefore
     // availability) on resume — a Dashboard availability change made while the POS
     // was backgrounded would otherwise stay invisible until the session changed.

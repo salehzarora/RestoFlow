@@ -1738,6 +1738,18 @@ abstract class AppLocalizations {
   /// **'Kitchen mode unavailable'**
   String get posCloseWorkflowUnavailable;
 
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: shown near Send while the verified kitchen workflow mode is still resolving (Send is temporarily blocked).
+  ///
+  /// In en, this message translates to:
+  /// **'Checking kitchen setup…'**
+  String get posKitchenModeLoading;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: retry action when the kitchen workflow mode could not be verified (fail-closed).
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get posKitchenModeRetry;
+
   /// POS action that opens the table picker to assign a table to a dine-in order.
   ///
   /// In en, this message translates to:

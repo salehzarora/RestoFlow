@@ -113,6 +113,7 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     sendReport,
     required Future<void> Function() invalidateModeCache,
     void Function(KitchenModeResult)? onMode,
+    void Function()? onModeUnavailable,
     String appBuild = kPosKitchenReadinessAppBuild,
     Duration interval = kKitchenReadinessHeartbeatInterval,
     Duration callTimeout = kKitchenReadinessCallTimeout,
@@ -125,6 +126,7 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
        _sendReport = sendReport,
        _invalidateModeCache = invalidateModeCache,
        _onMode = onMode,
+       _onModeUnavailable = onModeUnavailable,
        _appBuild = appBuild,
        _interval = interval,
        _callTimeout = callTimeout,
@@ -139,6 +141,11 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
   /// mode so the submission path can resolve the dispatch mode (direct_print for a
   /// verified printer_only branch). Optional; null in tests that don't observe it.
   final void Function(KitchenModeResult)? _onMode;
+
+  /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: fired when the mode fetch fails
+  /// definitively (throw/timeout) so the submission readiness can block with a
+  /// retryable "unavailable" reason instead of guessing KDS. Optional.
+  final void Function()? _onModeUnavailable;
   final Future<KitchenReadinessPrinterEvidence> Function() _printerEvidence;
   final Future<KitchenSpoolReadinessProbeResult> Function({
     required String deviceId,
@@ -248,15 +255,20 @@ final class KitchenReadinessHeartbeat implements PosKitchenReadinessLifecycle {
     try {
       mode = await _fetchMode().timeout(_callTimeout);
     } on Object {
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: a definitive fetch failure (network
+      // throw / timeout) with no trusted cache must BLOCK submission with a
+      // retryable reason — never leave the readiness silently guessing KDS.
+      _onModeUnavailable?.call();
       return KitchenReadinessRunReport(
         trigger: trigger,
         outcome: KitchenReadinessRunOutcome.skippedModeUnavailable,
         detail: 'mode_fetch_failed',
       );
     }
-    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publish the freshly-verified mode so a
-    // submission resolves direct_print for a printer_only branch. Every non-trusted
-    // result (transient/server/invalid/unavailable) resolves to KDS (fail-closed).
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publish the freshly-fetched mode. A
+    // TRUSTED mode (printer_only+revision / verified kds) resolves submission; any
+    // other result blocks it (never a guessed KDS) — the readiness controller maps
+    // the result and only downgrades while still loading.
     _onMode?.call(mode);
     final int revision;
     switch (mode) {

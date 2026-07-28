@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:ui' as ui show PlatformDispatcher;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,12 +31,16 @@ import 'package:restoflow_printing/restoflow_printing.dart'
         sendKitchenBytesOverTcp;
 
 import '../data/ids.dart' show clientIdGeneratorProvider;
-import '../data/order_dispatch.dart' show posVerifiedKitchenModeProvider;
+import '../data/kitchen_mode_readiness.dart'
+    show posKitchenModeReadinessProvider;
+import 'kitchen_mode_cache_seed.dart' show readVerifiedCachedMode;
 import '../print/native_print_bridges.dart'
     show kPosNativePrintTimeout, posPrinterDestinationSendGateProvider;
 import '../state/pos_bluetooth_printer_config.dart'
     show posKitchenBluetoothPrinterConfigProvider;
 import '../state/pos_device_context.dart' show posDeviceContextProvider;
+import '../state/recent_orders_controller.dart'
+    show posRecentOrdersControllerProvider;
 import '../state/pos_network_printer_config.dart'
     show posKitchenNetworkPrinterConfigProvider;
 import '../state/pos_printer_transport.dart'
@@ -170,6 +175,16 @@ PosKitchenSpoolLifecycleHooks? buildPosKitchenSpoolRuntime(Ref ref) {
           ),
     sendGate: ref.watch(posPrinterDestinationSendGateProvider),
     modeCache: PosSecureKitchenModeCache(platform: platform),
+    // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap C): resolve the order's phone from
+    // THIS till's local recent-orders (the order it submitted, carrying the phone)
+    // so it is stored in the encrypted spool for a crash-recovery reprint — never
+    // from the redacted server payload. Best-effort: a miss yields null (name-only).
+    resolveCustomerPhone: (orderId) async {
+      for (final o in ref.read(posRecentOrdersControllerProvider)) {
+        if (o.orderId == orderId) return o.order?.customerPhone;
+      }
+      return null;
+    },
   );
   // REAL disposal: logout/unpair/scope change (the device-context watch) or
   // provider teardown closes the dedicated DB and stops an in-flight worker
@@ -232,9 +247,12 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     fetchMode: modeRepository.fetchMode,
     // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001: publish the verified mode so a
     // printer_only branch's submits emit direct_print and its dine-in orders
-    // close. Fail-closed: any non-trusted mode resolves to KDS at submit time.
+    // close. Fail-closed: a non-trusted result blocks submission (never guessed
+    // KDS); a definitive fetch failure marks the readiness unavailable (retryable).
     onMode: (mode) =>
-        ref.read(posVerifiedKitchenModeProvider.notifier).state = mode,
+        ref.read(posKitchenModeReadinessProvider.notifier).publish(mode),
+    onModeUnavailable: () =>
+        ref.read(posKitchenModeReadinessProvider.notifier).markUnavailable(),
     printerEvidence: () async {
       final assignments = await SupabaseDevicePrinterAssignmentsRepository(
         transport: transport,
@@ -271,6 +289,29 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
     sendReport: readinessRepository.report,
     invalidateModeCache: modeCache.invalidate,
   );
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): expose an immediate re-verify
+  // to the cart's retry affordance WITHOUT the UI importing this spool boundary
+  // (the runtime source-boundary proof forbids any spool reference outside
+  // `lib/src/spool`). Single-flight inside the coordinator absorbs bursts.
+  ref
+      .read(posKitchenModeReadinessProvider.notifier)
+      .bindResolver(() => heartbeat.requestImmediate('user_retry'));
+  // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): OFFLINE readiness seed. A fresh
+  // trusted secure-cached mode resolves submission IMMEDIATELY (before the network
+  // heartbeat), so a returning cashier's printer_only branch emits direct_print
+  // even offline. Fire-and-forget: a miss/failure leaves the readiness Loading and
+  // the heartbeat resolves it. Never a downgrade — publish only maps a TRUSTED
+  // cached mode to Resolved.
+  unawaited(() async {
+    final cached = await readVerifiedCachedMode(
+      cache: modeCache,
+      secretStore: secretStore,
+      context: ref.read(posDeviceContextProvider),
+    );
+    if (cached != null) {
+      ref.read(posKitchenModeReadinessProvider.notifier).publish(cached);
+    }
+  }());
   // Immediate evidence-change triggers (fire-and-forget; single-flight
   // inside the coordinator absorbs bursts).
   ref.listen(posKitchenSelectedPrinterTransportProvider, (_, _) {
@@ -285,7 +326,12 @@ PosKitchenReadinessLifecycle? buildPosKitchenReadinessHeartbeat(Ref ref) {
   ref.listen(posKitchenSpoolCapabilityProvider, (previous, next) {
     if (previous != next) heartbeat.requestImmediate('spool_state_changed');
   });
-  ref.onDispose(heartbeat.dispose);
+  ref.onDispose(() {
+    // Drop the retry binding before the heartbeat is gone (a rebuild on scope
+    // change installs the new scope's heartbeat).
+    ref.read(posKitchenModeReadinessProvider.notifier).bindResolver(null);
+    heartbeat.dispose();
+  });
   return heartbeat;
 }
 

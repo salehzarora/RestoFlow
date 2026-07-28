@@ -888,6 +888,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posCloseWorkflowUnavailable => 'Kitchen mode unavailable';
 
   @override
+  String get posKitchenModeLoading => 'Checking kitchen setup…';
+
+  @override
+  String get posKitchenModeRetry => 'Retry';
+
+  @override
   String get posAssignTable => 'Assign table';
 
   @override

@@ -273,6 +273,8 @@
   "posClosePaymentRequired": "استلم الدفع لإنهاء الطلب",
   "posCloseKdsRequired": "شاشة المطبخ تُنهي هذا الطلب",
   "posCloseWorkflowUnavailable": "وضع المطبخ غير متاح",
+  "posKitchenModeLoading": "جارٍ التحقق من إعداد المطبخ…",
+  "posKitchenModeRetry": "إعادة المحاولة",
   "posAssignTable": "تعيين طاولة",
   "posChangeTable": "تغيير الطاولة",
   "posClearTableAssignment": "إزالة الطاولة",

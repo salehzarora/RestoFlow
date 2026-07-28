@@ -273,6 +273,8 @@
   "posClosePaymentRequired": "יש לגבות תשלום כדי לסיים",
   "posCloseKdsRequired": "מסך המטבח מסיים הזמנה זו",
   "posCloseWorkflowUnavailable": "מצב המטבח אינו זמין",
+  "posKitchenModeLoading": "בודק את הגדרת המטבח…",
+  "posKitchenModeRetry": "נסה שוב",
   "posAssignTable": "שיוך שולחן",
   "posChangeTable": "החלפת שולחן",
   "posClearTableAssignment": "הסרת שולחן",

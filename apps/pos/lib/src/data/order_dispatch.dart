@@ -1,4 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 
 import 'order_submission.dart' show OrderDispatchMode;
@@ -19,13 +18,7 @@ OrderDispatchMode resolveOrderDispatchMode(KitchenModeResult? verifiedMode) {
       : OrderDispatchMode.kds;
 }
 
-/// The LAST server-VERIFIED kitchen workflow mode for the current scope, or null
-/// until it has been verified this session (fail-closed → KDS). Published by the
-/// kitchen-readiness heartbeat, which fetches the revision-gated mode on
-/// startup/resume/interval; the value survives offline (the last verified mode is
-/// kept), so a printer_only branch keeps emitting direct_print while offline, and
-/// a not-yet-verified or transiently-failed mode stays KDS. Tests override this to
-/// force a mode.
-final posVerifiedKitchenModeProvider = StateProvider<KitchenModeResult?>(
-  (ref) => null,
-);
+// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): the verified-mode signal moved to
+// kitchen_mode_readiness.dart as a TYPED readiness (loading / resolved /
+// unavailable) so a submit can BLOCK until the mode is verified instead of
+// guessing KDS. `posVerifiedKitchenModeProvider` there is derived from it.

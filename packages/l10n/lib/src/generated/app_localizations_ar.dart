@@ -881,6 +881,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posCloseWorkflowUnavailable => 'وضع المطبخ غير متاح';
 
   @override
+  String get posKitchenModeLoading => 'جارٍ التحقق من إعداد المطبخ…';
+
+  @override
+  String get posKitchenModeRetry => 'إعادة المحاولة';
+
+  @override
   String get posAssignTable => 'تعيين طاولة';
 
   @override

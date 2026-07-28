@@ -875,6 +875,12 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posCloseWorkflowUnavailable => 'מצב המטבח אינו זמין';
 
   @override
+  String get posKitchenModeLoading => 'בודק את הגדרת המטבח…';
+
+  @override
+  String get posKitchenModeRetry => 'נסה שוב';
+
+  @override
   String get posAssignTable => 'שיוך שולחן';
 
   @override
