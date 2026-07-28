@@ -38,6 +38,8 @@ import 'package:restoflow_pos/src/widgets/cart_panel.dart'
 import 'package:restoflow_pos/src/widgets/recovery_coordinator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/verified_kitchen_mode_readiness.dart';
+
 /// MENU-ORDER-001 (Codex 5th pass) — the END-TO-END durable recovery + resubmission
 /// proof, driven through the REAL production seams (NOT _draft/captureDraft/
 /// restoreDraft/viewFromDraft directly):
@@ -277,6 +279,10 @@ void main() {
           recentStore ?? InMemoryRecentOrdersStore(),
         ),
         posSyncClockProvider.overrideWithValue(() => _t0),
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): this recovery suite is a
+        // KDS-branch flow; simulate the startup lifecycle having verified the
+        // mode so the Gap-A readiness gate does not block submit/replay.
+        verifiedKdsReadinessOverride(),
       ],
     );
     return c;
@@ -1169,6 +1175,7 @@ void main() {
             InMemoryRecentOrdersStore(),
           ),
           posSyncClockProvider.overrideWithValue(() => _t0),
+          verifiedKdsReadinessOverride(),
         ],
       );
       addTearDown(c.dispose);
@@ -1217,6 +1224,7 @@ void main() {
             InMemoryRecentOrdersStore(),
           ),
           posSyncClockProvider.overrideWithValue(() => _t0),
+          verifiedKdsReadinessOverride(),
         ],
       );
       addTearDown(c.dispose);
@@ -1574,6 +1582,7 @@ void main() {
             InMemoryRecentOrdersStore(),
           ),
           posSyncClockProvider.overrideWithValue(() => _t0),
+          verifiedKdsReadinessOverride(),
         ],
       );
       addTearDown(c.dispose);

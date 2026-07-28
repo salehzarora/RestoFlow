@@ -16,6 +16,8 @@ import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
 
+import 'support/verified_kitchen_mode_readiness.dart';
+
 /// REVIEW B2 — a PERMANENT business rejection replays its stored verdict under
 /// the same operation identity forever, so the POS must not offer a "Retry"
 /// that reuses that identity. Retry stays for transport-ish failures where no
@@ -132,6 +134,9 @@ Future<void> _pumpReal(WidgetTester tester, SyncRpcTransport transport) async {
             currencyCode: 'ILS',
           ),
         ),
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): REAL surface without
+        // PosSyncLifecycle — simulate the verified KDS branch so Send is enabled.
+        verifiedKdsReadinessOverride(),
       ],
       child: MaterialApp(
         locale: const Locale('en'),

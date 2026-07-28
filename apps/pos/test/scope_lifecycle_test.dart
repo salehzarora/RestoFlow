@@ -27,6 +27,8 @@ import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/state/pos_device_context.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
+
+import 'support/verified_kitchen_mode_readiness.dart';
 import 'package:restoflow_pos/src/state/pos_sync_scope_provider.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
@@ -92,6 +94,10 @@ void main() {
         if (store != null)
           posRecentOrdersStoreProvider.overrideWithValue(store),
         if (voids != null) voidRepositoryProvider.overrideWithValue(voids),
+        // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): KDS-branch flow —
+        // simulate the startup-verified mode so the readiness gate does not
+        // block the submits whose scope-mutation boundary is under test.
+        verifiedKdsReadinessOverride(),
       ],
     );
     addTearDown(c.dispose);

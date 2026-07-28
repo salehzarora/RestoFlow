@@ -35,6 +35,8 @@ import 'package:restoflow_pos/src/widgets/recovery_coordinator.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/verified_kitchen_mode_readiness.dart';
+
 /// MENU-ORDER-001 (Codex 8th pass) — CORRECTION-RESULT SETTLEMENT ACROSS WORKER/SCOPE
 /// HANDOVER. A corrected submit (source recovery e1 -> corrected op e2, durably linked
 /// BEFORE dispatch) that settles AFTER the submitting worker/scope changed must NEVER
@@ -235,6 +237,10 @@ void main() {
         InMemoryRecentOrdersStore(),
       ),
       posSyncClockProvider.overrideWithValue(() => _t0),
+      // POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): KDS-branch flow — simulate
+      // the startup lifecycle having verified the mode so the readiness gate
+      // does not block the correction/handover submits under test.
+      verifiedKdsReadinessOverride(),
     ],
   );
 
