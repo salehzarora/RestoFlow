@@ -159,6 +159,8 @@ class SubmittedLineView {
     this.categoryDisplayOrder = 0,
     this.itemDisplayOrder = 0,
     this.linePosition = 0,
+    this.kitchenMeats = const <KitchenMeat>[],
+    this.prepComponents = const <KitchenPrepComponent>[],
   });
 
   final String name;
@@ -187,6 +189,26 @@ class SubmittedLineView {
   /// Optional cashier note for this item ("بدون بصل") — rendered under the
   /// modifiers on the confirmation/receipt/print (non-money data).
   final String? note;
+
+  /// PRINT-STARTUP-REPRINT-001 (Defect 2): the ORDER-TIME kitchen count
+  /// snapshots (D-008), so a MANUAL kitchen reprint aggregates the SAME
+  /// whole-order counts the automatic ticket printed.
+  ///
+  /// [kitchenMeats] is each selected option's owner-configured meat snapshot
+  /// ALREADY multiplied by the units of that option (the `meat.quantity ×
+  /// modifier.quantity` the automatic path computes); the aggregator then
+  /// applies the item quantity. It is deliberately NOT index-aligned with
+  /// [modifiers] — options without a configured meat contribute nothing.
+  /// [prepComponents] is the item's PER-UNIT prep snapshot captured when the
+  /// line was added to the cart.
+  ///
+  /// Both are ADDITIVE and OPTIONAL: a record persisted before this change, or
+  /// a view rebuilt from the server projection (which carries no meat/prep),
+  /// decodes to empty — and the reprint then honestly OMITS the count section
+  /// rather than guessing quantities out of the [modifiers] display strings.
+  /// Non-money throughout (D-007).
+  final List<KitchenMeat> kitchenMeats;
+  final List<KitchenPrepComponent> prepComponents;
 
   Money get lineTotal => Money(lineTotalMinor, currencyCode);
 }

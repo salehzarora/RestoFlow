@@ -521,6 +521,14 @@ Map<String, Object?> _lineToJson(SubmittedLineView l) => <String, Object?>{
   if (l.itemDisplayOrder != 0)
     'item_display_order_snapshot': l.itemDisplayOrder,
   if (l.linePosition != 0) 'line_position': l.linePosition,
+  // PRINT-STARTUP-REPRINT-001: persist the ORDER-TIME kitchen count snapshots
+  // (ADDITIVE — only when set) so a MANUAL kitchen reprint after a relaunch
+  // still aggregates the same whole-order counts the automatic ticket printed.
+  // Older records simply lack the keys and decode to empty (see _lineFromJson).
+  if (l.kitchenMeats.isNotEmpty)
+    'kitchen_meat_snapshots': [for (final m in l.kitchenMeats) m.toJson()],
+  if (l.prepComponents.isNotEmpty)
+    'prep_snapshot': [for (final c in l.prepComponents) c.toJson()],
 };
 
 SubmittedLineView _lineFromJson(Map<String, Object?> j) {
@@ -544,7 +552,24 @@ SubmittedLineView _lineFromJson(Map<String, Object?> j) {
     categoryDisplayOrder: _int(j['category_display_order_snapshot']),
     itemDisplayOrder: _int(j['item_display_order_snapshot']),
     linePosition: _int(j['line_position']),
+    // PRINT-STARTUP-REPRINT-001: tolerant read of the kitchen count snapshots.
+    // A record written before this change lacks the keys and decodes to EMPTY —
+    // the reprint then honestly omits the count section instead of guessing
+    // quantities out of the stored `name ×N` display strings, and nothing is
+    // ever re-read from the current menu.
+    kitchenMeats: _kitchenMeats(j['kitchen_meat_snapshots']),
+    prepComponents: parseKitchenPrepComponents(j['prep_snapshot']),
   );
+}
+
+List<KitchenMeat> _kitchenMeats(Object? raw) {
+  if (raw is! List) return const <KitchenMeat>[];
+  final out = <KitchenMeat>[];
+  for (final element in raw) {
+    final meat = KitchenMeat.tryFromJson(element);
+    if (meat != null) out.add(meat);
+  }
+  return out;
 }
 
 // --- CashPayment serialization ----------------------------------------------

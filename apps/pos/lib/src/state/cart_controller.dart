@@ -74,6 +74,25 @@ class SelectedModifier {
   }
 }
 
+/// PRINT-STARTUP-REPRINT-001 (Defect 2) — the SINGLE place selected modifiers
+/// become kitchen meat contributions, so the automatic ticket, the stored order
+/// snapshot and the manual reprint can never drift apart.
+///
+/// Each option's owner-configured [KitchenMeat] is multiplied by the UNITS of
+/// that option (`extra meat ×2` => two patties); the item quantity is applied
+/// later by `aggregateOrderKitchenCounts`. Options with no configured meat, or
+/// with non-positive units, contribute nothing — so the result is deliberately
+/// NOT index-aligned with the modifier display list. Money-free (D-007).
+List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) => [
+  for (final modifier in modifiers)
+    if (modifier.kitchenMeat case final meat?)
+      if (modifier.quantity > 0)
+        KitchenMeat(
+          quantity: meat.quantity * modifier.quantity,
+          unit: meat.unit,
+        ),
+];
+
 /// Immutable view of a single cart line for the POS UI.
 ///
 /// Money fields are integer minor units (DECISION D-007); [unitPrice] and
@@ -371,6 +390,14 @@ class CartController extends Notifier<CartViewState> {
   /// print surface orders items into Dashboard-configured order. Non-money.
   final Map<String, (int, int)> _lineDisplayOrders = {};
 
+  /// PRINT-STARTUP-REPRINT-001 (Defect 2): the item's PER-UNIT kitchen prep
+  /// components per line id, captured from the DemoMenuItem at ADD time — the
+  /// same order-time snapshot the outbox payload carries (D-008) — and carried
+  /// onto SubmittedLineView so a MANUAL kitchen reprint can aggregate the same
+  /// whole-order counts as the automatic ticket. Never re-read from the live
+  /// menu at reprint time. Non-money.
+  final Map<String, List<KitchenPrepComponent>> _linePrep = {};
+
   /// The ACTIVE menu currency (real backend currency in real mode; the demo
   /// constant otherwise). Read at cart (re)creation so price snapshots and the
   /// cart currency always agree with the menu being sold from (D-007/D-008).
@@ -392,6 +419,7 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _lineDisplayOrders.clear();
+    _linePrep.clear();
     _lockOwner = null;
     return CartViewState.fromCart(_cart);
   }
@@ -481,6 +509,7 @@ class CartController extends Notifier<CartViewState> {
         item.categoryDisplayOrder,
         item.itemDisplayOrder,
       );
+      _linePrep[lineId] = item.prepComponents;
     }
     _emit();
     return CartMutationResult.applied;
@@ -519,6 +548,7 @@ class CartController extends Notifier<CartViewState> {
       item.categoryDisplayOrder,
       item.itemDisplayOrder,
     );
+    _linePrep[lineId] = item.prepComponents;
     _emit();
     return CartMutationResult.applied;
   }
@@ -644,6 +674,7 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _lineDisplayOrders.clear();
+    _linePrep.clear();
     for (final l in draft.lines) {
       // MENU-ORDER-001 (Codex #2/#3): reuse the persisted STABLE line id so
       // edits/removals target the original line and a re-restore never
@@ -733,6 +764,13 @@ class CartController extends Notifier<CartViewState> {
           categoryDisplayOrder: dispOrder?.$1 ?? 0,
           itemDisplayOrder: dispOrder?.$2 ?? 0,
           linePosition: linePosition,
+          // PRINT-STARTUP-REPRINT-001: the ORDER-TIME kitchen count snapshots,
+          // so a manual reprint aggregates the SAME totals the automatic
+          // ticket printed. Meat is pre-multiplied by the option's units,
+          // exactly as kdsTicketViewFromCartLines does.
+          kitchenMeats: kitchenMeatSnapshots(mods),
+          prepComponents:
+              _linePrep[item.orderItemId] ?? const <KitchenPrepComponent>[],
         ),
       );
     }
@@ -756,6 +794,7 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _lineDisplayOrders.clear();
+    _linePrep.clear();
     _emit();
     return CartMutationResult.applied;
   }
@@ -806,6 +845,11 @@ class CartController extends Notifier<CartViewState> {
           categoryDisplayOrder: l.categoryDisplayOrder,
           itemDisplayOrder: l.itemDisplayOrder,
           linePosition: linePosition,
+          // PRINT-STARTUP-REPRINT-001: the recovered draft carries its own
+          // order-time modifier snapshots, so meat survives a restart. Prep is
+          // a MENU snapshot the draft does not carry — it stays empty rather
+          // than being re-read from the current catalog.
+          kitchenMeats: kitchenMeatSnapshots(l.modifiers),
         ),
       );
     }
@@ -846,6 +890,7 @@ class CartController extends Notifier<CartViewState> {
     _lineModifiers.clear();
     _lineNotes.clear();
     _lineDisplayOrders.clear();
+    _linePrep.clear();
     // A fresh order ends any in-progress correction (see [clear]).
     ref.read(posActiveCorrectionSourceProvider.notifier).clear();
     _emit();

@@ -146,8 +146,11 @@ const _moneyTokens = [
 }
 
 /// The AUTOMATIC initial kitchen ticket, built the way the live path builds it.
-KdsTicketView _autoTicket(List<CartLineView> lines) => kdsTicketViewFromCartLines(
-  orderCode: '#3F7A2C',
+KdsTicketView _autoTicket(
+  List<CartLineView> lines,
+  String orderCode,
+) => kdsTicketViewFromCartLines(
+  orderCode: orderCode,
   orderType: OrderType.dineIn,
   tableLabel: 'T2',
   lines: lines,
@@ -170,7 +173,7 @@ void main() {
       'kitchen ticket', () {
     test('AGGREGATE kitchen counts match (extra meat + prep)', () {
       final r = _realSubmit();
-      final auto = _autoTicket(r.cartLines);
+      final auto = _autoTicket(r.cartLines, r.submitted.orderNumber);
       final reprint = _reprintTicket(r.submitted);
 
       // Extra meat: 1 patty × 2 selections × 1 burger = 2. Bread: 1 × 1 = 1.
@@ -190,7 +193,7 @@ void main() {
     test('product quantity, modifier names + quantities, meal selection and '
         'item note all match', () {
       final r = _realSubmit();
-      final auto = _autoTicket(r.cartLines);
+      final auto = _autoTicket(r.cartLines, r.submitted.orderNumber);
       final reprint = _reprintTicket(r.submitted);
 
       expect(auto.items, hasLength(2));
@@ -227,7 +230,7 @@ void main() {
 
     test('menu print ORDERING matches despite shuffled input', () {
       final r = _realSubmit();
-      final auto = _autoTicket(r.cartLines);
+      final auto = _autoTicket(r.cartLines, r.submitted.orderNumber);
       final reprint = _reprintTicket(r.submitted);
 
       // Burgers (category 1) before Sides (category 2), though Fries was added
@@ -246,7 +249,7 @@ void main() {
       final r = _realSubmit();
       final labels = _labels();
       final autoDoc = buildKdsTicketPrintDocument(
-        ticket: _autoTicket(r.cartLines),
+        ticket: _autoTicket(r.cartLines, r.submitted.orderNumber),
         labels: labels,
       );
       final reprintDoc = buildKdsTicketPrintDocument(
@@ -279,7 +282,7 @@ void main() {
       final r = _realSubmit();
       final labels = _labels();
       final autoBytes = await renderKitchenTicketBytes(
-        ticket: _autoTicket(r.cartLines),
+        ticket: _autoTicket(r.cartLines, r.submitted.orderNumber),
         labels: labels,
       );
       final reprintBytes = await renderKitchenTicketBytes(

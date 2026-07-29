@@ -20,7 +20,8 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../data/order_submission.dart' show kPermanentRejectionCodes;
-import '../state/cart_controller.dart' show CartLineView;
+import '../state/cart_controller.dart'
+    show CartLineView, kitchenMeatSnapshots;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_network_printer_config.dart';
@@ -449,41 +450,89 @@ KdsTicketView kdsTicketViewFromCartLines({
     lines,
     (l) => [l.categoryDisplayOrder, l.itemDisplayOrder],
   );
+  return _kdsTicketViewFromKitchenLines(
+    orderCode: orderCode,
+    orderType: orderType,
+    tableLabel: tableLabel,
+    customerName: customerName,
+    customerPhone: customerPhone,
+    orderNote: orderNote,
+    lines: [
+      for (final line in sortedLines)
+        _KitchenTicketLine(
+          name: line.name,
+          quantity: line.quantity,
+          // Structured modifier lines (name first, ×N when >1 — the KDS
+          // convention), via the ONE shared formatter.
+          modifierLines: [for (final m in line.modifiers) m.displayName],
+          note: line.note,
+          // KITCHEN-MEAT-001: each option's meat_snapshot PRE-multiplied by its
+          // modifier units (× the item quantity is applied by the aggregator).
+          meats: kitchenMeatSnapshots(line.modifiers),
+          prepComponents:
+              prepByItemId[line.menuItemId] ?? const <KitchenPrepComponent>[],
+        ),
+    ],
+  );
+}
+
+/// PRINT-STARTUP-REPRINT-001 (Defect 2) — ONE canonical, money-free kitchen
+/// ticket line. Both the automatic initial print (from live cart lines) and the
+/// manual reprint (from the stored order snapshot) map onto this shape, so the
+/// two tickets cannot drift apart.
+class _KitchenTicketLine {
+  const _KitchenTicketLine({
+    required this.name,
+    required this.quantity,
+    required this.modifierLines,
+    required this.note,
+    required this.meats,
+    required this.prepComponents,
+  });
+
+  final String name;
+  final int quantity;
+
+  /// Already-formatted modifier text (`name ×N`). NEVER parsed back for counts.
+  final List<String> modifierLines;
+  final String? note;
+
+  /// Meat contributions, pre-multiplied by the option's units. Deliberately not
+  /// index-aligned with [modifierLines].
+  final List<KitchenMeat> meats;
+  final List<KitchenPrepComponent> prepComponents;
+}
+
+/// The SINGLE kitchen-ticket mapper: canonical lines (already in canonical
+/// print order) -> the shared [KdsTicketView], with the ONE whole-order
+/// [aggregateOrderKitchenCounts] invocation in the POS. Money-free throughout —
+/// a [KdsTicketView] cannot carry money (D-007).
+KdsTicketView _kdsTicketViewFromKitchenLines({
+  required String orderCode,
+  required OrderType orderType,
+  required List<_KitchenTicketLine> lines,
+  String? tableLabel,
+  String? customerName,
+  String? customerPhone,
+  String? orderNote,
+}) {
   final items = <KdsItemView>[];
   final countInputs = <KitchenCountItemInput>[];
-  for (final line in sortedLines) {
-    final prep =
-        prepByItemId[line.menuItemId] ?? const <KitchenPrepComponent>[];
+  for (final line in lines) {
     items.add(
       KdsItemView(
         name: line.name,
         quantity: line.quantity,
-        // Structured modifier lines (name first, ×N when >1 — the KDS convention).
-        modifiers: [
-          for (final modifier in line.modifiers)
-            modifier.quantity > 1
-                ? '${modifier.optionName} ×${modifier.quantity}'
-                : modifier.optionName,
-        ],
+        modifiers: line.modifierLines,
         note: line.note,
-        prepComponents: prep,
+        prepComponents: line.prepComponents,
       ),
     );
-    // KITCHEN-MEAT-001: an option's meat_snapshot, PRE-multiplied by its modifier
-    // units (× the item quantity is the count factor, applied by the aggregator).
     countInputs.add(
       KitchenCountItemInput(
         quantity: line.quantity,
-        meats: [
-          for (final modifier in line.modifiers)
-            if (modifier.kitchenMeat case final meat?)
-              if (modifier.quantity > 0)
-                KitchenMeat(
-                  quantity: meat.quantity * modifier.quantity,
-                  unit: meat.unit,
-                ),
-        ],
-        prepComponents: prep,
+        meats: line.meats,
+        prepComponents: line.prepComponents,
       ),
     );
   }
@@ -505,34 +554,39 @@ KdsTicketView kdsTicketViewFromCartLines({
   );
 }
 
-/// Maps an already-created [SubmittedOrderView] (flattened lines) to a
-/// [KdsTicketView] — used by the manual reprint action. The confirmation
-/// snapshot carries name/qty/modifiers/note/table/customer/type but NOT the
-/// per-item prep/meat snapshot, so a reprinted ticket omits the whole-order
-/// counts (it is a best-effort reprint of what the confirmation shows).
+/// Maps an already-created [SubmittedOrderView] (flattened lines) to the SHARED
+/// [KdsTicketView] — used by the manual reprint action.
+///
+/// PRINT-STARTUP-REPRINT-001 (Defect 2): the submitted view now carries the
+/// ORDER-TIME kitchen count snapshots, so a reprint goes through the SAME
+/// mapper and aggregates the SAME whole-order counts as the automatic ticket.
+///
+/// A record stored BEFORE that change — or a view rebuilt from the server
+/// projection, which exposes no meat/prep — decodes to empty snapshots, and the
+/// count section is then honestly OMITTED. Quantities are never recovered by
+/// parsing the `name ×N` display strings, and never re-read from the live menu.
 KdsTicketView kdsTicketViewFromSubmittedOrder(SubmittedOrderView order) {
   // MENU-ORDER-001: items in the canonical menu-configured print order (shared
   // getter) so the manual kitchen reprint matches the cashier receipt + KDS.
   final sortedLines = order.printOrderedLines;
-  return KdsTicketView(
-    kitchenTicketId: order.orderNumber,
-    stationId: KdsTicketMapper.unassignedStation,
-    items: [
-      for (final line in sortedLines)
-        KdsItemView(
-          name: line.name,
-          quantity: line.quantity,
-          // Already pre-formatted as `name ×N` on the submitted view.
-          modifiers: line.modifiers,
-          note: line.note,
-        ),
-    ],
-    status: KitchenTicketStatus.newTicket,
-    orderNumber: order.orderNumber,
-    orderType: _orderTypeWire(order.orderType),
+  return _kdsTicketViewFromKitchenLines(
+    orderCode: order.orderNumber,
+    orderType: order.orderType,
     tableLabel: order.tableLabel,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
+    lines: [
+      for (final line in sortedLines)
+        _KitchenTicketLine(
+          name: line.name,
+          quantity: line.quantity,
+          // Already pre-formatted as `name ×N` on the submitted view.
+          modifierLines: line.modifiers,
+          note: line.note,
+          meats: line.kitchenMeats,
+          prepComponents: line.prepComponents,
+        ),
+    ],
   );
 }
 
