@@ -624,12 +624,22 @@ begin
                   and kd.superseded_by_dispatch_id is null;
             end if;
             -- KITCHEN-PRINT-DUAL-001C: a direct_print order is dispatched to the
-            -- kitchen via the POS printer (no KDS device). Route it OUT of the KDS
-            -- active workflow IN THIS SAME transaction — a concurrent sync_pull can
-            -- never observe an intermediate active state (sync_push commits once).
-            -- Promotes the fresh submitted order to `served` + stamps dispatch_mode;
-            -- the UNCHANGED served+paid rule still owns completion (settlement is
-            -- NEVER bypassed). A 'kds' (default) order is a structural no-op here.
+            -- kitchen via the POS printer (no KDS device), IN THIS SAME transaction
+            -- — a concurrent sync_pull can never observe an intermediate active
+            -- state (sync_push commits once). app.submit_order already ran above, so
+            -- the outcome here is CONDITIONAL, not an unconditional promotion:
+            --   * CHARGEABLE printer_only order, still `submitted` -> the helper
+            --     routes it OUT of the KDS active workflow: served +
+            --     dispatch_mode=direct_print, dispatched=true; completion still
+            --     waits for settlement.
+            --   * ZERO-TOTAL printer_only order -> app.submit_order ALREADY
+            --     completed it (a zero balance is settled on arrival), so the helper
+            --     declines with dispatched=false / reason=not_eligible and the order
+            --     stays completed / dispatch_mode='kds' / revision 2.
+            -- Settlement is NEVER bypassed and physical print success NEVER completes
+            -- an order; the POS local kitchen print is a separate best-effort client
+            -- path and is not represented in this result. A 'kds' (default) order is
+            -- a structural no-op here.
             if v_requested_dispatch = 'direct_print' then
               -- Merge the ADDITIVE outcome (order_status/revision/auto_completed)
               -- into the envelope so the client sees the FINAL committed state,
