@@ -83,7 +83,9 @@ class PosNetworkPrinterProfilesController
     );
   }
 
-  Future<PosNetworkProfilesState> _load(NetworkPrinterProfileStore store) async {
+  Future<PosNetworkProfilesState> _load(
+    NetworkPrinterProfileStore store,
+  ) async {
     final profiles = await store.list();
     return PosNetworkProfilesState(
       profiles: profiles,
