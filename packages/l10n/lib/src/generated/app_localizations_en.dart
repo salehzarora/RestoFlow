@@ -3770,6 +3770,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posDiscountDemoNote => 'Demo discount — applied locally';
 
   @override
+  String get printerProfilesHeading => 'Saved printers';
+
+  @override
+  String get printerProfilesAddAction => 'Add printer';
+
+  @override
+  String get printerProfilesEditAction => 'Edit printer';
+
+  @override
+  String get printerProfilesDeleteAction => 'Delete printer';
+
+  @override
+  String get printerProfilesSelectAction => 'Use this printer';
+
+  @override
+  String get printerProfilesActiveBadge => 'Active';
+
+  @override
+  String get printerProfilesDefaultName => 'Saved printer';
+
+  @override
+  String get printerProfilesNameLabel => 'Printer name';
+
+  @override
+  String get printerProfilesEmpty =>
+      'No saved printers yet. Add one to switch between printers quickly.';
+
+  @override
+  String get printerProfilesLoading => 'Loading saved printers…';
+
+  @override
+  String get printerProfilesLoadFailure => 'Could not load saved printers.';
+
+  @override
+  String get printerProfilesRetryAction => 'Retry';
+
+  @override
+  String get printerProfilesDeleteConfirmTitle => 'Delete printer?';
+
+  @override
+  String printerProfilesDeleteConfirmBody(Object name) {
+    return '$name will be removed from this device.';
+  }
+
+  @override
+  String get printerProfilesDeleteActiveWarning =>
+      'This is the active printer. This slot will have no printer until you select another.';
+
+  @override
+  String get printerProfilesDuplicateError =>
+      'A saved printer already uses this address and port.';
+
+  @override
+  String get printerProfilesNameRequired => 'Enter a printer name.';
+
+  @override
+  String get printerProfilesSaveFailure => 'Could not save the printer.';
+
+  @override
+  String get printerProfilesCancelAction => 'Cancel';
+
+  @override
   String get posNetworkPrinterHeading => 'Network printer (this device)';
 
   @override

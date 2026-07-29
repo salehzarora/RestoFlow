@@ -3742,6 +3742,68 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posDiscountDemoNote => 'خصم تجريبي — مُطبّق محليًا';
 
   @override
+  String get printerProfilesHeading => 'طابعات محفوظة';
+
+  @override
+  String get printerProfilesAddAction => 'إضافة طابعة';
+
+  @override
+  String get printerProfilesEditAction => 'تعديل الطابعة';
+
+  @override
+  String get printerProfilesDeleteAction => 'حذف الطابعة';
+
+  @override
+  String get printerProfilesSelectAction => 'استخدام هذه الطابعة';
+
+  @override
+  String get printerProfilesActiveBadge => 'نشطة';
+
+  @override
+  String get printerProfilesDefaultName => 'طابعة محفوظة';
+
+  @override
+  String get printerProfilesNameLabel => 'اسم الطابعة';
+
+  @override
+  String get printerProfilesEmpty =>
+      'لا توجد طابعات محفوظة بعد. أضف واحدة للتبديل بين الطابعات بسرعة.';
+
+  @override
+  String get printerProfilesLoading => 'جارٍ تحميل الطابعات المحفوظة…';
+
+  @override
+  String get printerProfilesLoadFailure => 'تعذّر تحميل الطابعات المحفوظة.';
+
+  @override
+  String get printerProfilesRetryAction => 'إعادة المحاولة';
+
+  @override
+  String get printerProfilesDeleteConfirmTitle => 'حذف الطابعة؟';
+
+  @override
+  String printerProfilesDeleteConfirmBody(Object name) {
+    return 'سيتم حذف $name من هذا الجهاز.';
+  }
+
+  @override
+  String get printerProfilesDeleteActiveWarning =>
+      'هذه هي الطابعة النشطة. لن تكون هناك طابعة لهذه الفتحة حتى تختار أخرى.';
+
+  @override
+  String get printerProfilesDuplicateError =>
+      'توجد طابعة محفوظة تستخدم هذا العنوان والمنفذ.';
+
+  @override
+  String get printerProfilesNameRequired => 'أدخل اسم الطابعة.';
+
+  @override
+  String get printerProfilesSaveFailure => 'تعذّر حفظ الطابعة.';
+
+  @override
+  String get printerProfilesCancelAction => 'إلغاء';
+
+  @override
   String get posNetworkPrinterHeading => 'طابعة الشبكة (هذا الجهاز)';
 
   @override

@@ -3714,6 +3714,68 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posDiscountDemoNote => 'הנחת דמו — הוחלה מקומית';
 
   @override
+  String get printerProfilesHeading => 'מדפסות שמורות';
+
+  @override
+  String get printerProfilesAddAction => 'הוספת מדפסת';
+
+  @override
+  String get printerProfilesEditAction => 'עריכת מדפסת';
+
+  @override
+  String get printerProfilesDeleteAction => 'מחיקת מדפסת';
+
+  @override
+  String get printerProfilesSelectAction => 'שימוש במדפסת זו';
+
+  @override
+  String get printerProfilesActiveBadge => 'פעילה';
+
+  @override
+  String get printerProfilesDefaultName => 'מדפסת שמורה';
+
+  @override
+  String get printerProfilesNameLabel => 'שם המדפסת';
+
+  @override
+  String get printerProfilesEmpty =>
+      'אין עדיין מדפסות שמורות. הוסיפו אחת כדי לעבור בין מדפסות במהירות.';
+
+  @override
+  String get printerProfilesLoading => 'טוען מדפסות שמורות…';
+
+  @override
+  String get printerProfilesLoadFailure => 'לא ניתן לטעון את המדפסות השמורות.';
+
+  @override
+  String get printerProfilesRetryAction => 'נסה שוב';
+
+  @override
+  String get printerProfilesDeleteConfirmTitle => 'למחוק את המדפסת?';
+
+  @override
+  String printerProfilesDeleteConfirmBody(Object name) {
+    return '$name תוסר ממכשיר זה.';
+  }
+
+  @override
+  String get printerProfilesDeleteActiveWarning =>
+      'זו המדפסת הפעילה. לא תהיה מדפסת עד שתבחרו אחרת.';
+
+  @override
+  String get printerProfilesDuplicateError =>
+      'קיימת מדפסת שמורה עם כתובת ופורט אלה.';
+
+  @override
+  String get printerProfilesNameRequired => 'הזינו שם מדפסת.';
+
+  @override
+  String get printerProfilesSaveFailure => 'לא ניתן לשמור את המדפסת.';
+
+  @override
+  String get printerProfilesCancelAction => 'ביטול';
+
+  @override
   String get posNetworkPrinterHeading => 'מדפסת רשת (מכשיר זה)';
 
   @override

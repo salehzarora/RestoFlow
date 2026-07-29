@@ -7042,6 +7042,120 @@ abstract class AppLocalizations {
   /// **'Demo discount — applied locally'**
   String get posDiscountDemoNote;
 
+  /// Heading for the device-local saved network printer list (WIFI-PRINTER-PROFILE-LISTS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Saved printers'**
+  String get printerProfilesHeading;
+
+  /// Action that opens the form to save a new network printer profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Add printer'**
+  String get printerProfilesAddAction;
+
+  /// Accessible label for the edit action on a saved printer row.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit printer'**
+  String get printerProfilesEditAction;
+
+  /// Accessible label for the delete action on a saved printer row.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete printer'**
+  String get printerProfilesDeleteAction;
+
+  /// Action that makes a saved printer the active one for this slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this printer'**
+  String get printerProfilesSelectAction;
+
+  /// Badge marking the currently selected saved printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get printerProfilesActiveBadge;
+
+  /// Default name given once to a printer migrated from the previous single configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved printer'**
+  String get printerProfilesDefaultName;
+
+  /// Label for the saved printer profile name input.
+  ///
+  /// In en, this message translates to:
+  /// **'Printer name'**
+  String get printerProfilesNameLabel;
+
+  /// Empty state guiding the user to add a first saved printer.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved printers yet. Add one to switch between printers quickly.'**
+  String get printerProfilesEmpty;
+
+  /// Compact loading state shown while the saved printer list resolves.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading saved printers…'**
+  String get printerProfilesLoading;
+
+  /// Actionable error shown when the saved printer list cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load saved printers.'**
+  String get printerProfilesLoadFailure;
+
+  /// Action that reloads the saved printer list after a load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get printerProfilesRetryAction;
+
+  /// Title of the confirmation dialog shown before deleting a saved printer.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete printer?'**
+  String get printerProfilesDeleteConfirmTitle;
+
+  /// Body of the delete confirmation, naming the printer being removed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be removed from this device.'**
+  String printerProfilesDeleteConfirmBody(Object name);
+
+  /// Extra warning shown when the profile being deleted is the active one.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the active printer. This slot will have no printer until you select another.'**
+  String get printerProfilesDeleteActiveWarning;
+
+  /// Validation message shown when the entered endpoint duplicates a saved printer.
+  ///
+  /// In en, this message translates to:
+  /// **'A saved printer already uses this address and port.'**
+  String get printerProfilesDuplicateError;
+
+  /// Validation message shown when the profile name is blank.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a printer name.'**
+  String get printerProfilesNameRequired;
+
+  /// Error shown when persisting a saved printer fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the printer.'**
+  String get printerProfilesSaveFailure;
+
+  /// Action that closes the add/edit printer form without saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get printerProfilesCancelAction;
+
   /// POS device-settings heading for the on-device network (Wi-Fi/Ethernet) ESC/POS printer setup (ANDROID-002).
   ///
   /// In en, this message translates to:
