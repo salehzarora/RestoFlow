@@ -98,57 +98,51 @@ pp.PrintDocument _doc(String text) =>
     pp.PrintDocument([pp.PrintTextLine(text)]);
 
 void main() {
-  test(
-    'COLD START: with a saved Bluetooth profile on disk, the FIRST job must '
-    'reach the printer — today the synchronous factory samples an unresolved '
-    'config and the first job has no transport at all',
-    () async {
-      _seedSavedBluetoothProfile();
-      final connector = _RecordingConnector();
-      final container = _coldContainer(connector);
+  test('COLD START: with a saved Bluetooth profile on disk, the FIRST job must '
+      'reach the printer — today the synchronous factory samples an unresolved '
+      'config and the first job has no transport at all', () async {
+    _seedSavedBluetoothProfile();
+    final connector = _RecordingConnector();
+    final container = _coldContainer(connector);
 
-      // The first real print resolves its transport the way the KDS bridge does,
-      // on a container that has just been created (process recreation).
-      final firstFactory = await container.read(
-        activeNativeTransportFactoryReadyProvider.future,
-      );
+    // The first real print resolves its transport the way the KDS bridge does,
+    // on a container that has just been created (process recreation).
+    final firstFactory = await container.read(
+      activeNativeTransportFactoryReadyProvider.future,
+    );
 
-      // THE DEFECT: a saved profile exists on disk, yet the first job gets no
-      // transport, so nothing is ever sent.
-      expect(
-        firstFactory,
-        isNotNull,
-        reason: 'the first job after a relaunch must resolve the SAVED profile',
-      );
-      await firstFactory!().send(Uint8List.fromList(const [1, 2, 3]));
-      expect(
-        connector.sent,
-        hasLength(1),
-        reason: 'the first job reaches the printer exactly once',
-      );
-      expect(connector.addresses.single, _address);
-    },
-  );
+    // THE DEFECT: a saved profile exists on disk, yet the first job gets no
+    // transport, so nothing is ever sent.
+    expect(
+      firstFactory,
+      isNotNull,
+      reason: 'the first job after a relaunch must resolve the SAVED profile',
+    );
+    await firstFactory!().send(Uint8List.fromList(const [1, 2, 3]));
+    expect(
+      connector.sent,
+      hasLength(1),
+      reason: 'the first job reaches the printer exactly once',
+    );
+    expect(connector.addresses.single, _address);
+  });
 
-  test(
-    'the SECOND job works today — proving the failure is cold-start '
-    'resolution, not the Bluetooth transport',
-    () async {
-      _seedSavedBluetoothProfile();
-      final connector = _RecordingConnector();
-      final container = _coldContainer(connector);
+  test('the SECOND job works today — proving the failure is cold-start '
+      'resolution, not the Bluetooth transport', () async {
+    _seedSavedBluetoothProfile();
+    final connector = _RecordingConnector();
+    final container = _coldContainer(connector);
 
-      // Let the persisted config land, exactly as it has by the time the
-      // cashier prints a second time.
-      await container.read(selectedPrinterTransportProvider.future);
-      await container.read(bluetoothPrinterConfigProvider.future);
-      final laterFactory = container.read(activeNativeTransportFactoryProvider);
+    // Let the persisted config land, exactly as it has by the time the
+    // cashier prints a second time.
+    await container.read(selectedPrinterTransportProvider.future);
+    await container.read(bluetoothPrinterConfigProvider.future);
+    final laterFactory = container.read(activeNativeTransportFactoryProvider);
 
-      expect(laterFactory, isNotNull);
-      await laterFactory!().send(Uint8List.fromList(const [1, 2, 3]));
-      expect(connector.sent, hasLength(1));
-    },
-  );
+    expect(laterFactory, isNotNull);
+    await laterFactory!().send(Uint8List.fromList(const [1, 2, 3]));
+    expect(connector.sent, hasLength(1));
+  });
 
   test(
     'the transport is NOT at fault: once resolved it delivers the exact bytes '
