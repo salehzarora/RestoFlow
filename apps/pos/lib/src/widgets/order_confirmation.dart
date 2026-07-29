@@ -70,14 +70,20 @@ class OrderConfirmation extends ConsumerWidget {
     final entry = _entryForId(entries, order.outboxEntryId);
     final outbox = ref.read(outboxControllerProvider.notifier);
 
-    // PILOT-OPERATIONS-CORRECTIONS-001 — a PERMANENTLY rejected item_unavailable
-    // NEW order has NO server order: it must NEVER offer payment / discount / void
-    // / receipt (those pretend an order exists). Instead the cashier recovers —
-    // restore the exact draft to the cart, or discard the attempt (no server void).
-    final isRejectedDraft =
-        entry != null &&
-        entry.isPermanentBusinessRejection &&
-        entry.lastErrorCode == 'item_unavailable';
+    // PILOT-OPERATIONS-CORRECTIONS-001 — a PERMANENTLY rejected NEW order has NO
+    // server order: it must NEVER offer payment / discount / void / receipt
+    // (those pretend an order exists). Instead the cashier recovers — restore the
+    // exact draft to the cart, or discard the attempt (no server void).
+    //
+    // KITCHEN-DISPATCH-ENFORCE-001: this was keyed to `item_unavailable` alone,
+    // so a submit rejected for ANY other permanent reason (a forged
+    // `dispatch_mode_not_allowed`, a table-rule refusal, a flattened `rejected`)
+    // still exposed Pay / Pay later / Discount for an order the server never
+    // created. The rule is now the typed classification itself: a PERMANENT
+    // rejection of an `order.submit` — which app.sync_push guarantees is atomic
+    // BEFORE order creation — regardless of which typed code carried it. Later
+    // operations failing (a payment, a discount) are deliberately NOT included.
+    final isRejectedDraft = entry != null && entry.isNeverCreatedOrderSubmit;
     // A2: the recovery for THIS submit, keyed by its outbox entry and offered ONLY when
     // the CURRENT operational context matches its binding — a PIN switch / branch /
     // device change makes the previous employee's draft inaccessible immediately.
