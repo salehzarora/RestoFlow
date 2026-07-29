@@ -3776,6 +3776,21 @@ class AppLocalizationsHe extends AppLocalizations {
   String get printerProfilesCancelAction => 'ביטול';
 
   @override
+  String get posPrintBillAction => 'הדפסת חשבון';
+
+  @override
+  String get receiptUnpaidBillLabel => 'לא שולם - תשלום בהמשך';
+
+  @override
+  String get receiptAmountDueLabel => 'סכום לתשלום';
+
+  @override
+  String get posPrintBillStarted => 'מדפיס חשבון';
+
+  @override
+  String get posPrintBillFailed => 'הדפסת החשבון נכשלה';
+
+  @override
   String get posNetworkPrinterHeading => 'מדפסת רשת (מכשיר זה)';
 
   @override

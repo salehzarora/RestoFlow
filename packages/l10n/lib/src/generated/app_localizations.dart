@@ -7156,6 +7156,36 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get printerProfilesCancelAction;
 
+  /// POS Orders action that prints a customer-facing bill for an order that is still unpaid (DEFERRED-PAYMENT-RECEIPTS-001).
+  ///
+  /// In en, this message translates to:
+  /// **'Print bill'**
+  String get posPrintBillAction;
+
+  /// Prominent label printed on an UNPAID customer bill so it can never be mistaken for a paid receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'UNPAID - PAY LATER'**
+  String get receiptUnpaidBillLabel;
+
+  /// Label for the total still owed on an unpaid customer bill.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get receiptAmountDueLabel;
+
+  /// Snackbar confirming that an unpaid bill print was requested.
+  ///
+  /// In en, this message translates to:
+  /// **'Printing bill'**
+  String get posPrintBillStarted;
+
+  /// Shown when an unpaid bill could not be printed; the order itself is unaffected.
+  ///
+  /// In en, this message translates to:
+  /// **'Bill print failed'**
+  String get posPrintBillFailed;
+
   /// POS device-settings heading for the on-device network (Wi-Fi/Ethernet) ESC/POS printer setup (ANDROID-002).
   ///
   /// In en, this message translates to:

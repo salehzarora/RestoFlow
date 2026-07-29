@@ -3804,6 +3804,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerProfilesCancelAction => 'إلغاء';
 
   @override
+  String get posPrintBillAction => 'طباعة الحساب';
+
+  @override
+  String get receiptUnpaidBillLabel => 'غير مدفوع - الدفع لاحقاً';
+
+  @override
+  String get receiptAmountDueLabel => 'المبلغ المستحق';
+
+  @override
+  String get posPrintBillStarted => 'جارٍ طباعة الحساب';
+
+  @override
+  String get posPrintBillFailed => 'فشلت طباعة الحساب';
+
+  @override
   String get posNetworkPrinterHeading => 'طابعة الشبكة (هذا الجهاز)';
 
   @override

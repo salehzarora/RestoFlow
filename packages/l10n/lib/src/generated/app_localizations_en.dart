@@ -3832,6 +3832,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get printerProfilesCancelAction => 'Cancel';
 
   @override
+  String get posPrintBillAction => 'Print bill';
+
+  @override
+  String get receiptUnpaidBillLabel => 'UNPAID - PAY LATER';
+
+  @override
+  String get receiptAmountDueLabel => 'Amount due';
+
+  @override
+  String get posPrintBillStarted => 'Printing bill';
+
+  @override
+  String get posPrintBillFailed => 'Bill print failed';
+
+  @override
   String get posNetworkPrinterHeading => 'Network printer (this device)';
 
   @override
