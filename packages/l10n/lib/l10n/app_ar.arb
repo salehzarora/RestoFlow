@@ -381,6 +381,7 @@
   "posKitchenTicketPrintFailedSnack": "تعذّرت طباعة تذكرة المطبخ",
   "posKitchenPrinterNotConfiguredSnack": "لا توجد طابعة مطبخ مُعدّة. عيّن واحدة من إعدادات الجهاز.",
   "printStatusNotConfigured": "لا توجد طابعة مُعدّة",
+  "printStatusWaitingForPrinter": "بانتظار جاهزية الطابعة…",
   "printStatusPrepared": "تم تجهيز مهمة الطباعة — الطباعة الفعلية تتطلب جسر طباعة.",
   "printStatusPrinted": "تمت الطباعة",
   "printStatusFailed": "فشلت الطباعة",

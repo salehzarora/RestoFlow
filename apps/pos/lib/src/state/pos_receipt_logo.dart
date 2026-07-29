@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
     show DeviceReceiptLogoReader, ReceiptLogoBytes;
@@ -127,6 +129,36 @@ class PosReceiptLogoController extends StateNotifier<ReceiptLogoAsset?> {
 
   int _epoch = 0;
 
+  /// PRINT-STARTUP-REPRINT-001 — the FIRST definitive resolution.
+  ///
+  /// `state == null` is ambiguous: not-resolved-yet, definitively no logo, or a
+  /// fetch/decode/rasterize failure that legitimately falls back to text-only.
+  /// A receipt must be able to wait for the first DEFINITIVE outcome (image or
+  /// no usable image) instead of racing an unresolved null onto paper.
+  ///
+  /// Completes exactly once, on whichever terminal outcome happens first, and on
+  /// [dispose] — so a disposed/recreated controller can never leave a waiter
+  /// hanging. Concurrent callers all share this one future.
+  final Completer<void> _firstResolution = Completer<void>();
+
+  /// Resolves as soon as the first definitive logo outcome is known.
+  /// NEVER hangs: a null config (no branding / demo) resolves immediately.
+  Future<void> get firstResolution => _firstResolution.future;
+
+  /// True once the first definitive outcome is known.
+  bool get isFirstResolutionComplete => _firstResolution.isCompleted;
+
+  void _markFirstResolution() {
+    if (!_firstResolution.isCompleted) _firstResolution.complete();
+  }
+
+  @override
+  void dispose() {
+    // Never leak a waiter across controller recreation.
+    _markFirstResolution();
+    super.dispose();
+  }
+
   /// Resolve the asset for [config] on [profile]. Cache-first, then a
   /// download+decode+rasterize+cache on a miss. Fail-closes to null throughout.
   Future<void> resolve(
@@ -225,7 +257,14 @@ class PosReceiptLogoController extends StateNotifier<ReceiptLogoAsset?> {
   }
 
   void _set(int epoch, ReceiptLogoAsset? asset) {
-    if (epoch == _epoch && mounted) state = asset;
+    if (epoch == _epoch && mounted) {
+      state = asset;
+      // Every terminal outcome routes through here — image, definitively none,
+      // and each fail-closed fallback — so this is the one place the first
+      // definitive resolution is published. A superseded epoch does not mark:
+      // the newer resolve that replaced it terminates and marks instead.
+      _markFirstResolution();
+    }
   }
 
   ReceiptLogoAsset _assetFromCache(

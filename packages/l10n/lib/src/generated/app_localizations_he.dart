@@ -1224,6 +1224,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get printStatusNotConfigured => 'לא הוגדרה מדפסת';
 
   @override
+  String get printStatusWaitingForPrinter => 'ממתין למוכנות המדפסת…';
+
+  @override
   String get printStatusPrepared =>
       'עבודת ההדפסה הוכנה — הדפסה פיזית דורשת גשר הדפסה.';
 

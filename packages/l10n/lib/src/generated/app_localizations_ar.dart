@@ -1235,6 +1235,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printStatusNotConfigured => 'لا توجد طابعة مُعدّة';
 
   @override
+  String get printStatusWaitingForPrinter => 'بانتظار جاهزية الطابعة…';
+
+  @override
   String get printStatusPrepared =>
       'تم تجهيز مهمة الطباعة — الطباعة الفعلية تتطلب جسر طباعة.';
 

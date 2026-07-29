@@ -381,6 +381,7 @@
   "posKitchenTicketPrintFailedSnack": "לא ניתן היה להדפיס את כרטיס המטבח",
   "posKitchenPrinterNotConfiguredSnack": "לא הוגדרה מדפסת מטבח. הגדר אחת בהגדרות המכשיר.",
   "printStatusNotConfigured": "לא הוגדרה מדפסת",
+  "printStatusWaitingForPrinter": "ממתין למוכנות המדפסת…",
   "printStatusPrepared": "עבודת ההדפסה הוכנה — הדפסה פיזית דורשת גשר הדפסה.",
   "printStatusPrinted": "הודפס",
   "printStatusFailed": "ההדפסה נכשלה",

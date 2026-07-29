@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_design_system/restoflow_design_system.dart';
@@ -185,52 +187,13 @@ class OrderConfirmation extends ConsumerWidget {
       final paid = next.paymentFor(order.identity);
       if (paid == null) return;
       if (previous?.paymentFor(order.identity) != null) return;
-      final assignments = switch (ref
-          .read(posPrinterAssignmentsProvider)
-          .valueOrNull) {
-        Success(:final value) => value,
-        _ => null,
-      };
-      // ANDROID-003: a native (Wi-Fi/Bluetooth) printer configured on THIS
-      // device counts as a printer even without a backend assignment.
-      final nativeConfigured = ref.read(posHasNativePrinterProvider);
-      // Demo / unconfigured reads with NO native printer: no auto-print.
-      if (assignments == null && !nativeConfigured) return;
-      final stored = ref.read(posAutoPrintReceiptProvider).valueOrNull;
-      if (stored == false) return; // explicitly off — show nothing
-      final printer =
-          (assignments?.hasEnabledPrinter ?? false) || nativeConfigured;
-      // ANDROID-003: dispatch through the RESOLVED print target — a native
-      // network/Bluetooth transport on Android, else the RF-115 loopback bridge.
-      // With no target the job stays honestly "prepared"; a confirmed transport
-      // write flips it to "sent to printer"; never a fabricated hardware print.
-      final bridge = ref.read(posActivePrintBridgeProvider);
-      ref
-          .read(receiptPrintControllerProvider.notifier)
-          .prepareAndDispatch(
-            // The receipt is keyed to THIS order. Keyed by the display code, a second
-            // order sharing it found a job already prepared and never got a receipt.
-            orderKey: order.identity.key,
-            hasEnabledPrinter: printer,
-            // The RECEIPT prints the REALIGNED money, exactly like the totals on
-            // screen. This branch used to hand the FROZEN submit-time view to the
-            // printer, so an order discounted on another till printed "Total 40.00 /
-            // Paid 30.00" — an incoherent financial document — while the orders
-            // centre's reprint (built from the reconciled row) printed 30.00 for the
-            // very same order. The LINES are untouched: they are the order-time
-            // price snapshot (D-008) and are never recomputed.
-            buildDocument: () => buildReceiptDocument(
-              l10n,
-              displayOrder,
-              paid,
-              isDemo: isDemo,
-              restaurantName: assignments?.restaurantName,
-              // PRINT-BRANDING-LOGO-001: the current resolved logo (null when
-              // disabled / not yet warm / any failure -> text-only receipt).
-              branding: ref.read(posReceiptLogoAssetProvider),
-            ),
-            submitToBridge: bridge == null ? null : bridge.submit,
-          );
+      // PRINT-STARTUP-REPRINT-001: the trigger no longer inspects async printer
+      // state with `.valueOrNull` and return silently — that dropped the paid
+      // receipt entirely on a cold start (no job, no status, no retry). It now
+      // detects the payment edge and hands ONE job, keyed by this order's stable
+      // identity, to the controller, which owns readiness, preparation and
+      // dispatch. Everything below is async but never optional.
+      unawaited(_requestReceipt(ref, l10n, displayOrder, paid, isDemo: isDemo));
     });
 
     return Material(
@@ -745,6 +708,13 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
         RestoflowTone.neutral,
         Icons.print_disabled,
       ),
+      // PRINT-STARTUP-REPRINT-001: the paid receipt is HELD, not lost, while
+      // printer readiness and the first definitive logo outcome resolve.
+      PrintJobStatus.waitingForPrinter => (
+        l10n.printStatusWaitingForPrinter,
+        RestoflowTone.info,
+        Icons.hourglass_top,
+      ),
     };
     final style = tone.styleOf(theme);
     final canRetry =
@@ -780,33 +750,84 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
   }
 
   void _retry(WidgetRef ref) {
-    final assignments = switch (ref
-        .read(posPrinterAssignmentsProvider)
-        .valueOrNull) {
-      Success(:final value) => value,
+    // PRINT-STARTUP-REPRINT-001: a Retry RE-RESOLVES printer readiness and the
+    // logo before dispatching, instead of reusing a stale synchronous snapshot.
+    unawaited(
+      ref
+          .read(receiptPrintControllerProvider.notifier)
+          .retryReceipt(
+            orderKey: order.identity.key,
+            resolveReadiness: ref.read(posReceiptReadinessResolverProvider),
+            awaitLogoReady: () =>
+                ref.read(posReceiptLogoAssetProvider.notifier).firstResolution,
+            buildDocument: () => buildReceiptDocument(
+              l10n,
+              order,
+              payment,
+              isDemo: isDemo,
+              restaurantName: _resolvedRestaurantName(ref),
+              // PRINT-BRANDING-LOGO-001: current logo (null -> text-only).
+              branding: ref.read(posReceiptLogoAssetProvider),
+            ),
+            submitToBridge: ref.read(posActivePrintBridgeProvider)?.submit,
+          ),
+    );
+  }
+}
+
+/// The restaurant name from the RESOLVED assignments, or null. Read only after
+/// readiness resolved, so this is no longer a cold-start race.
+String? _resolvedRestaurantName(WidgetRef ref) =>
+    switch (ref.read(posPrinterAssignmentsProvider).valueOrNull) {
+      Success(:final value) => value.restaurantName,
       _ => null,
     };
-    // ANDROID-003: retry through the resolved native/loopback target.
-    final nativeConfigured = ref.read(posHasNativePrinterProvider);
-    final bridge = ref.read(posActivePrintBridgeProvider);
-    ref
-        .read(receiptPrintControllerProvider.notifier)
-        .retry(
-          orderKey: order.identity.key,
-          hasEnabledPrinter:
-              (assignments?.hasEnabledPrinter ?? false) || nativeConfigured,
-          buildDocument: () => buildReceiptDocument(
-            l10n,
-            order,
-            payment,
-            isDemo: isDemo,
-            restaurantName: assignments?.restaurantName,
-            // PRINT-BRANDING-LOGO-001: current logo (null -> text-only).
-            branding: ref.read(posReceiptLogoAssetProvider),
-          ),
-          submitToBridge: bridge == null ? null : bridge.submit,
-        );
+
+/// PRINT-STARTUP-REPRINT-001 — the payment-success entry point.
+///
+/// Respects an EXPLICIT auto-print OFF (awaited, so a cold start cannot ignore
+/// the cashier's choice), then hands exactly one job to the controller. The
+/// controller creates it immediately and holds it in `waitingForPrinter` while
+/// authoritative readiness and the first definitive logo outcome resolve.
+Future<void> _requestReceipt(
+  WidgetRef ref,
+  AppLocalizations l10n,
+  SubmittedOrderView displayOrder,
+  CashPayment paid, {
+  required bool isDemo,
+}) async {
+  final bool? autoPrint;
+  try {
+    autoPrint = await ref.read(posAutoPrintReceiptProvider.future);
+  } catch (_) {
+    return; // preference unreadable: unchanged conservative behaviour
   }
+  if (autoPrint == false) return; // explicitly off — show nothing
+  await ref
+      .read(receiptPrintControllerProvider.notifier)
+      .requestReceipt(
+        // The receipt is keyed to THIS order. Keyed by the display code, a
+        // second order sharing it found a job already prepared and never got
+        // its own receipt.
+        orderKey: displayOrder.identity.key,
+        resolveReadiness: ref.read(posReceiptReadinessResolverProvider),
+        awaitLogoReady: () =>
+            ref.read(posReceiptLogoAssetProvider.notifier).firstResolution,
+        // The RECEIPT prints the REALIGNED money, exactly like the totals on
+        // screen; the LINES are the order-time price snapshot (D-008) and are
+        // never recomputed.
+        buildDocument: () => buildReceiptDocument(
+          l10n,
+          displayOrder,
+          paid,
+          isDemo: isDemo,
+          restaurantName: _resolvedRestaurantName(ref),
+          // The logo is now read AFTER its first definitive resolution, so the
+          // first receipt carries the configured branding instead of racing it.
+          branding: ref.read(posReceiptLogoAssetProvider),
+        ),
+        submitToBridge: ref.read(posActivePrintBridgeProvider)?.submit,
+      );
 }
 
 /// The live outbox entry whose id is [id], or null.

@@ -1,13 +1,21 @@
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restoflow_auth_identity/restoflow_auth_identity.dart'
+    show DevicePrinterAssignments, DevicePrinterAssignmentsFailure;
+import 'package:restoflow_core/restoflow_core.dart'
+    show Failure, Result, Success;
 import 'package:restoflow_native_printing/restoflow_native_printing.dart'
     show kBluetoothPrintTimeout, nativePrintRasterizerProvider;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../state/pos_bluetooth_printer_config.dart';
+import '../state/pos_device_context.dart' show posPrinterScopeSegmentProvider;
 import '../state/pos_network_printer_config.dart';
+import '../state/pos_printer_assignments.dart';
 import '../state/pos_printer_transport.dart';
+import '../state/receipt_print_controller.dart'
+    show ReceiptReadiness, ReceiptReadinessResolver;
 import 'bluetooth_printer.dart';
 import 'print_bridge.dart';
 import 'print_document.dart' as app;
@@ -233,6 +241,61 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
       }
   }
   return ref.watch(posPrintBridgeProvider);
+});
+
+/// PRINT-STARTUP-REPRINT-001 — the AUTHORITATIVE receipt-readiness resolver.
+///
+/// The receipt trigger used to read every printer source with `.valueOrNull` and
+/// return silently while they were unresolved, which dropped the paid receipt on
+/// a cold start. This resolver AWAITS each authoritative source instead, so an
+/// unresolved source can never be mistaken for "not configured":
+///
+///  1. the Defect 3 preference scope (a pending device restore is waited out);
+///  2. the native path — selected transport + its saved profile;
+///  3. the bridge/assignment path.
+///
+/// A load failure is reported distinctly from "definitively none" so the UI can
+/// offer a meaningful Retry. No timeouts are introduced: each awaited source
+/// already resolves on its own (local prefs, or the assignment reader's own
+/// bounded load).
+final posReceiptReadinessResolverProvider = Provider<ReceiptReadinessResolver>((
+  ref,
+) {
+  return () async {
+    // 1. Never choose a namespace from a transient null (Defect 3 contract).
+    await ref.read(posPrinterScopeSegmentProvider.future);
+
+    // 2. A native printer configured on THIS device counts on its own.
+    if (ref.read(posNativePrintingAvailableProvider)) {
+      final transport = await ref.read(
+        posSelectedPrinterTransportProvider.future,
+      );
+      final nativeConfigured = switch (transport) {
+        PosPrinterTransportKind.bluetooth =>
+          await ref.read(posBluetoothPrinterConfigProvider.future) != null,
+        PosPrinterTransportKind.network =>
+          await ref.read(posNetworkPrinterConfigProvider.future) != null,
+      };
+      if (nativeConfigured) return ReceiptReadiness.configured;
+    }
+
+    // 3. Otherwise the backend assignment/bridge path.
+    final Result<DevicePrinterAssignments, DevicePrinterAssignmentsFailure>?
+    assignments;
+    try {
+      assignments = await ref.read(posPrinterAssignmentsProvider.future);
+    } catch (_) {
+      return ReceiptReadiness.loadFailed; // retryable, NOT "not configured"
+    }
+    return switch (assignments) {
+      Success(:final value) =>
+        value.hasEnabledPrinter
+            ? ReceiptReadiness.configured
+            : ReceiptReadiness.notConfigured,
+      Failure() => ReceiptReadiness.loadFailed,
+      _ => ReceiptReadiness.notConfigured, // demo / no reader wired
+    };
+  };
 });
 
 /// Whether THIS device has a native printer configured for the selected

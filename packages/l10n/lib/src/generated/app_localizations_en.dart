@@ -1242,6 +1242,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get printStatusNotConfigured => 'No printer configured';
 
   @override
+  String get printStatusWaitingForPrinter =>
+      'Waiting for the printer to be ready…';
+
+  @override
   String get printStatusPrepared =>
       'Print job prepared — physical printing requires print bridge.';
 

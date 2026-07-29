@@ -2386,6 +2386,12 @@ abstract class AppLocalizations {
   /// **'No printer configured'**
   String get printStatusNotConfigured;
 
+  /// Print-job status: the paid receipt job exists and is held while printer configuration and branding finish loading. Nothing has been sent yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the printer to be ready…'**
+  String get printStatusWaitingForPrinter;
+
   /// Print-job status: the job payload is ready; no physical transport exists in this build, so it is NOT claimed as printed.
   ///
   /// In en, this message translates to:

@@ -996,6 +996,8 @@
   "@posKitchenPrinterNotConfiguredSnack": { "description": "POS message when a manual kitchen print is requested but no kitchen printer is assigned for this device." },
   "printStatusNotConfigured": "No printer configured",
   "@printStatusNotConfigured": { "description": "Print-job status: nothing was prepared because no printer is assigned." },
+  "printStatusWaitingForPrinter": "Waiting for the printer to be ready…",
+  "@printStatusWaitingForPrinter": { "description": "Print-job status: the paid receipt job exists and is held while printer configuration and branding finish loading. Nothing has been sent yet." },
   "printStatusPrepared": "Print job prepared — physical printing requires print bridge.",
   "@printStatusPrepared": { "description": "Print-job status: the job payload is ready; no physical transport exists in this build, so it is NOT claimed as printed." },
   "printStatusPrinted": "Printed",
