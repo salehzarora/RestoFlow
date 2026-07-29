@@ -73,6 +73,14 @@ const Set<String> kPermanentRejectionCodes = {
   'table_required',
   'table_not_allowed',
   'table_not_available',
+  // KITCHEN-DISPATCH-ENFORCE-001: the server refused a `direct_print` submit
+  // because the branch's authoritative kitchen_workflow_mode is not
+  // `printer_only`. Re-sending the SAME op can never succeed (the op's
+  // dispatch mode is part of its stored identity), so this is TERMINAL: no
+  // auto-resweep, no Retry, the phantom recent-order row is retired and the
+  // kitchen print is suppressed. The cashier re-submits and the fresh op
+  // resolves the correct mode.
+  'dispatch_mode_not_allowed',
   'rejected',
 };
 
@@ -416,6 +424,24 @@ class OutboxEntry {
   bool get isPermanentBusinessRejection =>
       syncState == OutboxSyncState.rejected &&
       kPermanentRejectionCodes.contains(lastErrorCode);
+
+  /// KITCHEN-DISPATCH-ENFORCE-001 — TRUE when this entry is a permanently
+  /// rejected **`order.submit`**, i.e. the server NEVER created an order for it.
+  ///
+  /// `app.sync_push` dispatches every operation inside its own `EXCEPTION`
+  /// subtransaction and validates `order.submit` (payload shape, customer phone,
+  /// dispatch mode, order-type/table rules, item availability) **before**
+  /// `app.submit_order` inserts anything. So a PERMANENT rejection of an
+  /// `order.submit` means there is no `orders` row — whatever the typed code.
+  /// Any surface that would act on a server order (pay, pay later, discount,
+  /// void, receipt, kitchen ticket, complete) must therefore be withheld.
+  ///
+  /// Scoped deliberately to `order.submit`: a permanent rejection of a LATER
+  /// operation (a payment, a discount) says nothing about whether the order
+  /// itself exists, so it must never be treated as a never-created shell. A
+  /// retryable/unknown failure is likewise excluded — it has no durable verdict.
+  bool get isNeverCreatedOrderSubmit =>
+      operationType == 'order.submit' && isPermanentBusinessRejection;
 
   /// RF-114 durable-outbox persistence. Stores ONLY what a retry needs: the
   /// idempotency identity `(deviceId, localOperationId)`, the op envelope, the
