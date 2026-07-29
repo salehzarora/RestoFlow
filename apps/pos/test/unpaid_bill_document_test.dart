@@ -78,32 +78,34 @@ List<String> _texts(PrintDocument doc) => [
 String _blob(PrintDocument doc) => _texts(doc).join('\n');
 
 void main() {
-  test('A. the UNPAID bill carries the full order, clearly marked unpaid',
-      () async {
-    final l10n = await _en();
-    final doc = buildBillDocument(l10n, _unpaidOrder, isDemo: false);
+  test(
+    'A. the UNPAID bill carries the full order, clearly marked unpaid',
+    () async {
+      final l10n = await _en();
+      final doc = buildBillDocument(l10n, _unpaidOrder, isDemo: false);
 
-    final blob = _blob(doc);
-    // Order + customer + service details.
-    expect(blob, contains('#BILL01'));
-    expect(blob, contains('Dana'));
-    expect(blob, contains('+972500000000'));
-    expect(blob, contains('T7'));
-    // Items, quantities, modifier quantities, notes.
-    expect(blob, contains('2 × Classic Burger'));
-    expect(blob, contains('+ Extra meat ×2'));
-    expect(blob, contains('+ Ketchup'));
-    expect(blob, contains('no onions'));
-    expect(blob, contains('1 × Fries'));
-    // Item prices + discount + tax + total.
-    expect(blob, contains('78.00'));
-    expect(blob, contains('12.00'));
-    expect(blob, contains('5.00'), reason: 'the discount is shown');
-    expect(blob, contains('89.25'), reason: 'the amount still owed');
-    // THE marker: unmistakably unpaid.
-    expect(blob, contains(l10n.receiptUnpaidBillLabel));
-    expect(blob, contains(l10n.receiptAmountDueLabel));
-  });
+      final blob = _blob(doc);
+      // Order + customer + service details.
+      expect(blob, contains('#BILL01'));
+      expect(blob, contains('Dana'));
+      expect(blob, contains('+972500000000'));
+      expect(blob, contains('T7'));
+      // Items, quantities, modifier quantities, notes.
+      expect(blob, contains('2 × Classic Burger'));
+      expect(blob, contains('+ Extra meat ×2'));
+      expect(blob, contains('+ Ketchup'));
+      expect(blob, contains('no onions'));
+      expect(blob, contains('1 × Fries'));
+      // Item prices + discount + tax + total.
+      expect(blob, contains('78.00'));
+      expect(blob, contains('12.00'));
+      expect(blob, contains('5.00'), reason: 'the discount is shown');
+      expect(blob, contains('89.25'), reason: 'the amount still owed');
+      // THE marker: unmistakably unpaid.
+      expect(blob, contains(l10n.receiptUnpaidBillLabel));
+      expect(blob, contains(l10n.receiptAmountDueLabel));
+    },
+  );
 
   test('A. the UNPAID bill omits EVERY payment-only field', () async {
     final l10n = await _en();
@@ -114,8 +116,11 @@ void main() {
     expect(blob, isNot(contains(l10n.posReceiptPaid)));
     expect(blob, isNot(contains(l10n.posReceiptChange)));
     expect(blob, isNot(contains(l10n.posPaymentMethodLabel)));
-    expect(blob, isNot(contains(l10n.posReceiptTitle)),
-        reason: 'a bill is not titled "Receipt"');
+    expect(
+      blob,
+      isNot(contains(l10n.posReceiptTitle)),
+      reason: 'a bill is not titled "Receipt"',
+    );
     // No tendered/change money and no transaction identifiers.
     expect(blob, isNot(contains('100.00')));
     expect(blob, isNot(contains('10.75')));
@@ -152,15 +157,18 @@ void main() {
       buildReceiptDocument(l10n, _unpaidOrder, _payment, isDemo: false),
     );
 
-    // The item block and the discount/tax/total rows are identical strings.
-    for (final line in [
-      '2 × Classic Burger|78.00 ₪',
-      '+ Extra meat ×2|',
-      '1 × Fries|12.00 ₪',
-    ]) {
-      expect(bill, contains(line), reason: 'bill shares the item layout');
-      expect(paid, contains(line), reason: 'paid shares the item layout');
-    }
+    // Every ITEM / MODIFIER / NOTE line is byte-identical between the two
+    // documents — the shared body formats them once.
+    bool isItemish(String l) =>
+        l.contains('×') || l.startsWith('+ ') || l.contains('no onions');
+    final billItems = bill.where(isItemish).toList();
+    final paidItems = paid.where(isItemish).toList();
+    expect(billItems, isNotEmpty);
+    expect(
+      billItems,
+      paidItems,
+      reason: 'the item block is produced by ONE shared layout',
+    );
   });
 
   test('the bill carries the logo when one is supplied, exactly like the '
@@ -179,8 +187,7 @@ void main() {
     );
   });
 
-  test('I. the bill uses the STORED snapshot, never live catalog data',
-      () async {
+  test('I. the bill uses the STORED snapshot, never live catalog data', () async {
     final l10n = await _en();
     // The snapshot is an immutable value: there is no menu/catalog input to the
     // builder at all, so a later catalog edit cannot reach a historical bill.
