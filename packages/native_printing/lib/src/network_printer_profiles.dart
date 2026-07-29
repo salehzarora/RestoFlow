@@ -32,12 +32,14 @@ class NetworkPrinterProfile {
   /// The endpoint + printer options (host, port, media profile).
   final NetworkPrinterConfig config;
 
-  NetworkPrinterProfile copyWith({String? name, NetworkPrinterConfig? config}) =>
-      NetworkPrinterProfile(
-        id: id,
-        name: name ?? this.name,
-        config: config ?? this.config,
-      );
+  NetworkPrinterProfile copyWith({
+    String? name,
+    NetworkPrinterConfig? config,
+  }) => NetworkPrinterProfile(
+    id: id,
+    name: name ?? this.name,
+    config: config ?? this.config,
+  );
 
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
@@ -50,13 +52,11 @@ class NetworkPrinterProfile {
     if (raw is! Map) return null;
     final id = '${raw['id'] ?? ''}'.trim();
     if (id.isEmpty) return null;
-    final config = NetworkPrinterConfig.fromJson(
-      switch (raw['config']) {
-        final Map<String, dynamic> m => m,
-        final Map m => m.map((k, v) => MapEntry('$k', v)),
-        _ => const <String, dynamic>{},
-      },
-    );
+    final config = NetworkPrinterConfig.fromJson(switch (raw['config']) {
+      final Map<String, dynamic> m => m,
+      final Map m => m.map((k, v) => MapEntry('$k', v)),
+      _ => const <String, dynamic>{},
+    });
     if (config == null) return null;
     return NetworkPrinterProfile(
       id: id,
