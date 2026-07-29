@@ -16,6 +16,7 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
         bluetoothPrinterConnectorProvider,
         kBluetoothPrintTimeout,
         nativePrinterNamespaceProvider;
+import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 import 'package:restoflow_pos/src/data/order_identity.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
@@ -23,6 +24,8 @@ import 'package:restoflow_pos/src/data/payment_repository.dart';
 import 'package:restoflow_pos/src/state/payment_controller.dart';
 import 'package:restoflow_pos/src/state/pos_printer_transport.dart';
 import 'package:restoflow_pos/src/state/receipt_print_controller.dart';
+import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
+import 'package:restoflow_pos/src/state/submitted_order_view.dart';
 import 'package:restoflow_pos/src/widgets/cash_payment_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -38,7 +41,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// These drive the REAL sheet over the REAL payment + receipt controllers.
 
 final _identity = PosOrderIdentity.server('oid-DEF1');
-const _orderKey = 'server:oid-DEF1';
+const _orderKey = 'srv:oid-DEF1';
 
 /// Records every byte batch that actually reaches a printer transport.
 class _RecordingConnector implements BluetoothPrinterConnector {
@@ -115,6 +118,28 @@ void _seedBluetoothPrinter() {
   });
 }
 
+/// The pay-later order as it exists in the Orders list before payment. You can
+/// only collect payment for an order that is already there.
+const _order = SubmittedOrderView(
+  orderNumber: '#DEF1',
+  orderType: OrderType.dineIn,
+  tableLabel: 'T4',
+  currencyCode: 'ILS',
+  subtotalMinor: 5400,
+  orderId: 'oid-DEF1',
+  customerName: 'Dana',
+  lines: [
+    SubmittedLineView(
+      name: 'Classic Burger',
+      quantity: 1,
+      lineTotalMinor: 5400,
+      currencyCode: 'ILS',
+      modifiers: ['Extra meat ×2'],
+      note: 'no onions',
+    ),
+  ],
+);
+
 Future<ProviderContainer> _pumpSheet(
   WidgetTester tester, {
   required _RecordingConnector connector,
@@ -132,6 +157,10 @@ Future<ProviderContainer> _pumpSheet(
     ],
   );
   addTearDown(container.dispose);
+  // Seed the Orders list with the unpaid order, as the real surface does.
+  container
+      .read(posRecentOrdersControllerProvider.notifier)
+      .recordSubmitted(_order);
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
@@ -182,7 +211,8 @@ void main() {
     expect(
       job,
       isNotNull,
-      reason: 'THE DEFECT: paying a pay-later order from Orders printed nothing',
+      reason:
+          'THE DEFECT: paying a pay-later order from Orders printed nothing',
     );
     expect(job!.status, PrintJobStatus.sentToPrinter);
     expect(job.document, isNotNull);
@@ -285,9 +315,7 @@ void main() {
 
     // The payment IS recorded even though nothing printed.
     expect(
-      container
-          .read(paymentControllerProvider.notifier)
-          .paymentFor(_identity),
+      container.read(paymentControllerProvider.notifier).paymentFor(_identity),
       isNotNull,
       reason: 'a print failure must never roll back a successful payment',
     );
