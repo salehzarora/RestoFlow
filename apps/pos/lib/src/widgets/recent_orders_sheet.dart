@@ -22,7 +22,11 @@ import '../data/order_submission.dart' show OutboxEntry, OutboxSyncState;
 import '../data/payment.dart' show CashPayment;
 import '../data/recent_order.dart';
 import '../format/money_format.dart';
-import '../print/native_print_bridges.dart' show posActivePrintBridgeProvider;
+import '../print/native_print_bridges.dart'
+    show
+        posActivePrintBridgeProvider,
+        posActivePrintBridgeReadyProvider,
+        posReceiptReadinessResolverProvider;
 import '../state/pos_order_complete_controller.dart';
 import '../print/pos_kitchen_ticket_printer.dart'
     show posHasKitchenNativePrinterProvider;
@@ -1212,6 +1216,24 @@ class _ActionRow extends ConsumerWidget {
       );
     }
 
+    // DEFERRED-PAYMENT-RECEIPTS-001: the customer-facing BILL for an order that
+    // is still unpaid. Gated on the SAME authoritative `canPay` the payment
+    // action uses, so it appears exactly while money is still owed and never on
+    // a paid, cancelled or otherwise ineligible order — and it sits BESIDE
+    // Collect payment rather than replacing it.
+    if (actions.canPay) {
+      children.add(
+        _ActionButton(
+          child: OutlinedButton.icon(
+            key: Key('recent-print-bill-${order.orderNumber}'),
+            onPressed: () => _printBill(context, ref),
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: Text(l10n.posPrintBillAction),
+          ),
+        ),
+      );
+    }
+
     if (actions.canDiscount) {
       children.add(
         _ActionButton(
@@ -1388,6 +1410,55 @@ class _ActionRow extends ConsumerWidget {
   /// Reprints the receipt from the COMBINED authoritative source — see
   /// [_receiptSource]; an unavailable source is an honest retry message,
   /// never a partial receipt presented as complete.
+  /// Prints the customer-facing UNPAID bill for this order.
+  ///
+  /// Read-only with respect to the order: it never calls payment, never
+  /// transitions status or settlement, never touches the table or the outbox. A
+  /// print failure is a print failure only.
+  ///
+  /// Unlike [_reprint] this resolves the bridge through
+  /// `posActivePrintBridgeReadyProvider` and goes through the canonical
+  /// readiness lifecycle, so the FIRST bill after a cold start is not lost to a
+  /// synchronously-sampled null bridge.
+  Future<void> _printBill(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final isDemo = ref.read(runtimeConfigProvider).isDemoMode;
+    final view = await authoritativeUnpaidOrderSource(
+      isDemoMode: isDemo,
+      orderId: order.orderId,
+      localView: order.order,
+      repository: ref.read(orderDetailRepositoryProvider),
+    );
+    if (view == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.posReceiptUnavailableRetry)),
+      );
+      return;
+    }
+    await ref
+        .read(receiptPrintControllerProvider.notifier)
+        .requestRepeatableDocument(
+          // A DISTINCT key from the paid receipt: the two documents are separate
+          // jobs for one order, and the bill is intentionally repeatable.
+          orderKey: 'bill:${order.identity.key}',
+          resolveReadiness: ref.read(posReceiptReadinessResolverProvider),
+          awaitLogoReady: () =>
+              ref.read(posReceiptLogoAssetProvider.notifier).firstResolution,
+          buildDocument: () => buildBillDocument(
+            l10n,
+            view,
+            isDemo: isDemo,
+            restaurantName: ref.read(posRestaurantNameProvider),
+            branding: ref.read(posReceiptLogoAssetProvider),
+          ),
+          resolveBridge: () async => (await ref.read(
+            posActivePrintBridgeReadyProvider.future,
+          ))?.submit,
+        );
+    if (!context.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(l10n.posPrintBillStarted)));
+  }
+
   Future<void> _reprint(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     final bridge = ref.read(posActivePrintBridgeProvider);

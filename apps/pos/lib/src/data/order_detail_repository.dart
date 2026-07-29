@@ -569,6 +569,36 @@ CashPayment? cashPaymentFromDetail(PosOrderDetail d) {
 /// Demo mode keeps its self-contained local receipt: there is no server to
 /// ask. The just-submitted confirmation-screen print is a DIFFERENT flow and
 /// keeps its intentional local rendering; it does not pass through here.
+/// DEFERRED-PAYMENT-RECEIPTS-001: the authoritative order snapshot for an UNPAID
+/// order, with no payment involved.
+///
+/// [authoritativeReceiptSource] cannot serve this: it REQUIRES a payment and
+/// returns null without one, because a paid receipt without a payment would be a
+/// lie. A bill has no payment by definition, so this returns the itemized view
+/// alone — and never fabricates a [CashPayment] to get past that check.
+///
+/// Same authority rule as the receipt: a server-backed order comes from
+/// `pos_order_detail` (a failed load/parse is an honest null the caller reports,
+/// never a partial local document), and demo keeps its self-contained local
+/// record.
+Future<SubmittedOrderView?> authoritativeUnpaidOrderSource({
+  required bool isDemoMode,
+  required String? orderId,
+  required SubmittedOrderView? localView,
+  required OrderDetailRepository repository,
+}) async {
+  if (isDemoMode) return localView;
+  if (orderId != null) {
+    try {
+      return submittedOrderViewFromDetail(await repository.fetch(orderId));
+    } on PosOrderDetailException {
+      return null;
+    }
+  }
+  // No server identity at all — the local record or nothing.
+  return localView;
+}
+
 Future<(SubmittedOrderView, CashPayment)?> authoritativeReceiptSource({
   required bool isDemoMode,
   required String? orderId,

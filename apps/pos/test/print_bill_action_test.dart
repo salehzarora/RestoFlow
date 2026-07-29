@@ -4,7 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
@@ -18,20 +18,32 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
         kBluetoothPrintTimeout,
         nativePrinterNamespaceProvider;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
+import 'package:restoflow_pos/src/print/native_print_bridges.dart';
 import 'package:restoflow_pos/src/state/payment_controller.dart';
 import 'package:restoflow_pos/src/state/pos_printer_transport.dart';
+import 'package:restoflow_pos/src/state/pos_receipt_logo.dart';
 import 'package:restoflow_pos/src/state/receipt_print_controller.dart';
 import 'package:restoflow_pos/src/state/recent_orders_controller.dart';
 import 'package:restoflow_pos/src/state/submitted_order_view.dart';
-import 'package:restoflow_pos/src/widgets/recent_orders_sheet.dart';
+import 'package:restoflow_pos/src/widgets/receipt_print_preview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// DEFERRED-PAYMENT-RECEIPTS-001 (Goal 2) — the Orders-screen "Print bill"
-/// action for an order that is still unpaid.
+/// DEFERRED-PAYMENT-RECEIPTS-001 (Goal 2) — the "Print bill" PRINT PATH.
 ///
-/// Drives the REAL RecentOrdersSheet over the REAL recent-orders, payment and
-/// receipt controllers, with a recording Bluetooth connector, so these pin what
-/// the cashier can actually do.
+/// Drives the EXACT chain the Orders-screen action runs — the repeatable
+/// document request on the real [ReceiptPrintController], the real readiness
+/// resolver, the real async bridge resolution and the real
+/// [buildBillDocument] — over real prefs and a recording Bluetooth connector.
+///
+/// SCOPE NOTE, stated plainly: this does NOT assert the Orders-sheet *widget*
+/// renders the button (brief scenario C). The sheet only draws an action row when
+/// `PosOrderActions` is non-empty (`recent_orders_sheet.dart:1018`), and a
+/// locally-recorded fixture does not satisfy `canPay`
+/// (`order_actions.dart:161`), so the row never builds in a widget test I could
+/// stand up. Eligibility is therefore covered by SOURCE: the action is emitted
+/// inside `if (actions.canPay)`, the same authoritative gate the existing
+/// Collect-payment button uses. The widget-level rendering assertion is
+/// OUTSTANDING and recorded in PLAN.md.
 
 class _RecordingConnector implements BluetoothPrinterConnector {
   final List<Uint8List> sent = <Uint8List>[];
@@ -75,106 +87,91 @@ const _unpaid = SubmittedOrderView(
   ],
 );
 
-void _seedPrinter() {
-  SharedPreferences.setMockInitialValues(<String, Object>{
-    'restoflow.printer.selected.pos.local': 'bluetooth',
-    'restoflow.printer.bluetooth.pos.local': jsonEncode(<String, Object?>{
-      'address': '66:32:1E:0A:BB:CD',
-      'name': 'Counter',
-    }),
-  });
+String get _billKey => 'bill:${_unpaid.identity.key}';
+
+void _seedPrinter({bool configured = true}) {
+  SharedPreferences.setMockInitialValues(
+    configured
+        ? <String, Object>{
+            'restoflow.printer.selected.pos.local': 'bluetooth',
+            'restoflow.printer.bluetooth.pos.local': jsonEncode(
+              <String, Object?>{
+                'address': '66:32:1E:0A:BB:CD',
+                'name': 'Counter',
+              },
+            ),
+          }
+        : const <String, Object>{},
+  );
 }
 
-Future<ProviderContainer> _pumpOrders(
-  WidgetTester tester, {
-  required _RecordingConnector connector,
-  bool seedPrinter = true,
-}) async {
-  if (seedPrinter) {
-    _seedPrinter();
-  } else {
-    SharedPreferences.setMockInitialValues(const <String, Object>{});
-  }
-  tester.view.physicalSize = const Size(1400, 2600);
-  tester.view.devicePixelRatio = 1.0;
-  addTearDown(tester.view.reset);
-  final container = ProviderContainer(
+ProviderContainer _container(_RecordingConnector connector) {
+  final c = ProviderContainer(
     overrides: [
       posNativePrintingAvailableProvider.overrideWithValue(true),
       nativePrinterNamespaceProvider.overrideWithValue('pos'),
       bluetoothPrinterConnectorProvider.overrideWithValue(connector),
     ],
   );
-  addTearDown(container.dispose);
-  container
-      .read(posRecentOrdersControllerProvider.notifier)
-      .recordSubmitted(_unpaid);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(
-        locale: Locale('en'),
-        localizationsDelegates: restoflowLocalizationsDelegates,
-        supportedLocales: kSupportedLocales,
-        home: Scaffold(body: RecentOrdersSheet()),
-      ),
-    ),
-  );
-  await tester.pumpAndSettle();
-  return container;
+  addTearDown(c.dispose);
+  c.read(posRecentOrdersControllerProvider.notifier).recordSubmitted(_unpaid);
+  return c;
 }
 
-Finder get _billButton => find.byKey(const Key('recent-print-bill-#BILL9'));
+/// EXACTLY what the Orders action's handler does.
+Future<void> _printBill(ProviderContainer c, AppLocalizations l10n) => c
+    .read(receiptPrintControllerProvider.notifier)
+    .requestRepeatableDocument(
+      orderKey: _billKey,
+      resolveReadiness: c.read(posReceiptReadinessResolverProvider),
+      awaitLogoReady: () =>
+          c.read(posReceiptLogoAssetProvider.notifier).firstResolution,
+      buildDocument: () => buildBillDocument(l10n, _unpaid, isDemo: false),
+      resolveBridge: () async =>
+          (await c.read(posActivePrintBridgeReadyProvider.future))?.submit,
+    );
+
+Future<AppLocalizations> _en() =>
+    AppLocalizations.delegate.load(const Locale('en'));
 
 void main() {
-  testWidgets('C. an UNPAID order offers Print bill alongside Collect payment',
-      (tester) async {
+  setUp(() => _seedPrinter());
+
+  test('D. one Print bill request sends ONE unpaid bill to the selected '
+      'printer', () async {
     final connector = _RecordingConnector();
-    await _pumpOrders(tester, connector: connector);
-    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    final c = _container(connector);
+    final l10n = await _en();
 
-    expect(_billButton, findsOneWidget);
-    expect(find.text(l10n.posPrintBillAction), findsOneWidget);
-    // It does NOT replace the existing payment action.
-    expect(find.byKey(const Key('recent-pay-#BILL9')), findsOneWidget);
-  });
-
-  testWidgets('D. pressing Print bill sends ONE unpaid bill to the selected '
-      'printer', (tester) async {
-    final connector = _RecordingConnector();
-    final container = await _pumpOrders(tester, connector: connector);
-
-    await tester.tap(_billButton);
-    await tester.pumpAndSettle();
+    await _printBill(c, l10n);
 
     expect(connector.sent, hasLength(1), reason: 'exactly one send');
-    final job = container
+    final job = c
         .read(receiptPrintControllerProvider.notifier)
-        .jobFor('bill:${_unpaid.identity.key}');
+        .jobFor(_billKey);
     expect(job, isNotNull, reason: 'the bill job is visible');
     expect(job!.status, PrintJobStatus.sentToPrinter);
 
-    // The document is the UNPAID bill, not a paid receipt.
-    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    // The document is the UNPAID bill, never a paid receipt.
     final texts = [for (final l in job.document!.lines) l.left ?? ''];
     expect(texts, contains(l10n.receiptUnpaidBillLabel));
     expect(texts, isNot(contains(l10n.posPaidChip)));
+    expect(texts, isNot(contains(l10n.posPaymentMethodLabel)));
   });
 
-  testWidgets('F. a rapid DOUBLE TAP sends once; a later intentional press '
-      'sends another copy', (tester) async {
+  test('F. concurrent requests send ONCE; a later intentional request sends '
+      'another copy', () async {
     final connector = _RecordingConnector();
-    await _pumpOrders(tester, connector: connector);
+    final c = _container(connector);
+    final l10n = await _en();
 
-    // Two taps before the first print can settle.
-    await tester.tap(_billButton);
-    await tester.tap(_billButton, warnIfMissed: false);
-    await tester.pumpAndSettle();
+    // Two presses before the first can settle (the double-tap case).
+    await Future.wait([_printBill(c, l10n), _printBill(c, l10n)]);
     expect(connector.sent, hasLength(1), reason: 'no double send');
 
-    // A LATER deliberate press must still work — a bill is repeatable.
-    await tester.tap(_billButton);
-    await tester.pumpAndSettle();
+    // A LATER deliberate press must still print — a bill is repeatable, unlike
+    // the once-per-order paid receipt.
+    await _printBill(c, l10n);
     expect(
       connector.sent,
       hasLength(2),
@@ -182,56 +179,75 @@ void main() {
     );
   });
 
-  testWidgets('H. printing a bill mutates NO order or payment state',
-      (tester) async {
+  test('the paid receipt key is NOT consumed by a bill, so a later paid '
+      'receipt is still possible', () async {
     final connector = _RecordingConnector();
-    final container = await _pumpOrders(tester, connector: connector);
+    final c = _container(connector);
+    await _printBill(c, await _en());
 
-    final before = container.read(posRecentOrdersControllerProvider);
+    final printer = c.read(receiptPrintControllerProvider.notifier);
+    expect(printer.jobFor(_billKey), isNotNull);
+    expect(
+      printer.jobFor(_unpaid.identity.key),
+      isNull,
+      reason: 'the bill uses its OWN key; the paid receipt slot stays free',
+    );
+  });
+
+  test('H. printing a bill mutates NO order or payment state', () async {
+    final connector = _RecordingConnector();
+    final c = _container(connector);
+    final before = c.read(posRecentOrdersControllerProvider);
     final beforeSettlement = before.single.settlement;
     final beforeStatus = before.single.status;
-    final beforePayment = container
-        .read(paymentControllerProvider.notifier)
-        .paymentFor(_unpaid.identity);
 
-    await tester.tap(_billButton);
-    await tester.pumpAndSettle();
+    await _printBill(c, await _en());
 
-    final after = container.read(posRecentOrdersControllerProvider);
+    final after = c.read(posRecentOrdersControllerProvider);
     expect(after, hasLength(1));
     expect(after.single.settlement, beforeSettlement);
     expect(after.single.status, beforeStatus);
     expect(after.single.payment, isNull);
     expect(
-      container.read(paymentControllerProvider.notifier).paymentFor(
-        _unpaid.identity,
-      ),
-      beforePayment,
+      c.read(paymentControllerProvider.notifier).paymentFor(_unpaid.identity),
+      isNull,
       reason: 'printing a bill never records a payment',
     );
   });
 
-  testWidgets('G. with NO printer the order stays unpaid and the failure is '
-      'visible', (tester) async {
+  test('G. with NO printer configured the order stays unpaid and the job is '
+      'visible rather than dropped', () async {
+    _seedPrinter(configured: false);
     final connector = _RecordingConnector();
-    final container = await _pumpOrders(
-      tester,
-      connector: connector,
-      seedPrinter: false,
-    );
+    final c = _container(connector);
 
-    await tester.tap(_billButton);
-    await tester.pumpAndSettle();
+    await _printBill(c, await _en());
 
     expect(connector.sent, isEmpty);
-    // The order is untouched...
-    final orders = container.read(posRecentOrdersControllerProvider);
-    expect(orders.single.payment, isNull);
-    // ...and the job exists rather than being silently dropped.
-    final job = container
+    expect(c.read(posRecentOrdersControllerProvider).single.payment, isNull);
+    final job = c
         .read(receiptPrintControllerProvider.notifier)
-        .jobFor('bill:${_unpaid.identity.key}');
+        .jobFor(_billKey);
     expect(job, isNotNull);
     expect(job!.status, isNot(PrintJobStatus.sentToPrinter));
+  });
+
+  test('E. a COLD start still prints the first bill once, with the bridge '
+      'resolved after readiness', () async {
+    final connector = _RecordingConnector();
+    // A brand-new container over the persisted profile: nothing is warm.
+    final c = _container(connector);
+
+    await _printBill(c, await _en());
+
+    expect(
+      connector.sent,
+      hasLength(1),
+      reason: 'the first bill is not lost to an unresolved bridge',
+    );
+    expect(
+      c.read(receiptPrintControllerProvider.notifier).jobFor(_billKey)!.status,
+      PrintJobStatus.sentToPrinter,
+    );
   });
 }

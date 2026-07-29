@@ -225,6 +225,37 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
     }
   }
 
+  /// DEFERRED-PAYMENT-RECEIPTS-001: an intentionally REPEATABLE manual document
+  /// request (the unpaid customer bill).
+  ///
+  /// [requestReceipt] is once-per-order on purpose — a paid receipt must never
+  /// print twice off one payment. A bill is the opposite: the cashier may hand
+  /// the customer another copy whenever they ask. So a TERMINAL job for this key
+  /// is cleared first and the full readiness lifecycle re-runs.
+  ///
+  /// The in-flight guard is still honoured, so a rapid double tap produces ONE
+  /// send; only a press after the previous print reached a terminal state starts
+  /// another. Nothing here is keyed to a permanent per-order flag.
+  Future<void> requestRepeatableDocument({
+    required String orderKey,
+    required ReceiptReadinessResolver resolveReadiness,
+    required PrintDocument Function() buildDocument,
+    ReceiptLogoReadyAwaiter? awaitLogoReady,
+    ReceiptBridgeSubmit? submitToBridge,
+    ReceiptBridgeResolver? resolveBridge,
+  }) async {
+    if (_inFlight.contains(orderKey)) return; // a double tap sends once
+    state = {...state}..remove(orderKey);
+    await requestReceipt(
+      orderKey: orderKey,
+      resolveReadiness: resolveReadiness,
+      buildDocument: buildDocument,
+      awaitLogoReady: awaitLogoReady,
+      submitToBridge: submitToBridge,
+      resolveBridge: resolveBridge,
+    );
+  }
+
   /// Re-runs a job that ended in an actionable state, RE-RESOLVING printer
   /// readiness and logo state first. Refuses while a flow is already running so
   /// an impatient Retry can never open a concurrent second send.
