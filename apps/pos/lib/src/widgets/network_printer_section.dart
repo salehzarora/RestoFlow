@@ -51,8 +51,25 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
   );
   final TextEditingController _nameController = TextEditingController();
 
-  bool _prefilled = false;
+  /// PRINT-STARTUP-REPRINT-001 — prefill state.
+  ///
+  /// The old single `_prefilled` latch was set on the FIRST `hasValue`, which on
+  /// a cold start is the transient `AsyncData(null)` produced while the device
+  /// scope was still unresolved. The field then stayed blank forever even after
+  /// the real device-scoped profile resolved. Now:
+  ///  * [_dirty] — the cashier has typed; never overwrite their text.
+  ///  * [_prefilledIdentity] — WHICH saved profile the fields were filled from,
+  ///    so a later authoritative profile (or an explicit save/removal) re-fills,
+  ///    while an unchanged rebuild does not.
+  bool _dirty = false;
+  String? _prefilledIdentity;
+
   _TestStatus _status = _TestStatus.idle;
+
+  /// A stable identity for a saved profile (null = definitively none).
+  static String? _identityOf(PosNetworkPrinterConfig? c) => c == null
+      ? null
+      : '${c.host}|${c.port}|${c.name ?? ''}|${c.mediaProfile.id.name}';
 
   /// PRINT-LAYOUT-001A: the selected media profile for THIS purpose slot.
   /// Prefilled from the saved config; defaults to the continuous-80 roll.
@@ -84,7 +101,8 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
     // slot, so switching tabs can never overwrite a configuration.
     if (oldWidget.purpose != widget.purpose) {
       setState(() {
-        _prefilled = false;
+        _dirty = false;
+        _prefilledIdentity = null;
         _status = _TestStatus.idle;
         _fieldError = null;
         _lastHostPort = null;
@@ -133,7 +151,13 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
         .read(posNetworkPrinterConfigFamily(widget.purpose).notifier)
         .save(config);
     if (!mounted) return;
-    setState(() => _status = _TestStatus.idle);
+    // The fields now match what was persisted: hand control back to the
+    // authoritative prefill (identity re-sync) instead of staying 'dirty'.
+    setState(() {
+      _dirty = false;
+      _prefilledIdentity = _identityOf(config);
+      _status = _TestStatus.idle;
+    });
     messenger.showSnackBar(
       SnackBar(content: Text(l10n.posNetworkPrinterSavedSnack)),
     );
@@ -189,14 +213,27 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
     final savedAsync = ref.watch(posNetworkPrinterConfigFamily(widget.purpose));
     final saved = savedAsync.valueOrNull;
 
-    // Prefill the fields once from the saved config (if any).
-    if (!_prefilled && savedAsync.hasValue) {
-      _prefilled = true;
-      if (saved != null) {
-        _ipController.text = saved.host;
+    // PRINT-STARTUP-REPRINT-001: prefill whenever the RESOLVED saved profile
+    // differs from what the fields were last filled from — so a cold start that
+    // first reported "no profile" still populates once the authoritative
+    // device-scoped profile arrives. Never while the cashier is mid-edit, and
+    // never repeatedly for an unchanged profile.
+    if (savedAsync.hasValue && !_dirty) {
+      final identity = _identityOf(saved);
+      if (identity != null && identity != _prefilledIdentity) {
+        _prefilledIdentity = identity;
+        _ipController.text = saved!.host;
         _portController.text = '${saved.port}';
         _nameController.text = saved.name ?? '';
         _selectedProfile = saved.mediaProfile.id;
+      } else if (identity == null && _prefilledIdentity != null) {
+        // An explicit removal (a resolved null AFTER a real profile) clears the
+        // fields; a merely-still-empty slot leaves them untouched.
+        _prefilledIdentity = null;
+        _ipController.clear();
+        _portController.text = '9100';
+        _nameController.clear();
+        _selectedProfile = MediaProfileId.continuous80;
       }
     }
 
@@ -226,7 +263,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9A-Za-z.\-]')),
           ],
-          onChanged: (_) => setState(() => _fieldError = null),
+          onChanged: (_) => setState(() {
+            _dirty = true;
+            _fieldError = null;
+          }),
           decoration: InputDecoration(
             labelText: l10n.posNetworkPrinterIpLabel,
             hintText: l10n.posNetworkPrinterIpHint,
@@ -248,7 +288,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(5),
                 ],
-                onChanged: (_) => setState(() => _fieldError = null),
+                onChanged: (_) => setState(() {
+                  _dirty = true;
+                  _fieldError = null;
+                }),
                 decoration: InputDecoration(
                   labelText: l10n.posNetworkPrinterPortLabel,
                   border: const OutlineInputBorder(),
@@ -273,7 +316,10 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
           fieldKey: _k('network-printer-media-size'),
           value: _selectedProfile,
           enabled: !busy,
-          onChanged: (id) => setState(() => _selectedProfile = id),
+          onChanged: (id) => setState(() {
+            _dirty = true;
+            _selectedProfile = id;
+          }),
         ),
         if (_fieldError != null) ...[
           const SizedBox(height: RestoflowSpacing.sm),
