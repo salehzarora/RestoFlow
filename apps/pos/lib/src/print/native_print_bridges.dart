@@ -243,6 +243,72 @@ final posActivePrintBridgeProvider = Provider<PosPrintBridge?>((ref) {
   return ref.watch(posPrintBridgeProvider);
 });
 
+/// PRINT-STARTUP-REPRINT-001 (BLUETOOTH-FIRST-PRINT) — the RESOLVED customer
+/// print bridge for the FIRST receipt of a fresh process.
+///
+/// [posActivePrintBridgeProvider] samples `posSelectedPrinterTransportProvider`
+/// and the printer configs with `.valueOrNull` (:198, :202, :225). Those are
+/// `AsyncNotifier`s with an async `build()`, so on their FIRST synchronous read
+/// in a new process they are necessarily still `AsyncLoading` — the bridge falls
+/// through to `posPrintBridgeProvider`, which is `null` in every shipped build.
+/// The paid receipt was then dispatched to NO bridge and stopped at `prepared`,
+/// which shows no Retry. The second receipt printed because the providers had
+/// landed and the `Provider` recomputed.
+///
+/// The readiness work (Defect 1) fixed the JOB-CREATION half of that race — it
+/// awaits the same sources — but the bridge was captured as an eager argument
+/// BEFORE that await ran, so the dispatch half stayed broken. This provider
+/// awaits, so the bridge can be resolved AFTER readiness, on the same job.
+/// It changes no transport, connection, retry or layout behaviour.
+final posActivePrintBridgeReadyProvider = FutureProvider<PosPrintBridge?>((
+  ref,
+) async {
+  if (!ref.watch(posNativePrintingAvailableProvider)) {
+    return ref.watch(posPrintBridgeProvider);
+  }
+  final rasterizer = ref.watch(nativePrintRasterizerProvider);
+  final selected = await ref.watch(posSelectedPrinterTransportProvider.future);
+  switch (selected) {
+    case PosPrinterTransportKind.bluetooth:
+      final bt = await ref.watch(posBluetoothPrinterConfigProvider.future);
+      if (bt != null) {
+        final connector = ref.watch(bluetoothPrinterConnectorProvider);
+        return NativeTransportPrintBridge(
+          rasterizer: rasterizer,
+          mediaProfile: bt.mediaProfile,
+          sendGate: ref.watch(posPrinterDestinationSendGateProvider),
+          destinationKey: pp.PrinterDestinationSendGate.bluetoothKey(
+            bt.address,
+          ),
+          transportFactory: () => BluetoothClassicPrintTransport(
+            connector: connector,
+            address: bt.address,
+            timeout: kBluetoothPrintTimeout,
+          ),
+        );
+      }
+    case PosPrinterTransportKind.network:
+      final net = await ref.watch(posNetworkPrinterConfigProvider.future);
+      if (net != null) {
+        return NativeTransportPrintBridge(
+          rasterizer: rasterizer,
+          mediaProfile: net.mediaProfile,
+          sendGate: ref.watch(posPrinterDestinationSendGateProvider),
+          destinationKey: pp.PrinterDestinationSendGate.networkKey(
+            net.host,
+            net.port,
+          ),
+          transportFactory: () => pp.NetworkTcpPrintTransport(
+            host: net.host,
+            port: net.port,
+            timeout: kPosNativePrintTimeout,
+          ),
+        );
+      }
+  }
+  return ref.watch(posPrintBridgeProvider);
+});
+
 /// PRINT-STARTUP-REPRINT-001 — the AUTHORITATIVE receipt-readiness resolver.
 ///
 /// The receipt trigger used to read every printer source with `.valueOrNull` and

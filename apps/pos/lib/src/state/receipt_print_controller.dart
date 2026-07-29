@@ -100,6 +100,14 @@ class ReceiptPrintJob {
 typedef ReceiptBridgeSubmit =
     Future<BridgeSubmitResult> Function(PrintDocument document);
 
+/// PRINT-STARTUP-REPRINT-001 (BLUETOOTH-FIRST-PRINT): resolves the print bridge
+/// LAZILY, after readiness. Passing an already-read bridge cannot work on a cold
+/// start: the bridge provider samples async printer configs with `.valueOrNull`,
+/// so an eagerly-captured value is `null` on the first read of a fresh process
+/// and the paid receipt is dispatched to nothing. Returning null here still
+/// means "no bridge wired" and leaves the job honestly `prepared`.
+typedef ReceiptBridgeResolver = Future<ReceiptBridgeSubmit?> Function();
+
 /// Holds the receipt print job per ORDER IDENTITY (RF-115).
 ///
 /// POS-OPERATIONS-SYNC-001 (second review correction): these jobs were keyed by the
@@ -141,6 +149,7 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
     required PrintDocument Function() buildDocument,
     ReceiptLogoReadyAwaiter? awaitLogoReady,
     ReceiptBridgeSubmit? submitToBridge,
+    ReceiptBridgeResolver? resolveBridge,
   }) async {
     if (state.containsKey(orderKey) || _inFlight.contains(orderKey)) return;
     _inFlight.add(orderKey);
@@ -192,9 +201,27 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
           document: document,
         ),
       };
-      await _dispatch(orderKey, submitToBridge);
+      await _dispatch(
+        orderKey,
+        await _resolveSubmit(submitToBridge, resolveBridge),
+      );
     } finally {
       _inFlight.remove(orderKey);
+    }
+  }
+
+  /// The bridge is resolved HERE — after readiness — never captured before it.
+  /// A resolver that throws is treated as "no bridge": the job stays `prepared`
+  /// rather than claiming a print that never happened.
+  static Future<ReceiptBridgeSubmit?> _resolveSubmit(
+    ReceiptBridgeSubmit? submitToBridge,
+    ReceiptBridgeResolver? resolveBridge,
+  ) async {
+    if (resolveBridge == null) return submitToBridge;
+    try {
+      return await resolveBridge() ?? submitToBridge;
+    } catch (_) {
+      return submitToBridge;
     }
   }
 
@@ -207,6 +234,7 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
     required PrintDocument Function() buildDocument,
     ReceiptLogoReadyAwaiter? awaitLogoReady,
     ReceiptBridgeSubmit? submitToBridge,
+    ReceiptBridgeResolver? resolveBridge,
   }) async {
     if (_inFlight.contains(orderKey)) return;
     final job = state[orderKey];
@@ -224,6 +252,7 @@ class ReceiptPrintController extends Notifier<Map<String, ReceiptPrintJob>> {
       buildDocument: buildDocument,
       awaitLogoReady: awaitLogoReady,
       submitToBridge: submitToBridge,
+      resolveBridge: resolveBridge,
     );
   }
 

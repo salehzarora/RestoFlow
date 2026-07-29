@@ -109,7 +109,9 @@ void main() {
 
       // The first real print resolves its transport the way the KDS bridge does,
       // on a container that has just been created (process recreation).
-      final firstFactory = container.read(activeNativeTransportFactoryProvider);
+      final firstFactory = await container.read(
+        activeNativeTransportFactoryReadyProvider.future,
+      );
 
       // THE DEFECT: a saved profile exists on disk, yet the first job gets no
       // transport, so nothing is ever sent.

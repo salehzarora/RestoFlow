@@ -94,6 +94,37 @@ final kdsActivePrintBridgeProvider = Provider<KdsPrintBridge?>((ref) {
   return ref.watch(kdsPrintBridgeProvider);
 });
 
+/// PRINT-STARTUP-REPRINT-001 (BLUETOOTH-FIRST-PRINT) — the RESOLVED KDS bridge
+/// for the FIRST kitchen print of a fresh process.
+///
+/// [kdsActivePrintBridgeProvider] reads [activeNativeTransportFactoryProvider],
+/// which samples the persisted printer selection and config with `.valueOrNull`.
+/// Those are `AsyncNotifier`s with an async `build()`, so on their FIRST
+/// synchronous read after process recreation they are still `AsyncLoading`: the
+/// factory answers null and the bridge silently falls back to the loopback
+/// bridge, so the first real kitchen ticket never reaches the printer even
+/// though a Bluetooth profile is saved on disk. The second ticket works because
+/// the providers have landed by then.
+///
+/// This awaits the saved profile instead, so the first REAL ticket is held until
+/// the transport is genuinely resolved. No connection, retry, layout or
+/// lifecycle behaviour changes; the kitchen ticket stays money-free.
+final kdsActivePrintBridgeReadyProvider = FutureProvider<KdsPrintBridge?>((
+  ref,
+) async {
+  final transportFactory = await ref.watch(
+    activeNativeTransportFactoryReadyProvider.future,
+  );
+  if (transportFactory != null) {
+    return NativeKdsPrintBridge(
+      NativeEscPosSender(transportFactory: transportFactory),
+      rasterizer: ref.watch(nativePrintRasterizerProvider),
+      mediaProfile: ref.watch(activeNativeMediaProfileProvider),
+    );
+  }
+  return ref.watch(kdsPrintBridgeProvider);
+});
+
 /// Maps the KDS l10n into the shared printer-settings labels (ANDROID-004).
 /// Reuses the generic POS printer keys where they fit and the new `kdsPrinter*`
 /// keys for the KDS-specific labels. No money strings - the UI is money-free.

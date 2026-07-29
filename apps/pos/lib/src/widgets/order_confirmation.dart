@@ -769,7 +769,13 @@ class _ReceiptPrintStatusLine extends ConsumerWidget {
               // PRINT-BRANDING-LOGO-001: current logo (null -> text-only).
               branding: ref.read(posReceiptLogoAssetProvider),
             ),
-            submitToBridge: ref.read(posActivePrintBridgeProvider)?.submit,
+            // BLUETOOTH-FIRST-PRINT: resolved AFTER readiness, never captured
+            // eagerly — on a cold start the sync bridge provider samples async
+            // printer configs and answers null, which dispatched the paid receipt
+            // to nothing and stopped it at `prepared`.
+            resolveBridge: () async => (await ref.read(
+              posActivePrintBridgeReadyProvider.future,
+            ))?.submit,
           ),
     );
   }
@@ -826,7 +832,12 @@ Future<void> _requestReceipt(
           // first receipt carries the configured branding instead of racing it.
           branding: ref.read(posReceiptLogoAssetProvider),
         ),
-        submitToBridge: ref.read(posActivePrintBridgeProvider)?.submit,
+        // BLUETOOTH-FIRST-PRINT: resolved AFTER readiness, never captured
+        // eagerly — on a cold start the sync bridge provider samples async
+        // printer configs and answers null, which dispatched the paid receipt
+        // to nothing and stopped it at `prepared`.
+        resolveBridge: () async =>
+            (await ref.read(posActivePrintBridgeReadyProvider.future))?.submit,
       );
 }
 
