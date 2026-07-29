@@ -6,8 +6,9 @@
 --     THE SAME transaction: persisted `served` + dispatch_mode='direct_print' +
 --     ready_at + revision 2, items served, one money-free order.status_updated
 --     audit. It is NOT completed (unpaid — settlement is NEVER bypassed).
---   * A ZERO-TOTAL direct_print order auto-completes at the tail (the UNCHANGED
---     served+paid rule: nothing to pay) -> completed, revision 3, no payment row.
+--   * A ZERO-TOTAL order on a printer_only branch is settled-with-nothing-to-pay
+--     INSIDE app.submit_order, so it never reaches the direct_print promotion:
+--     -> completed, dispatch_mode 'kds', revision 2, dispatched=false, no payment.
 --   * A default (kds) submit is byte-identical to before: submitted, dispatch_mode
 --     ='kds', revision 1 (the dormancy pin).
 --   * An order.submit REPLAY is idempotent: no duplicate transition, ONE audit.
@@ -126,13 +127,20 @@ create temp table t_zt as select pg_temp.dp_submit(
   'dp-zt', '00000000-0000-0000-0000-00d1c00d0002', '00000000-0000-0000-0000-00d1c00000f0', 0, 'direct_print') as res;
 select is((select res #>> '{results,0,order_status}' from t_zt), 'completed',
   'B1: a ZERO-TOTAL direct_print order completes at the tail (nothing to pay)');           -- 10
--- KITCHEN-DISPATCH-ENFORCE-001 fixture split: on a `printer_only` branch
--- app.submit_order ITSELF auto-completes a zero-total order (20260725090000
--- :1185-1193) BEFORE app.apply_direct_print_dispatch runs, so the dispatch is
--- correctly `not_eligible` (dispatched=false), dispatch_mode stays 'kds' and
--- the revision is 2 (insert + complete) rather than 3. That is the UNCHANGED
--- printer_only behavior — pre- and post-migration identical; only the fixture
--- branch moved, because direct_print is no longer legal on a kds branch.
+-- KITCHEN-DISPATCH-ENFORCE-001 fixture split. On a `printer_only` branch
+-- app.submit_order ITSELF (a) creates the kitchen print dispatch row from its
+-- branch-mode gate and (b) auto-completes a ZERO-TOTAL order (20260725090000
+-- :1185-1193), because a zero balance is already SETTLED (D-025) — this is
+-- settlement-driven, never physical-print-success-driven. By the time
+-- app.apply_direct_print_dispatch runs the order is terminal, so it correctly
+-- declines: dispatched=false / not_eligible. The order therefore ends
+-- `completed` with dispatch_mode STILL 'kds' at revision 2 — it never takes the
+-- served/direct_print path a CHARGEABLE direct_print order takes (case A).
+-- Accepting a direct_print REQUEST does not mean the order finishes
+-- served/direct_print. That lifecycle PREDATES this phase and is unchanged by
+-- it; only the fixture branch moved, because direct_print is no longer legal on
+-- a kds branch. Explicit assertions for the full zero-total contract live in
+-- kitchen_dispatch_enforce_001_test.sql case F.
 select ok((select o.status = 'completed' and o.dispatch_mode = 'kds' and o.revision = 2
              from orders o where o.id = '00000000-0000-0000-0000-00d1c00d0002'),
   'B2: persisted completed at revision 2 — submit_order settled it before dispatch (not_eligible)'); -- 11

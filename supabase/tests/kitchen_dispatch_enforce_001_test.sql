@@ -26,7 +26,7 @@ create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 set local timezone to 'UTC';
 
-select plan(52);
+select plan(57);
 
 -- ===== fixture: ONE org, TWO branches (kds + printer_only) ===================
 insert into organizations (id, name, slug, default_currency) values
@@ -236,16 +236,41 @@ select ok((select o.status = 'completed' from orders o where o.id = '00000000-00
 select is(pg_temp.de_occupancy('00000000-0000-0000-0000-00de00007b01'), 0,
   'E8: completion RELEASES the derived table occupancy');
 
--- ===== F. printer_only + 'direct_print' ZERO-TOTAL -> completes ==============
+-- ===== F. printer_only + 'direct_print' ZERO-TOTAL ==========================
+-- The EXACT pre-existing lifecycle, pinned here because it is easy to state
+-- wrongly. On a printer_only branch app.submit_order ITSELF (a) creates the
+-- kitchen print dispatch from the branch-mode gate and (b) auto-completes a
+-- ZERO-TOTAL order, because a zero balance is already settled (D-025) — this is
+-- SETTLEMENT-driven, never print-success-driven. By the time
+-- app.apply_direct_print_dispatch runs, the order is terminal, so the dispatch
+-- correctly declines: dispatched=false / not_eligible. The order therefore ends
+-- `completed` with dispatch_mode STILL 'kds' at revision 2 — it never takes the
+-- served/direct_print path a CHARGEABLE direct_print order takes (case E).
+-- Three distinct things must not be conflated:
+--   1. the SERVER kitchen dispatch LEDGER row  -> created by submit_order (F8)
+--   2. apply_direct_print_dispatch's outcome   -> dispatched=false (F5/F6)
+--   3. the POS local physical kitchen print    -> a client path, not asserted here
+-- KITCHEN-DISPATCH-ENFORCE-001 does not change ANY of this.
 create temp table t_f as select pg_temp.de_submit(
   '00000000-0000-0000-0000-00de00c50002', '00000000-0000-0000-0000-00de000dd002',
   'de-f-zt', '00000000-0000-0000-0000-00de00000b02', '00000000-0000-0000-0000-00de000000f0', 0, 'direct_print') as res;
 select is((select res #>> '{results,0,status}' from t_f), 'applied',
   'F1: printer_only + direct_print zero-total is applied');
 select ok((select o.status = 'completed' from orders o where o.id = '00000000-0000-0000-0000-00de00000b02'),
-  'F2: a ZERO-TOTAL order completes inside the submit transaction (nothing to pay)');
+  'F2: a ZERO-TOTAL order completes inside the submit transaction (zero balance = settled)');
+select is((select o.dispatch_mode from orders o where o.id = '00000000-0000-0000-0000-00de00000b02'), 'kds',
+  'F3: dispatch_mode stays ''kds'' — the direct_print promotion never ran');
+select is((select o.revision::text from orders o where o.id = '00000000-0000-0000-0000-00de00000b02'), '2',
+  'F4: revision 2 (insert + complete), NOT the served/direct_print revision path');
+select is((select res #>> '{results,0,dispatched}' from t_f), 'false',
+  'F5: app.apply_direct_print_dispatch reports dispatched=false for the terminal order');
+select is((select res #>> '{results,0,reason}' from t_f), 'not_eligible',
+  'F6: and exposes the not_eligible reason in the merged envelope');
 select ok(not exists (select 1 from payments where order_id = '00000000-0000-0000-0000-00de00000b02'),
-  'F3: NO payment row is fabricated for the zero-total completion');
+  'F7: NO payment row is fabricated for the zero-total completion');
+select ok(exists (select 1 from kitchen_print_dispatches
+                   where order_id = '00000000-0000-0000-0000-00de00000b02' and dispatch_type = 'initial_order'),
+  'F8: its SERVER kitchen dispatch ledger row STILL exists — created by submit_order''s branch-mode gate, independently of the declined direct_print dispatch');
 
 -- ===== G. printer_only + OMITTED key -> accepted (legacy compatibility) ======
 create temp table t_g as select pg_temp.de_submit(

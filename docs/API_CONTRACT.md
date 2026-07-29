@@ -879,7 +879,7 @@ Four connected corrections that build on RESTAURANT-OPERATIONS-V1-001 without re
 
 **Client corrections (Flutter):** the KDS gains a resume-recovery path — `KdsSyncSource.resume()` un-latches a transient terminal stop, restarts polling with exactly one poller, and pulls fresh on `AppLifecycleState.resumed` (a genuine expiry still shows the honest reauth state, never mislabelled as network); `SupabaseSyncRpcTransport` gains a bounded 15s timeout so a half-open socket after resume fails fast (transient+retry) instead of hanging — so the KDS recovers on foreground instead of requiring a restart. The POS shift-close UI sources expected cash from `get_open_shift_summary` and names the signed-in operator. The Dashboard staff-management screen gains the two capability toggles. **The POS-cashier availability control UI and the POS floor table-control/linking UI are the remaining client surfaces; their server contracts (above) are complete and pgTAP-verified, and managers can already manage availability + table status from the Dashboard.**
 
-### 4.40 `order.submit` dispatch-mode enforcement (KITCHEN-DISPATCH-ENFORCE-001)
+### 4.41 `order.submit` dispatch-mode enforcement (KITCHEN-DISPATCH-ENFORCE-001)
 
 **The `dispatch_mode` field of an `order.submit` payload is now VALIDATED SERVER-SIDE against the branch's authoritative kitchen workflow mode.** Previously `app.sync_push` routed on the client payload alone, so a forged, malformed, stale or replayed `direct_print` submit on a KDS branch stamped the order `served`, dropped it from the KDS feed and created no kitchen print dispatch — the ticket reached neither the screen nor the printer. Enforcement was CLIENT-ONLY by design; it no longer is.
 
@@ -891,8 +891,8 @@ Four connected corrections that build on RESTAURANT-OPERATIONS-V1-001 without re
 |---|---|---|
 | `kds` | absent / `'kds'` | **accepted** — unchanged KDS lifecycle |
 | `kds` | `'direct_print'` | **REJECTED** `dispatch_mode_not_allowed` |
-| `printer_only` | `'direct_print'` | **accepted** — unchanged served + settlement lifecycle |
-| `printer_only` | absent / `'kds'` | **accepted** — deployed-client compatibility; the order stays `submitted` and still receives its kitchen dispatch row |
+| `printer_only` | `'direct_print'` | **accepted** — unchanged lifecycle. A **chargeable** order takes the guarded `served` + settlement path; a **zero-total** order does NOT (see below) |
+| `printer_only` | absent / `'kds'` | **accepted** — deployed-client compatibility; the order stays `submitted` and still receives its kitchen dispatch row (a **zero-total** one completes immediately instead — see below) |
 | any | any other value | **REJECTED** `invalid_payload`, `detail:'dispatch_mode'` |
 | branch row missing / tombstoned | `'direct_print'` | **REJECTED** (fail closed) |
 
@@ -901,6 +901,17 @@ Four connected corrections that build on RESTAURANT-OPERATIONS-V1-001 without re
 **Serialization.** The authoritative branch read on the privileged `direct_print` arm takes a `FOR SHARE` row lock held to transaction end. It conflicts with the `FOR NO KEY UPDATE` lock a `kitchen_workflow_mode` UPDATE takes, so only two orders are possible: the submit commits under the mode authoritative for its transaction (the update waits), or the update commits first and the waiting submit re-reads `kds` and rejects. **No `direct_print` op can commit as newly accepted on a stale `printer_only` read.** Concurrent `direct_print` submits share the lock; the common absent/`'kds'` path takes **no** lock at all. Proven by a real two-session `dblink` race suite.
 
 **Error channel.** `app.apply_direct_print_dispatch` carries a defensive belt that re-proves the branch mode and raises a dedicated internal SQLSTATE; `app.sync_push` normalizes it to the SAME terminal typed `dispatch_mode_not_allowed`. **No raw SQLSTATE and no internal branch-mode detail ever reaches a client** — consistent with the §4.35 error contract (this code RETURNS through the envelope rather than relying on a flattened RAISE).
+
+**Accepting `direct_print` does NOT mean the order ends `served`/`direct_print`.** On a `printer_only` branch `app.submit_order` itself (a) creates the kitchen print dispatch row from its branch-mode gate and (b) **auto-completes a ZERO-TOTAL order**, because a zero balance is already settled (**D-025**) — settlement-driven, *never* physical-print-success-driven. `app.apply_direct_print_dispatch` then finds a terminal order and correctly declines, returning `dispatched=false` / `reason='not_eligible'` in the merged envelope. So:
+
+| accepted request on `printer_only` | final state |
+|---|---|
+| `direct_print`, **chargeable** | `served`, `dispatch_mode='direct_print'`, revision 2, `dispatched=true`; completes later on settlement |
+| `direct_print`, **zero-total** | **`completed`, `dispatch_mode='kds'`, revision 2, `dispatched=false`** — the promotion never ran |
+| absent / `'kds'`, chargeable | stays `submitted` with its kitchen dispatch row; completes on settlement |
+| absent / `'kds'`, zero-total | **`completed` immediately** inside the submit transaction |
+
+The kitchen dispatch LEDGER row (written by `app.submit_order`), `apply_direct_print_dispatch`'s `dispatched` outcome, and the POS's own local physical print are three distinct things and must not be conflated. This lifecycle predates KITCHEN-DISPATCH-ENFORCE-001 and is unchanged by it; **no new lifecycle state is introduced.**
 
 **Client contract.** `dispatch_mode_not_allowed` is **TERMINAL** on the POS (`kPermanentRejectionCodes`): no auto-resweep, no Retry affordance, the phantom recent-order row is retired to a non-actionable rejected shell, and the kitchen print is suppressed. The cashier re-submits; the fresh operation resolves the correct mode. Older clients that do not know the code degrade gracefully (capped resweep, then a visible failure) and cannot legitimately trigger it. Lifecycle documentation for the `submitted → served` dispatch edge lives in [STATE_MACHINES §1.2](STATE_MACHINES.md).
 

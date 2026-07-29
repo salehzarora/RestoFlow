@@ -45,6 +45,21 @@
 --   any          + unknown value   -> REJECT invalid_payload / detail dispatch_mode
 --   branch row unreadable + 'direct_print' -> REJECT (fail closed)
 --
+-- ACCEPTING a 'direct_print' REQUEST DOES NOT MEAN THE ORDER ENDS
+-- served/direct_print. This guard decides only whether the request is ALLOWED;
+-- the resulting lifecycle is the pre-existing one and is unchanged here. On a
+-- printer_only branch app.submit_order itself creates the kitchen dispatch row
+-- AND auto-completes a ZERO-TOTAL order (a zero balance is already settled,
+-- D-025 — settlement-driven, never print-success-driven), so
+-- app.apply_direct_print_dispatch then finds a terminal order and correctly
+-- declines with dispatched=false / not_eligible:
+--   printer_only + 'direct_print', chargeable -> served / direct_print / rev 2
+--   printer_only + 'direct_print', ZERO-TOTAL -> completed / 'kds' / rev 2 /
+--                                                dispatched=false
+--   printer_only + absent|'kds',   ZERO-TOTAL -> completed inside submit
+-- The kitchen dispatch LEDGER row, apply_direct_print_dispatch's `dispatched`
+-- outcome, and the POS's own local physical print are three distinct things.
+--
 -- Scope is SESSION-DERIVED (v_org/v_branch from the authenticated device+PIN
 -- session), never the payload. Idempotency, the customer_phone fingerprint
 -- exclusion, money-free kitchen output, settlement-driven completion (D-025)
