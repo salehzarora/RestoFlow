@@ -18,4 +18,5 @@ export 'src/native_printer_store.dart';
 export 'src/network_printer_profile_providers.dart';
 export 'src/network_printer_profiles.dart';
 export 'src/printer_config.dart';
+export 'src/saved_printers_section.dart';
 export 'src/printer_testers.dart';

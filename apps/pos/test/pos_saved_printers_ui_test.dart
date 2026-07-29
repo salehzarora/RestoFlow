@@ -10,7 +10,6 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/state/pos_network_printer_config.dart';
 import 'package:restoflow_pos/src/state/pos_network_printer_profiles.dart';
 import 'package:restoflow_pos/src/state/pos_printer_purpose.dart';
-import 'package:restoflow_pos/src/state/pos_printer_transport.dart';
 import 'package:restoflow_pos/src/widgets/network_printer_section.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -139,13 +138,15 @@ void main() {
 
     // The existing endpoint fields follow the selection.
     expect(
-      (tester.widget(find.byKey(const Key('network-printer-ip'))) as TextField)
+      (tester.widget(find.byKey(const Key('network-printer-ip-field')))
+              as TextField)
           .controller!
           .text,
       '10.0.0.20',
     );
     expect(
-      (tester.widget(find.byKey(const Key('network-printer-port'))) as TextField)
+      (tester.widget(find.byKey(const Key('network-printer-port-field')))
+              as TextField)
           .controller!
           .text,
       '9101',
@@ -226,7 +227,9 @@ void main() {
     expect(state.profiles, hasLength(1));
   });
 
-  testWidgets('E. an INVALID add is refused and stores nothing', (tester) async {
+  testWidgets('E. an INVALID add is refused and stores nothing', (
+    tester,
+  ) async {
     final container = await _pump(tester);
 
     await tester.tap(find.byKey(const Key('saved-printers-add')));
@@ -386,7 +389,7 @@ void main() {
     final container = await _pump(tester);
 
     await tester.enterText(
-      find.byKey(const Key('network-printer-ip')),
+      find.byKey(const Key('network-printer-ip-field')),
       '10.0.0.55',
     );
     await tester.pump();
@@ -401,7 +404,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      (tester.widget(find.byKey(const Key('network-printer-ip'))) as TextField)
+      (tester.widget(find.byKey(const Key('network-printer-ip-field')))
+              as TextField)
           .controller!
           .text,
       '10.0.0.55',
@@ -409,8 +413,9 @@ void main() {
     );
   });
 
-  testWidgets('H. the KITCHEN slot keeps its own list and selection',
-      (tester) async {
+  testWidgets('H. the KITCHEN slot keeps its own list and selection', (
+    tester,
+  ) async {
     final container = await _pump(
       tester,
       purpose: PosPrinterPurpose.kitchenTicket,
