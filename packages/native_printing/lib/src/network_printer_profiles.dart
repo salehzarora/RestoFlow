@@ -142,7 +142,7 @@ class NetworkPrinterProfileStore {
       if (existing.endpointKey == key) return existing;
     }
     final profile = NetworkPrinterProfile(
-      id: _newId(current),
+      id: await _newId(current),
       name: name.trim(),
       config: normalized,
     );
@@ -261,7 +261,7 @@ class NetworkPrinterProfileStore {
       return const <NetworkPrinterProfile>[];
     }
     final profile = NetworkPrinterProfile(
-      id: _newId(const <NetworkPrinterProfile>[]),
+      id: await _newId(const <NetworkPrinterProfile>[]),
       // Keep the saved label when there is one; the caller supplies a localized
       // default otherwise (never a hardcoded user-facing string here).
       name: (legacy.name ?? '').trim(),
@@ -278,14 +278,23 @@ class NetworkPrinterProfileStore {
   NetworkPrinterConfig _normalize(NetworkPrinterConfig config) =>
       config.copyWith(host: config.host.trim());
 
-  /// A stable id derived from the slot's own key space. Deterministic and
-  /// collision-checked against the current list; never the list index.
-  String _newId(List<NetworkPrinterProfile> current) {
+  /// The key holding this slot's monotonic id counter.
+  String get _seqKey => '$listKey.seq';
+
+  /// A stable id from a MONOTONIC per-slot counter that never decreases.
+  ///
+  /// Deriving the id from the list length or the current maximum would REUSE an
+  /// id after a deletion (delete `p2` from `[p1, p2]`, add again, and the new
+  /// profile is `p2`), so a dialog or a caller holding the old id would silently
+  /// edit or select a DIFFERENT printer. The counter is persisted next to the
+  /// list and is still collision-checked against it.
+  Future<String> _newId(List<NetworkPrinterProfile> current) async {
     final taken = {for (final p in current) p.id};
-    var n = current.length + 1;
+    var n = (prefs.getInt(_seqKey) ?? current.length) + 1;
     while (taken.contains('p$n')) {
       n++;
     }
+    await prefs.setInt(_seqKey, n);
     return 'p$n';
   }
 }

@@ -91,27 +91,30 @@ void main() {
   });
 
   group('B/D/F. add, select, edit, remove', () {
-    test('two profiles persist; selecting the second makes it active', () async {
-      final store = await _store();
-      final kitchen = await store.add(
-        name: 'Kitchen printer',
-        config: const NetworkPrinterConfig(host: '10.0.0.14', port: 9100),
-      );
-      final backup = await store.add(
-        name: 'Backup printer',
-        config: const NetworkPrinterConfig(host: '10.0.0.20', port: 9100),
-      );
+    test(
+      'two profiles persist; selecting the second makes it active',
+      () async {
+        final store = await _store();
+        final kitchen = await store.add(
+          name: 'Kitchen printer',
+          config: const NetworkPrinterConfig(host: '10.0.0.14', port: 9100),
+        );
+        final backup = await store.add(
+          name: 'Backup printer',
+          config: const NetworkPrinterConfig(host: '10.0.0.20', port: 9100),
+        );
 
-      expect(await store.list(), hasLength(2));
-      await store.setActiveProfileId(backup!.id);
-      expect(await store.activeProfileId(), backup.id);
-      expect(
-        (await store.get(backup.id))!.config.host,
-        '10.0.0.20',
-        reason: 'the active endpoint is the selected profile',
-      );
-      expect(kitchen, isNotNull);
-    });
+        expect(await store.list(), hasLength(2));
+        await store.setActiveProfileId(backup!.id);
+        expect(await store.activeProfileId(), backup.id);
+        expect(
+          (await store.get(backup.id))!.config.host,
+          '10.0.0.20',
+          reason: 'the active endpoint is the selected profile',
+        );
+        expect(kitchen, isNotNull);
+      },
+    );
 
     test('D. editing preserves the stable id and persists', () async {
       final store = await _store();
@@ -136,32 +139,39 @@ void main() {
       expect(reloaded.config.port, 9101);
     });
 
-    test('E. an INVALID edit fails honestly and leaves the profile intact',
-        () async {
-      final store = await _store();
-      final p = (await store.add(
-        name: 'Kitchen',
-        config: const NetworkPrinterConfig(host: '10.0.0.14', port: 9100),
-      ))!;
+    test(
+      'E. an INVALID edit fails honestly and leaves the profile intact',
+      () async {
+        final store = await _store();
+        final p = (await store.add(
+          name: 'Kitchen',
+          config: const NetworkPrinterConfig(host: '10.0.0.14', port: 9100),
+        ))!;
 
-      final blankHost = await store.update(
-        p.copyWith(config: const NetworkPrinterConfig(host: '  ')),
-      );
-      final badPort = await store.update(
-        p.copyWith(config: const NetworkPrinterConfig(host: 'x', port: 70000)),
-      );
-      expect(blankHost, isFalse);
-      expect(badPort, isFalse);
+        final blankHost = await store.update(
+          p.copyWith(config: const NetworkPrinterConfig(host: '  ')),
+        );
+        final badPort = await store.update(
+          p.copyWith(
+            config: const NetworkPrinterConfig(host: 'x', port: 70000),
+          ),
+        );
+        expect(blankHost, isFalse);
+        expect(badPort, isFalse);
 
-      final reloaded = await (await _store()).get(p.id);
-      expect(reloaded!.config.host, '10.0.0.14');
-      expect(reloaded.config.port, 9100);
-    });
+        final reloaded = await (await _store()).get(p.id);
+        expect(reloaded!.config.host, '10.0.0.14');
+        expect(reloaded.config.port, 9100);
+      },
+    );
 
     test('an invalid ADD is refused and stores nothing', () async {
       final store = await _store();
       expect(
-        await store.add(name: 'x', config: const NetworkPrinterConfig(host: '')),
+        await store.add(
+          name: 'x',
+          config: const NetworkPrinterConfig(host: ''),
+        ),
         isNull,
       );
       expect(
@@ -174,23 +184,25 @@ void main() {
       expect(await store.list(), isEmpty);
     });
 
-    test('F. removing an INACTIVE profile leaves the active one alone',
-        () async {
-      final store = await _store();
-      final a = (await store.add(
-        name: 'A',
-        config: const NetworkPrinterConfig(host: '10.0.0.1'),
-      ))!;
-      final b = (await store.add(
-        name: 'B',
-        config: const NetworkPrinterConfig(host: '10.0.0.2'),
-      ))!;
-      await store.setActiveProfileId(a.id);
+    test(
+      'F. removing an INACTIVE profile leaves the active one alone',
+      () async {
+        final store = await _store();
+        final a = (await store.add(
+          name: 'A',
+          config: const NetworkPrinterConfig(host: '10.0.0.1'),
+        ))!;
+        final b = (await store.add(
+          name: 'B',
+          config: const NetworkPrinterConfig(host: '10.0.0.2'),
+        ))!;
+        await store.setActiveProfileId(a.id);
 
-      await store.remove(b.id);
-      expect(await store.list(), hasLength(1));
-      expect(await store.activeProfileId(), a.id);
-    });
+        await store.remove(b.id);
+        expect(await store.list(), hasLength(1));
+        expect(await store.activeProfileId(), a.id);
+      },
+    );
 
     test('F. removing the ACTIVE profile leaves the slot honestly '
         'unconfigured — never a silent unrelated selection', () async {
@@ -262,6 +274,41 @@ void main() {
         config: const NetworkPrinterConfig(host: '10.0.0.14', port: 9101),
       );
       expect(await store.list(), hasLength(2));
+    });
+  });
+
+  group('stable ids are never REUSED after a deletion', () {
+    test('a deleted id is not handed to the next profile', () async {
+      final store = await _store();
+      final a = (await store.add(
+        name: 'A',
+        config: const NetworkPrinterConfig(host: '10.0.0.1'),
+      ))!;
+      final b = (await store.add(
+        name: 'B',
+        config: const NetworkPrinterConfig(host: '10.0.0.2'),
+      ))!;
+      await store.remove(b.id);
+
+      final c = (await store.add(
+        name: 'C',
+        config: const NetworkPrinterConfig(host: '10.0.0.3'),
+      ))!;
+      expect(
+        c.id,
+        isNot(b.id),
+        reason:
+            'reusing a deleted id would let a stale reference edit or '
+            'select a DIFFERENT printer',
+      );
+      expect(c.id, isNot(a.id));
+      // ...and the counter survives process recreation.
+      final fresh = await _store();
+      final d = (await fresh.add(
+        name: 'D',
+        config: const NetworkPrinterConfig(host: '10.0.0.4'),
+      ))!;
+      expect({a.id, b.id, c.id}.contains(d.id), isFalse);
     });
   });
 
@@ -357,20 +404,22 @@ void main() {
   });
 
   group('ordering + corruption', () {
-    test('a corrupt stored list degrades to empty instead of crashing',
-        () async {
-      SharedPreferences.setMockInitialValues({_listKey: 'not json at all'});
-      final store = await _store();
-      expect(await store.list(), isEmpty);
-      // ...and the store is still usable.
-      expect(
-        await store.add(
-          name: 'A',
-          config: const NetworkPrinterConfig(host: '10.0.0.1'),
-        ),
-        isNotNull,
-      );
-    });
+    test(
+      'a corrupt stored list degrades to empty instead of crashing',
+      () async {
+        SharedPreferences.setMockInitialValues({_listKey: 'not json at all'});
+        final store = await _store();
+        expect(await store.list(), isEmpty);
+        // ...and the store is still usable.
+        expect(
+          await store.add(
+            name: 'A',
+            config: const NetworkPrinterConfig(host: '10.0.0.1'),
+          ),
+          isNotNull,
+        );
+      },
+    );
 
     test('ordering is deterministic and NOT rewritten on every read', () async {
       final store = await _store();
@@ -421,7 +470,11 @@ void main() {
         'error',
         'online',
       ]) {
-        expect(stored.containsKey(banned), isFalse, reason: 'never persist $banned');
+        expect(
+          stored.containsKey(banned),
+          isFalse,
+          reason: 'never persist $banned',
+        );
       }
     });
   });
