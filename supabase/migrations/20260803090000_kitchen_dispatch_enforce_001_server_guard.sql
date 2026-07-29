@@ -1027,17 +1027,28 @@ begin
       'order_code',    v_order_code,
       'role',          v_role));
 
-  -- Completion follows the UNCHANGED served+paid rule: a ZERO-TOTAL
-  -- (non-chargeable) order auto-completes now; a CHARGEABLE one stays `served`
-  -- until the NORMAL payment settles it (D-025). Settlement is NEVER bypassed,
-  -- no payment is created, and the helper NEVER raises (fail-soft).
+  -- Completion follows the UNCHANGED settlement rule (D-025): a CHARGEABLE
+  -- order stays `served` until the NORMAL payment settles it. Settlement is
+  -- NEVER bypassed, no payment is created, and this call NEVER raises
+  -- (fail-soft).
+  --
+  -- KITCHEN-DISPATCH-ENFORCE-001 accuracy note: on the app.sync_push
+  -- order.submit path this call does NOT complete zero-total orders, and must
+  -- not be read as doing so. A ZERO-TOTAL printer_only order was ALREADY
+  -- completed by app.submit_order itself (its balance is zero, so it is settled
+  -- on arrival), which makes it terminal — the eligibility check above returns
+  -- `not_eligible` and execution never reaches this line for such an order.
+  -- Here the call is the unchanged settlement RE-CHECK for the order this
+  -- helper just promoted to `served`. Physical print success is never the
+  -- completion trigger on either path.
   v_auto := app.try_auto_complete_order(
     p_organization_id, p_restaurant_id, p_branch_id, p_order_id,
     'order_served', null, p_actor_employee_profile_id, p_actor_membership_id,
     v_role, p_device_id, p_local_operation_id);
 
-  -- Re-read the FINAL committed state (served, or completed if the zero-total
-  -- auto-completion just fired) so app.sync_push can merge an HONEST envelope.
+  -- Re-read the FINAL committed state (normally `served`; `completed` only if
+  -- the settlement re-check above found this promoted order already fully
+  -- settled) so app.sync_push can merge an HONEST envelope.
   select o.status, o.revision into v_status, v_new_rev
     from public.orders o where o.id = p_order_id;
   return jsonb_build_object(
@@ -1049,7 +1060,7 @@ end;
 $$;
 
 comment on function app.apply_direct_print_dispatch(uuid, uuid, uuid, uuid, uuid, uuid, uuid, text) is
-  'KITCHEN-PRINT-DUAL-001C SECURITY DEFINER helper: routes a just-submitted order OUT of the KDS active workflow for a printer-dispatched (no-KDS) restaurant. In the SAME app.sync_push transaction it promotes the FRESH submitted order to served (skipping the KDS accept/prepare/ready states — the kitchen dispatch is the POS printed ticket), stamps dispatch_mode=direct_print + a write-once ready_at, dispatches the items to served, writes ONE money-free order.status_updated audit, then runs the UNCHANGED app.try_auto_complete_order so a zero-total order auto-completes and a chargeable one stays served until the NORMAL payment settles it (D-025 NEVER bypassed; no payment created). IDEMPOTENT: only a submitted/kds order is acted on, so an order.submit replay is a no-op. INTERNAL: not granted to any client role; only app.sync_push calls it, after it has authenticated the actor + scope. KITCHEN-DISPATCH-ENFORCE-001: after the eligibility check it re-proves the branch is affirmatively kitchen_workflow_mode=''printer_only'' (FOR SHARE, tenant-scoped) and otherwise raises the DEDICATED internal SQLSTATE RFDM0 carrying no branch-mode detail, which app.sync_push normalizes to the terminal typed dispatch_mode_not_allowed; the raise rolls the caller''s per-op subtransaction back so no business rows survive.';
+  'KITCHEN-PRINT-DUAL-001C SECURITY DEFINER helper: routes a just-submitted order OUT of the KDS active workflow for a printer-dispatched (no-KDS) restaurant. In the SAME app.sync_push transaction it promotes the FRESH submitted order to served (skipping the KDS accept/prepare/ready states — the kitchen dispatch is the POS printed ticket), stamps dispatch_mode=direct_print + a write-once ready_at, dispatches the items to served, writes ONE money-free order.status_updated audit, then runs the UNCHANGED app.try_auto_complete_order as a SETTLEMENT RE-CHECK on the order it just promoted, so a chargeable one stays served until the NORMAL payment settles it (D-025 NEVER bypassed; no payment created). IDEMPOTENT: only a submitted/kds order is acted on, so an order.submit replay is a no-op. TWO OUTCOMES ON A printer_only BRANCH, and they differ — (A) CHARGEABLE + direct_print: the authoritative branch guard passes, this helper promotes the order through the guarded direct-print lifecycle (served, dispatch_mode=direct_print, revision 2, dispatched=true) and final completion stays SETTLEMENT-driven via the normal payment. (B) ZERO-TOTAL: app.submit_order ITSELF completes the order before this helper can dispatch (a zero balance is already settled), so the order is terminal on arrival, the eligibility check returns dispatched=false/not_eligible, the stored dispatch_mode REMAINS ''kds'' and the revision REMAINS 2 — this helper does NOT perform that completion and its app.try_auto_complete_order call is never reached for such an order. In BOTH cases the POS local physical kitchen print is a SEPARATE best-effort client path and is never the completion trigger, and the server kitchen-dispatch LEDGER row is written by app.submit_order independently of this helper''s outcome. INTERNAL: not granted to any client role; only app.sync_push calls it, after it has authenticated the actor + scope. KITCHEN-DISPATCH-ENFORCE-001: after the eligibility check it re-proves the branch is affirmatively kitchen_workflow_mode=''printer_only'' (FOR SHARE, tenant-scoped) and otherwise raises the DEDICATED internal SQLSTATE RFDM0 carrying no branch-mode detail, which app.sync_push normalizes to the terminal typed dispatch_mode_not_allowed; the raise rolls the caller''s per-op subtransaction back so no business rows survive.';
 
 revoke all on function app.apply_direct_print_dispatch(uuid, uuid, uuid, uuid, uuid, uuid, uuid, text) from public;
 revoke all on function app.apply_direct_print_dispatch(uuid, uuid, uuid, uuid, uuid, uuid, uuid, text) from anon;
