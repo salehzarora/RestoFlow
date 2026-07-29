@@ -28,7 +28,11 @@ const String kPosNetworkPrinterKeyPrefix = 'restoflow.printer.network.pos.';
 
 /// A stable fallback key segment for when no device is paired yet (demo / not
 /// yet paired) so the pilot can still configure + test-print a printer.
-const String kPosNetworkPrinterLocalKey = 'local';
+///
+/// PRINT-STARTUP-REPRINT-001: this is now the ONE shared constant
+/// [kPosPrinterScopeLocalKey]; the alias is kept so existing imports of this
+/// name keep compiling.
+const String kPosNetworkPrinterLocalKey = kPosPrinterScopeLocalKey;
 
 /// KITCHEN-MODE-001B: the per-PURPOSE saved network printer family.
 /// [PosPrinterPurpose.customerReceipt] reads/writes the LEGACY key (identity
@@ -55,53 +59,126 @@ final posKitchenNetworkPrinterConfigProvider = posNetworkPrinterConfigFamily(
   PosPrinterPurpose.kitchenTicket,
 );
 
+/// True when [config] is safe to persist. An invalid profile must NEVER
+/// overwrite the last valid one (PRINT-STARTUP-REPRINT-001).
+bool isValidNetworkPrinterConfig(PosNetworkPrinterConfig config) =>
+    config.host.trim().isNotEmpty && config.port > 0 && config.port <= 65535;
+
 class PosNetworkPrinterConfigController
     extends FamilyAsyncNotifier<PosNetworkPrinterConfig?, PosPrinterPurpose> {
-  String get _key {
-    final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
-    final segment = (deviceId == null || deviceId.isEmpty)
-        ? kPosNetworkPrinterLocalKey
-        : deviceId;
-    return '$kPosNetworkPrinterKeyPrefix${arg.keySegment}$segment';
-  }
+  String _keyFor(String segment) =>
+      '$kPosNetworkPrinterKeyPrefix${arg.keySegment}$segment';
 
   @override
   Future<PosNetworkPrinterConfig?> build(PosPrinterPurpose arg) async {
-    // Re-read when the pairing gate (re)publishes the device.
-    ref.watch(posDeviceContextProvider);
+    // PRINT-STARTUP-REPRINT-001: WAIT for the authoritative scope. While a
+    // device-session restore is pending this suspends (stays loading) instead
+    // of reading the legacy `local` namespace and latching the wrong answer.
+    final segment = await ref.watch(posPrinterScopeSegmentProvider.future);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_key);
-      if (raw == null || raw.isEmpty) return null;
-      final decoded = jsonDecode(raw);
-      return decoded is Map<String, dynamic>
-          ? PosNetworkPrinterConfig.fromJson(decoded)
-          : null;
+
+      // 1. The CURRENT device-scoped key always wins.
+      final own = _parse(prefs.getString(_keyFor(segment)));
+      if (own != null) return own;
+
+      // 2. Only when it is empty, fall back to the LEGACY local key of this
+      //    SAME app installation. Never another device id — there is no
+      //    device -> local -> other-device chain anywhere in this class.
+      if (segment == kPosPrinterScopeLocalKey) return null;
+      final legacyRaw = prefs.getString(_keyFor(kPosPrinterScopeLocalKey));
+      final legacy = _parse(legacyRaw);
+      if (legacy == null) return null;
+
+      // 3. Adopt it ONCE into the current device namespace, and verify the
+      //    write landed before treating the migration as done. The legacy
+      //    source is deliberately KEPT: losing a working printer profile to a
+      //    half-finished migration is far worse than a stale duplicate key.
+      await _writeVerified(prefs, _keyFor(segment), legacyRaw!);
+      return legacy;
     } catch (_) {
       // Unreadable/corrupt prefs degrade to "not configured", never crash.
       return null;
     }
   }
 
-  /// Persists [config] for this device+purpose (state first, best-effort).
+  /// Persists [config] for this device+purpose.
+  ///
+  /// Waits for the authoritative scope and settles any in-flight load first, so
+  /// a save issued during cold startup can never land in the legacy namespace.
+  /// Exposed state is updated only after the write is verified; a failed or
+  /// invalid save leaves the previously saved profile untouched.
   Future<void> save(PosNetworkPrinterConfig config) async {
-    state = AsyncData(config);
+    if (!isValidNetworkPrinterConfig(config)) return; // keep the last valid one
+    final segment = await ref.read(posPrinterScopeSegmentProvider.future);
+    await _settle();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_key, jsonEncode(config.toJson()));
+      final ok = await _writeVerified(
+        prefs,
+        _keyFor(segment),
+        jsonEncode(config.toJson()),
+      );
+      if (ok) state = AsyncData(config);
     } catch (_) {
-      // Best-effort persistence: the in-session config still applies.
+      // Persistence failed: the previously saved profile stands.
     }
   }
 
   /// Removes this device+purpose's saved printer (other purposes untouched).
+  ///
+  /// The ONLY path that deletes a profile. It also clears the legacy local key
+  /// for this slot so an explicit removal is not silently undone by the
+  /// adoption fallback on the next cold start.
   Future<void> clear() async {
-    state = const AsyncData(null);
+    final segment = await ref.read(posPrinterScopeSegmentProvider.future);
+    await _settle();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_key);
+      await prefs.remove(_keyFor(segment));
+      if (segment != kPosPrinterScopeLocalKey) {
+        await prefs.remove(_keyFor(kPosPrinterScopeLocalKey));
+      }
+      state = const AsyncData(null);
     } catch (_) {
-      // Best-effort.
+      state = const AsyncData(null);
+    }
+  }
+
+  /// Settles the in-flight build so a save never races the initial load.
+  Future<void> _settle() async {
+    try {
+      await future;
+    } catch (_) {
+      // A failed load must not block an explicit save.
+    }
+  }
+
+  PosNetworkPrinterConfig? _parse(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic>
+          ? PosNetworkPrinterConfig.fromJson(decoded)
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Writes and RE-READS the key; returns true only when the value is durably
+  /// present. Used for both adoption and save so neither reports success on a
+  /// storage backend that silently dropped the write.
+  Future<bool> _writeVerified(
+    SharedPreferences prefs,
+    String key,
+    String value,
+  ) async {
+    try {
+      await prefs.setString(key, value);
+      return prefs.getString(key) == value;
+    } catch (_) {
+      return false;
     }
   }
 }

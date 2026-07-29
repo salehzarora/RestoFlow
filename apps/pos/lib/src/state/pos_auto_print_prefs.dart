@@ -22,18 +22,17 @@ final posAutoPrintReceiptProvider =
     );
 
 class PosAutoPrintReceiptController extends AsyncNotifier<bool?> {
-  String? get _key {
-    final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
-    return deviceId == null || deviceId.isEmpty
-        ? null
-        : '$kPosAutoPrintReceiptKeyPrefix$deviceId';
-  }
+  /// This preference is DEVICE-only: with no paired device there is no key and
+  /// nothing is stored (unchanged behaviour). PRINT-STARTUP-REPRINT-001 only
+  /// changes WHEN the namespace is decided — after the scope resolves, never
+  /// from a transient null.
+  String? _keyFor(PosPrinterScope scope) =>
+      scope.isDevice ? '$kPosAutoPrintReceiptKeyPrefix${scope.deviceId}' : null;
 
   @override
   Future<bool?> build() async {
-    // Re-read when the pairing gate (re)publishes the device.
-    ref.watch(posDeviceContextProvider);
-    final key = _key;
+    await ref.watch(posPrinterScopeSegmentProvider.future);
+    final key = _keyFor(ref.read(posPrinterScopeProvider));
     if (key == null) return null;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -45,7 +44,8 @@ class PosAutoPrintReceiptController extends AsyncNotifier<bool?> {
 
   /// Persists the cashier's choice (state first, storage best-effort).
   Future<void> setEnabled(bool value) async {
-    final key = _key;
+    await ref.read(posPrinterScopeSegmentProvider.future);
+    final key = _keyFor(ref.read(posPrinterScopeProvider));
     if (key == null) return;
     state = AsyncData(value);
     try {
@@ -80,17 +80,14 @@ final posAutoPrintKitchenTicketProvider =
     );
 
 class PosAutoPrintKitchenTicketController extends AsyncNotifier<bool?> {
-  String? get _key {
-    final deviceId = ref.read(posDeviceContextProvider)?.deviceId;
-    return deviceId == null || deviceId.isEmpty
-        ? null
-        : '$kPosAutoPrintKitchenTicketKeyPrefix$deviceId';
-  }
+  String? _keyFor(PosPrinterScope scope) => scope.isDevice
+      ? '$kPosAutoPrintKitchenTicketKeyPrefix${scope.deviceId}'
+      : null;
 
   @override
   Future<bool?> build() async {
-    ref.watch(posDeviceContextProvider);
-    final key = _key;
+    await ref.watch(posPrinterScopeSegmentProvider.future);
+    final key = _keyFor(ref.read(posPrinterScopeProvider));
     if (key == null) return null;
     // KITCHEN-PRINT-DUAL-001C: a genuine prefs READ FAILURE must SURFACE as
     // AsyncError, NOT silently degrade to null (OFF). CartPanel gates Send on this
@@ -107,7 +104,8 @@ class PosAutoPrintKitchenTicketController extends AsyncNotifier<bool?> {
   /// the option through Device Settings is the operator's escape hatch if a read
   /// ever failed and blocked Send.
   Future<void> setEnabled(bool value) async {
-    final key = _key;
+    await ref.read(posPrinterScopeSegmentProvider.future);
+    final key = _keyFor(ref.read(posPrinterScopeProvider));
     if (key == null) return;
     state = AsyncData(value);
     try {
