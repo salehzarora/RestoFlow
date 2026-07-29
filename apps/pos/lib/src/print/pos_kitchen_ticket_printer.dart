@@ -20,8 +20,7 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../data/order_submission.dart' show kPermanentRejectionCodes;
-import '../state/cart_controller.dart'
-    show CartLineView, kitchenMeatSnapshots;
+import '../state/cart_controller.dart' show CartLineView, kitchenMeatSnapshots;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_network_printer_config.dart';

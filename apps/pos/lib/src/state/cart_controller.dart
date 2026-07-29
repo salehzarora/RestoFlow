@@ -83,15 +83,16 @@ class SelectedModifier {
 /// later by `aggregateOrderKitchenCounts`. Options with no configured meat, or
 /// with non-positive units, contribute nothing — so the result is deliberately
 /// NOT index-aligned with the modifier display list. Money-free (D-007).
-List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) => [
-  for (final modifier in modifiers)
-    if (modifier.kitchenMeat case final meat?)
-      if (modifier.quantity > 0)
-        KitchenMeat(
-          quantity: meat.quantity * modifier.quantity,
-          unit: meat.unit,
-        ),
-];
+List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) =>
+    [
+      for (final modifier in modifiers)
+        if (modifier.kitchenMeat case final meat?)
+          if (modifier.quantity > 0)
+            KitchenMeat(
+              quantity: meat.quantity * modifier.quantity,
+              unit: meat.unit,
+            ),
+    ];
 
 /// Immutable view of a single cart line for the POS UI.
 ///

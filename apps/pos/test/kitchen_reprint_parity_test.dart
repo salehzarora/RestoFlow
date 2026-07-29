@@ -146,19 +146,17 @@ const _moneyTokens = [
 }
 
 /// The AUTOMATIC initial kitchen ticket, built the way the live path builds it.
-KdsTicketView _autoTicket(
-  List<CartLineView> lines,
-  String orderCode,
-) => kdsTicketViewFromCartLines(
-  orderCode: orderCode,
-  orderType: OrderType.dineIn,
-  tableLabel: 'T2',
-  lines: lines,
-  prepByItemId: {
-    for (final item in [_burger, _fries])
-      if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
-  },
-);
+KdsTicketView _autoTicket(List<CartLineView> lines, String orderCode) =>
+    kdsTicketViewFromCartLines(
+      orderCode: orderCode,
+      orderType: OrderType.dineIn,
+      tableLabel: 'T2',
+      lines: lines,
+      prepByItemId: {
+        for (final item in [_burger, _fries])
+          if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
+      },
+    );
 
 /// The MANUAL kitchen reprint, built from the confirmation snapshot.
 KdsTicketView _reprintTicket(SubmittedOrderView submitted) =>
@@ -177,16 +175,21 @@ void main() {
       final reprint = _reprintTicket(r.submitted);
 
       // Extra meat: 1 patty × 2 selections × 1 burger = 2. Bread: 1 × 1 = 1.
-      expect(auto.kitchenCounts, [
-        const KitchenCount(quantity: 2, label: 'قطع لحم'),
-        const KitchenCount(quantity: 1, label: 'خبز'),
-      ], reason: 'the automatic ticket is the CORRECT reference');
+      expect(
+        auto.kitchenCounts,
+        [
+          const KitchenCount(quantity: 2, label: 'قطع لحم'),
+          const KitchenCount(quantity: 1, label: 'خبز'),
+        ],
+        reason: 'the automatic ticket is the CORRECT reference',
+      );
 
       // THE DEFECT: pre-fix the reprint carries no counts at all.
       expect(
         reprint.kitchenCounts,
         auto.kitchenCounts,
-        reason: 'the chef must see the same extra-meat/prep totals on a reprint',
+        reason:
+            'the chef must see the same extra-meat/prep totals on a reprint',
       );
     });
 
@@ -215,7 +218,9 @@ void main() {
       }
 
       // The concrete contract, spelled out so a regression is unambiguous.
-      final burger = reprint.items.firstWhere((i) => i.name == 'Classic Burger');
+      final burger = reprint.items.firstWhere(
+        (i) => i.name == 'Classic Burger',
+      );
       expect(burger.quantity, 1);
       expect(burger.modifiers, [
         'Extra meat ×2',
@@ -235,10 +240,7 @@ void main() {
 
       // Burgers (category 1) before Sides (category 2), though Fries was added
       // to the cart FIRST.
-      expect([for (final i in auto.items) i.name], [
-        'Classic Burger',
-        'Fries',
-      ]);
+      expect([for (final i in auto.items) i.name], ['Classic Burger', 'Fries']);
       expect(
         [for (final i in reprint.items) i.name],
         [for (final i in auto.items) i.name],
@@ -273,28 +275,32 @@ void main() {
       expect(reprintTexts, contains('+ Extra meat ×2'));
       expect(reprintTexts, contains('+ Ketchup ×2'));
       expect(reprintTexts, contains('+ Make it a meal'));
-      expect(autoTexts.where((t) => t.startsWith('+ ')).toList(),
-          reprintTexts.where((t) => t.startsWith('+ ')).toList());
+      expect(
+        autoTexts.where((t) => t.startsWith('+ ')).toList(),
+        reprintTexts.where((t) => t.startsWith('+ ')).toList(),
+      );
     });
 
-    test('BYTE equivalence: the same canonical inputs render identical bytes',
-        () async {
-      final r = _realSubmit();
-      final labels = _labels();
-      final autoBytes = await renderKitchenTicketBytes(
-        ticket: _autoTicket(r.cartLines, r.submitted.orderNumber),
-        labels: labels,
-      );
-      final reprintBytes = await renderKitchenTicketBytes(
-        ticket: _reprintTicket(r.submitted),
-        labels: labels,
-      );
-      expect(
-        reprintBytes,
-        autoBytes,
-        reason: 'same canonical content + same renderer => identical bytes',
-      );
-    });
+    test(
+      'BYTE equivalence: the same canonical inputs render identical bytes',
+      () async {
+        final r = _realSubmit();
+        final labels = _labels();
+        final autoBytes = await renderKitchenTicketBytes(
+          ticket: _autoTicket(r.cartLines, r.submitted.orderNumber),
+          labels: labels,
+        );
+        final reprintBytes = await renderKitchenTicketBytes(
+          ticket: _reprintTicket(r.submitted),
+          labels: labels,
+        );
+        expect(
+          reprintBytes,
+          autoBytes,
+          reason: 'same canonical content + same renderer => identical bytes',
+        );
+      },
+    );
 
     test('the kitchen reprint stays MONEY-FREE', () {
       final r = _realSubmit();
