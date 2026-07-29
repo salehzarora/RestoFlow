@@ -1,3 +1,4 @@
+import 'dart:async' show scheduleMicrotask;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +7,10 @@ import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import 'bluetooth_printer.dart';
 import 'native_printer_store.dart';
+import 'network_printer_profile_providers.dart';
+import 'network_printer_profiles.dart';
 import 'printer_config.dart';
+import 'saved_printers_section.dart';
 import 'printer_testers.dart';
 
 /// The localized labels the shared native-printer settings UI needs
@@ -57,6 +61,7 @@ class NativePrinterStrings {
     required this.diagHeight,
     required this.diagTopSafe,
     required this.diagBottomSafe,
+    required this.savedPrinters,
   });
 
   final String transportHeading;
@@ -110,6 +115,11 @@ class NativePrinterStrings {
   final String Function(int height) diagHeight;
   final String diagTopSafe;
   final String diagBottomSafe;
+
+  /// WIFI-PRINTER-PROFILE-LISTS-001: the labels for the device-local saved
+  /// printer list. Supplied by the host app from its own ARB, so nothing
+  /// user-visible is hardcoded in this package.
+  final SavedPrintersStrings savedPrinters;
 }
 
 /// PRINT-LAYOUT-001A: builds the profile-aware Test-Print diagnostic document
@@ -240,6 +250,11 @@ class _NetworkPrinterSectionState
   final TextEditingController _nameController = TextEditingController();
 
   bool _prefilled = false;
+
+  /// WIFI-PRINTER-PROFILE-LISTS-001: the operator has typed into the endpoint
+  /// fields, so a provider rebuild must never overwrite their text. An explicit
+  /// profile selection deliberately clears this and refills.
+  bool _dirty = false;
   _TestStatus _status = _TestStatus.idle;
   String? _fieldError;
   String? _lastHostPort;
@@ -255,6 +270,107 @@ class _NetworkPrinterSectionState
     _portController.dispose();
     _nameController.dispose();
     super.dispose();
+  }
+
+  /// The saved kitchen-printer list for THIS device.
+  Widget _savedPrinters() {
+    final async = ref.watch(networkPrinterProfilesProvider);
+    final controller = ref.read(networkPrinterProfilesProvider.notifier);
+    final state = async.valueOrNull;
+    if (state != null) _ensureMigratedName(state, controller);
+    return SavedPrintersSection(
+      strings: _s.savedPrinters,
+      profiles: state?.profiles ?? const <NetworkPrinterProfile>[],
+      activeId: state?.activeId,
+      loading: async.isLoading && !async.hasValue,
+      failed: async.hasError,
+      onRetry: () => ref.invalidate(networkPrinterProfilesProvider),
+      onSelect: (id) async {
+        await controller.selectProfile(id);
+        final selected = ref
+            .read(networkPrinterProfilesProvider)
+            .valueOrNull
+            ?.active;
+        if (selected == null || !mounted) return;
+        // An INTENTIONAL selection replaces the endpoint fields; a background
+        // rebuild still never touches what the user typed (see _dirty).
+        setState(() {
+          _dirty = false;
+          _prefilled = true;
+          _ipController.text = selected.config.host;
+          _portController.text = '${selected.config.port}';
+          _nameController.text = selected.config.name ?? '';
+          _selectedProfile = selected.config.mediaProfile.id;
+          _fieldError = null;
+        });
+      },
+      onAdd: (name, config) async {
+        final before = state?.profiles.length ?? 0;
+        final added = await controller.addProfile(name: name, config: config);
+        if (added == null) return SavedPrinterSaveResult.invalid;
+        final after = ref.read(networkPrinterProfilesProvider).valueOrNull;
+        if ((after?.profiles.length ?? 0) == before) {
+          // The store returned the EXISTING profile for this endpoint.
+          return SavedPrinterSaveResult.duplicate;
+        }
+        await controller.selectProfile(added.id);
+        if (mounted) {
+          setState(() {
+            _dirty = false;
+            _prefilled = true;
+            _ipController.text = added.config.host;
+            _portController.text = '${added.config.port}';
+            _nameController.text = added.config.name ?? '';
+          });
+        }
+        return SavedPrinterSaveResult.saved;
+      },
+      onEdit: (profile) async {
+        final ok = await controller.updateProfile(profile);
+        if (!ok) return SavedPrinterSaveResult.duplicate;
+        final now = ref.read(networkPrinterProfilesProvider).valueOrNull;
+        if (now?.activeId == profile.id && mounted) {
+          setState(() {
+            _dirty = false;
+            _prefilled = true;
+            _ipController.text = profile.config.host;
+            _portController.text = '${profile.config.port}';
+          });
+        }
+        return SavedPrinterSaveResult.saved;
+      },
+      onRemove: (id) async {
+        final wasActive = state?.activeId == id;
+        await controller.removeProfile(id);
+        // The form clears ONLY when the removed printer was the active one.
+        if (wasActive && mounted) {
+          setState(() {
+            _dirty = false;
+            _status = _TestStatus.idle;
+          });
+        }
+      },
+    );
+  }
+
+  /// Gives a profile migrated from the previous single configuration its
+  /// localized default name ONCE, through the existing update operation. An
+  /// explicitly named profile is never renamed, and the write cannot repeat
+  /// because the name is no longer blank afterwards.
+  void _ensureMigratedName(
+    NetworkProfilesState state,
+    NetworkPrinterProfilesController controller,
+  ) {
+    for (final p in state.profiles) {
+      if (p.name.trim().isEmpty) {
+        scheduleMicrotask(() {
+          controller.updateProfile(
+            p.copyWith(name: _s.savedPrinters.defaultName),
+          );
+        });
+        return;
+      }
+    }
   }
 
   NetworkPrinterConfig? _readFields() {
@@ -319,7 +435,10 @@ class _NetworkPrinterSectionState
     final savedAsync = ref.watch(networkPrinterConfigProvider);
     final saved = savedAsync.valueOrNull;
 
-    if (!_prefilled && savedAsync.hasValue) {
+    // WIFI-PRINTER-PROFILE-LISTS-001: never overwrite text the operator is
+    // typing. The latch still only fires once, and an explicit profile
+    // selection clears _dirty and refills deliberately.
+    if (!_prefilled && !_dirty && savedAsync.hasValue) {
       _prefilled = true;
       if (saved != null) {
         _ipController.text = saved.host;
@@ -352,7 +471,10 @@ class _NetworkPrinterSectionState
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9A-Za-z.\-]')),
           ],
-          onChanged: (_) => setState(() => _fieldError = null),
+          onChanged: (_) => setState(() {
+            _dirty = true;
+            _fieldError = null;
+          }),
           decoration: InputDecoration(
             labelText: _s.networkIpLabel,
             hintText: _s.networkIpHint,
@@ -374,7 +496,10 @@ class _NetworkPrinterSectionState
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(5),
                 ],
-                onChanged: (_) => setState(() => _fieldError = null),
+                onChanged: (_) => setState(() {
+                  _dirty = true;
+                  _fieldError = null;
+                }),
                 decoration: InputDecoration(
                   labelText: _s.networkPortLabel,
                   border: const OutlineInputBorder(),
@@ -435,6 +560,14 @@ class _NetworkPrinterSectionState
           saved: saved,
           hostPort: _lastHostPort,
         ),
+        const SizedBox(height: RestoflowSpacing.md),
+        const Divider(height: 1),
+        const SizedBox(height: RestoflowSpacing.sm),
+        // WIFI-PRINTER-PROFILE-LISTS-001: this device's saved kitchen printers.
+        // A view over the KDS profile provider — selecting writes through the
+        // canonical config, so Test Print, normal KDS printing and cold-start
+        // restoration all follow the selection. No parallel endpoint state.
+        _savedPrinters(),
       ],
     );
   }

@@ -499,6 +499,7 @@ class _NetworkPrinterSectionState extends ConsumerState<NetworkPrinterSection> {
         editAction: l10n.printerProfilesEditAction,
         deleteAction: l10n.printerProfilesDeleteAction,
         activeBadge: l10n.printerProfilesActiveBadge,
+        defaultName: l10n.printerProfilesDefaultName,
         nameLabel: l10n.printerProfilesNameLabel,
         hostLabel: l10n.posNetworkPrinterIpLabel,
         portLabel: l10n.posNetworkPrinterPortLabel,

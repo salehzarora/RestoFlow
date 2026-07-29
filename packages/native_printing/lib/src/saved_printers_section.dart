@@ -22,6 +22,7 @@ class SavedPrintersStrings {
     required this.editAction,
     required this.deleteAction,
     required this.activeBadge,
+    required this.defaultName,
     required this.nameLabel,
     required this.hostLabel,
     required this.portLabel,
@@ -45,6 +46,10 @@ class SavedPrintersStrings {
   final String editAction;
   final String deleteAction;
   final String activeBadge;
+
+  /// The localized name given ONCE to a profile migrated from the previous
+  /// single configuration (the store deliberately stores it blank).
+  final String defaultName;
   final String nameLabel;
   final String hostLabel;
   final String portLabel;

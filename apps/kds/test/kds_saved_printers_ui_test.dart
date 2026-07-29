@@ -170,8 +170,10 @@ void main() {
     final after = await c.read(networkPrinterProfilesProvider.future);
     expect(after.activeId, activeId, reason: 'the id is stable');
     expect(after.active!.config.host, '10.0.0.77');
-    expect((await c.read(networkPrinterConfigProvider.future))!.host,
-        '10.0.0.77');
+    expect(
+      (await c.read(networkPrinterConfigProvider.future))!.host,
+      '10.0.0.77',
+    );
 
     // Force-stop + relaunch: a brand-new container over the same prefs.
     final fresh = _kdsContainer();
@@ -258,8 +260,9 @@ void main() {
     );
   });
 
-  testWidgets('8. a DUPLICATE endpoint is rejected with a localized message',
-      (tester) async {
+  testWidgets('8. a DUPLICATE endpoint is rejected with a localized message', (
+    tester,
+  ) async {
     final c = _kdsContainer();
     await _seedTwo(c);
     await _pump(tester, container: c);
@@ -310,8 +313,9 @@ void main() {
     expect(again.profiles.single.name, l10n.printerProfilesDefaultName);
   });
 
-  testWidgets('9b. an explicitly NAMED profile is never renamed',
-      (tester) async {
+  testWidgets('9b. an explicitly NAMED profile is never renamed', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({
       _kdsLegacyKey: jsonEncode(const {
         'host': '10.0.0.9',
@@ -320,9 +324,16 @@ void main() {
       }),
     });
     final c = await _pump(tester);
-    expect(find.text('Grill line'), findsOneWidget);
+    final l10n = await _en();
+    // The stored name appears in the saved row AND in the prefilled name field.
+    expect(find.text('Grill line'), findsWidgets);
     final state = await c.read(networkPrinterProfilesProvider.future);
     expect(state.profiles.single.name, 'Grill line');
+    expect(
+      find.text(l10n.printerProfilesDefaultName),
+      findsNothing,
+      reason: 'an explicitly named profile is never renamed to the default',
+    );
   });
 
   testWidgets('10. the empty state offers Add and is never shown as a false '
@@ -359,9 +370,9 @@ void main() {
     );
 
     // Cancelling the Add form changes nothing.
-    final before = (await c.read(networkPrinterProfilesProvider.future))
-        .profiles
-        .length;
+    final before = (await c.read(
+      networkPrinterProfilesProvider.future,
+    )).profiles.length;
     await tester.tap(find.byKey(const Key('saved-printers-add')));
     await tester.pumpAndSettle();
     await tester.enterText(
