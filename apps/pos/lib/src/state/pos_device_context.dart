@@ -48,17 +48,41 @@ final posDeviceRestorePendingProvider =
       PosDeviceRestorePendingController.new,
     );
 
+/// The pending mark, held OUTSIDE Riverpod.
+///
+/// The gate must mark a pending publish synchronously from `initState`, before
+/// any POS subtree can build and resolve a printer scope — but writing to a
+/// provider while the tree is building is illegal (the same rule the gate's
+/// `_publish` already defers around). So the mark is a plain flag that
+/// [PosDeviceRestorePendingController.build] reads as its initial value, and
+/// only the ENDING transition (always async: a post-frame publish or a restore
+/// completing) goes through the provider.
+bool _posDeviceRestorePendingSeed = false;
+
+/// Marks a device-context publish as pending. Safe to call from `initState`.
+void markPosDeviceRestorePending() => _posDeviceRestorePendingSeed = true;
+
+/// Clears the mark without touching a provider — for a gate disposed before it
+/// ever published, so a pending mark can never leak into the next composition.
+void clearPosDeviceRestorePendingMark() => _posDeviceRestorePendingSeed = false;
+
 class PosDeviceRestorePendingController extends Notifier<bool> {
   @override
-  bool build() => false;
+  bool build() => _posDeviceRestorePendingSeed;
 
   /// Marks a device-context publish as pending (the gate is restoring, or is
   /// about to publish an injected initial device). Preference providers then
   /// WAIT instead of resolving to the legacy local namespace.
-  void begin() => state = true;
+  void begin() {
+    markPosDeviceRestorePending();
+    state = true;
+  }
 
   /// Marks the restore finished (the gate published its result).
-  void end() => state = false;
+  void end() {
+    clearPosDeviceRestorePendingMark();
+    state = false;
+  }
 }
 
 /// The stable key segment used when there is definitively no paired device
