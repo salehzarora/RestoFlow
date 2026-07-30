@@ -149,7 +149,19 @@ class _ShiftItem extends StatelessWidget {
           color: color,
         ),
         const SizedBox(width: RestoflowSpacing.xs),
-        Text(label, style: textStyle),
+        // FINAL-NEW-MODIFICATIONS-COMBINED-001: the label MUST be flexible.
+        // The enclosing Wrap offers each item the panel's width as a maximum,
+        // but a Row whose Text is inflexible keeps its full intrinsic width and
+        // overflows whatever it is given. The cash-in-drawer line intrinsically
+        // wants ~344px, so it overflowed by ~36px in EVERY side cart narrower
+        // than that — the whole tablet band (340px cart), not just 1024px, and
+        // the compact-landscape cart (304px) by even more. Flexible lets the
+        // label reflow inside the width the panel actually has, at every width
+        // and in every locale: nothing is width-special-cased, nothing is
+        // clipped, and the text is not ellipsised (it softwraps), so the figure
+        // a cashier reads is never truncated. It stays ONE Text so descendant
+        // text-equality finders keep working.
+        Flexible(child: Text(label, style: textStyle)),
       ],
     );
   }

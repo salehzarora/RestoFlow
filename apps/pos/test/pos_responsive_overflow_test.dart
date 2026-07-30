@@ -26,25 +26,29 @@ import 'package:restoflow_pos/src/widgets/shift_context_bar.dart';
 /// These tests therefore sweep the band and both sides of every breakpoint, and
 /// they NEVER drain the overflow: an overflow here is a failure.
 
-/// Every horizontal [RenderFlex] whose children are wider than the box it was
-/// given, as `own|children|excess` plus its creator chain. Reported instead of
-/// merely asserting `takeException()` so a failure NAMES the widget.
+/// Every [RenderFlex] whose children are larger along its own main axis than
+/// the box it was given, as `own|children|excess` plus its creator chain.
+/// Reported instead of merely asserting `takeException()` so a failure NAMES
+/// the widget. Both axes are checked: a horizontal fix that silently traded the
+/// defect for a vertical one would otherwise read as success.
 List<String> _overflowingFlexes(WidgetTester tester) {
   final found = <String>[];
   for (final ro in tester.allRenderObjects) {
-    if (ro is! RenderFlex || ro.direction != Axis.horizontal || !ro.hasSize) {
-      continue;
-    }
+    if (ro is! RenderFlex || !ro.hasSize) continue;
+    final horizontal = ro.direction == Axis.horizontal;
     var children = 0.0;
     ro.visitChildren((child) {
-      if (child is RenderBox && child.hasSize) children += child.size.width;
+      if (child is RenderBox && child.hasSize) {
+        children += horizontal ? child.size.width : child.size.height;
+      }
     });
-    if (children > ro.size.width + 0.5) {
+    final own = horizontal ? ro.size.width : ro.size.height;
+    if (children > own + 0.5) {
       final chain = ro.debugCreator.toString().split('\n').first;
       found.add(
-        'own=${ro.size.width.toStringAsFixed(1)} '
+        '${horizontal ? 'H' : 'V'} own=${own.toStringAsFixed(1)} '
         'children=${children.toStringAsFixed(1)} '
-        'excess=${(children - ro.size.width).toStringAsFixed(1)} :: $chain',
+        'excess=${(children - own).toStringAsFixed(1)} :: $chain',
       );
     }
   }
@@ -112,6 +116,16 @@ Future<void> _pumpCartAt(
   bool demo = true,
   bool compact = true,
 }) async {
+  // A REALISTIC two-pane viewport height. The default 600px test window is
+  // shorter than any real POS surface and hits a SEPARATE, PRE-EXISTING
+  // vertical fit limit of the cart content — measured on the baseline as well
+  // as here (e.g. 380px cart at 600px tall overflows vertically by 104px with
+  // and without this phase's change). That defect is not this phase's scope, so
+  // it is neither fixed nor suppressed here: these tests simply run at a height
+  // where the horizontal contract under test can be read cleanly.
+  tester.view.physicalSize = Size(cartWidth + 200, 1200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
       key: ValueKey('cart-$cartWidth-${locale.languageCode}-$demo-$compact'),
