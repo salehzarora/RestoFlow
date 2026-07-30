@@ -57,6 +57,8 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   stationLabel: 'Station',
   noteLabel: 'Note',
   kitchenTotal: (count, unit) => 'KTotal $count $unit',
+  additionLabel: 'Addition',
+  roundLabel: (n) => 'Round $n',
 );
 
 KdsTicketView _representativeTicket() => kdsTicketViewFromCartLines(

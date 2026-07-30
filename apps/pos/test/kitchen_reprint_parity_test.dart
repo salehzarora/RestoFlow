@@ -106,6 +106,8 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   noteLabel: 'Note',
   // Deliberately avoids the word "total" so the money scan stays exact.
   kitchenTotal: (count, unit) => 'KCount $count $unit',
+  additionLabel: 'Addition',
+  roundLabel: (n) => 'Round $n',
 );
 
 /// Money tokens that must NEVER reach a kitchen ticket (D-007).

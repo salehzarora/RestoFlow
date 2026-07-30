@@ -74,6 +74,8 @@ KitchenTicketPrintLabels _labels() => KitchenTicketPrintLabels(
   stationLabel: 'Station',
   noteLabel: 'Note',
   kitchenTotal: (count, unit) => 'KCount $count $unit',
+  additionLabel: 'Addition',
+  roundLabel: (n) => 'Round $n',
 );
 
 List<String> _texts(dynamic doc) => [

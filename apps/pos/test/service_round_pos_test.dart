@@ -363,10 +363,15 @@ void main() {
       expect(resolveOrderActions(_order(status: 'served')).canAddItems, isTrue);
     });
 
-    test('A2 a TAKEAWAY order never takes additions (locked scope)', () {
+    // DEFERRED-ORDER-AMENDMENTS-001 replaces the old takeaway-denied assertion:
+    // takeaway is now an eligible amendment target on both sides (the POS policy
+    // here and the widened `app.add_order_items` gate). The full takeaway
+    // eligibility matrix lives in deferred_order_amendments_pos_test.dart.
+    test('A2 a TAKEAWAY order NOW takes additions '
+        '(DEFERRED-ORDER-AMENDMENTS-001)', () {
       expect(
         resolveOrderActions(_order(orderType: 'takeaway')).canAddItems,
-        isFalse,
+        isTrue,
       );
     });
 
