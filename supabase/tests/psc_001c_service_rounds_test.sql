@@ -316,9 +316,13 @@ select is(
   1, '23. exactly ONE order.items_added audit for round 2 (replay wrote no second)');
 
 -- ===== (24-36) eligibility + payload contracts ===============================
+-- DEFERRED-ORDER-AMENDMENTS-001 replaces the old takeaway-denied assertion: a
+-- takeaway order is now an ELIGIBLE amendment target (no table is required).
+-- The full takeaway identity/idempotency contract lives in
+-- supabase/tests/deferred_order_amendments_001_test.sql.
 select is(
   (pg_temp.cadd('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'add-tw', 'c0000000-0000-0000-0000-00000000a003') -> 'results' -> 0 ->> 'error'),
-  'order_not_dine_in', '24. a TAKEAWAY order refuses additions (out of scope this version)');
+  null, '24. a TAKEAWAY order now ACCEPTS additions (DEFERRED-ORDER-AMENDMENTS-001)');
 select pg_temp.cvoid('vd-o4', 'c0000000-0000-0000-0000-00000000a004');
 select is(
   (pg_temp.cadd('c0000000-0000-0000-0000-0000000ad002', 'c0000000-0000-0000-0000-0000000000d1', 'add-void', 'c0000000-0000-0000-0000-00000000a004') -> 'results' -> 0 ->> 'error'),
