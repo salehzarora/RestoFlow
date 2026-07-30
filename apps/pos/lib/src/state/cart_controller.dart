@@ -301,6 +301,7 @@ class CartDraftLine {
     this.note,
     this.categoryDisplayOrder = 0,
     this.itemDisplayOrder = 0,
+    this.prepComponents = const <KitchenPrepComponent>[],
   });
 
   final String menuItemId;
@@ -322,6 +323,15 @@ class CartDraftLine {
   final int categoryDisplayOrder;
   final int itemDisplayOrder;
 
+  /// PARKED-CARTS-001: the item's PER-UNIT kitchen prep components, captured at
+  /// ADD time (the order-time D-008 snapshot). The draft previously dropped
+  /// them, so any capture -> restore round-trip silently lost the chef's prep
+  /// summary. Empty is a valid, honest value (an item with none configured, or
+  /// a record written before this field existed) — it is never re-read from the
+  /// live menu at restore time, which would substitute today's configuration
+  /// for the one the cashier actually ordered against.
+  final List<KitchenPrepComponent> prepComponents;
+
   /// MENU-ORDER-001 (Codex #8/#9): durable serialization — carries the stable
   /// lineId, ranks, modifiers, and note through a restart so a recovered order
   /// keeps its line identity and still prints in menu order. Money is integer
@@ -338,6 +348,10 @@ class CartDraftLine {
     if (categoryDisplayOrder != 0)
       'category_display_order': categoryDisplayOrder,
     if (itemDisplayOrder != 0) 'item_display_order': itemDisplayOrder,
+    // PARKED-CARTS-001: omitted when empty, so a record that carries no prep
+    // stays byte-identical to one written before this field existed.
+    if (prepComponents.isNotEmpty)
+      'prep_components': [for (final p in prepComponents) p.toJson()],
   };
 
   static CartDraftLine fromJson(Map<String, Object?> json) {
@@ -358,6 +372,10 @@ class CartDraftLine {
       note: rawNote == null ? null : rawNote.toString(),
       categoryDisplayOrder: intOf(json['category_display_order']),
       itemDisplayOrder: intOf(json['item_display_order']),
+      // PARKED-CARTS-001: absent on an older record -> empty. The shared
+      // tolerant parser drops blank-name / non-positive rows rather than
+      // showing the chef a bogus count.
+      prepComponents: parseKitchenPrepComponents(json['prep_components']),
     );
   }
 }
@@ -655,6 +673,10 @@ class CartController extends Notifier<CartViewState> {
           // draft so a restored (item_unavailable) cart still prints in menu order.
           categoryDisplayOrder: _lineDisplayOrders[line.lineId]?.$1 ?? 0,
           itemDisplayOrder: _lineDisplayOrders[line.lineId]?.$2 ?? 0,
+          // PARKED-CARTS-001: carry the ORDER-TIME kitchen prep snapshot too.
+          // Without it every draft round-trip dropped the chef's prep summary.
+          prepComponents:
+              _linePrep[line.lineId] ?? const <KitchenPrepComponent>[],
         ),
     ],
   );
@@ -705,6 +727,13 @@ class CartController extends Notifier<CartViewState> {
       // MENU-ORDER-001 (Codex): restore the Dashboard menu ranks so the corrected
       // resubmit prints in the same menu order the original attempt would have.
       _lineDisplayOrders[lineId] = (l.categoryDisplayOrder, l.itemDisplayOrder);
+      // PARKED-CARTS-001: repopulate the ORDER-TIME prep snapshot the draft
+      // carries. It is deliberately NOT re-read from the live menu — a restored
+      // cart must keep the configuration it was ordered against, and a record
+      // written before the field existed honestly restores none.
+      if (l.prepComponents.isNotEmpty) {
+        _linePrep[lineId] = List.unmodifiable(l.prepComponents);
+      }
     }
     _submittedOrder = null;
     _emit();
@@ -847,10 +876,14 @@ class CartController extends Notifier<CartViewState> {
           itemDisplayOrder: l.itemDisplayOrder,
           linePosition: linePosition,
           // PRINT-STARTUP-REPRINT-001: the recovered draft carries its own
-          // order-time modifier snapshots, so meat survives a restart. Prep is
-          // a MENU snapshot the draft does not carry — it stays empty rather
-          // than being re-read from the current catalog.
+          // order-time modifier snapshots, so meat survives a restart.
           kitchenMeats: kitchenMeatSnapshots(l.modifiers),
+          // PARKED-CARTS-001: the draft now carries its ORDER-TIME prep
+          // snapshot as well, so a recovered row's manual kitchen reprint
+          // aggregates the real counts instead of silently omitting them. Still
+          // never re-read from the current catalog: a record written before the
+          // field existed honestly yields none.
+          prepComponents: l.prepComponents,
         ),
       );
     }
