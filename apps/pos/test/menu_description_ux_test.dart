@@ -76,15 +76,13 @@ SliverGridDelegateWithMaxCrossAxisExtent _gridDelegate(WidgetTester tester) =>
     tester.widget<GridView>(find.byType(GridView).last).gridDelegate
         as SliverGridDelegateWithMaxCrossAxisExtent;
 
-/// Swallows ONLY the screen-level horizontal overflow that this menu screen
-/// already produced at 1024px on the baseline commit — see the `H-note` test,
-/// which proves it is pre-existing and outside this phase. Anything else is
-/// rethrown so a real regression cannot hide behind this drain.
-void _drainPreExistingOverflow(WidgetTester tester) {
-  for (var error = tester.takeException(); error != null;) {
-    if (!error.toString().contains('overflowed')) throw error as Object;
-    error = tester.takeException();
-  }
+/// FINAL-NEW-MODIFICATIONS-COMBINED-001 replaced the former
+/// `_drainPreExistingOverflow` helper: the screen-level horizontal overflow it
+/// tolerated has been ROOT-CAUSED and FIXED (a fixed-width Row in the cart's
+/// shift context bar), so no overflow is permitted here any more. The sweep
+/// that owns that contract now lives in `pos_responsive_overflow_test.dart`.
+void _expectCleanFrame(WidgetTester tester) {
+  expect(tester.takeException(), isNull);
 }
 
 Future<void> _pumpMenu(
@@ -180,7 +178,7 @@ void main() {
           'grids agree on the cell height', (tester) async {
         // The LOADED grid.
         await _pumpMenu(tester, size: Size(width, 1200));
-        _drainPreExistingOverflow(tester);
+        _expectCleanFrame(tester);
         final loaded = _gridDelegate(tester);
 
         // The described demo item is on screen with its description, the image
@@ -198,7 +196,7 @@ void main() {
 
         // The SKELETON grid at the SAME width, with the menu still loading.
         await _pumpMenu(tester, size: Size(width, 1200), loading: true);
-        _drainPreExistingOverflow(tester);
+        _expectCleanFrame(tester);
         final skeleton = _gridDelegate(tester);
 
         expect(
@@ -218,21 +216,16 @@ void main() {
       });
     }
 
-    testWidgets('H-note the 1024px screen-level overflow is PRE-EXISTING and '
-        'not owned by this phase', (tester) async {
-      // Recorded honestly rather than silently swallowed: at exactly 1024 the
-      // menu screen already overflowed by 36px on the baseline commit, with
-      // every change from this phase stashed. Fixing it would be unrelated
-      // scope, so this test documents the fact instead of asserting a clean
-      // frame that was never clean.
+    testWidgets('H-note the former 1024px screen-level overflow is GONE — no '
+        'overflow is tolerated here any more', (tester) async {
+      // This test used to RECORD a 36px horizontal overflow as pre-existing.
+      // FINAL-NEW-MODIFICATIONS-COMBINED-001 root-caused it (a fixed-width Row
+      // in the cart's shift context bar, which the tablet cart could not fit)
+      // and fixed it, so the assertion is now inverted: the frame must be
+      // clean. The full width/locale sweep lives in
+      // `pos_responsive_overflow_test.dart`.
       await _pumpMenu(tester, size: const Size(1024, 1200));
-      final error = tester.takeException();
-      expect(
-        error == null || error.toString().contains('overflowed'),
-        isTrue,
-        reason: 'only a pre-existing RenderFlex overflow is tolerated here',
-      );
-      // Whatever the surrounding chrome does, the CARD content is fine.
+      expect(tester.takeException(), isNull);
       expect(
         find.text('San Marzano tomato, fresh mozzarella and basil.'),
         findsWidgets,
