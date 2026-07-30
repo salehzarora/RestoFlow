@@ -72,19 +72,40 @@ class KdsPrintJob {
 typedef KdsBridgeSubmit =
     Future<BridgeSubmitResult> Function(PrintDocument document);
 
-/// Holds the kitchen-ticket print job per ORDER (RF-115).
+/// Holds the kitchen-ticket print job per KITCHEN WORK UNIT (RF-115).
 ///
-/// Keyed by the ticket's order id (kitchen-ticket id for demo fixtures), so
-/// [prepareForTicket] is IDEMPOTENT across poll refreshes and repeated
-/// acknowledge taps: the board rebuilds its `KdsTicketView`s on every pull, but
-/// a key that was already prepared never re-prepares (no double print/send).
+/// Keyed by [keyFor] — order + station + round (kitchen-ticket id for demo
+/// fixtures) — so [prepareForTicket] is IDEMPOTENT across poll refreshes and
+/// repeated acknowledge taps: the board rebuilds its `KdsTicketView`s on every
+/// pull, but a key that was already prepared never re-prepares (no double
+/// print/send). DEFERRED-ORDER-AMENDMENTS-001: one ORDER can own several work
+/// units — the initial ticket plus a ticket per service round, and one per
+/// station — and each has to print on its own.
 class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
   @override
   Map<String, KdsPrintJob> build() => const {};
 
-  /// The idempotency key for [ticket].
-  static String keyFor(KdsTicketView ticket) =>
-      ticket.orderId ?? ticket.kitchenTicketId;
+  /// The idempotency key for [ticket] — its WORK UNIT, not its order.
+  ///
+  /// DEFERRED-ORDER-AMENDMENTS-001: this used to be the bare `orderId`, which
+  /// collapsed distinct work units onto one key. A PSC-001C round ticket carries
+  /// the PARENT order's id (correctly — the round belongs to that order), so once
+  /// the initial ticket had printed, every later ADDITION was reported as already
+  /// handled and the kitchen silently never received the added food. The same
+  /// collapse hid every station after the first on a station-routed board.
+  ///
+  /// The key is therefore the full composite: order + station + round. Built from
+  /// the parts rather than reusing `kitchenTicketId` (which the mapper happens to
+  /// compose the same way today) so it stays correct for a hand-built or
+  /// POS-built view whose ticket id is just an order code. A ticket with NO order
+  /// id (demo fixtures) keeps the `kitchenTicketId` fallback.
+  static String keyFor(KdsTicketView ticket) {
+    final orderId = ticket.orderId;
+    if (orderId == null) return ticket.kitchenTicketId;
+    final roundId = ticket.roundId;
+    final base = '$orderId|station:${ticket.stationId}';
+    return roundId == null ? base : '$base|round:$roundId';
+  }
 
   /// Prepares the kitchen job for [ticket] once. No enabled kitchen printer
   /// => an honest [KdsPrintJobStatus.notConfigured] marker; a throwing builder
@@ -95,7 +116,7 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
     required PrintDocument Function() buildDocument,
   }) {
     final key = keyFor(ticket);
-    if (state.containsKey(key)) return; // idempotent per order
+    if (state.containsKey(key)) return; // idempotent per WORK UNIT
     if (!hasEnabledPrinter) {
       state = {
         ...state,
@@ -132,7 +153,7 @@ class KdsKitchenPrintController extends Notifier<Map<String, KdsPrintJob>> {
   ///    confirmed transport write (never a fabricated hardware print).
   ///  * No enabled printer => an honest notConfigured marker.
   ///
-  /// Idempotent per order id (a re-tap or the next poll never double-prepares
+  /// Idempotent per WORK UNIT (a re-tap or the next poll never double-prepares
   /// or double-sends). The caller passes [buildDocument] (the widget owns l10n);
   /// the payload is money-free (T-003).
   Future<void> prepareOnAcknowledge(
