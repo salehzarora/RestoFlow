@@ -5057,4 +5057,85 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get brandingErrorUncertain =>
       'تعذّر تأكيد التغيير. حدّث الصفحة وتحقّق قبل المحاولة مجدداً.';
+
+  @override
+  String get posParkOrder => 'تعليق الطلب';
+
+  @override
+  String get posParkedOrders => 'الطلبات المعلّقة';
+
+  @override
+  String get posParkedOrdersEmpty => 'لا توجد طلبات معلّقة';
+
+  @override
+  String get posParkedOrdersLoading => 'جارٍ تحميل الطلبات المعلّقة';
+
+  @override
+  String get posParkedOrdersLoadFailed => 'تعذّر تحميل الطلبات المعلّقة';
+
+  @override
+  String get posParkedOrdersRetry => 'إعادة المحاولة';
+
+  @override
+  String get posParkedRestore => 'استعادة';
+
+  @override
+  String get posParkedDelete => 'حذف';
+
+  @override
+  String get posParkedDeleteTitle => 'حذف الطلب المعلّق';
+
+  @override
+  String posParkedDeleteBody(String label) {
+    return 'حذف $label؟ لم يُرسل الطلب، لذلك لن يُلغى أي شيء على الخادم.';
+  }
+
+  @override
+  String get posParkedParkSucceeded => 'تم تعليق الطلب';
+
+  @override
+  String get posParkedParkFailed => 'تعذّر تعليق الطلب. ما زال في السلة.';
+
+  @override
+  String get posParkedRestoreFailed => 'تعذّرت استعادة الطلب. ما زال معلّقاً.';
+
+  @override
+  String get posParkedTableUnavailable =>
+      'لم تعد الطاولة متاحة، لذلك تمت استعادة الطلب بدون طاولة.';
+
+  @override
+  String get posParkedActiveCartTitle => 'السلة الحالية ليست فارغة';
+
+  @override
+  String get posParkedActiveCartBody =>
+      'علّق السلة الحالية أولاً ثم استعد هذه. لا يتم أي دمج أو حذف.';
+
+  @override
+  String get posParkedParkCurrentAndRestore => 'تعليق السلة الحالية والاستعادة';
+
+  @override
+  String get posParkedBlockedByAddition =>
+      'التعليق غير متاح أثناء إضافة أصناف إلى طلب';
+
+  @override
+  String get posParkedCopyRetained =>
+      'تمت الاستعادة، لكن تعذّر حذف النسخة المعلّقة.';
+
+  @override
+  String posParkedItemCount(int count) {
+    return '$count صنف';
+  }
+
+  @override
+  String posParkedAt(String time) {
+    return 'عُلِّق $time';
+  }
+
+  @override
+  String posParkedOrdersTooltip(int count) {
+    return 'الطلبات المعلّقة: $count';
+  }
+
+  @override
+  String get posParkedUnnamedOrder => 'طلب معلّق';
 }

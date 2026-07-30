@@ -25,6 +25,7 @@ import '../print/pos_kitchen_ticket_printer.dart'
         runAutoKitchenTicketPrintOnSubmit;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
+import '../state/parked_carts_controller.dart';
 import '../state/draft_recovery_controller.dart';
 import '../state/order_setup_controller.dart';
 import '../state/outbox_controller.dart';
@@ -35,6 +36,7 @@ import '../state/recent_orders_controller.dart';
 import '../state/pos_sync_scope_provider.dart';
 import 'modifier_selection_sheet.dart';
 import 'order_confirmation.dart';
+import 'parked_orders_sheet.dart';
 import 'order_setup_section.dart';
 import 'shift_context_bar.dart';
 
@@ -287,6 +289,19 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
                         .read(posKitchenModeReadinessProvider.notifier)
                         .requestResolution()
                   : null,
+              // PARKED-CARTS-001: Park is offered only when the controller says
+              // this cart is parkable — not empty, no submit/confirmation in
+              // flight, and no amendment owning it. The controller re-checks
+              // every condition regardless, so this is honesty, not the gate.
+              onPark:
+                  (!_submitting &&
+                      ref.watch(parkedCartsControllerProvider.notifier).canPark)
+                  ? () => handleParkFromCart(
+                      ref: ref,
+                      context: context,
+                      l10n: l10n,
+                    )
+                  : null,
               // POS-SUBMIT-GUARD-001: the spinner + disabled state while a submit
               // is in flight.
               submitting: _submitting,
@@ -357,6 +372,34 @@ class _CartPanelContentState extends ConsumerState<CartPanelContent> {
       if (mounted) setState(() => _submitting = false);
     }
   }
+}
+
+/// PARKED-CARTS-001 — the Park handler.
+///
+/// Sets the current UNSENT cart aside as a local draft. It sends nothing,
+/// prints nothing, takes no payment and claims no table; the controller
+/// persists the draft and only then resets the cart, so a failed write leaves
+/// the cashier exactly where they were.
+///
+/// PUBLIC (visible for testing): this is the Park button's handler, and the
+/// atomic persist-then-reset ordering can only be proven by driving THIS seam.
+@visibleForTesting
+Future<void> handleParkFromCart({
+  required WidgetRef ref,
+  required BuildContext context,
+  required AppLocalizations l10n,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final result = await ref.read(parkedCartsControllerProvider.notifier).park();
+  final message = switch (result) {
+    ParkResult.parked => l10n.posParkedParkSucceeded,
+    ParkResult.blockedByAddition => l10n.posParkedBlockedByAddition,
+    // cartEmpty / busy / noScope are states the disabled button already
+    // prevents; if one is somehow reached, say the honest thing rather than
+    // implying the cart was stored.
+    _ => l10n.posParkedParkFailed,
+  };
+  messenger.showSnackBar(SnackBar(content: Text(message)));
 }
 
 /// The phone sheet's drag handle + close row (DESIGN-004 §6.8).
@@ -1058,6 +1101,10 @@ class _CartHeader extends StatelessWidget {
             ),
           ],
           const Spacer(),
+          // PARKED-CARTS-001: the parked-orders list lives BESIDE Clear in the
+          // cart header rather than as another global app-bar action. It hides
+          // itself at zero, so a till that never parks sees no new chrome.
+          const ParkedOrdersButton(compact: true),
           if (onClear != null)
             TextButton.icon(
               onPressed: onClear,
@@ -1577,7 +1624,13 @@ class _CartFooter extends StatelessWidget {
     this.sendLabelOverride,
     this.kitchenModeHint,
     this.onRetryKitchenMode,
+    this.onPark,
   });
+
+  /// PARKED-CARTS-001: sets the current unsent cart aside as a local draft.
+  /// Null when parking does not apply (nothing to park, or an amendment owns
+  /// the cart) — the action is then absent rather than shown disabled.
+  final VoidCallback? onPark;
 
   /// POS-CUSTOMER-PHONE-DINEIN-CLOSE-001 (Gap A): a localized reason shown while
   /// the kitchen workflow mode is not yet verified (Send is blocked). Null once
@@ -1729,6 +1782,23 @@ class _CartFooter extends StatelessWidget {
                 ),
               ),
             ),
+            // PARKED-CARTS-001: Park sits directly BELOW Send, as a secondary
+            // (outlined) action — Send keeps its size, glow and primary filled
+            // treatment, so the main path is never diluted. Absent entirely
+            // when parking is not applicable (empty cart, amendment mode),
+            // rather than shown as a dead control.
+            if (onPark != null) ...[
+              const SizedBox(height: RestoflowSpacing.sm),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const Key('park-cart-button'),
+                  onPressed: onPark,
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: Text(l10n.posParkOrder),
+                ),
+              ),
+            ],
           ],
         ),
       ),

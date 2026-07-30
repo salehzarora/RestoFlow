@@ -9429,6 +9429,144 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We could not confirm the change. Refresh and check before trying again.'**
   String get brandingErrorUncertain;
+
+  /// PARKED-CARTS-001: full-width action below Send that sets the current unsent cart aside as a local draft.
+  ///
+  /// In en, this message translates to:
+  /// **'Park order'**
+  String get posParkOrder;
+
+  /// PARKED-CARTS-001: title of the sheet listing carts set aside on this till.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked orders'**
+  String get posParkedOrders;
+
+  /// PARKED-CARTS-001: empty state of the parked-orders sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'No parked orders'**
+  String get posParkedOrdersEmpty;
+
+  /// PARKED-CARTS-001: shown while the parked-orders list is being read from local storage.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading parked orders'**
+  String get posParkedOrdersLoading;
+
+  /// PARKED-CARTS-001: shown when the stored parked-orders data could not be read. Never rendered as an empty list, because the orders may still be on disk.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load parked orders'**
+  String get posParkedOrdersLoadFailed;
+
+  /// PARKED-CARTS-001: retries reading the parked-orders list after a load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get posParkedOrdersRetry;
+
+  /// PARKED-CARTS-001: action that brings a parked cart back as the active cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get posParkedRestore;
+
+  /// PARKED-CARTS-001: action that discards a parked cart (local draft only).
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get posParkedDelete;
+
+  /// PARKED-CARTS-001: title of the delete-confirmation dialog for a parked cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete parked order'**
+  String get posParkedDeleteTitle;
+
+  /// PARKED-CARTS-001: body of the delete-confirmation dialog. {label} identifies the selected parked cart.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {label}? It was never sent, so nothing is cancelled on the server.'**
+  String posParkedDeleteBody(String label);
+
+  /// PARKED-CARTS-001: confirmation that the cart was set aside and the till is ready for the next customer.
+  ///
+  /// In en, this message translates to:
+  /// **'Order parked'**
+  String get posParkedParkSucceeded;
+
+  /// PARKED-CARTS-001: shown when the parked cart could not be stored. The cashier keeps their cart unchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not park the order. It is still in the cart.'**
+  String get posParkedParkFailed;
+
+  /// PARKED-CARTS-001: shown when a parked cart could not be restored. Nothing was lost.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not restore the order. It is still parked.'**
+  String get posParkedRestoreFailed;
+
+  /// PARKED-CARTS-001: shown after restoring a dine-in cart whose saved table is now occupied, out of service, or gone.
+  ///
+  /// In en, this message translates to:
+  /// **'That table is no longer available, so the order was restored without one.'**
+  String get posParkedTableUnavailable;
+
+  /// PARKED-CARTS-001: title of the dialog shown when restoring while another cart is in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'The current cart is not empty'**
+  String get posParkedActiveCartTitle;
+
+  /// PARKED-CARTS-001: body of that dialog. The only two choices are to park the current cart and restore, or cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Park the current cart first, then restore this one. Nothing is merged or discarded.'**
+  String get posParkedActiveCartBody;
+
+  /// PARKED-CARTS-001: the confirming action of that dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Park current cart and restore'**
+  String get posParkedParkCurrentAndRestore;
+
+  /// PARKED-CARTS-001: explains why Park is disabled during an add-items (amendment) flow.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking is unavailable while adding items to an order'**
+  String get posParkedBlockedByAddition;
+
+  /// PARKED-CARTS-001: shown when a restore succeeded but deleting the stored copy failed; the restored cart is kept.
+  ///
+  /// In en, this message translates to:
+  /// **'Restored, but the parked copy could not be removed.'**
+  String get posParkedCopyRetained;
+
+  /// PARKED-CARTS-001: item count on a parked-order row. {count} is the number of physical items.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String posParkedItemCount(int count);
+
+  /// PARKED-CARTS-001: when the cart was set aside. {time} is an already-formatted local time.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked {time}'**
+  String posParkedAt(String time);
+
+  /// PARKED-CARTS-001: tooltip of the cart-header parked-orders button. {count} is how many carts are parked.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked orders: {count}'**
+  String posParkedOrdersTooltip(int count);
+
+  /// PARKED-CARTS-001: fallback label for a parked cart with no customer name.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked order'**
+  String get posParkedUnnamedOrder;
 }
 
 class _AppLocalizationsDelegate

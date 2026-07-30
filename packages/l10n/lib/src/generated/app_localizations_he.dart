@@ -5020,4 +5020,87 @@ class AppLocalizationsHe extends AppLocalizations {
   @override
   String get brandingErrorUncertain =>
       'לא הצלחנו לאמת את השינוי. רעננו ובדקו לפני ניסיון נוסף.';
+
+  @override
+  String get posParkOrder => 'השהיית הזמנה';
+
+  @override
+  String get posParkedOrders => 'הזמנות מושהות';
+
+  @override
+  String get posParkedOrdersEmpty => 'אין הזמנות מושהות';
+
+  @override
+  String get posParkedOrdersLoading => 'טוען הזמנות מושהות';
+
+  @override
+  String get posParkedOrdersLoadFailed => 'לא ניתן לטעון הזמנות מושהות';
+
+  @override
+  String get posParkedOrdersRetry => 'נסה שוב';
+
+  @override
+  String get posParkedRestore => 'שחזור';
+
+  @override
+  String get posParkedDelete => 'מחיקה';
+
+  @override
+  String get posParkedDeleteTitle => 'מחיקת הזמנה מושהית';
+
+  @override
+  String posParkedDeleteBody(String label) {
+    return 'למחוק את $label? ההזמנה לא נשלחה, ולכן דבר אינו מבוטל בשרת.';
+  }
+
+  @override
+  String get posParkedParkSucceeded => 'ההזמנה הושהתה';
+
+  @override
+  String get posParkedParkFailed =>
+      'לא ניתן להשהות את ההזמנה. היא נשארה בעגלה.';
+
+  @override
+  String get posParkedRestoreFailed =>
+      'לא ניתן לשחזר את ההזמנה. היא נשארה מושהית.';
+
+  @override
+  String get posParkedTableUnavailable =>
+      'השולחן כבר אינו זמין, ולכן ההזמנה שוחזרה ללא שולחן.';
+
+  @override
+  String get posParkedActiveCartTitle => 'העגלה הנוכחית אינה ריקה';
+
+  @override
+  String get posParkedActiveCartBody =>
+      'השהו תחילה את העגלה הנוכחית ולאחר מכן שחזרו את זו. דבר אינו ממוזג או נמחק.';
+
+  @override
+  String get posParkedParkCurrentAndRestore => 'השהיית העגלה הנוכחית ושחזור';
+
+  @override
+  String get posParkedBlockedByAddition =>
+      'השהיה אינה זמינה בעת הוספת פריטים להזמנה';
+
+  @override
+  String get posParkedCopyRetained =>
+      'שוחזר, אך לא ניתן היה להסיר את העותק המושהה.';
+
+  @override
+  String posParkedItemCount(int count) {
+    return '$count פריטים';
+  }
+
+  @override
+  String posParkedAt(String time) {
+    return 'הושהה $time';
+  }
+
+  @override
+  String posParkedOrdersTooltip(int count) {
+    return 'הזמנות מושהות: $count';
+  }
+
+  @override
+  String get posParkedUnnamedOrder => 'הזמנה מושהית';
 }

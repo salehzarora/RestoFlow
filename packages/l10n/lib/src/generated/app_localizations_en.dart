@@ -5099,4 +5099,87 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get brandingErrorUncertain =>
       'We could not confirm the change. Refresh and check before trying again.';
+
+  @override
+  String get posParkOrder => 'Park order';
+
+  @override
+  String get posParkedOrders => 'Parked orders';
+
+  @override
+  String get posParkedOrdersEmpty => 'No parked orders';
+
+  @override
+  String get posParkedOrdersLoading => 'Loading parked orders';
+
+  @override
+  String get posParkedOrdersLoadFailed => 'Could not load parked orders';
+
+  @override
+  String get posParkedOrdersRetry => 'Retry';
+
+  @override
+  String get posParkedRestore => 'Restore';
+
+  @override
+  String get posParkedDelete => 'Delete';
+
+  @override
+  String get posParkedDeleteTitle => 'Delete parked order';
+
+  @override
+  String posParkedDeleteBody(String label) {
+    return 'Delete $label? It was never sent, so nothing is cancelled on the server.';
+  }
+
+  @override
+  String get posParkedParkSucceeded => 'Order parked';
+
+  @override
+  String get posParkedParkFailed =>
+      'Could not park the order. It is still in the cart.';
+
+  @override
+  String get posParkedRestoreFailed =>
+      'Could not restore the order. It is still parked.';
+
+  @override
+  String get posParkedTableUnavailable =>
+      'That table is no longer available, so the order was restored without one.';
+
+  @override
+  String get posParkedActiveCartTitle => 'The current cart is not empty';
+
+  @override
+  String get posParkedActiveCartBody =>
+      'Park the current cart first, then restore this one. Nothing is merged or discarded.';
+
+  @override
+  String get posParkedParkCurrentAndRestore => 'Park current cart and restore';
+
+  @override
+  String get posParkedBlockedByAddition =>
+      'Parking is unavailable while adding items to an order';
+
+  @override
+  String get posParkedCopyRetained =>
+      'Restored, but the parked copy could not be removed.';
+
+  @override
+  String posParkedItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String posParkedAt(String time) {
+    return 'Parked $time';
+  }
+
+  @override
+  String posParkedOrdersTooltip(int count) {
+    return 'Parked orders: $count';
+  }
+
+  @override
+  String get posParkedUnnamedOrder => 'Parked order';
 }
