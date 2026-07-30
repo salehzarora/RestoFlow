@@ -261,6 +261,34 @@ class _MenuSearchFieldState extends ConsumerState<_MenuSearchField> {
   }
 }
 
+/// POS-PRODUCT-DESCRIPTIONS-001 — the ONE grid geometry, shared by the loaded
+/// grid and the loading skeleton so the two can never drift apart (a skeleton
+/// that is a different height than the cards it stands in for makes the whole
+/// grid jump the moment the menu arrives).
+///
+/// [kPosMenuCardBodyHeight] rose from 104 to 140 to fit up to TWO description
+/// lines under the product name.
+///
+/// MEASURED, not guessed. At the narrowest real cell (173px, a 390px viewport)
+/// the body content is 120px in en, ar AND he alike: 12+12 padding, a 20px
+/// title line, a 2px gap, a 30px two-line description (bodySmall at height
+/// 1.25) and the unchanged 44px price/add row. 140 keeps ~20px of headroom, so
+/// a larger accessibility text scale does not immediately clip the price row
+/// and the description is not jammed against it. Note that a too-small value
+/// would NOT throw: the body uses `spaceBetween`, which quietly compresses
+/// rather than overflowing — which is exactly why this number is measured from
+/// the rendered content instead of inferred from the absence of an exception.
+///
+/// Cards stay a FIXED height — no IntrinsicHeight, no variable extents — so the
+/// grid keeps scanning cleanly in rows.
+const double kPosMenuCardMaxExtent = 230;
+const double kPosMenuCardBodyHeight = 140;
+
+/// The cell height for a card [cellWidth] wide: the fixed 4:3 image band plus
+/// the card body.
+double posMenuCardExtent(double cellWidth) =>
+    cellWidth * 3 / 4 + kPosMenuCardBodyHeight;
+
 /// A static skeleton of the chips strip + item grid while the menu loads.
 class _MenuSkeleton extends StatelessWidget {
   const _MenuSkeleton();
@@ -294,17 +322,36 @@ class _MenuSkeleton extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(RestoflowSpacing.lg),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 230,
-              mainAxisExtent: 240,
-              crossAxisSpacing: RestoflowSpacing.md,
-              mainAxisSpacing: RestoflowSpacing.md,
-            ),
-            itemCount: 8,
-            itemBuilder: (_, _) =>
-                const RestoflowSkeleton(height: 240, radius: RestoflowRadii.lg),
+          // The skeleton computes its cell height with the SAME geometry the
+          // loaded grid uses, so the placeholders occupy exactly the space the
+          // real cards will and nothing shifts when the menu resolves.
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const maxExtent = kPosMenuCardMaxExtent;
+              const spacing = RestoflowSpacing.md;
+              final contentWidth =
+                  constraints.maxWidth - 2 * RestoflowSpacing.lg;
+              final cols = (contentWidth / (maxExtent + spacing)).ceil().clamp(
+                1,
+                999,
+              );
+              final cellWidth = (contentWidth - (cols - 1) * spacing) / cols;
+              final extent = posMenuCardExtent(cellWidth);
+              return GridView.builder(
+                padding: const EdgeInsets.all(RestoflowSpacing.lg),
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: maxExtent,
+                  mainAxisExtent: extent,
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing,
+                ),
+                itemCount: 8,
+                itemBuilder: (_, _) => RestoflowSkeleton(
+                  height: extent,
+                  radius: RestoflowRadii.lg,
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -398,9 +445,8 @@ class _MenuGrid extends ConsumerWidget {
                   builder: (context, constraints) {
                     // Size the grid cell so a fixed 4:3 image band + the card
                     // body fit exactly (no overflow, no gap) at every width.
-                    const maxExtent = 230.0;
+                    const maxExtent = kPosMenuCardMaxExtent;
                     const spacing = RestoflowSpacing.md;
-                    const bodyHeight = 104.0;
                     final contentWidth =
                         constraints.maxWidth - 2 * RestoflowSpacing.lg;
                     final cols = (contentWidth / (maxExtent + spacing))
@@ -408,7 +454,7 @@ class _MenuGrid extends ConsumerWidget {
                         .clamp(1, 999);
                     final cellWidth =
                         (contentWidth - (cols - 1) * spacing) / cols;
-                    final mainAxisExtent = cellWidth * 3 / 4 + bodyHeight;
+                    final mainAxisExtent = posMenuCardExtent(cellWidth);
                     return GridView.builder(
                       padding: const EdgeInsets.all(RestoflowSpacing.lg),
                       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(

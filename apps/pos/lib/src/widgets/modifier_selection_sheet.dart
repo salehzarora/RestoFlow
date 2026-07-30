@@ -425,8 +425,11 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     // Part E header: thumbnail + name + BASE price, so the cashier reads base
     // vs the running total at the bottom. NOTE: the base price is a DIFFERENT
     // money string than the running total once any paid option is picked —
-    // tests pin the total's render count. (No description line: the menu item
-    // model carries no description field, and nothing is ever fabricated.)
+    // tests pin the total's render count. (No description line: since
+    // POS-PRODUCT-DESCRIPTIONS-001 the menu item DOES carry a description, but
+    // it is deliberately not repeated here — the cashier already read it on the
+    // card they just tapped, and this sheet is for configuring the item, not
+    // re-describing it.)
     final header = Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
