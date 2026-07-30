@@ -62,6 +62,7 @@ class DemoMenuItem {
     this.attributes = const <String, dynamic>{},
     this.availability = 'available',
     this.availabilityReason,
+    this.description,
   });
 
   /// Stable demo identifier; also used as the cart line's menu item id.
@@ -116,6 +117,21 @@ class DemoMenuItem {
   final String availability;
   final String? availabilityReason;
 
+  /// POS-PRODUCT-DESCRIPTIONS-001: the operator's short product description
+  /// (`menu_items.description`), written in the Dashboard item editor and served
+  /// by the `pos_menu` RPC.
+  ///
+  /// PRODUCT DATA, not localized application chrome. There is exactly ONE
+  /// stored string — no per-locale schema exists — so it is rendered as-is
+  /// under every app locale, precisely like [name]. It is never translated,
+  /// never searched, and never travels with an order: no cart line, snapshot,
+  /// receipt, kitchen ticket or outbox payload carries it.
+  ///
+  /// Null means the operator wrote none. Normalization happens ONCE at the RPC
+  /// parsing boundary (trimmed; empty/whitespace-only/wrong-typed becomes
+  /// null), never in a widget build.
+  final String? description;
+
   bool get isUnavailable => availability == 'unavailable';
 
   /// PILOT-OPERATIONS-CORRECTIONS-001: a field-preserving copy. Every field is
@@ -145,6 +161,7 @@ class DemoMenuItem {
     Map<String, dynamic>? attributes,
     String? availability,
     Object? availabilityReason = _unset,
+    String? description,
   }) => DemoMenuItem(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -164,6 +181,7 @@ class DemoMenuItem {
     availabilityReason: identical(availabilityReason, _unset)
         ? this.availabilityReason
         : availabilityReason as String?,
+    description: description ?? this.description,
   );
 
   /// PILOT-OPERATIONS-CORRECTIONS-001: a copy with only the branch availability
@@ -291,6 +309,8 @@ const List<DemoMenuItem> kDemoMenu = <DemoMenuItem>[
     priceMinor: 5600,
     categoryId: 'mains',
     categoryName: 'Mains',
+    // POS-PRODUCT-DESCRIPTIONS-001: a normal, one-line description.
+    description: 'San Marzano tomato, fresh mozzarella and basil.',
   ),
   DemoMenuItem(
     id: 'falafel-plate',
@@ -305,6 +325,10 @@ const List<DemoMenuItem> kDemoMenu = <DemoMenuItem>[
     priceMinor: 5400,
     categoryId: 'mains',
     categoryName: 'Mains',
+    // A LONG description, so the two-line truncation has a live example.
+    description:
+        'Slow-roasted lamb carved to order, with tahini, pickled turnip, '
+        'sumac onion and parsley in a warm laffa.',
   ),
   // Sides
   DemoMenuItem(
@@ -324,6 +348,9 @@ const List<DemoMenuItem> kDemoMenu = <DemoMenuItem>[
     categoryName: 'Sides',
     availability: 'unavailable',
     availabilityReason: 'sold_out',
+    // An UNAVAILABLE item still shows its description (staff see WHAT it is
+    // as well as why it cannot be sold).
+    description: 'Beer-battered, thick cut.',
   ),
   DemoMenuItem(
     id: 'garden-salad',

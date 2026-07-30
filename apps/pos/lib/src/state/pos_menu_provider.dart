@@ -211,6 +211,20 @@ const List<(IconData, Color)> _kCategoryPalette = [
   (Icons.icecream, RestoflowCategoryPalette.berry),
 ];
 
+/// POS-PRODUCT-DESCRIPTIONS-001: the ONE normalization for an optional free-text
+/// wire field, applied at the parsing boundary so no widget ever normalizes
+/// during a build.
+///
+/// A non-String value (an integer, an object, a list — anything a future schema
+/// or a bad row might carry) is NOT content, and neither is whitespace. Both
+/// become null, which the UI renders as "no description" rather than failing the
+/// item: one bad optional field must never drop a sellable product off the menu.
+String? _optionalText(Object? raw) {
+  if (raw is! String) return null;
+  final trimmed = raw.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
 final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   final cfg = ref.watch(runtimeConfigProvider);
   if (cfg.isDemoMode) {
@@ -292,6 +306,12 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
     // acceptance (item_unavailable), so a lenient parse can never oversell.
     final availability = row['availability'];
     final availabilityReason = row['availability_reason'];
+    // POS-PRODUCT-DESCRIPTIONS-001: the operator's product description, served
+    // by `pos_menu` for both the cashier and the kitchen-redacted object.
+    // Normalized ONCE, here at the parsing boundary — never in a card build.
+    // Tolerant like every other optional field: a wrong-typed or blank value
+    // degrades to "no description" rather than dropping a sellable product.
+    final description = _optionalText(row['description']);
     items.add(
       DemoMenuItem(
         id: (row['id'] ?? '').toString(),
@@ -330,6 +350,7 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
             availabilityReason is String && availabilityReason.isNotEmpty
             ? availabilityReason
             : null,
+        description: description,
       ),
     );
   }
