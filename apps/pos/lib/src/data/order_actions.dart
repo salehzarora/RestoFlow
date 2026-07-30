@@ -204,12 +204,18 @@ PosOrderActions resolveOrderActions(
       !terminal && order.orderType == OrderType.dineIn && pending == null;
 
   // ADD ITEMS (PSC-001C). New work joins the SAME bill as a service round —
-  // dine-in only (locked; takeaway is out of scope), never on a terminal
-  // order, FROZEN once the order has been charged (the same freeze that
-  // guards discounts: a charged bill's total must keep matching its numbered
-  // receipt), and withheld while THIS device has any operation in flight for
-  // the order (a stale expected state helps nobody). A comped-to-zero UNPAID
-  // order stays eligible — the addition simply makes it chargeable again.
+  // never on a terminal order, FROZEN once the order has been charged (the same
+  // freeze that guards discounts: a charged bill's total must keep matching its
+  // numbered receipt), and withheld while THIS device has any operation in
+  // flight for the order (a stale expected state helps nobody). A comped-to-zero
+  // UNPAID order stays eligible — the addition simply makes it chargeable again.
+  //
+  // DEFERRED-ORDER-AMENDMENTS-001: TAKEAWAY is now eligible too, matching the
+  // widened server gate (`app.add_order_items` accepts dine_in AND takeaway). A
+  // takeaway customer who orders more while still waiting is the same operation
+  // as a dine-in table asking for another round; refusing it forced a second,
+  // separately-paid order for one visit. NO table is required — a takeaway order
+  // has none, and the server does not ask for one.
   //
   // "Charged" here spans BOTH channels: this device's own payment MARKER and
   // the SERVER's settlement verdict — a branch-DISCOVERED paid order has no
@@ -219,7 +225,8 @@ PosOrderActions resolveOrderActions(
   final chargedPerServer = alreadyCharged || settlement == PosSettlement.paid;
   final canAddItems =
       !terminal &&
-      order.orderType == OrderType.dineIn &&
+      (order.orderType == OrderType.dineIn ||
+          order.orderType == OrderType.takeaway) &&
       !chargedPerServer &&
       pending == null;
 

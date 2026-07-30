@@ -18,6 +18,28 @@ import 'kitchen_print_document.dart';
 /// builder. MONEY-FREE by construction (SECURITY T-003): a [KdsTicketView]
 /// carries no money fields at all, and nothing here invents any.
 
+/// DEFERRED-ORDER-AMENDMENTS-001 — WHICH kitchen work unit a ticket represents.
+///
+/// The kitchen must be able to tell, at a glance, whether the paper in its hand
+/// is a NEW order to cook from scratch or a DELTA added to something already on
+/// the line. Getting that wrong means either cooking the whole order twice or
+/// missing the addition entirely, so the distinction is a typed value rather
+/// than an inferred formatting difference.
+enum KitchenTicketDocumentKind {
+  /// The order's FIRST kitchen work unit (PSC-001C work unit 1).
+  initialOrder,
+
+  /// A later service round: items ADDED to an order that already exists.
+  orderAddition;
+
+  /// The kind [ticket] is, derived from the ONE authoritative signal — the
+  /// server-assigned service-round number, which is null on work unit 1 and
+  /// 2+ on every addition. Deriving it (instead of accepting a separate flag)
+  /// means the marker can never disagree with the round it names.
+  static KitchenTicketDocumentKind forTicket(KdsTicketView ticket) =>
+      ticket.roundNumber != null ? orderAddition : initialOrder;
+}
+
 /// The localized CHROME strings the kitchen-ticket layout needs. Both apps build
 /// one from their `AppLocalizations` (identical keys), so the printed chrome is
 /// the same on either surface; only the labels differ, never the layout.
@@ -33,6 +55,8 @@ class KitchenTicketPrintLabels {
     required this.stationLabel,
     required this.noteLabel,
     required this.kitchenTotal,
+    required this.additionLabel,
+    required this.roundLabel,
     this.restaurantNameFallback,
   });
 
@@ -67,6 +91,15 @@ class KitchenTicketPrintLabels {
   /// `kdsMeatTotalLabel(count, unit)` — the whole-order "Kitchen total: N unit".
   final String Function(String count, String unit) kitchenTotal;
 
+  /// DEFERRED-ORDER-AMENDMENTS-001: `kdsAdditionLabel` — the word that marks a
+  /// ticket as a DELTA rather than a new order. The SAME key the KDS board's
+  /// round pill uses, so screen and paper cannot disagree.
+  final String additionLabel;
+
+  /// DEFERRED-ORDER-AMENDMENTS-001: `kdsRoundLabel(number)` — "Round N" for the
+  /// server-assigned service-round number.
+  final String Function(int number) roundLabel;
+
   /// PRINT-LAYOUT-001B: the localized GENERIC brand word printed as the
   /// restaurant-name header when the device carries no real restaurant name
   /// (`printRestaurantNameFallback`). Null on a label built without it — the
@@ -89,13 +122,38 @@ class KitchenTicketPrintLabels {
 ///  * a blank spacer before each item after the first, so the gap BETWEEN
 ///    items reads larger than the spacing WITHIN one item.
 ///
+/// DEFERRED-ORDER-AMENDMENTS-001 — an ADDITION ticket (a PSC-001C service round)
+/// carries a prominent marker band directly under the order code: the localized
+/// "Addition · Round N", in the same large heading style as the order code
+/// itself. The order code above it IS the original order's identity, so the
+/// kitchen can tie the delta to the food already on the line. [kind] defaults to
+/// [KitchenTicketDocumentKind.forTicket] — derived from the ticket's own round
+/// number — so an addition can never print without its marker. An INITIAL order
+/// prints byte-identically to before: the band is a conditional line and no
+/// other line moves.
+///
 /// MONEY-FREE by construction (SECURITY T-003): a [KdsTicketView] carries no
 /// money field and nothing here (item right column stays empty) invents one.
 PrintDocument buildKdsTicketPrintDocument({
   required KdsTicketView ticket,
   required KitchenTicketPrintLabels labels,
   String? restaurantName,
+  KitchenTicketDocumentKind? kind,
 }) {
+  final documentKind = kind ?? KitchenTicketDocumentKind.forTicket(ticket);
+  // The marker text: the SAME "Addition · Round N" composition the KDS board's
+  // round pill renders. A round number is always present on a real addition
+  // (that is what derives the kind); with an explicit [kind] override and no
+  // number, the honest bare marker prints rather than a fabricated "Round".
+  final round = ticket.roundNumber;
+  final String? additionMarker;
+  if (documentKind != KitchenTicketDocumentKind.orderAddition) {
+    additionMarker = null;
+  } else if (round != null) {
+    additionMarker = '${labels.additionLabel} · ${labels.roundLabel(round)}';
+  } else {
+    additionMarker = labels.additionLabel;
+  }
   final header =
       ticket.orderNumber ?? '${labels.ticketLabel} ${ticket.kitchenTicketId}';
   final dineIn = ticket.orderType == 'dine_in';
@@ -117,6 +175,11 @@ PrintDocument buildKdsTicketPrintDocument({
     lines: <PrintLine>[
       if (brand != null && brand.isNotEmpty) PrintLine.subtitle(brand),
       PrintLine.title(header),
+      // DEFERRED-ORDER-AMENDMENTS-001: the addition marker band, immediately
+      // under the ORIGINAL order code so the two read as one identity ("this
+      // delta belongs to that order"). Large heading style — the kitchen must
+      // not have to hunt for it. Absent on an initial order.
+      if (additionMarker != null) PrintLine.title(additionMarker),
       PrintLine.rule(),
       if (dineIn || takeaway)
         PrintLine.center(dineIn ? labels.dineIn : labels.takeaway),

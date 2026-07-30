@@ -366,6 +366,13 @@ Future<PosKitchenPrintOutcome> printKitchenTicketForOrder({
 /// order's dispatch_mode), so the print and the dispatch can never disagree and a
 /// toggle change mid-submit cannot split the workflow — this NO LONGER re-reads
 /// the toggle here.
+/// DEFERRED-ORDER-AMENDMENTS-001: [guardKey] overrides the exactly-once identity
+/// the print is guarded under. It defaults to [orderId] — correct for an initial
+/// order, where the order IS the work unit — but an ADDITION must never share
+/// that key: the parent order has already printed once, so a parent-keyed guard
+/// would silently swallow every later round's ticket and the kitchen would never
+/// see the added food. Additions pass
+/// [posAdditionKitchenPrintGuardKey] (order identity AND round identity).
 Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   required ProviderContainer container,
   required String orderId,
@@ -375,6 +382,7 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   bool isDemoMode = false,
   String? rejectionCode,
   PosKitchenTicketPrinter? printer,
+  String? guardKey,
 }) async {
   // Rejected / demo / blank / placeholder orders never print (shared rule).
   if (!isOrderEligibleForKitchenPrint(
@@ -408,7 +416,7 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
   return container
       .read(posAutoKitchenPrintGuardProvider)
       .runGuarded(
-        orderId,
+        guardKey ?? orderId,
         () => printKitchenTicketForOrder(
           container: container,
           ticket: ticket,
@@ -417,6 +425,19 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
         ),
       );
 }
+
+/// DEFERRED-ORDER-AMENDMENTS-001 — the exactly-once print identity of ONE service
+/// round: the original order AND the round the server applied.
+///
+/// The parent order id alone is NOT an identity here. It is the same order for
+/// every addition, and the initial ticket already claimed it, so a parent-keyed
+/// guard reports "already printed" and the kitchen silently never receives the
+/// added items. Round-scoped, so each round prints exactly once and a failed
+/// round print can still be retried on its own.
+String posAdditionKitchenPrintGuardKey({
+  required String orderId,
+  required String roundId,
+}) => '$orderId|round:$roundId';
 
 /// Maps a live cart (the rich submit-time lines) + the menu's PER-ITEM prep
 /// snapshot into the SHARED [KdsTicketView] — the SAME model the KDS renders —
@@ -429,6 +450,12 @@ Future<PosKitchenPrintOutcome> runAutoKitchenTicketPrintOnSubmit({
 /// [prepByItemId] is the live menu's `menuItemId -> prepComponents` snapshot
 /// (D-008), looked up the SAME way the outbox builds the order payload; empty
 /// for unconfigured items.
+/// DEFERRED-ORDER-AMENDMENTS-001: [roundId] / [roundNumber] are the SERVER's
+/// applied service-round identity. Passing them makes the resulting view an
+/// ADDITION ticket — the shared builder derives
+/// [KitchenTicketDocumentKind.orderAddition] from the round number and prints
+/// the "Addition · Round N" marker. Omitting them (the initial-order path) is
+/// byte-identical to before.
 KdsTicketView kdsTicketViewFromCartLines({
   required String orderCode,
   required OrderType orderType,
@@ -439,6 +466,8 @@ KdsTicketView kdsTicketViewFromCartLines({
   String? customerName,
   String? customerPhone,
   String? orderNote,
+  String? roundId,
+  int? roundNumber,
 }) {
   // MENU-ORDER-001: order items by the shared canonical print order (category ->
   // item display order -> cart index) so the POS-direct kitchen ticket matches
@@ -456,6 +485,8 @@ KdsTicketView kdsTicketViewFromCartLines({
     customerName: customerName,
     customerPhone: customerPhone,
     orderNote: orderNote,
+    roundId: roundId,
+    roundNumber: roundNumber,
     lines: [
       for (final line in sortedLines)
         _KitchenTicketLine(
@@ -514,6 +545,8 @@ KdsTicketView _kdsTicketViewFromKitchenLines({
   String? customerName,
   String? customerPhone,
   String? orderNote,
+  String? roundId,
+  int? roundNumber,
 }) {
   final items = <KdsItemView>[];
   final countInputs = <KitchenCountItemInput>[];
@@ -550,6 +583,11 @@ KdsTicketView _kdsTicketViewFromKitchenLines({
     customerPhone: customerPhone,
     notes: orderNote,
     kitchenCounts: aggregateOrderKitchenCounts(countInputs),
+    // DEFERRED-ORDER-AMENDMENTS-001: null on the initial order (work unit 1) —
+    // the shared builder then prints no marker; the server's applied round
+    // identity on an addition.
+    roundId: roundId,
+    roundNumber: roundNumber,
   );
 }
 

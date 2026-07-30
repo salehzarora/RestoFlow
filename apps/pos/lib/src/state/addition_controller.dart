@@ -49,6 +49,8 @@ class AdditionAttempt {
     required this.localOperationId,
     required this.itemsJson,
     required this.clientCreatedAt,
+    this.lines = const <CartLineView>[],
+    this.prepByItemId = const <String, List<KitchenPrepComponent>>{},
   });
 
   /// The parent order this attempt is bound to — never retargetable.
@@ -62,6 +64,72 @@ class AdditionAttempt {
   final List<Map<String, Object?>> itemsJson;
 
   final DateTime clientCreatedAt;
+
+  /// DEFERRED-ORDER-AMENDMENTS-001: the SAME cart lines [itemsJson] was
+  /// serialized from, frozen in the SAME synchronous block. The kitchen ADDITION
+  /// ticket is rendered from these, so the paper cannot disagree with the wire
+  /// payload the server applied — and it survives the reconciliation that clears
+  /// the cart. Retries print the same delta, never a rebuild from a mutable cart.
+  final List<CartLineView> lines;
+
+  /// The ORDER-TIME (D-008) per-item prep snapshot used for BOTH the wire
+  /// payload and the printed ticket — captured once, never re-read from the live
+  /// menu afterwards.
+  final Map<String, List<KitchenPrepComponent>> prepByItemId;
+}
+
+/// DEFERRED-ORDER-AMENDMENTS-001 — everything the kitchen ADDITION ticket needs,
+/// assembled at the moment the server confirmed the round and BEFORE the
+/// reconciliation clears the cart.
+///
+/// It carries the DELTA only (the frozen added lines), the parent order's own
+/// identity and type, and the server's applied round identity. There is no money
+/// field: a kitchen ticket never carries one (T-003).
+class AdditionPrintPayload {
+  const AdditionPrintPayload({
+    required this.orderId,
+    required this.orderCode,
+    required this.orderTypeWire,
+    required this.roundId,
+    required this.roundNumber,
+    required this.lines,
+    required this.prepByItemId,
+    this.tableLabel,
+    this.customerName,
+    this.customerPhone,
+  });
+
+  /// The ORIGINAL order — the addition's parent, never a new order.
+  final String orderId;
+  final String orderCode;
+
+  /// The parent's PRESERVED order type, as the server stores it
+  /// (`dine_in` / `takeaway`). Never rewritten by the addition.
+  final String orderTypeWire;
+
+  /// The server's applied round identity. Both are required: the id scopes the
+  /// exactly-once print guard, the number is what the kitchen reads.
+  final String roundId;
+  final int roundNumber;
+
+  final List<CartLineView> lines;
+  final Map<String, List<KitchenPrepComponent>> prepByItemId;
+
+  /// The parent's table — present for dine-in, null for takeaway (which has no
+  /// table at all, and none is invented).
+  final String? tableLabel;
+  final String? customerName;
+  final String? customerPhone;
+
+  /// The parent's type as the POS domain enum, or null when the wire value is
+  /// missing/unrecognized. FAIL-CLOSED on purpose: an unknown type is never
+  /// coerced to dine-in, because that would print a type (and possibly a table
+  /// line) the order does not actually have.
+  OrderType? get orderType => switch (orderTypeWire) {
+    'dine_in' => OrderType.dineIn,
+    'takeaway' => OrderType.takeaway,
+    _ => null,
+  };
 }
 
 /// The lifecycle phase of the addition flow (one attempt at a time).
@@ -169,10 +237,17 @@ class AdditionResult {
     this.roundNumber,
     this.error,
     this.refreshRequired = false,
+    this.printPayload,
   });
   final bool applied;
   final int? roundNumber;
   final String? error;
+
+  /// DEFERRED-ORDER-AMENDMENTS-001: non-null ONLY when the server applied the
+  /// addition AND named both the round id and the round number — the identity the
+  /// kitchen ticket and its exactly-once guard are built from. Absent otherwise:
+  /// the addition stays applied, and no ticket is printed on a guess.
+  final AdditionPrintPayload? printPayload;
 
   /// Finding 4: the server applied the addition but the authoritative
   /// refresh did not complete — the honest "saved, refresh required" state.
@@ -379,11 +454,19 @@ class AdditionController extends Notifier<AdditionState> {
       if (lines.isEmpty) {
         return const AdditionResult(applied: false, error: 'nothing_to_add');
       }
+      // DEFERRED-ORDER-AMENDMENTS-001: the ONE order-time prep snapshot, read
+      // here inside the synchronous freeze and then used for BOTH the wire
+      // payload and the printed addition ticket — so a menu edit while the
+      // operation is in flight can never make the paper disagree with what the
+      // server applied.
+      final prepByItemId = _prepSnapshot();
       attempt = AdditionAttempt(
         orderId: target.orderId,
         localOperationId: ref.read(clientIdGeneratorProvider).newId(),
-        itemsJson: _serializeLines(lines),
+        itemsJson: _serializeLines(lines, prepByItemId),
         clientCreatedAt: DateTime.now(),
+        lines: List.unmodifiable(lines),
+        prepByItemId: prepByItemId,
       );
     }
     if (!cartController.lockForAddition(_ownerOf(gen, attempt))) {
@@ -446,9 +529,30 @@ class AdditionController extends Notifier<AdditionState> {
     // APPLIED (Finding 4). The server owns the addition from this moment:
     // the operation may never be dispatched again, and the frozen identity
     // stays known until the authoritative refresh PROVES the new state.
-    final roundNumber = result['round_number'];
+    final roundNumberRaw = result['round_number'];
+    final roundNumber = roundNumberRaw is int ? roundNumberRaw : null;
     final roundIdRaw = result['round_id'];
     final roundId = roundIdRaw is String ? roundIdRaw : null;
+    // DEFERRED-ORDER-AMENDMENTS-001: assemble the kitchen ADDITION ticket payload
+    // NOW — the frozen delta, the parent's own identity/type/table from the
+    // installed authoritative target, and the round the server just named. Built
+    // BEFORE the reconciliation below, which clears the cart on success. Requires
+    // BOTH round fields: without them there is no round-scoped exactly-once
+    // identity, so nothing is printed rather than printing on a guess.
+    final printPayload = (roundId != null && roundNumber != null)
+        ? AdditionPrintPayload(
+            orderId: attempt.orderId,
+            orderCode: target.orderCode,
+            orderTypeWire: target.orderType ?? '',
+            roundId: roundId,
+            roundNumber: roundNumber,
+            lines: attempt.lines,
+            prepByItemId: attempt.prepByItemId,
+            tableLabel: target.tableLabel,
+            customerName: target.customerName,
+            customerPhone: target.customerPhone,
+          )
+        : null;
     state = state.copyWith(
       phase: AdditionPhase.appliedAwaitingRefresh,
       appliedRoundId: roundId,
@@ -457,8 +561,9 @@ class AdditionController extends Notifier<AdditionState> {
     final reconciled = await _reconcileApplied(gen, attempt, roundId);
     return AdditionResult(
       applied: true,
-      roundNumber: roundNumber is int ? roundNumber : null,
+      roundNumber: roundNumber,
       refreshRequired: !reconciled,
+      printPayload: printPayload,
     );
   }
 
@@ -548,16 +653,24 @@ class AdditionController extends Notifier<AdditionState> {
       state.attempt?.localOperationId == attempt.localOperationId &&
       state.attempt?.orderId == attempt.orderId;
 
-  /// The SAME order-time item snapshots the submit path sends (D-008), built
-  /// with the SAME mapping — including the menu's per-unit prep components —
-  /// serialized ONCE into the frozen attempt.
-  List<Map<String, Object?>> _serializeLines(List<CartLineView> lines) {
+  /// The live menu's `menuItemId -> prepComponents` snapshot (D-008), read ONCE
+  /// per frozen attempt. Empty for unconfigured items.
+  Map<String, List<KitchenPrepComponent>> _prepSnapshot() {
     final menuData = ref.read(posMenuProvider).valueOrNull;
-    final prepByItemId = <String, List<KitchenPrepComponent>>{
+    return <String, List<KitchenPrepComponent>>{
       if (menuData != null)
         for (final item in menuData.items)
           if (item.prepComponents.isNotEmpty) item.id: item.prepComponents,
     };
+  }
+
+  /// The SAME order-time item snapshots the submit path sends (D-008), built
+  /// with the SAME mapping — including the menu's per-unit prep components —
+  /// serialized ONCE into the frozen attempt.
+  List<Map<String, Object?>> _serializeLines(
+    List<CartLineView> lines,
+    Map<String, List<KitchenPrepComponent>> prepByItemId,
+  ) {
     return [
       for (final l in lines)
         OrderSubmissionItem(

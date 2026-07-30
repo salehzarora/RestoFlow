@@ -21,6 +21,7 @@ import '../print/pos_kitchen_ticket_printer.dart'
     show
         kdsTicketViewFromCartLines,
         kitchenTicketPrintLabelsFromL10n,
+        posAdditionKitchenPrintGuardKey,
         runAutoKitchenTicketPrintOnSubmit;
 import '../state/addition_controller.dart';
 import '../state/cart_controller.dart';
@@ -423,6 +424,9 @@ Future<void> submitOrderFromCart({
   // controller, together with the authoritative refresh).
   final additionState = ref.read(additionControllerProvider);
   if (additionState.active) {
+    // Captured BEFORE the await: the widget's ref dies with the tree, the
+    // container and the notifiers it owns do not.
+    final additionContainer = ProviderScope.containerOf(context, listen: false);
     final result = await ref.read(additionControllerProvider.notifier).submit();
     // Finding 4: applied-but-not-refreshed is its own honest message — the
     // addition IS saved; only the authoritative view still needs a reload.
@@ -437,6 +441,47 @@ Future<void> submitOrderFromCart({
         ),
       ),
     );
+    // DEFERRED-ORDER-AMENDMENTS-001: print ONE kitchen ADDITION ticket for the
+    // round the server just applied — the DELTA only, never the whole parent
+    // order (the kitchen already has that paper, and reprinting it would get the
+    // original food cooked twice). Best-effort and fully decoupled: the amendment
+    // is ALREADY applied server-side, so a print failure never resends
+    // `order.items_add` and never turns the applied addition into a failure — the
+    // guard releases the round so only the PRINT can be retried. Guarded on the
+    // round-scoped identity, so each round prints exactly once while the parent's
+    // initial ticket keeps its own separate claim.
+    final payload = result.printPayload;
+    final additionOrderType = payload?.orderType;
+    if (payload != null && additionOrderType != null) {
+      unawaited(
+        runAutoKitchenTicketPrintOnSubmit(
+          container: additionContainer,
+          orderId: payload.orderId,
+          guardKey: posAdditionKitchenPrintGuardKey(
+            orderId: payload.orderId,
+            roundId: payload.roundId,
+          ),
+          isDemoMode: additionContainer.read(runtimeConfigProvider).isDemoMode,
+          // The frozen delta lines + the ONE order-time prep snapshot the wire
+          // payload used, plus the parent's PRESERVED identity, type and table
+          // (null for takeaway — no table is invented). The round id/number make
+          // this an addition ticket, so the shared builder prints the localized
+          // "Addition · Round N" marker under the original order code.
+          ticket: kdsTicketViewFromCartLines(
+            orderCode: payload.orderCode,
+            orderType: additionOrderType,
+            lines: payload.lines,
+            prepByItemId: payload.prepByItemId,
+            tableLabel: payload.tableLabel,
+            customerName: payload.customerName,
+            customerPhone: payload.customerPhone,
+            roundId: payload.roundId,
+            roundNumber: payload.roundNumber,
+          ),
+          labels: kitchenTicketPrintLabelsFromL10n(l10n),
+        ),
+      );
+    }
     return;
   }
   final outbox = ref.read(outboxControllerProvider.notifier);

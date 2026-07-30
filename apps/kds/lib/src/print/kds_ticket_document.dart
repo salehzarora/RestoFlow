@@ -42,5 +42,9 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
   stationLabel: l10n.kdsStationLabel,
   noteLabel: l10n.kdsNoteLabel,
   kitchenTotal: l10n.kdsMeatTotalLabel,
+  // DEFERRED-ORDER-AMENDMENTS-001: the SAME two keys this app's round pill uses
+  // (kds_ticket_card.dart), so an addition reads identically on screen and paper.
+  additionLabel: l10n.kdsAdditionLabel,
+  roundLabel: l10n.kdsRoundLabel,
   restaurantNameFallback: l10n.printRestaurantNameFallback,
 );
