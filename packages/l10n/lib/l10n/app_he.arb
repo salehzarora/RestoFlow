@@ -1607,5 +1607,13 @@
   "posParkedItemCount": "{count} פריטים",
   "posParkedAt": "הושהה {time}",
   "posParkedOrdersTooltip": "הזמנות מושהות: {count}",
-  "posParkedUnnamedOrder": "הזמנה מושהית"
+  "posParkedUnnamedOrder": "הזמנה מושהית",
+  "posOrderPreviewTitle": "פרטי ההזמנה",
+  "posOrderPreviewLoadFailedTitle": "לא ניתן לטעון את ההזמנה",
+  "posOrderPreviewLoadFailedBody": "פרטי ההזמנה אינם זמינים כעת. דבר לא שונה.",
+  "posOrderPreviewLocalCopy": "עותק מקומי - לא רוענן",
+  "posOrderPreviewRetry": "נסה שוב",
+  "posOrderPreviewLoading": "טוען את פרטי ההזמנה",
+  "posOrderPreviewItems": "פריטים",
+  "posOrderPreviewOpenedAt": "נפתח {time}"
 }

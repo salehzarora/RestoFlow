@@ -34,6 +34,7 @@ import '../state/outbox_controller.dart';
 import '../state/pos_order_complete_controller.dart';
 import '../state/recent_orders_controller.dart';
 import 'order_action_row.dart';
+import 'order_detail_preview.dart';
 import 'order_status_pills.dart';
 import 'recovery_coordinator.dart';
 
@@ -877,121 +878,143 @@ class _OrderCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            order.orderNumber,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
+          // ORDER-DETAIL-PREVIEW-001: the INFORMATIONAL body opens the
+          // read-only detail preview. The action row deliberately sits OUTSIDE
+          // this InkWell, so an action press can never also fire the row tap —
+          // that is structural, not a reliance on event absorption.
+          Semantics(
+            button: true,
+            child: InkWell(
+              key: Key('recent-order-preview-${order.orderNumber}'),
+              onTap: () => OrderDetailPreview.show(
+                context,
+                order: order,
+                // The SAME central policy result the row already resolved: the
+                // preview never recomputes eligibility.
+                actions: actions,
+              ),
+              borderRadius: BorderRadius.circular(RestoflowRadii.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    order.orderNumber,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: RestoflowSpacing.sm),
+                                Text(
+                                  _hhmm(order.sortAt),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                            if (meta.isNotEmpty) ...[
+                              const SizedBox(height: RestoflowSpacing.xs),
+                              Text(
+                                meta,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(width: RestoflowSpacing.sm),
-                        Text(
-                          _hhmm(order.sortAt),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (meta.isNotEmpty) ...[
-                      const SizedBox(height: RestoflowSpacing.xs),
+                      ),
+                      const SizedBox(width: RestoflowSpacing.sm),
                       Text(
-                        meta,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        // AUTHORITATIVE money. This is the "stale 40" fix, at the pixel.
+                        MoneyFormatter.formatMinor(
+                          order.grandTotalMinor,
+                          order.currencyCode,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: RestoflowSpacing.sm),
+                  Wrap(
+                    spacing: RestoflowSpacing.xs,
+                    runSpacing: RestoflowSpacing.xs,
+                    children: [
+                      // A3: a PERMANENTLY-REJECTED submit created no server order. It shows ONE
+                      // honest "Not created" marker instead of a lifecycle/settlement that would
+                      // imply a real order — and it carries no actions (the policy fails closed).
+                      if (order.isNeverCreated)
+                        RestoflowStatusPill(
+                          key: Key('recent-not-created-${order.orderNumber}'),
+                          label: l10n.posRecentOrderNotCreated,
+                          tone: RestoflowTone.danger,
+                          icon: Icons.error_outline,
+                        )
+                      else
+                        // LIFECYCLE + SETTLEMENT, from the ONE shared vocabulary both order
+                        // surfaces speak (see order_status_pills.dart). The confirmation screen
+                        // renders exactly these.
+                        OrderStatusPills(
+                          serverStatus: serverStatus,
+                          settlement: order.settlement,
+                          keySuffix: order.orderNumber,
+                          // A takeaway's `served` reads "Picked up" - same state machine,
+                          // honest operational words (RESTAURANT-OPERATIONS-V1-001).
+                          orderType: order.orderType,
+                        ),
+                      // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
+                      // "My payment is syncing" is a fact about this till, not the order.
+                      if (actions.pendingKind case final p?)
+                        RestoflowStatusPill(
+                          key: Key('order-pending-${order.orderNumber}'),
+                          label: _pendingLabel(l10n, p),
+                          tone: RestoflowTone.info,
+                          icon: Icons.sync,
+                        ),
+                      if (outboxState != null && outboxState!.isFailed)
+                        RestoflowStatusPill(
+                          label: l10n.posRecentSyncFailed,
+                          tone: RestoflowTone.danger,
+                          icon: Icons.sync_problem,
+                        ),
+                    ],
+                  ),
+                  // A DEAD CONTROL WITH NO REASON IS WORSE THAN NO CONTROL. When an order is
+                  // still active but owes nothing, the missing Take-payment button needs an
+                  // explanation — otherwise the cashier just sees a button that "should be
+                  // there" and does not know why it is not.
+                  if (!order.isTerminal &&
+                      order.settlement == PosSettlement.notChargeable &&
+                      order.payment == null) ...[
+                    const SizedBox(height: RestoflowSpacing.sm),
+                    Text(
+                      key: Key('recent-nocharge-note-${order.orderNumber}'),
+                      l10n.posNoChargeNoPayment,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ],
-                ),
-              ),
-              const SizedBox(width: RestoflowSpacing.sm),
-              Text(
-                // AUTHORITATIVE money. This is the "stale 40" fix, at the pixel.
-                MoneyFormatter.formatMinor(
-                  order.grandTotalMinor,
-                  order.currencyCode,
-                ),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: RestoflowSpacing.sm),
-          Wrap(
-            spacing: RestoflowSpacing.xs,
-            runSpacing: RestoflowSpacing.xs,
-            children: [
-              // A3: a PERMANENTLY-REJECTED submit created no server order. It shows ONE
-              // honest "Not created" marker instead of a lifecycle/settlement that would
-              // imply a real order — and it carries no actions (the policy fails closed).
-              if (order.isNeverCreated)
-                RestoflowStatusPill(
-                  key: Key('recent-not-created-${order.orderNumber}'),
-                  label: l10n.posRecentOrderNotCreated,
-                  tone: RestoflowTone.danger,
-                  icon: Icons.error_outline,
-                )
-              else
-                // LIFECYCLE + SETTLEMENT, from the ONE shared vocabulary both order
-                // surfaces speak (see order_status_pills.dart). The confirmation screen
-                // renders exactly these.
-                OrderStatusPills(
-                  serverStatus: serverStatus,
-                  settlement: order.settlement,
-                  keySuffix: order.orderNumber,
-                  // A takeaway's `served` reads "Picked up" - same state machine,
-                  // honest operational words (RESTAURANT-OPERATIONS-V1-001).
-                  orderType: order.orderType,
-                ),
-              // THIS DEVICE's queued work — reported SEPARATELY from the lifecycle.
-              // "My payment is syncing" is a fact about this till, not the order.
-              if (actions.pendingKind case final p?)
-                RestoflowStatusPill(
-                  key: Key('order-pending-${order.orderNumber}'),
-                  label: _pendingLabel(l10n, p),
-                  tone: RestoflowTone.info,
-                  icon: Icons.sync,
-                ),
-              if (outboxState != null && outboxState!.isFailed)
-                RestoflowStatusPill(
-                  label: l10n.posRecentSyncFailed,
-                  tone: RestoflowTone.danger,
-                  icon: Icons.sync_problem,
-                ),
-            ],
-          ),
-          // A DEAD CONTROL WITH NO REASON IS WORSE THAN NO CONTROL. When an order is
-          // still active but owes nothing, the missing Take-payment button needs an
-          // explanation — otherwise the cashier just sees a button that "should be
-          // there" and does not know why it is not.
-          if (!order.isTerminal &&
-              order.settlement == PosSettlement.notChargeable &&
-              order.payment == null) ...[
-            const SizedBox(height: RestoflowSpacing.sm),
-            Text(
-              key: Key('recent-nocharge-note-${order.orderNumber}'),
-              l10n.posNoChargeNoPayment,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+                ],
               ),
             ),
-          ],
+          ),
           // PILOT-OPERATIONS-CORRECTIONS-001 (Finding 1A): a permanently-rejected shell
           // exposes its recovery actions (Edit / Restore + Discard) HERE — never
           // payment / discount / void / receipt (the central policy already returns

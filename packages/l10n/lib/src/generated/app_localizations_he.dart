@@ -5103,4 +5103,31 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get posParkedUnnamedOrder => 'הזמנה מושהית';
+
+  @override
+  String get posOrderPreviewTitle => 'פרטי ההזמנה';
+
+  @override
+  String get posOrderPreviewLoadFailedTitle => 'לא ניתן לטעון את ההזמנה';
+
+  @override
+  String get posOrderPreviewLoadFailedBody =>
+      'פרטי ההזמנה אינם זמינים כעת. דבר לא שונה.';
+
+  @override
+  String get posOrderPreviewLocalCopy => 'עותק מקומי - לא רוענן';
+
+  @override
+  String get posOrderPreviewRetry => 'נסה שוב';
+
+  @override
+  String get posOrderPreviewLoading => 'טוען את פרטי ההזמנה';
+
+  @override
+  String get posOrderPreviewItems => 'פריטים';
+
+  @override
+  String posOrderPreviewOpenedAt(String time) {
+    return 'נפתח $time';
+  }
 }

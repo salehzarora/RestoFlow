@@ -5138,4 +5138,31 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get posParkedUnnamedOrder => 'طلب معلّق';
+
+  @override
+  String get posOrderPreviewTitle => 'تفاصيل الطلب';
+
+  @override
+  String get posOrderPreviewLoadFailedTitle => 'تعذّر تحميل هذا الطلب';
+
+  @override
+  String get posOrderPreviewLoadFailedBody =>
+      'تفاصيل الطلب غير متاحة حالياً. لم يتم تغيير أي شيء.';
+
+  @override
+  String get posOrderPreviewLocalCopy => 'نسخة محلية - غير محدّثة';
+
+  @override
+  String get posOrderPreviewRetry => 'إعادة المحاولة';
+
+  @override
+  String get posOrderPreviewLoading => 'جارٍ تحميل تفاصيل الطلب';
+
+  @override
+  String get posOrderPreviewItems => 'الأصناف';
+
+  @override
+  String posOrderPreviewOpenedAt(String time) {
+    return 'فُتح $time';
+  }
 }

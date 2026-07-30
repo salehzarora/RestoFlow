@@ -3525,5 +3525,21 @@
   "posParkedOrdersTooltip": "Parked orders: {count}",
   "@posParkedOrdersTooltip": {"description": "PARKED-CARTS-001: tooltip of the cart-header parked-orders button. {count} is how many carts are parked.", "placeholders": {"count": {"type": "int"}}},
   "posParkedUnnamedOrder": "Parked order",
-  "@posParkedUnnamedOrder": {"description": "PARKED-CARTS-001: fallback label for a parked cart with no customer name."}
+  "@posParkedUnnamedOrder": {"description": "PARKED-CARTS-001: fallback label for a parked cart with no customer name."},
+  "posOrderPreviewTitle": "Order details",
+  "@posOrderPreviewTitle": {"description": "ORDER-DETAIL-PREVIEW-001: title of the READ-ONLY order detail preview opened by tapping an Orders row."},
+  "posOrderPreviewLoadFailedTitle": "Could not load this order",
+  "@posOrderPreviewLoadFailedTitle": {"description": "ORDER-DETAIL-PREVIEW-001: title shown when the authoritative order detail could not be read and no local copy exists."},
+  "posOrderPreviewLoadFailedBody": "The order details are not available right now. Nothing was changed.",
+  "@posOrderPreviewLoadFailedBody": {"description": "ORDER-DETAIL-PREVIEW-001: body of that failure state. It reassures the cashier that only a READ failed."},
+  "posOrderPreviewLocalCopy": "Local copy - not refreshed",
+  "@posOrderPreviewLocalCopy": {"description": "ORDER-DETAIL-PREVIEW-001: warning shown when the server read failed and this device's own copy is being shown instead. It may be missing another till's changes."},
+  "posOrderPreviewRetry": "Retry",
+  "@posOrderPreviewRetry": {"description": "ORDER-DETAIL-PREVIEW-001: retries ONLY the order-detail read. It never resends a payment, print or status change."},
+  "posOrderPreviewLoading": "Loading order details",
+  "@posOrderPreviewLoading": {"description": "ORDER-DETAIL-PREVIEW-001: shown while the authoritative order detail is being read."},
+  "posOrderPreviewItems": "Items",
+  "@posOrderPreviewItems": {"description": "ORDER-DETAIL-PREVIEW-001: section heading above the order's item list."},
+  "posOrderPreviewOpenedAt": "Opened {time}",
+  "@posOrderPreviewOpenedAt": {"description": "ORDER-DETAIL-PREVIEW-001: when the order was created. {time} is an already-formatted local time.", "placeholders": {"time": {"type": "String"}}}
 }

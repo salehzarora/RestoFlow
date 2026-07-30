@@ -175,6 +175,7 @@ void main() {
           tester.getSemantics(_rowTap),
           matchesSemantics(
             isButton: true,
+            isFocusable: true,
             hasTapAction: true,
             hasFocusAction: true,
           ),
@@ -273,7 +274,11 @@ void main() {
       await tester.tap(find.byKey(const Key('order-detail-preview-close')));
       await tester.pumpAndSettle();
 
-      final after = (await store.load(kDemoSyncScope.key)).single;
+      // The demo snapshot repository seeds sibling rows, so select OUR order by
+      // its identity rather than assuming the store holds exactly one.
+      final after = (await store.load(
+        kDemoSyncScope.key,
+      )).firstWhere((o) => o.orderId == _orderId);
       expect(after.snapshot?.status, 'served');
       expect(after.snapshot?.settlement, PosSettlement.unpaid);
       expect(after.snapshot?.revision, 2);

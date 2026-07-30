@@ -9567,6 +9567,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Parked order'**
   String get posParkedUnnamedOrder;
+
+  /// ORDER-DETAIL-PREVIEW-001: title of the READ-ONLY order detail preview opened by tapping an Orders row.
+  ///
+  /// In en, this message translates to:
+  /// **'Order details'**
+  String get posOrderPreviewTitle;
+
+  /// ORDER-DETAIL-PREVIEW-001: title shown when the authoritative order detail could not be read and no local copy exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this order'**
+  String get posOrderPreviewLoadFailedTitle;
+
+  /// ORDER-DETAIL-PREVIEW-001: body of that failure state. It reassures the cashier that only a READ failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The order details are not available right now. Nothing was changed.'**
+  String get posOrderPreviewLoadFailedBody;
+
+  /// ORDER-DETAIL-PREVIEW-001: warning shown when the server read failed and this device's own copy is being shown instead. It may be missing another till's changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Local copy - not refreshed'**
+  String get posOrderPreviewLocalCopy;
+
+  /// ORDER-DETAIL-PREVIEW-001: retries ONLY the order-detail read. It never resends a payment, print or status change.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get posOrderPreviewRetry;
+
+  /// ORDER-DETAIL-PREVIEW-001: shown while the authoritative order detail is being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading order details'**
+  String get posOrderPreviewLoading;
+
+  /// ORDER-DETAIL-PREVIEW-001: section heading above the order's item list.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get posOrderPreviewItems;
+
+  /// ORDER-DETAIL-PREVIEW-001: when the order was created. {time} is an already-formatted local time.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened {time}'**
+  String posOrderPreviewOpenedAt(String time);
 }
 
 class _AppLocalizationsDelegate

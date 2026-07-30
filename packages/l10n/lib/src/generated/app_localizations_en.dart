@@ -5182,4 +5182,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get posParkedUnnamedOrder => 'Parked order';
+
+  @override
+  String get posOrderPreviewTitle => 'Order details';
+
+  @override
+  String get posOrderPreviewLoadFailedTitle => 'Could not load this order';
+
+  @override
+  String get posOrderPreviewLoadFailedBody =>
+      'The order details are not available right now. Nothing was changed.';
+
+  @override
+  String get posOrderPreviewLocalCopy => 'Local copy - not refreshed';
+
+  @override
+  String get posOrderPreviewRetry => 'Retry';
+
+  @override
+  String get posOrderPreviewLoading => 'Loading order details';
+
+  @override
+  String get posOrderPreviewItems => 'Items';
+
+  @override
+  String posOrderPreviewOpenedAt(String time) {
+    return 'Opened $time';
+  }
 }

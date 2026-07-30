@@ -1607,5 +1607,13 @@
   "posParkedItemCount": "{count} صنف",
   "posParkedAt": "عُلِّق {time}",
   "posParkedOrdersTooltip": "الطلبات المعلّقة: {count}",
-  "posParkedUnnamedOrder": "طلب معلّق"
+  "posParkedUnnamedOrder": "طلب معلّق",
+  "posOrderPreviewTitle": "تفاصيل الطلب",
+  "posOrderPreviewLoadFailedTitle": "تعذّر تحميل هذا الطلب",
+  "posOrderPreviewLoadFailedBody": "تفاصيل الطلب غير متاحة حالياً. لم يتم تغيير أي شيء.",
+  "posOrderPreviewLocalCopy": "نسخة محلية - غير محدّثة",
+  "posOrderPreviewRetry": "إعادة المحاولة",
+  "posOrderPreviewLoading": "جارٍ تحميل تفاصيل الطلب",
+  "posOrderPreviewItems": "الأصناف",
+  "posOrderPreviewOpenedAt": "فُتح {time}"
 }
