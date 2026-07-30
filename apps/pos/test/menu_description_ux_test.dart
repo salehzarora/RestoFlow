@@ -455,10 +455,19 @@ void main() {
       cart.addItem(_item(description: 'Should never travel with the order.'));
       final line = container.read(cartControllerProvider).lines.single;
 
-      // The cart line's own surface carries no description at all.
+      // The cart line's own surface carries no description at all. Asserted
+      // FIELD BY FIELD: `CartLineView` declares no `toString` override, so
+      // asserting on `line.toString()` would only ever inspect
+      // "Instance of 'CartLineView'" and could never fail — a vacuous check.
       expect(line.name, 'Lamb Shawarma');
+      final lineFields = <Object?>[
+        line.menuItemId,
+        line.name,
+        line.note,
+        line.modifiers.map((m) => '${m.groupName}/${m.optionName}').join('|'),
+      ].join('␟');
       expect(
-        line.toString(),
+        lineFields,
         isNot(contains('Should never travel')),
         reason: 'a cart line is order data, not catalog copy',
       );
