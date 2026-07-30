@@ -141,6 +141,12 @@ class OrderPreviewController
 }
 
 /// The preview for one order. AutoDispose: closing the sheet ends its work.
+///
+/// KEYED ON THE ORDER OBJECT, which is stable for a preview's whole life: the
+/// sheet route captures ONE [PosRecentOrder] when it opens and hands that same
+/// instance to every rebuild. `PosRecentOrder` has no value equality, so a
+/// caller that rebuilt the order would key a different controller and refetch —
+/// hold the instance rather than reconstructing it.
 final orderPreviewControllerProvider = NotifierProvider.autoDispose
     .family<OrderPreviewController, OrderPreviewState, PosRecentOrder>(
       OrderPreviewController.new,
