@@ -271,8 +271,10 @@ void main() {
       final c = await store.add(_scopeA, (id) => _cart(id: id));
       expect(c.id, 'park-3', reason: 'park-2 was deleted and must not return');
 
+      // Both fixtures share _t0, so the documented tie-break (id descending)
+      // decides — NOT insertion order.
       final snapshot = await store.load(_scopeA);
-      expect(snapshot.carts.map((p) => p.id), ['park-1', 'park-3']);
+      expect(snapshot.carts.map((p) => p.id), ['park-3', 'park-1']);
     });
 
     test(
@@ -537,6 +539,7 @@ void main() {
     test('parked carts are visible to the controller and counted', () async {
       final prefs = await SharedPreferences.getInstance();
       final c = _process(store: SharedPrefsParkedCartsStore(prefs));
+      c.read(parkedCartsControllerProvider); // instantiate, then let it load
       await _tick();
       expect(c.read(parkedCartsControllerProvider).loading, isFalse);
       expect(c.read(parkedCartsControllerProvider).count, 0);
@@ -555,6 +558,7 @@ void main() {
         jsonEncode(<String, Object?>{'version': 99}),
       );
       final c = _process(store: SharedPrefsParkedCartsStore(prefs));
+      c.read(parkedCartsControllerProvider); // instantiate, then let it load
       await _tick();
       final state = c.read(parkedCartsControllerProvider);
       expect(state.loading, isFalse);

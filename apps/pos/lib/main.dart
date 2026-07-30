@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/draft_recovery_store.dart';
 import 'src/data/durable_outbox_store.dart';
+import 'src/data/parked_carts_store.dart';
 import 'src/data/ready_notifications_store.dart';
 import 'src/data/recent_orders_store.dart';
 import 'src/data/sync_cursor_store.dart';
@@ -99,6 +100,13 @@ Widget _posApp(
       // corrected resubmit still prints in menu order.
       posDraftRecoveryStoreProvider.overrideWithValue(
         SharedPrefsDraftRecoveryStore(prefs),
+      ),
+      // PARKED-CARTS-001: held (parked) carts are durable and SCOPE-PARTITIONED,
+      // so a cart set aside to serve another customer survives an ordinary
+      // restart, a force-stop and a logout — and is never inherited by another
+      // branch or device. Purely local: never synced, never a server order.
+      parkedCartsStoreProvider.overrideWithValue(
+        SharedPrefsParkedCartsStore(prefs),
       ),
       // POS-OPERATIONS-SYNC-001: the incremental pull cursor is durable and
       // SCOPE-PARTITIONED (org/restaurant/branch/device). Replaying one branch's
