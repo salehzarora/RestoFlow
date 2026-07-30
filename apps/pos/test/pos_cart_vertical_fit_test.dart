@@ -140,20 +140,38 @@ Finder cartScrollable() => find.descendant(
   matching: find.byType(Scrollable),
 );
 
-/// Scrolls the cart body until [target] is on screen, then returns it.
+/// Brings [target] on screen through ORDINARY scrolling of the cart body.
+///
+/// If the widget is already built it is simply scrolled into view; if it is not
+/// built at all (a SliverList only builds what is near the viewport) the cart
+/// body is scrolled until it appears. Either way this is exactly what a cashier
+/// would do with a finger — nothing is forced into existence.
 Future<void> revealInCart(WidgetTester tester, Finder target) async {
-  if (target.evaluate().isNotEmpty && tester.any(target)) {
-    final box = tester.getRect(target.first);
-    if (box.height > 0) return;
+  if (target.evaluate().isNotEmpty) {
+    await tester.ensureVisible(target.first);
+    await tester.pumpAndSettle();
+    return;
   }
+  final scrollable = cartScrollable();
+  expect(
+    scrollable,
+    findsWidgets,
+    reason: 'the cart body must own a scrollable for anything to be reachable',
+  );
   await tester.scrollUntilVisible(
     target,
     120,
-    scrollable: cartScrollable().first,
-    maxScrolls: 60,
+    scrollable: scrollable.first,
+    maxScrolls: 80,
   );
   await tester.pumpAndSettle();
 }
+
+/// The cart total row. With branch tax OFF (the default) the footer renders a
+/// single `cart-subtotal` total row and NO `cart-grand-total`; with tax on it
+/// renders subtotal + tax + grand total. `cart-subtotal` is therefore the row
+/// that is present either way.
+Finder cartTotal() => find.byKey(const Key('cart-subtotal'));
 
 const shortViewports = <List<double>>[
   [1024, 768],
@@ -205,11 +223,11 @@ void main() {
           final at = '${v[0].toInt()}x${v[1].toInt()}';
 
           // The totals block.
-          await revealInCart(tester, find.byKey(const Key('cart-grand-total')));
+          await revealInCart(tester, cartTotal());
           expect(
-            find.byKey(const Key('cart-grand-total')),
-            findsOneWidget,
-            reason: 'the grand total must be reachable at $at',
+            cartTotal(),
+            findsWidgets,
+            reason: 'the cart total must be reachable at $at',
           );
 
           // Park.
@@ -249,13 +267,23 @@ void main() {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       final send = find.widgetWithText(FilledButton, l10n.posSendOrder);
       await revealInCart(tester, send);
+
+      // Reachable AND genuinely pressable: enabled, a real touch target, and
+      // fully inside the 800x480 viewport rather than merely existing. Whether
+      // a press SUBMITS is order-submission behaviour, owned by
+      // submit_order_flow_test — this suite only proves the layout puts the
+      // control within the cashier's reach.
       expect(
         tester.widget<FilledButton>(send).onPressed,
-        isNull,
-        reason:
-            'with no order type chosen Send stays disabled — the point here is '
-            'that it is REACHABLE and hit-testable, not that it fires',
+        isNotNull,
+        reason: 'Send is live for a non-empty demo cart',
       );
+      final rect = tester.getRect(send);
+      expect(rect.height, greaterThanOrEqualTo(44));
+      expect(rect.top, greaterThanOrEqualTo(-0.5));
+      expect(rect.bottom, lessThanOrEqualTo(480.5));
+      expect(tester.hitTestOnBinding(rect.center), isNotNull);
+
       // The cart itself is untouched by the scrolling.
       expect(container.read(cartControllerProvider).lines.length, 2);
       expectNoOverflow(tester, 'after reaching Submit at 800x480');
