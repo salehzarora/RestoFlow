@@ -154,6 +154,14 @@ insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_cate
   ('c0000000-0000-0000-0000-0000000000f9', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000c9', 'Item', 500, 'USD', 1),
 
   ('c0000000-0000-0000-0000-0000000000f8', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000c9', 'SoldOut', 400, 'USD', 2);
+-- MONEY-SERVER-MODIFIER-SCOPE-003D: the submitted modifier option must be a REAL
+-- option owned by a group of the submitted item. The LIVE delta below is
+-- deliberately unequal to the declared snapshot, so this suite keeps proving the
+-- server stores the CLIENT'S frozen snapshot and never the catalogue price (D-008).
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name) values
+  ('c0000000-0000-0000-0000-00000000eb01', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-0000000000f9', 'Extras');
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor) values
+  ('c0000000-0000-0000-0000-00000000e001', 'c0000000-0000-0000-0000-000000000c01', 'c0000000-0000-0000-0000-000000000c02', null, 'c0000000-0000-0000-0000-00000000eb01', 'Extra', 8888);
 
 insert into menu_item_branch_availability (organization_id, restaurant_id, branch_id, menu_item_id, availability, reason) values
 

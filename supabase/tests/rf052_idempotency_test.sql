@@ -39,6 +39,14 @@ insert into menu_categories (id, organization_id, restaurant_id, branch_id, name
   ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
 insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Burger', 500, 'USD', 1);
+-- MONEY-SERVER-MODIFIER-SCOPE-003D: the submitted modifier option must be a REAL
+-- option owned by a group of the submitted item. The LIVE delta below is
+-- deliberately unequal to the declared snapshot, so this suite keeps proving the
+-- server stores the CLIENT'S frozen snapshot and never the catalogue price (D-008).
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name) values
+  ('00000000-0000-0000-0000-00000003de01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-0000000000f1', 'Extras');
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor) values
+  ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000003de01', 'Extra', 8888);
 
 -- ---- first submit: 1 item, 2 x (500 + modifier 100) => line/subtotal 1200
 select app.submit_order(
