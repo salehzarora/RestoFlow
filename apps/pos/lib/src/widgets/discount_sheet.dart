@@ -176,6 +176,13 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
     // await; that pre-existing disposal hazard is recorded as a residual risk
     // and is not money.)
     final cartController = ref.read(cartControllerProvider.notifier);
+    // MONEY-LOCAL-ATOMICITY-003A (Part F): the order-sync controller is captured
+    // here too. Both post-await reads used to go through `ref`, and if the
+    // cashier dismissed the sheet while the RPC was in flight the widget was
+    // disposed — so `ref` threw "Cannot use ref after the widget was disposed"
+    // and the refresh never ran. Notifiers outlive this widget; holding them is
+    // the same pattern the navigator above already uses.
+    final orderSync = ref.read(posOrderSyncControllerProvider.notifier);
     try {
       final result = await ref
           .read(discountRepositoryProvider)
@@ -210,21 +217,18 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
       // envelope carries the new discount/grand/revision but NOT the status, tax or
       // settlement, so we take the authoritative snapshot rather than assembling a
       // half-truth from the parts we happen to have.
-      await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
-        <String>[widget.orderId],
-      );
-      navigator.pop();
+      await orderSync.refreshOrders(<String>[widget.orderId]);
+      // The route is only popped while this sheet is still mounted. A dismissed
+      // sheet has already gone; popping again would take the screen beneath it.
+      if (mounted) navigator.pop();
     } on DiscountException catch (e) {
-      if (!mounted) return;
       // POS-OPERATIONS-SYNC-001 (review correction): a CONFLICT means our picture of
       // this order is stale, so the totals this sheet was computed from are wrong.
       // Fetch the truth BEFORE explaining anything -- a conflict message on top of a
       // stale total explains nothing. It is NEVER auto-retried: the cashier must act
       // again deliberately, against the refreshed state.
       if (e.conflict) {
-        await ref.read(posOrderSyncControllerProvider.notifier).refreshOrders(
-          <String>[widget.orderId],
-        );
+        await orderSync.refreshOrders(<String>[widget.orderId]);
       }
       if (!mounted) return;
       setState(() {

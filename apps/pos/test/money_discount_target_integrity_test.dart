@@ -305,33 +305,32 @@ void main() {
     final repo = _GatedDiscountRepo()..gate = true;
     final c = harness(repo);
 
-    // SCOPE NOTE, stated rather than faked. Two discount RPCs cannot actually
-    // be in flight at once through the UI: the sheet stays open until its own
-    // response arrives, and dismissing it mid-flight hits a PRE-EXISTING
-    // disposal hazard (`_apply` reads `ref` after the await to refresh orders,
-    // guarded by `if (!mounted)` only AFTERWARDS) that is not money and is out
-    // of this phase's bounded scope — it is recorded as a residual risk.
-    //
-    // So the reverse-resolution contract is proven where it actually lives: at
-    // the mutation boundary, by delivering the two responses to the controller
-    // in reverse order with their true target ids. This is the same call the
-    // sheet makes, and C1/H1/H2 above already prove the widget path.
+    // MONEY-LOCAL-ATOMICITY-003A (Part F) made this reachable through the REAL
+    // widget path. It previously could not be: dismissing the sheet mid-flight
+    // hit a disposal hazard, so two discount RPCs could never both be pending.
+    // Now the sheet captures its notifiers before the await, so a dismissed
+    // sheet still completes safely and a second request can be started.
     holdConfirmationFor(c, 'order-A');
-    final cart = c.read(cartControllerProvider.notifier);
+    await pumpHost(tester, c);
+    await applyDiscount(tester, 'order-A');
+    await dismissSheet(tester);
 
-    // B becomes the held confirmation while A's request is still outstanding.
+    // B becomes the held confirmation, and B is discounted too.
     holdConfirmationFor(c, 'order-B');
+    await applyDiscount(tester, 'order-B');
+    expect(repo.requestedOrderIds, <String>['order-A', 'order-B']);
 
-    // B's response lands first — B is held, so B legitimately updates.
-    cart.applyOrderDiscount(orderId: 'order-B', discountTotalMinor: kDiscount);
+    // They resolve in REVERSE order: B first, then the stale A.
+    repo.release('order-B', discountTotalMinor: kDiscount);
+    await tester.pumpAndSettle();
     expect(
       snapshotOf(c).discount,
       kDiscount,
       reason: 'B is held, so B may update',
     );
 
-    // Then A's stale response arrives with a DIFFERENT amount.
-    cart.applyOrderDiscount(orderId: 'order-A', discountTotalMinor: 500);
+    repo.release('order-A', discountTotalMinor: 500);
+    await tester.pumpAndSettle();
 
     final finalB = snapshotOf(c);
     expect(
@@ -342,6 +341,47 @@ void main() {
     expect(finalB.grand, kDiscountedTotal);
     expect(finalB.orderId, 'order-B');
     expect(finalB.subtotal, kOrderTotal);
+  });
+
+  testWidgets('F2 DISPOSED SHEET: dismissing the sheet while its request is in '
+      'flight must not crash, must not re-send, and must still land the '
+      'discount on its own order', (tester) async {
+    final repo = _GatedDiscountRepo()..gate = true;
+    final c = harness(repo);
+
+    holdConfirmationFor(c, 'order-B');
+    await pumpHost(tester, c);
+    await applyDiscount(tester, 'order-B');
+    expect(repo.requestedOrderIds, <String>['order-B']);
+
+    // The cashier dismisses the sheet before the server answers.
+    await dismissSheet(tester);
+    await tester.pumpAndSettle();
+
+    // The response arrives to a disposed widget.
+    repo.release('order-B');
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.takeException(),
+      isNull,
+      reason:
+          '_apply used to read `ref` after the await, so a dismissed sheet '
+          'threw "Cannot use ref after the widget was disposed"',
+    );
+    expect(
+      repo.requestedOrderIds,
+      <String>['order-B'],
+      reason: 'and the dismissal must not re-send the discount',
+    );
+    final v = snapshotOf(c);
+    expect(
+      v.discount,
+      kDiscount,
+      reason: 'the server accepted it, so B genuinely is discounted',
+    );
+    expect(v.orderId, 'order-B');
+    expect(v.grand, kDiscountedTotal);
   });
 
   testWidgets('H1 DOCUMENT ISOLATION: discounting B while A is held leaves '

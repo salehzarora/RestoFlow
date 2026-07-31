@@ -129,8 +129,11 @@ class OrderSubmissionModifier {
 /// A single line on an [OrderSubmissionPayload]. Money is integer minor units
 /// only (DECISION D-007); the name + unit price are snapshots captured at order
 /// time (DECISION D-008), never recomputed from a live menu. [lineTotalMinor]
-/// follows the RF-052 server formula `qty × unit + Σmodifiers` (the server
-/// recomputes and rejects any mismatch).
+/// follows the server formula corrected in MONEY-PRICING-FORMULA-002A,
+/// `qty × (unit + Σmodifiers)` (the server recomputes and rejects any
+/// mismatch). [unitPriceMinorSnapshot] stays the BARE unit price and each
+/// modifier's `price_minor_snapshot` stays its UNIT delta — neither is
+/// pre-multiplied on the wire.
 class OrderSubmissionItem {
   const OrderSubmissionItem({
     required this.menuItemId,

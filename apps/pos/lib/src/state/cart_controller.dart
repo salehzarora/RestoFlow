@@ -10,9 +10,11 @@ import 'submitted_order_view.dart';
 /// order-time snapshot (D-008) the payload sends as an `order_item_modifiers`
 /// entry: option id + group/option name snapshots + a SIGNED minor-unit price
 /// delta. [quantity] (modifier-quantity sprint) is how many units of THIS
-/// option the cashier took (extra cheese ×2) — the frozen RF-052 total
-/// formula the server recomputes is
-/// `line_total = qty × unit + Σ(delta × modifier_qty) − discount`.
+/// option the cashier took (extra cheese ×2). The total formula the server
+/// recomputes is the CORRECTED per-unit one (MONEY-PRICING-FORMULA-002A):
+/// `line_total = qty × (unit + Σ(delta × modifier_qty)) − discount`.
+/// The surcharge belongs to the per-unit price, so it is charged once per ITEM
+/// UNIT — the old `qty × unit + Σ` under-charged every extra unit.
 class SelectedModifier {
   const SelectedModifier({
     required this.optionId,
@@ -262,7 +264,8 @@ List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) =>
 ///
 /// Money fields are integer minor units (DECISION D-007); [unitPrice] and
 /// [lineTotal] expose them as [Money] for type-safe display formatting.
-/// [lineTotalMinor] uses the SERVER's formula: `qty × unit + Σmodifiers`.
+/// [lineTotalMinor] uses the SERVER's formula, corrected in
+/// MONEY-PRICING-FORMULA-002A: `qty × (unit + Σmodifiers)`.
 class CartLineView {
   const CartLineView({
     required this.lineId,

@@ -321,9 +321,11 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
             nameSnapshot: l.name,
             quantity: l.quantity,
             unitPriceMinorSnapshot: l.unitPriceMinor,
-            // Already includes the line's modifier deltas × quantities
-            // (RF-052 formula) — the server recomputes
-            // qty×unit + Σ(delta × modifier_qty) and must match.
+            // Already includes the line's modifier deltas × quantities, inside
+            // the per-unit multiplication — the server recomputes
+            // qty × (unit + Σ(delta × modifier_qty)) and must match
+            // (MONEY-PRICING-FORMULA-002A). The wire still carries the BARE
+            // unit price and the UNIT delta; only this total is multiplied.
             lineTotalMinor: l.lineTotalMinor,
             notes: l.note,
             prepComponents:
