@@ -805,6 +805,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posOutboxRetryAll => 'Retry all';
 
   @override
+  String get posStorageWriteRefused => 'This device could not save an order';
+
+  @override
+  String posStorageUnreadable(int count) {
+    return '$count local records cannot be read';
+  }
+
+  @override
+  String get posStorageNeedsAttention =>
+      'Local storage needs attention — records are being kept but cannot sync';
+
+  @override
   String get posOrderSubmittedTitle => 'Order sent';
 
   @override

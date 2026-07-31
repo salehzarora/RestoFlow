@@ -797,6 +797,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posOutboxRetryAll => 'إعادة المحاولة';
 
   @override
+  String get posStorageWriteRefused => 'هذا الجهاز لم يستطع حفظ طلب';
+
+  @override
+  String posStorageUnreadable(int count) {
+    return '$count سجلات محلية لا يمكن قراءتها';
+  }
+
+  @override
+  String get posStorageNeedsAttention =>
+      'التخزين المحلي يحتاج انتباه — السجلات محفوظة لكن لا يمكن مزامنتها';
+
+  @override
   String get posOrderSubmittedTitle => 'تم إرسال الطلب';
 
   @override

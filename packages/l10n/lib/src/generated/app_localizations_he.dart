@@ -791,6 +791,18 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posOutboxRetryAll => 'נסה שוב';
 
   @override
+  String get posStorageWriteRefused => 'המכשיר לא הצליח לשמור הזמנה';
+
+  @override
+  String posStorageUnreadable(int count) {
+    return '$count רשומות מקומיות לא ניתנות לקריאה';
+  }
+
+  @override
+  String get posStorageNeedsAttention =>
+      'האחסון המקומי דורש טיפול — הרשומות נשמרות אך אינן מסתנכרנות';
+
+  @override
   String get posOrderSubmittedTitle => 'ההזמנה נשלחה';
 
   @override

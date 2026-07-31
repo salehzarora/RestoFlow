@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/order_submission.dart';
+import 'package:restoflow_pos/src/state/local_storage_health_provider.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
 import 'package:restoflow_pos/src/widgets/outbox_status_indicator.dart';
 
@@ -45,11 +46,18 @@ OutboxEntry _e(OutboxSyncState state, {String op = 'op'}) => OutboxEntry(
   clientCreatedAt: DateTime.utc(2026, 6, 29, 9),
 );
 
-Future<_SeededOutbox> _pump(WidgetTester tester, List<OutboxEntry> seed) async {
+Future<_SeededOutbox> _pump(
+  WidgetTester tester,
+  List<OutboxEntry> seed, {
+  PosLocalStorageHealth storage = const PosLocalStorageHealth(),
+}) async {
   final controller = _SeededOutbox(seed);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [outboxControllerProvider.overrideWith(() => controller)],
+      overrides: [
+        outboxControllerProvider.overrideWith(() => controller),
+        posLocalStorageHealthProvider.overrideWithValue(storage),
+      ],
       child: const MaterialApp(
         locale: Locale('en'),
         localizationsDelegates: restoflowLocalizationsDelegates,
@@ -163,4 +171,86 @@ void main() {
       expect(find.text('All orders synced'), findsNothing);
     },
   );
+
+  // MONEY-DURABLE-STORES-003B: local storage that refused a write, or that is
+  // holding records this build cannot read, outranks every queue state — and is
+  // shown even when the queue is empty.
+  group('local-storage health', () {
+    testWidgets('a refused durable write is shown INSTEAD of "all synced"', (
+      tester,
+    ) async {
+      await _pump(tester, [
+        _e(OutboxSyncState.applied, op: 'a'),
+      ], storage: const PosLocalStorageHealth(writeRefused: true));
+      expect(find.text('This device could not save an order'), findsOneWidget);
+      expect(
+        find.text('All orders synced'),
+        findsNothing,
+        reason:
+            'a till that could not store an order must never present the same '
+            'confident face as a healthy one',
+      );
+    });
+
+    testWidgets('unreadable records are reported with their count', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const [],
+        storage: const PosLocalStorageHealth(unreadableRecords: 3),
+      );
+      expect(find.text('3 local records cannot be read'), findsOneWidget);
+      expect(
+        find.byKey(const Key('outbox-status-indicator')),
+        findsOneWidget,
+        reason:
+            'an EMPTY queue must still surface storage trouble — otherwise the '
+            'only sign is silence',
+      );
+    });
+
+    testWidgets('storage trouble outranks a failed queue entry', (
+      tester,
+    ) async {
+      await _pump(tester, [
+        _e(OutboxSyncState.rejected, op: 'a'),
+      ], storage: const PosLocalStorageHealth(writeRefused: true));
+      expect(find.text('This device could not save an order'), findsOneWidget);
+      expect(find.text('1 failed — retry'), findsNothing);
+      expect(
+        find.byKey(const Key('outbox-retry-all')),
+        findsNothing,
+        reason: 'retrying does not fix storage that refuses writes',
+      );
+    });
+
+    testWidgets('the spoken label explains what the icon cannot', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const [],
+        storage: const PosLocalStorageHealth(unreadableRecords: 1),
+      );
+      final labels = tester
+          .widgetList<Semantics>(find.byType(Semantics))
+          .map((s) => s.properties.label)
+          .whereType<String>();
+      expect(
+        labels,
+        contains(
+          '1 local records cannot be read. Local storage needs attention — '
+          'records are being kept but cannot sync',
+        ),
+      );
+    });
+
+    testWidgets('a healthy till with an empty queue still renders nothing', (
+      tester,
+    ) async {
+      await _pump(tester, const []);
+      expect(find.byKey(const Key('outbox-status-indicator')), findsNothing);
+    });
+  });
 }

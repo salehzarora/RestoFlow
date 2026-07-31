@@ -1576,6 +1576,24 @@ abstract class AppLocalizations {
   /// **'Retry all'**
   String get posOutboxRetryAll;
 
+  /// MONEY-DURABLE-STORES-003B: POS storage status — a durable local write was refused (full disk / browser refusing storage). The affected order was NOT sent.
+  ///
+  /// In en, this message translates to:
+  /// **'This device could not save an order'**
+  String get posStorageWriteRefused;
+
+  /// MONEY-DURABLE-STORES-003B: POS storage status — N stored records this build cannot decode. They are kept, not deleted, but they will not sync.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} local records cannot be read'**
+  String posStorageUnreadable(int count);
+
+  /// MONEY-DURABLE-STORES-003B: POS storage status — the full spoken/tooltip explanation behind the storage warning icon.
+  ///
+  /// In en, this message translates to:
+  /// **'Local storage needs attention — records are being kept but cannot sync'**
+  String get posStorageNeedsAttention;
+
   /// POS heading on the local order-confirmation panel after Send Order.
   ///
   /// In en, this message translates to:

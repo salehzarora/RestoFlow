@@ -5,6 +5,7 @@ import 'package:restoflow_l10n/restoflow_l10n.dart';
 
 import '../data/order_submission.dart';
 import '../pos_palette.dart' show kPosCompactAppBarWidth;
+import '../state/local_storage_health_provider.dart';
 import '../state/outbox_controller.dart';
 
 /// RF-114: a compact app-bar indicator of the order OUTBOX's aggregate sync
@@ -16,7 +17,14 @@ import '../state/outbox_controller.dart';
 ///  * PENDING → "N pending sync" (queued locally, durable across refresh/restart).
 ///  * else    → "All orders synced" — shown ONLY for orders the backend confirmed.
 ///
-/// Renders NOTHING when no order has been submitted this session (no clutter).
+///  * STORAGE → "This device could not save an order" / "N local records cannot
+///    be read" (MONEY-DURABLE-STORES-003B). Ranked ABOVE everything else and
+///    shown even with an empty queue: a till whose storage refused a write, or
+///    which is holding records it cannot decode, must never present the same
+///    confident face as a healthy one — least of all "All orders synced".
+///
+/// Renders NOTHING when no order has been submitted this session AND local
+/// storage is healthy (no clutter).
 /// RTL-safe (a plain [Row]; the framework mirrors it under an RTL Directionality).
 class OutboxStatusIndicator extends ConsumerWidget {
   const OutboxStatusIndicator({super.key});
@@ -25,7 +33,8 @@ class OutboxStatusIndicator extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final entries = ref.watch(outboxControllerProvider);
-    if (entries.isEmpty) return const SizedBox.shrink();
+    final storage = ref.watch(posLocalStorageHealthProvider);
+    if (entries.isEmpty && storage.isHealthy) return const SizedBox.shrink();
 
     // CONSERVATIVE aggregation (RF-114 Codex fix): "All orders synced" shows ONLY
     // when EVERY entry is `applied` (backend-confirmed). Non-final / ambiguous
@@ -67,7 +76,18 @@ class OutboxStatusIndicator extends ConsumerWidget {
     final String label;
     final Color color;
     VoidCallback? onTap;
-    if (failed > 0) {
+    // MONEY-DURABLE-STORES-003B: local storage first. A refused durable write
+    // means an order could not be saved (and was therefore NOT sent);
+    // undecodable records are being preserved but will never sync. Either way
+    // the queue counts below describe only what the app can still see, so
+    // reporting them as the whole truth would be the lie this phase removes.
+    if (!storage.isHealthy) {
+      icon = Icons.sd_card_alert_outlined;
+      color = RestoflowTone.danger.styleOf(theme).accent;
+      label = storage.writeRefused
+          ? l10n.posStorageWriteRefused
+          : l10n.posStorageUnreadable(storage.unreadableRecords);
+    } else if (failed > 0) {
       icon = Icons.error_outline;
       color = RestoflowTone.danger.styleOf(theme).accent;
       label = l10n.posOutboxFailed(failed);
@@ -132,9 +152,17 @@ class OutboxStatusIndicator extends ConsumerWidget {
           )
         : chip;
 
+    // The storage warning spells out what it means for the operator; the icon
+    // alone would only say "something is wrong".
+    final spoken = !storage.isHealthy
+        ? '$label. ${l10n.posStorageNeedsAttention}'
+        : onTap != null
+        ? '$label. ${l10n.posOutboxRetryAll}'
+        : label;
+
     return Semantics(
       button: onTap != null,
-      label: onTap != null ? '$label. ${l10n.posOutboxRetryAll}' : label,
+      label: spoken,
       child: onTap == null
           ? Center(key: const Key('outbox-status-indicator'), child: sized)
           : InkWell(

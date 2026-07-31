@@ -20,6 +20,7 @@ import 'package:restoflow_pos/src/data/outbox_repository.dart';
 import 'package:restoflow_pos/src/data/recent_orders_store.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/draft_recovery_controller.dart';
+import 'package:restoflow_pos/src/state/local_storage_health_provider.dart';
 import 'package:restoflow_pos/src/state/order_setup_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart'
     show posSyncClockProvider, orderSnapshotRepositoryProvider;
@@ -547,6 +548,107 @@ void main() {
       expect(discarded, isFalse);
       expect(c.read(posDraftRecoveryProvider).containsKey('e1'), isTrue);
     });
+  });
+
+  // =========================================================================
+  // G — THE OPERATOR SURFACE IS WIRED TO THE REAL STORES
+  // =========================================================================
+  group('G. local-storage health provider', () {
+    ProviderContainer container(
+      SharedPreferences prefs, {
+      SyncSession? session = _session,
+    }) {
+      final c = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          posSyncSessionProvider.overrideWithValue(session),
+          durableOutboxStoreProvider.overrideWithValue(
+            SharedPrefsOutboxStore(prefs),
+          ),
+          posDraftRecoveryStoreProvider.overrideWithValue(
+            SharedPrefsDraftRecoveryStore(prefs),
+          ),
+        ],
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    test('G1 a healthy till reports healthy', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final prefs = await SharedPreferences.getInstance();
+      final health = container(prefs).read(posLocalStorageHealthProvider);
+      expect(health.isHealthy, isTrue);
+      expect(health.unreadableRecords, 0);
+    });
+
+    test('G2 a REAL refused write is reported', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final prefs = FailingPrefs(await SharedPreferences.getInstance());
+      final c = container(prefs);
+      final store = c.read(durableOutboxStoreProvider)!;
+
+      prefs.failWrites = true;
+      await store
+          .persist(_session.deviceId, <OutboxEntry>[_entry()])
+          .catchError((Object _) {});
+
+      final health = c.read(posLocalStorageHealthProvider);
+      expect(health.writeRefused, isTrue);
+      expect(health.isHealthy, isFalse);
+    });
+
+    test(
+      'G3 REAL undecodable records are counted across both stores',
+      () async {
+        final brokenEntry = _entry(localOperationId: 'op-x').toJson();
+        brokenEntry['sync_state'] = 'from_a_newer_build';
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          _outboxKey: jsonEncode(<String, Object?>{
+            'version': SharedPrefsOutboxStore.schemaVersion,
+            'entries': <Object?>[_entry().toJson(), brokenEntry],
+          }),
+          _recoveryKey: jsonEncode(<String, Object?>{
+            'version': SharedPrefsDraftRecoveryStore.schemaVersion,
+            'recoveries': <String, Object?>{
+              'broken': <String, Object?>{'outbox_entry_id': 'broken'},
+            },
+          }),
+        });
+        final prefs = await SharedPreferences.getInstance();
+
+        final health = container(prefs).read(posLocalStorageHealthProvider);
+        expect(
+          health.unreadableRecords,
+          2,
+          reason: 'one undecodable outbox entry plus one undecodable recovery',
+        );
+        expect(health.isHealthy, isFalse);
+      },
+    );
+
+    test(
+      'G4 with no session the per-device outbox is not guessed at',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          _outboxKey: '{corrupt',
+        });
+        final prefs = await SharedPreferences.getInstance();
+        final health = container(
+          prefs,
+          session: null,
+        ).read(posLocalStorageHealthProvider);
+        expect(
+          health.unreadableRecords,
+          0,
+          reason:
+              'without a session there is no scope key, and counting another '
+              "device's records would be a guess",
+        );
+      },
+    );
   });
 
   // =========================================================================

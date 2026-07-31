@@ -544,6 +544,15 @@
   "@posOutboxAttention": {"description": "RF-114: POS outbox chip — a queued order is in a conflict/resolved state that needs review; NOT confirmed synced."},
   "posOutboxRetryAll": "Retry all",
   "@posOutboxRetryAll": {"description": "RF-114: POS outbox — retry-all-failed action label."},
+  "posStorageWriteRefused": "This device could not save an order",
+  "@posStorageWriteRefused": {"description": "MONEY-DURABLE-STORES-003B: POS storage status — a durable local write was refused (full disk / browser refusing storage). The affected order was NOT sent."},
+  "posStorageUnreadable": "{count} local records cannot be read",
+  "@posStorageUnreadable": {
+    "description": "MONEY-DURABLE-STORES-003B: POS storage status — N stored records this build cannot decode. They are kept, not deleted, but they will not sync.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "posStorageNeedsAttention": "Local storage needs attention — records are being kept but cannot sync",
+  "@posStorageNeedsAttention": {"description": "MONEY-DURABLE-STORES-003B: POS storage status — the full spoken/tooltip explanation behind the storage warning icon."},
   "posOrderSubmittedTitle": "Order sent",
   "@posOrderSubmittedTitle": {
     "description": "POS heading on the local order-confirmation panel after Send Order."
