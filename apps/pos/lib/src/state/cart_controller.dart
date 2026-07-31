@@ -21,9 +21,28 @@ class SelectedModifier {
     required this.priceDeltaMinor,
     this.quantity = 1,
     this.kitchenMeat,
+    this.modifierGroupId,
   });
 
   final String optionId;
+
+  /// MONEY-EDIT-INTEGRITY-002C (Codex Blocker 4) — the STABLE id of the
+  /// modifier group this option was selected from (`PosModifierGroup.id`, i.e.
+  /// the server `modifiers.id` the POS menu payload serves).
+  ///
+  /// LOCAL EDIT-SAFETY METADATA ONLY. It never reaches the order wire, the
+  /// `order_item_modifiers` schema, an RPC argument, a receipt, a kitchen
+  /// ticket or a KDS payload: those are built from a SEPARATE
+  /// `OrderSubmissionModifier` whose `toJson` writes its own fixed key set, so
+  /// the wire shape and the server's content fingerprint are untouched.
+  ///
+  /// Null on a LEGACY record written before this field existed. That absence is
+  /// tolerated — rejecting proven-valid history would be a worse defect than
+  /// the one this fixes — and resolved fail-closed at edit time instead (see
+  /// the modifier sheet). A group id is only ever WRITTEN after a healthy,
+  /// intentional edit where the current group→option relationship was proven.
+  final String? modifierGroupId;
+
   final String groupName;
   final String optionName;
 
@@ -52,6 +71,12 @@ class SelectedModifier {
   /// integer minor (D-007); the kitchen count rides through KitchenMeat's json.
   Map<String, Object?> toJson() => <String, Object?>{
     'option_id': optionId,
+    // MONEY-EDIT-INTEGRITY-002C: emitted ONLY when known, so a record that
+    // carries no proven group id stays byte-identical to one written before
+    // this field existed — the same additive shape `kitchen_meat` uses. This
+    // is LOCAL persistence (cart draft / parked cart / draft recovery); the
+    // order wire is built from `OrderSubmissionModifier`, not from here.
+    if (modifierGroupId != null) 'modifier_group_id': modifierGroupId,
     'group_name': groupName,
     'option_name': optionName,
     'price_delta_minor': priceDeltaMinor,
@@ -112,8 +137,28 @@ class SelectedModifier {
         throw FormatException('modifier quantity must be >= 1, got $quantity');
       }
     }
+    // MONEY-EDIT-INTEGRITY-002C — strict, under the SAME 002B corruption
+    // contract as the money above. ABSENT is the one legacy allowance (a record
+    // written before the field existed); a value that is PRESENT must be an
+    // exact non-blank String. Absence is distinguished from an explicit null
+    // via containsKey, so a corrupt null can never masquerade as legacy — that
+    // is precisely the coercion that would hand a moved option a free pass.
+    final String? modifierGroupId;
+    if (!json.containsKey('modifier_group_id')) {
+      modifierGroupId = null;
+    } else {
+      final raw = json['modifier_group_id'];
+      if (raw is! String || raw.trim().isEmpty) {
+        throw FormatException(
+          'modifier modifier_group_id is not a non-blank string: '
+          '${raw == null ? 'null' : raw.runtimeType}',
+        );
+      }
+      modifierGroupId = raw;
+    }
     return SelectedModifier(
       optionId: optionId,
+      modifierGroupId: modifierGroupId,
       groupName: (json['group_name'] ?? '').toString(),
       optionName: (json['option_name'] ?? '').toString(),
       priceDeltaMinor: priceDeltaMinor,

@@ -278,6 +278,14 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   Map<String, int> _groupSelection(String groupId) =>
       _selected[groupId] ?? const {};
 
+  /// MONEY-EDIT-INTEGRITY-002C: [group]'s stable id, or null when the live menu
+  /// did not supply one. `PosModifierGroup.id` is non-nullable but the payload
+  /// parse is tolerant, so a row without an `id` arrives as the empty string.
+  /// Treating that as an identity would either persist a record the strict
+  /// decoder rejects, or let two id-less groups look like the same group.
+  static String? _stableGroupId(PosModifierGroup group) =>
+      group.id.trim().isEmpty ? null : group.id;
+
   /// MONEY-MODIFIER-PRICING-INTEGRITY-001 — the stored selections this sheet
   /// CANNOT represent against the live groups (option removed, moved to another
   /// group, or the groups could not be loaded at all).
@@ -401,6 +409,18 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
         if (_groupSelection(group.id).containsKey(option.id))
           SelectedModifier(
             optionId: option.id,
+            // MONEY-EDIT-INTEGRITY-002C: capture the STABLE group id this
+            // option was actually chosen from, so a later edit can tell a
+            // genuine re-selection from an option that has since been moved
+            // into a different group with different semantics and price.
+            //
+            // BLANK is written as NULL, never as ''. The menu parse is
+            // tolerant — a payload row with no `id` yields the empty string
+            // rather than skipping the group (pos_menu_provider.dart) — and
+            // persisting '' would produce a record the strict decoder rejects,
+            // quarantining the cashier's own cart on the next restart. A blank
+            // id is simply "unknown", which resolves fail-closed by name.
+            modifierGroupId: _stableGroupId(group),
             groupName: group.name,
             optionName: option.name,
             priceDeltaMinor: option.priceDeltaMinor,
