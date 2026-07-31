@@ -184,8 +184,11 @@ void main() {
         );
       });
 
-      test('A8 item quantity 2 applies the ITEM price twice and the modifier '
-          'delta ONCE (the frozen RF-052 formula)', () {
+      test('A8 item quantity 2 charges TWO fully configured units — the '
+          'authoritative MONEY_AND_TAX_SPEC §9.1 formula', () {
+        // CORRECTED by MONEY-PRICING-FORMULA-002A. This previously pinned
+        // `2 × base + delta ONCE`, under-charging one surcharge per extra unit
+        // while the kitchen still cooked two upgraded meals.
         final c = container();
         final id = addConfigured(c, burger, [meat(k240gMinor)]);
         cartOf(c).increaseQuantity(id);
@@ -193,9 +196,9 @@ void main() {
         expect(v.lines.single.quantity, 2);
         expect(
           v.lines.single.lineTotalMinor,
-          2 * kBurgerBaseMinor + k240gMinor,
+          2 * (kBurgerBaseMinor + k240gMinor),
         );
-        expect(v.subtotalMinor, 2 * kBurgerBaseMinor + k240gMinor);
+        expect(v.subtotalMinor, 2 * (kBurgerBaseMinor + k240gMinor));
       });
 
       test('A9 modifier quantity multiplies the delta exactly once', () {
