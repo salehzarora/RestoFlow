@@ -59,16 +59,65 @@ class SelectedModifier {
     if (kitchenMeat != null) 'kitchen_meat': kitchenMeat!.toJson(),
   };
 
-  /// Tolerant decode — a missing/absent field defaults safely so an older or
-  /// partial record never crashes the till on start.
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001 — FAIL-CLOSED decode.
+  ///
+  /// This used to be "tolerant": `int.tryParse('${v ?? ''}') ?? 0`. That turned
+  /// unreadable MONEY into a free option — the modifier name still rendered, so
+  /// a 15.00 surcharge silently vanished and the line fell back to its base
+  /// price. A cart we cannot read is not a cart we are entitled to re-price.
+  ///
+  /// The contract, derived from the ACTUAL serialized history rather than
+  /// assumed — [toJson] has written BOTH `price_delta_minor` and `quantity`
+  /// since it was introduced (ab43893, MENU-ORDER-001), so no record this app
+  /// ever wrote can be missing either:
+  ///
+  ///  * `price_delta_minor` ABSENT      -> corrupt (never "free").
+  ///  * `price_delta_minor` present but not an int -> corrupt.
+  ///  * `quantity` ABSENT               -> 1. The ONLY legacy allowance, kept
+  ///    for records predating explicit modifier quantities. Absence is
+  ///    distinguished from an explicit null via [Map.containsKey], so a
+  ///    corrupt null can never masquerade as a legacy record.
+  ///  * `quantity` present but not an int, or < 1 -> corrupt. A zero quantity
+  ///    would zero [totalDeltaMinor], which is the same under-charge by
+  ///    another route.
+  ///  * `option_id` blank -> corrupt: an unidentifiable option cannot be
+  ///    re-priced, re-sent or reasoned about.
+  ///
+  /// Throwing is what makes this safe: every caller already treats a throw as
+  /// "this record is unreadable". A parked cart lands in
+  /// `ParkedCartsSnapshot.unreadable`, which is preserved VERBATIM on disk and
+  /// re-emitted untouched by the next write, so the record is never destroyed
+  /// and the active cart is never replaced by an under-charged one.
   static SelectedModifier fromJson(Map<String, Object?> json) {
-    int intOf(Object? v) => v is int ? v : int.tryParse('${v ?? ''}') ?? 0;
+    int requireInt(String key) {
+      final raw = json[key];
+      if (raw is int) return raw;
+      throw FormatException(
+        'modifier $key is not an integer minor-unit value: '
+        '${raw == null ? 'absent/null' : raw.runtimeType}',
+      );
+    }
+
+    final optionId = (json['option_id'] ?? '').toString();
+    if (optionId.isEmpty) {
+      throw const FormatException('modifier has no option_id');
+    }
+    final priceDeltaMinor = requireInt('price_delta_minor');
+    final int quantity;
+    if (!json.containsKey('quantity')) {
+      quantity = 1; // legacy record, written before modifier quantities
+    } else {
+      quantity = requireInt('quantity');
+      if (quantity < 1) {
+        throw FormatException('modifier quantity must be >= 1, got $quantity');
+      }
+    }
     return SelectedModifier(
-      optionId: (json['option_id'] ?? '').toString(),
+      optionId: optionId,
       groupName: (json['group_name'] ?? '').toString(),
       optionName: (json['option_name'] ?? '').toString(),
-      priceDeltaMinor: intOf(json['price_delta_minor']),
-      quantity: json['quantity'] == null ? 1 : intOf(json['quantity']),
+      priceDeltaMinor: priceDeltaMinor,
+      quantity: quantity,
       kitchenMeat: KitchenMeat.tryFromJson(json['kitchen_meat']),
     );
   }
