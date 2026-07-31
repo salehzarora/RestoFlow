@@ -613,6 +613,7 @@ begin
     'order_status', case when coalesce((v_auto ->> 'completed')::boolean, false)
                          then 'completed' else 'submitted' end);
 end;
+$$;
 
 create or replace function app.add_order_items(
   p_pin_session_id     uuid,
