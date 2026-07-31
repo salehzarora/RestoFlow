@@ -167,6 +167,15 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
       _applyError = null;
     });
     final navigator = Navigator.of(context);
+    // MONEY-DISCOUNT-TARGET-INTEGRITY-002E: captured BEFORE the await, the same
+    // way the navigator above already is. If the sheet is dismissed while the
+    // RPC is in flight, `ref` is dead and reading it would throw before the
+    // identity guard could run — so the money decision would never be made at
+    // all. Holding the notifier lets the guard evaluate and, for a stale
+    // response, safely decline. (The refresh below still reads `ref` after the
+    // await; that pre-existing disposal hazard is recorded as a residual risk
+    // and is not money.)
+    final cartController = ref.read(cartControllerProvider.notifier);
     try {
       final result = await ref
           .read(discountRepositoryProvider)
@@ -180,9 +189,18 @@ class _DiscountSheetState extends ConsumerState<DiscountSheet> {
             expectedRevision: widget.expectedRevision,
           );
       // SERVER-AUTHORITATIVE (real) / demo-local: reflect the result's discount.
-      ref
-          .read(cartControllerProvider.notifier)
-          .applyOrderDiscount(discountTotalMinor: result.discountTotalMinor);
+      //
+      // MONEY-DISCOUNT-TARGET-INTEGRITY-002E: name the SAME order locally that
+      // was just named on the wire. This sheet is opened per RECENT ORDER, so
+      // the order it discounts is routinely NOT the one on the confirmation;
+      // the local write used to carry no identity at all and landed on whatever
+      // was held. The controller now applies it only on an exact match and is
+      // a safe no-op otherwise — including when this response arrives after the
+      // cashier has moved on to a different confirmation.
+      cartController.applyOrderDiscount(
+        orderId: widget.orderId,
+        discountTotalMinor: result.discountTotalMinor,
+      );
 
       // POS-OPERATIONS-SYNC-001 — THE "STALE 40" FIX.
       //

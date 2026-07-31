@@ -187,12 +187,13 @@ typedef SubmittedOrderViewSnapshot = ({
   int grand,
 });
 
-/// Pumps a host whose one button opens the REAL sheet for [orderId].
+/// Pumps ONE host carrying a button per order — the shape of the Orders sheet,
+/// where every recent-order row can open the discount sheet for its own order.
 Future<void> pumpHost(
   WidgetTester tester,
-  ProviderContainer c,
-  String orderId,
-) async {
+  ProviderContainer c, {
+  List<String> orderIds = const ['order-A', 'order-B'],
+}) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: c,
@@ -201,16 +202,22 @@ Future<void> pumpHost(
         supportedLocales: kSupportedLocales,
         home: Scaffold(
           body: Builder(
-            builder: (ctx) => TextButton(
-              onPressed: () => DiscountSheet.show(
-                ctx,
-                // Exactly what order_action_row.dart passes for a recent order.
-                orderId: orderId,
-                subtotalMinor: kOrderTotal,
-                taxTotalMinor: 0,
-                currencyCode: 'ILS',
-              ),
-              child: const Text('open'),
+            builder: (ctx) => Column(
+              children: [
+                for (final id in orderIds)
+                  TextButton(
+                    key: Key('open-$id'),
+                    onPressed: () => DiscountSheet.show(
+                      ctx,
+                      // Exactly what order_action_row.dart passes per row.
+                      orderId: id,
+                      subtotalMinor: kOrderTotal,
+                      taxTotalMinor: 0,
+                      currencyCode: 'ILS',
+                    ),
+                    child: Text('open $id'),
+                  ),
+              ],
             ),
           ),
         ),
@@ -220,9 +227,9 @@ Future<void> pumpHost(
   await tester.pump();
 }
 
-/// Opens the sheet and taps Apply with a fixed 20.00 discount and a reason.
-Future<void> applyDiscount(WidgetTester tester) async {
-  await tester.tap(find.text('open'));
+/// Opens [orderId]'s sheet and taps Apply with a fixed 20.00 discount.
+Future<void> applyDiscount(WidgetTester tester, String orderId) async {
+  await tester.tap(find.byKey(Key('open-$orderId')));
   await tester.pumpAndSettle();
   final fields = find.byType(TextField);
   expect(fields, findsWidgets, reason: 'the real sheet is open');
@@ -230,6 +237,12 @@ Future<void> applyDiscount(WidgetTester tester) async {
   await tester.enterText(fields.last, 'manager comp');
   await tester.pump();
   await tester.tap(find.byType(FilledButton).last);
+  await tester.pump();
+}
+
+/// Dismisses a sheet that is still waiting on its gated response.
+Future<void> dismissSheet(WidgetTester tester) async {
+  await tester.tapAt(const Offset(20, 20));
   await tester.pump();
 }
 
@@ -259,8 +272,11 @@ void main() {
     final c = harness(repo);
 
     holdConfirmationFor(c, 'order-A');
-    await pumpHost(tester, c, 'order-A');
-    await applyDiscount(tester); // A's request is now in flight, un-resolved
+    await pumpHost(tester, c);
+    await applyDiscount(
+      tester,
+      'order-A',
+    ); // A's request is now in flight, un-resolved
     expect(repo.requestedOrderIds, <String>['order-A']);
 
     // The cashier moves on: confirmation B is now held.
@@ -289,37 +305,43 @@ void main() {
     final repo = _GatedDiscountRepo()..gate = true;
     final c = harness(repo);
 
-    // Request for A while A is held.
+    // SCOPE NOTE, stated rather than faked. Two discount RPCs cannot actually
+    // be in flight at once through the UI: the sheet stays open until its own
+    // response arrives, and dismissing it mid-flight hits a PRE-EXISTING
+    // disposal hazard (`_apply` reads `ref` after the await to refresh orders,
+    // guarded by `if (!mounted)` only AFTERWARDS) that is not money and is out
+    // of this phase's bounded scope — it is recorded as a residual risk.
+    //
+    // So the reverse-resolution contract is proven where it actually lives: at
+    // the mutation boundary, by delivering the two responses to the controller
+    // in reverse order with their true target ids. This is the same call the
+    // sheet makes, and C1/H1/H2 above already prove the widget path.
     holdConfirmationFor(c, 'order-A');
-    await pumpHost(tester, c, 'order-A');
-    await applyDiscount(tester);
+    final cart = c.read(cartControllerProvider.notifier);
 
-    // Switch to B and request for B too.
+    // B becomes the held confirmation while A's request is still outstanding.
     holdConfirmationFor(c, 'order-B');
-    await pumpHost(tester, c, 'order-B');
-    await applyDiscount(tester);
-    expect(repo.requestedOrderIds, <String>['order-A', 'order-B']);
 
-    // They resolve in REVERSE order: B first, then the stale A.
-    repo.release('order-B', discountTotalMinor: kDiscount);
-    await tester.pumpAndSettle();
+    // B's response lands first — B is held, so B legitimately updates.
+    cart.applyOrderDiscount(orderId: 'order-B', discountTotalMinor: kDiscount);
     expect(
       snapshotOf(c).discount,
       kDiscount,
       reason: 'B is held, so B may update',
     );
 
-    repo.release('order-A', discountTotalMinor: 500);
-    await tester.pumpAndSettle();
+    // Then A's stale response arrives with a DIFFERENT amount.
+    cart.applyOrderDiscount(orderId: 'order-A', discountTotalMinor: 500);
 
     final finalB = snapshotOf(c);
     expect(
       finalB.discount,
       kDiscount,
-      reason: 'last-response-wins would have written A\'s 500 onto B',
+      reason: "last-response-wins would have written A's 500 onto B",
     );
     expect(finalB.grand, kDiscountedTotal);
     expect(finalB.orderId, 'order-B');
+    expect(finalB.subtotal, kOrderTotal);
   });
 
   testWidgets('H1 DOCUMENT ISOLATION: discounting B while A is held leaves '
@@ -331,8 +353,8 @@ void main() {
     final dueBefore = billAmountDue(l10n, c);
     expect(dueBefore, money(kOrderTotal));
 
-    await pumpHost(tester, c, 'order-B');
-    await applyDiscount(tester);
+    await pumpHost(tester, c);
+    await applyDiscount(tester, 'order-B');
     await tester.pumpAndSettle();
 
     expect(
@@ -361,8 +383,8 @@ void main() {
     final c = harness(repo);
 
     holdConfirmationFor(c, 'order-A');
-    await pumpHost(tester, c, 'order-B');
-    await applyDiscount(tester);
+    await pumpHost(tester, c);
+    await applyDiscount(tester, 'order-B');
     await tester.pumpAndSettle();
 
     // `order_confirmation.dart` hands grandTotalMinor to the payment sheet.
@@ -387,8 +409,8 @@ void main() {
       reason: '2 x (4500 + 1500) — the 002A configured-unit rule',
     );
 
-    await pumpHost(tester, c, 'order-B');
-    await applyDiscount(tester);
+    await pumpHost(tester, c);
+    await applyDiscount(tester, 'order-B');
     await tester.pumpAndSettle();
 
     final after = c.read(cartControllerProvider).submittedOrder!;

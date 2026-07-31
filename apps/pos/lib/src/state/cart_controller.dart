@@ -1212,10 +1212,40 @@ class CartController extends Notifier<CartViewState> {
   /// applied (RF-117 part C). In real mode the values are the
   /// SERVER-AUTHORITATIVE `discount_total_minor` (+ recomputed grand) from
   /// `apply_discount`; in demo mode they are computed locally with the same
-  /// clamp. No-op when no order is being confirmed.
-  void applyOrderDiscount({required int discountTotalMinor}) {
+  /// clamp.
+  ///
+  /// MONEY-DISCOUNT-TARGET-INTEGRITY-002E — [orderId] IS THE POINT.
+  ///
+  /// This used to take the amount alone and write it onto whatever order the
+  /// confirmation happened to be holding. The discount sheet is reachable per
+  /// RECENT ORDER, so discounting order B wrote B's discount onto order A: A's
+  /// confirmation showed a discount it never received, A's printed customer
+  /// bill was built from that view, and A's payment sheet opened under-charged.
+  /// The server was always told the right order — only the LOCAL write was
+  /// blind. Passing the id to the RPC is therefore not enough; the identity
+  /// has to be checked at THIS boundary, where the state actually changes.
+  ///
+  /// FAIL CLOSED. The mutation happens only on an EXACT id match against the
+  /// currently held order. A stale response (the held confirmation moved on
+  /// while the request was in flight), a response for a different order, a
+  /// held order with no server identity yet, or a blank target are all a SAFE
+  /// NO-OP: no discount, no subtotal, tax, grand-total or payment change, no
+  /// confirmation change, no cart-line change, no substitution — and no
+  /// cashier-facing crash, because a late response is normal, not exceptional.
+  ///
+  /// Comparison is EXACT, deliberately. Order ids are not canonically trimmed
+  /// anywhere on the way in, so a whitespace-tolerant compare could match two
+  /// orders that the rest of the system considers distinct.
+  void applyOrderDiscount({
+    required String orderId,
+    required int discountTotalMinor,
+  }) {
     final current = _submittedOrder;
-    if (current == null) return;
+    if (current == null) return; // nothing is being confirmed
+    final heldOrderId = current.orderId;
+    if (heldOrderId == null || heldOrderId.isEmpty) return;
+    if (orderId.isEmpty) return;
+    if (orderId != heldOrderId) return; // a DIFFERENT order — never ours
     _submittedOrder = current.copyWith(discountTotalMinor: discountTotalMinor);
     _emit();
   }
