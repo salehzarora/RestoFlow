@@ -38,6 +38,15 @@ insert into menu_categories (id, organization_id, restaurant_id, branch_id, name
   ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, 'Fixture Food', 1);
 insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000ca01', 'Item', 1000, 'USD', 1);
+-- MONEY-SERVER-MODIFIER-SCOPE-003D: the submitted modifier option must now be a
+-- REAL option owned by a group of THIS item. The LIVE catalogue delta is
+-- deliberately 7777 while the submits below declare 100 — so these assertions
+-- keep proving the server stores the CLIENT'S frozen snapshot and never
+-- substitutes the current catalogue price (D-008).
+insert into modifiers (id, organization_id, restaurant_id, branch_id, menu_item_id, name) values
+  ('00000000-0000-0000-0000-00000000cf01', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-0000000000f1', 'Cheese');
+insert into modifier_options (id, organization_id, restaurant_id, branch_id, modifier_id, name, price_delta_minor) values
+  ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-00000000cf01', 'Extra', 7777);
 
 -- submit: 2 x (500 + modifier 100) + a size snapshot; line/subtotal = grand = 1200
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1',
