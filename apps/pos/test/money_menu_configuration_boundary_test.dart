@@ -1,11 +1,16 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show RuntimeConfig, runtimeConfigProvider;
+import 'package:restoflow_l10n/restoflow_l10n.dart';
 import 'package:restoflow_pos/src/data/demo_menu.dart';
+import 'package:restoflow_pos/src/pos_menu_screen.dart';
+import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/pos_menu_provider.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
+import 'package:restoflow_pos/src/widgets/menu_item_card.dart';
 
 /// MONEY-LOCAL-ATOMICITY-003A [E] — the POS MENU SOURCE BOUNDARY fails closed.
 ///
@@ -241,8 +246,14 @@ void main() {
       }
     });
 
-    test('E6 an option with an unreadable modifier_id cannot orphan onto a '
-        'blank group', () async {
+    // MONEY-CODEX-FINAL-CORRECTIONS-004 (F3/F6). This test used to wrap its only
+    // assertion in `if (groups.isNotEmpty)`, so it could not fail from the
+    // direction the whole suite exists to guard: had a change made the product
+    // unavailable, or emptied the group list, E6 would still have passed green.
+    // It now pins the decided outcome exactly, and asserts the thing that
+    // actually protects money — the item cannot be sold plain.
+    test('E6 an option with an unreadable modifier_id leaves the group intact '
+        'and the healthy option attached', () async {
       final menu = await loadMenu(
         envelope(
           modifiers: [groupRow()],
@@ -252,15 +263,156 @@ void main() {
           ],
         ),
       );
-      // The orphan is not attached anywhere...
       final groups = menu.groupsForItem(kBurgerId);
-      if (groups.isNotEmpty) {
-        expect(
-          groups.single.options.map((o) => o.id),
-          isNot(contains('opt-360')),
-        );
-      }
+      expect(groups, hasLength(1));
+      expect(groups.single.options.map((o) => o.id).toList(), ['opt-240']);
+      expect(
+        itemOf(menu, kBurgerId).isUnavailable,
+        isFalse,
+        reason:
+            'the group still offers a real choice, so the product is still '
+            'safely sellable through the modifier sheet',
+      );
     });
+
+    // THE EXACT CASE CODEX ASKED FOR: a required PAID group whose ONLY option
+    // is unattributable. The group then offers nothing, `groupsForItem` would
+    // hide it, and the add handler would take the plain `addItem` branch —
+    // selling a configured product at its base price with the surcharge gone.
+    test(
+      'E6b a required PAID group whose ONLY option has an unreadable '
+      'modifier_id makes the product UNAVAILABLE, never plain-sellable',
+      () async {
+        final menu = await loadMenu(
+          envelope(
+            modifiers: [groupRow()], // required: true, paid options
+            options: [
+              optionRow({'id': 'opt-240', 'modifier_id': ''}),
+            ],
+          ),
+        );
+        final burger = itemOf(menu, kBurgerId);
+        expect(
+          burger.isUnavailable,
+          isTrue,
+          reason:
+              'the configured paid choice was lost — selling at base price would '
+              'undercharge every customer who ordered it',
+        );
+        expect(
+          burger.availabilityReason,
+          DemoMenuItem.configurationUnavailableReason,
+          reason:
+              'the cashier is told it is a configuration fault, not sold out',
+        );
+        expect(
+          menu.groupsForItem(kBurgerId),
+          isEmpty,
+          reason:
+              'and there is no half-group to present — which is exactly why the '
+              'item must be blocked rather than silently plain-added',
+        );
+      },
+    );
+
+    // A PADDED identity used to validate (trim) but be stored raw, so it never
+    // matched its group — the same silent loss by a different route.
+    test('E6c a PADDED modifier_id still matches its group (canonical '
+        'identity)', () async {
+      final menu = await loadMenu(
+        envelope(
+          modifiers: [groupRow()],
+          options: [
+            optionRow({'modifier_id': '  grp-meat  '}),
+          ],
+        ),
+      );
+      final groups = menu.groupsForItem(kBurgerId);
+      expect(groups, hasLength(1));
+      expect(
+        groups.single.options.map((o) => o.id).toList(),
+        ['opt-240'],
+        reason:
+            'trimming ONCE at the boundary makes every reference agree; storing '
+            'the raw padded value orphaned the option from its own group',
+      );
+      expect(itemOf(menu, kBurgerId).isUnavailable, isFalse);
+    });
+  });
+
+  // THE PRODUCTION SCREEN PROOF for E6b. The data assertions above pin the
+  // decision; this pins the CONSEQUENCE the money depends on — that the real
+  // `PosMenuScreen` add handler cannot reach its `groups.isEmpty -> addItem`
+  // branch for a product whose paid configuration was lost. That branch is the
+  // undercharge: `pos_menu_screen.dart` adds the item at `item.priceMinor` with
+  // no modifier at all.
+  testWidgets('E6d PRODUCTION SCREEN: the broken product offers no add action '
+      'and cannot create a base-price cart line', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final menu = await loadMenu(
+      envelope(
+        modifiers: [groupRow()], // required, paid
+        options: [
+          optionRow({'id': 'opt-240', 'modifier_id': ''}),
+        ],
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [posMenuProvider.overrideWith((ref) async => menu)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: restoflowLocalizationsDelegates,
+          supportedLocales: kSupportedLocales,
+          home: const PosMenuScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final burgerCard = find.byWidgetPredicate(
+      (w) => w is MenuItemCard && w.item.id == kBurgerId,
+    );
+    final colaCard = find.byWidgetPredicate(
+      (w) => w is MenuItemCard && w.item.id == kColaId,
+    );
+    expect(burgerCard, findsOneWidget, reason: 'it is still VISIBLE to staff');
+    expect(colaCard, findsOneWidget);
+
+    // The healthy sibling still offers its add button — so a missing button on
+    // the burger means "blocked", not "this screen renders no buttons".
+    expect(
+      find.descendant(of: colaCard, matching: find.byType(IconButton)),
+      findsOneWidget,
+      reason:
+          'the control case proves the add affordance exists on this screen',
+    );
+    expect(
+      find.descendant(of: burgerCard, matching: find.byType(IconButton)),
+      findsNothing,
+      reason: 'no add button is offered for a product we cannot price',
+    );
+
+    // And the card itself takes no tap.
+    await tester.tap(burgerCard, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    final cart = container.read(cartControllerProvider);
+    expect(
+      cart.lines,
+      isEmpty,
+      reason:
+          'the plain-add branch would have created a 4500 line and dropped the '
+          '1500 paid choice — every such sale undercharges by 15.00',
+    );
+    expect(cart.subtotalMinor, 0);
   });
 
   test('E7 a BROKEN group alongside a HEALTHY one still makes the product '

@@ -406,7 +406,20 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   // the item is served UNAVAILABLE through the existing availability mechanism
   // so the card refuses the tap and says why. An undercharged sale is a worse
   // outcome than a temporarily unsellable product.
-  String? exactId(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
+  // MONEY-CODEX-FINAL-CORRECTIONS-004 (F3): CANONICAL, not merely validated.
+  //
+  // This used to validate with `.trim()` but return the RAW value, so a padded
+  // `' grp-1 '` passed the check and was then stored uncanonicalised. Every
+  // later comparison is byte-exact, so that option never matched the group
+  // `grp-1` it belongs to: the group silently lost a choice, and if it lost its
+  // only one, `groupsForItem` dropped the whole group and the product became
+  // plain-addable at base price. Trimming ONCE here makes every reference in
+  // the menu envelope agree.
+  String? exactId(Object? v) {
+    if (v is! String) return null;
+    final trimmed = v.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
 
   // Menu items whose modifier configuration cannot be trusted.
   final brokenConfigItemIds = <String>{};
@@ -487,6 +500,24 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         maxQuantity: maxQuantity is int && maxQuantity > 0 ? maxQuantity : null,
       ),
     );
+  }
+
+  // MONEY-CODEX-FINAL-CORRECTIONS-004 (F3): A GROUP WITH NO OPTIONS IS BROKEN
+  // CONFIGURATION, not an empty menu.
+  //
+  // This is the hole the 003A boundary left. An option whose `modifier_id` is
+  // unreadable is unattributable, so nothing was blamed; an option whose
+  // `modifier_id` names no declared group simply vanished. Either way the group
+  // it belonged to could end up with ZERO options — and `groupsForItem` filters
+  // empty groups out, so the product presented no choices at all and the add
+  // handler took the `groups.isEmpty -> addItem` branch. A required PAID group
+  // disappeared and the item sold at base price: precisely the silent
+  // under-charge the boundary exists to prevent.
+  //
+  // A group the operator configured must offer something. Zero options means a
+  // choice was lost, so its product stops selling until the menu is readable.
+  for (final g in groups) {
+    if (g.options.isEmpty) brokenConfigItemIds.add(g.menuItemId);
   }
 
   // THE CHOSEN RULE, stated: a product is unavailable when ANY group associated
