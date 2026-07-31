@@ -20,7 +20,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../state/cart_controller.dart' show CartDraftSnapshot;
+import '../state/cart_controller.dart'
+    show CartDraftSnapshot, configuredLineTotalMinor;
 import 'demo_tables.dart' show DemoTable;
 import 'sync_cursor_store.dart' show PosPersistenceException, PosSyncScope;
 
@@ -99,16 +100,25 @@ class ParkedCart {
   int get itemCount =>
       draft.lines.fold(0, (count, line) => count + line.quantity);
 
-  /// The cart subtotal in integer minor units, DERIVED with the same RF-052
-  /// formula the cart and the server use: `Σ(qty × unit + Σ(delta × mod qty))`.
-  /// Never read from storage.
-  int get subtotalMinor => draft.lines.fold(0, (sum, line) {
-    final mods = line.modifiers.fold<int>(
-      0,
-      (m, mod) => m + mod.totalDeltaMinor,
-    );
-    return sum + line.basePriceMinor * line.quantity + mods;
-  });
+  /// The cart subtotal in integer minor units, DERIVED through the ONE shared
+  /// client formula ([configuredLineTotalMinor]) the cart, the draft view and
+  /// the submission all use — never read from storage.
+  ///
+  /// MONEY-PRICING-FORMULA-002A: this used to hold a fourth private copy of
+  /// `base × qty + Σ`, so a parked cart's badge would have drifted below the
+  /// live cart's subtotal for any line of quantity > 1 carrying a paid modifier.
+  /// A parked cart is an unsubmitted, editable cart — not an immutable submitted
+  /// order — so it is presented under the corrected client contract.
+  int get subtotalMinor => draft.lines.fold(
+    0,
+    (sum, line) =>
+        sum +
+        configuredLineTotalMinor(
+          basePriceMinor: line.basePriceMinor,
+          modifiers: line.modifiers,
+          quantity: line.quantity,
+        ),
+  );
 
   String get currencyCode => draft.currencyCode;
 

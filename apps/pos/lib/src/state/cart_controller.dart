@@ -123,6 +123,47 @@ class SelectedModifier {
   }
 }
 
+/// MONEY-PRICING-FORMULA-002A — THE ONE client pricing formula.
+///
+/// A cart line is N identical FULLY CONFIGURED items, so a modifier surcharge is
+/// part of the per-unit price and is charged once per ITEM UNIT:
+///
+///   configuredUnitAmountMinor = basePriceMinor + Σ(priceDeltaMinor × modifierQty)
+///   lineTotalMinor            = configuredUnitAmountMinor × itemQuantity
+///
+/// This is the authoritative contract in `docs/MONEY_AND_TAX_SPEC.md` §9:157,
+/// whose worked example §9.1:179 reads "Line A per-unit = 4500 + 700 = 5200;
+/// × 2 = 10400". §9:155 requires the server RPC and every offline client to
+/// follow it IDENTICALLY.
+///
+/// It replaces four independently-maintained copies of `base × itemQty + Σ`,
+/// which added the surcharge once per LINE and so under-charged every extra
+/// unit — while the kitchen already multiplied meat and prep by item quantity
+/// (`aggregateOrderKitchenCounts`), cooking N upgraded meals for one upgrade's
+/// money. The two rules agree at quantity 1, which is why it survived.
+///
+/// Integer minor units only (D-007). Keep this the ONLY implementation: the
+/// payload still transmits the BARE unit price and the UNIT modifier delta, and
+/// the server recombines them with the same rule.
+int configuredUnitAmountMinor(
+  int basePriceMinor,
+  Iterable<SelectedModifier> modifiers,
+) {
+  var total = basePriceMinor;
+  for (final m in modifiers) {
+    total += m.totalDeltaMinor;
+  }
+  return total;
+}
+
+/// [configuredUnitAmountMinor] × [quantity] — a line's total BEFORE any line
+/// discount, which the existing discount/tax ordering then consumes unchanged.
+int configuredLineTotalMinor({
+  required int basePriceMinor,
+  required Iterable<SelectedModifier> modifiers,
+  required int quantity,
+}) => configuredUnitAmountMinor(basePriceMinor, modifiers) * quantity;
+
 /// PRINT-STARTUP-REPRINT-001 (Defect 2) — the SINGLE place selected modifiers
 /// become kitchen meat contributions, so the automatic ticket, the stored order
 /// snapshot and the manual reprint can never drift apart.
@@ -249,8 +290,17 @@ class CartViewState {
     final views = cart.lines
         .map((line) {
           final mods = lineModifiers[line.lineId] ?? const <SelectedModifier>[];
-          final modSum = mods.fold<int>(0, (sum, m) => sum + m.totalDeltaMinor);
-          modifiersTotal += modSum;
+          // MONEY-PRICING-FORMULA-002A: the modifier surcharge belongs to the
+          // per-unit price, so it is multiplied by the item quantity like the
+          // base is. `line.unitPriceMinor` is the BARE unit price here (the POS
+          // carries modifier snapshots out-of-band in `lineModifiers`, never on
+          // the domain CartLine), and it stays bare on the wire.
+          final lineTotal = configuredLineTotalMinor(
+            basePriceMinor: line.unitPriceMinor,
+            modifiers: mods,
+            quantity: line.quantity,
+          );
+          modifiersTotal += lineTotal - line.lineTotalMinor;
           final order = lineDisplayOrders[line.lineId];
           return CartLineView(
             lineId: line.lineId,
@@ -258,7 +308,7 @@ class CartViewState {
             name: line.itemNameSnapshot,
             quantity: line.quantity,
             unitPriceMinor: line.unitPriceMinor,
-            lineTotalMinor: line.lineTotalMinor + modSum,
+            lineTotalMinor: lineTotal,
             currencyCode: line.currencyCodeSnapshot,
             modifiers: mods,
             note: lineNotes[line.lineId],
@@ -848,8 +898,15 @@ class CartController extends Notifier<CartViewState> {
       // LocalOrderItem.orderItemId carries the source cart line id.
       final mods =
           _lineModifiers[item.orderItemId] ?? const <SelectedModifier>[];
-      final modSum = mods.fold<int>(0, (sum, m) => sum + m.totalDeltaMinor);
-      modifiersTotal += modSum;
+      // MONEY-PRICING-FORMULA-002A: the ONE formula. `lineTotalMinorPreview` is
+      // the BARE base × quantity, so the configured total re-derives from the
+      // per-unit base to keep the surcharge inside the multiplication.
+      final lineTotal = configuredLineTotalMinor(
+        basePriceMinor: item.basePriceMinorSnapshot,
+        modifiers: mods,
+        quantity: item.quantity,
+      );
+      modifiersTotal += lineTotal - item.lineTotalMinorPreview;
       // MENU-ORDER-001: carry the item's Dashboard ranks + its 1-based cart
       // position so every POS surface (receipt, kitchen ticket) orders items
       // into the SAME Dashboard-configured sequence the KDS + server reprint use.
@@ -858,7 +915,7 @@ class CartController extends Notifier<CartViewState> {
         SubmittedLineView(
           name: item.itemNameSnapshot,
           quantity: item.quantity,
-          lineTotalMinor: item.lineTotalMinorPreview + modSum,
+          lineTotalMinor: lineTotal,
           currencyCode: item.currencyCodeSnapshot,
           // `name ×N` snapshots — quantity rides the display string so the
           // confirmation/receipt/print paths all show it unchanged.
@@ -928,11 +985,13 @@ class CartController extends Notifier<CartViewState> {
     final lines = <SubmittedLineView>[];
     for (final l in draft.lines) {
       linePosition++;
-      final modSum = l.modifiers.fold<int>(
-        0,
-        (sum, m) => sum + m.totalDeltaMinor,
+      // MONEY-PRICING-FORMULA-002A: the SAME one formula, so a recovered draft
+      // bills exactly what it displayed.
+      final lineTotal = configuredLineTotalMinor(
+        basePriceMinor: l.basePriceMinor,
+        modifiers: l.modifiers,
+        quantity: l.quantity,
       );
-      final lineTotal = l.basePriceMinor * l.quantity + modSum;
       subtotal += lineTotal;
       lines.add(
         SubmittedLineView(
