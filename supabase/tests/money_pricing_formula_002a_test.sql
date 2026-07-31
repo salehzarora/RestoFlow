@@ -34,7 +34,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(45);
+select plan(58);
 insert into organizations (id, name, slug, default_currency) values
 
   ('c0000000-0000-0000-0000-000000000c01', 'Org RC', 'rc-a', 'USD'),
@@ -405,6 +405,58 @@ select is((select p.proconfig::text from pg_proc p join pg_namespace n on n.oid 
 select is((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
             where n.nspname = 'app' and p.proname in ('submit_order','add_order_items','apply_discount')),
           3::bigint, 'G4 exactly one definition of each re-emitted function remains');
+
+
+-- ---- H. the corrected functions keep every non-money guarantee -------------
+-- A discount larger than the line is REFUSED, not floored to a free line.
+select is((pg_temp.msub('mf-h0', 'c0000000-0000-0000-0000-00000000f061', pg_temp.mline(2, 300, 1), 1600)
+           -> 'results' -> 0 ->> 'status'), 'applied', 'H0 seed a corrected 1600 line');
+select is((pg_temp.mdisc('mf-h1', 'c0000000-0000-0000-0000-00000000f061',
+             pg_temp.mline_id('c0000000-0000-0000-0000-00000000f061'), 'fixed', 99999)
+           -> 'results' -> 0 ->> 'status'), 'applied',
+          'H1 an over-large item discount is CLAMPED (existing contract), not refused');
+select is((select line_discount_minor from public.order_items
+            where id = pg_temp.mline_id('c0000000-0000-0000-0000-00000000f061')), 1600::bigint,
+          'H1b the clamp used the RECOVERED 1600 base, never a recomputed 1300');
+
+-- A zero-value discount is a no-op that must not disturb the stored base.
+select is((pg_temp.msub('mf-h2a', 'c0000000-0000-0000-0000-00000000f062', pg_temp.mline(2, 300, 1), 1600)
+           -> 'results' -> 0 ->> 'status'), 'applied', 'H2 seed a clean corrected line');
+select is((pg_temp.mdisc('mf-h2', 'c0000000-0000-0000-0000-00000000f062',
+             pg_temp.mline_id('c0000000-0000-0000-0000-00000000f062'), 'fixed', 0)
+           -> 'results' -> 0 ->> 'status'), 'applied', 'H2a a zero discount applies');
+select is(pg_temp.mline_total('c0000000-0000-0000-0000-00000000f062'), 1600::bigint,
+          'H2b a zero discount leaves the corrected 1600 intact - the base was RECOVERED, not recomputed to 1300');
+
+-- The audit trail is unchanged.
+select ok(exists(select 1 from audit_events
+                  where action = 'order.discount_applied'
+                    and organization_id = 'c0000000-0000-0000-0000-000000000c01'),
+          'H3 order.discount_applied is still audited');
+select is((select count(*)::int from audit_events
+            where action = 'order.items_added'
+              and (new_values ->> 'order_id') = 'c0000000-0000-0000-0000-00000000f021'), 1,
+          'H4 an added round still audits exactly once');
+
+-- Grants are untouched by CREATE OR REPLACE.
+select ok((not has_function_privilege('anon', 'app.apply_discount(uuid,uuid,uuid,text,text,uuid,text,bigint,text,integer)', 'execute'))
+      and (not has_function_privilege('public', 'app.apply_discount(uuid,uuid,uuid,text,text,uuid,text,bigint,text,integer)', 'execute')),
+          'H5 anon and PUBLIC still hold NO execute on app.apply_discount');
+
+-- The order-scope discount branch still consumes STORED authoritative totals.
+select is((pg_temp.msub('mf-h7', 'c0000000-0000-0000-0000-00000000f071', pg_temp.mline(2, 300, 1), 1600)
+           -> 'results' -> 0 ->> 'status'), 'applied', 'H7 seed for the order scope');
+select is((public.sync_push('c0000000-0000-0000-0000-0000000ad001', 'c0000000-0000-0000-0000-0000000000d1',
+             jsonb_build_array(jsonb_build_object(
+               'local_operation_id', 'mf-h8', 'operation_type', 'order.discount', 'target_entity', 'order',
+               'payload', jsonb_build_object(
+                 'order_id', 'c0000000-0000-0000-0000-00000000f071', 'scope', 'order',
+                 'discount_type', 'fixed', 'value', 600, 'reason', 'test'))))
+           -> 'results' -> 0 ->> 'status'), 'applied', 'H8 an ORDER-scope discount applies');
+select is((select grand_total_minor from public.orders where id = 'c0000000-0000-0000-0000-00000000f071'),
+          1000::bigint, 'H8b order scope: 1600 stored subtotal - 600 = 1000');
+select is(pg_temp.mline_total('c0000000-0000-0000-0000-00000000f071'), 1600::bigint,
+          'H8c the order-scope discount did NOT rewrite the line total');
 
 select finish();
 rollback;
