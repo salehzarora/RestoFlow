@@ -95,9 +95,9 @@ void main() {
 
       final view = c.read(cartControllerProvider);
       // What the cashier sees.
-      expect(view.lines[0].lineTotalMinor, 2 * kBase + 2 * k240);
+      expect(view.lines[0].lineTotalMinor, 2 * (kBase + 2 * k240));
       expect(view.lines[1].lineTotalMinor, kBase + k480);
-      expect(view.subtotalMinor, 2 * kBase + 2 * k240 + kBase + k480);
+      expect(view.subtotalMinor, 2 * (kBase + 2 * k240) + (kBase + k480));
 
       await c
           .read(outboxControllerProvider.notifier)
@@ -118,7 +118,7 @@ void main() {
       // Line 1: item qty 2, ONE modifier at unit 1500 taken twice.
       expect(items[0]['quantity'], 2);
       expect(items[0]['unit_price_minor_snapshot'], kBase);
-      expect(items[0]['line_total_minor'], 2 * kBase + 2 * k240);
+      expect(items[0]['line_total_minor'], 2 * (kBase + 2 * k240));
       final mods0 = (items[0]['modifiers'] as List)
           .cast<Map<String, Object?>>();
       expect(mods0, hasLength(1));
@@ -285,7 +285,10 @@ void main() {
           for (final l in before.lines) l.lineTotalMinor,
         ];
         final expectedSubtotal = before.subtotalMinor;
-        expect(expectedSubtotal, 4 * kBase + 2 * k240 + k480);
+        expect(
+          expectedSubtotal,
+          2 * (kBase + 2 * k240) + (kBase + k480) + kBase,
+        );
 
         cart.submitOrder(orderNumber: 'A-1');
         final submitted = c.read(cartControllerProvider).submittedOrder!;
@@ -321,7 +324,7 @@ void main() {
         live.lines.map((l) => l.lineTotalMinor).toList(),
       );
       expect(recovered.subtotalMinor, live.subtotalMinor);
-      expect(recovered.subtotalMinor, 2 * kBase + 2 * k240 + k480);
+      expect(recovered.subtotalMinor, (kBase + 2 * k240) + (kBase + k480));
     });
 
     test('E7 the same holds after a JSON round-trip of that draft — the '

@@ -209,8 +209,8 @@ void main() {
           reason: 'a stored total could disagree with its own lines',
         );
       }
-      // 2 × 4200 + (300 × 2 modifier units) = 9000
-      expect(_cart().subtotalMinor, 9000);
+      // MONEY-PRICING-FORMULA-002A: 2 x (4200 + 300 x 2) = 9600
+      expect(_cart().subtotalMinor, 9600);
       expect(_cart().itemCount, 2);
       expect(_cart().currencyCode, 'ILS');
     });
