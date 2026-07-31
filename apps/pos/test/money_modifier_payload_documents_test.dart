@@ -13,7 +13,8 @@ import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
 
 /// MONEY-MODIFIER-PRICING-INTEGRITY-001 [E/F] — the money a cashier SEES must be
-/// the money that leaves the device, survives persistence and retry, and is what
+/// the money that leaves the device, survives serialization and an in-session
+/// retry byte-identically, and is what
 /// every downstream document reads.
 ///
 /// Every assertion is an exact integer minor-unit value read out of the REAL
@@ -214,7 +215,12 @@ void main() {
     });
   });
 
-  group('[E] persistence and retry never duplicate or drop a surcharge', () {
+  // TRUTHFULNESS NOTE (003E): this group touches NO SharedPreferences. It proves
+  // that the SERIALIZED payload string is opaque and byte-stable across an
+  // in-session retry — which is real and useful — but it is NOT a durability or
+  // process-restart proof. Those live in money_durable_outbox_production_test
+  // (real SharedPrefsOutboxStore + container disposal) and money_durable_stores_test.
+  group('[E] in-session retry re-sends the surcharge byte-identically', () {
     test(
       'E4 the persisted payload is an OPAQUE string — a retry re-sends '
       'byte-identical money, so replay can neither zero nor double it',

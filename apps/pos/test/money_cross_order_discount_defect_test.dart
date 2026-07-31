@@ -17,11 +17,19 @@ import 'package:restoflow_pos/src/state/order_sync_controller.dart'
     show orderSnapshotRepositoryProvider, posSyncPollIntervalProvider;
 import 'package:restoflow_pos/src/widgets/discount_sheet.dart';
 
-/// MONEY-PRODUCTION-PATH-TESTS-002D — DEFECT REPRODUCTION.
+/// MONEY-PRODUCTION-PATH-TESTS-002D — the reproduction that found the defect;
+/// MONEY-DISCOUNT-TARGET-INTEGRITY-002E fixed it. This file is now a
+/// REGRESSION GUARD and it PASSES on the corrected stack.
 ///
-/// Classification: **DEFECT REPRODUCTION — the corrected stack FAILS this.**
+/// Classification: **REGRESSION GUARD — green, and must stay green.**
 ///
-/// THE DEFECT. `CartController.applyOrderDiscount` takes no order identity and
+/// TRUTHFULNESS NOTE (MONEY-RELEASE-PROOF-003E): the header below described the
+/// defect in the present tense and declared "it is expected to FAIL". Both were
+/// true when it was written and both are false now — 002E added the identity
+/// guard in `applyOrderDiscount`, so the wording is corrected here rather than
+/// left to mislead a reviewer into thinking a red test is outstanding.
+///
+/// THE DEFECT, AS IT WAS. `CartController.applyOrderDiscount` took no order identity and
 /// writes onto whatever order the confirmation currently holds:
 ///
 ///   void applyOrderDiscount({required int discountTotalMinor}) {
@@ -51,9 +59,14 @@ import 'package:restoflow_pos/src/widgets/discount_sheet.dart';
 /// `record_payment`, so the cash drawer is protected — the PRINTED CUSTOMER
 /// DOCUMENT and the demo-mode payment are not.
 ///
-/// This test is the honest reproduction. It is expected to FAIL on the current
-/// code, and it must NOT be weakened to make the suite green: the fix belongs
-/// to a separate, bounded corrective phase, not to this tests-only one.
+/// THE FIX (002E). `applyOrderDiscount` now takes the `orderId` the sheet
+/// already knew and refuses when it does not match the held order:
+///
+///   if (orderId != heldOrderId) return;
+///
+/// This test drives the REAL `DiscountSheet` widget against the REAL cart
+/// controller, so it proves the guard through the production path rather than
+/// by calling the mutation directly. It must NOT be weakened.
 
 const kBase = 4500;
 const k240 = 1500;
@@ -115,101 +128,106 @@ class _EmptySnapshotRepo implements OrderSnapshotRepository {
 }
 
 void main() {
-  testWidgets('DEFECT: discounting order B contaminates order A, which is the '
-      'order currently on the confirmation screen', (tester) async {
-    final discounts = _FakeDiscountRepo();
-    final c = ProviderContainer(
-      overrides: [
-        runtimeConfigProvider.overrideWithValue(
-          RuntimeConfig.test(isDemoMode: true),
-        ),
-        discountRepositoryProvider.overrideWithValue(discounts),
-        orderSnapshotRepositoryProvider.overrideWithValue(_EmptySnapshotRepo()),
-        posSyncPollIntervalProvider.overrideWithValue(null),
-      ],
-    );
-    addTearDown(c.dispose);
+  testWidgets(
+    'GUARD (002E): discounting order B leaves order A untouched, even '
+    'while A is the order on the confirmation screen',
+    (tester) async {
+      final discounts = _FakeDiscountRepo();
+      final c = ProviderContainer(
+        overrides: [
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: true),
+          ),
+          discountRepositoryProvider.overrideWithValue(discounts),
+          orderSnapshotRepositoryProvider.overrideWithValue(
+            _EmptySnapshotRepo(),
+          ),
+          posSyncPollIntervalProvider.overrideWithValue(null),
+        ],
+      );
+      addTearDown(c.dispose);
 
-    // ---- ORDER A is submitted and its confirmation is showing.
-    final cart = c.read(cartControllerProvider.notifier);
-    cart.addItemWithModifiers(_burger, const [_meat240]);
-    cart.submitOrder(
-      orderType: OrderType.takeaway,
-      orderNumber: '#AAAAAA',
-      orderId: 'order-A',
-    );
-    final submittedA = c.read(cartControllerProvider).submittedOrder;
-    expect(submittedA, isNotNull, reason: 'A is on the confirmation screen');
-    expect(submittedA!.orderId, 'order-A');
-    expect(submittedA.subtotalMinor, kOrderATotal);
-    expect(submittedA.discountTotalMinor, 0);
-    expect(submittedA.grandTotalMinor, kOrderATotal);
+      // ---- ORDER A is submitted and its confirmation is showing.
+      final cart = c.read(cartControllerProvider.notifier);
+      cart.addItemWithModifiers(_burger, const [_meat240]);
+      cart.submitOrder(
+        orderType: OrderType.takeaway,
+        orderNumber: '#AAAAAA',
+        orderId: 'order-A',
+      );
+      final submittedA = c.read(cartControllerProvider).submittedOrder;
+      expect(submittedA, isNotNull, reason: 'A is on the confirmation screen');
+      expect(submittedA!.orderId, 'order-A');
+      expect(submittedA.subtotalMinor, kOrderATotal);
+      expect(submittedA.discountTotalMinor, 0);
+      expect(submittedA.grandTotalMinor, kOrderATotal);
 
-    // ---- The cashier discounts a DIFFERENT order, B, from the orders sheet.
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: c,
-        child: MaterialApp(
-          localizationsDelegates: restoflowLocalizationsDelegates,
-          supportedLocales: kSupportedLocales,
-          home: Scaffold(
-            body: Builder(
-              builder: (ctx) => TextButton(
-                onPressed: () => DiscountSheet.show(
-                  ctx,
-                  // The production call site passes the ROW's order id.
-                  orderId: 'order-B',
-                  subtotalMinor: 5000,
-                  taxTotalMinor: 0,
-                  currencyCode: 'ILS',
+      // ---- The cashier discounts a DIFFERENT order, B, from the orders sheet.
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: MaterialApp(
+            localizationsDelegates: restoflowLocalizationsDelegates,
+            supportedLocales: kSupportedLocales,
+            home: Scaffold(
+              body: Builder(
+                builder: (ctx) => TextButton(
+                  onPressed: () => DiscountSheet.show(
+                    ctx,
+                    // The production call site passes the ROW's order id.
+                    orderId: 'order-B',
+                    subtotalMinor: 5000,
+                    taxTotalMinor: 0,
+                    currencyCode: 'ILS',
+                  ),
+                  child: const Text('open'),
                 ),
-                child: const Text('open'),
               ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
 
-    // Enter a fixed 20.00 discount with a reason and apply it.
-    final fields = find.byType(TextField);
-    expect(fields, findsWidgets, reason: 'the sheet is open');
-    await tester.enterText(fields.first, '20');
-    await tester.enterText(fields.last, 'manager comp');
-    await tester.pump();
+      // Enter a fixed 20.00 discount with a reason and apply it.
+      final fields = find.byType(TextField);
+      expect(fields, findsWidgets, reason: 'the sheet is open');
+      await tester.enterText(fields.first, '20');
+      await tester.enterText(fields.last, 'manager comp');
+      await tester.pump();
 
-    final apply = find.byType(FilledButton);
-    expect(apply, findsWidgets);
-    await tester.tap(apply.last);
-    await tester.pumpAndSettle();
+      final apply = find.byType(FilledButton);
+      expect(apply, findsWidgets);
+      await tester.tap(apply.last);
+      await tester.pumpAndSettle();
 
-    expect(
-      discounts.discountedOrderIds,
-      <String>['order-B'],
-      reason: 'the SERVER was correctly told to discount B',
-    );
+      expect(
+        discounts.discountedOrderIds,
+        <String>['order-B'],
+        reason: 'the SERVER was correctly told to discount B',
+      );
 
-    // ---- THE ASSERTION THAT MATTERS.
-    final afterA = c.read(cartControllerProvider).submittedOrder!;
-    expect(
-      afterA.orderId,
-      'order-A',
-      reason: 'the confirmation is still order A',
-    );
-    expect(
-      afterA.discountTotalMinor,
-      0,
-      reason:
-          "order B's discount must never be written onto order A — "
-          "A never received it, yet A's printed bill and payment sheet are "
-          'built from this view',
-    );
-    expect(
-      afterA.grandTotalMinor,
-      kOrderATotal,
-      reason: 'A still owes 60.00; a contaminated view under-charges it',
-    );
-  });
+      // ---- THE ASSERTION THAT MATTERS.
+      final afterA = c.read(cartControllerProvider).submittedOrder!;
+      expect(
+        afterA.orderId,
+        'order-A',
+        reason: 'the confirmation is still order A',
+      );
+      expect(
+        afterA.discountTotalMinor,
+        0,
+        reason:
+            "order B's discount must never be written onto order A — "
+            "A never received it, yet A's printed bill and payment sheet are "
+            'built from this view',
+      );
+      expect(
+        afterA.grandTotalMinor,
+        kOrderATotal,
+        reason: 'A still owes 60.00; a contaminated view under-charges it',
+      );
+    },
+  );
 }

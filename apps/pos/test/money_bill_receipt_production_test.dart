@@ -11,15 +11,25 @@ import 'package:restoflow_pos/src/widgets/receipt_print_preview.dart'
     show buildBillDocument, buildReceiptDocument;
 
 /// MONEY-PRODUCTION-PATH-TESTS-002D [D + E] — Codex Blocker 7, the customer
+/// DOCUMENT layer (source function + builder). Action-level proof: 003E.
 /// documents.
 ///
-/// The brief forbids constructing a `SubmittedOrderView` by hand and calling a
-/// formatter. Nothing here does. Every document below is produced by the SAME
-/// two-step production path the POS buttons use:
+/// SCOPE, CORRECTED IN MONEY-RELEASE-PROOF-003E. This suite is a DOCUMENT-LEVEL
+/// proof: it calls the real authoritative SOURCE FUNCTION and the real DOCUMENT
+/// BUILDER that the POS buttons use, but it does NOT go through the button, the
+/// widget, or the ReceiptPrintController. The rows below were previously
+/// labelled "Auto receipt" and "Manual reprint", which overstated them twice
+/// over — both call the SAME source function, so neither was distinguished from
+/// the other, and neither exercised the action that triggers it.
 ///
-///   Print bill    -> `authoritativeUnpaidOrderSource(...)` -> `buildBillDocument`
-///   Auto receipt  -> `authoritativeReceiptSource(...)`     -> `buildReceiptDocument`
-///   Manual reprint-> `authoritativeReceiptSource(...)`     -> `buildReceiptDocument`
+///   Print bill            -> `authoritativeUnpaidOrderSource(...)` -> `buildBillDocument`
+///   Paid-receipt document -> `authoritativeReceiptSource(...)`     -> `buildReceiptDocument`
+///
+/// The ACTION-level proof — the real CashPaymentSheet automatic request and the
+/// real OrderActionRow manual reprint, each captured at the printer seam — lives
+/// in `money_receipt_action_production_test.dart` (003E). This suite keeps its
+/// real and useful value: that the source+builder pair preserves configured
+/// modifier money exactly.
 ///
 /// The order view is therefore built by the REAL `submittedOrderViewFromDetail`
 /// mapper from an authoritative `PosOrderDetail`, and the payment by the REAL
@@ -224,7 +234,7 @@ void main() {
   });
 
   // =========================================================================
-  group('[E] the REAL paid receipt and manual reprint', () {
+  group('[E] the paid-receipt DOCUMENT (source fn + builder)', () {
     final paidDetail = PosOrderDetailPayment(
       paymentId: 'pay-authoritative-1',
       method: PaymentMethod.cash,
@@ -236,8 +246,11 @@ void main() {
       receiptNumber: 'R-9',
     );
 
-    test('E1 the automatic receipt and the manual reprint are built from the '
-        'SAME authoritative source and agree exactly', () async {
+    // Both the automatic request and the manual reprint call THIS source
+    // function, so calling it twice proves they cannot diverge at the document
+    // layer. It does NOT prove either ACTION ran — 003E does that.
+    test('E1 two calls to the SAME authoritative source produce identical '
+        'receipt documents', () async {
       final repo = _DetailRepo(
         _detail(status: 'completed', payment: paidDetail),
       );
@@ -326,8 +339,8 @@ void main() {
       expect(source, isNull);
     });
 
-    test('E4 a CORRUPT local payment (002B) can enable neither the automatic '
-        'receipt nor a manual reprint', () async {
+    test('E4 a CORRUPT local payment (002B) yields NO receipt source at all, so '
+        'neither trigger can produce a document', () async {
       // 002B made the LOCAL payment decode fail closed, through the real
       // `PosRecentOrder.fromJson` used by the recent-orders store. A corrupt
       // record therefore never becomes a CashPayment at all, so there is
