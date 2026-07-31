@@ -13,8 +13,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/data/draft_recovery_store.dart';
 import 'src/data/durable_outbox_store.dart';
+import 'src/state/addition_controller.dart' show additionJournalStoreProvider;
 import 'src/data/parked_carts_store.dart';
 import 'src/data/ready_notifications_store.dart';
+import 'src/data/addition_journal_store.dart';
 import 'src/data/recent_orders_store.dart';
 import 'src/data/round_print_claim_store.dart';
 import 'src/print/pos_kitchen_ticket_printer.dart'
@@ -91,13 +93,20 @@ Widget _posApp(
       outboxAutoSweepIntervalProvider.overrideWithValue(
         const Duration(seconds: 25),
       ),
-      // MONEY-DURABLE-ADDITIONS-003C: the DURABLE automatic-kitchen-print claim,
-      // scoped to this device's session. Without it the exactly-once guard is
-      // session-only, so a process that dies after an amendment was applied
-      // comes back, replays the operation (which correctly returns the SAME
-      // round) and prints the kitchen a second ticket for food it is already
-      // cooking. Scoped like the outbox: one device never reads another's
-      // claims.
+      // MONEY-DURABLE-ADDITIONS-003C: the durable amendment journal. One frozen
+      // identity + one byte-identical payload survive process death, so an
+      // uncertain Add-items operation is REPLAYED under its own
+      // local_operation_id (which app.add_order_items answers with the same
+      // round) instead of being re-keyed as a second round.
+      additionJournalStoreProvider.overrideWithValue(
+        SharedPrefsAdditionJournalStore(prefs),
+      ),
+      // The DURABLE automatic-kitchen-print claim, scoped to this device's
+      // session. Without it the exactly-once guard is session-only, so a process
+      // that dies after an amendment was applied comes back, replays the
+      // operation (which correctly returns the SAME round) and prints the
+      // kitchen a second ticket for food it is already cooking. Scoped like the
+      // outbox: one device never reads another's claims.
       posRoundPrintClaimStoreProvider.overrideWith((ref) {
         final store = SharedPrefsRoundPrintClaimStore(prefs);
         store.scopeKey = ref.watch(posSyncSessionProvider)?.deviceId ?? '';

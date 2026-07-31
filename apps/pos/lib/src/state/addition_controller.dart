@@ -3,6 +3,9 @@ import 'package:restoflow_domain/restoflow_domain.dart';
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
     show runtimeConfigProvider;
 
+import 'dart:async' show unawaited;
+
+import '../data/addition_journal_store.dart';
 import '../data/ids.dart';
 import '../data/order_detail_repository.dart';
 import '../data/order_submission.dart';
@@ -166,6 +169,7 @@ class AdditionState {
     this.appliedRoundId,
     this.phase = AdditionPhase.idle,
     this.lastError,
+    this.dispatched = false,
   });
 
   /// The entry/attempt token (Finding 2): every reservation, exit and
@@ -193,6 +197,21 @@ class AdditionState {
   final AdditionPhase phase;
   final String? lastError;
 
+  /// MONEY-DURABLE-ADDITIONS-003C: whether the frozen attempt reached the
+  /// transport WITHOUT a definitive verdict coming back — i.e. the server may
+  /// already own the round and we cannot tell.
+  ///
+  /// The distinction matters. A typed business REJECTION is the server saying
+  /// no: there is no round, so abandoning the identity is safe and the cashier
+  /// must be able to. A TRANSPORT failure says nothing at all, and treating it
+  /// as a no is how a second round gets created. Only the second case locks the
+  /// identity down.
+  ///
+  /// Lives on the state, not just in the controller, because the UI must not
+  /// offer a Cancel that cannot work — the same honesty rule the order-action
+  /// predicates follow.
+  final bool dispatched;
+
   bool get active => target != null;
   bool get sending => phase == AdditionPhase.sending;
   bool get failed => phase == AdditionPhase.failed;
@@ -207,10 +226,16 @@ class AdditionState {
   /// Finding 2: cancel is honest — it is only offered when it can actually
   /// happen. While SENDING the server may already own the operation; while
   /// APPLIED-AWAITING-REFRESH it definitely does.
+  /// 003C: an attempt whose outcome is UNCERTAIN can never be cancelled,
+  /// whatever phase it is showing. A transport failure looks retryable, but the
+  /// operation was on the wire and its verdict is unknown — releasing the
+  /// identity there is how a second server round gets created without any
+  /// crash. A definitive rejection is different and stays cancellable.
   bool get canCancel =>
-      phase == AdditionPhase.entering ||
-      phase == AdditionPhase.active ||
-      phase == AdditionPhase.failed;
+      !dispatched &&
+      (phase == AdditionPhase.entering ||
+          phase == AdditionPhase.active ||
+          phase == AdditionPhase.failed);
 
   AdditionState copyWith({
     PosOrderDetail? target,
@@ -219,6 +244,7 @@ class AdditionState {
     AdditionPhase? phase,
     String? lastError,
     bool clearError = false,
+    bool? dispatched,
   }) => AdditionState(
     generation: generation,
     entryOrderId: entryOrderId,
@@ -227,6 +253,7 @@ class AdditionState {
     appliedRoundId: appliedRoundId ?? this.appliedRoundId,
     phase: phase ?? this.phase,
     lastError: clearError ? null : (lastError ?? this.lastError),
+    dispatched: dispatched ?? this.dispatched,
   );
 }
 
@@ -290,7 +317,201 @@ class AdditionController extends Notifier<AdditionState> {
   int? _inFlightGeneration;
 
   @override
-  AdditionState build() => const AdditionState();
+  AdditionState build() {
+    // MONEY-DURABLE-ADDITIONS-003C: rehydrate an unresolved amendment. An
+    // operation whose outcome is UNKNOWN must not disappear because the process
+    // died — nothing else in the system can resolve it, and re-keying it under
+    // a fresh identity is exactly how a second server round gets created.
+    _restoreJournal();
+    return const AdditionState();
+  }
+
+  /// The durable journal for this device, or null when nothing durable is wired
+  /// (demo mode / tests), in which case the pre-003C session behaviour stands.
+  PosAdditionJournalStore? get _journal =>
+      ref.read(additionJournalStoreProvider);
+
+  /// RF-114 scope binding: the journal is keyed by THIS session's device, so one
+  /// device never replays another's amendment.
+  String get _journalScope => ref.read(posSyncSessionProvider)?.deviceId ?? '';
+
+  /// Rebuilds the durable record for [attempt] and CONFIRMS the write. Returns
+  /// whether the operation may now be dispatched.
+  Future<bool> _journalPrepared(
+    AdditionAttempt attempt,
+    PosOrderDetail target,
+    PosAdditionJournalStore journal,
+  ) async {
+    final scope = _journalScope;
+    if (scope.isEmpty) return true; // no session => no real submit anyway
+    try {
+      final existing = await journal.load(scope);
+      final record = PosAdditionJournalRecord(
+        localOperationId: attempt.localOperationId,
+        orderId: attempt.orderId,
+        orderCode: target.orderCode,
+        orderTypeWire: target.orderType ?? '',
+        generation: state.generation,
+        itemsJson: attempt.itemsJson,
+        lines: attempt.lines,
+        prepByItemId: attempt.prepByItemId,
+        // The 002A formula, computed ONCE here and never recomputed: each line
+        // already carries qty x (base + Σ(delta x modifierQty)).
+        expectedDeltaMinor: attempt.lines.fold<int>(
+          0,
+          (sum, l) => sum + l.lineTotalMinor,
+        ),
+        currencyCode: attempt.lines.isEmpty
+            ? 'ILS'
+            : attempt.lines.first.currencyCode,
+        clientCreatedAt: attempt.clientCreatedAt,
+        // DISPATCHING, written BEFORE the wire. A crash between this write and
+        // the invoke therefore reads as "outcome unknown", which is the truth —
+        // recording `prepared` here would let recovery wrongly conclude the
+        // server never saw it and free the identity.
+        phase: PosAdditionJournalPhase.dispatching,
+        tableLabel: target.tableLabel,
+        customerName: target.customerName,
+        customerPhone: target.customerPhone,
+        attemptCount:
+            (existing[attempt.localOperationId]?.attemptCount ?? 0) + 1,
+      );
+      await journal.persist(scope, <String, PosAdditionJournalRecord>{
+        ...existing,
+        attempt.localOperationId: record,
+      });
+      return true;
+    } catch (_) {
+      // Includes PosPersistenceException from a refused write. Fail CLOSED.
+      return false;
+    }
+  }
+
+  /// Records a phase transition. Best-effort by design: by this point the
+  /// operation's real outcome is already known in memory, and refusing to carry
+  /// on because a bookkeeping write failed would turn a storage wobble into a
+  /// lost order. The record itself stays on disk under its previous phase,
+  /// which always errs toward reconciling again rather than toward forgetting.
+  Future<void> _journalPhase(
+    String localOperationId,
+    PosAdditionJournalPhase phase, {
+    String? errorCode,
+    String? roundId,
+    int? roundNumber,
+  }) async {
+    final journal = _journal;
+    if (journal == null) return;
+    final scope = _journalScope;
+    if (scope.isEmpty) return;
+    try {
+      final existing = await journal.load(scope);
+      final record = existing[localOperationId];
+      if (record == null) return;
+      await journal.persist(scope, <String, PosAdditionJournalRecord>{
+        ...existing,
+        localOperationId: record.copyWith(
+          phase: phase,
+          lastErrorCode: errorCode,
+          appliedRoundId: roundId,
+          appliedRoundNumber: roundNumber,
+        ),
+      });
+    } catch (_) {
+      // Surfaced through the store's own degraded health, never swallowed into
+      // a false claim about the operation.
+    }
+  }
+
+  /// Removes the record — ONLY after authoritative confirmation, or for an
+  /// attempt that provably never reached the server.
+  Future<void> _journalClose(String localOperationId) async {
+    final journal = _journal;
+    if (journal == null) return;
+    final scope = _journalScope;
+    if (scope.isEmpty) return;
+    try {
+      final existing = await journal.load(scope);
+      if (!existing.containsKey(localOperationId)) return;
+      await journal.persist(scope, <String, PosAdditionJournalRecord>{
+        for (final e in existing.entries)
+          if (e.key != localOperationId) e.key: e.value,
+      });
+    } catch (_) {
+      // The record survives; reconciliation is idempotent and will close it.
+    }
+  }
+
+  /// Rehydrates the oldest unresolved amendment and re-installs its target.
+  ///
+  /// Deliberately does NOT re-acquire the cart lock: after a restart the cart is
+  /// empty (its lines were only ever in memory), so there is no source cart to
+  /// protect. What protects correctness is that [_submit] re-sends the FROZEN
+  /// payload whenever an attempt exists — anything the cashier types afterwards
+  /// can never become a second operation.
+  Future<void> _restoreJournal() async {
+    final journal = _journal;
+    if (journal == null) return;
+    final scope = _journalScope;
+    if (scope.isEmpty) return;
+    Map<String, PosAdditionJournalRecord> records;
+    try {
+      records = await journal.load(scope);
+    } catch (_) {
+      return;
+    }
+    final unresolved =
+        records.values.where((r) => r.isUnresolved && r.wasDispatched).toList()
+          ..sort((a, b) => a.clientCreatedAt.compareTo(b.clientCreatedAt));
+    if (unresolved.isEmpty) return;
+    final record = unresolved.first;
+    // Never clobber work started in this session.
+    if (state.attempt != null || state.entryOrderId != null) return;
+
+    final attempt = AdditionAttempt(
+      orderId: record.orderId,
+      localOperationId: record.localOperationId,
+      itemsJson: record.itemsJson,
+      clientCreatedAt: record.clientCreatedAt,
+      lines: record.lines,
+      prepByItemId: record.prepByItemId,
+    );
+    // The record only survives in a dispatched phase, so the restored identity
+    // is by definition one the server may already own.
+    state = AdditionState(
+      dispatched: true,
+      // The PERSISTED generation, so `_ownerOf` reproduces the byte-equal
+      // CartLockOwner the attempt was frozen under.
+      generation: record.generation,
+      entryOrderId: record.orderId,
+      attempt: attempt,
+      appliedRoundId: record.appliedRoundId,
+      phase:
+          record.phase == PosAdditionJournalPhase.awaitingAuthoritativeRefresh
+          ? AdditionPhase.appliedAwaitingRefresh
+          : AdditionPhase.failed,
+      lastError: record.lastErrorCode ?? 'reconcile_required',
+    );
+
+    // Re-install the authoritative parent so the resumed submit/refresh has the
+    // same target it had before. A failure here leaves the attempt visible and
+    // unresolved rather than silently dropping it.
+    try {
+      final detail = await ref
+          .read(orderDetailRepositoryProvider)
+          .fetch(record.orderId);
+      if (state.attempt?.localOperationId != record.localOperationId) return;
+      if (detail.orderId != record.orderId) return;
+      state = state.copyWith(target: detail);
+    } catch (_) {
+      // Keep the restored attempt; the order stays locked and pending.
+    }
+  }
+
+  /// Whether an unresolved amendment is being carried for [orderId] — the
+  /// signal the order-action gates and the operator surface read after a
+  /// restart, when nothing else remembers the operation.
+  bool hasUnresolvedAmendmentFor(String orderId) =>
+      state.attempt?.orderId == orderId;
 
   /// Finding 1 — CONTROLLER-OWNED SAFE ENTRY into addition mode.
   ///
@@ -306,6 +527,11 @@ class AdditionController extends Notifier<AdditionState> {
     final s = state;
     // Idempotent same-target re-entry: already reserved/entering/active for
     // this exact order — nothing to change, nothing to refetch.
+    //
+    // 003C: this is also how a RESTORED unresolved amendment is resumed. The
+    // restore installs `entryOrderId`, so coming back to Add-items for that
+    // order returns `entered` with the frozen attempt still held, and the next
+    // submit replays the SAME identity instead of starting a new operation.
     if (s.entryOrderId == orderId) return AdditionEntryResult.entered;
     if (s.attempt != null) return AdditionEntryResult.blockedPendingAttempt;
     if (s.entryOrderId != null) {
@@ -376,12 +602,33 @@ class AdditionController extends Notifier<AdditionState> {
     final s = state;
     if (!s.canCancel && s.phase != AdditionPhase.idle) return false;
     final attempt = s.attempt;
+    // MONEY-DURABLE-ADDITIONS-003C: an attempt that REACHED THE TRANSPORT may
+    // never be discarded here.
+    //
+    // `canCancel` includes `failed`, and a transport timeout lands in `failed` —
+    // but a timeout is not a "no". The server may already have applied the
+    // round; we simply never heard. Releasing the identity there means the next
+    // submission dispatches a DIFFERENT operation, `app.add_order_items` cannot
+    // recognise it as a replay, and the kitchen gets a second round of the same
+    // food. That needed no crash at all: a timeout, Cancel, and re-send did it.
+    //
+    // So the UI may dismiss, but the identity stays: the attempt is retained,
+    // the order remains reconciliation-pending, and coming back to Add-items
+    // for it RESUMES the frozen operation. A fresh identity becomes available
+    // only once this one reaches a terminal, safely-released state.
+    if (attempt != null && s.dispatched) {
+      state = s.copyWith(lastError: 'reconcile_required');
+      return false;
+    }
     if (attempt != null &&
         !ref
             .read(cartControllerProvider.notifier)
             .unlockForAddition(_ownerOf(s.generation, attempt))) {
       return false;
     }
+    // An attempt that provably never left this device is safe to abandon, and
+    // its journal record (if any) goes with it — there is nothing to replay.
+    if (attempt != null) unawaited(_journalClose(attempt.localOperationId));
     state = AdditionState(generation: s.generation + 1);
     return true;
   }
@@ -480,6 +727,42 @@ class AdditionController extends Notifier<AdditionState> {
       phase: AdditionPhase.sending,
       clearError: true,
     );
+
+    // MONEY-DURABLE-ADDITIONS-003C — PERSIST BEFORE DISPATCH.
+    //
+    // The frozen identity and payload are written to the durable journal and
+    // the write is CONFIRMED before a single byte goes to the transport. If it
+    // cannot be stored, nothing is sent: without the record there is nothing to
+    // replay under, so a later retry would mint a NEW local_operation_id and
+    // `app.add_order_items` — whose idempotency is keyed on
+    // (org, device, local_operation_id) — would build a SECOND round for food
+    // the kitchen is already cooking.
+    //
+    // The failure is returned as a typed AdditionResult rather than thrown:
+    // `cart_panel._handleSend` wraps the call in try/finally with no catch, so a
+    // throw here would escape as an unhandled async error instead of the honest
+    // "not sent, keep your cart" the cashier needs.
+    // The await happens ONLY when there is something durable to write. With no
+    // journal wired (demo mode / tests) the path from the synchronous freeze to
+    // the invoke stays exactly as it was — an extra microtask here would change
+    // observable dispatch timing for every existing caller, which is not this
+    // phase's business to alter.
+    final journal = _journal;
+    if (journal != null && !await _journalPrepared(attempt, target, journal)) {
+      if (_isCurrentAttempt(gen, attempt)) {
+        state = state.copyWith(
+          phase: AdditionPhase.failed,
+          lastError: 'storage',
+        );
+      }
+      return const AdditionResult(applied: false, error: 'storage');
+    }
+
+    // From here the server may see this operation. Recorded BEFORE the await,
+    // so a continuation that lands after a dismissal still knows the identity
+    // is owned and must not be released.
+    state = state.copyWith(dispatched: true);
+
     final Object? raw;
     try {
       raw = await transport.invoke('sync_push', <String, dynamic>{
@@ -500,6 +783,14 @@ class AdditionController extends Notifier<AdditionState> {
         ],
       });
     } catch (_) {
+      // TRANSPORT UNCERTAIN — NOT "not applied". The server may already own the
+      // round; only a replay of this exact identity can tell us. The journal
+      // keeps the frozen operation so that replay is possible.
+      await _journalPhase(
+        attempt.localOperationId,
+        PosAdditionJournalPhase.transportUncertain,
+        errorCode: 'transport',
+      );
       if (_isCurrentAttempt(gen, attempt)) {
         state = state.copyWith(
           phase: AdditionPhase.failed,
@@ -522,7 +813,26 @@ class AdditionController extends Notifier<AdditionState> {
       // Typed rejection / malformed envelope: the FROZEN attempt stays local
       // and retryable — nothing merged, nothing cleared, no fake success.
       final error = _errorOf(raw, attempt.localOperationId) ?? 'rejected';
-      state = state.copyWith(phase: AdditionPhase.failed, lastError: error);
+      // A `conflict` means this identity already exists server-side under a
+      // DIFFERENT payload fingerprint. It can never be resolved by retrying and
+      // it can never produce a second round — it needs a person. Everything
+      // else is a permanent business rejection: terminal, no retry, no print.
+      await _journalPhase(
+        attempt.localOperationId,
+        error == 'conflict'
+            ? PosAdditionJournalPhase.conflict
+            : PosAdditionJournalPhase.rejected,
+        errorCode: error,
+      );
+      // A definitive business rejection RESOLVES the uncertainty: the server
+      // refused, so no round exists under this identity and the cashier may
+      // abandon it. A `conflict` is NOT definitive — the identity is already in
+      // use server-side and only a person can untangle it — so it stays locked.
+      state = state.copyWith(
+        phase: AdditionPhase.failed,
+        lastError: error,
+        dispatched: error == 'conflict',
+      );
       return AdditionResult(applied: false, error: error);
     }
 
@@ -553,6 +863,18 @@ class AdditionController extends Notifier<AdditionState> {
             customerPhone: target.customerPhone,
           )
         : null;
+    // APPLIED — but NOT closed. The journal records the round identity and stays
+    // open until the authoritative refresh proves the new state; closing here
+    // would discard the only evidence that could reconcile a crash in the next
+    // few milliseconds. A replayed result (`idempotency_replay: true`) lands
+    // here identically and by design: the server is telling us the round it
+    // already built, which is exactly what recovery needs.
+    await _journalPhase(
+      attempt.localOperationId,
+      PosAdditionJournalPhase.awaitingAuthoritativeRefresh,
+      roundId: roundId,
+      roundNumber: roundNumber,
+    );
     state = state.copyWith(
       phase: AdditionPhase.appliedAwaitingRefresh,
       appliedRoundId: roundId,
@@ -644,6 +966,13 @@ class AdditionController extends Notifier<AdditionState> {
       state = state.copyWith(lastError: 'refresh_required');
       return false;
     }
+    // AUTHORITATIVE CONFIRMATION REACHED, and only now. `verified` above proved
+    // the refreshed detail is the right parent AND carries the applied round, so
+    // the operation is genuinely settled: the identity can never be needed again
+    // and the record may go. The durable print claim is deliberately NOT touched
+    // — it is keyed on the round, outlives the journal, and financial closure
+    // must not depend on whether paper came out.
+    await _journalClose(attempt.localOperationId);
     state = AdditionState(generation: gen + 1);
     return true;
   }
@@ -727,6 +1056,13 @@ class AdditionController extends Notifier<AdditionState> {
     return null;
   }
 }
+
+/// MONEY-DURABLE-ADDITIONS-003C: the durable amendment journal. Null by default
+/// => in-memory only (demo mode / tests / the pre-003C behaviour); `main.dart`
+/// overrides it for the real app.
+final additionJournalStoreProvider = Provider<PosAdditionJournalStore?>(
+  (_) => null,
+);
 
 final additionControllerProvider =
     NotifierProvider<AdditionController, AdditionState>(AdditionController.new);

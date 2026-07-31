@@ -318,6 +318,18 @@ void main() {
         final op2 = (transport.calls[1]['p_operations'] as List).single as Map;
         expect(op2['local_operation_id'], op1['local_operation_id']);
         expect(op2['payload'], op1['payload']);
+        // UNCHANGED BY MONEY-DURABLE-ADDITIONS-003C, and worth saying why.
+        //
+        // The failure scripted above is a TYPED BUSINESS REJECTION — the server
+        // answered and said no, so no round exists under this identity.
+        // Abandoning it is safe, and the cashier must be able to: this is the
+        // ordinary "the kitchen is out of that, let me redo it" path.
+        //
+        // 003C locks the identity down only when the outcome is UNCERTAIN (a
+        // transport failure or an applied-awaiting-refresh), where the server
+        // may already own the round. That case is proven separately in
+        // money_durable_additions_test.dart D1/D2.
+        //
         // EXPLICIT cancel: unlock, lines INTACT, attempt gone.
         expect(notifier.exit(), isTrue);
         final unlockedCart = container.read(cartControllerProvider);

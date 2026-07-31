@@ -13,6 +13,7 @@ import 'package:restoflow_pos/src/state/addition_controller.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
+import 'package:restoflow_pos/src/data/addition_journal_store.dart';
 import 'package:restoflow_pos/src/data/round_print_claim_store.dart';
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -205,6 +206,7 @@ PosRecentOrder _order({
 ProviderContainer _container(
   _FakeTransport transport, {
   SharedPreferences? prefs,
+  SharedPreferences? journal,
 }) {
   final c = ProviderContainer(
     overrides: [
@@ -224,10 +226,22 @@ ProviderContainer _container(
         posRoundPrintClaimStoreProvider.overrideWithValue(
           SharedPrefsRoundPrintClaimStore(prefs)..scopeKey = _session.deviceId,
         ),
+      if (journal != null)
+        additionJournalStoreProvider.overrideWithValue(
+          SharedPrefsAdditionJournalStore(journal),
+        ),
     ],
   );
   addTearDown(c.dispose);
   return c;
+}
+
+/// Drains the microtask queue so an asynchronous journal restore completes.
+Future<void> _settle(ProviderContainer c) async {
+  c.read(additionControllerProvider); // force the Notifier to build
+  for (var i = 0; i < 12; i++) {
+    await Future<void>.microtask(() {});
+  }
 }
 
 /// Builds the canonical paid addition in [c]'s cart and submits it.
@@ -257,10 +271,12 @@ void main() {
     test(
       'A1 after a restart the SAME operation identity is dispatched',
       () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        final j = await SharedPreferences.getInstance();
         // Session 1: the addition goes out and the transport dies. The client
         // cannot know whether the server applied the round.
         final t1 = _FakeTransport([_transportDown]);
-        final c1 = _container(t1);
+        final c1 = _container(t1, journal: j);
         final r1 = await _buildAndSubmit(c1);
         expect(r1.applied, isFalse, reason: 'the outcome is genuinely UNKNOWN');
         expect(t1.additionIdentities, hasLength(1));
@@ -270,7 +286,8 @@ void main() {
 
         // Session 2: the cashier re-does the same addition on the same order.
         final t2 = _FakeTransport([_replayApplied]);
-        final c2 = _container(t2);
+        final c2 = _container(t2, journal: j);
+        await _settle(c2);
         await _buildAndSubmit(c2);
 
         expect(
@@ -287,16 +304,19 @@ void main() {
     );
 
     test('A2 the unresolved attempt is still known after a restart', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
       final t1 = _FakeTransport([_transportDown]);
-      final c1 = _container(t1);
+      final c1 = _container(t1, journal: j);
       await _buildAndSubmit(c1);
       final original = t1.additionIdentities.single;
       c1.dispose();
 
       final t2 = _FakeTransport([_replayApplied]);
-      final c2 = _container(t2);
+      final c2 = _container(t2, journal: j);
       // Reading the controller is enough to build it; a durable attempt must
       // be visible without the cashier having to re-key anything.
+      await _settle(c2);
       final restored = c2.read(additionControllerProvider);
 
       expect(
@@ -314,14 +334,17 @@ void main() {
     });
 
     test('A3 the frozen payload is replayed byte-identically', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
       final t1 = _FakeTransport([_transportDown]);
-      final c1 = _container(t1);
+      final c1 = _container(t1, journal: j);
       await _buildAndSubmit(c1);
       final firstPayload = t1.additionOps.single['payload'];
       c1.dispose();
 
       final t2 = _FakeTransport([_replayApplied]);
-      final c2 = _container(t2);
+      final c2 = _container(t2, journal: j);
+      await _settle(c2);
       await _buildAndSubmit(c2);
 
       expect(
@@ -336,12 +359,15 @@ void main() {
     });
 
     test('A4 the restored attempt carries the exact frozen money', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
       final t1 = _FakeTransport([_transportDown]);
-      final c1 = _container(t1);
+      final c1 = _container(t1, journal: j);
       await _buildAndSubmit(c1);
       c1.dispose();
 
-      final c2 = _container(_FakeTransport([_replayApplied]));
+      final c2 = _container(_FakeTransport([_replayApplied]), journal: j);
+      await _settle(c2);
       final attempt = c2.read(additionControllerProvider).attempt;
       expect(attempt, isNotNull, reason: 'nothing survived the restart');
 
@@ -594,11 +620,12 @@ void main() {
           .read(additionControllerProvider.notifier)
           .enterForOrder('o-1');
       expect(
-        reentry,
-        isNot(AdditionEntryResult.entered),
+        (reentry, c.read(additionControllerProvider).attempt?.localOperationId),
+        (AdditionEntryResult.entered, original),
         reason:
-            'an order with an unresolved operation must not accept a FRESH '
-            'amendment — re-entry has to resume the existing one',
+            're-entry RESUMES the unresolved operation rather than starting a '
+            'fresh one: the cashier is let back in, but the frozen attempt is '
+            'still the original identity, so the submit below replays it',
       );
 
       final cart = c.read(cartControllerProvider.notifier);
