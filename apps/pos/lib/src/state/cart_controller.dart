@@ -376,16 +376,50 @@ class CartDraftSnapshot {
     'lines': [for (final l in lines) l.toJson()],
   };
 
+  /// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 2) — decode EXACTLY, or
+  /// not at all.
+  ///
+  /// This previously reinterpreted a non-List `lines` as an empty cart and
+  /// SKIPPED any element that was not a Map, so a truncated or partially
+  /// corrupt record restored as a smaller — but entirely plausible — cart that
+  /// the cashier would then charge. A draft we cannot read in full is a draft
+  /// we are not entitled to re-price, so the whole snapshot is refused and the
+  /// caller quarantines the raw record instead of silently reducing it.
   static CartDraftSnapshot fromJson(Map<String, Object?> json) {
     final rawLines = json['lines'];
-    return CartDraftSnapshot(
-      currencyCode: (json['currency_code'] ?? 'ILS').toString(),
-      lines: <CartDraftLine>[
-        if (rawLines is List)
-          for (final l in rawLines)
-            if (l is Map) CartDraftLine.fromJson(l.cast<String, Object?>()),
-      ],
-    );
+    if (rawLines is! List) {
+      throw FormatException(
+        'cart draft lines must be a list, got '
+        '${rawLines == null ? 'absent/null' : rawLines.runtimeType}',
+      );
+    }
+    final lines = <CartDraftLine>[];
+    for (var i = 0; i < rawLines.length; i++) {
+      final l = rawLines[i];
+      if (l is! Map) {
+        throw FormatException(
+          'cart draft line $i is not an object: '
+          '${l == null ? 'absent/null' : l.runtimeType}',
+        );
+      }
+      lines.add(CartDraftLine.fromJson(l.cast<String, Object?>()));
+    }
+    // The currency is only ever omitted by a record written before it was
+    // serialized; the pilot is ILS-only, so absence keeps its historical
+    // meaning while a present-but-unreadable value is corruption.
+    final rawCurrency = json['currency_code'];
+    final String currencyCode;
+    if (rawCurrency == null) {
+      currencyCode = 'ILS';
+    } else if (rawCurrency is String && rawCurrency.trim().isNotEmpty) {
+      currencyCode = rawCurrency;
+    } else {
+      throw FormatException(
+        'cart draft currency_code is not a non-blank string: '
+        '${rawCurrency.runtimeType}',
+      );
+    }
+    return CartDraftSnapshot(currencyCode: currencyCode, lines: lines);
   }
 }
 
@@ -453,27 +487,120 @@ class CartDraftLine {
       'prep_components': [for (final p in prepComponents) p.toJson()],
   };
 
+  /// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 2) — strict, atomic.
+  ///
+  /// Every field this line is priced or identified by is read EXACTLY. The old
+  /// decoder coerced through `int.tryParse('${v}') ?? 0`, so a corrupt
+  /// `base_price_minor` became a free item, a corrupt `quantity` became 0, and
+  /// a `modifiers` value that was not a list became "no modifiers" — each of
+  /// them an UNDER-CHARGE that looked like a normal cart.
+  ///
+  /// The tolerated absences are evidence-based, not invented: [toJson] has,
+  /// since the commit that introduced it (MENU-ORDER-001), ALWAYS written
+  /// `menu_item_id`, `name`, `base_price_minor` and `quantity`, and
+  /// conditionally omitted `line_id`, `modifiers`, `note`, the display orders
+  /// and `prep_components`. So exactly those omissions are legitimate history;
+  /// anything else missing is corruption.
   static CartDraftLine fromJson(Map<String, Object?> json) {
-    int intOf(Object? v) => v is int ? v : int.tryParse('${v ?? ''}') ?? 0;
-    final rawMods = json['modifiers'];
+    int requireInt(String key) {
+      final raw = json[key];
+      if (raw is int) return raw;
+      throw FormatException(
+        'cart draft line $key is not an integer: '
+        '${raw == null ? 'absent/null' : raw.runtimeType}',
+      );
+    }
+
+    /// A rank omitted when 0 is legitimate; a present one must be exact.
+    int optionalRank(String key) {
+      if (!json.containsKey(key) || json[key] == null) return 0;
+      final v = requireInt(key);
+      if (v < 0) throw FormatException('cart draft line $key must be >= 0');
+      return v;
+    }
+
+    String requireId(String key) {
+      final raw = json[key];
+      if (raw is String && raw.trim().isNotEmpty) return raw;
+      throw FormatException(
+        'cart draft line $key is not a non-blank string: '
+        '${raw == null ? 'absent/null' : raw.runtimeType}',
+      );
+    }
+
+    final basePriceMinor = requireInt('base_price_minor');
+    if (basePriceMinor < 0) {
+      throw FormatException(
+        'cart draft line base_price_minor must be >= 0, got $basePriceMinor',
+      );
+    }
+    final quantity = requireInt('quantity');
+    if (quantity < 1) {
+      throw FormatException(
+        'cart draft line quantity must be >= 1, got $quantity',
+      );
+    }
+
+    // An ABSENT `modifiers` key is a plain line. A present one that is not a
+    // list is corruption: treating it as empty deletes paid surcharges.
+    final modifiers = <SelectedModifier>[];
+    if (json.containsKey('modifiers')) {
+      final rawMods = json['modifiers'];
+      if (rawMods is! List) {
+        throw FormatException(
+          'cart draft line modifiers must be a list, got '
+          '${rawMods == null ? 'absent/null' : rawMods.runtimeType}',
+        );
+      }
+      for (var i = 0; i < rawMods.length; i++) {
+        final m = rawMods[i];
+        if (m is! Map) {
+          throw FormatException(
+            'cart draft line modifier $i is not an object: '
+            '${m == null ? 'absent/null' : m.runtimeType}',
+          );
+        }
+        modifiers.add(SelectedModifier.fromJson(m.cast<String, Object?>()));
+      }
+    }
+
+    final rawName = json['name'];
+    if (rawName is! String) {
+      throw FormatException(
+        'cart draft line name is not a string: '
+        '${rawName == null ? 'absent/null' : rawName.runtimeType}',
+      );
+    }
     final rawNote = json['note'];
+    if (rawNote != null && rawNote is! String) {
+      throw FormatException(
+        'cart draft line note is not a string: ${rawNote.runtimeType}',
+      );
+    }
+    // PARKED-CARTS-001: absent on an older record -> empty. Present but not a
+    // list is corruption, for the same reason as `modifiers`.
+    if (json.containsKey('prep_components') &&
+        json['prep_components'] is! List) {
+      throw FormatException(
+        'cart draft line prep_components must be a list, got '
+        '${json['prep_components']!.runtimeType}',
+      );
+    }
+
     return CartDraftLine(
-      lineId: json['line_id']?.toString(),
-      menuItemId: (json['menu_item_id'] ?? '').toString(),
-      name: (json['name'] ?? '').toString(),
-      basePriceMinor: intOf(json['base_price_minor']),
-      quantity: json['quantity'] == null ? 1 : intOf(json['quantity']),
-      modifiers: <SelectedModifier>[
-        if (rawMods is List)
-          for (final m in rawMods)
-            if (m is Map) SelectedModifier.fromJson(m.cast<String, Object?>()),
-      ],
-      note: rawNote == null ? null : rawNote.toString(),
-      categoryDisplayOrder: intOf(json['category_display_order']),
-      itemDisplayOrder: intOf(json['item_display_order']),
-      // PARKED-CARTS-001: absent on an older record -> empty. The shared
-      // tolerant parser drops blank-name / non-positive rows rather than
-      // showing the chef a bogus count.
+      // Absent line_id is legitimate (a fresh id is minted); a present one
+      // must be an exact non-blank string, never a coerced number.
+      lineId: json.containsKey('line_id') ? requireId('line_id') : null,
+      menuItemId: requireId('menu_item_id'),
+      name: rawName,
+      basePriceMinor: basePriceMinor,
+      quantity: quantity,
+      modifiers: modifiers,
+      note: rawNote as String?,
+      categoryDisplayOrder: optionalRank('category_display_order'),
+      itemDisplayOrder: optionalRank('item_display_order'),
+      // The shared tolerant element parser drops blank-name / non-positive
+      // rows rather than showing the chef a bogus count.
       prepComponents: parseKitchenPrepComponents(json['prep_components']),
     );
   }

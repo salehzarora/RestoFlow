@@ -169,16 +169,34 @@ class PosDraftRecovery {
     final rawTable = json['table'];
     final orderTypeName = (json['order_type'] ?? OrderType.takeaway.name)
         .toString();
+    // MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blockers 2/6): an absent or
+    // non-object `draft` previously became an EMPTY draft, so a recovery record
+    // we could not read presented itself as a real, recoverable order with no
+    // lines at all. `toJson` writes `draft` unconditionally, so its absence is
+    // corruption, never history — refuse it and let the store QUARANTINE the
+    // raw record rather than hand the cashier a silently emptied order.
+    final rawDraft = json['draft'];
+    if (rawDraft is! Map) {
+      throw FormatException(
+        'draft recovery draft is not an object: '
+        '${rawDraft == null ? 'absent/null' : rawDraft.runtimeType}',
+      );
+    }
+    // The record's own key. Blank would collide with every other blank one.
+    final rawEntryId = json['outbox_entry_id'];
+    if (rawEntryId is! String || rawEntryId.trim().isEmpty) {
+      throw FormatException(
+        'draft recovery outbox_entry_id is not a non-blank string: '
+        '${rawEntryId == null ? 'absent/null' : rawEntryId.runtimeType}',
+      );
+    }
     return PosDraftRecovery(
-      draft: CartDraftSnapshot.fromJson(
-        (json['draft'] as Map?)?.cast<String, Object?>() ??
-            const <String, Object?>{},
-      ),
+      draft: CartDraftSnapshot.fromJson(rawDraft.cast<String, Object?>()),
       orderType: OrderType.values.firstWhere(
         (t) => t.name == orderTypeName,
         orElse: () => OrderType.takeaway,
       ),
-      outboxEntryId: (json['outbox_entry_id'] ?? '').toString(),
+      outboxEntryId: rawEntryId,
       binding: PosRecoveryBinding.fromJson(
         (json['binding'] as Map?)?.cast<String, Object?>() ??
             const <String, Object?>{},
