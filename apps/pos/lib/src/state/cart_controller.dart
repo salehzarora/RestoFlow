@@ -306,6 +306,17 @@ enum CartMutationResult {
   /// must stay exactly what was frozen. The UI shows the existing pending /
   /// refresh-required messaging and disables the controls.
   lockedByAddition,
+
+  /// MONEY-LOCAL-ATOMICITY-003A — the incoming draft could not be turned into a
+  /// valid cart (a duplicate line id, a currency mismatch, an impossible
+  /// quantity), so NOTHING was applied.
+  ///
+  /// This is a distinct outcome from [lockedByAddition]: the cart was free to
+  /// change, and the change was refused on its own merits. The previous cart,
+  /// its money and every side map are exactly as they were, and no state was
+  /// emitted. Callers keep their source record (the parked entry, the durable
+  /// recovery) so the cashier can try again or read it on a later build.
+  invalidDraft,
 }
 
 /// Immutable snapshot of the cart for the POS UI (the Riverpod state value).
@@ -439,6 +450,14 @@ class CartDraftSnapshot {
       );
     }
     final lines = <CartDraftLine>[];
+    // MONEY-LOCAL-ATOMICITY-003A: line ids must be UNIQUE within a draft. The
+    // domain refuses a duplicate by throwing, so a record carrying one can
+    // never become a cart — catching it here means the existing quarantine
+    // seams receive it exactly like any other corruption, instead of the
+    // restore path discovering it half-way through. No first-wins, no
+    // last-wins, no silent regeneration: a cart we cannot rebuild faithfully
+    // is not one we may rebuild approximately.
+    final seenLineIds = <String>{};
     for (var i = 0; i < rawLines.length; i++) {
       final l = rawLines[i];
       if (l is! Map) {
@@ -447,7 +466,12 @@ class CartDraftSnapshot {
           '${l == null ? 'absent/null' : l.runtimeType}',
         );
       }
-      lines.add(CartDraftLine.fromJson(l.cast<String, Object?>()));
+      final line = CartDraftLine.fromJson(l.cast<String, Object?>());
+      final id = line.lineId;
+      if (id != null && !seenLineIds.add(id)) {
+        throw FormatException('cart draft has duplicate line_id "$id"');
+      }
+      lines.add(line);
     }
     // The currency is only ever omitted by a record written before it was
     // serialized; the pilot is ILS-only, so absence keeps its historical
@@ -980,56 +1004,104 @@ class CartController extends Notifier<CartViewState> {
   /// (products, quantities, modifiers, notes). Idempotent replacement — it always
   /// REPLACES the current cart, so a repeated "Back to cart" cannot duplicate
   /// lines. Line ids keep advancing so they stay unique.
+  /// MONEY-LOCAL-ATOMICITY-003A — BUILD, VALIDATE, THEN SWAP ONCE.
+  ///
+  /// This used to replace the live `Cart` and clear all four side maps BEFORE
+  /// validating a single incoming line, then add lines one at a time. Because
+  /// the domain refuses a duplicate line id by THROWING
+  /// (`Cart.addLine` -> `DuplicateLineException`), a draft whose third of five
+  /// lines repeated an id destroyed the cashier's active cart, left a shorter
+  /// and cheaper one behind, and threw into the UI on the way out.
+  ///
+  /// Everything below is assembled into LOCAL structures. Nothing owned by this
+  /// controller is touched until the whole replacement exists and is valid, and
+  /// then it is swapped in as one committed step with exactly one emit. On any
+  /// failure the previous cart, its money, every side map, the line sequence and
+  /// the submitted-order confirmation are untouched and NOTHING is emitted —
+  /// the caller gets [CartMutationResult.invalidDraft] and keeps its source
+  /// record.
   CartMutationResult restoreDraft(CartDraftSnapshot draft) {
     if (_locked) return CartMutationResult.lockedByAddition;
-    _cart = Cart(
+
+    // ---- build into TEMPORARIES; the live state is not touched yet ---------
+    final nextCart = Cart(
       orderId: 'demo-order',
       organizationId: 'demo-org',
       restaurantId: 'demo-restaurant',
       branchId: 'demo-branch',
       currencyCode: draft.currencyCode,
     );
-    _lineModifiers.clear();
-    _lineNotes.clear();
-    _lineDisplayOrders.clear();
-    _linePrep.clear();
-    for (final l in draft.lines) {
-      // MENU-ORDER-001 (Codex #2/#3): reuse the persisted STABLE line id so
-      // edits/removals target the original line and a re-restore never
-      // duplicates; a legacy record with no id mints a fresh one. Keep _lineSeq
-      // AHEAD of any restored `line-N` so a later add can never collide with it.
-      final lineId = l.lineId ?? 'line-${_lineSeq++}';
-      final seqMatch = RegExp(r'^line-(\d+)$').firstMatch(lineId);
-      if (seqMatch != null) {
-        final n = int.tryParse(seqMatch.group(1)!) ?? -1;
-        if (n >= _lineSeq) _lineSeq = n + 1;
+    final nextModifiers = <String, List<SelectedModifier>>{};
+    final nextNotes = <String, String>{};
+    final nextDisplayOrders = <String, (int, int)>{};
+    final nextPrep = <String, List<KitchenPrepComponent>>{};
+    // A LOCAL sequence: a rejected draft must not advance the real one either,
+    // or a failed restore would silently consume line ids.
+    var nextSeq = _lineSeq;
+
+    try {
+      for (final l in draft.lines) {
+        // MENU-ORDER-001 (Codex #2/#3): reuse the persisted STABLE line id so
+        // edits/removals target the original line and a re-restore never
+        // duplicates; a legacy record with no id mints a fresh one. Keep the
+        // sequence AHEAD of any restored `line-N` so a later add cannot collide.
+        final lineId = l.lineId ?? 'line-${nextSeq++}';
+        final seqMatch = RegExp(r'^line-(\d+)$').firstMatch(lineId);
+        if (seqMatch != null) {
+          final n = int.tryParse(seqMatch.group(1)!) ?? -1;
+          if (n >= nextSeq) nextSeq = n + 1;
+        }
+        // Throws DuplicateLineException / CurrencyMismatchException on a draft
+        // that cannot become a cart — caught below, with nothing yet swapped.
+        nextCart.addLine(
+          CartLine.snapshot(
+            lineId: lineId,
+            menuItemId: l.menuItemId,
+            itemNameSnapshot: l.name,
+            basePriceMinorSnapshot: l.basePriceMinor,
+            currencyCodeSnapshot: draft.currencyCode,
+          ),
+        );
+        if (l.quantity > 1) nextCart.changeQuantity(lineId, l.quantity);
+        if (l.modifiers.isNotEmpty) {
+          nextModifiers[lineId] = List.unmodifiable(l.modifiers);
+        }
+        final note = l.note;
+        if (note != null && note.isNotEmpty) nextNotes[lineId] = note;
+        // MENU-ORDER-001 (Codex): restore the Dashboard menu ranks so the
+        // corrected resubmit prints in the menu order the original would have.
+        nextDisplayOrders[lineId] = (
+          l.categoryDisplayOrder,
+          l.itemDisplayOrder,
+        );
+        // PARKED-CARTS-001: repopulate the ORDER-TIME prep snapshot the draft
+        // carries. It is deliberately NOT re-read from the live menu — a
+        // restored cart must keep the configuration it was ordered against, and
+        // a record written before the field existed honestly restores none.
+        if (l.prepComponents.isNotEmpty) {
+          nextPrep[lineId] = List.unmodifiable(l.prepComponents);
+        }
       }
-      _cart.addLine(
-        CartLine.snapshot(
-          lineId: lineId,
-          menuItemId: l.menuItemId,
-          itemNameSnapshot: l.name,
-          basePriceMinorSnapshot: l.basePriceMinor,
-          currencyCodeSnapshot: draft.currencyCode,
-        ),
-      );
-      if (l.quantity > 1) _cart.changeQuantity(lineId, l.quantity);
-      if (l.modifiers.isNotEmpty) {
-        _lineModifiers[lineId] = List.unmodifiable(l.modifiers);
-      }
-      final note = l.note;
-      if (note != null && note.isNotEmpty) _lineNotes[lineId] = note;
-      // MENU-ORDER-001 (Codex): restore the Dashboard menu ranks so the corrected
-      // resubmit prints in the same menu order the original attempt would have.
-      _lineDisplayOrders[lineId] = (l.categoryDisplayOrder, l.itemDisplayOrder);
-      // PARKED-CARTS-001: repopulate the ORDER-TIME prep snapshot the draft
-      // carries. It is deliberately NOT re-read from the live menu — a restored
-      // cart must keep the configuration it was ordered against, and a record
-      // written before the field existed honestly restores none.
-      if (l.prepComponents.isNotEmpty) {
-        _linePrep[lineId] = List.unmodifiable(l.prepComponents);
-      }
+    } on CartException {
+      // The draft cannot become a cart. Nothing was swapped, nothing emitted.
+      return CartMutationResult.invalidDraft;
     }
+
+    // ---- ONE committed swap ------------------------------------------------
+    _cart = nextCart;
+    _lineModifiers
+      ..clear()
+      ..addAll(nextModifiers);
+    _lineNotes
+      ..clear()
+      ..addAll(nextNotes);
+    _lineDisplayOrders
+      ..clear()
+      ..addAll(nextDisplayOrders);
+    _linePrep
+      ..clear()
+      ..addAll(nextPrep);
+    _lineSeq = nextSeq;
     _submittedOrder = null;
     _emit();
     return CartMutationResult.applied;
