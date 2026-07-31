@@ -440,15 +440,46 @@ class PosRecentOrder {
         ? _orderFromJson(orderRaw.cast<String, Object?>())
         : null;
 
+    // MONEY-CODEX-FINAL-CORRECTIONS-004 (F7). `payment` and `voided_at` were
+    // read as `raw is Map ? ... : null` / `raw is String ? ... : null`, so
+    // ABSENT and PRESENT-BUT-WRONG-TYPE were indistinguishable — and the
+    // wrong-type reading was always the MORE PERMISSIVE one:
+    //   * a settled order read as unpaid is payable again (double charge, and
+    //     a drawer count that never reconciles);
+    //   * a voided order read as live is payable, printable and re-sendable.
+    // Neither may be inferred from a value we could not read. The record goes
+    // to quarantine instead (002B), where it is preserved verbatim.
+    if (paymentRaw != null && paymentRaw is! Map) {
+      throw FormatException(
+        'recent order: payment must be an object when present, got '
+        '${paymentRaw.runtimeType}',
+      );
+    }
+    if (voidedAtRaw != null && voidedAtRaw is! String) {
+      throw FormatException(
+        'recent order: voided_at must be a string when present, got '
+        '${voidedAtRaw.runtimeType}',
+      );
+    }
+    final voidedAt = voidedAtRaw is String
+        ? DateTime.tryParse(voidedAtRaw)
+        : null;
+    if (voidedAtRaw is String && voidedAt == null) {
+      // A void marker that parses to nothing is the same silent resurrection.
+      throw FormatException('recent order: bad voided_at "$voidedAtRaw"');
+    }
+
     return PosRecentOrder(
       order: parsedOrder,
       submittedAt: submittedAt,
       payment: paymentRaw is Map
           ? _paymentFromJson(paymentRaw.cast<String, Object?>())
           : null,
-      voidedAt: voidedAtRaw is String ? DateTime.tryParse(voidedAtRaw) : null,
+      voidedAt: voidedAt,
       voidReason: _strOrNull(voidReasonRaw),
-      status: _strOrNull(json['status']),
+      // The record status gates Pay, Print bill and Void. A stringified int or
+      // list is not a status this build knows how to reason about.
+      status: _optionalString(json['status'], 'record', 'status'),
       snapshot: snapshot,
       syncState: syncState,
       // A record with no `order` view was never submitted here, so it can only be
@@ -548,9 +579,19 @@ SubmittedOrderView _orderFromJson(Map<String, Object?> j) {
     tableLabel: _strOrNull(j['table_label']),
     customerName: _strOrNull(j['customer_name']),
     customerPhone: _strOrNull(j['customer_phone']),
-    orderId: _strOrNull(j['order_id']),
-    outboxEntryId: _strOrNull(j['outbox_entry_id']),
-    localOperationId: _strOrNull(j['local_operation_id']),
+    // F7: IDENTITY, not display text — these reach the D-022 idempotency key,
+    // the order-targeting lookups and the reprint path.
+    orderId: _optionalString(j['order_id'], 'order', 'order_id'),
+    outboxEntryId: _optionalString(
+      j['outbox_entry_id'],
+      'order',
+      'outbox_entry_id',
+    ),
+    localOperationId: _optionalString(
+      j['local_operation_id'],
+      'order',
+      'local_operation_id',
+    ),
     lines: lines,
   );
 }
@@ -741,7 +782,7 @@ CashPayment _paymentFromJson(Map<String, Object?> j) {
   }
   return CashPayment(
     paymentId: _requireString(j, 'payment_id', 'payment'),
-    orderId: _strOrNull(j['order_id']),
+    orderId: _optionalString(j['order_id'], 'payment', 'order_id'),
     orderNumber: _requireString(j, 'order_number', 'payment'),
     // The D-022 idempotency key halves. Written unconditionally; a coerced
     // '7' or 'null' would silently re-key the operation.
@@ -768,7 +809,7 @@ CashPayment _paymentFromJson(Map<String, Object?> j) {
       allowBlank: true,
     ),
     paidAt: paidAt,
-    orderStatus: _strOrNull(j['order_status']),
+    orderStatus: _optionalString(j['order_status'], 'payment', 'order_status'),
   );
 }
 
@@ -850,5 +891,25 @@ String _requireString(
 String? _strOrNull(Object? v) {
   if (v == null) return null;
   final s = '$v';
+  return s.isEmpty ? null : s;
+}
+
+/// MONEY-CODEX-FINAL-CORRECTIONS-004 (F7) — an optional field that IS present
+/// must be its own type.
+///
+/// [_strOrNull] stringifies anything, so `42` decoded as `'42'` and a list
+/// decoded as its `toString()`. That is fine for display text a human typed
+/// (a table label reads badly and nothing else happens) and unacceptable for
+/// an IDENTITY, which flows into the D-022 idempotency key, order targeting
+/// and reprint lookups. A fabricated identity is worse than no record.
+String? _optionalString(Object? v, String what, String key) {
+  if (v == null) return null;
+  if (v is! String) {
+    throw FormatException(
+      'recent order: $what $key must be a string when present, '
+      'got ${v.runtimeType}',
+    );
+  }
+  final s = v.trim();
   return s.isEmpty ? null : s;
 }

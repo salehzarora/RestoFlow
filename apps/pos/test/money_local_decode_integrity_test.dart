@@ -303,6 +303,15 @@ void main() {
     if (payment != null) 'payment': payment,
   };
 
+  /// A valid record with ONE extra key set to a raw, possibly non-Map value —
+  /// the shape group D needs and `record()` cannot express.
+  Map<String, Object?> recordWithRaw(String key, Object? value) =>
+      <String, Object?>{
+        'order': validLocalOrder(),
+        'submitted_at': '2026-08-05T09:00:00.000Z',
+        key: value,
+      };
+
   group('B. the LOCAL order view decodes its money exactly, or not at all', () {
     test('B0 a valid local record decodes with exact money', () {
       final o = PosRecentOrder.fromJson(
@@ -423,5 +432,143 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+  });
+
+  // =========================================================================
+  // MONEY-CODEX-FINAL-CORRECTIONS-004 (F7). OPTIONAL DOES NOT MEAN
+  // UNTYPED.
+  //
+  // `payment` and `voided_at` were read as `raw is Map ? ... : null` and
+  // `raw is String ? ... : null`. Absent and PRESENT-BUT-WRONG-TYPE were
+  // therefore indistinguishable, and the wrong-type case silently produced the
+  // MORE PERMISSIVE record: a paid order read as unpaid (payable again, and a
+  // second cash line in the drawer count), a voided order read as live
+  // (payable, printable, re-sendable to the kitchen).
+  //
+  // Group C above already proves a MALFORMED payment OBJECT throws. What it
+  // never covered is a payment that is not an object at all.
+  //
+  // Identity strings had the same shape of hole: `_strOrNull` stringifies
+  // ANYTHING, so `order_id: 42` decoded as `'42'` and a list decoded as its
+  // `toString()`. Those values then flow into idempotency keys, order
+  // targeting and reprint lookups.
+  // =========================================================================
+  group('D. an optional financial field, when PRESENT, must be its own type', () {
+    test('D0 absent payment and absent voided_at are legitimate', () {
+      final o = PosRecentOrder.fromJson(recordWithRaw('unused', null));
+      expect(o.payment, isNull);
+      expect(o.voidedAt, isNull);
+      expect(o.isVoided, isFalse);
+    });
+
+    for (final bad in <Object?>[
+      7,
+      true,
+      'completed',
+      <Object?>['cash', 6000],
+    ]) {
+      test('D1 a PRESENT payment that is not a Map (${bad.runtimeType}) is '
+          'corruption, never "unpaid"', () {
+        expect(
+          () => PosRecentOrder.fromJson(recordWithRaw('payment', bad)),
+          throwsA(isA<FormatException>()),
+          reason:
+              'reading it as unpaid re-opens a SETTLED order for payment — the '
+              'customer is charged twice and the drawer never reconciles',
+        );
+      });
+    }
+
+    test('D1b an explicit null payment stays legitimate (the written shape '
+        'omits it, and an older writer may have emitted null)', () {
+      final o = PosRecentOrder.fromJson(recordWithRaw('payment', null));
+      expect(o.payment, isNull);
+    });
+
+    for (final bad in <Object?>[
+      7,
+      true,
+      <Object?>['2026-08-05T09:00:00.000Z'],
+      <String, Object?>{'at': '2026-08-05T09:00:00.000Z'},
+    ]) {
+      test('D2 a PRESENT voided_at that is not a String (${bad.runtimeType}) '
+          'is corruption, never "still live"', () {
+        expect(
+          () => PosRecentOrder.fromJson(recordWithRaw('voided_at', bad)),
+          throwsA(isA<FormatException>()),
+          reason:
+              'reading it as live makes a VOIDED order payable and printable '
+              'again',
+        );
+      });
+    }
+
+    test('D2b a PRESENT voided_at String that is not a date is corruption', () {
+      expect(
+        () => PosRecentOrder.fromJson(recordWithRaw('voided_at', 'yesterday')),
+        throwsA(isA<FormatException>()),
+        reason:
+            'it used to decode to null — a void marker that parses to nothing '
+            'is the same silent resurrection',
+      );
+    });
+
+    test('D2c a valid voided_at decodes exactly', () {
+      final o = PosRecentOrder.fromJson(
+        recordWithRaw('voided_at', '2026-08-05T09:30:00.000Z'),
+      );
+      expect(o.voidedAt, DateTime.parse('2026-08-05T09:30:00.000Z'));
+      expect(o.isVoided, isTrue);
+    });
+
+    for (final field in <String>[
+      'order_id',
+      'outbox_entry_id',
+      'local_operation_id',
+    ]) {
+      for (final bad in <Object?>[
+        42,
+        true,
+        <Object?>['a', 'b'],
+      ]) {
+        test('D3 order identity $field ${bad.runtimeType} is corruption, '
+            'never its toString()', () {
+          final order = validLocalOrder()..[field] = bad;
+          expect(
+            () => PosRecentOrder.fromJson(record(order: order)),
+            throwsA(isA<FormatException>()),
+            reason:
+                '$field reaches the idempotency key and the order-targeting '
+                'lookups; a stringified list or int is a FABRICATED identity',
+          );
+        });
+      }
+
+      test('D3b a valid $field decodes exactly, and absent stays absent', () {
+        final withId = validLocalOrder()..[field] = 'x-1';
+        expect(
+          () => PosRecentOrder.fromJson(record(order: withId)),
+          returnsNormally,
+        );
+        expect(
+          () => PosRecentOrder.fromJson(record(order: validLocalOrder())),
+          returnsNormally,
+        );
+      });
+    }
+
+    for (final bad in <Object?>[
+      42,
+      true,
+      <Object?>['open'],
+    ]) {
+      test('D4 a record status of ${bad.runtimeType} is corruption — it gates '
+          'Pay, Print bill and Void', () {
+        expect(
+          () => PosRecentOrder.fromJson(recordWithRaw('status', bad)),
+          throwsA(isA<FormatException>()),
+        );
+      });
+    }
   });
 }
