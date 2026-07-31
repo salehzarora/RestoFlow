@@ -76,7 +76,13 @@ class SharedPrefsDraftRecoveryStore
   bool get isDegraded => _degraded;
 
   @override
-  int unreadableRecordCount(String scopeKey) => _quarantined().length;
+  int unreadableRecordCount(String scopeKey) {
+    var preserved = 0;
+    for (var slot = 0; slot < _maxPreservedEnvelopes; slot++) {
+      if ((_prefs.getString(_preservedKey(slot)) ?? '').isNotEmpty) preserved++;
+    }
+    return _quarantined().length + preserved;
+  }
 
   @override
   Future<Map<String, PosDraftRecovery>> load() async {
@@ -99,12 +105,66 @@ class SharedPrefsDraftRecoveryStore
           );
         } catch (_) {
           // Drop a single corrupt/foreign record; never crash the POS on start.
+          // It is not lost — `_quarantined` re-emits it verbatim on every write.
         }
       }
       return out;
     } catch (_) {
+      // An envelope this build cannot interpret at all. Start clean, but the
+      // bytes are NOT discarded — `persist` preserves them before overwriting.
       return <String, PosDraftRecovery>{};
     }
+  }
+
+  /// Sidecar keys holding envelopes this build could not interpret at all.
+  static const int _maxPreservedEnvelopes = 5;
+
+  String _preservedKey(int slot) =>
+      slot == 0 ? '$_key.unreadable' : '$_key.unreadable.${slot + 1}';
+
+  /// MONEY-DURABLE-STORES-003B: copies an envelope this build cannot interpret
+  /// to a sidecar key BEFORE the primary key is overwritten.
+  ///
+  /// The per-record quarantine added in 002B only reaches records inside an
+  /// envelope this build can still open. A whole envelope that fails — damaged
+  /// JSON, the wrong shape, or a schema version from a newer build — was simply
+  /// replaced, taking every rejected order's recoverable draft with it. A v1
+  /// envelope is the concrete case: it is intentionally not loaded (its records
+  /// are pin-session-keyed and unattributable to a stable worker), and it was
+  /// then destroyed rather than left for a build that could migrate it.
+  ///
+  /// Fails CLOSED, like the outbox: when the copy cannot be made, [persist]
+  /// throws rather than destroying the original.
+  Future<void> _preserveUnreadableEnvelope() async {
+    final raw = _prefs.getString(_key);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map &&
+          (decoded['version'] as num?)?.toInt() == schemaVersion &&
+          decoded['recoveries'] is Map) {
+        return; // interpretable; per-record quarantine covers it
+      }
+    } catch (_) {
+      // not decodable at all — preserve it
+    }
+    for (var slot = 0; slot < _maxPreservedEnvelopes; slot++) {
+      final key = _preservedKey(slot);
+      final existing = _prefs.getString(key);
+      if (existing == raw) return; // already preserved (idempotent)
+      if (existing != null && existing.isNotEmpty) continue;
+      if (await _prefs.setString(key, raw)) return;
+      _degraded = true;
+      throw const PosPersistenceException(
+        'an unreadable draft-recovery envelope could not be set aside, so it '
+        'was not overwritten',
+      );
+    }
+    _degraded = true;
+    throw const PosPersistenceException(
+      'too many unreadable draft-recovery envelopes are already being held; '
+      'refusing to overwrite another',
+    );
   }
 
   /// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 6): the raw records this
@@ -157,6 +217,7 @@ class SharedPrefsDraftRecoveryStore
     // record under the same key REPLACES its quarantined shadow — the caller's
     // set is written last and wins — so a key never ends up duplicated and a
     // repaired record never stays hidden behind the broken one.
+    await _preserveUnreadableEnvelope();
     final envelope = <String, Object?>{
       'version': schemaVersion,
       'recoveries': <String, Object?>{
