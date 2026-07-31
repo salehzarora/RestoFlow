@@ -8014,6 +8014,12 @@ abstract class AppLocalizations {
   /// **'Options couldn\'t be loaded. You can still edit the note - this item\'s saved options are kept as they are.'**
   String get posModifierOptionsUnavailable;
 
+  /// MONEY-EDIT-INTEGRITY-002C: shown when EDITING a cart line whose stored selection still exists on the menu but no longer as the line describes it - the option was MOVED to another modifier group, or a legacy record written before group ids existed cannot be attributed to exactly one group. Saving is blocked so the stored selection is never reinterpreted under another group's price and semantics. Distinct from posModifierSavedOptionsUnavailable, which means the option is genuinely gone.
+  ///
+  /// In en, this message translates to:
+  /// **'Some options saved on this item have changed on the menu. Refresh the menu to change it, or cancel to keep it as it is.'**
+  String get posModifierSavedOptionsChanged;
+
   /// MONEY-MODIFIER-PRICING-INTEGRITY-001: shown when EDITING a cart line whose stored selections cannot all be represented by the live groups (an option was removed or moved). Saving is blocked so the missing paid option is never silently dropped.
   ///
   /// In en, this message translates to:

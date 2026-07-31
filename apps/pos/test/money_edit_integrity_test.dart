@@ -302,13 +302,15 @@ void main() {
         selections: [selectedBaconInExtras],
       );
       await openEdit(tester, c);
-      // The running total must not have adopted the new group's FREE price for
-      // a selection that cost 8.00. Under the old cross-group match the sheet
-      // showed base + 0.
+      // Sauces (max 2) must report ZERO selected. Under the old cross-group
+      // match the stored bacon was seeded INTO Sauces, so this group showed
+      // 1/2 — the sheet had adopted an option the cashier never chose there,
+      // at that group's free price.
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       expect(
-        find.text(money(kFrozenBase)),
-        findsNothing,
-        reason: 'the moved option was adopted at its new, free price',
+        find.text(l10n.posModifierSelectedCount(0, 2)),
+        findsOneWidget,
+        reason: 'the moved option must not be preselected under its new group',
       );
       final line = viewOf(c).lines.single;
       expect(line.modifiers.single.priceDeltaMinor, kBacon);

@@ -4290,6 +4290,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Options couldn\'t be loaded. You can still edit the note - this item\'s saved options are kept as they are.';
 
   @override
+  String get posModifierSavedOptionsChanged =>
+      'Some options saved on this item have changed on the menu. Refresh the menu to change it, or cancel to keep it as it is.';
+
+  @override
   String get posModifierSavedOptionsUnavailable =>
       'Some options saved on this item are no longer on the menu. Refresh the menu to change it, or cancel to keep it as it is.';
 

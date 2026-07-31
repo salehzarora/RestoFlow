@@ -4260,6 +4260,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذّر تحميل الخيارات. يمكنك تعديل الملاحظة فقط - الخيارات المحفوظة لهذا الصنف تبقى كما هي.';
 
   @override
+  String get posModifierSavedOptionsChanged =>
+      'بعض الخيارات المحفوظة على هذا الصنف تغيّرت في القائمة. حدِّث القائمة لتعديله، أو ألغِ لتُبقيه كما هو.';
+
+  @override
   String get posModifierSavedOptionsUnavailable =>
       'بعض الخيارات المحفوظة على هذا الصنف لم تعد موجودة في القائمة. حدِّث القائمة لتعديله، أو ألغِ لتُبقيه كما هو.';
 

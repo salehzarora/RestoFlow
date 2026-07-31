@@ -1350,6 +1350,8 @@
   "posEditSaveChanges": "حفظ التعديلات",
   "posModifierOptionsUnavailable": "تعذّر تحميل الخيارات. يمكنك تعديل الملاحظة فقط - الخيارات المحفوظة لهذا الصنف تبقى كما هي.",
   "@posModifierOptionsUnavailable": {"description": "MONEY-MODIFIER-PRICING-INTEGRITY-001: note-only edit hint when modifier groups cannot be resolved; stored paid modifiers are preserved."},
+  "posModifierSavedOptionsChanged": "بعض الخيارات المحفوظة على هذا الصنف تغيّرت في القائمة. حدِّث القائمة لتعديله، أو ألغِ لتُبقيه كما هو.",
+  "@posModifierSavedOptionsChanged": {"description": "MONEY-EDIT-INTEGRITY-002C: blocked-save hint when a stored selection was MOVED to another group or cannot be attributed to exactly one group."},
   "posModifierSavedOptionsUnavailable": "بعض الخيارات المحفوظة على هذا الصنف لم تعد موجودة في القائمة. حدِّث القائمة لتعديله، أو ألغِ لتُبقيه كما هو.",
   "@posModifierSavedOptionsUnavailable": {"description": "MONEY-MODIFIER-PRICING-INTEGRITY-001: blocked-save hint when stored selections cannot all be represented."},
   "kdsNewOrderBadge": "طلب جديد",

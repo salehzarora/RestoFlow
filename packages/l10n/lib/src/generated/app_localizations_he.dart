@@ -4229,6 +4229,10 @@ class AppLocalizationsHe extends AppLocalizations {
       'לא ניתן היה לטעון את האפשרויות. אפשר לערוך רק את ההערה - האפשרויות השמורות של הפריט נשמרות כפי שהן.';
 
   @override
+  String get posModifierSavedOptionsChanged =>
+      'חלק מהאפשרויות השמורות על הפריט השתנו בתפריט. רענן את התפריט כדי לשנות אותו, או בטל כדי להשאיר אותו כפי שהן.';
+
+  @override
   String get posModifierSavedOptionsUnavailable =>
       'חלק מהאפשרויות השמורות על הפריט כבר אינן בתפריט. רענן את התפריט כדי לשנות אותו, או בטל כדי להשאיר אותו כפי שהוא.';
 
