@@ -90,13 +90,60 @@ class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
     }
   }
 
+  /// MONEY-LOCAL-DECODE-INTEGRITY-002B (Codex Blocker 6): the raw records this
+  /// build cannot decode, read back from the CURRENT envelope.
+  ///
+  /// Deliberately re-read here rather than remembered from [load]: a guarantee
+  /// that only holds when the caller happens to have loaded first is not a
+  /// guarantee. The controller replaces the whole map on every write, so
+  /// preservation has to live where it cannot be bypassed.
+  Map<String, Object?> _quarantined() {
+    final raw = _prefs.getString(_key);
+    if (raw == null || raw.isEmpty) return const <String, Object?>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return const <String, Object?>{};
+      if ((decoded['version'] as num?)?.toInt() != schemaVersion) {
+        // A version this build does not understand is already left untouched
+        // by `load`, and this store only ever writes its OWN version — so
+        // there is nothing here we could carry forward without mis-shaping it.
+        return const <String, Object?>{};
+      }
+      final map = decoded['recoveries'];
+      if (map is! Map) return const <String, Object?>{};
+      final out = <String, Object?>{};
+      for (final entry in map.entries) {
+        final value = entry.value;
+        if (value is Map) {
+          try {
+            PosDraftRecovery.fromJson(value.cast<String, Object?>());
+            continue; // readable — the caller owns it
+          } catch (_) {
+            // unreadable — falls through and is kept VERBATIM
+          }
+        }
+        out[entry.key.toString()] = value;
+      }
+      return out;
+    } catch (_) {
+      return const <String, Object?>{};
+    }
+  }
+
   @override
   Future<void> persist(Map<String, PosDraftRecovery> recoveries) async {
     // Build + serialize FIRST so an unencodable record fails here, before the
     // durable store is touched (the old set stays on disk and still correct).
+    //
+    // A record we cannot read is NOT a record we are entitled to destroy, so
+    // the quarantined raw entries are re-emitted byte-for-byte. A readable
+    // record under the same key REPLACES its quarantined shadow — the caller's
+    // set is written last and wins — so a key never ends up duplicated and a
+    // repaired record never stays hidden behind the broken one.
     final envelope = <String, Object?>{
       'version': schemaVersion,
       'recoveries': <String, Object?>{
+        ..._quarantined(),
         for (final e in recoveries.entries) e.key: e.value.toJson(),
       },
     };
