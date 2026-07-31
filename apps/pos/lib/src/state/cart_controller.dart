@@ -123,10 +123,39 @@ class SelectedModifier {
       );
     }
 
-    final optionId = (json['option_id'] ?? '').toString();
-    if (optionId.isEmpty) {
-      throw const FormatException('modifier has no option_id');
+    // MONEY-LOCAL-ATOMICITY-003A — an IDENTITY is exact or it is corrupt.
+    //
+    // This used to be `(json['option_id'] ?? '').toString()`, so an int, a
+    // bool, a double, a list or a map all became plausible option ids and only
+    // emptiness was caught. An unidentifiable option cannot be re-priced,
+    // re-sent or reasoned about — and a fabricated one is worse, because it
+    // looks resolvable.
+    //
+    // Stored UNTRIMMED, deliberately. Every consumer compares ids byte-exactly
+    // (the sheet's group match, the domain's line lookup, the side-map keys), so
+    // trimming here would silently re-point a stored selection at a live group
+    // and re-price it — exactly the class of defect 002C closed.
+    final rawOptionId = json['option_id'];
+    if (rawOptionId is! String || rawOptionId.trim().isEmpty) {
+      throw FormatException(
+        'modifier option_id is not a non-blank string: '
+        '${rawOptionId == null ? 'absent/null' : rawOptionId.runtimeType}',
+      );
     }
+    final optionId = rawOptionId;
+
+    /// A DISPLAY snapshot: type-strict, but blank is legitimate history — the
+    /// menu parse can produce an empty option name, so requiring non-blank here
+    /// would quarantine a real cashier's parked cart.
+    String requireDisplayName(String key) {
+      final raw = json[key];
+      if (raw is String) return raw;
+      throw FormatException(
+        'modifier $key is not a string: '
+        '${raw == null ? 'absent/null' : raw.runtimeType}',
+      );
+    }
+
     final priceDeltaMinor = requireInt('price_delta_minor');
     final int quantity;
     if (!json.containsKey('quantity')) {
@@ -159,8 +188,8 @@ class SelectedModifier {
     return SelectedModifier(
       optionId: optionId,
       modifierGroupId: modifierGroupId,
-      groupName: (json['group_name'] ?? '').toString(),
-      optionName: (json['option_name'] ?? '').toString(),
+      groupName: requireDisplayName('group_name'),
+      optionName: requireDisplayName('option_name'),
       priceDeltaMinor: priceDeltaMinor,
       quantity: quantity,
       kitchenMeat: KitchenMeat.tryFromJson(json['kitchen_meat']),
@@ -1038,6 +1067,24 @@ class CartController extends Notifier<CartViewState> {
     // A LOCAL sequence: a rejected draft must not advance the real one either,
     // or a failed restore would silently consume line ids.
     var nextSeq = _lineSeq;
+
+    // A legacy line carries no id and is MINTED one. Scan the explicit ids
+    // FIRST so a mint can never collide with an id that appears later in the
+    // same draft — otherwise a legitimate mixed draft (some legacy lines, some
+    // `line-N`) would self-collide and be refused for a reason of our own
+    // making. Failing closed would still be safe; restoring it correctly is
+    // better.
+    final explicitIds = <String>{
+      for (final l in draft.lines)
+        if (l.lineId != null) l.lineId!,
+    };
+    for (final id in explicitIds) {
+      final m = RegExp(r'^line-(\d+)$').firstMatch(id);
+      if (m != null) {
+        final n = int.tryParse(m.group(1)!) ?? -1;
+        if (n >= nextSeq) nextSeq = n + 1;
+      }
+    }
 
     try {
       for (final l in draft.lines) {

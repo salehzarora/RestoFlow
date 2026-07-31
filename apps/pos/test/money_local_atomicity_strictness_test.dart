@@ -14,9 +14,11 @@ import 'package:restoflow_pos/src/state/cart_controller.dart';
 ///    write path can legitimately produce an empty string
 ///    (`pos_menu_provider` builds an option name as `(row['name'] ?? '')`), so
 ///    they are tightened to TYPE only — a String, blank allowed.
-///  * Ids are stored UNTRIMMED and compared byte-exactly everywhere. A padded
-///    id is REJECTED, never silently trimmed: trimming would re-point a stored
-///    selection at a live group and re-price it — the class of defect 002C fixed.
+///  * Ids are stored UNTRIMMED and compared byte-exactly everywhere. Trimming
+///    is used ONLY to decide blankness: a padded id is kept exactly as stored,
+///    so it resolves to nothing rather than being re-pointed at a live option.
+///    Canonicalising here would re-price a stored selection — the class of
+///    defect 002C closed.
 ///  * No local `change == tendered - amount` invariant. The client stores the
 ///    SHEET's amount but the SERVER's change, so a legitimate server-accepted
 ///    payment can fail that identity when the order total moved between
@@ -146,14 +148,25 @@ void main() {
       }
     });
 
-    test('B3 a PADDED option_id is REJECTED, never silently trimmed — trimming '
-        'would re-point a stored selection at a live group', () {
-      expect(
-        () => CartDraftSnapshot.fromJson(
-          draftWithModifier(modifierJson({'option_id': ' opt-240'})),
-        ),
-        throwsA(isA<FormatException>()),
+    test('B3 a PADDED option_id is kept EXACTLY as stored — never trimmed, so '
+        'it simply fails to match a live option instead of being re-pointed '
+        'at one', () {
+      final d = CartDraftSnapshot.fromJson(
+        draftWithModifier(modifierJson({'option_id': ' opt-240'})),
       );
+      final m = d.lines.single.modifiers.single;
+      expect(
+        m.optionId,
+        ' opt-240',
+        reason:
+            'trimming here would silently re-point a stored selection at a '
+            'live group and re-price it — the class of defect 002C closed. '
+            'Every consumer compares ids byte-exactly, so an exact-but-odd id '
+            'resolves to nothing and the existing fail-closed edit guard '
+            'blocks Save.',
+      );
+      expect(m.optionId, isNot('opt-240'));
+      expect(m.priceDeltaMinor, k240, reason: 'and its money is untouched');
     });
 
     test('B4 a valid option_id decodes UNTRIMMED and exactly', () {

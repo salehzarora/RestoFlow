@@ -286,7 +286,12 @@ class PosRecentOrder {
   /// True when a receipt can actually be rebuilt: it needs the ORDER-TIME lines,
   /// which only a device-owned order has, plus a real payment. A discovered order
   /// has no lines — printing "a receipt" for it would be printing a forgery.
-  bool get canReprintReceipt => order != null && payment != null;
+  /// MONEY-LOCAL-ATOMICITY-003A: a receipt needs a SETTLEMENT, not merely a
+  /// payment object. The decoder already refuses to build a non-completed
+  /// persisted payment, and this gate states the same rule independently — the
+  /// eligibility must not depend on a construction detail one refactor away.
+  bool get canReprintReceipt =>
+      order != null && payment != null && payment!.status.isPaid;
 
   PosRecentOrder copyWith({
     CashPayment? payment,
@@ -377,10 +382,35 @@ class PosRecentOrder {
     final submittedAtRaw = json['submitted_at'];
     final orderRaw = json['order'];
 
+    // MONEY-LOCAL-ATOMICITY-003A — ABSENT and MALFORMED are different things.
+    //
+    // `PosOrderSnapshot.fromJson` is a strict all-or-nothing parse that returns
+    // null for BOTH, and this used to treat both as "no snapshot" and fall back
+    // to the older local money and status. So a corrupt authoritative snapshot
+    // silently showed a stale total as if it were current — the opposite of
+    // what an authoritative record is for.
+    //
+    // The key's ABSENCE stays legitimate: records written before
+    // POS-OPERATIONS-SYNC-001 carry no snapshot at all and are the cashier's
+    // real day's work. A key that is PRESENT but unreadable is corruption, and
+    // the containing record is refused so the existing quarantine seam keeps it
+    // instead of re-pricing the order from stale local data.
+    final PosOrderSnapshot? snapshotEarly;
+    if (!json.containsKey('snapshot')) {
+      snapshotEarly = null;
+    } else {
+      final parsed = PosOrderSnapshot.fromJson(json['snapshot']);
+      if (parsed == null) {
+        throw const FormatException(
+          'recent order: snapshot is present but unreadable',
+        );
+      }
+      snapshotEarly = parsed;
+    }
+
     // A record must be ONE of the two things it can be: something this device
     // submitted (an `order` view) or something the server told us about (a
     // `snapshot`). Neither is not an order.
-    final snapshotEarly = PosOrderSnapshot.fromJson(json['snapshot']);
     if (orderRaw is! Map && snapshotEarly == null) {
       throw const FormatException('recent order: neither order nor snapshot');
     }
@@ -507,7 +537,7 @@ SubmittedOrderView _orderFromJson(Map<String, Object?> j) {
   }
   return SubmittedOrderView(
     orderNumber: orderNumber,
-    orderType: _orderTypeFromName(j['order_type']),
+    orderType: _requireOrderType(j, 'order_type'),
     currencyCode: currencyCode,
     // MONEY-LOCAL-DECODE-INTEGRITY-002B: all four are written unconditionally,
     // so absence is corruption, and a coerced 0 would understate the bill.
@@ -653,7 +683,21 @@ Map<String, Object?> _paymentToJson(CashPayment p) => <String, Object?>{
 /// between two orders that share one is precisely the misfiling this correction exists
 /// to end.
 CashPayment _paymentFromJson(Map<String, Object?> j) {
-  final paidAt = DateTime.tryParse('${j['paid_at']}');
+  // MONEY-LOCAL-ATOMICITY-003A — `paid_at` must be an EXACT String.
+  //
+  // This used to read `DateTime.tryParse('${j['paid_at']}')`. Interpolation
+  // turned the integer 20260805 into "20260805", which is a valid compact-ISO
+  // date — so a corrupt numeric field became a real settlement timestamp. The
+  // timestamp is never invented here either: an absent or unreadable value
+  // refuses the record.
+  final rawPaidAt = j['paid_at'];
+  if (rawPaidAt is! String) {
+    throw FormatException(
+      'recent order: payment paid_at is not a string '
+      '(${rawPaidAt == null ? 'absent/null' : rawPaidAt.runtimeType})',
+    );
+  }
+  final paidAt = DateTime.tryParse(rawPaidAt);
   if (paidAt == null) {
     throw const FormatException('recent order: bad payment paid_at');
   }
@@ -673,6 +717,26 @@ CashPayment _paymentFromJson(Map<String, Object?> j) {
   if (status == null) {
     throw FormatException(
       'recent order: payment status is not a known status (${j['status']})',
+    );
+  }
+  // MONEY-LOCAL-ATOMICITY-003A — a PERSISTED local payment records a
+  // SETTLEMENT, and only `completed` is one.
+  //
+  // 002B stopped an UNKNOWN status becoming `completed`, but a KNOWN
+  // non-terminal one still decoded into a payment object — and every receipt
+  // gate downstream asked only whether a payment existed. So a `pending`,
+  // `tendered`, `voided` or `failed` marker presented itself as settled and
+  // offered a reprintable receipt for money that was never taken.
+  //
+  // Refusing the record is the right outcome rather than "keep it unpaid":
+  // this device only ever writes a payment here on a CONFIRMED settlement, so a
+  // non-completed value is corruption. The quarantine seam keeps the raw record
+  // and the order stays visible and payable from its own (valid) order money —
+  // a later real payment attaches normally.
+  if (!status.isPaid) {
+    throw FormatException(
+      'recent order: a persisted payment must be a settlement, got '
+      '"${status.wire}"',
     );
   }
   return CashPayment(
@@ -708,11 +772,25 @@ CashPayment _paymentFromJson(Map<String, Object?> j) {
   );
 }
 
-OrderType _orderTypeFromName(Object? name) {
+/// MONEY-LOCAL-ATOMICITY-003A — fail closed on an UNKNOWN order type.
+///
+/// This used to map anything unrecognised to takeaway, so a corrupt or foreign
+/// token silently changed a dine-in order's operational meaning. Absence keeps
+/// its documented legacy default (records written before the key existed); a
+/// PRESENT value must be an exact known token, and anything else refuses the
+/// record like the money fields around it.
+OrderType _requireOrderType(Map<String, Object?> j, String key) {
+  // Absence is history. An explicit null is a PRESENT wrong type, and is
+  // corruption — the same containsKey distinction the money decoders use.
+  if (!j.containsKey(key)) return OrderType.takeaway;
+  final raw = j[key];
   for (final t in OrderType.values) {
-    if (t.name == name) return t;
+    if (t.name == raw) return t;
   }
-  return OrderType.takeaway;
+  throw FormatException(
+    'recent order: order_type is not a known type ('
+    '${raw is String ? '"$raw"' : raw.runtimeType})',
+  );
 }
 
 /// MONEY-LOCAL-DECODE-INTEGRITY-002B: null on an unknown wire value. The
