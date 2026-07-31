@@ -1472,6 +1472,8 @@
   "posOrdersConflictClose": "סגור ופתח מחדש",
   "posOrdersStatusPickedUp": "נאסף",
   "posMenuItemSoldOut": "אזל מהמלאי",
+  "posMenuItemConfigurationUnavailable": "האפשרויות אינן זמינות",
+  "@posMenuItemConfigurationUnavailable": {"description": "MONEY-LOCAL-ATOMICITY-003A: the item's modifier configuration could not be read, so it cannot be sold."},
   "posMenuItemPaused": "לא זמין זמנית",
   "posSyncItemUnavailable": "לא זמין כרגע: {items}. הזן את ההזמנה מחדש ללא פריטים אלה.",
   "posSyncTableUnavailable": "השולחן שנבחר אינו זמין עוד. בחר שולחן אחר והזן את ההזמנה מחדש.",

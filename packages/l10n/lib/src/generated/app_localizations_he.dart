@@ -4633,6 +4633,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posMenuItemSoldOut => 'אזל מהמלאי';
 
   @override
+  String get posMenuItemConfigurationUnavailable => 'האפשרויות אינן זמינות';
+
+  @override
   String get posMenuItemPaused => 'לא זמין זמנית';
 
   @override

@@ -390,16 +390,54 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   // Modifier groups + their options (pos_menu v2, demo-readiness sprint).
   // price_delta_minor is present for cashier/manager sessions; an option
   // without one is skipped rather than sold at an invented price.
+  // MONEY-LOCAL-ATOMICITY-003A — THE SOURCE BOUNDARY FAILS CLOSED.
+  //
+  // Every identifier here used to be coerced with `(row['x'] ?? '').toString()`,
+  // and the consequence was not that a broken group vanished loudly — it was
+  // that the PRODUCT SILENTLY BECAME PLAIN-ADDABLE. A group row with a blank id
+  // was still constructed (id: ''), its options orphaned under their real
+  // `modifier_id`, `groupsForItem` then dropped it for having no options, and
+  // the add handler took the `groups.isEmpty -> addItem` branch: a required
+  // PAID modifier group disappeared and the item sold at its base price with no
+  // indicator that anything was lost.
+  //
+  // Identifiers are now exact. A row we cannot read does not produce a
+  // half-group — it marks its MENU ITEM as having unreadable configuration, and
+  // the item is served UNAVAILABLE through the existing availability mechanism
+  // so the card refuses the tap and says why. An undercharged sale is a worse
+  // outcome than a temporarily unsellable product.
+  String? exactId(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
+
+  // Menu items whose modifier configuration cannot be trusted.
+  final brokenConfigItemIds = <String>{};
+  // Groups we could not attribute to any item at all — their owning product is
+  // unknown, so they are dropped and recorded for the log-free honest path
+  // below (a group with no readable menu_item_id cannot make ONE item unsafe;
+  // it makes the payload itself suspect, which the group loop handles).
   final optionsByGroup = <String, List<PosModifierOption>>{};
+  final orphanedOptionGroupIds = <String>{};
   for (final row in (raw['modifier_options'] as List?) ?? const []) {
-    if (row is! Map) continue;
+    if (row is! Map) {
+      orphanedOptionGroupIds.add('');
+      continue;
+    }
+    final groupId = exactId(row['modifier_id']);
+    final optionId = exactId(row['id']);
     final delta = row['price_delta_minor'];
-    if (delta is! int) continue;
-    final groupId = (row['modifier_id'] ?? '').toString();
+    final name = row['name'];
+    if (groupId == null ||
+        optionId == null ||
+        delta is! int ||
+        name is! String) {
+      // Record the group so its owning item is marked below. A skipped PAID
+      // option is exactly the silent under-charge this phase exists to stop.
+      if (groupId != null) orphanedOptionGroupIds.add(groupId);
+      continue;
+    }
     (optionsByGroup[groupId] ??= <PosModifierOption>[]).add(
       PosModifierOption(
-        id: (row['id'] ?? '').toString(),
-        name: (row['name'] ?? '').toString(),
+        id: optionId,
+        name: name,
         priceDeltaMinor: delta,
         // KITCHEN-MEAT-001: tolerant parse of the option's meat metadata
         // (money-free {quantity,unit}); null when unset/disabled.
@@ -410,15 +448,34 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
   final groups = <PosModifierGroup>[];
   for (final row in (raw['modifiers'] as List?) ?? const []) {
     if (row is! Map) continue;
-    final id = (row['id'] ?? '').toString();
+    final id = exactId(row['id']);
+    final menuItemId = exactId(row['menu_item_id']);
+    final name = row['name'];
+    if (menuItemId == null) {
+      // No readable owner: the group cannot be attached to anything, and no
+      // single product can be blamed. Dropping it is the only option, and it
+      // cannot make an item plain-addable because it never named one.
+      continue;
+    }
+    if (id == null || name is! String || name.trim().isEmpty) {
+      brokenConfigItemIds.add(menuItemId);
+      continue;
+    }
     final minSelect = row['min_select'];
     final maxSelect = row['max_select'];
     final maxQuantity = row['max_quantity'];
+    // A group whose OPTIONS were unreadable is itself untrustworthy: the
+    // cashier would be offered a subset of the real choices, at the real
+    // prices, with no sign that one is missing.
+    if (orphanedOptionGroupIds.contains(id)) {
+      brokenConfigItemIds.add(menuItemId);
+      continue;
+    }
     groups.add(
       PosModifierGroup(
         id: id,
-        menuItemId: (row['menu_item_id'] ?? '').toString(),
-        name: (row['name'] ?? '').toString(),
+        menuItemId: menuItemId,
+        name: name,
         options: optionsByGroup[id] ?? const <PosModifierOption>[],
         singleSelect: row['selection_type'] == 'single',
         minSelect: minSelect is int ? minSelect : 0,
@@ -430,6 +487,24 @@ final posMenuProvider = FutureProvider<PosMenuData>((ref) async {
         maxQuantity: maxQuantity is int && maxQuantity > 0 ? maxQuantity : null,
       ),
     );
+  }
+
+  // THE CHOSEN RULE, stated: a product is unavailable when ANY group associated
+  // with it cannot be interpreted safely — not merely the broken group dropped.
+  // Dropping only the bad group would still sell the item, just without a
+  // choice the operator configured and possibly charged for; the safe default
+  // for money is to stop selling it until the configuration is readable.
+  if (brokenConfigItemIds.isNotEmpty) {
+    items = [
+      for (final item in items)
+        if (brokenConfigItemIds.contains(item.id))
+          item.withAvailability(
+            'unavailable',
+            DemoMenuItem.configurationUnavailableReason,
+          )
+        else
+          item,
+    ];
   }
 
   // MENU-ORDER-001 (Codex #12): present categories AND items in the owner's

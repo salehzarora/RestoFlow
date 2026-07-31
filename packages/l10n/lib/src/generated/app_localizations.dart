@@ -8734,6 +8734,12 @@ abstract class AppLocalizations {
   /// **'Sold out'**
   String get posMenuItemSoldOut;
 
+  /// MONEY-LOCAL-ATOMICITY-003A: shown on a menu-item card whose MODIFIER CONFIGURATION could not be read from the menu payload. The item cannot be added, because selling it now would mean selling it without a choice the operator configured and possibly charged for. Distinct from Sold out / Paused, which are stock decisions.
+  ///
+  /// In en, this message translates to:
+  /// **'Options unavailable'**
+  String get posMenuItemConfigurationUnavailable;
+
   /// Overlay pill on a POS menu tile whose item is temporarily paused in this branch.
   ///
   /// In en, this message translates to:

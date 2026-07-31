@@ -3251,6 +3251,8 @@
   "@posOrdersStatusPickedUp": {"description": "Order lifecycle status label shown for TAKEAWAY orders whose persisted status is served (the customer collected the order)."},
   "posMenuItemSoldOut": "Sold out",
   "@posMenuItemSoldOut": {"description": "Overlay pill on a POS menu tile whose item is marked sold out in this branch."},
+  "posMenuItemConfigurationUnavailable": "Options unavailable",
+  "@posMenuItemConfigurationUnavailable": {"description": "MONEY-LOCAL-ATOMICITY-003A: shown on a menu-item card whose MODIFIER CONFIGURATION could not be read from the menu payload. The item cannot be added, because selling it now would mean selling it without a choice the operator configured and possibly charged for. Distinct from Sold out / Paused, which are stock decisions."},
   "posMenuItemPaused": "Temporarily unavailable",
   "@posMenuItemPaused": {"description": "Overlay pill on a POS menu tile whose item is temporarily paused in this branch."},
   "posSyncItemUnavailable": "Not available right now: {items}. Re-enter the order without these items.",

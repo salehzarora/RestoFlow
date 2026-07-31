@@ -108,10 +108,12 @@ class MenuItemCard extends StatelessWidget {
     final unavailable = item.isUnavailable;
     // Accessibility: the unavailable state (and its reason) is announced, not just
     // shown as a colour scrim + pill (A3 — not colour alone).
+    // MONEY-LOCAL-ATOMICITY-003A: a THIRD reason. `sold_out` / `paused` are
+    // operator stock decisions; `configuration_unreadable` means the POS could
+    // not read the item's modifier configuration and so cannot price it — a
+    // different fact, which must not be reported as "Sold out".
     final unavailableLabel = unavailable
-        ? (item.availabilityReason == 'paused'
-              ? l10n.posMenuItemPaused
-              : l10n.posMenuItemSoldOut)
+        ? _unavailableLabel(l10n, item.availabilityReason)
         : null;
     // POS-PRODUCT-DESCRIPTIONS-001: the operator's description, already
     // normalized at the parse boundary. Re-checked for blankness here only so a
@@ -356,9 +358,7 @@ class _ImageBand extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 child: RestoflowStatusPill(
                   key: Key('menu-item-unavailable-${item.id}'),
-                  label: item.availabilityReason == 'paused'
-                      ? l10n.posMenuItemPaused
-                      : l10n.posMenuItemSoldOut,
+                  label: _unavailableLabel(l10n, item.availabilityReason),
                   tone: RestoflowTone.danger,
                   icon: Icons.do_not_disturb_on_outlined,
                 ),
@@ -513,3 +513,14 @@ class _CategoryBand extends StatelessWidget {
     );
   }
 }
+
+/// MONEY-LOCAL-ATOMICITY-003A — the ONE place an availability reason becomes a
+/// label, so the scrim pill and the accessibility announcement can never
+/// disagree about WHY an item cannot be sold.
+String _unavailableLabel(AppLocalizations l10n, String? reason) =>
+    switch (reason) {
+      'paused' => l10n.posMenuItemPaused,
+      DemoMenuItem.configurationUnavailableReason =>
+        l10n.posMenuItemConfigurationUnavailable,
+      _ => l10n.posMenuItemSoldOut,
+    };

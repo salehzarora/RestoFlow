@@ -1472,6 +1472,8 @@
   "posOrdersConflictClose": "إغلاق وإعادة الفتح",
   "posOrdersStatusPickedUp": "تم الاستلام",
   "posMenuItemSoldOut": "نفدت الكمية",
+  "posMenuItemConfigurationUnavailable": "الخيارات غير متاحة",
+  "@posMenuItemConfigurationUnavailable": {"description": "MONEY-LOCAL-ATOMICITY-003A: the item's modifier configuration could not be read, so it cannot be sold."},
   "posMenuItemPaused": "غير متوفر مؤقتاً",
   "posSyncItemUnavailable": "غير متوفر حالياً: {items}. أعد إدخال الطلب بدون هذه الأصناف.",
   "posSyncTableUnavailable": "الطاولة المحددة لم تعد متاحة. اختر طاولة أخرى وأعد إدخال الطلب.",

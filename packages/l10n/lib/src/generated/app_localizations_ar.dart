@@ -4665,6 +4665,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posMenuItemSoldOut => 'نفدت الكمية';
 
   @override
+  String get posMenuItemConfigurationUnavailable => 'الخيارات غير متاحة';
+
+  @override
   String get posMenuItemPaused => 'غير متوفر مؤقتاً';
 
   @override

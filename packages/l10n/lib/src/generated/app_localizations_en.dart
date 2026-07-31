@@ -4703,6 +4703,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posMenuItemSoldOut => 'Sold out';
 
   @override
+  String get posMenuItemConfigurationUnavailable => 'Options unavailable';
+
+  @override
   String get posMenuItemPaused => 'Temporarily unavailable';
 
   @override

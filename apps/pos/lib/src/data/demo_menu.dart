@@ -188,6 +188,16 @@ class DemoMenuItem {
   /// changed (used by the demo availability overlay and by real-mode optimistic
   /// tile reconciliation before the authoritative menu re-fetch lands). Clears
   /// the reason when returning to available.
+  /// MONEY-LOCAL-ATOMICITY-003A — the [availabilityReason] for an item whose
+  /// MODIFIER CONFIGURATION could not be read from the menu payload.
+  ///
+  /// Distinct from `sold_out` / `paused`, which are operator decisions about
+  /// stock. This one says the POS cannot price the item correctly: a group or
+  /// option row was unreadable, so selling it now would mean selling it without
+  /// a choice the operator configured — and possibly charged for.
+  static const String configurationUnavailableReason =
+      'configuration_unreadable';
+
   DemoMenuItem withAvailability(String availability, String? reason) =>
       copyWith(
         availability: availability,
