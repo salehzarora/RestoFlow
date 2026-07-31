@@ -299,8 +299,8 @@ select is((select line_total_minor from public.order_items
 
 -- an exact replay adds nothing
 select is((pg_temp.madd('mf-c1', 'c0000000-0000-0000-0000-00000000f021', pg_temp.mline(2, 300, 1))
-           -> 'results' -> 0 ->> 'status'), 'idempotency_replay',
-          'C2 an exact replay is idempotent');
+           -> 'results' -> 0 ->> 'idempotency_replay'), 'true',
+          'C2 an exact replay is flagged idempotency_replay');
 select is(pg_temp.msub_of('c0000000-0000-0000-0000-00000000f021'), 2400::bigint,
           'C2b the replay did not double the surcharge');
 
