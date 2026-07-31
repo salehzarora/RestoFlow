@@ -57,7 +57,7 @@ insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_cate
 -- a real order WITH a modifier (order_item_modifiers gets price_minor_snapshot)
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-sub','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","option_name_snapshot":"Extra Cheese","price_minor_snapshot":100,"quantity":1}]}]'::jsonb,
-  1100,0,0,1100,null);
+  1200,0,0,1200,null);
 -- a tombstoned order (deleted_at set) in the same branch (inserted as the owner)
 insert into orders (id, organization_id, restaurant_id, branch_id, device_id, pin_session_id, opened_by_employee_profile_id, resolved_membership_id, order_type, status, currency_code, subtotal_minor, grand_total_minor, local_operation_id, deleted_at) values
   ('00000000-0000-0000-0000-00000000a0d9', '00000000-0000-0000-0000-0000000000a0','00000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-00000000a1b1','00000000-0000-0000-0000-00000000da11','00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-0000000ef001','00000000-0000-0000-0000-00000000ab01','dine_in','voided','USD',1000,1000,'o-tomb', now());
@@ -134,8 +134,8 @@ select ok(
   (app.sync_pull('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000da11',array['order_item_modifiers'],'{}'::jsonb,500) -> 'changes' -> 'order_item_modifiers' -> 'rows' -> 0) ? 'price_minor_snapshot',
   'cashier order_item_modifiers KEEPS price_minor_snapshot');
 select ok(
-  (select bool_or((r ->> 'grand_total_minor') = '1100') from jsonb_array_elements(app.sync_pull('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000da11',array['orders'],'{}'::jsonb,500) -> 'changes' -> 'orders' -> 'rows') r),
-  'cashier orders KEEPS the real grand_total_minor (a row with 1100 is present)');
+  (select bool_or((r ->> 'grand_total_minor') = '1200') from jsonb_array_elements(app.sync_pull('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000da11',array['orders'],'{}'::jsonb,500) -> 'changes' -> 'orders' -> 'rows') r),
+  'cashier orders KEEPS the real grand_total_minor (a row with 1200 is present)');
 
 select * from finish();
 rollback;

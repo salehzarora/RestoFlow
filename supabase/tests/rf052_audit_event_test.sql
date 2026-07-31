@@ -43,11 +43,11 @@ insert into menu_categories (id, organization_id, restaurant_id, branch_id, name
 insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_category_id, name, base_price_minor, currency_code, display_order) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000a1', null, '00000000-0000-0000-0000-0000000ca7a1', 'Item', 1000, 'USD', 1);
 
--- ---- submit: 2 x 500 + modifier 100 => subtotal/grand 1100 -----------------
+-- ---- submit: 2 x (500 + modifier 100) => subtotal/grand 1200 ---------------
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1',
   '00000000-0000-0000-0000-00000000da11','op-audit','dine_in','00000000-0000-0000-0000-0000000ab1e1','00000000-0000-0000-0000-0000000585f1','USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"option_name_snapshot":"Extra"}]}]'::jsonb,
-  1100, 0, 0, 1100, null);
+  1200, 0, 0, 1200, null);
 
 -- exactly one audit row, action order.submitted ------------------------------ 1-2
 -- (REVIEW DELTA, hygiene: every read is scoped to THIS file's org — same
@@ -67,8 +67,8 @@ select is((select actor_employee_profile_id from audit_events where organization
 select is((select new_values ->> 'order_id'             from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0'), '00000000-0000-0000-0000-00000000a0d1', 'new_values.order_id');
 select is((select (new_values ->> 'revision')::int      from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0'), 1,        'new_values.revision');
 select is((select new_values ->> 'currency_code'        from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0'), 'USD',    'new_values.currency_code');
-select is((select (new_values ->> 'subtotal_minor')::bigint     from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0'), 1100::bigint, 'new_values.subtotal_minor');
-select is((select (new_values ->> 'grand_total_minor')::bigint  from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0'), 1100::bigint, 'new_values.grand_total_minor');
+select is((select (new_values ->> 'subtotal_minor')::bigint     from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0'), 1200::bigint, 'new_values.subtotal_minor');
+select is((select (new_values ->> 'grand_total_minor')::bigint  from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0'), 1200::bigint, 'new_values.grand_total_minor');
 select is((select new_values ->> 'local_operation_id'   from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0'), 'op-audit', 'new_values.local_operation_id');
 
 -- new_values contains ALL 16 expected keys ----------------------------------- 14
@@ -96,7 +96,7 @@ select is((select (new_values ->> 'modifier_count')::int       from audit_events
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1',
   '00000000-0000-0000-0000-00000000da11','op-audit','dine_in','00000000-0000-0000-0000-0000000ab1e1','00000000-0000-0000-0000-0000000585f1','USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","price_minor_snapshot":100,"quantity":1,"option_name_snapshot":"Extra"}]}]'::jsonb,
-  1100, 0, 0, 1100, null);
+  1200, 0, 0, 1200, null);
 select is((select count(*) from audit_events where organization_id = '00000000-0000-0000-0000-0000000000a0')::int, 1, 'a clean idempotency replay does NOT write a second audit_events row');
 
 select * from finish();

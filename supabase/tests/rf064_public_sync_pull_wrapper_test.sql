@@ -66,7 +66,7 @@ insert into menu_items (id, organization_id, restaurant_id, branch_id, menu_cate
 -- a real order WITH a modifier (order_item_modifiers carries price_minor_snapshot)
 select app.submit_order('00000000-0000-0000-0000-00000000c501','00000000-0000-0000-0000-00000000a0d1','00000000-0000-0000-0000-00000000da11','op-sub','dine_in','00000000-0000-0000-0000-00000000ab1e',null,'USD',null,
   '[{"menu_item_id":"00000000-0000-0000-0000-0000000000f1","quantity":2,"unit_price_minor_snapshot":500,"menu_item_name_snapshot":"Burger","modifiers":[{"modifier_option_id":"00000000-0000-0000-0000-0000000000f2","option_name_snapshot":"Extra Cheese","price_minor_snapshot":100,"quantity":1}]}]'::jsonb,
-  1100,0,0,1100,null);
+  1200,0,0,1200,null);
 
 -- revoke device da13 (direct state change as the owner — RF-061 already tests the
 -- revoke RPC; here we only need a revoked-device STATE to prove wrapper parity).
