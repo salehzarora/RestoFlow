@@ -13,7 +13,9 @@ import 'package:restoflow_pos/src/state/addition_controller.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
 import 'package:restoflow_pos/src/state/order_sync_controller.dart';
 import 'package:restoflow_pos/src/state/pos_session.dart';
+import 'package:restoflow_pos/src/data/round_print_claim_store.dart';
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// MONEY-DURABLE-ADDITIONS-003C — failing-first proof that an Add-items
 /// amendment has no durable identity.
@@ -200,7 +202,10 @@ PosRecentOrder _order({
   ),
 );
 
-ProviderContainer _container(_FakeTransport transport) {
+ProviderContainer _container(
+  _FakeTransport transport, {
+  SharedPreferences? prefs,
+}) {
   final c = ProviderContainer(
     overrides: [
       runtimeConfigProvider.overrideWithValue(
@@ -213,6 +218,12 @@ ProviderContainer _container(_FakeTransport transport) {
         DemoOrderSnapshotRepository(),
       ),
       posSyncPollIntervalProvider.overrideWithValue(null),
+      // The REAL production wiring when a durable store is supplied: the same
+      // SharedPreferences across two containers IS a process restart.
+      if (prefs != null)
+        posRoundPrintClaimStoreProvider.overrideWithValue(
+          SharedPrefsRoundPrintClaimStore(prefs)..scopeKey = _session.deviceId,
+        ),
     ],
   );
   addTearDown(c.dispose);
@@ -355,20 +366,20 @@ void main() {
   // B — A REPLAYED ROUND MUST NOT PRINT A SECOND KITCHEN TICKET
   // =========================================================================
   group('B. the kitchen ticket is printed at most once per round', () {
+    final key = posAdditionKitchenPrintGuardKey(orderId: 'o-1', roundId: 'r-2');
+
     test(
       'B1 a round printed before a restart is not auto-printed again',
       () async {
-        final key = posAdditionKitchenPrintGuardKey(
-          orderId: 'o-1',
-          roundId: 'r-2',
-        );
+        SharedPreferences.setMockInitialValues(<String, Object>{});
+        final prefs = await SharedPreferences.getInstance();
         var physicalSends = 0;
         Future<PosKitchenPrintOutcome> send() async {
           physicalSends++;
           return PosKitchenPrintOutcome.printed;
         }
 
-        final c1 = _container(_FakeTransport([_applied]));
+        final c1 = _container(_FakeTransport([_applied]), prefs: prefs);
         expect(
           await c1.read(posAutoKitchenPrintGuardProvider).runGuarded(key, send),
           PosKitchenPrintOutcome.printed,
@@ -381,19 +392,96 @@ void main() {
 
         c1.dispose(); // PROCESS DEATH
 
-        // The restart replays the applied round; the automatic print fires again.
-        final c2 = _container(_FakeTransport([_replayApplied]));
+        // The restart replays the applied round; the automatic print must NOT
+        // fire again.
+        final c2 = _container(_FakeTransport([_replayApplied]), prefs: prefs);
         await c2.read(posAutoKitchenPrintGuardProvider).runGuarded(key, send);
 
         expect(
           physicalSends,
           1,
           reason:
-              'PosAutoKitchenPrintGuard holds its claim in two plain in-memory '
-              'collections on a Provider, so process death releases it. The '
-              'kitchen receives a SECOND ticket for a round it is already '
+              'PosAutoKitchenPrintGuard held its claim in two plain in-memory '
+              'collections on a Provider, so process death released it and the '
+              'kitchen received a SECOND ticket for a round it was already '
               'cooking. The claim has to be as durable as the round it names.',
         );
+      },
+    );
+
+    test('B2 a FAILED send releases the round for a later retry', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final prefs = await SharedPreferences.getInstance();
+      var attempts = 0;
+
+      final c1 = _container(_FakeTransport([_applied]), prefs: prefs);
+      await c1.read(posAutoKitchenPrintGuardProvider).runGuarded(key, () async {
+        attempts++;
+        return PosKitchenPrintOutcome.failed;
+      });
+      expect(attempts, 1);
+      c1.dispose();
+
+      final c2 = _container(_FakeTransport([_applied]), prefs: prefs);
+      final outcome = await c2
+          .read(posAutoKitchenPrintGuardProvider)
+          .runGuarded(key, () async {
+            attempts++;
+            return PosKitchenPrintOutcome.printed;
+          });
+
+      expect(
+        (attempts, outcome),
+        (2, PosKitchenPrintOutcome.printed),
+        reason:
+            'a print that never happened must not be remembered as one that '
+            'did — otherwise a paper jam permanently withholds the ticket',
+      );
+    });
+
+    test('B3 a claim is scoped to ONE order and ONE round', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final prefs = await SharedPreferences.getInstance();
+      var sends = 0;
+      Future<PosKitchenPrintOutcome> send() async {
+        sends++;
+        return PosKitchenPrintOutcome.printed;
+      }
+
+      final c = _container(_FakeTransport([_applied]), prefs: prefs);
+      final guard = c.read(posAutoKitchenPrintGuardProvider);
+      await guard.runGuarded(key, send);
+      await guard.runGuarded(
+        posAdditionKitchenPrintGuardKey(orderId: 'o-2', roundId: 'r-2'),
+        send,
+      );
+      await guard.runGuarded(
+        posAdditionKitchenPrintGuardKey(orderId: 'o-1', roundId: 'r-3'),
+        send,
+      );
+
+      expect(
+        sends,
+        3,
+        reason:
+            'a different order, and a later round on the same order, are '
+            'different tickets and must each print',
+      );
+    });
+
+    test(
+      'B4 with NO durable store the pre-003C session behaviour is kept',
+      () async {
+        var sends = 0;
+        Future<PosKitchenPrintOutcome> send() async {
+          sends++;
+          return PosKitchenPrintOutcome.printed;
+        }
+
+        final c1 = _container(_FakeTransport([_applied]));
+        await c1.read(posAutoKitchenPrintGuardProvider).runGuarded(key, send);
+        await c1.read(posAutoKitchenPrintGuardProvider).runGuarded(key, send);
+        expect(sends, 1, reason: 'the in-session guard still works on its own');
       },
     );
   });

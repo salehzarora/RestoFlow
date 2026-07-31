@@ -16,6 +16,9 @@ import 'src/data/durable_outbox_store.dart';
 import 'src/data/parked_carts_store.dart';
 import 'src/data/ready_notifications_store.dart';
 import 'src/data/recent_orders_store.dart';
+import 'src/data/round_print_claim_store.dart';
+import 'src/print/pos_kitchen_ticket_printer.dart'
+    show posRoundPrintClaimStoreProvider;
 import 'src/data/sync_cursor_store.dart';
 import 'src/print/print_bridge.dart';
 import 'src/pos_menu_screen.dart';
@@ -88,6 +91,18 @@ Widget _posApp(
       outboxAutoSweepIntervalProvider.overrideWithValue(
         const Duration(seconds: 25),
       ),
+      // MONEY-DURABLE-ADDITIONS-003C: the DURABLE automatic-kitchen-print claim,
+      // scoped to this device's session. Without it the exactly-once guard is
+      // session-only, so a process that dies after an amendment was applied
+      // comes back, replays the operation (which correctly returns the SAME
+      // round) and prints the kitchen a second ticket for food it is already
+      // cooking. Scoped like the outbox: one device never reads another's
+      // claims.
+      posRoundPrintClaimStoreProvider.overrideWith((ref) {
+        final store = SharedPrefsRoundPrintClaimStore(prefs);
+        store.scopeKey = ref.watch(posSyncSessionProvider)?.deviceId ?? '';
+        return store;
+      }),
       // POS-ORDERS-AND-PAYMENT-001: the recent/unpaid-orders list persists to
       // shared_preferences too, so a "today + yesterday" window + each order's
       // paid/unpaid state survive a refresh / restart (per-device key).

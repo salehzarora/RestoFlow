@@ -26,6 +26,7 @@ import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_network_printer_config.dart';
 import '../state/pos_printer_assignments.dart' show posRestaurantNameProvider;
 import '../state/pos_printer_transport.dart';
+import '../data/round_print_claim_store.dart';
 import '../state/submitted_order_view.dart' show SubmittedOrderView;
 import 'bluetooth_printer.dart';
 import 'kitchen_ticket_render.dart' show renderKitchenTicketBytes;
@@ -194,6 +195,19 @@ final posHasKitchenNativePrinterProvider = Provider<bool>((ref) {
 /// device data loss. The MANUAL action never uses this guard (a deliberate
 /// reprint is always allowed).
 final class PosAutoKitchenPrintGuard {
+  PosAutoKitchenPrintGuard({PosRoundPrintClaimStore? claims})
+    : _claims = claims;
+
+  /// MONEY-DURABLE-ADDITIONS-003C: the DURABLE half of the claim, or null when
+  /// nothing durable is wired (demo mode / tests) — in which case the guard
+  /// behaves exactly as it did before, session-scoped and honest about it.
+  ///
+  /// Consulted BEFORE `attempt` runs and written BEFORE the send, so a process
+  /// that dies mid-print does not come back and print the round again. The
+  /// in-memory halves stay: they are what makes concurrent callbacks share ONE
+  /// send within a session, which no durable store can do.
+  final PosRoundPrintClaimStore? _claims;
+
   final Map<String, Future<PosKitchenPrintOutcome>> _inFlight = {};
   final Set<String> _succeeded = {};
 
@@ -216,6 +230,17 @@ final class PosAutoKitchenPrintGuard {
     final active = _inFlight[orderId];
     if (active != null) return active;
 
+    // 003C: a DURABLE claim from an earlier process suppresses the automatic
+    // send. `claimed` counts as suppressing: after a crash between claiming and
+    // sending, the honest answer is "a ticket may already be at the printer",
+    // and printing again to be sure is precisely the duplicate this prevents.
+    // Only `failed` releases the round, so a genuine retry still runs.
+    final durable = _claims?.claimOf(orderId);
+    if (durable == PosRoundPrintClaimState.claimed ||
+        durable == PosRoundPrintClaimState.sent) {
+      return Future.value(PosKitchenPrintOutcome.printed);
+    }
+
     // Race-safe: publish the in-flight future via a Completer FIRST, then invoke
     // attempt() inside a guarded driver. This holds even if attempt() throws
     // SYNCHRONOUSLY (before returning a Future) — the `finally` always removes
@@ -233,6 +258,22 @@ final class PosAutoKitchenPrintGuard {
   ) async {
     PosKitchenPrintOutcome outcome;
     try {
+      // 003C: CLAIM BEFORE SENDING. The window between "bytes went out" and
+      // "we recorded that they did" is exactly where a crash produces the
+      // duplicate ticket, so the claim is written first and a claim that could
+      // not be written REFUSES the print. Choosing not to print is recoverable
+      // — the operator can reprint on demand — while printing a second ticket
+      // for a round the kitchen is already cooking is not.
+      final claims = _claims;
+      if (claims != null) {
+        try {
+          await claims.record(orderId, PosRoundPrintClaimState.claimed);
+        } catch (_) {
+          _inFlight.remove(orderId);
+          completer.complete(PosKitchenPrintOutcome.failed);
+          return;
+        }
+      }
       // A synchronous throw from attempt() is caught here just like an async one.
       outcome = await attempt();
     } catch (_) {
@@ -246,12 +287,40 @@ final class PosAutoKitchenPrintGuard {
     if (outcome == PosKitchenPrintOutcome.printed) {
       _succeeded.add(orderId); // suppress duplicate auto callbacks this session
     }
+    // 003C: settle the durable claim TRUTHFULLY. `sent` means the transport
+    // accepted the bytes — never that paper was produced, which the platform
+    // does not tell us (PRINT-STABILITY-001). A non-success RELEASES the round
+    // so a later legitimate automatic retry can still run; a print that never
+    // happened must not be remembered as one that did.
+    final claims = _claims;
+    if (claims != null) {
+      try {
+        await claims.record(
+          orderId,
+          outcome == PosKitchenPrintOutcome.printed
+              ? PosRoundPrintClaimState.sent
+              : PosRoundPrintClaimState.failed,
+        );
+      } catch (_) {
+        // The claim is already `claimed` on disk, which errs toward NOT
+        // printing again — the safe direction. Surfaced via isDegraded.
+      }
+    }
     completer.complete(outcome);
   }
 }
 
+/// MONEY-DURABLE-ADDITIONS-003C: the durable round-print claim store. Null by
+/// default => session-scoped guarding only (demo mode / tests / the pre-003C
+/// behaviour). `main.dart` overrides it for the real app.
+final posRoundPrintClaimStoreProvider = Provider<PosRoundPrintClaimStore?>(
+  (_) => null,
+);
+
 final posAutoKitchenPrintGuardProvider = Provider<PosAutoKitchenPrintGuard>(
-  (_) => PosAutoKitchenPrintGuard(),
+  (ref) => PosAutoKitchenPrintGuard(
+    claims: ref.watch(posRoundPrintClaimStoreProvider),
+  ),
 );
 
 /// TEST SEAM: overrides how the kitchen printer builds its transport, so a
