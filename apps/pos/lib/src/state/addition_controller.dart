@@ -425,6 +425,9 @@ class AdditionController extends Notifier<AdditionState> {
   /// Removes the record — ONLY after authoritative confirmation, or for an
   /// attempt that provably never reached the server.
   Future<void> _journalClose(String localOperationId) async {
+    _pending = List.unmodifiable(
+      _pending.where((r) => r.localOperationId != localOperationId),
+    );
     final journal = _journal;
     if (journal == null) return;
     final scope = _journalScope;
@@ -441,13 +444,25 @@ class AdditionController extends Notifier<AdditionState> {
     }
   }
 
-  /// Rehydrates the oldest unresolved amendment and re-installs its target.
+  /// Rehydrates the oldest unresolved amendment, RE-OWNS ITS CART, and
+  /// re-installs its target.
   ///
-  /// Deliberately does NOT re-acquire the cart lock: after a restart the cart is
-  /// empty (its lines were only ever in memory), so there is no source cart to
-  /// protect. What protects correctness is that [_submit] re-sends the FROZEN
-  /// payload whenever an attempt exists — anything the cashier types afterwards
-  /// can never become a second operation.
+  /// MONEY-CODEX-FINAL-CORRECTIONS-004 (F1). The previous build deliberately did
+  /// NOT re-acquire the lock, reasoning that an empty post-restart cart has
+  /// nothing to protect. That was wrong twice over:
+  ///
+  ///  * a restored FAILED attempt left the cart free, so the cashier could type
+  ///    new lines that were never part of the frozen payload — and the
+  ///    reconciliation's privileged `clearForAddition` then destroyed them;
+  ///  * a restored APPLIED-AWAITING-REFRESH attempt could never complete at all.
+  ///    `submit()` short-circuits to `retryRefresh()`, which reaches
+  ///    `_reconcileApplied` without ever locking, so the `ownsAdditionLock`
+  ///    fence was permanently false: the journal never closed and the order
+  ///    stayed blocked for ever.
+  ///
+  /// The lock is therefore re-acquired here, synchronously, under the SAME
+  /// `CartLockOwner` the attempt was frozen with — which is exactly why the
+  /// record persists its `generation`.
   Future<void> _restoreJournal() async {
     final journal = _journal;
     if (journal == null) return;
@@ -459,11 +474,23 @@ class AdditionController extends Notifier<AdditionState> {
     } catch (_) {
       return;
     }
-    final unresolved =
-        records.values.where((r) => r.isUnresolved && r.wasDispatched).toList()
+    // MONEY-CODEX-FINAL-CORRECTIONS-004 (F4): EVERY record that still needs
+    // attention is retained, not just the one being worked. The previous build
+    // took `unresolved.first` and dropped the rest on the floor — a second
+    // pending amendment, and every `conflict`, simply vanished on restart while
+    // its order silently unblocked.
+    //
+    // `needsAttention` also covers `conflict`, which `isUnresolved` excludes
+    // because the server HAS answered; it is nonetheless the one state that can
+    // never resolve itself.
+    final actionable =
+        records.values
+            .where((r) => r.needsAttention && r.wasDispatched)
+            .toList()
           ..sort((a, b) => a.clientCreatedAt.compareTo(b.clientCreatedAt));
-    if (unresolved.isEmpty) return;
-    final record = unresolved.first;
+    if (actionable.isEmpty) return;
+    _pending = List.unmodifiable(actionable);
+    final record = actionable.first;
     // Never clobber work started in this session.
     if (state.attempt != null || state.entryOrderId != null) return;
 
@@ -492,6 +519,15 @@ class AdditionController extends Notifier<AdditionState> {
       lastError: record.lastErrorCode ?? 'reconcile_required',
     );
 
+    // RE-OWN THE CART (F1), synchronously and before any await, so there is no
+    // window in which the restored attempt exists but its cart is editable.
+    // Idempotent: `lockForAddition` re-asserts a matching token and only refuses
+    // a FOREIGN one, in which case the attempt stays visible and unresolved
+    // rather than silently taking someone else's cart.
+    ref
+        .read(cartControllerProvider.notifier)
+        .lockForAddition(_ownerOf(record.generation, attempt));
+
     // Re-install the authoritative parent so the resumed submit/refresh has the
     // same target it had before. A failure here leaves the attempt visible and
     // unresolved rather than silently dropping it.
@@ -511,7 +547,26 @@ class AdditionController extends Notifier<AdditionState> {
   /// signal the order-action gates and the operator surface read after a
   /// restart, when nothing else remembers the operation.
   bool hasUnresolvedAmendmentFor(String orderId) =>
-      state.attempt?.orderId == orderId;
+      state.attempt?.orderId == orderId ||
+      _pending.any((r) => r.orderId == orderId);
+
+  /// MONEY-CODEX-FINAL-CORRECTIONS-004 (F4): every journal record still needing
+  /// attention, oldest first — the ACTIVE one plus every other order's blocked
+  /// record. The action gates, the operator surface and the cutover all read
+  /// this, so "no unresolved amendments" can be stated truthfully instead of
+  /// meaning "none that happened to be restored".
+  List<PosAdditionJournalRecord> _pending = const <PosAdditionJournalRecord>[];
+
+  List<PosAdditionJournalRecord> get pendingAmendments => _pending;
+
+  /// Orders currently blocked by an amendment awaiting resolution.
+  Set<String> get blockedOrderIds => <String>{
+    if (state.attempt?.orderId case final id?) id,
+    for (final r in _pending) r.orderId,
+  };
+
+  /// How many blocked records are CONFLICTS — the ones a person must settle.
+  int get conflictCount => _pending.where((r) => r.isConflict).length;
 
   /// Finding 1 — CONTROLLER-OWNED SAFE ENTRY into addition mode.
   ///
@@ -810,19 +865,43 @@ class AdditionController extends Notifier<AdditionState> {
 
     final result = _appliedResult(raw, attempt.localOperationId);
     if (result == null) {
-      // Typed rejection / malformed envelope: the FROZEN attempt stays local
-      // and retryable — nothing merged, nothing cleared, no fake success.
-      final error = _errorOf(raw, attempt.localOperationId) ?? 'rejected';
+      // MONEY-CODEX-FINAL-CORRECTIONS-004 (F2). Only a response that names a
+      // REJECTING STATUS for OUR operation, with a real error code, is a
+      // verdict. Everything else — a malformed envelope, a non-list `results`,
+      // a response that never mentions this operation, an `applied` row whose
+      // `ok` is not true, an unknown status — leaves the outcome UNKNOWN on an
+      // operation that already reached the wire.
+      final refusal = _definitiveRefusal(raw, attempt.localOperationId);
+      if (refusal == null) {
+        // AMBIGUOUS. Treated exactly like a dead transport, because that is
+        // what it is: we do not know whether the server built the round. The
+        // identity and the frozen payload are retained, the cart stays owned,
+        // `exit()` cannot release it, and the next attempt REPLAYS this
+        // operation rather than minting a second one.
+        await _journalPhase(
+          attempt.localOperationId,
+          PosAdditionJournalPhase.transportUncertain,
+          errorCode: 'unknown_response',
+        );
+        if (_isCurrentAttempt(gen, attempt)) {
+          state = state.copyWith(
+            phase: AdditionPhase.failed,
+            lastError: 'unknown_response',
+            dispatched: true,
+          );
+        }
+        return const AdditionResult(applied: false, error: 'unknown_response');
+      }
       // A `conflict` means this identity already exists server-side under a
       // DIFFERENT payload fingerprint. It can never be resolved by retrying and
       // it can never produce a second round — it needs a person. Everything
       // else is a permanent business rejection: terminal, no retry, no print.
       await _journalPhase(
         attempt.localOperationId,
-        error == 'conflict'
+        refusal == 'conflict'
             ? PosAdditionJournalPhase.conflict
             : PosAdditionJournalPhase.rejected,
-        errorCode: error,
+        errorCode: refusal,
       );
       // A definitive business rejection RESOLVES the uncertainty: the server
       // refused, so no round exists under this identity and the cashier may
@@ -830,10 +909,10 @@ class AdditionController extends Notifier<AdditionState> {
       // use server-side and only a person can untangle it — so it stays locked.
       state = state.copyWith(
         phase: AdditionPhase.failed,
-        lastError: error,
-        dispatched: error == 'conflict',
+        lastError: refusal,
+        dispatched: refusal == 'conflict',
       );
-      return AdditionResult(applied: false, error: error);
+      return AdditionResult(applied: false, error: refusal);
     }
 
     // APPLIED (Finding 4). The server owns the addition from this moment:
@@ -960,11 +1039,31 @@ class AdditionController extends Notifier<AdditionState> {
       return false;
     }
     state = state.copyWith(target: fresh);
-    if (!cartController.clearForAddition(owner)) {
-      // Unreachable after the ownership check above (same synchronous block),
-      // but kept fail-closed: the true owner keeps the cart and the attempt.
-      state = state.copyWith(lastError: 'refresh_required');
-      return false;
+
+    // MONEY-CODEX-FINAL-CORRECTIONS-004 (F1): OWNING THE LOCK IS NOT THE SAME AS
+    // OWNING THESE LINES. The token proves this attempt holds the cart; it does
+    // not prove the cart still CONTAINS the payload that was frozen. Between a
+    // restore and this moment the cashier may have typed lines the server never
+    // saw, and `clearForAddition` is privileged — it would delete them.
+    //
+    // So the frozen lines are compared to the live ones by full per-line
+    // identity before anything is destroyed. `lineId` alone is not enough
+    // across a restart: `CartController` re-mints `line-0` in a fresh session,
+    // so a coincidental id match must not authorise a wipe.
+    if (_cartMatchesFrozen(attempt)) {
+      if (!cartController.clearForAddition(owner)) {
+        // Unreachable after the ownership check above (same synchronous block),
+        // but kept fail-closed: the true owner keeps the cart and the attempt.
+        state = state.copyWith(lastError: 'refresh_required');
+        return false;
+      }
+    } else {
+      // The round IS confirmed applied, so the OPERATION is settled and its
+      // journal record must close — leaving it open would block Pay/Void on an
+      // order the server has already amended. What must not happen is the
+      // destruction of work the cashier entered afterwards, so the lines stay
+      // and only the lock is released.
+      cartController.unlockForAddition(owner);
     }
     // AUTHORITATIVE CONFIRMATION REACHED, and only now. `verified` above proved
     // the refreshed detail is the right parent AND carries the applied round, so
@@ -974,6 +1073,42 @@ class AdditionController extends Notifier<AdditionState> {
     // must not depend on whether paper came out.
     await _journalClose(attempt.localOperationId);
     state = AdditionState(generation: gen + 1);
+    return true;
+  }
+
+  /// Whether the LIVE cart still holds exactly the lines this attempt froze.
+  ///
+  /// Compared field by field — id, item, quantity and every money value, the
+  /// note, and each modifier's option id / delta / quantity — because a wipe is
+  /// irreversible and a near-match is not a match. Any difference at all means
+  /// the cashier's cart is not the frozen payload's cart.
+  bool _cartMatchesFrozen(AdditionAttempt attempt) {
+    final live = ref.read(cartControllerProvider).lines;
+    final frozen = attempt.lines;
+    if (live.length != frozen.length) return false;
+    for (var i = 0; i < frozen.length; i++) {
+      final a = frozen[i];
+      final b = live[i];
+      if (a.lineId != b.lineId ||
+          a.menuItemId != b.menuItemId ||
+          a.quantity != b.quantity ||
+          a.unitPriceMinor != b.unitPriceMinor ||
+          a.lineTotalMinor != b.lineTotalMinor ||
+          a.currencyCode != b.currencyCode ||
+          a.note != b.note ||
+          a.modifiers.length != b.modifiers.length) {
+        return false;
+      }
+      for (var m = 0; m < a.modifiers.length; m++) {
+        final x = a.modifiers[m];
+        final y = b.modifiers[m];
+        if (x.optionId != y.optionId ||
+            x.priceDeltaMinor != y.priceDeltaMinor ||
+            x.quantity != y.quantity) {
+          return false;
+        }
+      }
+    }
     return true;
   }
 
@@ -1043,17 +1178,40 @@ class AdditionController extends Notifier<AdditionState> {
     return null;
   }
 
-  static String? _errorOf(Object? raw, String localOp) {
+  /// MONEY-CODEX-FINAL-CORRECTIONS-004 (F2): the server's DEFINITIVE refusal of
+  /// THIS operation, or null when the response proves nothing about it.
+  ///
+  /// This is the discriminator the previous build lacked. `_appliedResult`
+  /// returns null for four structurally different reasons and only one of them
+  /// is a verdict: a malformed envelope, a `results` value that is not a list, a
+  /// response that never mentions our `local_operation_id`, and a matched op
+  /// whose `ok` is not `true` all landed on `?? 'rejected'` — terminal, identity
+  /// released, and the next send minting a NEW id for an operation the server
+  /// may already have applied. That is the duplicate round this whole program
+  /// exists to prevent.
+  ///
+  /// A refusal counts only when the server named a REJECTING STATUS for OUR
+  /// operation AND gave a non-blank error code. Anything else is unknown.
+  static String? _definitiveRefusal(Object? raw, String localOp) {
     if (raw is! Map) return null;
     final results = raw['results'];
     if (results is! List) return null;
     for (final r in results) {
-      if (r is Map && r['local_operation_id'] == localOp) {
-        final error = r['error'];
-        return error is String ? error : null;
+      if (r is! Map || r['local_operation_id'] != localOp) continue;
+      final status = r['status'];
+      if (status != 'rejected' && status != 'conflict' && status != 'dead') {
+        // `applied` with a non-true `ok`, a pending/in-flight status, or an
+        // unknown token: the operation's fate is not settled by this response.
+        return null;
       }
+      final error = r['error'];
+      if (error is! String || error.trim().isEmpty) {
+        // A rejecting status with no code names no reason we can act on.
+        return null;
+      }
+      return error;
     }
-    return null;
+    return null; // our operation is not in this response at all
   }
 }
 

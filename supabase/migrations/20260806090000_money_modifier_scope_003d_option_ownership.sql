@@ -1151,4 +1151,3 @@ begin
     'server_ts', now(), 'idempotency_replay', false);
 end;
 $$;
-

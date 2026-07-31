@@ -140,9 +140,26 @@ class PosAdditionJournalRecord {
   bool get wasDispatched => phase != PosAdditionJournalPhase.prepared;
 
   /// Whether the operation still needs the server's verdict.
+  ///
+  /// `conflict` is EXCLUDED here on purpose: the server has spoken (the identity
+  /// exists under a different payload), so there is nothing left to ask it. It
+  /// is still ACTIONABLE — see [needsAttention].
   bool get isUnresolved =>
       phase != PosAdditionJournalPhase.rejected &&
       phase != PosAdditionJournalPhase.conflict;
+
+  /// MONEY-CODEX-FINAL-CORRECTIONS-004 (F4): whether this record still requires
+  /// operator or automatic resolution and must therefore survive a restart, keep
+  /// its order blocked, and be counted by the cutover.
+  ///
+  /// Broader than [isUnresolved] by exactly one phase — `conflict` — which the
+  /// previous build dropped on restart. A conflict is the one state that CANNOT
+  /// resolve itself: it needs a person, so silently forgetting it was the worst
+  /// possible default. Only a definitive `rejected` is finished.
+  bool get needsAttention => phase != PosAdditionJournalPhase.rejected;
+
+  /// Whether this record is blocked awaiting a person rather than a retry.
+  bool get isConflict => phase == PosAdditionJournalPhase.conflict;
 
   PosAdditionJournalRecord copyWith({
     PosAdditionJournalPhase? phase,

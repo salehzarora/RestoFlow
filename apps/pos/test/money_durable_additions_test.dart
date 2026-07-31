@@ -280,6 +280,21 @@ Future<void> _settle(ProviderContainer c) async {
   }
 }
 
+/// MONEY-CODEX-FINAL-CORRECTIONS-004 (F1): after a restart the restored attempt
+/// RE-OWNS its cart, so the cashier cannot re-key anything — resuming is simply
+/// submitting again, and the frozen payload goes back out under the frozen
+/// identity. Session 2 must use this, not [_buildAndSubmit].
+Future<AdditionResult> _resumeSubmit(ProviderContainer c) async {
+  expect(
+    c.read(cartControllerProvider).lockedByAddition,
+    isTrue,
+    reason:
+        'a restored unresolved amendment must own its cart — otherwise new '
+        'lines could be typed and then destroyed by the reconciliation',
+  );
+  return c.read(additionControllerProvider.notifier).submit();
+}
+
 /// Builds the canonical paid addition in [c]'s cart and submits it.
 Future<AdditionResult> _buildAndSubmit(ProviderContainer c) async {
   final entry = await c
@@ -320,11 +335,12 @@ void main() {
 
         c1.dispose(); // PROCESS DEATH — the in-memory attempt is gone
 
-        // Session 2: the cashier re-does the same addition on the same order.
+        // Session 2: the restored attempt owns the cart, so the cashier cannot
+        // re-key it (F1). Resuming replays the frozen operation.
         final t2 = _FakeTransport([_replayApplied]);
         final c2 = _container(t2, journal: j);
         await _settle(c2);
-        await _buildAndSubmit(c2);
+        await _resumeSubmit(c2);
 
         expect(
           t2.additionIdentities,
@@ -381,7 +397,7 @@ void main() {
       final t2 = _FakeTransport([_replayApplied]);
       final c2 = _container(t2, journal: j);
       await _settle(c2);
-      await _buildAndSubmit(c2);
+      await _resumeSubmit(c2);
 
       expect(
         t2.additionOps.single['payload'],
