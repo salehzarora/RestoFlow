@@ -1082,6 +1082,13 @@ void _editLine(
     initialSelections: line.modifiers,
     initialNote: line.note,
     isEdit: true,
+    // MONEY-EDIT-INTEGRITY-002C (Codex Blocker 5): the sheet must price this
+    // edit against the line's FROZEN base (D-008), not against whatever the
+    // Dashboard charges for the product today. `updateLineModifiers` keeps the
+    // snapshot, so showing the live price meant showing one amount and saving
+    // another. `CartLineView.unitPriceMinor` is the BARE per-unit base — the
+    // modifier deltas are carried separately and the sheet adds them itself.
+    displayBasePriceMinor: line.unitPriceMinor,
     onConfirm: noteOnly
         ? (selections, note) => controller.updateLineNote(line.lineId, note)
         : (selections, note) => controller.updateLineModifiers(

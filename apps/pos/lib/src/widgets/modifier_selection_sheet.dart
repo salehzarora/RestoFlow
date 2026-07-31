@@ -55,6 +55,7 @@ class ModifierSelectionSheet extends StatefulWidget {
     this.initialSelections = const <SelectedModifier>[],
     this.initialNote,
     this.isEdit = false,
+    this.displayBasePriceMinor,
     super.key,
   });
 
@@ -106,6 +107,22 @@ class ModifierSelectionSheet extends StatefulWidget {
   /// button reads "Save changes" (saving REPLACES the line, never duplicates it).
   final bool isEdit;
 
+  /// MONEY-EDIT-INTEGRITY-002C (Codex Blocker 5) — the EDITED cart line's
+  /// FROZEN base price, in integer minor units. Null in the add flow.
+  ///
+  /// A cart line captures its base price at add time (D-008) and `Save` keeps
+  /// that snapshot. The sheet, however, is populated from the LIVE menu, so it
+  /// used to render today's `item.priceMinor` as both the header base price and
+  /// the running total's base. Once the Dashboard changed the product price the
+  /// cashier was shown one amount and Save produced another — with nothing on
+  /// screen to say so.
+  ///
+  /// Passed EXPLICITLY rather than inferred, and never by handing the sheet a
+  /// fabricated menu item with the historical price written over the live one:
+  /// the option deltas, availability and group rules must all keep coming from
+  /// the real catalogue, and only the BASE is historical.
+  final int? displayBasePriceMinor;
+
   /// Presents the picker as a MODAL BOTTOM SHEET at EVERY width — the cashier
   /// workflow the POS is built around: it slides up from the bottom edge over
   /// the dimmed POS, with rounded top corners and a Material drag handle, and
@@ -133,6 +150,7 @@ class ModifierSelectionSheet extends StatefulWidget {
     List<SelectedModifier> initialSelections = const <SelectedModifier>[],
     String? initialNote,
     bool isEdit = false,
+    int? displayBasePriceMinor,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -164,6 +182,7 @@ class ModifierSelectionSheet extends StatefulWidget {
         initialSelections: initialSelections,
         initialNote: initialNote,
         isEdit: isEdit,
+        displayBasePriceMinor: displayBasePriceMinor,
       ),
     );
   }
@@ -625,11 +644,16 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final category = widget.category ?? categoryById(widget.item.categoryId);
+    // MONEY-EDIT-INTEGRITY-002C (Blocker 5): in EDIT mode the base is the cart
+    // line's FROZEN snapshot, not today's catalogue price. In the add flow
+    // there is no line yet, so the current price is the right one and the
+    // behaviour is unchanged.
+    final baseMinor = widget.displayBasePriceMinor ?? widget.item.priceMinor;
     final basePriceText = MoneyFormatter.formatMinor(
-      widget.item.priceMinor,
+      baseMinor,
       widget.currencyCode,
     );
-    final totalMinor = widget.item.priceMinor + _deltaTotal;
+    final totalMinor = baseMinor + _deltaTotal;
     final totalText = MoneyFormatter.formatMinor(
       totalMinor,
       widget.currencyCode,
