@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:restoflow_data_remote/restoflow_data_remote.dart';
@@ -17,6 +19,8 @@ import 'package:restoflow_pos/src/data/addition_journal_store.dart';
 import 'package:restoflow_pos/src/data/round_print_claim_store.dart';
 import 'package:restoflow_pos/src/print/pos_kitchen_ticket_printer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/failing_prefs.dart';
 
 /// MONEY-DURABLE-ADDITIONS-003C — failing-first proof that an Add-items
 /// amendment has no durable identity.
@@ -235,6 +239,36 @@ ProviderContainer _container(
   addTearDown(c.dispose);
   return c;
 }
+
+/// A durable journal record carrying the canonical paid fixture.
+PosAdditionJournalRecord _record({String localOperationId = 'op-1'}) =>
+    PosAdditionJournalRecord(
+      localOperationId: localOperationId,
+      orderId: 'o-1',
+      orderCode: '#O00001',
+      orderTypeWire: 'dine_in',
+      generation: 1,
+      itemsJson: const [
+        {'menu_item_id': 'burger-meat', 'quantity': 2},
+      ],
+      lines: const [
+        CartLineView(
+          lineId: 'l-1',
+          menuItemId: 'burger-meat',
+          name: 'Burger',
+          quantity: 2,
+          unitPriceMinor: kBase,
+          lineTotalMinor: kLineTotal,
+          currencyCode: 'ILS',
+          modifiers: [_meat240],
+        ),
+      ],
+      prepByItemId: const {},
+      expectedDeltaMinor: kLineTotal,
+      currencyCode: 'ILS',
+      clientCreatedAt: DateTime.utc(2026, 8, 6, 12),
+      phase: PosAdditionJournalPhase.transportUncertain,
+    );
 
 /// Drains the microtask queue so an asynchronous journal restore completes.
 Future<void> _settle(ProviderContainer c) async {
@@ -686,6 +720,388 @@ void main() {
         reason: 'unchanged pre-003C behaviour: cancel is refused while sending',
       );
       await pending;
+    });
+  });
+  // =========================================================================
+  // E — AN AMENDMENT THAT CANNOT BE JOURNALLED MUST NOT BE SENT
+  // =========================================================================
+  group('E. persist before dispatch', () {
+    test('E1 a refused journal write dispatches NOTHING', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = FailingPrefs(await SharedPreferences.getInstance());
+      final t = _FakeTransport([_applied]);
+      final c = _container(t, journal: j);
+
+      j.failWrites = true;
+      final result = await _buildAndSubmit(c);
+
+      expect(
+        t.additionOps,
+        isEmpty,
+        reason:
+            'without a durable record there is nothing to replay under, so a '
+            'later retry would mint a new identity and the server would build '
+            'a SECOND round — the amendment must not leave the device',
+      );
+      expect(result.applied, isFalse);
+      expect(result.error, 'storage');
+      expect(
+        c.read(cartControllerProvider).lines,
+        isNotEmpty,
+        reason: 'the cashier keeps the addition and can retry',
+      );
+    });
+
+    test('E2 nothing is left claiming to be pending', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = FailingPrefs(await SharedPreferences.getInstance());
+      final c1 = _container(_FakeTransport([_applied]), journal: j);
+      j.failWrites = true;
+      await _buildAndSubmit(c1);
+      c1.dispose();
+
+      j.failWrites = false;
+      final t2 = _FakeTransport([_applied]);
+      final c2 = _container(t2, journal: j);
+      await _settle(c2);
+
+      expect(
+        c2.read(additionControllerProvider).hasOpenAttempt,
+        isFalse,
+        reason:
+            'an operation that was never sent must not come back as an '
+            'unresolved amendment blocking the order',
+      );
+    });
+
+    test('E3 a healthy write still dispatches exactly once', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final t = _FakeTransport([_applied]);
+      final c = _container(t, journal: j);
+
+      final result = await _buildAndSubmit(c);
+      expect(result.applied, isTrue);
+      expect(t.additionOps, hasLength(1));
+    });
+  });
+
+  // =========================================================================
+  // F — REPLAY OUTCOMES
+  // =========================================================================
+  group('F. replay outcomes', () {
+    /// The server refuses the identity because the stored payload fingerprint
+    /// differs — `sync_push` returns this instead of ever building a 2nd round.
+    Object? conflict(Map<String, dynamic> params) {
+      final localOp =
+          ((params['p_operations'] as List).single as Map)['local_operation_id']
+              as String;
+      return {
+        'ok': true,
+        'results': [
+          {
+            'local_operation_id': localOp,
+            'status': 'conflict',
+            'ok': false,
+            'error': 'conflict',
+          },
+        ],
+      };
+    }
+
+    Object? rejected(Map<String, dynamic> params) {
+      final localOp =
+          ((params['p_operations'] as List).single as Map)['local_operation_id']
+              as String;
+      return {
+        'ok': true,
+        'results': [
+          {
+            'local_operation_id': localOp,
+            'status': 'rejected',
+            'ok': false,
+            'error': 'item_unavailable',
+          },
+        ],
+      };
+    }
+
+    test('F1 an already-applied replay closes on the SAME round', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final c1 = _container(_FakeTransport([_transportDown]), journal: j);
+      await _buildAndSubmit(c1);
+      c1.dispose();
+
+      final t2 = _FakeTransport([_replayApplied]);
+      final c2 = _container(t2, journal: j);
+      await _settle(c2);
+      final resumed = await c2
+          .read(additionControllerProvider.notifier)
+          .submit();
+
+      expect(resumed.applied, isTrue);
+      expect(resumed.roundNumber, 2);
+      expect(t2.additionOps, hasLength(1), reason: 'one replay, one round');
+      // Confirmed against the authoritative detail, so the record is gone.
+      final journal = SharedPrefsAdditionJournalStore(j);
+      expect(
+        await journal.load('dev-1'),
+        isEmpty,
+        reason:
+            'the journal closes ONLY after the refresh proved the round — and '
+            'then it must actually close, or the order stays locked forever',
+      );
+    });
+
+    test('F2 a CONFLICT keeps the record and creates no second round', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final t = _FakeTransport([_transportDown, conflict]);
+      final c = _container(t, journal: j);
+      await _buildAndSubmit(c);
+      final original = t.additionIdentities.single;
+
+      final second = await c.read(additionControllerProvider.notifier).submit();
+
+      expect(second.applied, isFalse);
+      expect(t.additionIdentities, <String>{original});
+      final journal = SharedPrefsAdditionJournalStore(j);
+      final held = await journal.load('dev-1');
+      expect(
+        held[original]?.phase,
+        PosAdditionJournalPhase.conflict,
+        reason:
+            'a conflict can never be resolved by retrying and can never make a '
+            'second round — it is retained for a person to settle',
+      );
+      expect(
+        c.read(cartControllerProvider).lines,
+        isNotEmpty,
+        reason: 'nothing is cleared on a conflict',
+      );
+    });
+
+    test('F3 a permanent rejection is terminal, and cancellable', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final t = _FakeTransport([rejected]);
+      final c = _container(t, journal: j);
+      final r = await _buildAndSubmit(c);
+
+      expect(r.applied, isFalse);
+      expect(r.error, 'item_unavailable');
+      final journal = SharedPrefsAdditionJournalStore(j);
+      expect(
+        (await journal.load('dev-1')).values.single.phase,
+        PosAdditionJournalPhase.rejected,
+      );
+      expect(
+        c.read(additionControllerProvider.notifier).exit(),
+        isTrue,
+        reason:
+            'the server definitively said no, so no round exists and the '
+            'cashier may redo the addition — this is the ordinary '
+            '"we are out of that" path and must not be locked',
+      );
+    });
+
+    test('F4 transport still down: same identity, record retained', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final t = _FakeTransport([_transportDown]);
+      final c = _container(t, journal: j);
+      await _buildAndSubmit(c);
+      final original = t.additionIdentities.single;
+
+      await c.read(additionControllerProvider.notifier).submit();
+
+      expect(t.additionIdentities, <String>{original});
+      final journal = SharedPrefsAdditionJournalStore(j);
+      expect(
+        (await journal.load('dev-1'))[original]?.phase,
+        PosAdditionJournalPhase.transportUncertain,
+      );
+    });
+  });
+
+  // =========================================================================
+  // G — THE JOURNAL PRESERVES WHAT IT CANNOT READ
+  // =========================================================================
+  group('G. journal durability contract', () {
+    const key = 'restoflow.pos.addition_journal.v1.dev-1';
+
+    test('G1 an absent key is a valid EMPTY journal', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final store = SharedPrefsAdditionJournalStore(
+        await SharedPreferences.getInstance(),
+      );
+      expect(await store.load('dev-1'), isEmpty);
+      expect(store.unreadableRecordCount('dev-1'), 0);
+    });
+
+    test('G2 a refused write THROWS a typed persistence failure', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final prefs = FailingPrefs(await SharedPreferences.getInstance());
+      final store = SharedPrefsAdditionJournalStore(prefs);
+      prefs.failWrites = true;
+      await expectLater(
+        store.persist('dev-1', <String, PosAdditionJournalRecord>{
+          'op-1': _record(),
+        }),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test(
+      'G3 one corrupt record is quarantined; valid siblings survive',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          key: jsonEncode(<String, Object?>{
+            'version': SharedPrefsAdditionJournalStore.schemaVersion,
+            'records': <String, Object?>{
+              'op-good': _record(localOperationId: 'op-good').toJson(),
+              // `expected_delta_minor` as a String: a tolerant decoder would send
+              // a silently-zeroed amendment.
+              'op-bad': {
+                ..._record(localOperationId: 'op-bad').toJson(),
+                'expected_delta_minor': 'not-a-number',
+              },
+            },
+          }),
+        });
+        final prefs = await SharedPreferences.getInstance();
+        final store = SharedPrefsAdditionJournalStore(prefs);
+
+        final loaded = await store.load('dev-1');
+        expect(
+          loaded.keys,
+          <String>['op-good'],
+          reason: 'the unreadable record is never handed out to be dispatched',
+        );
+        expect(store.unreadableRecordCount('dev-1'), 1);
+
+        await store.persist('dev-1', loaded);
+        final stored =
+            (jsonDecode(prefs.getString(key)!) as Map)['records'] as Map;
+        expect(
+          stored.keys,
+          containsAll(<String>['op-good', 'op-bad']),
+          reason:
+              'a record naming a possibly-live server amendment is not ours to '
+              'delete just because this build cannot read it',
+        );
+      },
+    );
+
+    test('G4 a malformed ENVELOPE is preserved, not read as empty', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        key: '{not json at all',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final store = SharedPrefsAdditionJournalStore(prefs);
+
+      expect(await store.load('dev-1'), isEmpty);
+      await store.persist('dev-1', <String, PosAdditionJournalRecord>{
+        'op-1': _record(),
+      });
+
+      final preserved = prefs
+          .getKeys()
+          .where((k) => k.startsWith(key) && k != key)
+          .toList();
+      expect(preserved, isNotEmpty);
+      expect(prefs.getString(preserved.single), '{not json at all');
+    });
+
+    test('G5 an unknown schema version is not mis-parsed', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        key: jsonEncode(<String, Object?>{'version': 99, 'records': {}}),
+      });
+      final store = SharedPrefsAdditionJournalStore(
+        await SharedPreferences.getInstance(),
+      );
+      expect(await store.load('dev-1'), isEmpty);
+    });
+
+    test('G6 the frozen money round-trips exactly', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final prefs = await SharedPreferences.getInstance();
+      final store = SharedPrefsAdditionJournalStore(prefs);
+      await store.persist('dev-1', <String, PosAdditionJournalRecord>{
+        'op-1': _record(),
+      });
+
+      final back = (await SharedPrefsAdditionJournalStore(
+        prefs,
+      ).load('dev-1'))['op-1']!;
+      expect(back.expectedDeltaMinor, kLineTotal);
+      final line = back.lines.single;
+      expect(line.quantity, 2);
+      expect(line.unitPriceMinor, kBase);
+      expect(line.lineTotalMinor, kLineTotal);
+      expect(line.modifiers.single.priceDeltaMinor, kDelta);
+      expect(line.modifiers.single.quantity, 1);
+      expect(
+        line.modifiers.single.modifierGroupId,
+        'grp-meat',
+        reason: 'the LOCAL group identity survives locally (002C)',
+      );
+    });
+  });
+
+  // =========================================================================
+  // H — THE ORDER STAYS LOCKED ACROSS A RESTART
+  // =========================================================================
+  group('H. affected-order lock survives process recreation', () {
+    test('H1 the restored amendment still withdraws money actions', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final c1 = _container(_FakeTransport([_transportDown]), journal: j);
+      await _buildAndSubmit(c1);
+      c1.dispose();
+
+      final c2 = _container(_FakeTransport([_replayApplied]), journal: j);
+      await _settle(c2);
+      final notifier = c2.read(additionControllerProvider.notifier);
+
+      expect(
+        notifier.hasUnresolvedAmendmentFor('o-1'),
+        isTrue,
+        reason:
+            'the pending kind is published from this, so without it the gates '
+            'have nothing to fire on after a restart',
+      );
+      final blocked = resolveOrderActions(
+        _order(),
+        pending: notifier.hasUnresolvedAmendmentFor('o-1')
+            ? PosPendingKind.itemsAdd
+            : null,
+      );
+      expect(
+        (blocked.canPay, blocked.canDiscount, blocked.canVoid),
+        (false, false, false),
+      );
+    });
+
+    test('H2 an UNRELATED order is untouched by the restored lock', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final c1 = _container(_FakeTransport([_transportDown]), journal: j);
+      await _buildAndSubmit(c1);
+      c1.dispose();
+
+      final c2 = _container(_FakeTransport([_replayApplied]), journal: j);
+      await _settle(c2);
+      final notifier = c2.read(additionControllerProvider.notifier);
+
+      expect(notifier.hasUnresolvedAmendmentFor('o-2'), isFalse);
+      final other = resolveOrderActions(_order(), pending: null);
+      expect(
+        (other.canPay, other.canDiscount, other.canVoid),
+        (true, true, true),
+        reason: 'order B must stay fully usable while order A reconciles',
+      );
     });
   });
 }
