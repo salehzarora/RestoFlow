@@ -4225,6 +4225,14 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posEditSaveChanges => 'שמירת שינויים';
 
   @override
+  String get posModifierOptionsUnavailable =>
+      'לא ניתן היה לטעון את האפשרויות. אפשר לערוך רק את ההערה - האפשרויות השמורות של הפריט נשמרות כפי שהן.';
+
+  @override
+  String get posModifierSavedOptionsUnavailable =>
+      'חלק מהאפשרויות השמורות על הפריט כבר אינן בתפריט. רענן את התפריט כדי לשנות אותו, או בטל כדי להשאיר אותו כפי שהוא.';
+
+  @override
   String get kdsNewOrderBadge => 'הזמנה חדשה';
 
   @override

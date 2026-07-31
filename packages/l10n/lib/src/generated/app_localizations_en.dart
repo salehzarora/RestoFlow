@@ -4286,6 +4286,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posEditSaveChanges => 'Save changes';
 
   @override
+  String get posModifierOptionsUnavailable =>
+      'Options couldn\'t be loaded. You can still edit the note - this item\'s saved options are kept as they are.';
+
+  @override
+  String get posModifierSavedOptionsUnavailable =>
+      'Some options saved on this item are no longer on the menu. Refresh the menu to change it, or cancel to keep it as it is.';
+
+  @override
   String get kdsNewOrderBadge => 'New order';
 
   @override

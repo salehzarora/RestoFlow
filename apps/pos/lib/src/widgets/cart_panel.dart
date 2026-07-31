@@ -1059,6 +1059,20 @@ void _editLine(
     categoryId: '',
     categoryName: '',
   );
+  // MONEY-MODIFIER-PRICING-INTEGRITY-001 — the money-safe edit routing.
+  //
+  // When no authoritative groups resolve (menu unavailable/loading, item gone)
+  // the sheet CANNOT represent the line's stored modifiers. Confirming used to
+  // call `updateLineModifiers(lineId, [])`, which deleted the paid snapshots
+  // and silently re-priced the line down to its base — the reported
+  // under-charge. The old comment claimed "note only"; nothing enforced it.
+  //
+  // Now the fallback is note-only BY CONSTRUCTION: it is routed to
+  // `updateLineNote`, which has no access to `_lineModifiers` at all, so this
+  // path cannot change money even if the sheet handed back an empty list. The
+  // sheet separately explains why options are missing, and blocks Save when
+  // groups DID resolve but a stored selection cannot be represented.
+  final noteOnly = groups.isEmpty && line.modifiers.isNotEmpty;
   ModifierSelectionSheet.show(
     context,
     item: item,
@@ -1068,8 +1082,13 @@ void _editLine(
     initialSelections: line.modifiers,
     initialNote: line.note,
     isEdit: true,
-    onConfirm: (selections, note) =>
-        controller.updateLineModifiers(line.lineId, selections, note: note),
+    onConfirm: noteOnly
+        ? (selections, note) => controller.updateLineNote(line.lineId, note)
+        : (selections, note) => controller.updateLineModifiers(
+            line.lineId,
+            selections,
+            note: note,
+          ),
   );
 }
 

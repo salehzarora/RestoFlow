@@ -278,11 +278,49 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   Map<String, int> _groupSelection(String groupId) =>
       _selected[groupId] ?? const {};
 
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001 — the stored selections this sheet
+  /// CANNOT represent against the live groups (option removed, moved to another
+  /// group, or the groups could not be loaded at all).
+  ///
+  /// [_applyInitialState] silently skips these, so without this they would be
+  /// dropped by a Save the cashier believed was harmless — deleting a paid
+  /// modifier and re-pricing the line downward.
+  List<SelectedModifier> get _unresolvedInitialSelections => [
+    for (final selection in widget.initialSelections)
+      if (!widget.groups.any(
+        (g) => g.options.any((o) => o.id == selection.optionId),
+      ))
+        selection,
+  ];
+
+  /// True when this edit cannot offer options at all (menu unavailable/loading,
+  /// item not found, or no authoritative groups) while the line DOES carry
+  /// stored modifiers. The sheet then edits the NOTE only and the caller routes
+  /// confirmation to a note-only mutation, so the snapshots survive untouched.
+  bool get _noteOnlyEdit =>
+      widget.isEdit &&
+      widget.groups.isEmpty &&
+      widget.initialSelections.isNotEmpty;
+
+  /// True when groups DID resolve but one or more stored selections did not.
+  /// Saving would silently keep the survivors and drop the rest, so Save is
+  /// blocked until the cashier refreshes the menu or cancels.
+  bool get _hasUnrepresentableSelections =>
+      widget.isEdit &&
+      widget.groups.isNotEmpty &&
+      _unresolvedInitialSelections.isNotEmpty;
+
   /// Min/max selection rules keep counting DISTINCT options — a quantity on
   /// one option never changes how many options are considered chosen.
-  bool get _satisfied => widget.groups.every(
-    (g) => _groupSelection(g.id).length >= g.effectiveMin,
-  );
+  ///
+  /// NOTE the empty-group trap this now closes: `Iterable.every` on an EMPTY
+  /// group list is vacuously TRUE, so an edit opened with no resolvable groups
+  /// used to report "satisfied" and enable Save over an empty selection.
+  bool get _satisfied =>
+      !_hasUnrepresentableSelections &&
+      widget.groups.every(
+        (g) => _groupSelection(g.id).length >= g.effectiveMin,
+      );
 
   int get _deltaTotal {
     var total = 0;
@@ -602,12 +640,30 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
                 ),
               ],
             ),
+            // MONEY-MODIFIER-PRICING-INTEGRITY-001: never let an edit look like
+            // "this item simply has no options". Say WHY, so the cashier
+            // refreshes or cancels instead of saving money away.
+            if (_noteOnlyEdit) ...[
+              const SizedBox(height: RestoflowSpacing.sm),
+              RestoflowNoticeBanner(
+                key: const Key('modifier-options-unavailable'),
+                body: l10n.posModifierOptionsUnavailable,
+              ),
+            ] else if (_hasUnrepresentableSelections) ...[
+              const SizedBox(height: RestoflowSpacing.sm),
+              RestoflowNoticeBanner(
+                key: const Key('modifier-saved-options-unavailable'),
+                body: l10n.posModifierSavedOptionsUnavailable,
+                tone: RestoflowTone.warning,
+              ),
+            ],
             const SizedBox(height: RestoflowSpacing.sm),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 key: const Key('modifier-add-button'),
-                // Disabled until every required group meets its minimum.
+                // Disabled until every required group meets its minimum, and
+                // while any stored selection cannot be represented.
                 onPressed: _satisfied
                     ? () {
                         widget.onConfirm(_selections(), _note);

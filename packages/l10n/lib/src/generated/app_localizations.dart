@@ -8008,6 +8008,18 @@ abstract class AppLocalizations {
   /// **'Save changes'**
   String get posEditSaveChanges;
 
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001: shown in the customization sheet when EDITING a cart line whose modifier groups could not be resolved (menu loading/unavailable, or the item is gone). The edit becomes note-only and the stored paid modifiers are preserved untouched, so the line is never silently repriced.
+  ///
+  /// In en, this message translates to:
+  /// **'Options couldn\'t be loaded. You can still edit the note - this item\'s saved options are kept as they are.'**
+  String get posModifierOptionsUnavailable;
+
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001: shown when EDITING a cart line whose stored selections cannot all be represented by the live groups (an option was removed or moved). Saving is blocked so the missing paid option is never silently dropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Some options saved on this item are no longer on the menu. Refresh the menu to change it, or cancel to keep it as it is.'**
+  String get posModifierSavedOptionsUnavailable;
+
   /// TABLET-UX-001: a small attention badge shown on a KDS card while a freshly-arrived order is still new, so the chef notices it. Money-free chrome.
   ///
   /// In en, this message translates to:

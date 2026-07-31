@@ -649,6 +649,30 @@ class CartController extends Notifier<CartViewState> {
     return CartMutationResult.applied;
   }
 
+  /// MONEY-MODIFIER-PRICING-INTEGRITY-001 — updates ONLY the cashier note on
+  /// [lineId], never its modifier snapshots.
+  ///
+  /// The cart's Edit action falls back to a note-only sheet when the live menu
+  /// cannot supply authoritative modifier groups. Routing that fallback through
+  /// [updateLineModifiers] meant confirming it replaced the stored snapshots
+  /// with whatever the (empty) sheet could resolve — silently deleting a paid
+  /// modifier and re-pricing the line down to base. This entry point cannot do
+  /// that: it never touches `_lineModifiers`, so a note edit is money-safe by
+  /// CONSTRUCTION rather than by the caller remembering to pass the old list
+  /// back in.
+  CartMutationResult updateLineNote(String lineId, String? note) {
+    if (_locked) return CartMutationResult.lockedByAddition;
+    if (_lineById(lineId) == null) return CartMutationResult.applied;
+    final trimmedNote = note?.trim();
+    if (trimmedNote != null && trimmedNote.isNotEmpty) {
+      _lineNotes[lineId] = trimmedNote;
+    } else {
+      _lineNotes.remove(lineId);
+    }
+    _emit();
+    return CartMutationResult.applied;
+  }
+
   /// Increases the quantity of [lineId] by one.
   CartMutationResult increaseQuantity(String lineId) {
     if (_locked) return CartMutationResult.lockedByAddition;

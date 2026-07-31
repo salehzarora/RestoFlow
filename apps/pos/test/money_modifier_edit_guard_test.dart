@@ -213,6 +213,42 @@ void main() {
       );
       expect(viewOf(c).subtotalMinor, kBase + k240);
     });
+
+    testWidgets('A2 the sheet explains WHY there are no options instead of '
+        'presenting an empty picker', (tester) async {
+      final c = await pumpWithConfiguredLine(tester, menu: null);
+      await openEdit(tester, c);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(
+        find.byKey(const Key('modifier-options-unavailable')),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.posModifierOptionsUnavailable), findsOneWidget);
+    });
+
+    testWidgets('A3 a note edit still saves, and touches ONLY the note', (
+      tester,
+    ) async {
+      final c = await pumpWithConfiguredLine(tester, menu: null);
+      await openEdit(tester, c);
+      await tester.enterText(find.byType(TextField).last, 'no pickles');
+      await tester.pump();
+      final confirm = confirmButton();
+      expect(
+        tester.widget<FilledButton>(confirm).onPressed,
+        isNotNull,
+        reason: 'note editing must not be blocked unnecessarily',
+      );
+      await tester.tap(confirm);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final line = viewOf(c).lines.single;
+      expect(line.note, 'no pickles');
+      expect(line.modifiers.single.optionId, 'opt-240');
+      expect(line.modifiers.single.priceDeltaMinor, k240);
+      expect(line.lineTotalMinor, kBase + k240);
+    });
   });
 
   group('[D1] B. a stored option missing from the live menu', () {
@@ -292,6 +328,25 @@ void main() {
       final line = container.read(cartControllerProvider).lines.single;
       expect(line.modifiers, hasLength(2));
       expect(line.lineTotalMinor, kBase + kBacon + kCheese);
+    });
+
+    testWidgets('B2 the cashier is told a saved option is unavailable', (
+      tester,
+    ) async {
+      final c = await pumpWithConfiguredLine(
+        tester,
+        menu: menuWith(const [meatGroupWithout240]),
+      );
+      await openEdit(tester, c);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(
+        find.byKey(const Key('modifier-saved-options-unavailable')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(l10n.posModifierSavedOptionsUnavailable),
+        findsOneWidget,
+      );
     });
 
     testWidgets('B3 cancelling leaves every modifier and the money intact', (
