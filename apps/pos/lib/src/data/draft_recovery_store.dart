@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../state/draft_recovery_controller.dart' show PosDraftRecovery;
+import 'local_storage_health.dart';
+import 'sync_cursor_store.dart' show PosPersistenceException;
 
 /// MENU-ORDER-001 (Codex #8/#9): persistence for the POS draft-recovery map so a
 /// permanently-rejected order's recovery — its draft (products, quantities,
@@ -20,6 +22,12 @@ abstract class PosDraftRecoveryStore {
   Future<Map<String, PosDraftRecovery>> load();
 
   /// Replaces the persisted recovery map with [recoveries].
+  ///
+  /// MONEY-DURABLE-STORES-003B: THROWS [PosPersistenceException] when the write
+  /// does not stick. `PosDraftRecoveryController._persistMap` reports success to
+  /// the PRE-DISPATCH correction gate on the strength of this call, so a write
+  /// that quietly failed would let an order be sent whose correction link exists
+  /// only in memory — precisely what that gate exists to prevent.
   Future<void> persist(Map<String, PosDraftRecovery> recoveries);
 }
 
@@ -44,7 +52,8 @@ class InMemoryDraftRecoveryStore implements PosDraftRecoveryStore {
 /// (localStorage). Each installed app / paired device has its OWN
 /// shared_preferences, and every stored record carries its scope binding, so a
 /// restored draft is still access-gated to its own scope + PIN session.
-class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
+class SharedPrefsDraftRecoveryStore
+    implements PosDraftRecoveryStore, PosDurableStoreHealth {
   SharedPrefsDraftRecoveryStore(this._prefs, {String key = _defaultKey})
     : _key = key;
 
@@ -60,6 +69,14 @@ class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
   /// persisted — so a v1 record (pin-session-keyed, unattributable to the stable
   /// worker) is intentionally dropped on load rather than silently mis-owned.
   static const int schemaVersion = 2;
+
+  bool _degraded = false;
+
+  @override
+  bool get isDegraded => _degraded;
+
+  @override
+  int unreadableRecordCount(String scopeKey) => _quarantined().length;
 
   @override
   Future<Map<String, PosDraftRecovery>> load() async {
@@ -147,6 +164,20 @@ class SharedPrefsDraftRecoveryStore implements PosDraftRecoveryStore {
         for (final e in recoveries.entries) e.key: e.value.toJson(),
       },
     };
-    await _prefs.setString(_key, jsonEncode(envelope));
+    // MONEY-DURABLE-STORES-003B: setString returns Future<bool> and can report
+    // FALSE WITHOUT THROWING (a full disk; a browser refusing localStorage).
+    // The previous build discarded that value, so `_persistMap` — which reports
+    // to the PRE-DISPATCH correction gate — returned true on a write that never
+    // happened, and the corrected order was sent with its source association
+    // held only in memory. A crash between the server accepting and the client
+    // recording it then left the source recovery unlinked, so the same order
+    // could be recovered and re-keyed a second time.
+    final ok = await _prefs.setString(_key, jsonEncode(envelope));
+    if (!ok) {
+      _degraded = true;
+      throw const PosPersistenceException(
+        'the draft-recovery map could not be persisted',
+      );
+    }
   }
 }

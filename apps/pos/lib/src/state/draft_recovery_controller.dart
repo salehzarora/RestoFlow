@@ -271,6 +271,15 @@ class PosDraftRecoveryController
   /// submit's recovery, whose loss simply means the operator re-keys that one order.
   /// The correction LIFECYCLE (link / supersede / accepted cleanup / discard) instead
   /// uses the AWAITED [_persistMap] so it never claims success on a failed write.
+  ///
+  /// MONEY-DURABLE-STORES-003B: the store now THROWS on a refused write rather
+  /// than completing silently, and this call still swallows it — deliberately,
+  /// because [capture] has no caller waiting on a verdict and blocking the till
+  /// on a lost recovery snapshot would be worse than losing it. The failure is
+  /// no longer invisible: the store latches it as
+  /// [PosDurableStoreHealth.isDegraded], which the operator-facing storage
+  /// status reads. Every path where the result CHANGES what the app does next
+  /// goes through [_persistMap] instead.
   void _persist() {
     if (_disposed) return;
     unawaited(_store.persist(state).catchError((Object _) {}));

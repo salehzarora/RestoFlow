@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'local_storage_health.dart';
 import 'order_submission.dart';
 import 'sync_cursor_store.dart' show PosPersistenceException;
 
@@ -31,13 +32,6 @@ abstract class DurableOutboxStore {
   /// taken, so "it did not throw" is not good enough — the caller must be able
   /// to tell a stored order from a lost one and refuse to dispatch the latter.
   Future<void> persist(String scopeKey, List<OutboxEntry> entries);
-
-  /// MONEY-DURABLE-STORES-003B: whether this store has REFUSED a write since it
-  /// was created, i.e. durable storage is behind what the app believes. Latched
-  /// deliberately — a later successful write of a DIFFERENT set does not undo
-  /// the update that was lost — and surfaced to the operator, because a till
-  /// that cannot store an order must not look identical to one that can.
-  bool get isDegraded => false;
 }
 
 /// A `shared_preferences`-backed [DurableOutboxStore]: one schema-versioned JSON
@@ -45,7 +39,8 @@ abstract class DurableOutboxStore {
 /// full storage key is `<prefix>.<scopeKey>`, so each paired device's queue is
 /// isolated (RF-114 scope binding): a re-paired-as-new device (new deviceId)
 /// gets a fresh, empty queue and cannot pick up another device's pending orders.
-class SharedPrefsOutboxStore implements DurableOutboxStore {
+class SharedPrefsOutboxStore
+    implements DurableOutboxStore, PosDurableStoreHealth {
   SharedPrefsOutboxStore(this._prefs, {String keyPrefix = _defaultPrefix})
     : _prefix = keyPrefix;
 
@@ -165,10 +160,8 @@ class SharedPrefsOutboxStore implements DurableOutboxStore {
     return out;
   }
 
-  /// How many stored entries this build cannot decode, plus how many whole
-  /// envelopes it had to set aside. Non-zero means the till is holding local
-  /// records it cannot act on — the operator has to be told (003B).
-  int unreadableCount(String scopeKey) {
+  @override
+  int unreadableRecordCount(String scopeKey) {
     final quarantined = _quarantined(scopeKey, (_) => true).length;
     var preserved = 0;
     for (var slot = 0; slot < _maxPreservedEnvelopes; slot++) {
