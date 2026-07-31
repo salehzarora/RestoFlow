@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'order_submission.dart';
+import 'sync_cursor_store.dart' show PosPersistenceException;
 
 /// Durable persistence for the POS order outbox (RF-114): queued/failed order
 /// submissions survive a browser refresh, tab close/reopen, and app restart.
@@ -24,7 +25,19 @@ abstract class DurableOutboxStore {
 
   /// Replaces the persisted set for [scopeKey] with [entries] (integer minor
   /// money only; no secrets, no service-role key — see [OutboxEntry]).
+  ///
+  /// MONEY-DURABLE-STORES-003B: THROWS [PosPersistenceException] when the write
+  /// does not stick. A queued order is the ONLY local record that an order was
+  /// taken, so "it did not throw" is not good enough — the caller must be able
+  /// to tell a stored order from a lost one and refuse to dispatch the latter.
   Future<void> persist(String scopeKey, List<OutboxEntry> entries);
+
+  /// MONEY-DURABLE-STORES-003B: whether this store has REFUSED a write since it
+  /// was created, i.e. durable storage is behind what the app believes. Latched
+  /// deliberately — a later successful write of a DIFFERENT set does not undo
+  /// the update that was lost — and surfaced to the operator, because a till
+  /// that cannot store an order must not look identical to one that can.
+  bool get isDegraded => false;
 }
 
 /// A `shared_preferences`-backed [DurableOutboxStore]: one schema-versioned JSON
@@ -44,6 +57,11 @@ class SharedPrefsOutboxStore implements DurableOutboxStore {
   /// Bump ONLY on an incompatible envelope/entry shape change; an unrecognised
   /// version is ignored on load (start clean) rather than mis-parsed.
   static const int schemaVersion = 1;
+
+  bool _degraded = false;
+
+  @override
+  bool get isDegraded => _degraded;
 
   String _keyFor(String scopeKey) {
     // Keep only key-safe chars so a scope value can never break the key space.
@@ -80,10 +98,27 @@ class SharedPrefsOutboxStore implements DurableOutboxStore {
 
   @override
   Future<void> persist(String scopeKey, List<OutboxEntry> entries) async {
+    // BUILD + SERIALIZE FIRST, so an unencodable entry fails here — before the
+    // durable store is touched and while the old set is still correct on disk.
     final envelope = <String, Object?>{
       'version': schemaVersion,
       'entries': [for (final e in entries) e.toJson()],
     };
-    await _prefs.setString(_keyFor(scopeKey), jsonEncode(envelope));
+    final encoded = jsonEncode(envelope);
+
+    // MONEY-DURABLE-STORES-003B: setString returns Future<bool> and can report
+    // FALSE WITHOUT THROWING (a full disk; a browser refusing or quota-limiting
+    // localStorage). The previous build discarded that value, so a failed write
+    // looked exactly like a successful one: `enqueue` returned the entry and the
+    // caller pushed the order to the server. The kitchen then cooks an order the
+    // till has no durable record of — it vanishes on the next restart, and no
+    // retry, reprint or reconciliation can find it again.
+    final ok = await _prefs.setString(_keyFor(scopeKey), encoded);
+    if (!ok) {
+      _degraded = true;
+      throw const PosPersistenceException(
+        'the order outbox could not be persisted',
+      );
+    }
   }
 }

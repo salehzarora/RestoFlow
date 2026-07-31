@@ -5,6 +5,7 @@ import 'package:restoflow_data_remote/restoflow_data_remote.dart';
 import 'customer_phone.dart';
 import 'durable_outbox_store.dart';
 import 'order_submission.dart';
+import 'sync_cursor_store.dart' show PosPersistenceException;
 
 /// Thrown when an order submission cannot be built or enqueued.
 class OrderSubmissionException implements Exception {
@@ -307,17 +308,73 @@ class RealOutboxRepository implements OutboxRepository {
   /// submits another device's queued orders. Only reached after [_ensureReady].
   String get _scopeKey => _session!.deviceId;
 
+  /// MONEY-DURABLE-STORES-003B: the in-flight load, so two callers arriving
+  /// before the first one resolves SHARE it. The previous `_entries ??= await
+  /// load()` tested the field before the await and assigned after it, so both
+  /// callers parsed and the second assignment discarded whatever the first had
+  /// already appended — a queued order lost from memory and then from disk.
+  Future<void>? _loading;
+
   /// Loads the durable queue once (per repo instance). Cheap no-op thereafter.
   Future<void> _ensureLoaded() async {
+    if (_entries != null) return;
     final store = _store;
-    _entries ??= store == null ? <OutboxEntry>[] : await store.load(_scopeKey);
+    if (store == null) {
+      _entries ??= <OutboxEntry>[];
+      return;
+    }
+    await (_loading ??= () async {
+      final loaded = await store.load(_scopeKey);
+      _entries ??= loaded;
+    }());
   }
 
-  /// Writes the current queue back to the durable store (no-op when in-memory).
-  Future<void> _persist() async {
+  /// Writes [next] to the durable store and CONFIRMS it, or throws.
+  ///
+  /// MONEY-DURABLE-STORES-003B: callers must persist BEFORE committing [next]
+  /// to [_entries], so a refused write leaves memory and disk agreeing on the
+  /// previous set rather than leaving a phantom "queued" order in RAM.
+  ///
+  /// The store speaks [PosPersistenceException]; this seam re-states it as an
+  /// [OrderSubmissionException] because that is what the POS Send handler
+  /// catches — it keeps the cart and shows the honest failure, which is exactly
+  /// the right outcome for an order that was never stored and never sent.
+  Future<void> _persistOrThrow(List<OutboxEntry> next) async {
     final store = _store;
-    if (store != null) {
-      await store.persist(_scopeKey, _entries ?? const <OutboxEntry>[]);
+    if (store == null) return;
+    try {
+      await store.persist(_scopeKey, next);
+    } on PosPersistenceException catch (e) {
+      throw OrderSubmissionException(
+        'the order could not be stored on this device, so it was not sent '
+        '(${e.message})',
+      );
+    }
+  }
+
+  /// Persists an update recorded AFTER the dispatch decision was already made
+  /// (a push result, or the scope-guard conflict marking).
+  ///
+  /// MONEY-DURABLE-STORES-003B: deliberately NON-fatal, and deliberately not the
+  /// same rule as [_persistOrThrow]. By this point the server has already been
+  /// told (or deliberately not told) about the order, and the in-memory entry
+  /// holds that real outcome — throwing it away to honour a storage failure
+  /// would replace a true result with a false one. Losing only the durable copy
+  /// of the RESULT is recoverable: the entry stays `pending` on disk and the
+  /// replay re-pushes it under the SAME `(deviceId, localOperationId)` identity
+  /// (DECISION D-022), which the server answers idempotently.
+  ///
+  /// What must NOT happen is that the failure disappears: the store records the
+  /// refusal in [DurableOutboxStore.isDegraded], which the operator-facing
+  /// status surface reads, so the till never shows a confident "all synced"
+  /// while its durable queue is behind what is in memory.
+  Future<void> _persistAfterDispatch(List<OutboxEntry> next) async {
+    final store = _store;
+    if (store == null) return;
+    try {
+      await store.persist(_scopeKey, next);
+    } on PosPersistenceException {
+      // Recorded by the store; the entry keeps its real, already-known outcome.
     }
   }
 
@@ -347,8 +404,16 @@ class RealOutboxRepository implements OutboxRepository {
         return e;
       }
     }
-    entries.add(entry);
-    await _persist();
+    // MONEY-DURABLE-STORES-003B: BUILD, PERSIST, THEN COMMIT. The previous build
+    // appended to the live list and then persisted whatever happened to be in
+    // the field, ignoring whether the write stuck — so a refused durable write
+    // left an order that existed only in RAM, which the caller immediately
+    // pushed to the server. Now a failed write throws with NOTHING mutated: the
+    // queue in memory and the queue on disk still hold exactly the previous set,
+    // and the submit is abandoned before any network call.
+    final next = <OutboxEntry>[...entries, entry];
+    await _persistOrThrow(next);
+    _entries = next;
     return entry;
   }
 
@@ -379,8 +444,9 @@ class RealOutboxRepository implements OutboxRepository {
         attemptCount: entry.attemptCount + 1,
         lastErrorCode: 'device_scope_mismatch',
       );
-      _entries![idx] = stale;
-      await _persist();
+      final next = <OutboxEntry>[..._entries!]..[idx] = stale;
+      await _persistAfterDispatch(next);
+      _entries = next;
       return stale;
     }
 
@@ -402,8 +468,9 @@ class RealOutboxRepository implements OutboxRepository {
         lastErrorCode: e.code ?? e.kind.name,
       );
     }
-    _entries![idx] = updated;
-    await _persist();
+    final next = <OutboxEntry>[..._entries!]..[idx] = updated;
+    await _persistAfterDispatch(next);
+    _entries = next;
     return updated;
   }
 
@@ -418,8 +485,12 @@ class RealOutboxRepository implements OutboxRepository {
       syncState: OutboxSyncState.pending,
       clearError: true,
     );
-    _entries![idx] = updated;
-    await _persist();
+    // Persist BEFORE publishing (as `enqueue` does): a re-queue that only exists
+    // in memory would show the cashier a retryable order that reverts to
+    // `failed` on the next restart.
+    final next = <OutboxEntry>[..._entries!]..[idx] = updated;
+    await _persistOrThrow(next);
+    _entries = next;
     return updated;
   }
 
