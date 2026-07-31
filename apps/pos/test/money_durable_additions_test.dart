@@ -10,6 +10,8 @@ import 'package:restoflow_pos/src/data/demo_order_snapshots.dart';
 import 'package:restoflow_pos/src/data/order_actions.dart';
 import 'package:restoflow_pos/src/data/order_detail_repository.dart';
 import 'package:restoflow_pos/src/data/order_snapshot.dart';
+import 'package:restoflow_pos/src/data/order_submission.dart'
+    show kPermanentRejectionCodes;
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/state/addition_controller.dart';
 import 'package:restoflow_pos/src/state/cart_controller.dart';
@@ -1101,6 +1103,142 @@ void main() {
         (other.canPay, other.canDiscount, other.canVoid),
         (true, true, true),
         reason: 'order B must stay fully usable while order A reconciles',
+      );
+    });
+  });
+  // =========================================================================
+  // I — MONEY-SERVER-MODIFIER-SCOPE-003D: the ownership refusal is PERMANENT
+  // =========================================================================
+  group('I. modifier_option_not_in_scope is a permanent refusal', () {
+    Object? notInScope(Map<String, dynamic> params) {
+      final localOp =
+          ((params['p_operations'] as List).single as Map)['local_operation_id']
+              as String;
+      return {
+        'ok': true,
+        'results': [
+          {
+            'local_operation_id': localOp,
+            'status': 'rejected',
+            'ok': false,
+            'error': 'modifier_option_not_in_scope',
+          },
+        ],
+      };
+    }
+
+    test('I1 the code is classified permanent, not retryable', () {
+      expect(
+        kPermanentRejectionCodes.contains('modifier_option_not_in_scope'),
+        isTrue,
+        reason:
+            'the payload names an option that cannot legitimately price that '
+            'line, so re-sending the SAME frozen operation can only be refused '
+            'again — retrying would be a loop',
+      );
+    });
+
+    test('I2 an order rejected for it is NEVER kitchen-printed', () {
+      expect(
+        isOrderEligibleForKitchenPrint(
+          orderId: 'o-real-1',
+          isDemoMode: false,
+          rejectionCode: 'modifier_option_not_in_scope',
+        ),
+        isFalse,
+        reason:
+            'no server order exists, so printing would send the kitchen food '
+            'nobody can be charged for correctly',
+      );
+    });
+
+    test('I3 an unrelated/unknown code stays retryable', () {
+      expect(
+        kPermanentRejectionCodes.contains('offline'),
+        isFalse,
+        reason: 'a transport failure has no server verdict and must retry',
+      );
+      expect(
+        kPermanentRejectionCodes.contains('some_future_server_code'),
+        isFalse,
+        reason:
+            'an unknown code must NOT silently become permanent — nor become '
+            'success; it stays retryable until it is understood',
+      );
+      expect(
+        isOrderEligibleForKitchenPrint(
+          orderId: 'o-real-1',
+          isDemoMode: false,
+          rejectionCode: 'offline',
+        ),
+        isTrue,
+      );
+    });
+
+    test('I4 the previously established codes are unchanged', () {
+      expect(
+        kPermanentRejectionCodes,
+        containsAll(<String>[
+          'item_unavailable',
+          'table_required',
+          'table_not_allowed',
+          'table_not_available',
+          'dispatch_mode_not_allowed',
+          'rejected',
+        ]),
+      );
+    });
+
+    test('I5 an Add-items refusal is journalled TERMINAL, prints nothing, and '
+        'mints no new identity', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final t = _FakeTransport([notInScope]);
+      final c = _container(t, journal: j);
+
+      final r = await _buildAndSubmit(c);
+
+      expect(r.applied, isFalse);
+      expect(r.error, 'modifier_option_not_in_scope');
+      expect(
+        r.printPayload,
+        isNull,
+        reason: 'no round was created, so there is nothing to print',
+      );
+
+      final store = SharedPrefsAdditionJournalStore(j);
+      final held = await store.load('dev-1');
+      expect(
+        held.values.single.phase,
+        PosAdditionJournalPhase.rejected,
+        reason:
+            'the server gave a definitive verdict — terminal, not an uncertain '
+            'operation to keep replaying',
+      );
+
+      // A retry must not invent a second identity for a refusal that is final.
+      final original = t.additionIdentities.single;
+      await c.read(additionControllerProvider.notifier).submit();
+      expect(t.additionIdentities, <String>{original});
+    });
+
+    test('I6 the cashier may abandon it and re-pick the modifier', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final j = await SharedPreferences.getInstance();
+      final c = _container(_FakeTransport([notInScope]), journal: j);
+      await _buildAndSubmit(c);
+
+      expect(
+        c.read(additionControllerProvider.notifier).exit(),
+        isTrue,
+        reason:
+            'a definitive refusal is not an uncertain operation: the cashier '
+            'must be able to drop it and re-pick the option from the live menu',
+      );
+      expect(
+        c.read(cartControllerProvider).lines,
+        isNotEmpty,
+        reason: 'their items survive — only the bad option needs re-picking',
       );
     });
   });

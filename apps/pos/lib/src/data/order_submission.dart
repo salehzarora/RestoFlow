@@ -81,6 +81,20 @@ const Set<String> kPermanentRejectionCodes = {
   // kitchen print is suppressed. The cashier re-submits and the fresh op
   // resolves the correct mode.
   'dispatch_mode_not_allowed',
+  // MONEY-SERVER-MODIFIER-SCOPE-003D: the server refused a modifier whose
+  // option does not belong to the submitted item within this organization —
+  // nonexistent, foreign-tenant, wrong-item, or a broken ownership chain, all
+  // reported under one code so the refusal is not an existence oracle.
+  //
+  // TERMINAL: the payload names an option that cannot legitimately price that
+  // line, and re-sending the SAME frozen operation can only be refused again.
+  // Retrying would be a loop; printing would send the kitchen food nobody can
+  // be charged for correctly. The cashier re-picks the modifier from the live
+  // menu, which produces a fresh operation.
+  //
+  // Deliberately NOT a cue to reprice or to drop the offending modifier and
+  // send the rest — that would silently turn a paid option into a free one.
+  'modifier_option_not_in_scope',
   'rejected',
 };
 
