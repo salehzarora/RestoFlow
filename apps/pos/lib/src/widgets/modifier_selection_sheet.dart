@@ -267,8 +267,30 @@ class _ModifierSelectionSheetState extends State<ModifierSelectionSheet> {
   /// down fresh instances with the same configuration) produce the SAME
   /// signature, so ordinary locale / theme / MediaQuery / parent rebuilds
   /// preserve the in-progress selections and note.
+  ///
+  /// MONEY-EDIT-INTEGRITY-002C adds the EDITED LINE's identity — its frozen
+  /// display base and its stored selections. Those were safely excluded while
+  /// state held ids and quantities alone, but `_pristine` now caches the
+  /// stored ORDER-TIME SNAPSHOTS of one specific line. Reusing this widget
+  /// position for a DIFFERENT line of the SAME product with the same groups
+  /// would otherwise carry another line's prices into this one's save. Each
+  /// edit opens its own modal route today, so this is a guard rather than an
+  /// observed bug — but it is money, and it costs one string.
   static String _configSignature(ModifierSelectionSheet w) {
-    final buffer = StringBuffer(w.item.id);
+    final buffer = StringBuffer(w.item.id)
+      ..write('|b:')
+      ..write(w.displayBasePriceMinor);
+    for (final selection in w.initialSelections) {
+      buffer
+        ..write('|s:')
+        ..write(selection.modifierGroupId)
+        ..write(':')
+        ..write(selection.optionId)
+        ..write(':')
+        ..write(selection.priceDeltaMinor)
+        ..write(':')
+        ..write(selection.quantity);
+    }
     for (final group in w.groups) {
       buffer
         ..write('|g:')
