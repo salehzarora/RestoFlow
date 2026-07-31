@@ -55,7 +55,12 @@ PosOrderSnapshot _snapshot({
   int grand = 5400,
   int revision = 2,
 }) {
-  final at = DateTime.utc(2026, 7, 30, 10);
+  // The recent-orders surface only shows a TODAY+YESTERDAY window, so a
+  // hard-coded calendar date silently rots the moment the clock passes it —
+  // these fixtures were written on 2026-07-30 and began failing on 2026-08-01
+  // for that reason alone. Anchored to `now` so the window always contains
+  // them; the exact instant is irrelevant to every assertion here.
+  final at = DateTime.now().toUtc().subtract(const Duration(hours: 2));
   return PosOrderSnapshot(
     orderId: _orderId,
     orderCode: _code,
@@ -78,7 +83,7 @@ PosOrderSnapshot _snapshot({
 PosRecentOrder _unpaidOrder() => PosRecentOrder(
   order: _view(),
   snapshot: _snapshot(settlement: PosSettlement.unpaid),
-  submittedAt: DateTime.utc(2026, 7, 30, 10),
+  submittedAt: DateTime.now().toUtc().subtract(const Duration(hours: 2)),
 );
 
 Future<InMemoryRecentOrdersStore> _store(PosRecentOrder order) async {
