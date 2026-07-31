@@ -545,4 +545,120 @@ void main() {
       );
     });
   });
+  // =========================================================================
+  // D — EXIT AFTER AN UNCERTAIN FAILURE MUST NOT RELEASE THE IDENTITY
+  // =========================================================================
+  group('D. exit() must not abandon a dispatched, unresolved attempt', () {
+    test(
+      'D1 exit after a transport timeout keeps the operation identity',
+      () async {
+        final t1 = _FakeTransport([_transportDown]);
+        final c = _container(t1);
+        await _buildAndSubmit(c);
+        final original = t1.additionIdentities.single;
+        expect(
+          c.read(additionControllerProvider).phase,
+          AdditionPhase.failed,
+          reason: 'a dead transport leaves a RETRYABLE frozen attempt',
+        );
+
+        // The cashier taps Cancel on the failed banner. No crash is involved.
+        c.read(additionControllerProvider.notifier).exit();
+
+        expect(
+          c.read(additionControllerProvider).attempt?.localOperationId,
+          original,
+          reason:
+              'THE SERVER MAY ALREADY OWN THIS OPERATION. After a timeout the '
+              'client cannot know the round was not applied, so discarding the '
+              'identity means the next submission dispatches a DIFFERENT '
+              'operation and the server creates a SECOND round — a duplicate '
+              'amendment with no process crash required.',
+        );
+      },
+    );
+
+    test('D2 a re-submission after that exit reuses the SAME identity', () async {
+      final t1 = _FakeTransport([_transportDown]);
+      final c = _container(t1);
+      await _buildAndSubmit(c);
+      final original = t1.additionIdentities.single;
+
+      c.read(additionControllerProvider.notifier).exit();
+
+      // The real-world path after a Cancel: the cart still holds the lines, so
+      // the cashier clears it, re-enters Add-items for the SAME order, re-keys
+      // the same items and sends again.
+      c.read(cartControllerProvider.notifier).clear();
+      final reentry = await c
+          .read(additionControllerProvider.notifier)
+          .enterForOrder('o-1');
+      expect(
+        reentry,
+        isNot(AdditionEntryResult.entered),
+        reason:
+            'an order with an unresolved operation must not accept a FRESH '
+            'amendment — re-entry has to resume the existing one',
+      );
+
+      final cart = c.read(cartControllerProvider.notifier);
+      cart.addItemWithModifiers(_burger, const [_meat240]);
+      final lineId = c.read(cartControllerProvider).lines.single.lineId;
+      cart.increaseQuantity(lineId);
+      await c.read(additionControllerProvider.notifier).submit();
+
+      expect(
+        t1.additionIdentities,
+        <String>{original},
+        reason:
+            'the unresolved operation must be RESUMED, never replaced — the '
+            'existing app.add_order_items idempotency only protects us when we '
+            'come back under the same identity',
+      );
+    });
+
+    test(
+      'D3 exit is still allowed for an attempt that never dispatched',
+      () async {
+        final t = _FakeTransport([_applied]);
+        final c = _container(t);
+        await c.read(additionControllerProvider.notifier).enterForOrder('o-1');
+        final cart = c.read(cartControllerProvider.notifier);
+        cart.addItemWithModifiers(_burger, const [_meat240]);
+
+        // Nothing was ever sent, so nothing can be owned by the server.
+        expect(c.read(additionControllerProvider.notifier).exit(), isTrue);
+        expect(t.additionOps, isEmpty);
+        expect(
+          c.read(additionControllerProvider).hasOpenAttempt,
+          isFalse,
+          reason:
+              'abandoning an addition the server never heard of is safe and must '
+              'stay possible — otherwise a cashier who changes their mind is '
+              'stuck with a lock nothing can clear',
+        );
+        expect(
+          c.read(cartControllerProvider).lines,
+          isNotEmpty,
+          reason:
+              'the cashier keeps their items (their own Clear discards them)',
+        );
+      },
+    );
+
+    test('D4 exit is refused while the operation is on the wire', () async {
+      final t = _FakeTransport([_applied]);
+      final c = _container(t);
+      await c.read(additionControllerProvider.notifier).enterForOrder('o-1');
+      c.read(cartControllerProvider.notifier).addItem(_burger);
+      final pending = c.read(additionControllerProvider.notifier).submit();
+
+      expect(
+        c.read(additionControllerProvider.notifier).exit(),
+        isFalse,
+        reason: 'unchanged pre-003C behaviour: cancel is refused while sending',
+      );
+      await pending;
+    });
+  });
 }
