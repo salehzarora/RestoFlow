@@ -1,3 +1,4 @@
+import '../order/menu_print_order.dart' show sortByMenuPrintOrder;
 import 'kitchen_meat.dart';
 import 'kitchen_prep.dart';
 
@@ -124,21 +125,36 @@ class KitchenCountContribution {
 /// summed as `quantity × factor`. Skips non-positive quantity/factor. Two
 /// distinct labels can never merge (length-prefixed grouping key). Money-free.
 ///
-/// ORDERING: rows keep the first-appearance order of their RESOURCE, and a
-/// split resource's buckets stay together in the slot the unsplit resource
-/// would have occupied — with-bucket first, then without. So a burger ordered
-/// without cheese followed by one with cheese still prints
-/// `Bread / Meat with Cheese / Meat without Cheese`, never interleaved with an
-/// unrelated resource that happened to be counted in between. With no
-/// classifier configured every resource has exactly one bucket and the result
-/// is identical to the historical first-appearance list.
+/// ORDERING (017, Codex MEDIUM #4) — the full key, in order:
+///   1. the RESOURCE's first appearance,
+///   2. that resource's CLASSIFIER's first appearance (unsplit sorts first),
+///   3. the with-bucket, then the without-bucket,
+///   4. an explicit insertion sequence as the final tie-break.
 ///
-/// A bucket that sums to nothing is never created, so an all-selected order
-/// prints no empty "without" row and vice versa.
+/// Step 2 is what keeps each classifier's PAIR together when one resource is
+/// split by more than one option. Ranking by bucket before classifier produced
+/// `with Cheese / with Bacon / without Cheese / without Bacon` — two interleaved
+/// halves the kitchen cannot read as pairs. The correct output is
+/// `Meat with Cheese / Meat without Cheese / Meat with Bacon / Meat without
+/// Bacon`.
+///
+/// Step 1 keeps a split resource's rows in the slot the unsplit resource would
+/// have occupied, so an unrelated resource counted in between never lands
+/// inside the pair. Step 4 matters because `List.sort` is NOT stable.
+///
+/// With no classifier configured every resource has exactly one bucket and the
+/// result is identical to the historical first-appearance list. A bucket that
+/// sums to nothing is never created, so an all-selected order prints no empty
+/// "without" row and vice versa.
+///
+/// The output is a pure function of the CONTRIBUTION ORDER, so POS, KDS and the
+/// durable spool must feed contributions in the same canonical item order —
+/// see [canonicalKitchenCountOrder].
 List<KitchenCount> aggregateKitchenCounts(
   Iterable<KitchenCountContribution> contributions,
 ) {
   final labelOrder = <String, int>{};
+  final classifierOrder = <String, int>{};
   final buckets = <String, _CountBucket>{};
   var seq = 0;
   for (final c in contributions) {
@@ -147,15 +163,29 @@ List<KitchenCount> aggregateKitchenCounts(
     final classifier = c.classifier.trim();
     // Length-prefixed so ("AB") and ("A","B") style labels can never collapse.
     final labelKey = '${label.length}:$label';
-    labelOrder.putIfAbsent(labelKey, () => labelOrder.length);
-    // rank 0 = unsplit, 1 = with the classifier, 2 = without it.
-    final rank = classifier.isEmpty ? 0 : (c.classifierSelected ? 1 : 2);
-    final key = '$labelKey|$rank|${classifier.length}:$classifier';
+    final labelIndex = labelOrder.putIfAbsent(
+      labelKey,
+      () => labelOrder.length,
+    );
+    // Classifier rank is scoped to its RESOURCE: two resources split by the
+    // same option each order their own classifiers independently. The unsplit
+    // bucket is rank -1 so it always leads its resource.
+    final classifierKey = '$labelKey|${classifier.length}:$classifier';
+    final classifierIndex = classifier.isEmpty
+        ? -1
+        : classifierOrder.putIfAbsent(
+            classifierKey,
+            () => classifierOrder.length,
+          );
+    // Within one classifier: the with-bucket, then the without-bucket.
+    final bucketRank = classifier.isEmpty ? 0 : (c.classifierSelected ? 0 : 1);
+    final key = '$classifierKey|$bucketRank';
     final bucket = buckets.putIfAbsent(
       key,
       () => _CountBucket(
-        labelIndex: labelOrder[labelKey]!,
-        rank: rank,
+        labelIndex: labelIndex,
+        classifierIndex: classifierIndex,
+        bucketRank: bucketRank,
         sequence: seq++,
         label: label,
         classifier: classifier,
@@ -168,8 +198,10 @@ List<KitchenCount> aggregateKitchenCounts(
     ..sort((a, b) {
       final byLabel = a.labelIndex.compareTo(b.labelIndex);
       if (byLabel != 0) return byLabel;
-      final byRank = a.rank.compareTo(b.rank);
-      if (byRank != 0) return byRank;
+      final byClassifier = a.classifierIndex.compareTo(b.classifierIndex);
+      if (byClassifier != 0) return byClassifier;
+      final byBucket = a.bucketRank.compareTo(b.bucketRank);
+      if (byBucket != 0) return byBucket;
       // Deterministic final tie-break (List.sort is not stable).
       return a.sequence.compareTo(b.sequence);
     });
@@ -188,7 +220,8 @@ List<KitchenCount> aggregateKitchenCounts(
 class _CountBucket {
   _CountBucket({
     required this.labelIndex,
-    required this.rank,
+    required this.classifierIndex,
+    required this.bucketRank,
     required this.sequence,
     required this.label,
     required this.classifier,
@@ -196,7 +229,14 @@ class _CountBucket {
   });
 
   final int labelIndex;
-  final int rank;
+
+  /// 017: the classifier's first-appearance rank WITHIN this resource (-1 for
+  /// the unsplit bucket, which always leads). Keeps each classifier's
+  /// with/without pair adjacent when one resource has several classifiers.
+  final int classifierIndex;
+
+  /// 0 = the with-bucket, 1 = the without-bucket (0 for an unsplit resource).
+  final int bucketRank;
   final int sequence;
   final String label;
   final String classifier;
@@ -216,12 +256,40 @@ class KitchenCountItemInput {
     required this.quantity,
     this.meats = const <KitchenMeat>[],
     this.prepComponents = const <KitchenPrepComponent>[],
+    this.categoryDisplayOrder = 0,
+    this.itemDisplayOrder = 0,
+    this.linePosition = 0,
   });
 
   final int quantity;
   final List<KitchenMeat> meats;
   final List<KitchenPrepComponent> prepComponents;
+
+  /// 017 (Codex MEDIUM #4): the item's menu-configured PRINT-order keys — the
+  /// SAME keys every kitchen surface already sorts its printed item lines by.
+  ///
+  /// Aggregation output depends on contribution order (rows keep first
+  /// appearance), so the POS (cart order), the KDS (`sync_pull` wire order,
+  /// which is arbitrary within an order) and the durable spool (SQL row order)
+  /// would otherwise emit the same totals in different sequences. Carrying the
+  /// keys here lets [aggregateOrderKitchenCounts] canonicalize the order
+  /// itself, so no surface can forget to. All-zero keys fall back to input
+  /// order, which is what a legacy/partially-migrated order gets.
+  final int categoryDisplayOrder;
+  final int itemDisplayOrder;
+  final int linePosition;
 }
+
+/// 017: [items] in the ONE canonical kitchen-count order — the shared menu
+/// print order, with input order as the tie-break. Exposed so a surface can
+/// assert its own input matches; [aggregateOrderKitchenCounts] applies it
+/// unconditionally, so callers cannot drift by forgetting it.
+List<KitchenCountItemInput> canonicalKitchenCountOrder(
+  Iterable<KitchenCountItemInput> items,
+) => sortByMenuPrintOrder(
+  items.toList(),
+  (i) => <int>[i.categoryDisplayOrder, i.itemDisplayOrder, i.linePosition],
+);
 
 /// Rolls a whole order's [items] up into [KitchenCount] totals — the SINGLE
 /// contribution mapping shared by the KDS live board and the POS direct kitchen
@@ -234,7 +302,10 @@ List<KitchenCount> aggregateOrderKitchenCounts(
   Iterable<KitchenCountItemInput> items,
 ) {
   final contributions = <KitchenCountContribution>[];
-  for (final item in items) {
+  // 017 (Codex MEDIUM #4): canonicalize FIRST. Row order is a function of
+  // contribution order, so the POS, the KDS and the durable spool must walk the
+  // same items in the same sequence to print the same summary.
+  for (final item in canonicalKitchenCountOrder(items)) {
     if (item.quantity <= 0) continue;
     for (final meat in item.meats) {
       contributions.add(

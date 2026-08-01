@@ -647,6 +647,11 @@ KdsTicketView _kdsTicketViewFromKitchenLines({
         quantity: line.quantity,
         meats: line.meats,
         prepComponents: line.prepComponents,
+        // 017: [lines] arrive already in canonical print order, so the shared
+        // aggregator's own canonicalization is a no-op here — the position is
+        // passed explicitly (1-based) so POS, KDS and spool agree by VALUE and
+        // not merely by arriving in the right sequence.
+        linePosition: countInputs.length + 1,
       ),
     );
   }

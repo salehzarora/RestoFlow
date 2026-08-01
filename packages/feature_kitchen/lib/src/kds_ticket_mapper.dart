@@ -345,6 +345,14 @@ class KdsTicketMapper {
                 quantity: quantity,
                 meats: meatByItem[itemId] ?? const <KitchenMeat>[],
                 prepComponents: prepComponents,
+                // 017 (Codex MEDIUM #4): the SAME menu print-order keys the
+                // ticket's item lines are sorted by. The wire delivers
+                // order_items in (updated_at, id) order — arbitrary within one
+                // order — so without these the KDS could aggregate the same
+                // totals in a different ROW order than the POS/spool.
+                categoryDisplayOrder: categoryDisplayOrder,
+                itemDisplayOrder: itemDisplayOrder,
+                linePosition: linePosition,
               ),
             );
       }
