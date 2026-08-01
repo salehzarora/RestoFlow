@@ -813,6 +813,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get posOutboxRetryAll => 'Retry all';
 
   @override
+  String posOutboxResolvedFailures(int count) {
+    return '$count resolved — clear';
+  }
+
+  @override
+  String get posOutboxClearResolved => 'Clear resolved failures';
+
+  @override
+  String posOutboxClearResolvedDone(int count) {
+    return 'Cleared $count resolved failures';
+  }
+
+  @override
   String get posStorageWriteRefused => 'This device could not save an order';
 
   @override

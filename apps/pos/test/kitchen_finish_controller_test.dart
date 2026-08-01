@@ -58,7 +58,10 @@ ProviderContainer _container(KitchenFinishRepository repo) {
 }
 
 Future<List<KitchenFinishTarget>> Function() _fixed(List<String> ids) =>
-    () async => [for (final id in ids) (orderId: id, fromStatus: 'submitted')];
+    () async => [
+      for (final id in ids)
+        (orderId: id, fromStatus: 'submitted', settled: false),
+    ];
 
 Future<String?> _noRefresh(String orderId) async => null;
 
@@ -94,7 +97,8 @@ void main() {
     // BEFORE run() awaits it — the run must see the fresh set.
     var active = <String>['o-stale'];
     Future<List<KitchenFinishTarget>> resolve() async => [
-      for (final id in active) (orderId: id, fromStatus: 'submitted'),
+      for (final id in active)
+        (orderId: id, fromStatus: 'submitted', settled: false),
     ];
     active = ['o-fresh-1', 'o-fresh-2'];
     final summary = await c

@@ -6,7 +6,14 @@ import 'package:restoflow_domain/restoflow_domain.dart' show OrderType;
 import 'package:restoflow_feature_auth/restoflow_feature_auth.dart';
 import 'package:restoflow_pos/src/data/durable_outbox_store.dart';
 import 'package:restoflow_pos/src/data/order_submission.dart';
+import 'package:restoflow_data_remote/restoflow_data_remote.dart'
+    show
+        SyncRpcTransport,
+        SyncSession,
+        SyncTransportErrorKind,
+        SyncTransportException;
 import 'package:restoflow_pos/src/state/outbox_controller.dart';
+import 'package:restoflow_pos/src/state/pos_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 — BUG 2.
@@ -33,8 +40,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// These tests use the REAL `SharedPrefsOutboxStore` over real
 /// SharedPreferences, and a container recreation IS the app restart.
-const _scopeKey = 'demo:demo-org:demo-restaurant:demo-branch:demo-device';
-const _prefsKey = 'restoflow.pos.outbox.v1.$_scopeKey';
+/// `RealOutboxRepository` keys its durable queue on the SESSION DEVICE ID
+/// (`_scopeKey => _session!.deviceId`), so the fixture must use exactly that —
+/// a hand-rolled composite key would seed a queue nothing reads.
+const _deviceId = 'dev-1';
+const _scopeKey = _deviceId;
+const _prefsKey = 'restoflow.pos.outbox.v1.$_deviceId';
+const _session = SyncSession(pinSessionId: 'pin-1', deviceId: _deviceId);
 
 OutboxEntry _entry({
   required String localOperationId,
@@ -43,7 +55,7 @@ OutboxEntry _entry({
   String? lastErrorCode,
 }) => OutboxEntry(
   id: 'outbox-$localOperationId',
-  deviceId: 'demo-device',
+  deviceId: _deviceId,
   organizationId: 'demo-org',
   restaurantId: 'demo-restaurant',
   branchId: 'demo-branch',
@@ -76,6 +88,22 @@ List<OutboxEntry> _sixStale() => [
     ),
 ];
 
+/// `RealOutboxRepository` refuses to operate without a transport AND a session
+/// (`_ready`), so one must exist — but nothing may actually be sent. This one
+/// fails every call as a TRANSIENT transport error, which is the outcome that
+/// changes no stored verdict.
+class _OfflineTransport implements SyncRpcTransport {
+  int calls = 0;
+  @override
+  Future<Object?> invoke(String function, Map<String, dynamic> params) async {
+    calls++;
+    throw const SyncTransportException(
+      SyncTransportErrorKind.transient,
+      code: 'offline',
+    );
+  }
+}
+
 Future<SharedPreferences> _seed(List<OutboxEntry> entries) async {
   SharedPreferences.setMockInitialValues(<String, Object>{
     _prefsKey: jsonEncode(<String, Object?>{
@@ -89,9 +117,16 @@ Future<SharedPreferences> _seed(List<OutboxEntry> entries) async {
 ProviderContainer _container(SharedPreferences prefs) {
   final c = ProviderContainer(
     overrides: [
+      // REAL mode: demo uses an in-memory `DemoOutboxStore` that never touches
+      // the durable queue, and the durable queue IS the defect.
       runtimeConfigProvider.overrideWithValue(
-        RuntimeConfig.test(isDemoMode: true),
+        RuntimeConfig.test(isDemoMode: false),
       ),
+      posSyncSessionProvider.overrideWithValue(_session),
+      // A transport that always fails transiently: the repository is `_ready`
+      // (it refuses to work without one) but nothing can actually be sent, so
+      // no stored verdict is altered by the recovery sweep.
+      posAuthTransportProvider.overrideWithValue(_OfflineTransport()),
       durableOutboxStoreProvider.overrideWithValue(
         SharedPrefsOutboxStore(prefs),
       ),
@@ -209,6 +244,8 @@ void main() {
       final outbox = c.read(outboxControllerProvider.notifier);
       await _settle();
 
+      await _settle();
+      await _settle();
       expect(outbox.dismissibleFailureCount, 2);
       final dismissed = await outbox.dismissResolvedFailures();
       expect(dismissed, 2);

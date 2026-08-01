@@ -488,6 +488,30 @@ class OutboxEntry {
   bool get isNeverCreatedOrderSubmit =>
       operationType == 'order.submit' && isPermanentBusinessRejection;
 
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 — whether this entry
+  /// may leave the active retry queue on an explicit operator action.
+  ///
+  /// DELIBERATELY the narrowest provable class: a permanently-rejected
+  /// `order.submit`. `app.sync_push` validates and dispatches every operation
+  /// inside its own subtransaction and rejects an `order.submit` BEFORE
+  /// `app.submit_order` inserts anything, so a permanent rejection of one is
+  /// positive proof that NO `orders` row exists — nothing is orphaned by
+  /// removing the local record, and there is no authoritative server order to
+  /// reconcile against.
+  ///
+  /// Everything else stays, on purpose:
+  ///   * `pending` / `created` / `in_flight` — the server may be about to own
+  ///     it, or already does;
+  ///   * `dead`, and a `rejected` carrying an UNRECOGNISED code — no positive
+  ///     server verdict was recorded, so a replay is still meaningful;
+  ///   * `conflict` / `resolved` — a person has to settle them;
+  ///   * a permanent rejection of a LATER operation (a payment, a discount) —
+  ///     it says nothing about whether the ORDER exists, which is exactly why
+  ///     [isNeverCreatedOrderSubmit] is scoped to `order.submit`;
+  ///   * an unreadable record — never decoded, so never in this list at all; it
+  ///     is preserved verbatim and counted by the storage-health surface.
+  bool get isDismissibleResolvedFailure => isNeverCreatedOrderSubmit;
+
   /// RF-114 durable-outbox persistence. Stores ONLY what a retry needs: the
   /// idempotency identity `(deviceId, localOperationId)`, the op envelope, the
   /// server-shaped [payloadJson] (integer minor money only, D-007; no secrets,

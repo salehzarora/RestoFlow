@@ -558,13 +558,39 @@ class _FinishAllKitchenButton extends ConsumerWidget {
     // (2) Under the controller's running guard: refresh the authoritative window,
     //     then derive the FRESH eligible list (active kitchen statuses only). If
     //     nothing is eligible any more, the batch sends nothing (zero/zero).
+    // SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007. Two eligible kinds:
+    //
+    //  * ACTIVE on the kitchen board (submitted/accepted/preparing/ready) —
+    //    advanced to `served`, unchanged behaviour;
+    //  * ALREADY `served` AND fully settled — completed explicitly. On a
+    //    printer_only branch an order that received Add-items can never
+    //    auto-complete (`app.try_auto_complete_order` requires
+    //    `app.order_rounds_all_served`, and no KDS exists to serve the new
+    //    round), so it strands at `served` with the money already taken. It was
+    //    excluded here as "already off the kitchen board" — which is true of the
+    //    kitchen, and false of the ACTIVE ORDERS LIST the operator is looking at.
+    //
+    // An order with an UNRESOLVED Add-items attempt on this device is excluded:
+    // its amendment has no server verdict yet, so its total may still change and
+    // closing it would be a claim we cannot support.
+    final blockedByAddition = container
+        .read(additionControllerProvider.notifier)
+        .blockedOrderIds;
     List<KitchenFinishTarget> deriveActive() => [
       for (final o in container.read(posRecentOrdersControllerProvider))
         if (o.orderId != null &&
             !o.isTerminal &&
             o.serverStatus != null &&
-            kActiveKitchenStatuses.contains(o.serverStatus))
-          (orderId: o.orderId!, fromStatus: o.serverStatus!),
+            !blockedByAddition.contains(o.orderId))
+          if (kActiveKitchenStatuses.contains(o.serverStatus))
+            (
+              orderId: o.orderId!,
+              fromStatus: o.serverStatus!,
+              settled: o.settlement != PosSettlement.unpaid,
+            )
+          else if (o.serverStatus == 'served' &&
+              o.settlement != PosSettlement.unpaid)
+            (orderId: o.orderId!, fromStatus: 'served', settled: true),
     ];
 
     final summary = await ref

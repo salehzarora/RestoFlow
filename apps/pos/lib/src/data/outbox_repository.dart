@@ -26,6 +26,28 @@ class OrderSubmissionException implements Exception {
 /// Implemented here ONLY by the in-memory [DemoOutboxStore]; the real
 /// `data_local`-backed implementation lands with the device/PIN-session auth
 /// bridge. Nothing here contacts a backend.
+/// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 — the capability a real
+/// outbox exposes when it can RETIRE resolved failures.
+///
+/// Deliberately a small separate interface rather than a member on
+/// [OutboxRepository], following the 003B `PosDurableStoreHealth` precedent:
+/// that seam has a dozen `implements` test doubles which store nothing and have
+/// nothing to retire, and widening it would force every one of them to answer a
+/// question that does not apply to it. A caller asks with
+/// `repo is PosOutboxFailureDismissal` and simply learns there is nothing to do
+/// otherwise — which is the honest outcome, not a silent success.
+abstract class PosOutboxFailureDismissal {
+  /// Removes ONLY the entries [OutboxEntry.isDismissibleResolvedFailure]
+  /// accepts — permanently rejected `order.submit` operations, for which the
+  /// server provably created no order — and persists the shorter queue.
+  /// Returns how many were removed.
+  ///
+  /// NEVER a "clear all failures": an entry whose outcome is unknown, whose
+  /// verdict was not positively recorded, or which needs a person is untouched,
+  /// and an unreadable record is preserved by the store exactly as always.
+  Future<int> dismissResolvedFailures();
+}
+
 abstract class OutboxRepository {
   /// Enqueues [entry] (idempotent on `(deviceId, localOperationId)`), returning
   /// the stored entry — `pending`/`created` until pushed.
@@ -170,7 +192,7 @@ String operationIdentityKey(
 /// submissions and simulates the sync lifecycle (pending → in-flight →
 /// applied / rejected). NO backend, NO persistence — the order body is the real
 /// `submit_order`-shaped JSON, but it is never sent anywhere.
-class DemoOutboxStore implements OutboxRepository {
+class DemoOutboxStore implements OutboxRepository, PosOutboxFailureDismissal {
   DemoOutboxStore({
     Future<void> Function(Duration)? delay,
     this.pushDelay = const Duration(milliseconds: 600),
@@ -248,6 +270,13 @@ class DemoOutboxStore implements OutboxRepository {
   }
 
   @override
+  Future<int> dismissResolvedFailures() async {
+    final before = _entries.length;
+    _entries.removeWhere((e) => e.isDismissibleResolvedFailure);
+    return before - _entries.length;
+  }
+
+  @override
   Future<String?> findOrderSubmitCustomerPhone(
     OrderSubmitPhoneLookupKey key,
   ) async => customerPhoneFromOrderSubmitEntries(_entries, key);
@@ -280,7 +309,8 @@ class DemoOutboxStore implements OutboxRepository {
 /// ever transmitted; the idempotency identity is the session device + the
 /// entry's `local_operation_id` (D-022). Money stays integer minor units (D-007;
 /// values are passed through verbatim from the captured snapshot - no float).
-class RealOutboxRepository implements OutboxRepository {
+class RealOutboxRepository
+    implements OutboxRepository, PosOutboxFailureDismissal {
   RealOutboxRepository(
     this._transport,
     this._session, {
@@ -492,6 +522,27 @@ class RealOutboxRepository implements OutboxRepository {
     await _persistOrThrow(next);
     _entries = next;
     return updated;
+  }
+
+  @override
+  Future<int> dismissResolvedFailures() async {
+    _ensureReady();
+    await _ensureLoaded();
+    final next = <OutboxEntry>[
+      for (final e in _entries!)
+        if (!e.isDismissibleResolvedFailure) e,
+    ];
+    final removed = _entries!.length - next.length;
+    if (removed == 0) return 0;
+    // PERSIST BEFORE PUBLISHING, the same order `enqueue` and `retry` use: a
+    // removal that only existed in memory would come straight back on the next
+    // start, which is the whole defect being fixed. Non-fatal by design — these
+    // entries are already terminal and nothing is being sent, so a refused write
+    // simply leaves them visible to clear again, and the store records the
+    // refusal in its own degraded health for the operator surface.
+    await _persistAfterDispatch(next);
+    _entries = next;
+    return removed;
   }
 
   @override

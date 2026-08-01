@@ -21,10 +21,19 @@ final kitchenFinishRepositoryProvider = Provider<KitchenFinishRepository>((
   );
 });
 
-/// One order to advance in a bulk finish: its id + its last-known status (the
-/// next step toward `served` is derived from the status, then re-derived
-/// authoritatively by the server on every push).
-typedef KitchenFinishTarget = ({String orderId, String fromStatus});
+/// One order in a bulk finish: its id, its last-known status (the next step
+/// toward `served` is derived from it, then re-derived authoritatively by the
+/// server on every push) and whether the SERVER reports it fully settled.
+///
+/// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: [settled] is what lets
+/// the batch close an order already stranded AT `served`. It is the server's
+/// answer (`app.order_is_fully_settled`, surfaced as the order's settlement),
+/// never a client recomputation — the POS does not decide what is paid.
+typedef KitchenFinishTarget = ({
+  String orderId,
+  String fromStatus,
+  bool settled,
+});
 
 /// The honest result of a bulk finish batch.
 class KitchenFinishSummary {
@@ -85,19 +94,56 @@ class KitchenFinishController extends Notifier<KitchenFinishState> {
     var finished = 0;
     var failed = 0;
     try {
-      final targets = await resolveTargets();
+      // DEFENCE IN DEPTH (007): a target already AT `served` is only eligible
+      // when the SERVER reports it settled. The button filters this too, but the
+      // controller is the guarantee — completing an unpaid order would close a
+      // bill nobody paid, and it is excluded from the batch entirely rather than
+      // sent and counted as a failure.
+      final targets = [
+        for (final t in await resolveTargets())
+          if (t.fromStatus != 'served' || t.settled) t,
+      ];
       // Nothing eligible after confirmation -> zero/zero, and don't even build
       // the repository (no transport is touched for an empty batch).
       if (targets.isNotEmpty) {
         final repo = ref.read(kitchenFinishRepositoryProvider);
         for (final t in targets) {
           try {
-            final result = await repo.advanceToServed(
-              orderId: t.orderId,
-              fromStatus: t.fromStatus,
-              batchRunId: batchRunId,
-              refreshStatus: refreshStatus,
-            );
+            // SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007 — TWO KINDS
+            // OF WORK IN ONE BATCH.
+            //
+            // An order still on the kitchen board is ADVANCED to `served`;
+            // reaching served auto-completes it if it is already paid, exactly
+            // as before.
+            //
+            // An order ALREADY AT `served` used to be skipped entirely
+            // ("already off the kitchen board"). That is the defect: on a
+            // printer_only branch, `app.try_auto_complete_order` refuses with
+            // `rounds_active` for any order that received Add-items, because
+            // the new service round can never be walked to `served` without a
+            // KDS. Such an order is paid, finished, and stuck in the active list
+            // for ever. It is COMPLETED here with the explicit manual op —
+            // whose server-side rounds gate 20260804090000 already skips on a
+            // printer_only branch, so nothing is fabricated and no round status
+            // is invented.
+            //
+            // Only when the SERVER says it is settled. Completing an unpaid
+            // order would close a bill nobody paid; the server refuses it
+            // (D-025) and the honest local answer is not to ask.
+            final result = t.fromStatus == 'served'
+                ? await repo.completeServedOrder(
+                    orderId: t.orderId,
+                    // The SAME stable-key discipline as the advance path:
+                    // batch + order + target, so a repeat press replays the
+                    // stored result instead of double-completing.
+                    localOperationId: '$batchRunId:${t.orderId}:completed',
+                  )
+                : await repo.advanceToServed(
+                    orderId: t.orderId,
+                    fromStatus: t.fromStatus,
+                    batchRunId: batchRunId,
+                    refreshStatus: refreshStatus,
+                  );
             if (result.isFinished) {
               finished++;
             } else {

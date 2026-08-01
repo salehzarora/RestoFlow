@@ -805,6 +805,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posOutboxRetryAll => 'إعادة المحاولة';
 
   @override
+  String posOutboxResolvedFailures(int count) {
+    return '$count منتهية — امسح';
+  }
+
+  @override
+  String get posOutboxClearResolved => 'مسح الأخطاء المنتهية';
+
+  @override
+  String posOutboxClearResolvedDone(int count) {
+    return 'تم مسح $count من الأخطاء المنتهية';
+  }
+
+  @override
   String get posStorageWriteRefused => 'هذا الجهاز لم يستطع حفظ طلب';
 
   @override

@@ -44,11 +44,24 @@ class OutboxStatusIndicator extends ConsumerWidget {
     //  * syncing   = in_flight.
     //  * pending   = created/pending.
     // Priority (safest first): failed / attention  >  syncing  >  pending  >  synced.
+    // SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: `failed` used to lump
+    // RETRYABLE failures together with PERMANENT business rejections and offer
+    // "N failed — retry" for both. `retryAllFailed` deliberately skips the
+    // permanent ones (replaying that identity returns the same stored refusal for
+    // ever), so the number could never move — the cashier saw the same entries
+    // after every restart and only ending the shift appeared to clear them.
+    // They are counted separately now, and the terminal ones get an action that
+    // can actually finish them.
     var failed = 0;
+    var resolved = 0;
     var attention = 0;
     var syncing = 0;
     var pending = 0;
     for (final e in entries) {
+      if (e.isDismissibleResolvedFailure) {
+        resolved++;
+        continue;
+      }
       switch (e.syncState) {
         case OutboxSyncState.rejected:
         case OutboxSyncState.dead:
@@ -93,6 +106,22 @@ class OutboxStatusIndicator extends ConsumerWidget {
       label = l10n.posOutboxFailed(failed);
       onTap = () =>
           ref.read(outboxControllerProvider.notifier).retryAllFailed();
+    } else if (resolved > 0) {
+      // TERMINAL and provably never applied: the server refused the submit
+      // before it created anything. Retrying is meaningless, so the action here
+      // CLEARS them instead — no shift change, and nothing uncertain is touched.
+      icon = Icons.playlist_remove_outlined;
+      color = RestoflowTone.warning.styleOf(theme).accent;
+      label = l10n.posOutboxResolvedFailures(resolved);
+      onTap = () async {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        final removed = await ref
+            .read(outboxControllerProvider.notifier)
+            .dismissResolvedFailures();
+        messenger?.showSnackBar(
+          SnackBar(content: Text(l10n.posOutboxClearResolvedDone(removed))),
+        );
+      };
     } else if (attention > 0) {
       // conflict/resolved: retry-all re-queues only FAILED entries, so this is an
       // honest "attention needed" warning, not a retry affordance and NOT synced.
@@ -156,9 +185,13 @@ class OutboxStatusIndicator extends ConsumerWidget {
     // alone would only say "something is wrong".
     final spoken = !storage.isHealthy
         ? '$label. ${l10n.posStorageNeedsAttention}'
-        : onTap != null
+        : onTap == null
+        ? label
+        // The two tap affordances do DIFFERENT things; a screen reader must not
+        // be told "Retry all" when the action clears resolved failures.
+        : failed > 0
         ? '$label. ${l10n.posOutboxRetryAll}'
-        : label;
+        : '$label. ${l10n.posOutboxClearResolved}';
 
     return Semantics(
       button: onTap != null,
@@ -166,7 +199,9 @@ class OutboxStatusIndicator extends ConsumerWidget {
       child: onTap == null
           ? Center(key: const Key('outbox-status-indicator'), child: sized)
           : InkWell(
-              key: const Key('outbox-retry-all'),
+              key: failed > 0
+                  ? const Key('outbox-retry-all')
+                  : const Key('outbox-clear-resolved'),
               onTap: onTap,
               child: Center(child: sized),
             ),

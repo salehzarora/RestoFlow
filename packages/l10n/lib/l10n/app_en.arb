@@ -547,6 +547,18 @@
   "posOutboxAttention": "Sync attention needed",
   "@posOutboxAttention": {"description": "RF-114: POS outbox chip — a queued order is in a conflict/resolved state that needs review; NOT confirmed synced."},
   "posOutboxRetryAll": "Retry all",
+  "posOutboxResolvedFailures": "{count} resolved — clear",
+  "@posOutboxResolvedFailures": {
+    "description": "SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: POS outbox chip — N failed submissions the server permanently refused, so no order exists for them and they can be cleared.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "posOutboxClearResolved": "Clear resolved failures",
+  "@posOutboxClearResolved": {"description": "SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: POS outbox — action that removes the terminal, never-applied failures."},
+  "posOutboxClearResolvedDone": "Cleared {count} resolved failures",
+  "@posOutboxClearResolvedDone": {
+    "description": "SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: confirmation after clearing resolved failures.",
+    "placeholders": {"count": {"type": "int"}}
+  },
   "@posOutboxRetryAll": {"description": "RF-114: POS outbox — retry-all-failed action label."},
   "posStorageWriteRefused": "This device could not save an order",
   "@posStorageWriteRefused": {"description": "MONEY-DURABLE-STORES-003B: POS storage status — a durable local write was refused (full disk / browser refusing storage). The affected order was NOT sent."},

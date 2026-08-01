@@ -1588,6 +1588,24 @@ abstract class AppLocalizations {
   /// **'Retry all'**
   String get posOutboxRetryAll;
 
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: POS outbox chip — N failed submissions the server permanently refused, so no order exists for them and they can be cleared.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} resolved — clear'**
+  String posOutboxResolvedFailures(int count);
+
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: POS outbox — action that removes the terminal, never-applied failures.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear resolved failures'**
+  String get posOutboxClearResolved;
+
+  /// SINGLE-DEVICE-ADDITION-CLOSE-AND-STALE-FAILURES-007: confirmation after clearing resolved failures.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared {count} resolved failures'**
+  String posOutboxClearResolvedDone(int count);
+
   /// MONEY-DURABLE-STORES-003B: POS storage status — a durable local write was refused (full disk / browser refusing storage). The affected order was NOT sent.
   ///
   /// In en, this message translates to:

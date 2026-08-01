@@ -799,6 +799,19 @@ class AppLocalizationsHe extends AppLocalizations {
   String get posOutboxRetryAll => 'נסה שוב';
 
   @override
+  String posOutboxResolvedFailures(int count) {
+    return '$count שהסתיימו — ניקוי';
+  }
+
+  @override
+  String get posOutboxClearResolved => 'ניקוי שגיאות שהסתיימו';
+
+  @override
+  String posOutboxClearResolvedDone(int count) {
+    return 'נוקו $count שגיאות שהסתיימו';
+  }
+
+  @override
   String get posStorageWriteRefused => 'המכשיר לא הצליח לשמור הזמנה';
 
   @override
