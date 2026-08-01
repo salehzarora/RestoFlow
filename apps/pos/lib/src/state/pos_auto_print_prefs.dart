@@ -1,7 +1,33 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/kitchen_mode_readiness.dart'
+    show posVerifiedKitchenModeProvider;
+import '../data/order_dispatch.dart' show resolveOrderDispatchMode;
+import '../data/order_submission.dart' show OrderDispatchMode;
 import 'pos_device_context.dart';
+
+/// HIDE-REDUNDANT-AUTO-PRINT-SETTINGS-014 — the ONE place that decides whether
+/// the branch's AUTHORITATIVE workflow makes both automatic prints mandatory.
+///
+/// In `printer_only` the POS *is* the kitchen: tickets and receipts print from
+/// this station by definition, so asking the cashier to opt in is redundant and
+/// a stale `false` would silently stop the kitchen seeing food. Both effective
+/// values are therefore forced ON, and the two device switches are hidden.
+///
+/// FAIL-SAFE BY CONSTRUCTION: the mode comes from the server-verified
+/// [posVerifiedKitchenModeProvider], and `resolveOrderDispatchMode(null)` is
+/// `kds`. So while the mode is still loading, and if it never resolves, this is
+/// `false` — the stored preferences keep deciding and nothing is forced. It is
+/// never inferred from printers, paired devices or local state.
+///
+/// UI visibility AND runtime behaviour both read THIS provider, so the settings
+/// screen and the printer can never disagree.
+final posPrinterOnlyAutoPrintProvider = Provider<bool>(
+  (ref) =>
+      resolveOrderDispatchMode(ref.watch(posVerifiedKitchenModeProvider)) ==
+      OrderDispatchMode.directPrint,
+);
 
 /// Per-DEVICE auto-print preference (device settings sprint, Part C): should
 /// THIS POS station prepare a customer-receipt print job automatically after
@@ -60,10 +86,16 @@ class PosAutoPrintReceiptController extends AsyncNotifier<bool?> {
 /// The EFFECTIVE auto-print decision: a printer must exist and be enabled
 /// (no printer = OFF and not toggleable), and the stored choice wins over
 /// the configured-printer default of ON.
+/// 014: [printerOnly] forces the decision ON without reading — let alone
+/// writing — the stored preference, which is left exactly as the cashier last
+/// set it and takes over again the moment the branch returns to `kds`.
+/// A configured, enabled printer is still required: that is a physical
+/// precondition, not a preference (no printer has always meant "cannot print").
 bool posAutoPrintReceiptEnabled({
   required bool? stored,
   required bool hasEnabledPrinter,
-}) => hasEnabledPrinter && (stored ?? true);
+  bool printerOnly = false,
+}) => hasEnabledPrinter && (printerOnly || (stored ?? true));
 
 /// KITCHEN-PRINT-DUAL-001: per-DEVICE "automatically print a KITCHEN ticket
 /// after a successful order creation?" — the independent twin of
@@ -120,7 +152,11 @@ class PosAutoPrintKitchenTicketController extends AsyncNotifier<bool?> {
 /// The EFFECTIVE auto-kitchen-print decision: a KITCHEN printer must be
 /// configured (no printer = OFF and not toggleable), and the DEFAULT is OFF
 /// (the cashier must opt in) — `stored ?? false`, never `?? true`.
+/// 014: [printerOnly] forces the decision ON, overriding the opt-in default and
+/// any stored `false`, without mutating the stored value. The kitchen-printer
+/// precondition is unchanged.
 bool posAutoPrintKitchenTicketEnabled({
   required bool? stored,
   required bool hasKitchenPrinter,
-}) => hasKitchenPrinter && (stored ?? false);
+  bool printerOnly = false,
+}) => hasKitchenPrinter && (printerOnly || (stored ?? false));
