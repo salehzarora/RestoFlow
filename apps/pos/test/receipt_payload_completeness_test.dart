@@ -193,8 +193,18 @@ void main() {
       order(),
       pay: payment(paidAt: at),
     );
+    // POS-KDS-FINISH-ALL-AND-ORDER-TIME-015: the assertion is about WHICH FIELD
+    // supplies the time, so it derives the expected wall clock from the same
+    // instant instead of hardcoding the UTC rendering. The receipt is a
+    // customer-facing surface and prints LOCAL time; the old literal '09:05'
+    // only held when the runner itself was in UTC, which quietly made this
+    // timezone-dependent. It keeps its teeth: `now` or the order time would
+    // still fail.
+    final local = at.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final expected = '${two(local.hour)}:${two(local.minute)}';
     expect(
-      lines.where((l) => l.text.contains('09:05')),
+      lines.where((l) => l.text.contains(expected)),
       isNotEmpty,
       reason: 'the receipt time line must come from payment.paidAt',
     );
