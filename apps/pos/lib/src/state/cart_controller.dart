@@ -249,6 +249,23 @@ int configuredLineTotalMinor({
 /// later by `aggregateOrderKitchenCounts`. Options with no configured meat, or
 /// with non-positive units, contribute nothing — so the result is deliberately
 /// NOT index-aligned with the modifier display list. Money-free (D-007).
+/// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the POS adapter over the shared
+/// [classifyPrepComponents]: the item's configured prep [components] resolved
+/// against the option ids actually selected on THIS line.
+///
+/// Presence-based by construction — a `Set` of ids — so `Cheese ×2` classifies
+/// the resource exactly once and never doubles the owner-configured resource
+/// quantity. Called at every site where a line's prep snapshot is built (order
+/// wire, addition wire, direct kitchen print, parked draft, submitted view), so
+/// all five agree; `kitchen_prep_modifier_split_test.dart` pins that parity.
+List<KitchenPrepComponent> classifiedPrepForLine(
+  List<KitchenPrepComponent> components,
+  Iterable<SelectedModifier> modifiers,
+) => classifyPrepComponents(components, <String>{
+  for (final m in modifiers)
+    if (m.quantity > 0) m.optionId,
+});
+
 List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) =>
     [
       for (final modifier in modifiers)
@@ -1088,8 +1105,12 @@ class CartController extends Notifier<CartViewState> {
           itemDisplayOrder: _lineDisplayOrders[line.lineId]?.$2 ?? 0,
           // PARKED-CARTS-001: carry the ORDER-TIME kitchen prep snapshot too.
           // Without it every draft round-trip dropped the chef's prep summary.
-          prepComponents:
-              _linePrep[line.lineId] ?? const <KitchenPrepComponent>[],
+          // 016: with its classification resolved against this line's selected
+          // options, so a restored draft prints the same split it was parked with.
+          prepComponents: classifiedPrepForLine(
+            _linePrep[line.lineId] ?? const <KitchenPrepComponent>[],
+            _lineModifiers[line.lineId] ?? const <SelectedModifier>[],
+          ),
         ),
     ],
   );
@@ -1287,8 +1308,13 @@ class CartController extends Notifier<CartViewState> {
           // ticket printed. Meat is pre-multiplied by the option's units,
           // exactly as kdsTicketViewFromCartLines does.
           kitchenMeats: kitchenMeatSnapshots(mods),
-          prepComponents:
-              _linePrep[item.orderItemId] ?? const <KitchenPrepComponent>[],
+          // 016: the ORDER-TIME classification resolved from the SAME selected
+          // options this line was submitted with, so a manual kitchen reprint
+          // splits the resource exactly as the automatic ticket did.
+          prepComponents: classifiedPrepForLine(
+            _linePrep[item.orderItemId] ?? const <KitchenPrepComponent>[],
+            mods,
+          ),
         ),
       );
     }

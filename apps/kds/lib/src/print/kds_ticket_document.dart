@@ -42,6 +42,11 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
   stationLabel: l10n.kdsStationLabel,
   noteLabel: l10n.kdsNoteLabel,
   kitchenTotal: l10n.kdsMeatTotalLabel,
+  // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the localized with/without wording
+  // for a preparation resource split by a classifying modifier option — the SAME
+  // two keys this app's card and the POS ticket adapter use.
+  prepWithOption: l10n.kitchenPrepResourceWithOption,
+  prepWithoutOption: l10n.kitchenPrepResourceWithoutOption,
   // DEFERRED-ORDER-AMENDMENTS-001: the SAME two keys this app's round pill uses
   // (kds_ticket_card.dart), so an addition reads identically on screen and paper.
   additionLabel: l10n.kdsAdditionLabel,
