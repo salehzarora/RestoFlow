@@ -290,9 +290,24 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
   /// is indistinguishable from a genuinely comped order and it is the basis
   /// for decisions about staff, pricing and takings.
   ///
-  /// A numeric STRING is accepted: PostgREST can render a bigint that way and
-  /// that is a legitimate wire form. A double is NOT — money is integer minor
-  /// units and no float may enter (D-007).
+  /// MONEY-CODEX-FINAL-CLOSURE-005 (F5): the value must be an actual Dart `int`.
+  /// Nothing is parsed, converted, rounded or stringified.
+  ///
+  /// The 004 version accepted a numeric String, on the theory that "PostgREST
+  /// can render a bigint that way". Not on THIS path:
+  /// `app.owner_order_history` / `app.owner_order_detail` return ONE jsonb
+  /// document whose money keys are built by
+  /// `jsonb_build_object(…, 'grand_total_minor', o.grand_total_minor, …)` from
+  /// bigint columns, so they arrive as JSON numbers and decode as `int`. A
+  /// String in a money field is not a wire form — it is evidence that something
+  /// between the column and here reshaped the value, and a reshaped money value
+  /// is precisely what must not be trusted.
+  ///
+  /// Accepting it also re-opened the coercion door: `int.tryParse` silently
+  /// takes `'0012000'`, `' 12000'`, `'+12000'` and `'-12000'`, so a padded or
+  /// sign-flipped figure would have read as a clean total. A double is refused
+  /// for the same reason plus D-007 — money is integer minor units and no float
+  /// may enter.
   ///
   /// Throwing is not a regression in availability: this repository's stated
   /// contract is already "never fabricated data, never a silent demo
@@ -300,10 +315,6 @@ class RealOrderHistoryRepository implements OrderHistoryRepository {
   /// screen that says "could not load" is honest; a screen showing 0.00 is not.
   static int _money(Object? value, String what, String key) {
     if (value is int) return value;
-    if (value is String) {
-      final parsed = int.tryParse(value.trim());
-      if (parsed != null) return parsed;
-    }
     throw OrderHistoryException(
       'owner order $what: $key is not an exact integer '
       '(${value == null ? 'absent/null' : value.runtimeType})',

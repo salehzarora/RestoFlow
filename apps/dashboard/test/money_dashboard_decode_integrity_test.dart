@@ -156,6 +156,9 @@ const _badMoney = <Object?>[
   '',
   true,
   12000.5,
+  // F5: a numeric STRING is corruption too — see A4.
+  '12000',
+  '0',
   <Object?>[12000],
   <String, Object?>{'v': 12000},
 ];
@@ -222,18 +225,43 @@ void main() {
       expect(page.rows.single.paidAmountMinor, isNull);
     });
 
-    test('A4 a numeric STRING decodes to its exact integer', () async {
-      // PostgREST can render a bigint as a JSON string; that is a legitimate
-      // wire form and must keep working, unlike 'oops'.
-      final page = await _repo(
-        _history(
-          rows: [
-            _row({'grand_total_minor': '12000'}),
-          ],
-        ),
-      ).loadHistory(const OrderHistoryQuery());
-      expect(page.rows.single.grandTotalMinor, kLineTotal);
-    });
+    // MONEY-CODEX-FINAL-CLOSURE-005 (F5) — THIS EXPECTATION WAS CORRECTED.
+    //
+    // A4 used to assert that a numeric STRING decodes to its integer, on the
+    // theory that "PostgREST can render a bigint as a JSON string". That is not
+    // true of THIS path. `owner_order_history` / `owner_order_detail` are RPCs
+    // returning ONE jsonb document; the money keys are built with
+    // `jsonb_build_object(... , 'grand_total_minor', o.grand_total_minor, ...)`
+    // from bigint columns, so they arrive as JSON numbers and Dart decodes them
+    // as `int`. A String in a money field is therefore not a wire form — it is
+    // evidence that something between the column and here reshaped the value,
+    // and a reshaped money value is exactly what must not be trusted.
+    //
+    // Accepting it also re-opened the coercion door the strict decoder closed:
+    // `int.tryParse` silently accepts '0012000', ' 12000', '+12000' and
+    // '-12000', so a padded or sign-flipped figure would have read as a clean
+    // total. Money is an exact `int` or the read fails.
+    for (final numericString in <Object?>[
+      '12000',
+      '0',
+      '0012000',
+      ' 12000',
+      '+12000',
+    ]) {
+      test('A4 a numeric STRING ("$numericString") is a FAILED READ, not a '
+          'total', () async {
+        expect(
+          () => _repo(
+            _history(
+              rows: [
+                _row({'grand_total_minor': numericString}),
+              ],
+            ),
+          ).loadHistory(const OrderHistoryQuery()),
+          throwsA(isA<OrderHistoryException>()),
+        );
+      });
+    }
 
     test('A5 an exact ZERO is a real total, not a failure', () async {
       final page = await _repo(
@@ -383,6 +411,114 @@ void main() {
         throwsA(isA<OrderHistoryException>()),
       );
     });
+  });
+
+  // MONEY-CODEX-FINAL-CLOSURE-005 (F5): the numeric-string form of EVERY money
+  // field this repository decodes, in one place, so none is left tolerant.
+  group('E. no money field anywhere accepts a numeric String', () {
+    test('E1 detail header fields', () async {
+      for (final field in <String>[
+        'subtotal_minor',
+        'discount_total_minor',
+        'tax_total_minor',
+        'grand_total_minor',
+      ]) {
+        expect(
+          () => _repo(_detail(order: {field: '12000'})).loadDetail('o1'),
+          throwsA(isA<OrderHistoryException>()),
+          reason: 'detail $field',
+        );
+      }
+    });
+
+    test('E2 line fields', () async {
+      for (final entry in <String, String>{
+        'unit_price_minor': '4500',
+        'line_discount_minor': '0',
+        'line_total_minor': '12000',
+        'quantity': '2',
+      }.entries) {
+        expect(
+          () => _repo(
+            _detail(
+              items: [
+                _item({entry.key: entry.value}),
+              ],
+            ),
+          ).loadDetail('o1'),
+          throwsA(isA<OrderHistoryException>()),
+          reason: 'line ${entry.key}',
+        );
+      }
+    });
+
+    test('E3 modifier price', () async {
+      expect(
+        () => _repo(
+          _detail(
+            items: [
+              _item({
+                'modifiers': [
+                  _modifier({'price_minor': '1500'}),
+                ],
+              }),
+            ],
+          ),
+        ).loadDetail('o1'),
+        throwsA(isA<OrderHistoryException>()),
+      );
+    });
+
+    test('E4 payment fields', () async {
+      for (final entry in <String, String>{
+        'amount_minor': '12000',
+        'tendered_minor': '15000',
+        'change_minor': '3000',
+      }.entries) {
+        expect(
+          () => _repo(
+            _detail(
+              payments: [
+                _payment({entry.key: entry.value}),
+              ],
+            ),
+          ).loadDetail('o1'),
+          throwsA(isA<OrderHistoryException>()),
+          reason: 'payment ${entry.key}',
+        );
+      }
+    });
+
+    test('E5 the optional paid_amount_minor', () async {
+      expect(
+        () => _repo(
+          _history(
+            rows: [
+              _row({'paid_amount_minor': '12000'}),
+            ],
+          ),
+        ).loadHistory(const OrderHistoryQuery()),
+        throwsA(isA<OrderHistoryException>()),
+      );
+    });
+
+    test(
+      'E6 and a real integer still decodes exactly — including zero',
+      () async {
+        final d = await _repo(
+          _detail(
+            order: {'discount_total_minor': 0},
+            payments: [
+              _payment({'change_minor': 0}),
+            ],
+          ),
+        ).loadDetail('o1');
+        expect(d.discountTotalMinor, 0);
+        expect(d.grandTotalMinor, kLineTotal);
+        expect(d.payments.single.changeMinor, 0);
+        expect(d.items.single.lineTotalMinor, kLineTotal);
+      },
+    );
   });
 
   group('D. the DETAIL payment money', () {
