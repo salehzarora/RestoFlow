@@ -14,17 +14,17 @@
 --   copy the kitchen actually receives after a crash/retry did not.
 --
 --   Codex also found the two payload builders order items by (created_at, id)
---   while every other kitchen surface orders by the menu print order with
---   line_position as the tie-break. Aggregation row order follows input order,
---   so the spool could print the same totals in a different sequence than the
---   POS and the KDS.
+--   while every other kitchen surface orders by the CANONICAL MENU ORDER —
+--   category rank, then item-within-category rank, then the cart line position.
+--   Aggregation row order follows input order, so the spool could print the same
+--   totals in a different sequence than the POS and the KDS.
 --
 -- WHAT
 --   1. app.kitchen_prep_projection — re-emitted, still a STRICT ALLOWLIST, now
 --      forwarding the three optional classifier fields under hard type guards.
 --   2. app.kitchen_dispatch_payload_initial / _round — re-emitted VERBATIM apart
---      from the item ORDER BY, which gains line_position as the leading key so
---      the durable ticket, the POS direct print and the KDS agree.
+--      from the item ORDER BY, which is now the canonical menu order so the
+--      durable ticket, the POS direct print and the KDS agree.
 --
 -- ADDITIVE AND REVERSIBLE IN MEANING
 --   No table, column, constraint, policy, grant or signature changes. No money
@@ -116,12 +116,25 @@ revoke all on function app.kitchen_prep_projection(jsonb) from authenticated;
 -- ---------------------------------------------------------------------------
 -- 2. The two item-carrying payload builders — re-emitted from 20260725090000.
 -- ---------------------------------------------------------------------------
--- The ONLY change is the item ORDER BY: `line_position` leads, then the previous
--- (created_at, id) as the stable tie-break. line_position is the 1-based cart
--- ordinal PRINT-LAYOUT-001D assigns on insert, and is exactly the tie-break the
--- POS receipt, the POS direct kitchen ticket and the KDS ticket already sort by.
--- A pre-001D row carries 0 and therefore keeps its historical (created_at, id)
--- position — no existing order is reordered.
+-- The ONLY change is the item ORDER BY, which is now the CANONICAL MENU ORDER
+-- every other kitchen surface already uses (MENU-ORDER-001 + PRINT-LAYOUT-001D):
+--
+--   1. category_display_order_snapshot  — the menu category rank
+--   2. item_display_order_snapshot      — the item's rank within its category
+--   3. line_position                    — the cart ordinal, and ONLY a tie-break
+--                                         inside an equal menu-order group
+--   4. created_at, 5. id                — deterministic final tie-breakers
+--
+-- 018 (Codex MEDIUM #3): 017 shipped with `line_position` LEADING, which is not
+-- the canonical order — a cart where a later-category product was rung up first
+-- would print its durable ticket in cart order while the POS receipt and the KDS
+-- printed it in menu order. The two snapshot ranks are the PRIMARY keys, exactly
+-- as `sortByMenuPrintOrder` applies them client-side.
+--
+-- All three ordinals are NOT NULL DEFAULT 0 columns; the coalesce is defensive
+-- and matches the client's tolerant int-or-0 pluck. A legacy row carries 0 in
+-- all three and therefore keeps its historical (created_at, id) position — no
+-- existing order is reordered.
 --
 -- Everything else is verbatim: the same money-free scalar plucks, the same
 -- 500-char note display caps (dispatch COPY only; the stored order is never
@@ -160,7 +173,10 @@ as $$
                  where om.organization_id = oi.organization_id
                    and om.order_item_id = oi.id
                    and om.deleted_at is null)))
-             order by coalesce(oi.line_position, 0), oi.created_at, oi.id), '[]'::jsonb)
+             order by coalesce(oi.category_display_order_snapshot, 0),
+                      coalesce(oi.item_display_order_snapshot, 0),
+                      coalesce(oi.line_position, 0),
+                      oi.created_at, oi.id), '[]'::jsonb)
       from public.order_items oi
       where oi.organization_id = o.organization_id
         and oi.order_id = o.id
@@ -173,7 +189,7 @@ as $$
 $$;
 
 comment on function app.kitchen_dispatch_payload_initial(uuid, uuid) is
-  'KITCHEN-MODE-001C1 INTERNAL + KITCHEN-PREP-MODIFIER-SPLIT-CODEX-FIX-017: the money-free INITIAL-ORDER dispatch payload snapshot, re-emitted verbatim except that items now order by (line_position, created_at, id) — the SAME canonical print order the POS receipt, the POS direct kitchen ticket and the KDS ticket use — so the durable spool ticket cannot list the whole-order preparation summary in a different sequence. Prep components carry the 016 classifier triple through app.kitchen_prep_projection.';
+  'KITCHEN-MODE-001C1 INTERNAL + KITCHEN-PREP-MODIFIER-SPLIT-CODEX-FIX-017: the money-free INITIAL-ORDER dispatch payload snapshot, re-emitted verbatim except that items now order by the CANONICAL MENU ORDER (category_display_order_snapshot, item_display_order_snapshot, line_position, created_at, id) — the SAME order the POS receipt, the POS direct kitchen ticket and the KDS ticket use — so the durable spool ticket cannot list the whole-order preparation summary in a different sequence. line_position is only a tie-break inside an equal menu-order group. Prep components carry the 016 classifier triple through app.kitchen_prep_projection.';
 
 create or replace function app.kitchen_dispatch_payload_round(
   p_organization_id uuid,
@@ -209,7 +225,10 @@ as $$
                  where om.organization_id = oi.organization_id
                    and om.order_item_id = oi.id
                    and om.deleted_at is null)))
-             order by coalesce(oi.line_position, 0), oi.created_at, oi.id), '[]'::jsonb)
+             order by coalesce(oi.category_display_order_snapshot, 0),
+                      coalesce(oi.item_display_order_snapshot, 0),
+                      coalesce(oi.line_position, 0),
+                      oi.created_at, oi.id), '[]'::jsonb)
       from public.order_items oi
       where oi.organization_id = o.organization_id
         and oi.order_id = o.id
@@ -224,7 +243,7 @@ as $$
 $$;
 
 comment on function app.kitchen_dispatch_payload_round(uuid, uuid, uuid) is
-  'KITCHEN-MODE-001C1 INTERNAL + KITCHEN-PREP-MODIFIER-SPLIT-CODEX-FIX-017: the money-free SERVICE-ROUND (Add-items) dispatch payload snapshot, re-emitted verbatim except that items now order by (line_position, created_at, id) — the SAME canonical print order the POS and KDS use. Prep components carry the 016 classifier triple through app.kitchen_prep_projection. Round scope is unchanged: only this round''s own items.';
+  'KITCHEN-MODE-001C1 INTERNAL + KITCHEN-PREP-MODIFIER-SPLIT-CODEX-FIX-017: the money-free SERVICE-ROUND (Add-items) dispatch payload snapshot, re-emitted verbatim except that items now order by the CANONICAL MENU ORDER (category_display_order_snapshot, item_display_order_snapshot, line_position, created_at, id) — the SAME order the POS and KDS use. Prep components carry the 016 classifier triple through app.kitchen_prep_projection. Round scope is unchanged: only this round''s own items.';
 
 -- INTERNAL-ONLY posture re-asserted (idempotent; create-or-replace preserves
 -- existing ACLs, these restate the 20260725090000 contract explicitly).
