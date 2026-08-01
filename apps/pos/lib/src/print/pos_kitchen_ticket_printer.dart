@@ -20,7 +20,8 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../data/order_submission.dart' show kPermanentRejectionCodes;
-import '../state/cart_controller.dart' show CartLineView, kitchenMeatSnapshots;
+import '../state/cart_controller.dart'
+    show CartLineView, classifiedPrepForLine, kitchenMeatSnapshots;
 import '../state/pos_auto_print_prefs.dart';
 import '../state/pos_bluetooth_printer_config.dart';
 import '../state/pos_network_printer_config.dart';
@@ -575,8 +576,13 @@ KdsTicketView kdsTicketViewFromCartLines({
           // KITCHEN-MEAT-001: each option's meat_snapshot PRE-multiplied by its
           // modifier units (× the item quantity is applied by the aggregator).
           meats: kitchenMeatSnapshots(line.modifiers),
-          prepComponents:
-              prepByItemId[line.menuItemId] ?? const <KitchenPrepComponent>[],
+          // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the direct kitchen print
+          // resolves the classification from the SAME cart line the wire payload
+          // does, so paper and KDS show the identical split.
+          prepComponents: classifiedPrepForLine(
+            prepByItemId[line.menuItemId] ?? const <KitchenPrepComponent>[],
+            line.modifiers,
+          ),
         ),
     ],
   );
@@ -641,6 +647,11 @@ KdsTicketView _kdsTicketViewFromKitchenLines({
         quantity: line.quantity,
         meats: line.meats,
         prepComponents: line.prepComponents,
+        // 017: [lines] arrive already in canonical print order, so the shared
+        // aggregator's own canonicalization is a no-op here — the position is
+        // passed explicitly (1-based) so POS, KDS and spool agree by VALUE and
+        // not merely by arriving in the right sequence.
+        linePosition: countInputs.length + 1,
       ),
     );
   }

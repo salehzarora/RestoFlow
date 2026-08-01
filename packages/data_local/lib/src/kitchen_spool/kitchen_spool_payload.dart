@@ -292,18 +292,50 @@ final class KitchenDispatchItem {
   }
 }
 
-/// One allowlisted prep component ({name, quantity, unit} — KITCHEN-PREP-001).
+/// One allowlisted prep component ({name, quantity, unit} — KITCHEN-PREP-001),
+/// plus the optional KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 classifier triple.
 final class KitchenDispatchPrepComponent {
-  KitchenDispatchPrepComponent({this.name, this.quantity, this.unit});
+  KitchenDispatchPrepComponent({
+    this.name,
+    this.quantity,
+    this.unit,
+    this.classifierOptionId,
+    this.classifierOptionName,
+    this.classifierSelected,
+  });
 
   final String? name;
   final num? quantity;
   final String? unit;
 
+  /// 017 (Codex BLOCKER #1): the classifier link + its order-time answer,
+  /// carried through the durable spool so a crash-recovery reprint shows the
+  /// SAME with/without split the direct print and the KDS show. Before this the
+  /// closed decoder had no field for them at all — the server projection
+  /// dropped them, and had it not, `finish()` would have rejected the whole
+  /// otherwise-valid ticket.
+  ///
+  /// All three are optional and only ever meaningful together; see
+  /// [isClassified].
+  final String? classifierOptionId;
+  final String? classifierOptionName;
+  final bool? classifierSelected;
+
+  /// True only when the triple is complete — a partial/degraded set is treated
+  /// as an ordinary unsplit resource.
+  bool get isClassified =>
+      classifierOptionId != null &&
+      classifierOptionName != null &&
+      classifierSelected != null;
+
   Map<String, Object?> toJson() => {
     if (name != null) 'name': name,
     if (quantity != null) 'quantity': quantity,
     if (unit != null) 'unit': unit,
+    if (classifierOptionId != null) 'classifier_option_id': classifierOptionId,
+    if (classifierOptionName != null)
+      'classifier_option_name': classifierOptionName,
+    if (classifierSelected != null) 'classifier_selected': classifierSelected,
   };
 
   static KitchenDispatchPrepComponent fromJson(Map<String, Object?> raw) {
@@ -314,9 +346,24 @@ final class KitchenDispatchPrepComponent {
       // a count/measure that may be fractional but never zero/negative.
       quantity: r.optionalPositiveNum('quantity'),
       unit: r.optionalString('unit'),
+      // 017: DEGRADING reads — a wrong-typed or empty classifier field yields
+      // null instead of throwing, so a malformed classifier costs the split and
+      // nothing else. Rejecting here would discard an otherwise valid ticket and
+      // leave the kitchen with NO paper, which is far worse than an unsplit
+      // resource. Every other field keeps its strict, throwing decode.
+      classifierOptionId: r.degradingString('classifier_option_id'),
+      classifierOptionName: r.degradingString('classifier_option_name'),
+      classifierSelected: r.degradingBool('classifier_selected'),
     );
     r.finish();
-    return prep;
+    // A half-present triple is not a classification: drop it to unsplit rather
+    // than print a bucket the operator never configured.
+    if (prep.isClassified) return prep;
+    return KitchenDispatchPrepComponent(
+      name: prep.name,
+      quantity: prep.quantity,
+      unit: prep.unit,
+    );
   }
 }
 
@@ -594,6 +641,24 @@ final class _StrictReader {
     throw KitchenSpoolPayloadFormatException(
       '$_context.$key must be a number when present',
     );
+  }
+
+  /// 017: a DEGRADING optional string — consumed (so `finish()` still closes
+  /// the object) but a wrong type or an empty value yields null instead of
+  /// throwing. Reserved for fields whose loss costs a display refinement, never
+  /// correctness; every identity/quantity field keeps [requireString] /
+  /// [optionalString].
+  String? degradingString(String key) {
+    final v = _take(key);
+    if (v is! String) return null;
+    final trimmed = v.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// 017: a DEGRADING optional boolean — see [degradingString].
+  bool? degradingBool(String key) {
+    final v = _take(key);
+    return v is bool ? v : null;
   }
 
   bool? optionalBool(String key) {

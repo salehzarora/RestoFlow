@@ -1,4 +1,5 @@
-import 'package:restoflow_domain/restoflow_domain.dart' show formatPrepQuantity;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show formatPrepQuantity, kitchenCountDisplayLabel;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 import '../kds_ticket_mapper.dart' show KdsTicketMapper;
@@ -58,6 +59,8 @@ class KitchenTicketPrintLabels {
     required this.additionLabel,
     required this.roundLabel,
     this.restaurantNameFallback,
+    this.prepWithOption = _defaultPrepWithOption,
+    this.prepWithoutOption = _defaultPrepWithoutOption,
   });
 
   /// Header fallback prefix when the ticket has no order number (`kdsTicketLabel`).
@@ -90,6 +93,17 @@ class KitchenTicketPrintLabels {
 
   /// `kdsMeatTotalLabel(count, unit)` — the whole-order "Kitchen total: N unit".
   final String Function(String count, String unit) kitchenTotal;
+
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016:
+  /// `kitchenPrepResourceWithOption(resource, option)` — the preparation-summary
+  /// wording for the portion prepared WITH the classifying option, and
+  /// [prepWithoutOption] for the portion prepared without it.
+  ///
+  /// Both default to the English patterns so a label built without them still
+  /// distinguishes the two buckets (never two identically-labelled rows); the
+  /// POS and KDS ticket documents override them from the active locale.
+  final String Function(String resource, String option) prepWithOption;
+  final String Function(String resource, String option) prepWithoutOption;
 
   /// DEFERRED-ORDER-AMENDMENTS-001: `kdsAdditionLabel` — the word that marks a
   /// ticket as a DELTA rather than a new order. The SAME key the KDS board's
@@ -200,7 +214,15 @@ PrintDocument buildKdsTicketPrintDocument({
           PrintLine.title(
             labels.kitchenTotal(
               formatPrepQuantity(count.quantity),
-              count.label,
+              // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: a classified resource
+              // prints as "{resource} with/without {option}" through the shared
+              // composer, so the printed ticket and the KDS card word the split
+              // identically. An unsplit total is the bare label, exactly as before.
+              kitchenCountDisplayLabel(
+                count,
+                withOption: labels.prepWithOption,
+                withoutOption: labels.prepWithoutOption,
+              ),
             ),
           ),
         PrintLine.rule(),
@@ -323,3 +345,13 @@ String _twoColumn(String? left, String? right, int columns) {
   final pad = columns - l.length - r.length;
   return pad < 1 ? '$l $r' : '$l${' ' * pad}$r';
 }
+
+/// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 fallback wording for a classified
+/// preparation resource, used only when a [KitchenTicketPrintLabels] is built
+/// without the localized patterns. English, so the two buckets always read
+/// differently; every production ticket overrides them from the active locale.
+String _defaultPrepWithOption(String resource, String option) =>
+    '$resource with $option';
+
+String _defaultPrepWithoutOption(String resource, String option) =>
+    '$resource without $option';

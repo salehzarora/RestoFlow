@@ -352,9 +352,15 @@ class OutboxController extends Notifier<List<OutboxEntry>> {
             // unit price and the UNIT delta; only this total is multiplied.
             lineTotalMinor: l.lineTotalMinor,
             notes: l.note,
-            prepComponents:
-                resolvedPrepByItemId[l.menuItemId] ??
-                const <KitchenPrepComponent>[],
+            // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the prep snapshot with
+            // its classification resolved against THIS line's selected options,
+            // so `order_items.prep_snapshot` carries the order-time answer (D-008)
+            // and the KDS splits the resource without re-deriving anything.
+            prepComponents: classifiedPrepForLine(
+              resolvedPrepByItemId[l.menuItemId] ??
+                  const <KitchenPrepComponent>[],
+              l.modifiers,
+            ),
             modifiers: [
               for (final m in l.modifiers)
                 OrderSubmissionModifier(

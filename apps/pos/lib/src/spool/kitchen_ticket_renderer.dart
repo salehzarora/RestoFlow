@@ -1,7 +1,13 @@
 import 'dart:typed_data';
 
 import 'package:restoflow_data_local/restoflow_data_local.dart'
-    show KitchenDispatchDocument, KitchenDispatchItem, KitchenSpoolDispatchType;
+    show
+        KitchenDispatchDocument,
+        KitchenDispatchItem,
+        KitchenDispatchPrepComponent,
+        KitchenSpoolDispatchType;
+import 'package:restoflow_domain/restoflow_domain.dart'
+    show KitchenCount, kitchenCountDisplayLabel;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
 
 /// KITCHEN-MODE-001C2C — the MONEY-FREE kitchen ticket renderer.
@@ -41,6 +47,8 @@ final class KitchenTicketLabels {
     required this.noteLabel,
     required this.dineInLabel,
     required this.takeawayLabel,
+    required this.prepWithOption,
+    required this.prepWithoutOption,
   });
 
   final String kitchenMarker;
@@ -52,6 +60,14 @@ final class KitchenTicketLabels {
   final String noteLabel;
   final String dineInLabel;
   final String takeawayLabel;
+
+  /// 017 (Codex BLOCKER #1): the with/without wording for a preparation
+  /// resource split by a classifying modifier option
+  /// (KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016). Part of THIS injectable
+  /// frame-label bundle, exactly like every other ticket word here — the shared
+  /// composer that applies them carries no natural language of its own.
+  final String Function(String resource, String option) prepWithOption;
+  final String Function(String resource, String option) prepWithoutOption;
 
   String orderTypeLabel(String wire) => switch (wire) {
     'dine_in' => dineInLabel,
@@ -69,6 +85,8 @@ final class KitchenTicketLabels {
     noteLabel: 'Note',
     dineInLabel: 'Dine-in',
     takeawayLabel: 'Takeaway',
+    prepWithOption: _enPrepWith,
+    prepWithoutOption: _enPrepWithout,
   );
 
   static const KitchenTicketLabels ar = KitchenTicketLabels(
@@ -81,6 +99,8 @@ final class KitchenTicketLabels {
     noteLabel: 'ملاحظة',
     dineInLabel: 'محلي',
     takeawayLabel: 'سفري',
+    prepWithOption: _arPrepWith,
+    prepWithoutOption: _arPrepWithout,
   );
 
   static const KitchenTicketLabels he = KitchenTicketLabels(
@@ -93,6 +113,8 @@ final class KitchenTicketLabels {
     noteLabel: 'הערה',
     dineInLabel: 'ישיבה',
     takeawayLabel: 'איסוף',
+    prepWithOption: _hePrepWith,
+    prepWithoutOption: _hePrepWithout,
   );
 
   /// Resolves a bundle from a BCP-47/locale language code (fail-safe: en).
@@ -237,13 +259,35 @@ final class KitchenTicketRenderer {
         style: pp.PrintLineStyle.sub,
       ),
     for (final prep in item.prep)
-      pp.PrintTextLine(
-        '  • ${[if (prep.name != null) prep.name, if (prep.quantity != null) '${prep.quantity}', if (prep.unit != null) prep.unit].join(' ')}',
-        style: pp.PrintLineStyle.sub,
-      ),
+      pp.PrintTextLine('  • ${_prepText(prep)}', style: pp.PrintLineStyle.sub),
     if (item.note != null)
       pp.PrintTextLine('  » ${item.note}', style: pp.PrintLineStyle.note),
   ];
+
+  /// 017 (Codex BLOCKER #1): one prep component's text. An UNCLASSIFIED
+  /// component renders byte-identically to before; a classified one wraps that
+  /// same text in this bundle's localized with/without pattern, through the
+  /// SHARED [kitchenCountDisplayLabel] composer the direct POS print and the KDS
+  /// card use — so a durable retry cannot word the split differently from the
+  /// ticket it is replacing.
+  String _prepText(KitchenDispatchPrepComponent prep) {
+    final base = [
+      if (prep.name != null) prep.name,
+      if (prep.quantity != null) '${prep.quantity}',
+      if (prep.unit != null) prep.unit,
+    ].join(' ');
+    if (!prep.isClassified) return base;
+    return kitchenCountDisplayLabel(
+      KitchenCount(
+        quantity: prep.quantity ?? 0,
+        label: base,
+        classifier: prep.classifierOptionName!,
+        classifierSelected: prep.classifierSelected!,
+      ),
+      withOption: labels.prepWithOption,
+      withoutOption: labels.prepWithoutOption,
+    );
+  }
 
   /// Renders the ticket to 80mm ESC/POS bytes through the shared RTL raster
   /// seam. A rasterizer failure falls back to the text document — a ticket
@@ -272,3 +316,16 @@ final class KitchenTicketRenderer {
     return adapter.encode(out, profile);
   }
 }
+
+// 017: const-friendly tear-off targets for the per-language with/without prep
+// wording. Closures in a const bundle are not const; these top-level functions
+// are — and they keep the natural language OUT of the shared composer.
+String _enPrepWith(String resource, String option) => '$resource with $option';
+String _enPrepWithout(String resource, String option) =>
+    '$resource without $option';
+String _arPrepWith(String resource, String option) => '$resource مع $option';
+String _arPrepWithout(String resource, String option) =>
+    '$resource بدون $option';
+String _hePrepWith(String resource, String option) => '$resource עם $option';
+String _hePrepWithout(String resource, String option) =>
+    '$resource בלי $option';

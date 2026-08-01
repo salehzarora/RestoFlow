@@ -749,7 +749,15 @@ class _KitchenCountsSection extends StatelessWidget {
                   Text(
                     l10n.kdsMeatTotalLabel(
                       formatPrepQuantity(count.quantity),
-                      count.label,
+                      // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: a classified
+                      // resource reads "{resource} with/without {option}" through
+                      // the SAME shared composer the printed ticket uses, so the
+                      // board and the paper can never word the split differently.
+                      kitchenCountDisplayLabel(
+                        count,
+                        withOption: l10n.kitchenPrepResourceWithOption,
+                        withoutOption: l10n.kitchenPrepResourceWithoutOption,
+                      ),
                     ),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w900,

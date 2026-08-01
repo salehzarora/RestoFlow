@@ -468,6 +468,16 @@
     "description": "KITCHEN-COUNT-001: the whole-order kitchen count total shown at the top of the KDS card + kitchen ticket (one per unit group). count is a formatted count string, unit is owner-written free text (e.g. patties, fish pieces, buns, skewers). Non-money. (Internal key kept as *Meat* for backwards compatibility; user-facing copy is a generic kitchen count.)",
     "placeholders": { "count": { "type": "String" }, "unit": { "type": "String" } }
   },
+  "kitchenPrepResourceWithOption": "{resource} with {option}",
+  "@kitchenPrepResourceWithOption": {
+    "description": "KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the kitchen preparation-summary row for the portion of a resource prepared WITH a classifying modifier option (e.g. 'Meat pieces with Cheese'). resource is the owner-written resource label, option the owner-written modifier option name. Non-money. Locales may reorder the parts.",
+    "placeholders": { "resource": { "type": "String" }, "option": { "type": "String" } }
+  },
+  "kitchenPrepResourceWithoutOption": "{resource} without {option}",
+  "@kitchenPrepResourceWithoutOption": {
+    "description": "KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the kitchen preparation-summary row for the portion of a resource prepared WITHOUT a classifying modifier option (e.g. 'Meat pieces without Cheese'). resource is the owner-written resource label, option the owner-written modifier option name. Non-money. Locales may reorder the parts.",
+    "placeholders": { "resource": { "type": "String" }, "option": { "type": "String" } }
+  },
   "kdsElapsedMinutes": "{minutes}m",
   "@kdsElapsedMinutes": {
     "description": "KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).",
@@ -1869,6 +1879,14 @@
   "@menuPrepComponentQuantityLabel": { "description": "KITCHEN-PREP-001: label for a prep component's per-unit quantity field (a count, never money)." },
   "menuPrepComponentUnitLabel": "Unit",
   "@menuPrepComponentUnitLabel": { "description": "KITCHEN-PREP-001: label for a prep component's optional unit field (e.g. pcs, g)." },
+  "menuPrepClassifierLabel": "Split by option",
+  "@menuPrepClassifierLabel": { "description": "KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: label of the optional picker that classifies this preparation resource by one of the item's modifier options, so the kitchen ticket lists it as 'with' and 'without' that option." },
+  "menuPrepClassifierNone": "Not split",
+  "@menuPrepClassifierNone": { "description": "KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the 'no classifier' choice in the split-by-option picker — the resource is counted as one total, the default." },
+  "menuPrepClassifierHint": "The option only decides which total the quantity above is counted in. It never adds a quantity of its own.",
+  "@menuPrepClassifierHint": { "description": "KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: helper text under the kitchen prep section explaining that the classifying option re-buckets the configured quantity rather than adding to it." },
+  "menuPrepClassifierMissing": "This option no longer exists, so the resource will not be split.",
+  "@menuPrepClassifierMissing": { "description": "KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: validation error shown when a prep resource points at a modifier option that has since been deleted or renamed away; saving clears the link and the resource returns to a single total." },
   "menuAddPrepComponent": "Add resource",
   "@menuAddPrepComponent": { "description": "KITCHEN-PREP-001: action to add a new kitchen prep component row." },
   "menuRemovePrepComponent": "Remove component",

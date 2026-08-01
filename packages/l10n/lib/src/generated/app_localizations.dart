@@ -1462,6 +1462,18 @@ abstract class AppLocalizations {
   /// **'Kitchen total: {count} {unit}'**
   String kdsMeatTotalLabel(String count, String unit);
 
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the kitchen preparation-summary row for the portion of a resource prepared WITH a classifying modifier option (e.g. 'Meat pieces with Cheese'). resource is the owner-written resource label, option the owner-written modifier option name. Non-money. Locales may reorder the parts.
+  ///
+  /// In en, this message translates to:
+  /// **'{resource} with {option}'**
+  String kitchenPrepResourceWithOption(String resource, String option);
+
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the kitchen preparation-summary row for the portion of a resource prepared WITHOUT a classifying modifier option (e.g. 'Meat pieces without Cheese'). resource is the owner-written resource label, option the owner-written modifier option name. Non-money. Locales may reorder the parts.
+  ///
+  /// In en, this message translates to:
+  /// **'{resource} without {option}'**
+  String kitchenPrepResourceWithoutOption(String resource, String option);
+
   /// KDS elapsed time since an order was submitted, in whole minutes (compact, e.g. 7m).
   ///
   /// In en, this message translates to:
@@ -4431,6 +4443,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unit'**
   String get menuPrepComponentUnitLabel;
+
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: label of the optional picker that classifies this preparation resource by one of the item's modifier options, so the kitchen ticket lists it as 'with' and 'without' that option.
+  ///
+  /// In en, this message translates to:
+  /// **'Split by option'**
+  String get menuPrepClassifierLabel;
+
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the 'no classifier' choice in the split-by-option picker — the resource is counted as one total, the default.
+  ///
+  /// In en, this message translates to:
+  /// **'Not split'**
+  String get menuPrepClassifierNone;
+
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: helper text under the kitchen prep section explaining that the classifying option re-buckets the configured quantity rather than adding to it.
+  ///
+  /// In en, this message translates to:
+  /// **'The option only decides which total the quantity above is counted in. It never adds a quantity of its own.'**
+  String get menuPrepClassifierHint;
+
+  /// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: validation error shown when a prep resource points at a modifier option that has since been deleted or renamed away; saving clears the link and the resource returns to a single total.
+  ///
+  /// In en, this message translates to:
+  /// **'This option no longer exists, so the resource will not be split.'**
+  String get menuPrepClassifierMissing;
 
   /// KITCHEN-PREP-001: action to add a new kitchen prep component row.
   ///

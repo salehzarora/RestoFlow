@@ -22,6 +22,11 @@ KitchenTicketPrintLabels kitchenTicketPrintLabelsFromL10n(
   stationLabel: l10n.kdsStationLabel,
   noteLabel: l10n.kdsNoteLabel,
   kitchenTotal: l10n.kdsMeatTotalLabel,
+  // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: the localized with/without wording
+  // for a preparation resource split by a classifying modifier option — the SAME
+  // two keys the KDS card and the KDS ticket document use.
+  prepWithOption: l10n.kitchenPrepResourceWithOption,
+  prepWithoutOption: l10n.kitchenPrepResourceWithoutOption,
   // DEFERRED-ORDER-AMENDMENTS-001: the SAME two keys the KDS board's round pill
   // uses, so an addition reads identically on screen and on paper.
   additionLabel: l10n.kdsAdditionLabel,

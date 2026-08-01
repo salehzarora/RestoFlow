@@ -1585,8 +1585,13 @@ class AdditionController extends Notifier<AdditionState> {
           unitPriceMinorSnapshot: l.unitPriceMinor,
           lineTotalMinor: l.lineTotalMinor,
           notes: l.note,
-          prepComponents:
-              prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
+          // KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016: an Add-items round resolves
+          // its classification exactly like the initial submission, so a round
+          // ticket splits its own new items correctly.
+          prepComponents: classifiedPrepForLine(
+            prepByItemId[l.menuItemId] ?? const <KitchenPrepComponent>[],
+            l.modifiers,
+          ),
           modifiers: [
             for (final m in l.modifiers)
               OrderSubmissionModifier(

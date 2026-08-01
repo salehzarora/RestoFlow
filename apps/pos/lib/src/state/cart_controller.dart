@@ -249,6 +249,46 @@ int configuredLineTotalMinor({
 /// later by `aggregateOrderKitchenCounts`. Options with no configured meat, or
 /// with non-positive units, contribute nothing — so the result is deliberately
 /// NOT index-aligned with the modifier display list. Money-free (D-007).
+/// 018 (Codex HIGH #1) — the AUTHORITATIVE lookup into a submitted operation's
+/// prep snapshot.
+///
+/// `map?[id] ?? legacy` conflated two different situations:
+///
+///  * `map == null` — no authoritative snapshot was supplied at all (the legacy
+///    in-memory/demo path), so falling back to the add-to-cart capture is right;
+///  * `map != null` but carrying no entry for the item — the authoritative
+///    answer IS "this item has no preparation resources". An owner who removed
+///    every resource between add-to-cart and submit produces exactly this, and
+///    the old expression silently resurrected the deleted add-time prep.
+///
+/// Returning `null` ONLY for the first case keeps the two distinguishable at the
+/// call site: a non-null map always answers, with an empty list when it has no
+/// entry, and the legacy fallback is unreachable.
+List<KitchenPrepComponent>? submittedPrepForItem(
+  Map<String, List<KitchenPrepComponent>>? submittedPrepByItemId,
+  String menuItemId,
+) {
+  if (submittedPrepByItemId == null) return null;
+  return submittedPrepByItemId[menuItemId] ?? const <KitchenPrepComponent>[];
+}
+
+/// KITCHEN-PREP-RESOURCE-MODIFIER-SPLIT-016 — the POS adapter over the shared
+/// [classifyPrepComponents]: the item's configured prep [components] resolved
+/// against the option ids actually selected on THIS line.
+///
+/// Presence-based by construction — a `Set` of ids — so `Cheese ×2` classifies
+/// the resource exactly once and never doubles the owner-configured resource
+/// quantity. Called at every site where a line's prep snapshot is built (order
+/// wire, addition wire, direct kitchen print, parked draft, submitted view), so
+/// all five agree; `kitchen_prep_modifier_split_test.dart` pins that parity.
+List<KitchenPrepComponent> classifiedPrepForLine(
+  List<KitchenPrepComponent> components,
+  Iterable<SelectedModifier> modifiers,
+) => classifyPrepComponents(components, <String>{
+  for (final m in modifiers)
+    if (m.quantity > 0) m.optionId,
+});
+
 List<KitchenMeat> kitchenMeatSnapshots(Iterable<SelectedModifier> modifiers) =>
     [
       for (final modifier in modifiers)
@@ -1088,8 +1128,12 @@ class CartController extends Notifier<CartViewState> {
           itemDisplayOrder: _lineDisplayOrders[line.lineId]?.$2 ?? 0,
           // PARKED-CARTS-001: carry the ORDER-TIME kitchen prep snapshot too.
           // Without it every draft round-trip dropped the chef's prep summary.
-          prepComponents:
-              _linePrep[line.lineId] ?? const <KitchenPrepComponent>[],
+          // 016: with its classification resolved against this line's selected
+          // options, so a restored draft prints the same split it was parked with.
+          prepComponents: classifiedPrepForLine(
+            _linePrep[line.lineId] ?? const <KitchenPrepComponent>[],
+            _lineModifiers[line.lineId] ?? const <SelectedModifier>[],
+          ),
         ),
     ],
   );
@@ -1235,6 +1279,16 @@ class CartController extends Notifier<CartViewState> {
     String? orderId,
     int taxTotalMinor = 0,
     int taxRateBp = 0,
+    // 017 (Codex HIGH #3): the AUTHORITATIVE prep snapshot of the operation that
+    // was actually submitted — the very map the outbox payload was built from,
+    // captured once before the first await.
+    //
+    // Without it this view fell back to `_linePrep`, captured when each line
+    // ENTERED THE CART. A prep/classifier edit between add-to-cart and submit
+    // therefore made the manual reprint disagree with the ticket the kitchen
+    // and the server received. Null keeps the legacy in-memory/demo behaviour
+    // (no submitted operation exists to be authoritative).
+    Map<String, List<KitchenPrepComponent>>? submittedPrepByItemId,
   }) {
     if (_locked) return CartMutationResult.lockedByAddition;
     if (_cart.isEmpty) return CartMutationResult.applied;
@@ -1287,8 +1341,21 @@ class CartController extends Notifier<CartViewState> {
           // ticket printed. Meat is pre-multiplied by the option's units,
           // exactly as kdsTicketViewFromCartLines does.
           kitchenMeats: kitchenMeatSnapshots(mods),
-          prepComponents:
-              _linePrep[item.orderItemId] ?? const <KitchenPrepComponent>[],
+          // 016: the ORDER-TIME classification resolved from the SAME selected
+          // options this line was submitted with, so a manual kitchen reprint
+          // splits the resource exactly as the automatic ticket did.
+          //
+          // 017 (Codex HIGH #3): resolved against the SUBMITTED operation's
+          // snapshot when one was supplied — never the older add-to-cart
+          // capture, and never re-read from the live menu after submit. The
+          // outbox payload, this confirmation view, the automatic ticket and
+          // the manual reprint therefore all describe ONE accepted operation.
+          prepComponents: classifiedPrepForLine(
+            submittedPrepForItem(submittedPrepByItemId, item.menuItemId) ??
+                _linePrep[item.orderItemId] ??
+                const <KitchenPrepComponent>[],
+            mods,
+          ),
         ),
       );
     }
@@ -1339,6 +1406,16 @@ class CartController extends Notifier<CartViewState> {
     String? orderId,
     int taxTotalMinor = 0,
     int taxRateBp = 0,
+    // 018 (Codex HIGH #2): the AUTHORITATIVE prep snapshot of the operation that
+    // was actually submitted — the same map the outbox payload and the automatic
+    // ticket were built from.
+    //
+    // The draft is captured BEFORE the submit and carries each line's ADD-TIME
+    // prep, so a departed worker's retained recent order (and every manual
+    // reprint from it) described a different configuration than the order the
+    // server accepted. A PIN handover mid-submit must not rewind the prep.
+    // Null keeps the legacy behaviour for callers with no submitted operation.
+    Map<String, List<KitchenPrepComponent>>? submittedPrepByItemId,
   }) {
     var subtotal = 0;
     var linePosition = 0;
@@ -1375,7 +1452,18 @@ class CartController extends Notifier<CartViewState> {
           // aggregates the real counts instead of silently omitting them. Still
           // never re-read from the current catalog: a record written before the
           // field existed honestly yields none.
-          prepComponents: l.prepComponents,
+          //
+          // 018 (Codex HIGH #2): when this view materializes a SUBMITTED
+          // operation (the PIN-handover path), the submitted snapshot wins over
+          // the draft's older add-time capture — resolved against THIS line's
+          // own selected options, exactly as the submitting session would have.
+          // A non-null map always answers, so a resource the owner deleted
+          // before submit cannot reappear here.
+          prepComponents: classifiedPrepForLine(
+            submittedPrepForItem(submittedPrepByItemId, l.menuItemId) ??
+                l.prepComponents,
+            l.modifiers,
+          ),
         ),
       );
     }
