@@ -144,10 +144,19 @@ class OrderSubmissionModifier {
 /// only (DECISION D-007); the name + unit price are snapshots captured at order
 /// time (DECISION D-008), never recomputed from a live menu. [lineTotalMinor]
 /// follows the server formula corrected in MONEY-PRICING-FORMULA-002A,
-/// `qty × (unit + Σmodifiers)` (the server recomputes and rejects any
-/// mismatch). [unitPriceMinorSnapshot] stays the BARE unit price and each
-/// modifier's `price_minor_snapshot` stays its UNIT delta — neither is
-/// pre-multiplied on the wire.
+/// `qty × (unit + Σmodifiers)`. [unitPriceMinorSnapshot] stays the BARE unit
+/// price and each modifier's `price_minor_snapshot` stays its UNIT delta —
+/// neither is pre-multiplied on the wire.
+///
+/// WHAT THE SERVER ACTUALLY CHECKS, stated accurately (F9). This said "the
+/// server recomputes and rejects any mismatch", which overstates the contract:
+/// `app.submit_order` recomputes each line from the SNAPSHOTS and compares only
+/// the resulting SUBTOTAL against the client's `subtotal_minor`. It never reads
+/// this per-line field back for comparison, and the stored
+/// `order_items.line_total_minor` is the server's own computation. So a wrong
+/// value here is caught only when it moves the subtotal — two compensating line
+/// errors would pass. Send the exact 002A figure; do not rely on the server to
+/// correct this field.
 class OrderSubmissionItem {
   const OrderSubmissionItem({
     required this.menuItemId,

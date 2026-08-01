@@ -15,7 +15,10 @@ import 'package:restoflow_native_printing/restoflow_native_printing.dart'
         kBluetoothPrintTimeout,
         nativePrinterNamespaceProvider;
 import 'package:restoflow_printing/restoflow_printing.dart' as pp;
+import 'package:restoflow_feature_auth/restoflow_feature_auth.dart'
+    show RuntimeConfig, runtimeConfigProvider;
 import 'package:restoflow_pos/src/data/order_actions.dart';
+import 'package:restoflow_pos/src/data/order_detail_repository.dart';
 import 'package:restoflow_pos/src/data/recent_order.dart';
 import 'package:restoflow_pos/src/data/order_identity.dart';
 import 'package:restoflow_pos/src/data/payment.dart';
@@ -145,6 +148,75 @@ const _order = SubmittedOrderView(
   ],
 );
 
+/// MONEY-CODEX-FINAL-CORRECTIONS-004 (F6). THE AUTHORITATIVE SERVER DETAIL.
+///
+/// Both groups below used to run with `runtimeConfigProvider` at its default,
+/// which is DEMO. `authoritativeReceiptSource` short-circuits in demo mode and
+/// returns the LOCAL view, so neither test ever reached the production branch
+/// the pilot actually runs: fetch `pos_order_detail`, refuse an incomplete or
+/// unparseable answer, and build the customer document from the SERVER's money.
+/// The tests were accurate about what they asserted and silent about which code path
+/// produced it — the exact overstatement 003E was meant to end.
+///
+/// Both groups now run in REAL mode against this repository. The money here is
+/// the server's: base 4500 + a paid modifier 1500, quantity 2 => 12000, and the
+/// modifier is named so the printed bytes can be checked to carry it.
+class _ServerDetail implements OrderDetailRepository {
+  _ServerDetail({this.payment});
+
+  final PosOrderDetailPayment? payment;
+  final List<String> fetched = <String>[];
+
+  @override
+  Future<PosOrderDetail> fetch(String orderId) async {
+    fetched.add(orderId);
+    return PosOrderDetail(
+      orderId: orderId,
+      orderCode: '#RCPT1',
+      orderType: 'dine_in',
+      status: 'submitted',
+      revision: 1,
+      currencyCode: 'ILS',
+      subtotalMinor: kTotal,
+      discountTotalMinor: 0,
+      taxTotalMinor: 0,
+      grandTotalMinor: kTotal,
+      tableLabel: 'T7',
+      customerName: 'Dana',
+      receiptNumber: 'R-77',
+      payment: payment,
+      rounds: const <PosOrderDetailRound>[],
+      items: const <PosOrderDetailItem>[
+        PosOrderDetailItem(
+          name: 'Burger',
+          quantity: 2,
+          unitPriceMinor: kBase,
+          lineDiscountMinor: 0,
+          lineTotalMinor: kTotal,
+          modifiers: <PosOrderDetailModifier>[
+            PosOrderDetailModifier(
+              optionName: '240g',
+              priceMinor: kDelta,
+              quantity: 1,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+PosOrderDetailPayment _serverPayment() => PosOrderDetailPayment(
+  paymentId: 'pay-RCPT1',
+  status: PaymentStatus.completed,
+  method: PaymentMethod.cash,
+  amountMinor: kTotal,
+  tenderedMinor: kTendered,
+  changeMinor: kChange,
+  paidAt: DateTime.now().toUtc(),
+  receiptNumber: 'R-77',
+);
+
 String _text(Uint8List bytes) => String.fromCharCodes(bytes);
 
 void main() {
@@ -154,6 +226,8 @@ void main() {
   // A — THE REAL AUTOMATIC PAID-RECEIPT ACTION
   // =========================================================================
   group('A. the automatic receipt is produced by the real payment action', () {
+    late _ServerDetail detail;
+
     Future<(ProviderContainer, _RecordingConnector)> pumpSheet(
       WidgetTester tester, {
       PaymentRepository? repo,
@@ -162,12 +236,24 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       final connector = _RecordingConnector();
+      // The server row exists once `record_payment` has settled, so the
+      // authoritative detail carries the COMPLETED payment. A3 proves this is
+      // not what makes the receipt print: a refused payment never asks for it.
+      detail = _ServerDetail(payment: _serverPayment());
       final container = ProviderContainer(
         overrides: [
+          // F6: REAL mode. In demo, `authoritativeReceiptSource` returns the
+          // local view and the production fetch/refuse branch is never run.
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          orderDetailRepositoryProvider.overrideWithValue(detail),
           posNativePrintingAvailableProvider.overrideWithValue(true),
           nativePrinterNamespaceProvider.overrideWithValue('pos'),
           bluetoothPrinterConnectorProvider.overrideWithValue(connector),
-          if (repo != null) paymentRepositoryProvider.overrideWithValue(repo),
+          paymentRepositoryProvider.overrideWithValue(
+            repo ?? _SettlingPaymentRepo(),
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -228,6 +314,16 @@ void main() {
         connector.sent,
         hasLength(1),
         reason: 'exactly one physical send for one payment',
+      );
+
+      expect(
+        detail.fetched,
+        ['oid-RCPT1'],
+        reason:
+            'F6: the AUTHORITATIVE path really ran. In demo mode '
+            '`authoritativeReceiptSource` returns the local view and never '
+            'fetches, so this suite used to prove nothing about the branch the '
+            'pilot runs',
       );
 
       final receipt = _text(connector.sent.single);
@@ -325,6 +421,8 @@ void main() {
       ),
     );
 
+    late _ServerDetail detailB;
+
     Future<(ProviderContainer, _RecordingBridge)> pumpRow(
       WidgetTester tester, {
       PosRecentOrder? row,
@@ -333,8 +431,16 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       final bridge = _RecordingBridge();
+      detailB = _ServerDetail(payment: _serverPayment());
       final container = ProviderContainer(
         overrides: [
+          // F6: REAL mode, and the server answers with a COMPLETED payment —
+          // so the reprint is built from the authoritative row, not from the
+          // local record the demo branch would have used.
+          runtimeConfigProvider.overrideWithValue(
+            RuntimeConfig.test(isDemoMode: false),
+          ),
+          orderDetailRepositoryProvider.overrideWithValue(detailB),
           posNativePrintingAvailableProvider.overrideWithValue(false),
           posPrintBridgeProvider.overrideWithValue(bridge),
         ],
@@ -385,6 +491,14 @@ void main() {
         reason: 'the paid modifier is on the copy',
       );
       expect(flat, contains('120.00'), reason: 'the authoritative total');
+      expect(
+        detailB.fetched,
+        ['oid-RCPT1'],
+        reason:
+            'F6: the reprint really went through the SERVER detail. The demo '
+            'branch would have reprinted the local record instead, proving '
+            'nothing about the path the pilot runs',
+      );
     });
 
     testWidgets('B2 reprint is REPEATABLE — the operator may ask again', (
@@ -425,6 +539,41 @@ void main() {
 
 /// Refuses every payment, the way the server does for a non-chargeable order.
 /// Everything else delegates to the real demo store, so only the refusal is fake.
+/// MONEY-CODEX-FINAL-CORRECTIONS-004 (F6): a repository that SETTLES, used for
+/// the real-mode success path. In demo mode the container's default was the
+/// `DemoPaymentStore`; in real mode the default needs a live transport, so the
+/// settlement has to be supplied here. It delegates to the demo store so
+/// `paymentFor` answers exactly as production does after a settlement.
+class _SettlingPaymentRepo implements PaymentRepository {
+  final DemoPaymentStore _inner = DemoPaymentStore();
+
+  @override
+  Future<CashPayment> recordCashPayment({
+    required String orderId,
+    required String orderNumber,
+    required int amountMinor,
+    required int tenderedMinor,
+    required String currencyCode,
+    PaymentMethod method = PaymentMethod.cash,
+    int? expectedRevision,
+  }) => _inner.recordCashPayment(
+    orderId: orderId,
+    orderNumber: orderNumber,
+    amountMinor: amountMinor,
+    tenderedMinor: tenderedMinor,
+    currencyCode: currencyCode,
+    method: method,
+    expectedRevision: expectedRevision,
+  );
+
+  @override
+  ShiftContext shiftContext() => _inner.shiftContext();
+
+  @override
+  CashPayment? paymentFor(PosOrderIdentity identity) =>
+      _inner.paymentFor(identity);
+}
+
 class _FailingPaymentRepo implements PaymentRepository {
   final DemoPaymentStore _inner = DemoPaymentStore();
 

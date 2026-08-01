@@ -863,8 +863,12 @@ class CartController extends Notifier<CartViewState> {
 
   /// Adds a CONFIGURED [item] with its selected [modifiers] and optional
   /// cashier [note] as its OWN line (never merged — each configured item is
-  /// priced/kitchen-routed on its own; the RF-052 formula counts each
-  /// modifier's delta × its quantity once per line).
+  /// priced/kitchen-routed on its own).
+  ///
+  /// Priced by [configuredLineTotalMinor]: `qty × (unit + Σ(delta × modQty))`
+  /// (MONEY-PRICING-FORMULA-002A). This used to say the delta is counted "once
+  /// per line", which was the pre-002A rule the fix replaced — it under-charged
+  /// every unit after the first.
   CartMutationResult addItemWithModifiers(
     DemoMenuItem item,
     List<SelectedModifier> modifiers, {
@@ -1182,8 +1186,10 @@ class CartController extends Notifier<CartViewState> {
     // submit flow; fall back to a local number for the RF-101 in-memory path.
     final resolvedNumber =
         orderNumber ?? 'DEMO-${_orderSeq.toString().padLeft(4, '0')}';
-    // Line totals mirror the RF-052 server formula (each modifier delta
-    // counted × its own quantity, once per line).
+    // Line totals mirror the server formula as CORRECTED in
+    // MONEY-PRICING-FORMULA-002A: `qty × (unit + Σ(delta × modQty))`. The old
+    // comment here said "once per line" — the pre-002A rule — directly above
+    // code that had already been fixed to charge the surcharge per ITEM UNIT.
     var modifiersTotal = 0;
     var linePosition = 0;
     final lines = <SubmittedLineView>[];
@@ -1258,9 +1264,11 @@ class CartController extends Notifier<CartViewState> {
   /// only when a submit result lands AFTER a PIN handover on the same till: the ORIGINAL
   /// session's recent-orders row is materialized from ITS captured draft, so the CURRENT
   /// session's cart, setup, and confirmation are never touched. The money arithmetic
-  /// mirrors [submitOrder] EXACTLY — integer minor units, base price × line quantity plus
-  /// each modifier delta counted once per line (D-007) — so a recovered row shows the same
-  /// figures it would have shown in its own session.
+  /// mirrors [submitOrder] EXACTLY — integer minor units, and the ONE 002A formula
+  /// `qty × (unit + Σ(delta × modQty))` (D-007) — so a recovered row shows the same
+  /// figures it would have shown in its own session. (It read "base price × line
+  /// quantity plus each modifier delta counted once per line", which is the
+  /// superseded formula A; the code has used `configuredLineTotalMinor` since 002A.)
   SubmittedOrderView viewFromDraft({
     required CartDraftSnapshot draft,
     OrderType orderType = OrderType.takeaway,
